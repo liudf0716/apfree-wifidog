@@ -1,0 +1,11 @@
+--- wifidog.org/wifidog.conf	2008-03-23 16:24:48.000000000 -0400
++++ wifidog/wifidog.conf	2008-03-23 16:26:10.000000000 -0400
+@@ -30,7 +30,7 @@
+ # Set this to the internal interface (typically your wifi interface).    
+ # Typically br0 for OpenWrt, and eth1, wlan0, ath0, etc. otherwise
+ 
+-GatewayInterface br0
++GatewayInterface br-lan
+ 
+ # Parameter: GatewayAddress
+ # Default: Find it from GatewayInterface
