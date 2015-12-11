@@ -57,6 +57,7 @@
 #include "util.h"
 #include "debug.h"
 #include "pstring.h"
+#include "httpd.h"
 
 #include "../config.h"
 
