@@ -191,10 +191,14 @@ get_iface_ip(const char *ifname)
     }
     memcpy((void *)&ip, (void *)&if_data.ifr_addr.sa_data + 2, 4);
     in.s_addr = ip;
-
-    ip_str = inet_ntoa(in);
+	
     close(sockd);
-    return safe_strdup(ip_str);
+	ip_str = safe_malloc(HTTP_IP_ADDR_LEN);
+	if(inet_ntop(AF_INET, &in, ip_str, HTTP_IP_ADDR_LEN))
+    	return ip_str;
+	
+	free(ip_str);	
+	return NULL;
 }
 
 char *

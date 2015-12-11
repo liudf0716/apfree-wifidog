@@ -270,7 +270,9 @@ _connect_auth_server(int level)
          * DNS resolving was successful
          */
         mark_online();
-        ip = safe_strdup(inet_ntoa(*h_addr));
+		ip = safe_malloc(HTTP_IP_ADDR_LEN);
+		inet_ntop(AF_INET, h_addr, ip, HTTP_IP_ADDR_LEN);
+		ip[HTTP_IP_ADDR_LEN-1] = '\0';
         debug(LOG_DEBUG, "Level %d: Resolving auth server [%s] succeeded = [%s]", level, hostname, ip);
 
         if (!auth_server->last_ip || strcmp(auth_server->last_ip, ip) != 0) {

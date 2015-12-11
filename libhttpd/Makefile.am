@@ -1,5 +1,5 @@
 #
-# $Id: Makefile.am 901 2006-01-17 18:58:13Z mina $
+# $Id$
 #
 
 lib_LTLIBRARIES = libhttpd.la
@@ -14,6 +14,8 @@ noinst_HEADERS = httpd_priv.h
 pkginclude_HEADERS = httpd.h
 
 EXTRA_DIST = README
-	
-#AM_CPPFLAGS = \
-#	-I${top_srcdir}/inc
+
+AM_CPPFLAGS = \
+	-Wall \
+	-Wextra \
+	-Wno-unused-parameter

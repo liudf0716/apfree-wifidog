@@ -14,10 +14,10 @@
 ** connection with the use or performance of this software.
 **
 **
-** $Id: version.c 87 2004-04-19 05:24:36Z benoitg $
+** $Id$
 **
 */
 
-char    LIBHTTPD_VERSION[] =  "1.3",
+char    LIBHTTPD_VERSION[] =  "1.4-wifidog",
         LIBHTTPD_VENDOR[] =   "Hughes Technologies Pty Ltd";
 
