@@ -51,6 +51,12 @@ static void wdctl_status(void);
 static void wdctl_stop(void);
 static void wdctl_reset(void);
 static void wdctl_restart(void);
+//>>> liudf added 20151225
+static void wdctl_add_trusted_domains(void);
+static void wdctl_reparse_trusted_domains(void);
+static void wdctl_clear_trusted_domains(void);
+static void wdctl_show_trusted_domains(void);
+//<<< liudf added end
 
 /** @internal
  * @brief Print usage
@@ -245,6 +251,7 @@ wdctl_add_trusted_domains(void)
 
 }
 
+static void
 wdctl_reparse_trusted_domains(void)
 {
 	int sock;
@@ -269,6 +276,7 @@ wdctl_reparse_trusted_domains(void)
 
 }
 
+static void
 wdctl_clear_trusted_domains(void)
 {
 	int sock;
@@ -292,6 +300,7 @@ wdctl_clear_trusted_domains(void)
     close(sock);
 }
 
+static void
 wdctl_show_trusted_domains(void)
 {
 	int sock;
