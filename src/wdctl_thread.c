@@ -63,6 +63,12 @@ static void wdctl_status(int);
 static void wdctl_stop(int);
 static void wdctl_reset(int, const char *);
 static void wdctl_restart(int);
+//>>> liudf added 20151225
+static void wdctl_add_trusted_domains(int, const char *);
+static void wdctl_reparse_trusted_domains(int);
+static void wdctl_clear_trusted_domains(int);
+static void wdctl_show_trusted_domains(int);
+//<<< liudf added end
 
 static int wdctl_socket_server;
 
@@ -208,6 +214,16 @@ thread_wdctl_handler(void *arg)
         wdctl_reset(fd, (request + 6));
     } else if (strncmp(request, "restart", 7) == 0) {
         wdctl_restart(fd);
+	//>>> liudf added 20151225
+	} else if (strncmp(request, "add_trusted_domains", strlen("add_trusted_domains")) == 0) {
+		wdctl_add_trusted_domains(fd, (request + strlen("add_trusted_domains") + 1));
+	} else if (strncmp(request, "reparse_trusted_domains", strlen("reparse_trusted_domains")) == 0) {
+		wdctl_reparse_trusted_domains(fd);
+	} else if (strncmp(request, "clear_trusted_domains", strlen("clear_trusted_domains")) == 0) {
+		wdctl_clear_trusted_domains(fd);
+	} else if (strncmp(request, "show_trusted_domains", strlen("show_trusted_domains")) == 0) {
+		wdctl_show_trusted_domains(fd);
+	//<<< liudf added end
     } else {
         debug(LOG_ERR, "Request was not understood!");
     }
@@ -384,3 +400,71 @@ wdctl_reset(int fd, const char *arg)
 
     debug(LOG_DEBUG, "Exiting wdctl_reset...");
 }
+
+//>>> liudf added 20151225
+static void
+wdctl_add_trusted_domains(int fd, const char *arg)
+{
+    debug(LOG_DEBUG, "Entering wdctl_add_trusted_domains...");
+	
+    debug(LOG_DEBUG, "Argument: %s ", arg);
+
+    debug(LOG_DEBUG, "parse trusted domains");
+	parse_domain_trusted(arg);
+	
+    debug(LOG_DEBUG, "parse trusted domains ip");
+	parse_trusted_domains_ip();	
+
+	fw_refresh_domains_trusted_safely();	
+
+    write_to_socket(fd, "Yes", 3);
+
+    debug(LOG_DEBUG, "Exiting wdctl_add_trusted_domains...");
+}
+
+static void
+wdctl_reparse_trusted_domains(void)
+{
+	debug(LOG_DEBUG, "Entering wdctl_reparse_trusted_domains...");
+	
+    debug(LOG_DEBUG, "parse trusted domains ip");
+	parse_trusted_domains_ip();	
+
+	fw_refresh_domains_trusted_safely();	
+
+    write_to_socket(fd, "Yes", 3);
+
+    debug(LOG_DEBUG, "Exiting wdctl_reparse_trusted_domains...");
+}
+
+static void
+wdctl_clear_trusted_domains(void)
+{
+	debug(LOG_DEBUG, "Entering wdctl_clear_trusted_domains...");
+	
+	LOCK_CONFIG();
+	fw_clear_domains_trusted();
+	
+	__clear_trusted_domains();
+	UNLOCK_CONFIG();	
+
+    write_to_socket(fd, "Yes", 3);
+
+    debug(LOG_DEBUG, "Exiting wdctl_clear_trusted_domains...");
+}
+
+static void
+wdctl_show_trusted_domains(int fd)
+{
+    char *status = NULL;
+    size_t len = 0;
+
+    status = get_trusted_domains_text();
+    len = strlen(status);
+
+    write_to_socket(fd, status, len);   /* XXX Not handling error because we'd just print the same log line. */
+
+    free(status);
+}
+
+//>>> liudf added end

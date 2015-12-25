@@ -238,3 +238,30 @@ get_status_text()
 
     return pstr_to_string(pstr);
 }
+
+//>>>> liudf added 20151225
+char *get_trusted_domains_text()
+{
+	pstr_t *pstr = pstr_new();
+    s_config *config;
+	t_domain_trusted *domain_trusted = NULL;
+	t_ip_trusted	*ip_trusted = NULL;
+
+    config = config_get_config();
+    
+	pstr_cat(pstr, "\nTrusted domains and its ip:\n");
+
+	LOCK_CONFIG();
+	
+	for (domain_trusted = config->domains_trusted; domain_trusted != NULL; domain_trusted = domain_trusted->next) {
+        pstr_append_sprintf(pstr, "\nDomain: %s \n", domain_trusted->domain);
+		for(ip_trusted = domain_trusted->ips_trusted; ip_trusted != NULL; ip_trusted = ip_trusted->next) {
+        	pstr_append_sprintf(pstr, "  %s \n", ip_trusted->ip);
+		}
+	}
+	
+	UNLOCK_CONFIG();
+    
+	return pstr_to_string(pstr);
+}
+//<<<< liudf added end

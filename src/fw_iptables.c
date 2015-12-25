@@ -239,6 +239,49 @@ iptables_fw_set_authservers(void)
 
 }
 
+// >>>liudf added 20151223
+void
+iptables_fw_refresh_domains_trusted_safely(void)
+{
+	LOCK_CONFIG();
+	iptables_fw_refresh_domains_trusted();
+	UNLOCK_CONFIG();
+}
+
+void
+iptables_fw_refresh_domains_trusted(void)
+{
+	iptables_fw_clear_domains_trusted();
+	__parse_trusted_domains_ip();
+	iptables_fw_set_domains_trusted();
+}
+
+void
+iptables_fw_clear_domains_trusted(void)
+{
+    iptables_do_command("-t filter -F " CHAIN_DOMAIN_TRUSTED);
+    iptables_do_command("-t nat -F " CHAIN_DOMAIN_TRUSTED);
+}
+
+void
+iptables_fw_set_domains_trusted(void)
+{
+	const s_config *config;
+	t_domain_trusted *domain_trusted = NULL;
+
+    config = config_get_config();
+
+    for (domain_trusted = config->domains_trusted; domain_trusted != NULL; domain_trusted = domain_trusted->next) {
+		t_ip_trusted *ip_trusted = NULL;
+		for(ip_trusted = domain_trusted->ips_trusted; ip_trusted != NULL; ip_trusted = ip_trusted->next) {
+			iptables_do_command("-t filter -A " CHAIN_DOMAIN_TRUSTED " -d %s -j ACCEPT", ip_trusted->ip);
+            iptables_do_command("-t nat -A " CHAIN_DOMAIN_TRUSTED " -d %s -j ACCEPT", ip_trusted->ip);
+		}
+	}
+}
+
+// <<< liudf added end
+
 /** Initialize the firewall rules
 */
 int
@@ -303,6 +346,8 @@ iptables_fw_init(void)
     iptables_do_command("-t nat -N " CHAIN_GLOBAL);
     iptables_do_command("-t nat -N " CHAIN_UNKNOWN);
     iptables_do_command("-t nat -N " CHAIN_AUTHSERVERS);
+	// liudf added 20151224
+    iptables_do_command("-t nat -N " CHAIN_DOMAIN_TRUSTED);
     if (got_authdown_ruleset)
         iptables_do_command("-t nat -N " CHAIN_AUTH_IS_DOWN);
 
@@ -329,6 +374,8 @@ iptables_fw_init(void)
     iptables_do_command("-t nat -A " CHAIN_TO_INTERNET " -j " CHAIN_UNKNOWN);
 
     iptables_do_command("-t nat -A " CHAIN_UNKNOWN " -j " CHAIN_AUTHSERVERS);
+	// liudf added 20151224
+    iptables_do_command("-t nat -A " CHAIN_UNKNOWN " -j " CHAIN_DOMAIN_TRUSTED);
     iptables_do_command("-t nat -A " CHAIN_UNKNOWN " -j " CHAIN_GLOBAL);
     if (got_authdown_ruleset) {
         iptables_do_command("-t nat -A " CHAIN_UNKNOWN " -j " CHAIN_AUTH_IS_DOWN);
@@ -345,6 +392,8 @@ iptables_fw_init(void)
     /* Create new chains */
     iptables_do_command("-t filter -N " CHAIN_TO_INTERNET);
     iptables_do_command("-t filter -N " CHAIN_AUTHSERVERS);
+	// liudf added 20151224
+    iptables_do_command("-t filter -N " CHAIN_DOMAIN_TRUSTED);
     iptables_do_command("-t filter -N " CHAIN_LOCKED);
     iptables_do_command("-t filter -N " CHAIN_GLOBAL);
     iptables_do_command("-t filter -N " CHAIN_VALIDATE);
@@ -373,6 +422,11 @@ iptables_fw_init(void)
 
     iptables_do_command("-t filter -A " CHAIN_TO_INTERNET " -j " CHAIN_AUTHSERVERS);
     iptables_fw_set_authservers();
+	
+	// liudf added 20151224
+    iptables_do_command("-t filter -A " CHAIN_TO_INTERNET " -j " CHAIN_DOMAIN_TRUSTED);
+	__parse_trusted_domains_ip();
+    iptables_fw_set_domains_trusted();
 
     iptables_do_command("-t filter -A " CHAIN_TO_INTERNET " -m mark --mark 0x%u -j " CHAIN_LOCKED, FW_MARK_LOCKED);
     iptables_load_ruleset("filter", FWRULESET_LOCKED_USERS, CHAIN_LOCKED);
@@ -414,7 +468,9 @@ iptables_fw_destroy(void)
     fw_quiet = 1;
 
     debug(LOG_DEBUG, "Destroying our iptables entries");
-
+	
+	// liudf added 20151224
+	LOCK_CONFIG(); //better add lock here
     /*
      *
      * Everything in the MANGLE table
@@ -445,6 +501,8 @@ iptables_fw_destroy(void)
     debug(LOG_DEBUG, "Destroying chains in the NAT table");
     iptables_fw_destroy_mention("nat", "PREROUTING", CHAIN_OUTGOING);
     iptables_do_command("-t nat -F " CHAIN_AUTHSERVERS);
+	// liudf added 20151224
+    iptables_do_command("-t nat -F " CHAIN_DOMAIN_TRUSTED);
     iptables_do_command("-t nat -F " CHAIN_OUTGOING);
     if (got_authdown_ruleset)
         iptables_do_command("-t nat -F " CHAIN_AUTH_IS_DOWN);
@@ -453,6 +511,8 @@ iptables_fw_destroy(void)
     iptables_do_command("-t nat -F " CHAIN_GLOBAL);
     iptables_do_command("-t nat -F " CHAIN_UNKNOWN);
     iptables_do_command("-t nat -X " CHAIN_AUTHSERVERS);
+	// liudf added 20151224
+    iptables_do_command("-t nat -X " CHAIN_DOMAIN_TRUSTED);
     iptables_do_command("-t nat -X " CHAIN_OUTGOING);
     if (got_authdown_ruleset)
         iptables_do_command("-t nat -X " CHAIN_AUTH_IS_DOWN);
@@ -470,6 +530,8 @@ iptables_fw_destroy(void)
     iptables_fw_destroy_mention("filter", "FORWARD", CHAIN_TO_INTERNET);
     iptables_do_command("-t filter -F " CHAIN_TO_INTERNET);
     iptables_do_command("-t filter -F " CHAIN_AUTHSERVERS);
+	// liudf added 20151224
+    iptables_do_command("-t filter -F " CHAIN_DOMAIN_TRUSTED);
     iptables_do_command("-t filter -F " CHAIN_LOCKED);
     iptables_do_command("-t filter -F " CHAIN_GLOBAL);
     iptables_do_command("-t filter -F " CHAIN_VALIDATE);
@@ -479,6 +541,8 @@ iptables_fw_destroy(void)
         iptables_do_command("-t filter -F " CHAIN_AUTH_IS_DOWN);
     iptables_do_command("-t filter -X " CHAIN_TO_INTERNET);
     iptables_do_command("-t filter -X " CHAIN_AUTHSERVERS);
+	// liudf added 20151224
+    iptables_do_command("-t filter -X " CHAIN_DOMAIN_TRUSTED);
     iptables_do_command("-t filter -X " CHAIN_LOCKED);
     iptables_do_command("-t filter -X " CHAIN_GLOBAL);
     iptables_do_command("-t filter -X " CHAIN_VALIDATE);
@@ -486,7 +550,9 @@ iptables_fw_destroy(void)
     iptables_do_command("-t filter -X " CHAIN_UNKNOWN);
     if (got_authdown_ruleset)
         iptables_do_command("-t filter -X " CHAIN_AUTH_IS_DOWN);
-
+	
+	// liudf added 20151224
+	UNLOCK_CONFIG(); // better add lock 
     return 1;
 }
 

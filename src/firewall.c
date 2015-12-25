@@ -237,6 +237,36 @@ fw_set_authservers(void)
     iptables_fw_set_authservers();
 }
 
+//>>>>> liudf added 20151224
+void
+fw_refresh_domains_trusted_safely(void)
+{
+    debug(LOG_INFO, "Refresh trust domains list safely");
+	iptables_fw_refresh_domains_trusted_safely()
+}
+
+void
+fw_refresh_domains_trusted(void)
+{
+    debug(LOG_INFO, "Refresh trust domains list");
+	iptables_fw_refresh_domains_trusted()
+}
+
+void 
+fw_clear_domains_trusted(void)
+{
+    debug(LOG_INFO, "Clear trust domains list");
+	iptables_fw_clear_domains_trusted();
+}
+
+void 
+fw_set_domains_trusted(void)
+{
+    debug(LOG_INFO, "Setting the trust domains list");
+	iptables_fw_set_domains_trusted();
+}
+//<<<<< liudf added end
+
 /** Remove the firewall rules
  * This is used when we do a clean shutdown of WiFiDog.
  * @return Return code of the fw.destroy script

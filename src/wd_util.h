@@ -51,4 +51,7 @@ int is_auth_online(void);
 /** @brief Creates a human-readable paragraph of the status of wifidog */
 char *get_status_text(void);
 
+//>>> liudf added 20151225
+char *get_trusted_domains_text(void);
+//<<< liudf added end
 #endif /* _WD_UTIL_H_ */

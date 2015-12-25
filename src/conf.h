@@ -154,6 +154,24 @@ typedef struct _popular_server_t {
 } t_popular_server;
 
 /**
+ * liudf added 20151223
+ * trust domains and trust ip
+ *
+ */
+typedef struct _ip_trusted_t {
+	char	ip[HTTP_IP_ADDR_LEN];
+	struct _ip_trusted_t *next;
+} t_ip_trusted;
+
+typedef struct _domain_trusted_t {
+	char *domain;
+	t_ip_trusted	*ips_trusted;
+	struct _domain_trusted_t *next;
+} t_domain_trusted;
+
+// <<<< liudf added end
+
+/**
  * Configuration structure
  */
 typedef struct {
@@ -161,7 +179,7 @@ typedef struct {
     char *htmlmsgfile;          /**< @brief name of the HTML file used for messages */
     char *wdctl_sock;           /**< @brief wdctl path to socket */
     char *internal_sock;                /**< @brief internal path to socket */
-    int deltatraffic;                   /**< @brief reset each user's traffic (Outgoing and Incoming) value after each Auth operation. */
+    int deltatraffic;   /**< @brief reset each user's traffic (Outgoing and Incoming) value after each Auth operation. */
     int daemon;                 /**< @brief if daemon > 0, use daemon mode */
     char *pidfile;            /**< @brief pid file path of wifidog */
     char *external_interface;   /**< @brief External network interface name for
@@ -198,6 +216,10 @@ typedef struct {
     char *arp_table_path; /**< @brief Path to custom ARP table, formatted
         like /proc/net/arp */
     t_popular_server *popular_servers; /**< @brief list of popular servers */
+	
+	// liudf 20151223 added
+	// trusted domain
+	t_domain_trusted *domains_trusted;
 } s_config;
 
 /** @brief Get the current gateway configuration */
@@ -224,6 +246,25 @@ void mark_auth_server_bad(t_auth_serv *);
 /** @brief Fetch a firewall rule set. */
 t_firewall_rule *get_ruleset(const char *);
 
+// >>>>>liudf added 20151224
+/** @brief Get domains_trusted of config */
+t_domain_trusted *get_domains_trusted(void);
+
+/** @brief  Clear domains_trusted of config safely */
+void clear_trusted_domains(void); 
+
+/** @brief  Clear domains_trusted of config  */
+void __clear_trusted_domains(void);
+
+/** @brief  Parse all trusted domains's ip safely, attention! only add new ip */
+void parse_trusted_domains_ip(void);
+
+/** @brief  Parse all trusted domains's ip */
+void __parse_trusted_domains_ip(void);
+
+/** @brief  */
+void parse_domain_trusted(const char *);
+// <<< liudf added end
 
 #define LOCK_CONFIG() do { \
 	debug(LOG_DEBUG, "Locking config"); \

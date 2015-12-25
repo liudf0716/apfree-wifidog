@@ -794,7 +794,7 @@ va_dcl
 void
 httpdProcessRequest(httpd * server, request * r)
 {
-    char dirName[HTTP_MAX_URL], entryName[HTTP_MAX_URL], *cp;
+    char dirName[HTTP_MAX_URL] = { 0 }, entryName[HTTP_MAX_URL] = { 0 }, *cp;
     httpDir *dir;
     httpContent *entry;
 

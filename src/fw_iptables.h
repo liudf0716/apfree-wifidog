@@ -37,6 +37,8 @@
 #define CHAIN_TO_ROUTER "WiFiDog_$ID$_Router"
 #define CHAIN_INCOMING  "WiFiDog_$ID$_Incoming"
 #define CHAIN_AUTHSERVERS "WiFiDog_$ID$_AuthServers"
+// liudf added 20151223 for trusted domain
+#define CHAIN_DOMAIN_TRUSTED "WiFiDog_$ID$_DomainTrusted"
 #define CHAIN_GLOBAL  "WiFiDog_$ID$_Global"
 #define CHAIN_VALIDATE  "WiFiDog_$ID$_Validate"
 #define CHAIN_KNOWN     "WiFiDog_$ID$_Known"
@@ -82,4 +84,19 @@ int iptables_fw_auth_reachable(void);
 /** @brief All counters in the client list */
 int iptables_fw_counters_update(void);
 
+//>>>> liudf added 20151224
+
+/** @brief */
+void iptables_fw_refresh_domains_trusted_safely(void);
+
+/** @brief Clear domain_trusted chain; parse domain name then add its ips to chain */
+void iptables_fw_refresh_domains_trusted(void);
+
+/** @brief Set trust domains table */
+void iptables_fw_set_domains_trusted(void)
+
+/** @brief Clear trust domains table */
+void iptables_fw_clear_domains_trusted(void)
+
+//<<< liudf added end
 #endif                          /* _IPTABLES_H_ */

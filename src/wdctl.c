@@ -71,6 +71,12 @@ usage(void)
     fprintf(stdout, "  status            Obtain the status of wifidog\n");
     fprintf(stdout, "  stop              Stop the running wifidog\n");
     fprintf(stdout, "  restart           Re-start the running wifidog (without disconnecting active users!)\n");
+	//>>> liudf added 20151225
+    fprintf(stdout, "  add_trusted_domains		Add trusted domains)\n");
+    fprintf(stdout, "  reparse_trusted_domains	Reparse trusted domains ip)\n");
+    fprintf(stdout, "  clear_trusted_domains	Clear all trusted domains)\n");
+    fprintf(stdout, "  show_trusted_domains 	Show all trusted domains and its ip)\n");
+	//<<< liudf added end
     fprintf(stdout, "\n");
 }
 
@@ -136,6 +142,22 @@ parse_commandline(int argc, char **argv)
         config.param = strdup(*(argv + optind + 1));
     } else if (strcmp(*(argv + optind), "restart") == 0) {
         config.command = WDCTL_RESTART;
+	//>>> liudf added 20151225
+	} else if (strcmp(*(argv + optind), "add_trusted_domains") == 0) {
+		config.command = WDCTL_ADD_TRUSTED_DOMAINS;
+		if ((argc - (optind + 1)) <= 0) {
+			fprintf(stderr, "wdctl: Error: You must specify trusted domains" "seperated with comma\n");
+            usage();
+            exit(1);
+		}
+        config.param = strdup(*(argv + optind + 1));
+	} else if (strcmp(*(argv + optind), "reparse_trusted_domains") == 0) {
+		config.command = WDCTL_REPARSE_TRUSTED_DOMAINS;
+	} else if (strcmp(*(argv + optind), "clear_trusted_domains") == 0) {
+		config.command = WDCTL_CLEAR_TRUSTED_DOMAINS;
+	} else if (strcmp(*(argv + optind), "show_trusted_domains") == 0) {
+		config.command = WDCTL_SHOW_TRUSTED_DOMAINS;
+	//<<< liudf added end
     } else {
         fprintf(stderr, "wdctl: Error: Invalid command \"%s\"\n", *(argv + optind));
         usage();
@@ -186,12 +208,121 @@ send_request(int sock, const char *request)
     return len;
 }
 
+//>>> liudf added 20151225
+static void
+wdctl_add_trusted_domains(void)
+{
+	int sock;
+    char buffer[4196] = {0};
+    char request[4096] = {0};
+    size_t len;
+    ssize_t rlen;
+
+    sock = connect_to_server(config.socket);
+
+    strncpy(request, "add_trusted_domains ", 64);
+    strncat(request, config.param, (64 - strlen(request) - 1));
+    strncat(request, "\r\n\r\n", (64 - strlen(request) - 1));
+
+    send_request(sock, request);
+
+    len = 0;
+    memset(buffer, 0, sizeof(buffer));
+    while ((len < sizeof(buffer)) && ((rlen = read(sock, (buffer + len), (sizeof(buffer) - len))) > 0)) {
+        len += (size_t) rlen;
+    }
+
+    if (strcmp(buffer, "Yes") == 0) {
+        fprintf(stdout, "Connection %s successfully add_trusted_domains.\n", config.param);
+    } else if (strcmp(buffer, "No") == 0) {
+        fprintf(stdout, "Connection %s was not active.\n", config.param);
+    } else {
+        fprintf(stderr, "wdctl: Error: WiFiDog sent an abnormal " "reply.\n");
+    }
+
+    shutdown(sock, 2);
+    close(sock);
+
+}
+
+wdctl_reparse_trusted_domains(void)
+{
+	int sock;
+    char buffer[4096] = {0};
+    char request[36] = {0};
+    ssize_t len;
+
+    sock = connect_to_server(config.socket);
+
+    strncpy(request, "reparse_trusted_domains\r\n\r\n", 35);
+
+    send_request(sock, request);
+
+    // -1: need some space for \0!
+    while ((len = read(sock, buffer, sizeof(buffer) - 1)) > 0) {
+        buffer[len] = '\0';
+        fprintf(stdout, "%s", buffer);
+    }
+
+    shutdown(sock, 2);
+    close(sock);
+
+}
+
+wdctl_clear_trusted_domains(void)
+{
+	int sock;
+    char buffer[4096] = {0};
+    char request[36] = {0};
+    ssize_t len;
+
+    sock = connect_to_server(config.socket);
+
+    strncpy(request, "clear_trusted_domains\r\n\r\n", 35);
+
+    send_request(sock, request);
+
+    // -1: need some space for \0!
+    while ((len = read(sock, buffer, sizeof(buffer) - 1)) > 0) {
+        buffer[len] = '\0';
+        fprintf(stdout, "%s", buffer);
+    }
+
+    shutdown(sock, 2);
+    close(sock);
+}
+
+wdctl_show_trusted_domains(void)
+{
+	int sock;
+    char buffer[4096] = {0};
+    char request[36] = {0};
+    ssize_t len;
+
+    sock = connect_to_server(config.socket);
+
+    strncpy(request, "show_trusted_domains\r\n\r\n", 35);
+
+    send_request(sock, request);
+
+    // -1: need some space for \0!
+    while ((len = read(sock, buffer, sizeof(buffer) - 1)) > 0) {
+        buffer[len] = '\0';
+        fprintf(stdout, "%s", buffer);
+    }
+
+    shutdown(sock, 2);
+    close(sock);
+}
+
+//<<< liudf added end
+
 static void
 wdctl_status(void)
 {
     int sock;
-    char buffer[4096];
-    char request[16];
+    char buffer[4096] = {0};
+    char request[16] = {0};
     ssize_t len;
 
     sock = connect_to_server(config.socket);
@@ -237,8 +368,8 @@ void
 wdctl_reset(void)
 {
     int sock;
-    char buffer[4096];
-    char request[64];
+    char buffer[4096] = {0};
+    char request[64] = {0};
     size_t len;
     ssize_t rlen;
 
@@ -315,6 +446,24 @@ main(int argc, char **argv)
     case WDCTL_RESTART:
         wdctl_restart();
         break;
+	
+	//>>> liudf added 20151225
+	case WDCTL_ADD_TRUSTED_DOMAINS:
+		wdctl_add_trusted_domains();
+		break;
+
+	case WDCTL_REPARSE_TRUSTED_DOMAINS:
+		wdctl_reparse_trusted_domains();
+		break;
+
+	case WDCTL_CLEAR_TRUSTED_DOMAINS:
+		wdctl_clear_trusted_domains();
+		break;
+
+	case WDCTL_SHOW_TRUSTED_DOMAINS:
+		wdctl_show_trusted_domains();
+		break;
+	//<<< liudf end
 
     default:
         /* XXX NEVER REACHED */

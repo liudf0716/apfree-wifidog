@@ -104,6 +104,10 @@ typedef enum {
     oSSLCertPath,
     oSSLAllowedCipherList,
     oSSLUseSNI,
+	
+	// >>>>liudf added 20151224
+	oTrustedDomains,
+	// <<< liudf added end
 } OpCodes;
 
 /** @internal
@@ -151,6 +155,10 @@ static const struct {
     "sslcertpath", oSSLCertPath}, {
     "sslallowedcipherlist", oSSLAllowedCipherList}, {
     "sslusesni", oSSLUseSNI}, {
+	
+	//>>>>> liudf added 20151224
+	"trustedDomains", oTrustedDomains}, {
+	// <<<< liudf added end
 NULL, oBadOption},};
 
 static void config_notnull(const void *, const char *);
@@ -644,7 +652,7 @@ void
 config_read(const char *filename)
 {
     FILE *fd;
-    char line[MAX_BUF], *s, *p1, *p2, *rawarg = NULL;
+    char line[MAX_BUF] = { 0 }, *s, *p1, *p2, *rawarg = NULL;
     int linenum = 0, opcode, value;
     size_t len;
 
@@ -810,6 +818,11 @@ config_read(const char *filename)
 #endif
 #endif
                     break;
+				// >>> liudf added 20151224
+				case oTrustedDomains:
+                    parse_domain_trusted(rawarg);
+					break;
+				// <<< liudf added end
                 case oBadOption:
                     /* FALL THROUGH */
                 default:
@@ -1000,6 +1013,179 @@ parse_popular_servers(const char *ptr)
     free(ptrcopy);
 }
 
+/*
+ * liudf added 20151224
+ * trust domain related functio
+ */
+static void
+add_domain_trusted(const char *domain)
+{
+    t_domain_trusted *p = NULL;
+	
+	LOCK_CONFIG();
+    if (config.domains_trusted == NULL) {
+    	p = (t_domain_trusted *)safe_malloc(sizeof(t_domain_trusted));
+    	p->domain = safe_strdup(domain);
+        p->next = NULL;
+        config.domains_trusted = p;
+    } else {
+		for(p = config.domains_trusted; p != NULL; p = p->next) {
+			if(strcmp(p->domain, domain) == 0)
+				break;
+		}
+		if(p == NULL) {
+    		p = (t_domain_trusted *)safe_malloc(sizeof(t_domain_trusted));
+    		p->domain = safe_strdup(domain);
+        	p->next = config.domains_trusted;
+        	config.domains_trusted = p;
+		}
+    }
+	UNLOCK_CONFIG();
+}
+
+void
+parse_domain_trusted(const char *ptr)
+{
+    char *ptrcopy = NULL;
+    char *hostname = NULL;
+    char *tmp = NULL;
+
+    debug(LOG_DEBUG, "Parsing string [%s] for trust domains", ptr);
+
+    /* strsep modifies original, so let's make a copy */
+    ptrcopy = safe_strdup(ptr);
+
+    while ((hostname = strsep(&ptrcopy, ","))) {  /* hostname does *not* need allocation. strsep
+                                                     provides a pointer in ptrcopy. */
+        /* Skip leading spaces. */
+        while (*hostname != '\0' && isblank(*hostname)) { 
+            hostname++;
+        }
+        if (*hostname == '\0') {  /* Equivalent to strcmp(hostname, "") == 0 */
+            continue;
+        }
+        /* Remove any trailing blanks. */
+        tmp = hostname;
+        while (*tmp != '\0' && !isblank(*tmp)) {
+            tmp++;
+        }
+        if (*tmp != '\0' && isblank(*tmp)) {
+            *tmp = '\0';
+        }
+        debug(LOG_DEBUG, "Adding trust domain [%s] to list", hostname);
+        add_domain_trusted(hostname);
+    }
+
+    free(ptrcopy);
+}
+
+static void
+add_trusted_domain_ip(t_domain_trusted *p)
+{
+	struct hostent *he;
+    struct in_addr **addr_list;
+    int i;
+
+    if ( (he = gethostbyname( p->domain ) ) == NULL)
+    {
+        return ;
+    }
+
+    addr_list = (struct in_addr **) he->h_addr_list;
+
+    for(i = 0; addr_list[i] != NULL; i++){
+        char hostname[NI_MAXHOST] = { 0 };
+		inet_ntop(AF_INET, addr_list[i], hostname, NI_MAXHOST);
+		hostname[NI_MAXHOST-1] = '\0';
+        debug(LOG_DEBUG, "hostname ip is(%s)", hostname);
+		if(p->ips_trusted == NULL) {
+			p->ips_trusted = (struct t_ip_trusted *)malloc(sizeof(struct t_ip_trusted));
+			memset(p->ips_trusted, 0, sizeof(struct t_ip_trusted));
+			strncpy(ipt->ip, hostname, NI_MAXHOST); 
+			p->ips_trusted->next = NULL;
+		} else {
+			struct t_ip_trusted *ipt = p->ips_trusted;
+			while(ipt) {
+				if(strcmp(ipt->ip, hostname) == 0)
+					break;
+				ipt = ipt->next;
+			}
+	
+			if(ipt == NULL) {
+				ipt = (struct t_ip_trusted *)malloc(sizeof(struct t_ip_trusted));
+				memset(ipt, 0, sizeof(struct t_ip_trusted));
+				strncpy(ipt->ip, hostname, NI_MAXHOST);
+				ipt->next = p->ips_trusted;
+				p->ips_trusted = ipt; 
+			}
+		}
+	}	
+}
+
+// parse domain_trusted list and add new ip of domain
+void
+parse_trusted_domains_ip(void)
+{
+	LOCK_CONFIG();
+	__parse_trusted_domains_ip();
+	UNLOCK_CONFIG();
+}
+
+void
+__parse_trusted_domains_ip(void)
+{
+	t_domain_trusted *p = NULL;
+
+	p = config.domains_trusted;
+	while(p && p->domain) {
+		add_trusted_domain_ip(p);	
+		p = p->next;
+	}
+}
+
+// clear domain's ip collection
+static void
+clear_trusted_domain_ip(t_ip_trusted *ipt)
+{
+	t_ip_trusted *p, *p1;
+	for(p = ipt; p != NULL;) {
+		p1 = p;
+		p = p->next;
+		free(p1);
+	}
+}
+
+// clear domain_trusted list
+void
+__clear_trusted_domains(void)
+{
+	t_domain_trusted *p, *p1;
+    for (p = config.domains_trusted; p != NULL;) {
+    	p1 = p;
+        p = p->next;
+        clear_trusted_domain_ip(p1->ips_trusted);
+        free(p1->domain);
+        free(p1);
+    }
+    config.domains_trusted = NULL;
+}
+
+void
+clear_trusted_domains(void)
+{
+	LOCK_CONFIG();
+	__clear_trusted_domains();
+	UNLOCK_CONFIG();
+}
+
+t_domain_trusted *
+get_domains_trusted(void)
+{
+	return config.domains_trusted;
+}
+
+// >>> end liudf added
+
 /** Verifies if the configuration is complete and valid.  Terminates the program if it isn't */
 void
 config_validate(void)
@@ -1022,8 +1208,8 @@ validate_popular_servers(void)
 {
     if (config.popular_servers == NULL) {
         debug(LOG_WARNING, "PopularServers not set in config file, this will become fatal in a future version.");
-        add_popular_server("www.google.com");
-        add_popular_server("www.yahoo.com");
+        add_popular_server("www.baidu.com");
+        add_popular_server("www.qq.com");
     }
 }
 
