@@ -423,7 +423,7 @@ wdctl_add_trusted_domains(int fd, const char *arg)
 }
 
 static void
-wdctl_reparse_trusted_domains(void)
+wdctl_reparse_trusted_domains(int fd)
 {
 	debug(LOG_DEBUG, "Entering wdctl_reparse_trusted_domains...");
 	
@@ -438,7 +438,7 @@ wdctl_reparse_trusted_domains(void)
 }
 
 static void
-wdctl_clear_trusted_domains(void)
+wdctl_clear_trusted_domains(int fd)
 {
 	debug(LOG_DEBUG, "Entering wdctl_clear_trusted_domains...");
 	

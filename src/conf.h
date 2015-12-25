@@ -158,6 +158,7 @@ typedef struct _popular_server_t {
  * trust domains and trust ip
  *
  */
+#define	HTTP_IP_ADDR_LEN	17
 typedef struct _ip_trusted_t {
 	char	ip[HTTP_IP_ADDR_LEN];
 	struct _ip_trusted_t *next;

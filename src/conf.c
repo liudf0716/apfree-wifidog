@@ -37,6 +37,9 @@
 #include <string.h>
 #include <ctype.h>
 
+#include <netdb.h>
+#include <arpa/inet.h>
+
 #include "common.h"
 #include "safe.h"
 #include "debug.h"
@@ -1099,12 +1102,12 @@ add_trusted_domain_ip(t_domain_trusted *p)
 		hostname[NI_MAXHOST-1] = '\0';
         debug(LOG_DEBUG, "hostname ip is(%s)", hostname);
 		if(p->ips_trusted == NULL) {
-			p->ips_trusted = (struct t_ip_trusted *)malloc(sizeof(struct t_ip_trusted));
-			memset(p->ips_trusted, 0, sizeof(struct t_ip_trusted));
-			strncpy(ipt->ip, hostname, NI_MAXHOST); 
+			p->ips_trusted = (t_ip_trusted *)malloc(sizeof(t_ip_trusted));
+			memset(p->ips_trusted, 0, sizeof(t_ip_trusted));
+			strncpy(p->ips_trusted->ip, hostname, NI_MAXHOST); 
 			p->ips_trusted->next = NULL;
 		} else {
-			struct t_ip_trusted *ipt = p->ips_trusted;
+			t_ip_trusted *ipt = p->ips_trusted;
 			while(ipt) {
 				if(strcmp(ipt->ip, hostname) == 0)
 					break;
@@ -1112,8 +1115,8 @@ add_trusted_domain_ip(t_domain_trusted *p)
 			}
 	
 			if(ipt == NULL) {
-				ipt = (struct t_ip_trusted *)malloc(sizeof(struct t_ip_trusted));
-				memset(ipt, 0, sizeof(struct t_ip_trusted));
+				ipt = (t_ip_trusted *)malloc(sizeof(t_ip_trusted));
+				memset(ipt, 0, sizeof(t_ip_trusted));
 				strncpy(ipt->ip, hostname, NI_MAXHOST);
 				ipt->next = p->ips_trusted;
 				p->ips_trusted = ipt; 

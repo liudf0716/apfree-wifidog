@@ -78,12 +78,12 @@ char *arp_get(const char *);
 void fw_clear_domains_trusted(void);
 
 /** @brief refer to iptables_fw_set_domains_trusted */
-void fw_set_domains_trusted(void)
+void fw_set_domains_trusted(void);
 
 /** @brief refer to iptables_fw_refresh_domains_trusted */
 void fw_refresh_domains_trusted(void);
 
 /** @brief refer to iptables_fw_refresh_domains_trusted_safely */
-void fw_refresh_domains_trusted_safely(void)
+void fw_refresh_domains_trusted_safely(void);
 //<<<< liudf added end
 #endif                          /* _FIREWALL_H_ */

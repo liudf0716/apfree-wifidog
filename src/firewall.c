@@ -242,14 +242,14 @@ void
 fw_refresh_domains_trusted_safely(void)
 {
     debug(LOG_INFO, "Refresh trust domains list safely");
-	iptables_fw_refresh_domains_trusted_safely()
+	iptables_fw_refresh_domains_trusted_safely();
 }
 
 void
 fw_refresh_domains_trusted(void)
 {
     debug(LOG_INFO, "Refresh trust domains list");
-	iptables_fw_refresh_domains_trusted()
+	iptables_fw_refresh_domains_trusted();
 }
 
 void 

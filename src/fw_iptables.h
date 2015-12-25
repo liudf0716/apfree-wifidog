@@ -93,10 +93,10 @@ void iptables_fw_refresh_domains_trusted_safely(void);
 void iptables_fw_refresh_domains_trusted(void);
 
 /** @brief Set trust domains table */
-void iptables_fw_set_domains_trusted(void)
+void iptables_fw_set_domains_trusted(void);
 
 /** @brief Clear trust domains table */
-void iptables_fw_clear_domains_trusted(void)
+void iptables_fw_clear_domains_trusted(void);
 
 //<<< liudf added end
 #endif                          /* _IPTABLES_H_ */
