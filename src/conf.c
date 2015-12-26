@@ -1089,7 +1089,7 @@ add_trusted_domain_ip(t_domain_trusted *p)
     struct in_addr **addr_list;
     int i;
 
-    if ( (he = gethostbyname( p->domain ) ) == NULL)
+    if ( (he=gethostbyname2(p->domain, AF_INET) ) == NULL)
     {
         return ;
     }
@@ -1097,17 +1097,19 @@ add_trusted_domain_ip(t_domain_trusted *p)
     addr_list = (struct in_addr **) he->h_addr_list;
 
     for(i = 0; addr_list[i] != NULL; i++){
-        char hostname[NI_MAXHOST] = { 0 };
-		inet_ntop(AF_INET, addr_list[i], hostname, NI_MAXHOST);
-		hostname[NI_MAXHOST-1] = '\0';
+        char hostname[HTTP_IP_ADDR_LEN] = {0};
+		t_ip_trusted *ipt = NULL;
+		inet_ntop(AF_INET, addr_list[i], hostname, HTTP_IP_ADDR_LEN);
+		hostname[HTTP_IP_ADDR_LEN-1] = '\0';
         debug(LOG_DEBUG, "hostname ip is(%s)", hostname);
 		if(p->ips_trusted == NULL) {
-			p->ips_trusted = (t_ip_trusted *)malloc(sizeof(t_ip_trusted));
-			memset(p->ips_trusted, 0, sizeof(t_ip_trusted));
-			strncpy(p->ips_trusted->ip, hostname, NI_MAXHOST); 
-			p->ips_trusted->next = NULL;
+			ipt = (t_ip_trusted *)malloc(sizeof(t_ip_trusted));
+			memset(ipt, 0, sizeof(t_ip_trusted));
+			strncpy(ipt->ip, hostname, HTTP_IP_ADDR_LEN); 
+			ipt->next = NULL;
+			p->ips_trusted = ipt;
 		} else {
-			t_ip_trusted *ipt = p->ips_trusted;
+			ipt = p->ips_trusted;
 			while(ipt) {
 				if(strcmp(ipt->ip, hostname) == 0)
 					break;
@@ -1117,7 +1119,7 @@ add_trusted_domain_ip(t_domain_trusted *p)
 			if(ipt == NULL) {
 				ipt = (t_ip_trusted *)malloc(sizeof(t_ip_trusted));
 				memset(ipt, 0, sizeof(t_ip_trusted));
-				strncpy(ipt->ip, hostname, NI_MAXHOST);
+				strncpy(ipt->ip, hostname, HTTP_IP_ADDR_LEN);
 				ipt->next = p->ips_trusted;
 				p->ips_trusted = ipt; 
 			}
@@ -1141,6 +1143,7 @@ __parse_trusted_domains_ip(void)
 
 	p = config.domains_trusted;
 	while(p && p->domain) {
+        debug(LOG_DEBUG, "parse domain (%s)", p->domain);
 		add_trusted_domain_ip(p);	
 		p = p->next;
 	}
