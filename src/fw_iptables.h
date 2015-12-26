@@ -38,7 +38,7 @@
 #define CHAIN_INCOMING  "WiFiDog_$ID$_Incoming"
 #define CHAIN_AUTHSERVERS "WiFiDog_$ID$_AuthServers"
 // liudf added 20151223 for trusted domain
-#define CHAIN_DOMAIN_TRUSTED "WiFiDog_$ID$_TrustedDomains"
+#define CHAIN_DOMAIN_TRUSTED "WiFiDog_$ID$_TDomains"
 #define CHAIN_GLOBAL  "WiFiDog_$ID$_Global"
 #define CHAIN_VALIDATE  "WiFiDog_$ID$_Validate"
 #define CHAIN_KNOWN     "WiFiDog_$ID$_Known"
