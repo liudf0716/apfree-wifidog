@@ -78,10 +78,10 @@ usage(void)
     fprintf(stdout, "  stop              Stop the running wifidog\n");
     fprintf(stdout, "  restart           Re-start the running wifidog (without disconnecting active users!)\n");
 	//>>> liudf added 20151225
-    fprintf(stdout, "  add_trusted_domains		Add trusted domains)\n");
-    fprintf(stdout, "  reparse_trusted_domains	Reparse trusted domains ip)\n");
-    fprintf(stdout, "  clear_trusted_domains	Clear all trusted domains)\n");
-    fprintf(stdout, "  show_trusted_domains 	Show all trusted domains and its ip)\n");
+    fprintf(stdout, "  add_trusted_domains		Add trusted domains\n");
+    fprintf(stdout, "  reparse_trusted_domains	Reparse trusted domains ip\n");
+    fprintf(stdout, "  clear_trusted_domains	Clear all trusted domains\n");
+    fprintf(stdout, "  show_trusted_domains 	Show all trusted domains and its ip\n");
 	//<<< liudf added end
     fprintf(stdout, "\n");
 }
@@ -268,7 +268,7 @@ wdctl_reparse_trusted_domains(void)
     // -1: need some space for \0!
     while ((len = read(sock, buffer, sizeof(buffer) - 1)) > 0) {
         buffer[len] = '\0';
-        fprintf(stdout, "%s", buffer);
+        fprintf(stdout, "%s\n", buffer);
     }
 
     shutdown(sock, 2);
@@ -293,7 +293,7 @@ wdctl_clear_trusted_domains(void)
     // -1: need some space for \0!
     while ((len = read(sock, buffer, sizeof(buffer) - 1)) > 0) {
         buffer[len] = '\0';
-        fprintf(stdout, "%s", buffer);
+        fprintf(stdout, "%s\n", buffer);
     }
 
     shutdown(sock, 2);
