@@ -252,7 +252,6 @@ void
 iptables_fw_refresh_domains_trusted(void)
 {
 	iptables_fw_clear_domains_trusted();
-	__parse_trusted_domains_ip();
 	iptables_fw_set_domains_trusted();
 }
 
