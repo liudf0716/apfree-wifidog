@@ -890,7 +890,7 @@ check_mac_format(char *possiblemac)
 static void
 parse_trusted_mac_list(const char *ptr)
 {
-    char *ptrcopy = NULL;
+    char *ptrcopy = NULL, *pt = NULL;
     char *possiblemac = NULL;
     char *mac = NULL;
     t_trusted_mac *p = NULL;
@@ -901,6 +901,7 @@ parse_trusted_mac_list(const char *ptr)
 
     /* strsep modifies original, so let's make a copy */
     ptrcopy = safe_strdup(ptr);
+	pt = ptrcopy;
 
     while ((possiblemac = strsep(&ptrcopy, ","))) {
         /* check for valid format */
@@ -953,7 +954,7 @@ parse_trusted_mac_list(const char *ptr)
         }
     }
 
-    free(ptrcopy);
+    free(pt);
 
     free(mac);
 
@@ -983,7 +984,7 @@ add_popular_server(const char *server)
 static void
 parse_popular_servers(const char *ptr)
 {
-    char *ptrcopy = NULL;
+    char *ptrcopy = NULL, *pt = NULL;
     char *hostname = NULL;
     char *tmp = NULL;
 
@@ -991,6 +992,7 @@ parse_popular_servers(const char *ptr)
 
     /* strsep modifies original, so let's make a copy */
     ptrcopy = safe_strdup(ptr);
+	pt = ptrcopy;
 
     while ((hostname = strsep(&ptrcopy, ","))) {  /* hostname does *not* need allocation. strsep
                                                      provides a pointer in ptrcopy. */
@@ -1013,7 +1015,7 @@ parse_popular_servers(const char *ptr)
         add_popular_server(hostname);
     }
 
-    free(ptrcopy);
+    free(pt);
 }
 
 /*
@@ -1063,7 +1065,7 @@ add_domain_trusted(const char *domain)
 void
 parse_domain_trusted(const char *ptr)
 {
-    char *ptrcopy = NULL;
+    char *ptrcopy = NULL, *pt = NULL;
     char *hostname = NULL;
     char *tmp = NULL;
 
@@ -1071,6 +1073,7 @@ parse_domain_trusted(const char *ptr)
 
     /* strsep modifies original, so let's make a copy */
     ptrcopy = safe_strdup(ptr);
+	pt = ptrcopy;
 
     while ((hostname = strsep(&ptrcopy, ","))) {  /* hostname does *not* need allocation. strsep
                                                      provides a pointer in ptrcopy. */
@@ -1093,7 +1096,7 @@ parse_domain_trusted(const char *ptr)
         add_domain_trusted(hostname);
     }
 
-    free(ptrcopy);
+    free(pt);
 }
 
 static t_ip_trusted *
@@ -1117,17 +1120,26 @@ __add_domain_ip(t_domain_trusted *dt, const char *ip)
 void
 add_domain_ip(const char *args)
 {
-	char domain[128] 	= {0};
-	char ip[16] 		= {0};
+	char *domain 	= NULL;
+	char *ip 		= NULL;
 	t_domain_trusted	*dt = NULL;
-	
-	int nret = sscanf(args, "%s:%s", domain, ip);
-	if(nret != 2)
+    char *ptrcopy = NULL, *pt = NULL;
+
+    debug(LOG_DEBUG, "add domain ip (%s)", args);
+    ptrcopy = safe_strdup(ptr);
+	pt = ptrcopy;
+
+	if(domain = strsep(&ptrcopy, ":") == NULL) {	
+        debug(LOG_DEBUG, "args is illegal");
 		return;
-	
-	domain[127] = '\0';
-	ip[15] 		= '\0';
-	
+	}
+
+	ip = ptrcopy;	
+	if(ip == NULL || !(strlen(ip) >= 7 && strlen(ip) <= 15)) {
+		debug(LOG_DEBUG, "illegal ip");
+		return;
+	}
+		
 	LOCK_CONFIG();
 
 	dt = __add_domain_trusted(domain);
@@ -1135,6 +1147,8 @@ add_domain_ip(const char *args)
 	__add_domain_ip(dt, ip);
 	
 	UNLOCK_CONFIG();
+
+	free(pt);
 }
 
 static void
