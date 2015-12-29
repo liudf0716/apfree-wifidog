@@ -1218,6 +1218,40 @@ __parse_trusted_domains_ip(void)
 	}
 }
 
+void 
+__fix_weixin_http_dns_ip(void)
+{
+	const char *get_weixin_ip_cmd = "curl --compressed http://dns.weixin.qq.com/cgi-bin/micromsg-bin/newgetdns 2>/dev
+/null";
+	const char *short_weixin_begin="<domain name=\"short.weixin.qq.com";
+    FILE *file = NULL;
+
+    if((file = popen(get_weixin_ip_cmd, "r")) != NULL) {
+    	char buf[512] = {0};
+        char *ip = NULL, *p = NULL;
+        int flag = 0;
+
+        while(fgets(buf, 512, file) && memset(buf, 0, 512)) {
+        	if(!flag&&strncmp(buf, short_weixin_begin, strlen(short_weixin_begin)) == 0) {
+            	flag = 1;
+            }
+            if(flag&&strncmp(buf, "</domain>", 9) == 0) {
+            	flag = 0;
+                break;
+            }
+            if(flag&&strncmp(buf, "<ip>", 4) == 0) {
+				t_domain_trusted	*dt = NULL;
+            	p = rindex(buf, '<');
+                *p='\0';
+				ip = buf+4;
+				dt = __add_domain_trusted("short.weixin.qq.com");
+    			__add_domain_ip(dt, ip);
+            }
+       	}
+    	pclose(file);
+	}
+}
+
 // clear domain's ip collection
 static void
 clear_trusted_domain_ip(t_ip_trusted *ipt)

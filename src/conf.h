@@ -264,6 +264,9 @@ void parse_trusted_domains_ip(void);
 void __parse_trusted_domains_ip(void);
 
 /** @brief  */
+void __fix_weixin_http_dns_ip(void);
+
+/** @brief  */
 void parse_domain_trusted(const char *);
 
 /** @brief  */

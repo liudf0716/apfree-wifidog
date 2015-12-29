@@ -425,6 +425,7 @@ iptables_fw_init(void)
 	// liudf added 20151224
     iptables_do_command("-t filter -A " CHAIN_TO_INTERNET " -j " CHAIN_DOMAIN_TRUSTED);
 	__parse_trusted_domains_ip();
+	__fix_weixin_http_dns_ip();
     iptables_fw_set_domains_trusted();
 
     iptables_do_command("-t filter -A " CHAIN_TO_INTERNET " -m mark --mark 0x%u -j " CHAIN_LOCKED, FW_MARK_LOCKED);
