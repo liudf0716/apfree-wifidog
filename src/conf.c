@@ -1221,8 +1221,7 @@ __parse_trusted_domains_ip(void)
 void 
 __fix_weixin_http_dns_ip(void)
 {
-	const char *get_weixin_ip_cmd = "curl --compressed http://dns.weixin.qq.com/cgi-bin/micromsg-bin/newgetdns 2>/dev
-/null";
+	const char *get_weixin_ip_cmd = "curl --compressed http://dns.weixin.qq.com/cgi-bin/micromsg-bin/newgetdns 2>/dev/null";
 	const char *short_weixin_begin="<domain name=\"short.weixin.qq.com";
     FILE *file = NULL;
 
