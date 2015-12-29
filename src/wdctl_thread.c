@@ -68,6 +68,7 @@ static void wdctl_add_trusted_domains(int, const char *);
 static void wdctl_reparse_trusted_domains(int);
 static void wdctl_clear_trusted_domains(int);
 static void wdctl_show_trusted_domains(int);
+static void wdctl_add_domain_ip(int, const char *);
 //<<< liudf added end
 
 static int wdctl_socket_server;
@@ -223,6 +224,8 @@ thread_wdctl_handler(void *arg)
 		wdctl_clear_trusted_domains(fd);
 	} else if (strncmp(request, "show_trusted_domains", strlen("show_trusted_domains")) == 0) {
 		wdctl_show_trusted_domains(fd);
+	} else if (strncmp(request, "add_domain_ip", strlen("add_domain_ip")) == 0) {
+		wdctl_add_domain_ip(fd);
 	//<<< liudf added end
     } else {
         debug(LOG_ERR, "Request was not understood!");
@@ -467,4 +470,16 @@ wdctl_show_trusted_domains(int fd)
     free(status);
 }
 
+static void
+wdctl_add_domain_ip(int fd, const char *args)
+{
+    char *status = NULL;
+    size_t len = 0;
+
+	add_domain_ip(args);	
+
+	fw_refresh_domains_trusted_safely();	
+
+    write_to_socket(fd, "Yes", 3);
+}
 //>>> liudf added end

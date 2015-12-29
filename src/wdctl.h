@@ -39,6 +39,7 @@
 #define	WDCTL_REPARSE_TRUSTED_DOMAINS	6
 #define	WDCTL_CLEAR_TRUSTED_DOMAINS		7
 #define	WDCTL_SHOW_TRUSTED_DOMAINS		8
+#define	WDCTL_ADD_DOMAIN_IP				9
 //<<<< liudf added end
 
 typedef struct {

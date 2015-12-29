@@ -1020,12 +1020,12 @@ parse_popular_servers(const char *ptr)
  * liudf added 20151224
  * trust domain related functio
  */
-static void
-add_domain_trusted(const char *domain)
+
+static t_domain_trusted *
+__add_domain_trusted(const char *domain)
 {
     t_domain_trusted *p = NULL;
 	
-	LOCK_CONFIG();
     if (config.domains_trusted == NULL) {
     	p = (t_domain_trusted *)safe_malloc(sizeof(t_domain_trusted));
     	p->domain = safe_strdup(domain);
@@ -1043,7 +1043,21 @@ add_domain_trusted(const char *domain)
         	config.domains_trusted = p;
 		}
     }
-	UNLOCK_CONFIG();
+	
+	return p;
+}
+
+
+static t_domain_trusted *
+add_domain_trusted(const char *domain)
+{
+    t_domain_trusted *p = NULL;
+	
+	LOCK_CONFIG();
+	p= __add_domain_trusted(domain);
+    UNLOCK_CONFIG();
+	
+	return p;
 }
 
 void
@@ -1080,6 +1094,47 @@ parse_domain_trusted(const char *ptr)
     }
 
     free(ptrcopy);
+}
+
+static t_ip_trusted *
+__add_domain_ip(t_domain_trusted *dt, const char *ip)
+{
+	t_ip_trusted *ipt = dt->ips_trusted;
+	for(; ipt != NULL && strcmp(ipt->ip, ip) != 0; ipt = ipt->next)
+		;
+	
+	if(ipt == NULL) {
+		ipt = (t_ip_trusted *)malloc(sizeof(t_ip_trusted));
+		strncpy(ipt->ip, ip, HTTP_IP_ADDR_LEN);
+		ipt->ip[HTTP_IP_ADDR_LEN-1] = '\0';
+		ipt->next = dt->ips_trusted;
+		dt->ips_trusted = ipt;
+	}	
+
+	return ipt;
+}
+
+void
+add_domain_ip(const char *args)
+{
+	char domain[128] 	= {0};
+	char ip[16] 		= {0};
+	t_domain_trusted	*dt = NULL;
+	
+	int nret = sscanf(args, "%s:%s", domain, ip);
+	if(nret != 2)
+		return;
+	
+	domain[127] = '\0';
+	ip[15] 		= '\0';
+	
+	LOCK_CONFIG();
+
+	dt = __add_domain_trusted(domain);
+	
+	__add_domain_ip(dt, ip);
+	
+	UNLOCK_CONFIG();
 }
 
 static void

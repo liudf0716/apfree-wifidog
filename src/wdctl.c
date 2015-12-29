@@ -56,6 +56,7 @@ static void wdctl_add_trusted_domains(void);
 static void wdctl_reparse_trusted_domains(void);
 static void wdctl_clear_trusted_domains(void);
 static void wdctl_show_trusted_domains(void);
+static void wdctl_add_domain_ip(void);
 //<<< liudf added end
 
 /** @internal
@@ -82,6 +83,7 @@ usage(void)
     fprintf(stdout, "  reparse_trusted_domains	Reparse trusted domains ip\n");
     fprintf(stdout, "  clear_trusted_domains	Clear all trusted domains\n");
     fprintf(stdout, "  show_trusted_domains 	Show all trusted domains and its ip\n");
+    fprintf(stdout, "  add_domain_ip [domain|ip] 	Add domain and its ip\n");
 	//<<< liudf added end
     fprintf(stdout, "\n");
 }
@@ -163,6 +165,14 @@ parse_commandline(int argc, char **argv)
 		config.command = WDCTL_CLEAR_TRUSTED_DOMAINS;
 	} else if (strcmp(*(argv + optind), "show_trusted_domains") == 0) {
 		config.command = WDCTL_SHOW_TRUSTED_DOMAINS;
+	} else if (strcmp(*(argv + optind), "add_domain_ip") == 0) {
+		config.command = WDCTL_ADD_DOMAIN_IP;
+		if ((argc - (optind + 1)) <= 0) {
+			fprintf(stderr, "wdctl: Error: You must specify domain and its ip\n");
+            usage();
+            exit(1);
+		}
+        config.param = strdup(*(argv + optind + 1));
 	//<<< liudf added end
     } else {
         fprintf(stderr, "wdctl: Error: Invalid command \"%s\"\n", *(argv + optind));
@@ -324,6 +334,41 @@ wdctl_show_trusted_domains(void)
     close(sock);
 }
 
+void
+wdctl_add_domain_ip(void)
+{
+    int sock;
+    char buffer[4096] = {0};
+    char request[256] = {0};
+    size_t len;
+    ssize_t rlen;
+
+    sock = connect_to_server(config.socket);
+
+    strncpy(request, "add_domain_ip ", 256);
+    strncat(request, config.param, (256 - strlen(request) - 1));
+    strncat(request, "\r\n\r\n", (256 - strlen(request) - 1));
+
+    send_request(sock, request);
+
+    len = 0;
+    memset(buffer, 0, sizeof(buffer));
+    while ((len < sizeof(buffer)) && ((rlen = read(sock, (buffer + len), (sizeof(buffer) - len))) > 0)) {
+        len += (size_t) rlen;
+    }
+
+    if (strcmp(buffer, "Yes") == 0) {
+        fprintf(stdout, "Connection %s successfully reset.\n", config.param);
+    } else if (strcmp(buffer, "No") == 0) {
+        fprintf(stdout, "Connection %s was not active.\n", config.param);
+    } else {
+        fprintf(stderr, "wdctl: Error: WiFiDog sent an abnormal " "reply.\n");
+    }
+
+    shutdown(sock, 2);
+    close(sock);
+}
+
 //<<< liudf added end
 
 static void
@@ -471,6 +516,10 @@ main(int argc, char **argv)
 
 	case WDCTL_SHOW_TRUSTED_DOMAINS:
 		wdctl_show_trusted_domains();
+		break;
+	
+	case WDCTL_ADD_DOMAIN_IP:
+		wdctl_add_domain_ip();
 		break;
 	//<<< liudf end
 
