@@ -265,6 +265,9 @@ void __parse_trusted_domains_ip(void);
 
 /** @brief  */
 void parse_domain_trusted(const char *);
+
+/** @brief  */
+void add_domain_ip(const char *);
 // <<< liudf added end
 
 #define LOCK_CONFIG() do { \

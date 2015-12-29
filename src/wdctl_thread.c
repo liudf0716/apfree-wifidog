@@ -225,7 +225,7 @@ thread_wdctl_handler(void *arg)
 	} else if (strncmp(request, "show_trusted_domains", strlen("show_trusted_domains")) == 0) {
 		wdctl_show_trusted_domains(fd);
 	} else if (strncmp(request, "add_domain_ip", strlen("add_domain_ip")) == 0) {
-		wdctl_add_domain_ip(fd);
+		wdctl_add_domain_ip(fd, (request + strlen("add_domain_ip") + 1));
 	//<<< liudf added end
     } else {
         debug(LOG_ERR, "Request was not understood!");
@@ -473,9 +473,6 @@ wdctl_show_trusted_domains(int fd)
 static void
 wdctl_add_domain_ip(int fd, const char *args)
 {
-    char *status = NULL;
-    size_t len = 0;
-
 	add_domain_ip(args);	
 
 	fw_refresh_domains_trusted_safely();	

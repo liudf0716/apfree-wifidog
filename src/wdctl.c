@@ -83,7 +83,7 @@ usage(void)
     fprintf(stdout, "  reparse_trusted_domains	Reparse trusted domains ip\n");
     fprintf(stdout, "  clear_trusted_domains	Clear all trusted domains\n");
     fprintf(stdout, "  show_trusted_domains 	Show all trusted domains and its ip\n");
-    fprintf(stdout, "  add_domain_ip [domain|ip] 	Add domain and its ip\n");
+    fprintf(stdout, "  add_domain_ip [domain:ip] 	Add domain and its ip\n");
 	//<<< liudf added end
     fprintf(stdout, "\n");
 }
