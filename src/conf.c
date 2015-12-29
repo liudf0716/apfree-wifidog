@@ -1126,10 +1126,10 @@ add_domain_ip(const char *args)
     char *ptrcopy = NULL, *pt = NULL;
 
     debug(LOG_DEBUG, "add domain ip (%s)", args);
-    ptrcopy = safe_strdup(ptr);
+    ptrcopy = safe_strdup(args);
 	pt = ptrcopy;
 
-	if(domain = strsep(&ptrcopy, ":") == NULL) {	
+	if((domain = strsep(&ptrcopy, ":")) == NULL) {	
         debug(LOG_DEBUG, "args is illegal");
 		return;
 	}
