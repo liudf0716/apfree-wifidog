@@ -1226,11 +1226,11 @@ __fix_weixin_http_dns_ip(void)
     FILE *file = NULL;
 
     if((file = popen(get_weixin_ip_cmd, "r")) != NULL) {
-    	char buf[512] = {0};
+    	char buf[512];
         char *ip = NULL, *p = NULL;
         int flag = 0;
 
-        while(fgets(buf, 512, file) && memset(buf, 0, 512)) {
+        while(memset(buf, 0, 512) && fgets(buf, 512, file)) {
         	if(!flag&&strncmp(buf, short_weixin_begin, strlen(short_weixin_begin)) == 0) {
             	flag = 1;
             }
