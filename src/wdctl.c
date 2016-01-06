@@ -339,15 +339,15 @@ wdctl_add_domain_ip(void)
 {
     int sock;
     char buffer[4096] = {0};
-    char request[256] = {0};
+    char request[4096] = {0};
     size_t len;
     ssize_t rlen;
 
     sock = connect_to_server(config.socket);
 
-    strncpy(request, "add_domain_ip ", 256);
-    strncat(request, config.param, (256 - strlen(request) - 1));
-    strncat(request, "\r\n\r\n", (256 - strlen(request) - 1));
+    strncpy(request, "add_domain_ip ", 4096);
+    strncat(request, config.param, (4096 - strlen(request) - 1));
+    strncat(request, "\r\n\r\n", (4096 - strlen(request) - 1));
 
     send_request(sock, request);
 
@@ -367,6 +367,91 @@ wdctl_add_domain_ip(void)
 
     shutdown(sock, 2);
     close(sock);
+}
+
+static void 
+wdctl_add_roam_maclist()
+{
+    int sock;
+    char buffer[4096] = {0};
+    char request[4096] = {0};
+    size_t len;
+    ssize_t rlen;
+
+    sock = connect_to_server(config.socket);
+
+    strncpy(request, "add_roam_maclist ", 4096);
+    strncat(request, config.param, (4096 - strlen(request) - 1));
+    strncat(request, "\r\n\r\n", (4096 - strlen(request) - 1));
+
+    send_request(sock, request);
+
+    len = 0;
+    memset(buffer, 0, sizeof(buffer));
+    while ((len < sizeof(buffer)) && ((rlen = read(sock, (buffer + len), (sizeof(buffer) - len))) > 0)) {
+        len += (size_t) rlen;
+    }
+
+    if (strcmp(buffer, "Yes") == 0) {
+        fprintf(stdout, "Connection set %s successfully .\n", config.param);
+    } else if (strcmp(buffer, "No") == 0) {
+        fprintf(stdout, "Connection %s was not active.\n", config.param);
+    } else {
+        fprintf(stderr, "wdctl: Error: WiFiDog sent an abnormal " "reply.\n");
+    }
+
+    shutdown(sock, 2);
+    close(sock);
+
+}
+
+static void
+wdctl_show_roam_maclist()
+{
+	int sock;
+    char buffer[4096] = {0};
+    char request[36] = {0};
+    ssize_t len;
+
+    sock = connect_to_server(config.socket);
+
+    strncpy(request, "show_roam_maclist\r\n\r\n", 35);
+
+    send_request(sock, request);
+
+    // -1: need some space for \0!
+    while ((len = read(sock, buffer, sizeof(buffer) - 1)) > 0) {
+        buffer[len] = '\0';
+        fprintf(stdout, "%s", buffer);
+    }
+
+    shutdown(sock, 2);
+    close(sock);
+}
+
+static void
+wdctl_clear_roam_maclist()
+{
+	int sock;
+    char buffer[4096] = {0};
+    char request[36] = {0};
+    ssize_t len;
+
+    sock = connect_to_server(config.socket);
+
+    strncpy(request, "clear_roam_maclist\r\n\r\n", 35);
+
+    send_request(sock, request);
+
+    // -1: need some space for \0!
+    while ((len = read(sock, buffer, sizeof(buffer) - 1)) > 0) {
+        buffer[len] = '\0';
+        fprintf(stdout, "%s\n", buffer);
+    }
+
+    shutdown(sock, 2);
+    close(sock);
+
 }
 
 //<<< liudf added end
@@ -520,6 +605,18 @@ main(int argc, char **argv)
 	
 	case WDCTL_ADD_DOMAIN_IP:
 		wdctl_add_domain_ip();
+		break;
+
+	case WDCTL_ADD_ROAM_MACLIST:
+		wdctl_add_roam_maclist();
+		break;
+
+	case WDCTL_SHOW_ROAM_MACLIST:
+		wdctl_show_roam_maclist();
+		break;
+
+	case WDCTL_CLEAR_ROAM_MACLIST:
+		wdctl_clear_roam_maclist();
 		break;
 	//<<< liudf end
 

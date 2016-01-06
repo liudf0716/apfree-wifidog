@@ -69,6 +69,9 @@ static void wdctl_reparse_trusted_domains(int);
 static void wdctl_clear_trusted_domains(int);
 static void wdctl_show_trusted_domains(int);
 static void wdctl_add_domain_ip(int, const char *);
+static void wdctl_add_roam_maclist(int, const char *);
+static void wdctl_show_roam_maclist(int);
+static void wdctl_clear_roam_maclist(int);
 //<<< liudf added end
 
 static int wdctl_socket_server;
@@ -226,6 +229,12 @@ thread_wdctl_handler(void *arg)
 		wdctl_show_trusted_domains(fd);
 	} else if (strncmp(request, "add_domain_ip", strlen("add_domain_ip")) == 0) {
 		wdctl_add_domain_ip(fd, (request + strlen("add_domain_ip") + 1));
+	} else if (strncmp(request, "add_roam_maclist", strlen("add_roam_maclist"))) {
+		wdctl_add_roam_maclist(fd, (request + strlen("add_roam_maclist") + 1));
+	} else if (strncmp(request, "show_roam_maclist", strlen("show_roam_maclist"))) {
+		wdctl_show_roam_maclist(fd);
+	} else if (strncmp(request, "clear_roam_maclist", strlen("clear_roam_maclist"))) {
+		wdctl_clear_roam_maclist(fd);
 	//<<< liudf added end
     } else {
         debug(LOG_ERR, "Request was not understood!");
@@ -476,6 +485,52 @@ wdctl_add_domain_ip(int fd, const char *args)
 	add_domain_ip(args);	
 
 	fw_refresh_domains_trusted_safely();	
+
+    write_to_socket(fd, "Yes", 3);
+}
+
+
+static void
+wdctl_add_roam_maclist(int fd, const char *args)
+{
+    debug(LOG_DEBUG, "Entering wdctl_add_roam_maclist...");
+	
+    debug(LOG_DEBUG, "Argument: %s ", arg);
+	
+    debug(LOG_DEBUG, "parse roam maclist");
+	LOCK_CONFIG();
+
+	parse_roam_mac_list(args);	
+	
+	UNLOCK_CONFIG();
+	
+    write_to_socket(fd, "Yes", 3);
+
+    debug(LOG_DEBUG, "Exiting wdctl_add_roam_maclist...");
+}
+
+static void
+wdctl_show_roam_maclist(int fd)
+{
+    char *status = NULL;
+    size_t len = 0;
+
+    status = get_roam_maclist_text();
+    len = strlen(status);
+
+    write_to_socket(fd, status, len);   /* XXX Not handling error because we'd just print the same log line. */
+
+    free(status);
+}
+
+static void
+wdctl_clear_roam_maclist(int fd)
+{
+	LOCK_CONFIG();
+	__clear_roam_mac_list();	
+	
+	fw_clear_roam_maclist();
+	UNLOCK_CONFIG();	
 
     write_to_socket(fd, "Yes", 3);
 }

@@ -279,6 +279,19 @@ iptables_fw_set_domains_trusted(void)
 	}
 }
 
+void
+iptables_fw_clear_roam_maclist(void)
+{
+    iptables_do_command("-t mangle -F " CHAIN_ROAM);
+}
+
+void
+iptables_fw_set_roam_mac(const char *mac)
+{
+	iptables_do_command("-t mangle -A " CHAIN_ROAM " -m mac --mac-source %s -j MARK --set-mark %d", p->mac,
+						FW_MARK_KNOWN);
+}
+
 // <<< liudf added end
 
 /** Initialize the firewall rules
@@ -315,6 +328,8 @@ iptables_fw_init(void)
      */
 
     /* Create new chains */
+	// liudf added 20160106
+    iptables_do_command("-t mangle -N " CHAIN_ROAM);
     iptables_do_command("-t mangle -N " CHAIN_TRUSTED);
     iptables_do_command("-t mangle -N " CHAIN_OUTGOING);
     iptables_do_command("-t mangle -N " CHAIN_INCOMING);
@@ -324,6 +339,8 @@ iptables_fw_init(void)
     /* Assign links and rules to these new chains */
     iptables_do_command("-t mangle -I PREROUTING 1 -i %s -j " CHAIN_OUTGOING, config->gw_interface);
     iptables_do_command("-t mangle -I PREROUTING 1 -i %s -j " CHAIN_TRUSTED, config->gw_interface);     //this rule will be inserted before the prior one
+	// liudf added 20160106
+    iptables_do_command("-t mangle -I PREROUTING 1 -i %s -j " CHAIN_ROAM, config->gw_interface);    
     if (got_authdown_ruleset)
         iptables_do_command("-t mangle -I PREROUTING 1 -i %s -j " CHAIN_AUTH_IS_DOWN, config->gw_interface);    //this rule must be last in the chain
     iptables_do_command("-t mangle -I POSTROUTING 1 -o %s -j " CHAIN_INCOMING, config->gw_interface);
@@ -477,16 +494,22 @@ iptables_fw_destroy(void)
      *
      */
     debug(LOG_DEBUG, "Destroying chains in the MANGLE table");
+	// liudf added 20160106
+    iptables_fw_destroy_mention("mangle", "PREROUTING", CHAIN_ROAM);
     iptables_fw_destroy_mention("mangle", "PREROUTING", CHAIN_TRUSTED);
     iptables_fw_destroy_mention("mangle", "PREROUTING", CHAIN_OUTGOING);
     if (got_authdown_ruleset)
         iptables_fw_destroy_mention("mangle", "PREROUTING", CHAIN_AUTH_IS_DOWN);
     iptables_fw_destroy_mention("mangle", "POSTROUTING", CHAIN_INCOMING);
+	// liudf added 20160106
+    iptables_do_command("-t mangle -F " CHAIN_ROAM);
     iptables_do_command("-t mangle -F " CHAIN_TRUSTED);
     iptables_do_command("-t mangle -F " CHAIN_OUTGOING);
     if (got_authdown_ruleset)
         iptables_do_command("-t mangle -F " CHAIN_AUTH_IS_DOWN);
     iptables_do_command("-t mangle -F " CHAIN_INCOMING);
+	// liudf added 20160106
+    iptables_do_command("-t mangle -X " CHAIN_ROAM);
     iptables_do_command("-t mangle -X " CHAIN_TRUSTED);
     iptables_do_command("-t mangle -X " CHAIN_OUTGOING);
     if (got_authdown_ruleset)

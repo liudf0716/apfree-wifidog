@@ -262,14 +262,14 @@ int port;
         free(new);
         return (NULL);
     }
-#	ifdef SO_REUSEADDR
+
     opt = 1;
     if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (char *)&opt, sizeof(int)) < 0) {
         close(sock);
         free(new);
         return NULL;
     }
-#	endif
+
     new->serverSock = sock;
     bzero(&addr, sizeof(addr));
     addr.sin_family = AF_INET;
@@ -365,7 +365,7 @@ struct timeval *timeout;
 int
 httpdReadRequest(httpd * server, request * r)
 {
-    char buf[HTTP_MAX_LEN];
+    char buf[HTTP_MAX_LEN] = {0};
     int count, inHeaders;
     char *cp, *cp2;
     int _httpd_decode();
@@ -794,7 +794,7 @@ va_dcl
 void
 httpdProcessRequest(httpd * server, request * r)
 {
-    char dirName[HTTP_MAX_URL] = { 0 }, entryName[HTTP_MAX_URL] = { 0 }, *cp;
+    char dirName[HTTP_MAX_URL] = {0}, entryName[HTTP_MAX_URL] = {0}, *cp;
     httpDir *dir;
     httpContent *entry;
 
@@ -887,7 +887,7 @@ httpdAuthenticate(request * r, const char *realm)
 int
 httpdSetErrorFunction(httpd * server, int error, void (*function) ())
 {
-    char errBuf[80];
+    char errBuf[80] = {0};
 
     switch (error) {
     case 304:

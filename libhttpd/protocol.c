@@ -55,7 +55,7 @@ int len;
 
     FD_ZERO(&readfds);
     FD_SET(sock, &readfds);
-    timeout.tv_sec = 10;
+    timeout.tv_sec = 2; // liudf modified 20160104; from 10 to 2 seconds
     timeout.tv_usec = 0;
     nfds = sock + 1;
 
@@ -504,7 +504,7 @@ _httpd_send403(httpd * server, request * r)
 void
 _httpd_send404(httpd * server, request * r)
 {
-    char msg[HTTP_MAX_URL];
+    char msg[HTTP_MAX_URL] = {0};
 
     snprintf(msg, HTTP_MAX_URL, "File does not exist: %s\n", r->request.path);
     _httpd_writeErrorLog(server, r, LEVEL_ERROR, msg);
@@ -530,7 +530,7 @@ void
 _httpd_catFile(request * r, const char *path)
 {
     int fd, len;
-    char buf[HTTP_MAX_LEN];
+    char buf[HTTP_MAX_LEN] = {0};
 
     fd = open(path, O_RDONLY);
     if (fd < 0)

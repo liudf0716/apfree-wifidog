@@ -40,6 +40,9 @@
 #define	WDCTL_CLEAR_TRUSTED_DOMAINS		7
 #define	WDCTL_SHOW_TRUSTED_DOMAINS		8
 #define	WDCTL_ADD_DOMAIN_IP				9
+#define	WDCTL_ADD_ROAM_MACLIST			10
+#define	WDCTL_CLEAR_ROAM_MACLIST		11
+#define	WDCTL_SHOW_ROAM_MACLIST			12
 //<<<< liudf added end
 
 typedef struct {

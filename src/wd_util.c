@@ -264,4 +264,31 @@ char *get_trusted_domains_text()
     
 	return pstr_to_string(pstr);
 }
+
+char *get_roam_maclist_text()
+{
+	pstr_t *pstr = pstr_new();
+    s_config *config;
+	t_trusted_mac *roam_maclist = NULL;
+	int line = 0;
+    config = config_get_config();
+    
+	pstr_cat(pstr, "\nRoam mac list:\n");
+
+	LOCK_CONFIG();
+	
+	for (roam_maclist = config->roam_maclist; roam_maclist != NULL; roam_maclist = roam_maclist->next) {
+        pstr_append_sprintf(pstr, " %s ", roam_maclist->mac);
+		line++;
+		if(line == 4) {
+			line = 0;
+			pstr_append_sprintf(pstr, "\n");
+		}
+	}
+	
+	UNLOCK_CONFIG();
+    
+	return pstr_to_string(pstr);
+}
+
 //<<<< liudf added end

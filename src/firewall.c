@@ -161,8 +161,8 @@ char *
 arp_get(const char *req_ip)
 {
     FILE *proc;
-    char ip[16];
-    char mac[18];
+    char ip[16] 	= {0};
+    char mac[18] 	= {0};
     char *reply;
     s_config *config = config_get_config();
 
@@ -265,6 +265,21 @@ fw_set_domains_trusted(void)
     debug(LOG_INFO, "Setting the trust domains list");
 	iptables_fw_set_domains_trusted();
 }
+
+void
+fw_set_roam_mac(const char *mac)
+{
+    debug(LOG_INFO, "Set roam mac");
+	iptables_fw_set_roam_mac(mac);
+}
+
+void
+fw_clear_roam_maclist(void)
+{
+    debug(LOG_INFO, "Clear roam maclist");
+	iptables_fw_clear_roam_maclist();
+}
+
 //<<<<< liudf added end
 
 /** Remove the firewall rules

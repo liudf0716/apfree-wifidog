@@ -2,3 +2,9 @@ liudf 20151230 This ApFree wifidog version
 
 u can join our qq group 331230369
 
+20160105	Add js redirect switch
+			Add roam mac list to support auth roaming
+20160106	Add add_roam_maclist to wdctl
+			Add show_roam_maclist to wdctl
+			Add clear_roam_maclist to wdctl
+			Add device roam support	

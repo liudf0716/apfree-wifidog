@@ -110,6 +110,7 @@ typedef enum {
 	
 	// >>>>liudf added 20151224
 	oTrustedDomains,
+	oJsFilter,
 	// <<< liudf added end
 } OpCodes;
 
@@ -161,6 +162,7 @@ static const struct {
 	
 	//>>>>> liudf added 20151224
 	"trustedDomains", oTrustedDomains}, {
+	"jsFilter", oJsFilter}, {
 	// <<<< liudf added end
 NULL, oBadOption},};
 
@@ -219,7 +221,10 @@ config_init(void)
     config.ssl_cipher_list = NULL;
     config.arp_table_path = safe_strdup(DEFAULT_ARPTABLE);
     config.ssl_use_sni = DEFAULT_AUTHSERVSSLSNI;
-
+	//>>> liudf 20160104 added
+	config.js_filter = 1; // default enable it
+	//<<<
+	
     debugconf.log_stderr = 1;
     debugconf.debuglevel = DEFAULT_DEBUGLEVEL;
     debugconf.syslog_facility = DEFAULT_SYSLOG_FACILITY;
@@ -655,7 +660,7 @@ void
 config_read(const char *filename)
 {
     FILE *fd;
-    char line[MAX_BUF] = { 0 }, *s, *p1, *p2, *rawarg = NULL;
+    char line[MAX_BUF] = {0}, *s, *p1, *p2, *rawarg = NULL;
     int linenum = 0, opcode, value;
     size_t len;
 
@@ -825,6 +830,9 @@ config_read(const char *filename)
 				case oTrustedDomains:
                     parse_domain_trusted(rawarg);
 					break;
+				case oJsFilter:
+                    config.js_filter = parse_boolean_value(p1);
+					break;
 				// <<< liudf added end
                 case oBadOption:
                     /* FALL THROUGH */
@@ -878,6 +886,9 @@ int
 check_mac_format(char *possiblemac)
 {
     char hex2[3];
+	if(!possiblemac || strlen(possiblemac) != 17)
+		return 0;
+
     return
         sscanf(possiblemac,
                "%2[A-Fa-f0-9]:%2[A-Fa-f0-9]:%2[A-Fa-f0-9]:%2[A-Fa-f0-9]:%2[A-Fa-f0-9]:%2[A-Fa-f0-9]",
@@ -1290,6 +1301,124 @@ t_domain_trusted *
 get_domains_trusted(void)
 {
 	return config.domains_trusted;
+}
+
+
+/** 
+ * Parse the roam mac list.
+ */
+
+static void
+add_roam_mac(const char *mac)
+{
+	debug(LOG_DEBUG, "Adding MAC address [%s] to roam mac list", mac);
+
+	if (config.roam_maclist == NULL) {
+		config.roam_maclist = safe_malloc(sizeof(t_trusted_mac));
+		config.roam_maclist->mac = safe_strdup(mac);
+		config.roam_maclist->next = NULL;
+	} else {
+		int skipmac;
+		/* Advance to the last entry */
+		t_trusted_mac *p = config.roam_maclist;
+		skipmac = 0;
+		while (p != NULL) {
+			if (0 == strcmp(p->mac, mac)) {
+				skipmac = 1;
+			}
+			p = p->next;
+		}
+		if (!skipmac) {
+			p = safe_malloc(sizeof(t_trusted_mac));
+			p->mac = safe_strdup(mac);
+			p->next = config.roam_maclist;
+			config.roam_maclist = p;
+		} else {
+			debug(LOG_ERR,
+				"MAC address [%s] already on roam mac list.  ",
+				mac);
+		}
+	}
+}
+
+void
+parse_roam_mac_list(const char *ptr)
+{
+    char *ptrcopy = NULL, *pt = NULL;
+    char *possiblemac = NULL;
+    char *mac = NULL;
+
+    debug(LOG_DEBUG, "Parsing string [%s] for roam MAC addresses", ptr);
+	
+	if (check_mac_format(ptr)) {
+		// in case only one mac
+		add_roam_mac(ptr);
+		return;
+	}
+
+    mac = safe_malloc(18);
+
+    /* strsep modifies original, so let's make a copy */
+    ptrcopy = safe_strdup(ptr);
+	pt = ptrcopy;
+
+    while ((possiblemac = strsep(&ptrcopy, ","))) {
+        /* check for valid format */
+        if (!check_mac_format(possiblemac)) {
+            debug(LOG_ERR,
+                  "[%s] not a valid MAC address ",
+                  possiblemac);
+			break;
+        } else {
+            if (sscanf(possiblemac, " %17[A-Fa-f0-9:]", mac) == 1) {
+                /* Copy mac to the list */
+				add_roam_mac(mac);
+            }
+        }
+    }
+
+    free(pt);
+    free(mac);
+}
+
+void
+__clear_roam_mac_list()
+{
+	t_trusted_mac *p, *p1;
+    for (p = config.roam_maclist; p != NULL;) {
+    	p1 = p;
+        p = p->next;
+        free(p1->mac);
+        free(p1);
+    }
+    config.domains_trusted = NULL;
+}
+
+void 
+clear_roam_mac_list()
+{
+	LOCK_CONFIG();
+	__clear_roam_mac_list();
+	UNLOCK_CONFIG();
+}
+
+t_trusted_mac *
+get_roam_maclist() 
+{
+	return config.roam_maclist;
+}
+
+int
+is_roaming(const char *mac)
+{
+	t_trusted_mac *p = NULL;
+
+    for (p = config.roam_maclist; p != NULL; p = p->next) {
+    	if(strcmp(mac, p->mac) == 0)
+			break;
+	}
+	
+	return p==NULL?0:1;
 }
 
 // >>> end liudf added

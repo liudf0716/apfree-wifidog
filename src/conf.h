@@ -220,7 +220,9 @@ typedef struct {
 	
 	// liudf 20151223 added
 	// trusted domain
-	t_domain_trusted *domains_trusted;
+	t_domain_trusted *domains_trusted; /** domains list, seperate with comma*/
+	t_trusted_mac	*roam_maclist; /** roam mac list*/
+	int	js_filter; /** boolean, whether to enable javascript filter url request*/
 } s_config;
 
 /** @brief Get the current gateway configuration */
@@ -271,6 +273,17 @@ void parse_domain_trusted(const char *);
 
 /** @brief  */
 void add_domain_ip(const char *);
+
+/** @brief parse roam mac list, for wdctl use*/
+void parse_roam_mac_list(const char *); 
+
+void __clear_roam_mac_list();
+
+void clear_roam_mac_list();
+
+t_trusted_mac *get_roam_maclist();
+
+int is_roaming(const char *mac);
 // <<< liudf added end
 
 #define LOCK_CONFIG() do { \

@@ -49,4 +49,7 @@ void send_http_page(request *, const char *, const char* );
 void http_send_redirect(request *, const char *, const char *);
 /** @brief Convenience function to redirect the web browser to the authe server */
 void http_send_redirect_to_auth(request *, const char *, const char *);
+//>>> liudf added 20160104
+void http_send_js_redirect(request *, const char *, const char *);
+//<<< liudf added end
 #endif /* _HTTP_H_ */
