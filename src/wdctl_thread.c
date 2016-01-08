@@ -495,7 +495,7 @@ wdctl_add_roam_maclist(int fd, const char *args)
 {
     debug(LOG_DEBUG, "Entering wdctl_add_roam_maclist...");
 	
-    debug(LOG_DEBUG, "Argument: %s ", arg);
+    debug(LOG_DEBUG, "Argument: %s ", args);
 	
     debug(LOG_DEBUG, "parse roam maclist");
 	LOCK_CONFIG();

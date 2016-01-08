@@ -288,7 +288,7 @@ iptables_fw_clear_roam_maclist(void)
 void
 iptables_fw_set_roam_mac(const char *mac)
 {
-	iptables_do_command("-t mangle -A " CHAIN_ROAM " -m mac --mac-source %s -j MARK --set-mark %d", p->mac,
+	iptables_do_command("-t mangle -A " CHAIN_ROAM " -m mac --mac-source %s -j MARK --set-mark %d", mac,
 						FW_MARK_KNOWN);
 }
 
