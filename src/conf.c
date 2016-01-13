@@ -883,7 +883,7 @@ parse_boolean_value(char *line)
 /**
  * Parse possiblemac to see if it is valid MAC address format */
 int
-check_mac_format(char *possiblemac)
+check_mac_format(const char *possiblemac)
 {
     char hex2[3];
 	if(!possiblemac || strlen(possiblemac) != 17)
