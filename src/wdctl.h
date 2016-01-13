@@ -43,6 +43,12 @@
 #define	WDCTL_ADD_ROAM_MACLIST			10
 #define	WDCTL_CLEAR_ROAM_MACLIST		11
 #define	WDCTL_SHOW_ROAM_MACLIST			12
+#define	WDCTL_ADD_MAC_BL				13
+#define	WDCTL_CLEAR_MAC_BL				14
+#define	WDCTL_SHOW_MAC_BL				15
+#define	WDCTL_ADD_MAC_WL				16
+#define	WDCTL_CLEAR_MAC_WL				17
+#define	WDCTL_SHOW_MAC_WL				18
 //<<<< liudf added end
 
 typedef struct {

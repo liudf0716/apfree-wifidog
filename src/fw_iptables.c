@@ -89,6 +89,43 @@ iptables_insert_gateway_id(char **input)
 /** @internal 
  * */
 static int
+ipset_do_command(const char *format, ...)
+{
+    va_list vlist;
+    char *fmt_cmd;
+    char *cmd;
+    int rc;
+
+    va_start(vlist, format);
+    safe_vasprintf(&fmt_cmd, format, vlist);
+    va_end(vlist);
+
+    safe_asprintf(&cmd, "ipset %s", fmt_cmd);
+    free(fmt_cmd);
+
+    iptables_insert_gateway_id(&cmd);
+
+    debug(LOG_DEBUG, "Executing command: %s", cmd);
+
+    rc = execute(cmd, fw_quiet);
+
+    if (rc != 0) {
+        // If quiet, do not display the error
+        if (fw_quiet == 0)
+            debug(LOG_ERR, "ipset command failed(%d): %s", rc, cmd);
+        else if (fw_quiet == 1)
+            debug(LOG_DEBUG, "ipset command failed(%d): %s", rc, cmd);
+    }
+
+    free(cmd);
+
+    return rc;
+}
+
+
+/** @internal 
+ * */
+static int
 iptables_do_command(const char *format, ...)
 {
     va_list vlist;
@@ -344,10 +381,15 @@ iptables_fw_init(void)
     if (got_authdown_ruleset)
         iptables_do_command("-t mangle -I PREROUTING 1 -i %s -j " CHAIN_AUTH_IS_DOWN, config->gw_interface);    //this rule must be last in the chain
     iptables_do_command("-t mangle -I POSTROUTING 1 -o %s -j " CHAIN_INCOMING, config->gw_interface);
-
+	
+	//>>> liudf added&modified 20160113
+	// CHAIN_TRUSTED IPSET support
+	ipset_do_command("create " CHAIN_TRUSTED " hash:mac");
     for (p = config->trustedmaclist; p != NULL; p = p->next)
-        iptables_do_command("-t mangle -A " CHAIN_TRUSTED " -m mac --mac-source %s -j MARK --set-mark %d", p->mac,
-                            FW_MARK_KNOWN);
+		ipset_do_command("add " CHAIN_TRUSTED " %s", p->mac);
+    iptables_do_command("-t mangle -A " CHAIN_TRUSTED " -m set --match-set " CHAIN_TRUSTED " src -j MARK --set-mark %d",
+		 FW_MARK_KNOWN);
+	//<<< liudf added end
 
     /*
      *
@@ -362,14 +404,24 @@ iptables_fw_init(void)
     iptables_do_command("-t nat -N " CHAIN_GLOBAL);
     iptables_do_command("-t nat -N " CHAIN_UNKNOWN);
     iptables_do_command("-t nat -N " CHAIN_AUTHSERVERS);
-	// liudf added 20151224
+	//>>> liudf added 20151224
     iptables_do_command("-t nat -N " CHAIN_DOMAIN_TRUSTED);
-    if (got_authdown_ruleset)
+	iptables_do_command("-t nat -N " CHAIN_UNTRUSTED);
+    //<<< liudf added end
+	if (got_authdown_ruleset)
         iptables_do_command("-t nat -N " CHAIN_AUTH_IS_DOWN);
+	
+	//>>> liudf added 20160113
+	// add this rule for mac blacklist
+	ipset_do_command("create " CHAIN_UNTRUSTED " hash:mac");
+    iptables_do_command("-t nat -A PREROUTING -i %s -j " CHAIN_UNTRUSTED, config->gw_interface);
+	iptables_do_command("-t nat -A " CHAIN_UNTRUSTED " -m set --match-set " CHAIN_UNTRUSTED " src -j DROP");
+	//<<<
 
     /* Assign links and rules to these new chains */
     iptables_do_command("-t nat -A PREROUTING -i %s -j " CHAIN_OUTGOING, config->gw_interface);
-
+	
+	
     iptables_do_command("-t nat -A " CHAIN_OUTGOING " -d %s -j " CHAIN_TO_ROUTER, config->gw_address);
     iptables_do_command("-t nat -A " CHAIN_TO_ROUTER " -j ACCEPT");
 
@@ -509,6 +561,7 @@ iptables_fw_destroy(void)
         iptables_do_command("-t mangle -F " CHAIN_AUTH_IS_DOWN);
     iptables_do_command("-t mangle -F " CHAIN_INCOMING);
 	// liudf added 20160106
+	ipset_do_command("destroy " CHAIN_TRUSTED);
     iptables_do_command("-t mangle -X " CHAIN_ROAM);
     iptables_do_command("-t mangle -X " CHAIN_TRUSTED);
     iptables_do_command("-t mangle -X " CHAIN_OUTGOING);
@@ -525,6 +578,7 @@ iptables_fw_destroy(void)
     iptables_fw_destroy_mention("nat", "PREROUTING", CHAIN_OUTGOING);
     iptables_do_command("-t nat -F " CHAIN_AUTHSERVERS);
 	// liudf added 20151224
+    iptables_do_command("-t nat -F " CHAIN_UNTRUSTED);
     iptables_do_command("-t nat -F " CHAIN_DOMAIN_TRUSTED);
     iptables_do_command("-t nat -F " CHAIN_OUTGOING);
     if (got_authdown_ruleset)
@@ -535,6 +589,8 @@ iptables_fw_destroy(void)
     iptables_do_command("-t nat -F " CHAIN_UNKNOWN);
     iptables_do_command("-t nat -X " CHAIN_AUTHSERVERS);
 	// liudf added 20151224
+	ipset_do_command("destroy " CHAIN_UNTRUSTED);
+    iptables_do_command("-t nat -X " CHAIN_UNTRUSTED);
     iptables_do_command("-t nat -X " CHAIN_DOMAIN_TRUSTED);
     iptables_do_command("-t nat -X " CHAIN_OUTGOING);
     if (got_authdown_ruleset)
@@ -591,8 +647,8 @@ iptables_fw_destroy_mention(const char *table, const char *chain, const char *me
     FILE *p = NULL;
     char *command = NULL;
     char *command2 = NULL;
-    char line[MAX_BUF];
-    char rulenum[10];
+    char line[MAX_BUF] = {0};
+    char rulenum[10] = {0};
     char *victim = safe_strdup(mention);
     int deleted = 0;
 

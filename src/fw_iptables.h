@@ -40,6 +40,7 @@
 //>>> liudf added 20151223 
 #define CHAIN_DOMAIN_TRUSTED "WiFiDog_$ID$_TDomains"
 #define	CHAIN_ROAM			"WiFiDog_$ID$_Roam"
+#define	CHAIN_UNTRUSTED		"WiFiDog_$ID$_Untrusted"
 //<<< liudf added end
 #define CHAIN_GLOBAL  "WiFiDog_$ID$_Global"
 #define CHAIN_VALIDATE  "WiFiDog_$ID$_Validate"
