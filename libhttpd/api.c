@@ -309,7 +309,6 @@ struct timeval *timeout;
     fd_set fds;
     struct sockaddr_in addr;
     socklen_t addrLen;
-    char *ipaddr;
     request *r;
     /* Reset error */
     server->lastError = 0;
