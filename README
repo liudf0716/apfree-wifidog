@@ -8,3 +8,5 @@ u can join our qq group 331230369
 			Add show_roam_maclist to wdctl
 			Add clear_roam_maclist to wdctl
 			Add device roam support	
+20160113	Add first_login and online_time to auth interface
+			Add online_clients to ping interface
