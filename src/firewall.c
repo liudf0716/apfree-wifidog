@@ -316,7 +316,7 @@ fw_sync_with_authserver(void)
      * That way clients can disappear during the cycle with no risk of trashing the heap or getting
      * a SIGSEGV.
      */
-    client_list_dup(&worklist);
+    g_online_clients = client_list_dup(&worklist);
     UNLOCK_CLIENT_LIST();
 
     for (p1 = p2 = worklist; NULL != p1; p1 = p2) {
@@ -330,7 +330,9 @@ fw_sync_with_authserver(void)
         /* Update the counters on the remote server only if we have an auth server */
         if (config->auth_servers != NULL) {
             auth_server_request(&authresponse, REQUEST_TYPE_COUNTERS, p1->ip, p1->mac, p1->token, p1->counters.incoming,
-                                p1->counters.outgoing, p1->counters.incoming_delta, p1->counters.outgoing_delta);
+                                p1->counters.outgoing, p1->counters.incoming_delta, p1->counters.outgoing_delta,
+								// liudf added 20160112
+								p1->first_login, (p1->counters.last_updated - p1->first_login));
         }
 
         time_t current_time = time(NULL);

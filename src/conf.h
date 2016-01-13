@@ -284,6 +284,8 @@ void clear_roam_mac_list();
 t_trusted_mac *get_roam_maclist();
 
 int is_roaming(const char *mac);
+
+int g_online_clients;
 // <<< liudf added end
 
 #define LOCK_CONFIG() do { \

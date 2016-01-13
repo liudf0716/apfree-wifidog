@@ -65,7 +65,9 @@
 */
 t_authcode
 auth_server_request(t_authresponse * authresponse, const char *request_type, const char *ip, const char *mac,
-                    const char *token, unsigned long long int incoming, unsigned long long int outgoing, unsigned long long int incoming_delta, unsigned long long int outgoing_delta)
+                    const char *token, unsigned long long int incoming, unsigned long long int outgoing, 
+					unsigned long long int incoming_delta, unsigned long long int outgoing_delta,
+					time_t first_login, int online_time)
 {
     s_config *config = config_get_config();
     int sockfd;
@@ -88,7 +90,7 @@ auth_server_request(t_authresponse * authresponse, const char *request_type, con
     safe_token = httpdUrlEncode(token);
     if(config -> deltatraffic) {
            snprintf(buf, (sizeof(buf) - 1),
-             "GET %s%sstage=%s&ip=%s&mac=%s&token=%s&incoming=%llu&outgoing=%llu&incomingdelta=%llu&outgoingdelta=%llu&gw_id=%s HTTP/1.0\r\n"
+             "GET %s%sstage=%s&ip=%s&mac=%s&token=%s&incoming=%llu&outgoing=%llu&incomingdelta=%llu&outgoingdelta=%llu&first_login=%d&online_time=%d&gw_id=%s HTTP/1.0\r\n"
              "User-Agent: WiFiDog %s\r\n"
              "Host: %s\r\n"
              "\r\n",
@@ -100,10 +102,13 @@ auth_server_request(t_authresponse * authresponse, const char *request_type, con
              outgoing, 
              incoming_delta, 
              outgoing_delta,
-             config->gw_id, VERSION, auth_server->authserv_hostname);
+			 first_login,
+			 online_time,
+             config->gw_id, 
+			 VERSION, auth_server->authserv_hostname);
     } else {
             snprintf(buf, (sizeof(buf) - 1),
-             "GET %s%sstage=%s&ip=%s&mac=%s&token=%s&incoming=%llu&outgoing=%llu&gw_id=%s HTTP/1.0\r\n"
+             "GET %s%sstage=%s&ip=%s&mac=%s&token=%s&incoming=%llu&outgoing=%llu&first_login=%d&online_time=%d&gw_id=%s HTTP/1.0\r\n"
              "User-Agent: WiFiDog %s\r\n"
              "Host: %s\r\n"
              "\r\n",
@@ -111,7 +116,9 @@ auth_server_request(t_authresponse * authresponse, const char *request_type, con
              auth_server->authserv_auth_script_path_fragment,
              request_type,
              ip,
-             mac, safe_token, incoming, outgoing, config->gw_id, VERSION, auth_server->authserv_hostname);
+             mac, safe_token, incoming, outgoing, 
+			 first_login, online_time,
+			 config->gw_id, VERSION, auth_server->authserv_hostname);
         }
     free(safe_token);
 

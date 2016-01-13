@@ -718,7 +718,7 @@ int
 iptables_fw_counters_update(void)
 {
     FILE *output;
-    char *script, ip[16] = { 0 }, rc;
+    char *script, ip[16] = {0}, rc;
     unsigned long long int counter;
     t_client *p1;
     struct in_addr tempaddr;

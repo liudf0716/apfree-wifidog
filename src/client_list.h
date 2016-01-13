@@ -59,6 +59,8 @@ typedef struct _t_client {
 					     _http_* function is called */
     t_counters counters;                /**< @brief Counters for input/output of
 					     the client. */
+	//<<< liudf added 20160112	
+	time_t first_login;		/**< @brief first login time */
 } t_client;
 
 /** @brief Get a new client struct, not added to the list yet */

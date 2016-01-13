@@ -104,7 +104,10 @@ logout_client(t_client * client)
         UNLOCK_CLIENT_LIST();
         auth_server_request(&authresponse, REQUEST_TYPE_LOGOUT,
                             client->ip, client->mac, client->token,
-                            client->counters.incoming, client->counters.outgoing, client->counters.incoming_delta, client->counters.outgoing_delta);
+                            client->counters.incoming, client->counters.outgoing, 
+							client->counters.incoming_delta, client->counters.outgoing_delta,
+							//>>> liudf added 20160112
+							client->first_login, (client->counters.last_updated - client->first_login));
 
         if (authresponse.authcode == AUTH_ERROR)
             debug(LOG_WARNING, "Auth server error when reporting logout");
@@ -154,7 +157,7 @@ authenticate_client(request * r)
      * take multiple seconds to do and the gateway would effectively be frozen if we
      * kept the lock.
      */
-    auth_server_request(&auth_response, REQUEST_TYPE_LOGIN, client->ip, client->mac, token, 0, 0, 0, 0);
+    auth_server_request(&auth_response, REQUEST_TYPE_LOGIN, client->ip, client->mac, token, 0, 0, 0, 0, 0, 0);
 
     LOCK_CLIENT_LIST();
 
@@ -221,6 +224,9 @@ authenticate_client(request * r)
         debug(LOG_INFO, "Got ALLOWED from central server authenticating token %s from %s at %s - "
               "adding to firewall and redirecting them to portal", client->token, client->ip, client->mac);
         fw_allow(client, FW_MARK_KNOWN);
+		//>>> liudf added 20160112
+		client->first_login = time(NULL);
+		//<<< liudf added end
         served_this_session++;
         safe_asprintf(&urlFragment, "%sgw_id=%s", auth_server->authserv_portal_script_path_fragment, config->gw_id);
         http_send_redirect_to_auth(r, urlFragment, "Redirect to portal");
