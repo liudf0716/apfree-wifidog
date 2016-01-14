@@ -280,6 +280,33 @@ fw_clear_roam_maclist(void)
 	iptables_fw_clear_roam_maclist();
 }
 
+void
+fw_set_trusted_maclist()
+{
+    debug(LOG_INFO, "Set trusted maclist");
+	iptables_fw_set_trusted_maclist();
+}
+
+void
+fw_clear_trusted_maclist()
+{
+    debug(LOG_INFO, "Clear trusted maclist");
+	iptables_fw_clear_trusted_maclist();
+}
+
+void
+fw_set_untrusted_maclist()
+{
+    debug(LOG_INFO, "Set untrusted maclist");
+	iptables_fw_set_untrusted_maclist();
+}
+
+void
+fw_clear_untrusted_maclist()
+{
+    debug(LOG_INFO, "Clear untrusted maclist");
+	iptables_fw_clear_untrusted_maclist();
+}
 //<<<<< liudf added end
 
 /** Remove the firewall rules

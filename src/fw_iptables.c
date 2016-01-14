@@ -295,8 +295,7 @@ iptables_fw_refresh_domains_trusted(void)
 void
 iptables_fw_clear_domains_trusted(void)
 {
-    iptables_do_command("-t filter -F " CHAIN_DOMAIN_TRUSTED);
-    iptables_do_command("-t nat -F " CHAIN_DOMAIN_TRUSTED);
+	ipset_do_command("flush " CHAIN_DOMAIN_TRUSTED);
 }
 
 void
@@ -306,12 +305,11 @@ iptables_fw_set_domains_trusted(void)
 	t_domain_trusted *domain_trusted = NULL;
 
     config = config_get_config();
-
-    for (domain_trusted = config->domains_trusted; domain_trusted != NULL; domain_trusted = domain_trusted->next) {
+	
+	for (domain_trusted = config->domains_trusted; domain_trusted != NULL; domain_trusted = domain_trusted->next) {
 		t_ip_trusted *ip_trusted = NULL;
 		for(ip_trusted = domain_trusted->ips_trusted; ip_trusted != NULL; ip_trusted = ip_trusted->next) {
-			iptables_do_command("-t filter -A " CHAIN_DOMAIN_TRUSTED " -d %s -j ACCEPT", ip_trusted->ip);
-            iptables_do_command("-t nat -A " CHAIN_DOMAIN_TRUSTED " -d %s -j ACCEPT", ip_trusted->ip);
+			ipset_do_command("add " CHAIN_DOMAIN_TRUSTED " %s ", ip_trusted->ip);
 		}
 	}
 }
@@ -319,16 +317,42 @@ iptables_fw_set_domains_trusted(void)
 void
 iptables_fw_clear_roam_maclist(void)
 {
-    iptables_do_command("-t mangle -F " CHAIN_ROAM);
+	ipset_do_command("flush " CHAIN_ROAM);
 }
 
 void
 iptables_fw_set_roam_mac(const char *mac)
 {
-	iptables_do_command("-t mangle -A " CHAIN_ROAM " -m mac --mac-source %s -j MARK --set-mark %d", mac,
-						FW_MARK_KNOWN);
+	ipset_do_command("add " CHAIN_ROAM " %s", mac);
 }
 
+void
+iptables_fw_clear_trusted_maclist(void)
+{
+	ipset_do_command("flush " CHAIN_TRUSTED);
+}
+
+void
+iptables_fw_set_trusted_maclist(void)
+{
+	t_trusted_mac *p = NULL;
+	for (p = config->trustedmaclist; p != NULL; p = p->next)
+		ipset_do_command("add " CHAIN_TRUSTED " %s", p->mac);
+}
+
+void
+iptables_fw_clear_untrusted_maclist(void)
+{
+	ipset_do_command("flush " CHAIN_UNTRUSTED);
+}
+
+void
+iptables_fw_set_untrusted_maclist(void)
+{
+	t_trusted_mac *p = NULL;
+	for (p = config->mac_blacklist; p != NULL; p = p->next)
+		ipset_do_command("add " CHAIN_UNTRUSTED " %s", p->mac);
+}
 // <<< liudf added end
 
 /** Initialize the firewall rules
@@ -358,6 +382,14 @@ iptables_fw_init(void)
         debug(LOG_ERR, "FATAL: no external interface");
         return 0;
     }
+	
+	//>>> liudf added 20160114
+	// add ipset support
+	ipset_do_command("create " CHAIN_TRUSTED " hash:mac");
+	ipset_do_command("create " CHAIN_ROAM " hash:mac");
+	ipset_do_command("create " CHAIN_UNTRUSTED " hash:mac");
+	ipset_do_command("create " CHAIN_DOMAIN_TRUSTED " hash:ip ");
+
     /*
      *
      * Everything in the MANGLE table
@@ -378,17 +410,16 @@ iptables_fw_init(void)
     iptables_do_command("-t mangle -I PREROUTING 1 -i %s -j " CHAIN_TRUSTED, config->gw_interface);     //this rule will be inserted before the prior one
 	// liudf added 20160106
     iptables_do_command("-t mangle -I PREROUTING 1 -i %s -j " CHAIN_ROAM, config->gw_interface);    
+	iptables_do_command("-t mangle -A " CHAIN_ROAM " -m set --match-set " CHAIN_ROAM " src -j MARK --set-mark %d",
+		 				FW_MARK_KNOWN);
+
     if (got_authdown_ruleset)
         iptables_do_command("-t mangle -I PREROUTING 1 -i %s -j " CHAIN_AUTH_IS_DOWN, config->gw_interface);    //this rule must be last in the chain
     iptables_do_command("-t mangle -I POSTROUTING 1 -o %s -j " CHAIN_INCOMING, config->gw_interface);
 	
-	//>>> liudf added&modified 20160113
-	// CHAIN_TRUSTED IPSET support
-	ipset_do_command("create " CHAIN_TRUSTED " hash:mac");
-    for (p = config->trustedmaclist; p != NULL; p = p->next)
-		ipset_do_command("add " CHAIN_TRUSTED " %s", p->mac);
+	//>>> liudf added&modified 20160113	 
     iptables_do_command("-t mangle -A " CHAIN_TRUSTED " -m set --match-set " CHAIN_TRUSTED " src -j MARK --set-mark %d",
-		 FW_MARK_KNOWN);
+		 				FW_MARK_KNOWN);
 	//<<< liudf added end
 
     /*
@@ -413,7 +444,6 @@ iptables_fw_init(void)
 	
 	//>>> liudf added 20160113
 	// add this rule for mac blacklist
-	ipset_do_command("create " CHAIN_UNTRUSTED " hash:mac");
     iptables_do_command("-t nat -A PREROUTING -i %s -j " CHAIN_UNTRUSTED, config->gw_interface);
 	iptables_do_command("-t nat -A " CHAIN_UNTRUSTED " -m set --match-set " CHAIN_UNTRUSTED " src -j DROP");
 	//<<<
@@ -444,6 +474,7 @@ iptables_fw_init(void)
     iptables_do_command("-t nat -A " CHAIN_UNKNOWN " -j " CHAIN_AUTHSERVERS);
 	// liudf added 20151224
     iptables_do_command("-t nat -A " CHAIN_UNKNOWN " -j " CHAIN_DOMAIN_TRUSTED);
+	iptables_do_command("-t nat -A " CHAIN_DOMAIN_TRUSTED " -m set --match-set " CHAIN_DOMAIN_TRUSTED " dst -j ACCEPT");
     iptables_do_command("-t nat -A " CHAIN_UNKNOWN " -j " CHAIN_GLOBAL);
     if (got_authdown_ruleset) {
         iptables_do_command("-t nat -A " CHAIN_UNKNOWN " -j " CHAIN_AUTH_IS_DOWN);
@@ -493,10 +524,8 @@ iptables_fw_init(void)
 	
 	// liudf added 20151224
     iptables_do_command("-t filter -A " CHAIN_TO_INTERNET " -j " CHAIN_DOMAIN_TRUSTED);
-	__parse_trusted_domains_ip();
-	__fix_weixin_http_dns_ip();
-    iptables_fw_set_domains_trusted();
-
+	iptables_do_command("-t filter -A " CHAIN_DOMAIN_TRUSTED " -m set --match-set " CHAIN_DOMAIN_TRUSTED " dst -j ACCEPT");
+	
     iptables_do_command("-t filter -A " CHAIN_TO_INTERNET " -m mark --mark 0x%u -j " CHAIN_LOCKED, FW_MARK_LOCKED);
     iptables_load_ruleset("filter", FWRULESET_LOCKED_USERS, CHAIN_LOCKED);
 
@@ -521,8 +550,20 @@ iptables_fw_init(void)
     iptables_do_command("-t filter -A " CHAIN_UNKNOWN " -j REJECT --reject-with icmp-port-unreachable");
 
     UNLOCK_CONFIG();
-
+	
     free(ext_interface);
+
+	//>>> liudf added 20160114
+	// after initialize firewall chain; 
+	// add trusted&untrusted mac list; parse and add trusted domain	
+	fw_set_trusted_maclist();
+	fw_set_untrusted_maclist();
+	
+	__parse_trusted_domains_ip();
+	__fix_weixin_http_dns_ip();
+    iptables_fw_set_domains_trusted();
+	//<<< liudf added end
+
     return 1;
 }
 
@@ -537,6 +578,7 @@ iptables_fw_destroy(void)
     fw_quiet = 1;
 
     debug(LOG_DEBUG, "Destroying our iptables entries");
+	
 	
 	// liudf added 20151224
 	LOCK_CONFIG(); //better add lock here
@@ -561,7 +603,6 @@ iptables_fw_destroy(void)
         iptables_do_command("-t mangle -F " CHAIN_AUTH_IS_DOWN);
     iptables_do_command("-t mangle -F " CHAIN_INCOMING);
 	// liudf added 20160106
-	ipset_do_command("destroy " CHAIN_TRUSTED);
     iptables_do_command("-t mangle -X " CHAIN_ROAM);
     iptables_do_command("-t mangle -X " CHAIN_TRUSTED);
     iptables_do_command("-t mangle -X " CHAIN_OUTGOING);
@@ -589,7 +630,6 @@ iptables_fw_destroy(void)
     iptables_do_command("-t nat -F " CHAIN_UNKNOWN);
     iptables_do_command("-t nat -X " CHAIN_AUTHSERVERS);
 	// liudf added 20151224
-	ipset_do_command("destroy " CHAIN_UNTRUSTED);
     iptables_do_command("-t nat -X " CHAIN_UNTRUSTED);
     iptables_do_command("-t nat -X " CHAIN_DOMAIN_TRUSTED);
     iptables_do_command("-t nat -X " CHAIN_OUTGOING);
@@ -632,6 +672,13 @@ iptables_fw_destroy(void)
 	
 	// liudf added 20151224
 	UNLOCK_CONFIG(); // better add lock 
+	
+	//>>> destroy all our ipset set 	
+	ipset_do_command("destroy " CHAIN_TRUSTED);
+	ipset_do_command("destroy " CHAIN_ROAM);
+	ipset_do_command("destroy " CHAIN_UNTRUSTED);
+	ipset_do_command("destroy " CHAIN_DOMAIN_TRUSTED);
+
     return 1;
 }
 

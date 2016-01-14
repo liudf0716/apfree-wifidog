@@ -33,6 +33,16 @@
 
 static void _pstr_grow(pstr_t *);
 
+// liudf added 20160114
+void
+pstr_free(pstr_t *pstr)
+{
+	if(pstr != NULL) {
+		free(pstr->buf);
+		free(pstr);
+	}
+}
+
 /**
  * Create a new pascal-string like pstr struct and allocate initial buffer.
  * @param None.

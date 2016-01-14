@@ -171,7 +171,6 @@ static int parse_boolean_value(char *);
 static void parse_auth_server(FILE *, const char *, int *);
 static int _parse_firewall_rule(const char *, char *);
 static void parse_firewall_ruleset(const char *, FILE *, const char *, int *);
-static void parse_trusted_mac_list(const char *);
 static void parse_popular_servers(const char *);
 static void validate_popular_servers(void);
 static void add_popular_server(const char *);
@@ -895,18 +894,141 @@ check_mac_format(const char *possiblemac)
                hex2, hex2, hex2, hex2, hex2, hex2) == 6;
 }
 
+//>>> liudf added 20160114
 /** @internal
- * Parse the trusted mac list.
+ * 
  */
+
 static void
-parse_trusted_mac_list(const char *ptr)
+add_roam_mac(const char *mac)
+{
+	debug(LOG_DEBUG, "Adding MAC address [%s] to roam mac list", mac);
+
+	if (config.roam_maclist == NULL) {
+		config.roam_maclist = safe_malloc(sizeof(t_trusted_mac));
+		config.roam_maclist->mac = safe_strdup(mac);
+		config.roam_maclist->next = NULL;
+	} else {
+		int skipmac;
+		/* Advance to the last entry */
+		t_trusted_mac *p = config.roam_maclist;
+		skipmac = 0;
+		while (p != NULL) {
+			if (0 == strcmp(p->mac, mac)) {
+				skipmac = 1;
+			}
+			p = p->next;
+		}
+		if (!skipmac) {
+			p = safe_malloc(sizeof(t_trusted_mac));
+			p->mac = safe_strdup(mac);
+			p->next = config.roam_maclist;
+			config.roam_maclist = p;
+		} else {
+			debug(LOG_ERR,
+				"MAC address [%s] already on roam mac list.  ",
+				mac);
+		}
+	}
+}
+
+
+static void
+add_trusted_mac(const char *mac)
+{
+	debug(LOG_DEBUG, "Adding MAC address [%s] to trusted mac list", mac);
+
+	if (config.trustedmaclist == NULL) {
+		config.trustedmaclist = safe_malloc(sizeof(t_trusted_mac));
+		config.trustedmaclist->mac = safe_strdup(mac);
+		config.trustedmaclist->next = NULL;
+	} else {
+		int skipmac;
+		/* Advance to the last entry */
+		t_trusted_mac *p = config.trustedmaclist;
+		skipmac = 0;
+		while (p != NULL) {
+			if (0 == strcmp(p->mac, mac)) {
+				skipmac = 1;
+			}
+			p = p->next;
+		}
+		if (!skipmac) {
+			p = safe_malloc(sizeof(t_trusted_mac));
+			p->mac = safe_strdup(mac);
+			p->next = config.trustedmaclist;
+			config.trustedmaclist = p;
+		} else {
+			debug(LOG_ERR,
+				"MAC address [%s] already on trusted mac list.  ",
+				mac);
+		}
+	}
+}
+
+static void
+add_untrusted_mac(const char *mac)
+{
+	debug(LOG_DEBUG, "Adding MAC address [%s] to untrusted mac list", mac);
+
+	if (config.mac_blacklist == NULL) {
+		config.mac_blacklist = safe_malloc(sizeof(t_untrusted_mac));
+		config.mac_blacklist->mac = safe_strdup(mac);
+		config.mac_blacklist->next = NULL;
+	} else {
+		int skipmac;
+		/* Advance to the last entry */
+		t_untrusted_mac *p = config.mac_blacklist;
+		skipmac = 0;
+		while (p != NULL) {
+			if (0 == strcmp(p->mac, mac)) {
+				skipmac = 1;
+			}
+			p = p->next;
+		}
+		if (!skipmac) {
+			p = safe_malloc(sizeof(t_untrusted_mac));
+			p->mac = safe_strdup(mac);
+			p->next = config.mac_blacklist;
+			config.mac_blacklist = p;
+		} else {
+			debug(LOG_ERR,
+				"MAC address [%s] already on untrusted mac list.  ",
+				mac);
+		}
+	}
+}
+
+void
+add_mac(const char *mac, int which)
+{
+	switch(which) {
+	case TRUSTED_MAC:
+		add_trusted_mac(mac);
+		break;
+	case UNTRUSTED_MAC:
+		add_untrusted_mac(mac);
+		break;
+	case ROAM_MAC:
+		add_roam_mac(mac);
+		break;
+	}
+}
+
+void
+parse_mac_list(const char *ptr, int which)
 {
     char *ptrcopy = NULL, *pt = NULL;
     char *possiblemac = NULL;
     char *mac = NULL;
-    t_trusted_mac *p = NULL;
 
     debug(LOG_DEBUG, "Parsing string [%s] for trusted MAC addresses", ptr);
+	
+	if (check_mac_format(ptr)) {
+		// in case only one mac
+		add_mac(ptr, which);
+		return;
+	}
 
     mac = safe_malloc(18);
 
@@ -918,58 +1040,40 @@ parse_trusted_mac_list(const char *ptr)
         /* check for valid format */
         if (!check_mac_format(possiblemac)) {
             debug(LOG_ERR,
-                  "[%s] not a valid MAC address to trust. See option TrustedMACList in wifidog.conf for correct this mistake.",
+                  "[%s] not a valid MAC address ",
                   possiblemac);
-            free(ptrcopy);
-            free(mac);
-            return;
+			break;
         } else {
             if (sscanf(possiblemac, " %17[A-Fa-f0-9:]", mac) == 1) {
                 /* Copy mac to the list */
-
-                debug(LOG_DEBUG, "Adding MAC address [%s] to trusted list", mac);
-
-                if (config.trustedmaclist == NULL) {
-                    config.trustedmaclist = safe_malloc(sizeof(t_trusted_mac));
-                    config.trustedmaclist->mac = safe_strdup(mac);
-                    config.trustedmaclist->next = NULL;
-                } else {
-                    int skipmac;
-                    /* Advance to the last entry */
-                    p = config.trustedmaclist;
-                    skipmac = 0;
-                    /* Check before loop to handle case were mac is a duplicate
-                     * of the first and only item in the list so far.
-                     */
-                    if (0 == strcmp(p->mac, mac)) {
-                        skipmac = 1;
-                    }
-                    while (p->next != NULL) {
-                        if (0 == strcmp(p->mac, mac)) {
-                            skipmac = 1;
-                        }
-                        p = p->next;
-                    }
-                    if (!skipmac) {
-                        p->next = safe_malloc(sizeof(t_trusted_mac));
-                        p = p->next;
-                        p->mac = safe_strdup(mac);
-                        p->next = NULL;
-                    } else {
-                        debug(LOG_ERR,
-                              "MAC address [%s] already on trusted list. See option TrustedMACList in wifidog.conf file ",
-                              mac);
-                    }
-                }
+				add_mac(mac, which);
             }
         }
     }
 
     free(pt);
-
     free(mac);
-
 }
+
+void
+parse_trusted_mac_list(const char *pstr)
+{
+	parse_mac_list(pstr, TRUSTED_MAC);
+}
+
+void
+parse_untrusted_mac_list(const char *pstr)
+{
+	parse_mac_list(pstr, UNTRUSTED_MAC);
+}
+
+void 
+parse_roam_mac_list(const char *pstr)
+{
+	parse_mac_list(pstr, ROAM_MAC);
+}
+
+//<<< liudf added end
 
 /** @internal
  * Add a popular server to the list. It prepends for simplicity.
@@ -1305,82 +1409,8 @@ get_domains_trusted(void)
 
 
 /** 
- * Parse the roam mac list.
+ * Operate the roam mac list.
  */
-
-static void
-add_roam_mac(const char *mac)
-{
-	debug(LOG_DEBUG, "Adding MAC address [%s] to roam mac list", mac);
-
-	if (config.roam_maclist == NULL) {
-		config.roam_maclist = safe_malloc(sizeof(t_trusted_mac));
-		config.roam_maclist->mac = safe_strdup(mac);
-		config.roam_maclist->next = NULL;
-	} else {
-		int skipmac;
-		/* Advance to the last entry */
-		t_trusted_mac *p = config.roam_maclist;
-		skipmac = 0;
-		while (p != NULL) {
-			if (0 == strcmp(p->mac, mac)) {
-				skipmac = 1;
-			}
-			p = p->next;
-		}
-		if (!skipmac) {
-			p = safe_malloc(sizeof(t_trusted_mac));
-			p->mac = safe_strdup(mac);
-			p->next = config.roam_maclist;
-			config.roam_maclist = p;
-		} else {
-			debug(LOG_ERR,
-				"MAC address [%s] already on roam mac list.  ",
-				mac);
-		}
-	}
-}
-
-void
-parse_roam_mac_list(const char *ptr)
-{
-    char *ptrcopy = NULL, *pt = NULL;
-    char *possiblemac = NULL;
-    char *mac = NULL;
-
-    debug(LOG_DEBUG, "Parsing string [%s] for roam MAC addresses", ptr);
-	
-	if (check_mac_format(ptr)) {
-		// in case only one mac
-		add_roam_mac(ptr);
-		return;
-	}
-
-    mac = safe_malloc(18);
-
-    /* strsep modifies original, so let's make a copy */
-    ptrcopy = safe_strdup(ptr);
-	pt = ptrcopy;
-
-    while ((possiblemac = strsep(&ptrcopy, ","))) {
-        /* check for valid format */
-        if (!check_mac_format(possiblemac)) {
-            debug(LOG_ERR,
-                  "[%s] not a valid MAC address ",
-                  possiblemac);
-			break;
-        } else {
-            if (sscanf(possiblemac, " %17[A-Fa-f0-9:]", mac) == 1) {
-                /* Copy mac to the list */
-				add_roam_mac(mac);
-            }
-        }
-    }
-
-    free(pt);
-    free(mac);
-}
-
 void
 __clear_roam_mac_list()
 {
@@ -1419,6 +1449,48 @@ is_roaming(const char *mac)
 	}
 	
 	return p==NULL?0:1;
+}
+
+void
+__clear_trusted_mac_list()
+{
+	t_trusted_mac *p, *p1;
+    for (p = config.trustedmaclist; p != NULL;) {
+    	p1 = p;
+        p = p->next;
+        free(p1->mac);
+        free(p1);
+    }
+    config.trustedmaclist = NULL;
+}
+
+void 
+clear_trusted_mac_list()
+{
+	LOCK_CONFIG();
+	__clear_trusted_mac_list();
+	UNLOCK_CONFIG();
+}
+
+void
+__clear_untrusted_mac_list()
+{
+	t_untrusted_mac *p, *p1;
+    for (p = config.mac_blacklist; p != NULL;) {
+    	p1 = p;
+        p = p->next;
+        free(p1->mac);
+        free(p1);
+    }
+    config.mac_blacklist = NULL;
+}
+
+void 
+clear_untrusted_mac_list()
+{
+	LOCK_CONFIG();
+	__clear_untrusted_mac_list();
+	UNLOCK_CONFIG();
 }
 
 // >>> end liudf added

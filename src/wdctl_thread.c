@@ -72,6 +72,12 @@ static void wdctl_add_domain_ip(int, const char *);
 static void wdctl_add_roam_maclist(int, const char *);
 static void wdctl_show_roam_maclist(int);
 static void wdctl_clear_roam_maclist(int);
+static void wdctl_add_trusted_maclist(int, const char *);
+static void wdctl_show_trusted_maclist(int);
+static void wdctl_clear_trusted_maclist(int);
+static void wdctl_add_untrusted_maclist(int, const char *);
+static void wdctl_show_untrusted_maclist(int);
+static void wdctl_clear_untrusted_maclist(int);
 //<<< liudf added end
 
 static int wdctl_socket_server;
@@ -427,7 +433,7 @@ wdctl_add_trusted_domains(int fd, const char *arg)
     debug(LOG_DEBUG, "parse trusted domains ip");
 	parse_trusted_domains_ip();	
 
-	fw_refresh_domains_trusted_safely();	
+	fw_refresh_domains_trusted();	
 
     write_to_socket(fd, "Yes", 3);
 
@@ -442,7 +448,7 @@ wdctl_reparse_trusted_domains(int fd)
     debug(LOG_DEBUG, "parse trusted domains ip");
 	parse_trusted_domains_ip();	
 
-	fw_refresh_domains_trusted_safely();	
+	fw_refresh_domains_trusted();	
 
     write_to_socket(fd, "Yes", 3);
 
@@ -455,10 +461,11 @@ wdctl_clear_trusted_domains(int fd)
 	debug(LOG_DEBUG, "Entering wdctl_clear_trusted_domains...");
 	
 	LOCK_CONFIG();
-	fw_clear_domains_trusted();
 	
 	__clear_trusted_domains();
 	UNLOCK_CONFIG();	
+
+	fw_clear_domains_trusted();
 
     write_to_socket(fd, "Yes", 3);
 
@@ -484,12 +491,12 @@ wdctl_add_domain_ip(int fd, const char *args)
 {
 	add_domain_ip(args);	
 
-	fw_refresh_domains_trusted_safely();	
+	fw_refresh_domains_trusted();	
 
     write_to_socket(fd, "Yes", 3);
 }
 
-
+// roam maclist
 static void
 wdctl_add_roam_maclist(int fd, const char *args)
 {
@@ -529,9 +536,111 @@ wdctl_clear_roam_maclist(int fd)
 	LOCK_CONFIG();
 	__clear_roam_mac_list();	
 	
-	fw_clear_roam_maclist();
 	UNLOCK_CONFIG();	
+
+	fw_clear_roam_maclist();
 
     write_to_socket(fd, "Yes", 3);
 }
+
+
+// trusted maclist
+static void
+wdctl_add_trusted_maclist(int fd, const char *args)
+{
+    debug(LOG_DEBUG, "Entering wdctl_add_trusted_maclist...");
+	
+    debug(LOG_DEBUG, "Argument: %s ", args);
+	
+    debug(LOG_DEBUG, "parse trusted maclist");
+	LOCK_CONFIG();
+
+	parse_trusted_mac_list(args);	
+	
+	UNLOCK_CONFIG();
+	
+	fw_clear_trusted_maclist();
+	fw_set_trusted_maclist();	
+	
+    write_to_socket(fd, "Yes", 3);
+
+    debug(LOG_DEBUG, "Exiting wdctl_add_roam_maclist...");
+}
+
+static void
+wdctl_show_trusted_maclist(int fd)
+{
+    char *status = NULL;
+    size_t len = 0;
+
+    status = get_trusted_maclist_text();
+    len = strlen(status);
+
+    write_to_socket(fd, status, len);   /* XXX Not handling error because we'd just print the same log line. */
+
+    free(status);
+}
+
+static void
+wdctl_clear_trusted_maclist(int fd)
+{
+	LOCK_CONFIG();
+	__clear_trusted_mac_list();	
+	
+	UNLOCK_CONFIG();	
+
+	fw_clear_trusted_maclist();
+
+    write_to_socket(fd, "Yes", 3);
+}
+
+// untrusted maclist
+static void
+wdctl_add_untrusted_maclist(int fd, const char *args)
+{
+    debug(LOG_DEBUG, "Entering wdctl_add_untrusted_maclist...");
+	
+    debug(LOG_DEBUG, "Argument: %s ", args);
+	
+    debug(LOG_DEBUG, "parse untrusted maclist");
+	LOCK_CONFIG();
+
+	parse_untrusted_mac_list(args);	
+	
+	UNLOCK_CONFIG();
+	
+	fw_clear_untrusted_maclist();	
+	fw_set_untrusted_maclist();
+	
+    write_to_socket(fd, "Yes", 3);
+
+    debug(LOG_DEBUG, "Exiting wdctl_add_roam_maclist...");
+}
+
+static void
+wdctl_show_untrusted_maclist(int fd)
+{
+    char *status = NULL;
+    size_t len = 0;
+
+    status = get_untrusted_maclist_text();
+    len = strlen(status);
+
+    write_to_socket(fd, status, len);   /* XXX Not handling error because we'd just print the same log line. */
+
+    free(status);
+}
+
+static void
+wdctl_clear_untrusted_maclist(int fd)
+{
+	LOCK_CONFIG();
+	__clear_untrusted_mac_list();	
+	
+	UNLOCK_CONFIG();	
+
+	fw_clear_untrusted_maclist();
+    write_to_socket(fd, "Yes", 3);
+}
+
 //>>> liudf added end

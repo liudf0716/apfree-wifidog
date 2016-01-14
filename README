@@ -10,3 +10,5 @@ u can join our qq group 331230369
 			Add device roam support	
 20160113	Add first_login and online_time to auth interface
 			Add online_clients to ping interface
+20160114	Add trusted&untrusted maclist
+			Imply ipset to trusted&untrusted&roam maclist and trusted domain

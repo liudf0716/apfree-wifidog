@@ -41,6 +41,8 @@ struct pstr {
 
 typedef struct pstr pstr_t;  /**< @brief pstr_t is a type for a struct pstr. */
 
+// liudf added 20160114
+void pstr_free(pstr_t *); /**< @brief free pstr */
 pstr_t *pstr_new(void);  /**< @brief Create a new pstr */
 char * pstr_to_string(pstr_t *);  /**< @brief Convert pstr to a char *, freeing pstr. */
 void pstr_cat(pstr_t *, const char *);  /**< @brief Appends a string to a pstr_t */

@@ -57,6 +57,15 @@ static void wdctl_reparse_trusted_domains(void);
 static void wdctl_clear_trusted_domains(void);
 static void wdctl_show_trusted_domains(void);
 static void wdctl_add_domain_ip(void);
+static void wdctl_add_trusted_maclist(void);
+static void wdctl_show_trusted_maclist(void);
+static void wdctl_clear_trusted_maclist(void);
+static void wdctl_add_untrusted_maclist(void);
+static void wdctl_show_untrusted_maclist(void);
+static void wdctl_clear_untrusted_maclist(void);
+static void wdctl_add_roam_maclist(void);
+static void wdctl_show_roam_maclist(void);
+static void wdctl_clear_roam_maclist(void);
 //<<< liudf added end
 
 /** @internal
@@ -84,6 +93,15 @@ usage(void)
     fprintf(stdout, "  clear_trusted_domains	Clear all trusted domains\n");
     fprintf(stdout, "  show_trusted_domains 	Show all trusted domains and its ip\n");
     fprintf(stdout, "  add_domain_ip [domain:ip] 	Add domain and its ip\n");
+    fprintf(stdout, "  add_trusted_mac			Add trusted mac list\n");
+    fprintf(stdout, "  clear_trusted_mac		Clear trusted mac list\n");
+    fprintf(stdout, "  show_trusted_mac			Show trusted mac list\n");
+    fprintf(stdout, "  add_untrusted_mac		Add untrusted mac list\n");
+	fprintf(stdout, "  clear_untrusted_mac		Clear untrusted mac list\n");
+    fprintf(stdout, "  show_untrusted_mac		Show untrusted mac list\n");
+	fprintf(stdout, "  add_roam_mac				Add roaming mac list\n");
+	fprintf(stdout, "  clear_roam_mac			Clear roaming mac list\n");
+    fprintf(stdout, "  show_roam_mac			Show roaming mac list\n");
 	//<<< liudf added end
     fprintf(stdout, "\n");
 }
@@ -95,7 +113,6 @@ usage(void)
 static void
 init_config(void)
 {
-
     config.socket = strdup(DEFAULT_SOCK);
     config.command = WDCTL_UNDEF;
 }
@@ -369,6 +386,7 @@ wdctl_add_domain_ip(void)
     close(sock);
 }
 
+// roam maclist
 static void 
 wdctl_add_roam_maclist()
 {
@@ -452,6 +470,177 @@ wdctl_clear_roam_maclist()
     shutdown(sock, 2);
     close(sock);
 
+}
+
+// trusted maclist
+static void 
+wdctl_add_trusted_maclist()
+{
+    int sock;
+    char buffer[4096] = {0};
+    char request[4096] = {0};
+    size_t len;
+    ssize_t rlen;
+
+    sock = connect_to_server(config.socket);
+
+    strncpy(request, "add_trusted_maclist ", 4096);
+    strncat(request, config.param, (4096 - strlen(request) - 1));
+    strncat(request, "\r\n\r\n", (4096 - strlen(request) - 1));
+
+    send_request(sock, request);
+
+    len = 0;
+    memset(buffer, 0, sizeof(buffer));
+    while ((len < sizeof(buffer)) && ((rlen = read(sock, (buffer + len), (sizeof(buffer) - len))) > 0)) {
+        len += (size_t) rlen;
+    }
+
+    if (strcmp(buffer, "Yes") == 0) {
+        fprintf(stdout, "Connection set %s successfully .\n", config.param);
+    } else if (strcmp(buffer, "No") == 0) {
+        fprintf(stdout, "Connection %s was not active.\n", config.param);
+    } else {
+        fprintf(stderr, "wdctl: Error: WiFiDog sent an abnormal " "reply.\n");
+    }
+
+    shutdown(sock, 2);
+    close(sock);
+
+}
+
+static void
+wdctl_show_trusted_maclist()
+{
+	int sock;
+    char buffer[4096] = {0};
+    char request[36] = {0};
+    ssize_t len;
+
+    sock = connect_to_server(config.socket);
+
+    strncpy(request, "show_trusted_maclist\r\n\r\n", 35);
+
+    send_request(sock, request);
+
+    // -1: need some space for \0!
+    while ((len = read(sock, buffer, sizeof(buffer) - 1)) > 0) {
+        buffer[len] = '\0';
+        fprintf(stdout, "%s", buffer);
+    }
+
+    shutdown(sock, 2);
+    close(sock);
+}
+
+static void
+wdctl_clear_trusted_maclist()
+{
+	int sock;
+    char buffer[4096] = {0};
+    char request[36] = {0};
+    ssize_t len;
+
+    sock = connect_to_server(config.socket);
+
+    strncpy(request, "clear_trusted_maclist\r\n\r\n", 35);
+
+    send_request(sock, request);
+
+    // -1: need some space for \0!
+    while ((len = read(sock, buffer, sizeof(buffer) - 1)) > 0) {
+        buffer[len] = '\0';
+        fprintf(stdout, "%s\n", buffer);
+    }
+
+    shutdown(sock, 2);
+    close(sock);
+
+}
+
+// untrusted maclist
+static void 
+wdctl_add_untrusted_maclist()
+{
+    int sock;
+    char buffer[4096] = {0};
+    char request[4096] = {0};
+    size_t len;
+    ssize_t rlen;
+
+    sock = connect_to_server(config.socket);
+
+    strncpy(request, "add_untrusted_maclist ", 4096);
+    strncat(request, config.param, (4096 - strlen(request) - 1));
+    strncat(request, "\r\n\r\n", (4096 - strlen(request) - 1));
+
+    send_request(sock, request);
+
+    len = 0;
+    memset(buffer, 0, sizeof(buffer));
+    while ((len < sizeof(buffer)) && ((rlen = read(sock, (buffer + len), (sizeof(buffer) - len))) > 0)) {
+        len += (size_t) rlen;
+    }
+
+    if (strcmp(buffer, "Yes") == 0) {
+        fprintf(stdout, "Connection set %s successfully .\n", config.param);
+    } else if (strcmp(buffer, "No") == 0) {
+        fprintf(stdout, "Connection %s was not active.\n", config.param);
+    } else {
+        fprintf(stderr, "wdctl: Error: WiFiDog sent an abnormal " "reply.\n");
+    }
+
+    shutdown(sock, 2);
+    close(sock);
+
+}
+
+static void
+wdctl_show_untrusted_maclist()
+{
+	int sock;
+    char buffer[4096] = {0};
+    char request[36] = {0};
+    ssize_t len;
+
+    sock = connect_to_server(config.socket);
+
+    strncpy(request, "show_untrusted_maclist\r\n\r\n", 35);
+
+    send_request(sock, request);
+
+    // -1: need some space for \0!
+    while ((len = read(sock, buffer, sizeof(buffer) - 1)) > 0) {
+        buffer[len] = '\0';
+        fprintf(stdout, "%s", buffer);
+    }
+
+    shutdown(sock, 2);
+    close(sock);
+}
+
+static void
+wdctl_clear_untrusted_maclist()
+{
+	int sock;
+    char buffer[4096] = {0};
+    char request[36] = {0};
+    ssize_t len;
+
+    sock = connect_to_server(config.socket);
+
+    strncpy(request, "clear_untrusted_maclist\r\n\r\n", 35);
+
+    send_request(sock, request);
+
+    // -1: need some space for \0!
+    while ((len = read(sock, buffer, sizeof(buffer) - 1)) > 0) {
+        buffer[len] = '\0';
+        fprintf(stdout, "%s\n", buffer);
+    }
+
+    shutdown(sock, 2);
+    close(sock);
 }
 
 //<<< liudf added end
@@ -617,6 +806,30 @@ main(int argc, char **argv)
 
 	case WDCTL_CLEAR_ROAM_MACLIST:
 		wdctl_clear_roam_maclist();
+		break;
+	
+	case WDCTL_ADD_TRUSTED_MACLIST:
+		wdctl_add_trusted_maclist();
+		break;
+
+	case WDCTL_SHOW_TRUSTED_MACLIST:
+		wdctl_show_trusted_maclist();
+		break;
+
+	case WDCTL_CLEAR_TRUSTED_MACLIST:
+		wdctl_clear_trusted_maclist();
+		break;
+
+	case WDCTL_ADD_UNTRUSTED_MACLIST:
+		wdctl_add_untrusted_maclist();
+		break;
+
+	case WDCTL_SHOW_UNTRUSTED_MACLIST:
+		wdctl_show_untrusted_maclist();
+		break;
+
+	case WDCTL_CLEAR_UNTRUSTED_MACLIST:
+		wdctl_clear_untrusted_maclist();
 		break;
 	//<<< liudf end
 

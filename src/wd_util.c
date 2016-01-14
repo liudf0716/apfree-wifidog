@@ -265,20 +265,39 @@ char *get_trusted_domains_text()
 	return pstr_to_string(pstr);
 }
 
-char *get_roam_maclist_text()
+static char *
+get_maclist_text(int which)
 {
-	pstr_t *pstr = pstr_new();
+	pstr_t *pstr = NULL;
     s_config *config;
-	t_trusted_mac *roam_maclist = NULL;
+	t_trusted_mac *maclist = NULL;
 	int line = 0;
     config = config_get_config();
     
-	pstr_cat(pstr, "\nRoam mac list:\n");
+	switch(which) {
+	case TRUSTED_MAC:
+		pstr = pstr_new();
+		maclist = config->trustedmaclist; 
+		pstr_cat(pstr, "\nTrusted mac list:\n");
+		break;
+	case UNTRUSTED_MAC:
+		pstr = pstr_new();
+		maclist = config->mac_blacklist;
+		pstr_cat(pstr, "\nUntrusted mac list:\n");
+		break;
+	case ROAM_MAC:
+		pstr = pstr_new();
+		maclist = config->roam_maclist;
+		pstr_cat(pstr, "\nRoam mac list:\n");
+		break;
+	default:
+		return NULL;
+	}
 
 	LOCK_CONFIG();
 	
-	for (roam_maclist = config->roam_maclist; roam_maclist != NULL; roam_maclist = roam_maclist->next) {
-        pstr_append_sprintf(pstr, " %s ", roam_maclist->mac);
+	for (; maclist != NULL; maclist = maclist->next) {
+        pstr_append_sprintf(pstr, " %s ", maclist->mac);
 		line++;
 		if(line == 4) {
 			line = 0;
@@ -291,4 +310,21 @@ char *get_roam_maclist_text()
 	return pstr_to_string(pstr);
 }
 
+static char *
+get_roam_maclist_text()
+{
+	return get_maclist_text(ROAM_MAC);
+}
+
+static char *
+get_trusted_maclist_text()
+{
+	return get_maclist_text(TRUSTED_MAC);
+}
+
+static char *
+get_untrusted_maclist_text()
+{
+	return get_maclist_text(UNTRUSTED_MAC);
+}
 //<<<< liudf added end

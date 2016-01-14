@@ -80,6 +80,12 @@
 #define FWRULESET_LOCKED_USERS "locked-users"
 /*@}*/
 
+//>>> liudf added 20160114
+#define	TRUSTED_MAC		1
+#define	UNTRUSTED_MAC	2
+#define	ROAM_MAC		3	
+//<<< liudf added end
+
 /**
  * Mutex for the configuration file, used by the auth_servers related
  * functions. */
@@ -144,6 +150,8 @@ typedef struct _trusted_mac_t {
     char *mac;
     struct _trusted_mac_t *next;
 } t_trusted_mac;
+
+typedef t_trusted_mac	t_untrusted_mac;
 
 /**
  * Popular Servers
@@ -222,6 +230,7 @@ typedef struct {
 	// trusted domain
 	t_domain_trusted *domains_trusted; /** domains list, seperate with comma*/
 	t_trusted_mac	*roam_maclist; /** roam mac list*/
+	t_untrusted_mac	*mac_blacklist; /** blacklist mac*/
 	int	js_filter; /** boolean, whether to enable javascript filter url request*/
 } s_config;
 
@@ -285,6 +294,26 @@ t_trusted_mac *get_roam_maclist();
 
 int is_roaming(const char *mac);
 
+// trustedmaclist operation, for wdctl use
+void parse_trusted_mac_list(const char *);
+
+void __clear_trusted_mac_list();
+
+void clear_trusted_mac_list();
+
+// mac blacklist operation, for wdctl use
+void parse_untrusted_mac_list(const char*);
+
+void __clear_untrusted_mac_list();
+
+void clear_untrusted_mac_list();
+
+// common api
+void add_mac(const char *, int which);
+
+void parse_mac_list(const char *, int which);
+
+// online clients
 int g_online_clients;
 // <<< liudf added end
 
