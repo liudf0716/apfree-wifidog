@@ -53,6 +53,8 @@ char *get_status_text(void);
 
 //>>> liudf added 20151225
 char *get_trusted_domains_text(void);
+char *get_untrusted_maclist_text(void);
+char *get_trusted_maclist_text(void);
 char *get_roam_maclist_text(void);
 //<<< liudf added end
 #endif /* _WD_UTIL_H_ */

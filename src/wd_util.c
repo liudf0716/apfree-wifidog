@@ -310,19 +310,19 @@ get_maclist_text(int which)
 	return pstr_to_string(pstr);
 }
 
-static char *
+char *
 get_roam_maclist_text()
 {
 	return get_maclist_text(ROAM_MAC);
 }
 
-static char *
+char *
 get_trusted_maclist_text()
 {
 	return get_maclist_text(TRUSTED_MAC);
 }
 
-static char *
+char *
 get_untrusted_maclist_text()
 {
 	return get_maclist_text(UNTRUSTED_MAC);
