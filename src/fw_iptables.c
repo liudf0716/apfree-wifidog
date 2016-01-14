@@ -335,7 +335,11 @@ iptables_fw_clear_trusted_maclist(void)
 void
 iptables_fw_set_trusted_maclist(void)
 {
+	const s_config *config;
 	t_trusted_mac *p = NULL;
+	
+    config = config_get_config();
+
 	for (p = config->trustedmaclist; p != NULL; p = p->next)
 		ipset_do_command("add " CHAIN_TRUSTED " %s", p->mac);
 }
@@ -349,7 +353,11 @@ iptables_fw_clear_untrusted_maclist(void)
 void
 iptables_fw_set_untrusted_maclist(void)
 {
+	const s_config *config;
 	t_trusted_mac *p = NULL;
+
+    config = config_get_config();
+
 	for (p = config->mac_blacklist; p != NULL; p = p->next)
 		ipset_do_command("add " CHAIN_UNTRUSTED " %s", p->mac);
 }
@@ -363,7 +371,6 @@ iptables_fw_init(void)
     const s_config *config;
     char *ext_interface = NULL;
     int gw_port = 0;
-    t_trusted_mac *p;
     int proxy_port;
     fw_quiet = 0;
     int got_authdown_ruleset = NULL == get_ruleset(FWRULESET_AUTH_IS_DOWN) ? 0 : 1;
