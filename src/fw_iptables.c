@@ -587,8 +587,6 @@ iptables_fw_destroy(void)
     debug(LOG_DEBUG, "Destroying our iptables entries");
 	
 	
-	// liudf added 20151224
-	LOCK_CONFIG(); //better add lock here
     /*
      *
      * Everything in the MANGLE table
@@ -624,6 +622,7 @@ iptables_fw_destroy(void)
      */
     debug(LOG_DEBUG, "Destroying chains in the NAT table");
     iptables_fw_destroy_mention("nat", "PREROUTING", CHAIN_OUTGOING);
+    iptables_fw_destroy_mention("nat", "PREROUTING", CHAIN_UNTRUSTED);
     iptables_do_command("-t nat -F " CHAIN_AUTHSERVERS);
 	// liudf added 20151224
     iptables_do_command("-t nat -F " CHAIN_UNTRUSTED);
@@ -676,9 +675,6 @@ iptables_fw_destroy(void)
     iptables_do_command("-t filter -X " CHAIN_UNKNOWN);
     if (got_authdown_ruleset)
         iptables_do_command("-t filter -X " CHAIN_AUTH_IS_DOWN);
-	
-	// liudf added 20151224
-	UNLOCK_CONFIG(); // better add lock 
 	
 	//>>> destroy all our ipset set 	
 	ipset_do_command("destroy " CHAIN_TRUSTED);

@@ -126,11 +126,13 @@ authenticate_client(request * r)
 {
     t_client *client, *tmp;
     t_authresponse auth_response;
-    char *token;
-    httpVar *var;
+    char *token = NULL;
+    httpVar *var = NULL;
     char *urlFragment = NULL;
     s_config *config = NULL;
     t_auth_serv *auth_server = NULL;
+	// liudf 20160115
+	char *type = NULL;
 
     LOCK_CLIENT_LIST();
 
@@ -151,7 +153,15 @@ authenticate_client(request * r)
     } else {
         token = safe_strdup(client->token);
     }
-
+	
+	//>>> liudf added 20160115
+	// which auth type
+	var = NULL;
+	if ((var = httpdGetVariableByName(r, "type")) != NULL) {
+		type = safe_strdup(var->value);
+        debug(LOG_INFO, "authenticate_client(): type is %s", type);
+	}
+	//<<<
     /* 
      * At this point we've released the lock while we do an HTTP request since it could
      * take multiple seconds to do and the gateway would effectively be frozen if we
@@ -228,9 +238,13 @@ authenticate_client(request * r)
 		client->first_login = time(NULL);
 		//<<< liudf added end
         served_this_session++;
-        safe_asprintf(&urlFragment, "%sgw_id=%s", auth_server->authserv_portal_script_path_fragment, config->gw_id);
-        http_send_redirect_to_auth(r, urlFragment, "Redirect to portal");
-        free(urlFragment);
+		if(type != NULL) {
+        	send_http_page(r, "weixin auth", "Weixin auth come here");
+		} else {
+        	safe_asprintf(&urlFragment, "%sgw_id=%s", auth_server->authserv_portal_script_path_fragment, config->gw_id);
+        	http_send_redirect_to_auth(r, urlFragment, "Redirect to portal");
+        	free(urlFragment);
+		}
         break;
 
     case AUTH_VALIDATION_FAILED:
