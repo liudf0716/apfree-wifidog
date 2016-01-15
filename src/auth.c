@@ -132,7 +132,8 @@ authenticate_client(request * r)
     s_config *config = NULL;
     t_auth_serv *auth_server = NULL;
 	// liudf 20160115
-	char *type = NULL;
+	// for support weixin lian
+	int type = 0;
 
     LOCK_CLIENT_LIST();
 
@@ -155,11 +156,10 @@ authenticate_client(request * r)
     }
 	
 	//>>> liudf added 20160115
-	// which auth type
-	var = NULL;
+	// which auth type; for weixin lian
 	if ((var = httpdGetVariableByName(r, "type")) != NULL) {
-		type = safe_strdup(var->value);
-        debug(LOG_INFO, "authenticate_client(): type is %s", type);
+		type = 1;
+        debug(LOG_INFO, "authenticate_client(): type is %d", type);
 	}
 	//<<<
     /* 
@@ -200,6 +200,7 @@ authenticate_client(request * r)
     switch (auth_response.authcode) {
 
     case AUTH_ERROR:
+    	UNLOCK_CLIENT_LIST();
         /* Error talking to central server */
         debug(LOG_ERR, "Got ERROR from central server authenticating token %s from %s at %s", client->token, client->ip,
               client->mac);
@@ -212,6 +213,7 @@ authenticate_client(request * r)
               "Got DENIED from central server authenticating token %s from %s at %s - deleting from firewall and redirecting them to denied message",
               client->token, client->ip, client->mac);
         fw_deny(client);
+    	UNLOCK_CLIENT_LIST();
         safe_asprintf(&urlFragment, "%smessage=%s",
                       auth_server->authserv_msg_script_path_fragment, GATEWAY_MESSAGE_DENIED);
         http_send_redirect_to_auth(r, urlFragment, "Redirect to denied message");
@@ -219,6 +221,7 @@ authenticate_client(request * r)
         break;
 
     case AUTH_VALIDATION:
+    	UNLOCK_CLIENT_LIST();
         /* They just got validated for X minutes to check their email */
         debug(LOG_INFO, "Got VALIDATION from central server authenticating token %s from %s at %s"
               "- adding to firewall and redirecting them to activate message", client->token, client->ip, client->mac);
@@ -234,11 +237,12 @@ authenticate_client(request * r)
         debug(LOG_INFO, "Got ALLOWED from central server authenticating token %s from %s at %s - "
               "adding to firewall and redirecting them to portal", client->token, client->ip, client->mac);
         fw_allow(client, FW_MARK_KNOWN);
+    	UNLOCK_CLIENT_LIST();
 		//>>> liudf added 20160112
 		client->first_login = time(NULL);
 		//<<< liudf added end
         served_this_session++;
-		if(type != NULL) {
+		if(type) {
         	send_http_page(r, "weixin auth", "Weixin auth come here");
 		} else {
         	safe_asprintf(&urlFragment, "%sgw_id=%s", auth_server->authserv_portal_script_path_fragment, config->gw_id);
@@ -248,6 +252,7 @@ authenticate_client(request * r)
         break;
 
     case AUTH_VALIDATION_FAILED:
+    	UNLOCK_CLIENT_LIST();
         /* Client had X minutes to validate account by email and didn't = too late */
         debug(LOG_INFO, "Got VALIDATION_FAILED from central server authenticating token %s from %s at %s "
               "- redirecting them to failed_validation message", client->token, client->ip, client->mac);
@@ -258,6 +263,7 @@ authenticate_client(request * r)
         break;
 
     default:
+    	UNLOCK_CLIENT_LIST();
         debug(LOG_WARNING,
               "I don't know what the validation code %d means for token %s from %s at %s - sending error message",
               auth_response.authcode, client->token, client->ip, client->mac);
@@ -266,6 +272,5 @@ authenticate_client(request * r)
 
     }
 
-    UNLOCK_CLIENT_LIST();
     return;
 }

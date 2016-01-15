@@ -444,17 +444,11 @@ iptables_fw_init(void)
     iptables_do_command("-t nat -N " CHAIN_AUTHSERVERS);
 	//>>> liudf added 20151224
     iptables_do_command("-t nat -N " CHAIN_DOMAIN_TRUSTED);
-	iptables_do_command("-t nat -N " CHAIN_UNTRUSTED);
     //<<< liudf added end
 	if (got_authdown_ruleset)
         iptables_do_command("-t nat -N " CHAIN_AUTH_IS_DOWN);
 	
-	//>>> liudf added 20160113
-	// add this rule for mac blacklist
-    iptables_do_command("-t nat -A PREROUTING -i %s -j " CHAIN_UNTRUSTED, config->gw_interface);
-	iptables_do_command("-t nat -A " CHAIN_UNTRUSTED " -m set --match-set " CHAIN_UNTRUSTED " src -j DROP");
-	//<<<
-
+	
     /* Assign links and rules to these new chains */
     iptables_do_command("-t nat -A PREROUTING -i %s -j " CHAIN_OUTGOING, config->gw_interface);
 	
@@ -499,6 +493,7 @@ iptables_fw_init(void)
     iptables_do_command("-t filter -N " CHAIN_TO_INTERNET);
     iptables_do_command("-t filter -N " CHAIN_AUTHSERVERS);
 	// liudf added 20151224
+	iptables_do_command("-t filter -N " CHAIN_UNTRUSTED);
     iptables_do_command("-t filter -N " CHAIN_DOMAIN_TRUSTED);
     iptables_do_command("-t filter -N " CHAIN_LOCKED);
     iptables_do_command("-t filter -N " CHAIN_GLOBAL);
@@ -509,6 +504,11 @@ iptables_fw_init(void)
         iptables_do_command("-t filter -N " CHAIN_AUTH_IS_DOWN);
 
     /* Assign links and rules to these new chains */
+	//>>> liudf added 20160113
+	// add this rule for mac blacklist
+    iptables_do_command("-t filter -A INPUT -i %s -j " CHAIN_UNTRUSTED, config->gw_interface);
+	iptables_do_command("-t filter -A " CHAIN_UNTRUSTED " -m set --match-set " CHAIN_UNTRUSTED " src -j DROP");
+	//<<<
 
     /* Insert at the beginning */
     iptables_do_command("-t filter -I FORWARD -i %s -j " CHAIN_TO_INTERNET, config->gw_interface);
@@ -622,7 +622,6 @@ iptables_fw_destroy(void)
      */
     debug(LOG_DEBUG, "Destroying chains in the NAT table");
     iptables_fw_destroy_mention("nat", "PREROUTING", CHAIN_OUTGOING);
-    iptables_fw_destroy_mention("nat", "PREROUTING", CHAIN_UNTRUSTED);
     iptables_do_command("-t nat -F " CHAIN_AUTHSERVERS);
 	// liudf added 20151224
     iptables_do_command("-t nat -F " CHAIN_UNTRUSTED);
@@ -636,7 +635,6 @@ iptables_fw_destroy(void)
     iptables_do_command("-t nat -F " CHAIN_UNKNOWN);
     iptables_do_command("-t nat -X " CHAIN_AUTHSERVERS);
 	// liudf added 20151224
-    iptables_do_command("-t nat -X " CHAIN_UNTRUSTED);
     iptables_do_command("-t nat -X " CHAIN_DOMAIN_TRUSTED);
     iptables_do_command("-t nat -X " CHAIN_OUTGOING);
     if (got_authdown_ruleset)
@@ -653,6 +651,7 @@ iptables_fw_destroy(void)
      */
     debug(LOG_DEBUG, "Destroying chains in the FILTER table");
     iptables_fw_destroy_mention("filter", "FORWARD", CHAIN_TO_INTERNET);
+    iptables_fw_destroy_mention("filter", "PREROUTING", CHAIN_UNTRUSTED);
     iptables_do_command("-t filter -F " CHAIN_TO_INTERNET);
     iptables_do_command("-t filter -F " CHAIN_AUTHSERVERS);
 	// liudf added 20151224
@@ -667,6 +666,7 @@ iptables_fw_destroy(void)
     iptables_do_command("-t filter -X " CHAIN_TO_INTERNET);
     iptables_do_command("-t filter -X " CHAIN_AUTHSERVERS);
 	// liudf added 20151224
+   	iptables_do_command("-t filter -X " CHAIN_UNTRUSTED);
     iptables_do_command("-t filter -X " CHAIN_DOMAIN_TRUSTED);
     iptables_do_command("-t filter -X " CHAIN_LOCKED);
     iptables_do_command("-t filter -X " CHAIN_GLOBAL);
