@@ -104,5 +104,13 @@ void iptables_fw_clear_domains_trusted(void);
 void iptables_fw_set_roam_mac(const char *);
 
 void iptables_fw_clear_roam_maclist(void);
+
+void iptables_fw_set_trusted_maclist(void);
+
+void iptables_fw_clear_trusted_maclist(void);
+
+void iptables_fw_set_untrusted_maclist(void);
+
+void iptables_fw_clear_trusted_maclist(void);
 //<<< liudf added end
 #endif                          /* _IPTABLES_H_ */
