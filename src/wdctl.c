@@ -99,9 +99,9 @@ usage(void)
     fprintf(stdout, "  add_untrusted_mac		Add untrusted mac list\n");
 	fprintf(stdout, "  clear_untrusted_mac		Clear untrusted mac list\n");
     fprintf(stdout, "  show_untrusted_mac		Show untrusted mac list\n");
-	fprintf(stdout, "  add_roam_mac				Add roaming mac list\n");
-	fprintf(stdout, "  clear_roam_mac			Clear roaming mac list\n");
-    fprintf(stdout, "  show_roam_mac			Show roaming mac list\n");
+	//fprintf(stdout, "  add_roam_mac				Add roaming mac list\n");
+	//fprintf(stdout, "  clear_roam_mac			Clear roaming mac list\n");
+    //fprintf(stdout, "  show_roam_mac			Show roaming mac list\n");
 	//<<< liudf added end
     fprintf(stdout, "\n");
 }
@@ -190,6 +190,30 @@ parse_commandline(int argc, char **argv)
             exit(1);
 		}
         config.param = strdup(*(argv + optind + 1));
+	} else if (strcmp(*(argv + optind), "add_trusted_mac") == 0) {
+		config.command = WDCTL_ADD_TRUSTED_MACLIST;
+		if ((argc - (optind + 1)) <= 0) {
+			fprintf(stderr, "wdctl: Error: You must specify mac list\n");
+            usage();
+            exit(1);
+		}
+        config.param = strdup(*(argv + optind + 1));
+	} else if (strcmp(*(argv + optind), "show_trusted_mac") == 0) {
+		config.command = WDCTL_SHOW_TRUSTED_MACLIST;
+	} else if (strcmp(*(argv + optind), "clear_trusted_mac") == 0) {
+		config.command = WDCTL_CLEAR_TRUSTED_MACLIST;
+	} else if (strcmp(*(argv + optind), "add_untrusted_mac") == 0) {
+		config.command = WDCTL_ADD_UNTRUSTED_MACLIST;
+		if ((argc - (optind + 1)) <= 0) {
+			fprintf(stderr, "wdctl: Error: You must specify mac list\n");
+            usage();
+            exit(1);
+		}
+        config.param = strdup(*(argv + optind + 1));
+	} else if (strcmp(*(argv + optind), "show_untrusted_mac") == 0) {
+		config.command = WDCTL_SHOW_UNTRUSTED_MACLIST;
+	} else if (strcmp(*(argv + optind), "clear_untrusted_mac") == 0) {
+		config.command = WDCTL_CLEAR_UNTRUSTED_MACLIST;
 	//<<< liudf added end
     } else {
         fprintf(stderr, "wdctl: Error: Invalid command \"%s\"\n", *(argv + optind));

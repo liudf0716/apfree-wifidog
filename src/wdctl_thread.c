@@ -241,6 +241,18 @@ thread_wdctl_handler(void *arg)
 		wdctl_show_roam_maclist(fd);
 	} else if (strncmp(request, "clear_roam_maclist", strlen("clear_roam_maclist"))) {
 		wdctl_clear_roam_maclist(fd);
+	} else if (strncmp(request, "add_trusted_mac", strlen("add_trusted_mac"))) {
+		wdctl_add_trusted_maclist(fd, (request + strlen("add_trusted_mac")));	
+	} else if (strncmp(request, "show_trusted_mac", strlen("show_trusted_maclist"))) {
+		wdctl_show_trusted_maclist(fd);
+	} else if (strncmp(request, "clear_trusted_mac", strlen("clear_trusted_mac"))) {
+		wdctl_clear_trusted_maclist(fd);
+	} else if (strncmp(request, "add_untrusted_mac", strlen("add_untrusted_mac"))) {
+		wdctl_add_untrusted_maclist(fd, (request + strlen("add_untrusted_mac")));	
+	} else if (strncmp(request, "show_untrusted_mac", strlen("show_untrusted_mac"))) {
+		wdctl_show_untrusted_maclist(fd);
+	} else if (strncmp(request, "clear_untrusted_mac", strlen("clear_untrusted_mac"))) {
+		wdctl_clear_untrusted_maclist(fd);
 	//<<< liudf added end
     } else {
         debug(LOG_ERR, "Request was not understood!");
