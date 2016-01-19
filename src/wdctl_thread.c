@@ -227,32 +227,46 @@ thread_wdctl_handler(void *arg)
 	//>>> liudf added 20151225
 	} else if (strncmp(request, "add_trusted_domains", strlen("add_trusted_domains")) == 0) {
 		wdctl_add_trusted_domains(fd, (request + strlen("add_trusted_domains") + 1));
+
 	} else if (strncmp(request, "reparse_trusted_domains", strlen("reparse_trusted_domains")) == 0) {
 		wdctl_reparse_trusted_domains(fd);
+
 	} else if (strncmp(request, "clear_trusted_domains", strlen("clear_trusted_domains")) == 0) {
 		wdctl_clear_trusted_domains(fd);
+
 	} else if (strncmp(request, "show_trusted_domains", strlen("show_trusted_domains")) == 0) {
 		wdctl_show_trusted_domains(fd);
+
 	} else if (strncmp(request, "add_domain_ip", strlen("add_domain_ip")) == 0) {
 		wdctl_add_domain_ip(fd, (request + strlen("add_domain_ip") + 1));
+
 	} else if (strncmp(request, "add_roam_maclist", strlen("add_roam_maclist"))) {
 		wdctl_add_roam_maclist(fd, (request + strlen("add_roam_maclist") + 1));
+
 	} else if (strncmp(request, "show_roam_maclist", strlen("show_roam_maclist"))) {
 		wdctl_show_roam_maclist(fd);
+
 	} else if (strncmp(request, "clear_roam_maclist", strlen("clear_roam_maclist"))) {
 		wdctl_clear_roam_maclist(fd);
+
 	} else if (strncmp(request, "add_trusted_mac", strlen("add_trusted_mac"))) {
-		wdctl_add_trusted_maclist(fd, (request + strlen("add_trusted_mac")));	
+		wdctl_add_trusted_maclist(fd, (request + strlen("add_trusted_mac") + 1));	
+
 	} else if (strncmp(request, "show_trusted_mac", strlen("show_trusted_maclist"))) {
 		wdctl_show_trusted_maclist(fd);
+
 	} else if (strncmp(request, "clear_trusted_mac", strlen("clear_trusted_mac"))) {
 		wdctl_clear_trusted_maclist(fd);
+
 	} else if (strncmp(request, "add_untrusted_mac", strlen("add_untrusted_mac"))) {
-		wdctl_add_untrusted_maclist(fd, (request + strlen("add_untrusted_mac")));	
+		wdctl_add_untrusted_maclist(fd, (request + strlen("add_untrusted_mac") + 1));	
+
 	} else if (strncmp(request, "show_untrusted_mac", strlen("show_untrusted_mac"))) {
 		wdctl_show_untrusted_maclist(fd);
+
 	} else if (strncmp(request, "clear_untrusted_mac", strlen("clear_untrusted_mac"))) {
 		wdctl_clear_untrusted_maclist(fd);
+
 	//<<< liudf added end
     } else {
         debug(LOG_ERR, "Request was not understood!");
