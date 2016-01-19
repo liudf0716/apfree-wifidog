@@ -655,6 +655,7 @@ iptables_fw_destroy(void)
     iptables_do_command("-t filter -F " CHAIN_TO_INTERNET);
     iptables_do_command("-t filter -F " CHAIN_AUTHSERVERS);
 	// liudf added 20151224
+    iptables_do_command("-t filter -F " CHAIN_UNTRUSTED);
     iptables_do_command("-t filter -F " CHAIN_DOMAIN_TRUSTED);
     iptables_do_command("-t filter -F " CHAIN_LOCKED);
     iptables_do_command("-t filter -F " CHAIN_GLOBAL);
