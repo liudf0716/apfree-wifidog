@@ -1021,11 +1021,16 @@ parse_mac_list(const char *ptr, int which)
     char *ptrcopy = NULL, *pt = NULL;
     char *possiblemac = NULL;
     char *mac = NULL;
+	int  len = 0;
 
-    debug(LOG_DEBUG, "Parsing string [%s] for trusted MAC addresses", ptr);
+    debug(LOG_DEBUG, "Parsing string [%s] for  MAC addresses", ptr);
+	
+	while(isspace(*ptr))
+		ptr++;
 	
 	if (check_mac_format(ptr)) {
 		// in case only one mac
+    	debug(LOG_DEBUG, "add mac [%s] to list", ptr);
 		add_mac(ptr, which);
 		return;
 	}
@@ -1035,7 +1040,11 @@ parse_mac_list(const char *ptr, int which)
     /* strsep modifies original, so let's make a copy */
     ptrcopy = safe_strdup(ptr);
 	pt = ptrcopy;
-
+	
+	len = strlen(ptrcopy);
+	while(isspace(ptrcopy[--len]))
+		ptrcopy[len] = '\0';
+	
     while ((possiblemac = strsep(&ptrcopy, ","))) {
         /* check for valid format */
         if (!check_mac_format(possiblemac)) {
