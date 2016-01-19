@@ -576,7 +576,7 @@ wdctl_add_trusted_maclist(int fd, const char *args)
 	
     write_to_socket(fd, "Yes", 3);
 
-    debug(LOG_DEBUG, "Exiting wdctl_add_roam_maclist...");
+    debug(LOG_DEBUG, "Exiting wdctl_add_trusted_maclist...");
 }
 
 static void
@@ -626,7 +626,7 @@ wdctl_add_untrusted_maclist(int fd, const char *args)
 	
     write_to_socket(fd, "Yes", 3);
 
-    debug(LOG_DEBUG, "Exiting wdctl_add_roam_maclist...");
+    debug(LOG_DEBUG, "Exiting wdctl_add_untrusted_maclist...");
 }
 
 static void

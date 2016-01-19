@@ -508,7 +508,7 @@ wdctl_add_trusted_maclist()
 
     sock = connect_to_server(config.socket);
 
-    strncpy(request, "add_trusted_maclist ", 4096);
+    strncpy(request, "add_trusted_mac ", 4096);
     strncat(request, config.param, (4096 - strlen(request) - 1));
     strncat(request, "\r\n\r\n", (4096 - strlen(request) - 1));
 
@@ -543,7 +543,7 @@ wdctl_show_trusted_maclist()
 
     sock = connect_to_server(config.socket);
 
-    strncpy(request, "show_trusted_maclist\r\n\r\n", 35);
+    strncpy(request, "show_trusted_mac\r\n\r\n", 35);
 
     send_request(sock, request);
 
@@ -567,7 +567,7 @@ wdctl_clear_trusted_maclist()
 
     sock = connect_to_server(config.socket);
 
-    strncpy(request, "clear_trusted_maclist\r\n\r\n", 35);
+    strncpy(request, "clear_trusted_mac\r\n\r\n", 35);
 
     send_request(sock, request);
 
@@ -594,7 +594,7 @@ wdctl_add_untrusted_maclist()
 
     sock = connect_to_server(config.socket);
 
-    strncpy(request, "add_untrusted_maclist ", 4096);
+    strncpy(request, "add_untrusted_mac ", 4096);
     strncat(request, config.param, (4096 - strlen(request) - 1));
     strncat(request, "\r\n\r\n", (4096 - strlen(request) - 1));
 
@@ -629,7 +629,7 @@ wdctl_show_untrusted_maclist()
 
     sock = connect_to_server(config.socket);
 
-    strncpy(request, "show_untrusted_maclist\r\n\r\n", 35);
+    strncpy(request, "show_untrusted_mac\r\n\r\n", 35);
 
     send_request(sock, request);
 
@@ -653,7 +653,7 @@ wdctl_clear_untrusted_maclist()
 
     sock = connect_to_server(config.socket);
 
-    strncpy(request, "clear_untrusted_maclist\r\n\r\n", 35);
+    strncpy(request, "clear_untrusted_mac\r\n\r\n", 35);
 
     send_request(sock, request);
 
