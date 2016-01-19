@@ -651,7 +651,7 @@ iptables_fw_destroy(void)
      */
     debug(LOG_DEBUG, "Destroying chains in the FILTER table");
     iptables_fw_destroy_mention("filter", "FORWARD", CHAIN_TO_INTERNET);
-    iptables_fw_destroy_mention("filter", "PREROUTING", CHAIN_UNTRUSTED);
+    iptables_fw_destroy_mention("filter", "INPUT", CHAIN_UNTRUSTED);
     iptables_do_command("-t filter -F " CHAIN_TO_INTERNET);
     iptables_do_command("-t filter -F " CHAIN_AUTHSERVERS);
 	// liudf added 20151224
