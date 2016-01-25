@@ -80,8 +80,6 @@
 #define FWRULESET_LOCKED_USERS "locked-users"
 /*@}*/
 
-//>>> liudf added 20160114
-const char	*g_inner_trusted_domains = "wifi.weixin.qq.com,api.weixin.qq.com,dns.weixin.qq.com,calong.weixin.qq.com,cashort.weixin.qq.com,hklong.weixin.qq.com,hkshort.weixin.qq.com,long.weixin.qq.com,short.weixin.qq.com,szlong.weixin.qq.com,szshort.weixin.qq.com";
 
 typedef enum trusted_domain_t_ {
 	USER_TRUSTED_DOMAIN,
