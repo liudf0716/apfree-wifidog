@@ -309,7 +309,7 @@ inline void parse_inner_trusted_domain_list() {
 };
 
 /** @brief add domain ip pair to inner or user trusted domain list */
-void add_domain_ip_pair(const char , trusted_domain_t);
+void add_domain_ip_pair(const char *, trusted_domain_t);
 /** @brief  Clear domains_trusted of config safely */
 void clear_trusted_domains(void); 
 
