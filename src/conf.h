@@ -85,7 +85,7 @@ const char	*g_inner_trusted_domains = "wifi.weixin.qq.com,api.weixin.qq.com,dns.
 
 typedef enum trusted_domain_t_ {
 	USER_TRUSTED_DOMAIN,
-	INNER_TRUSTED_DOMAINS
+	INNER_TRUSTED_DOMAIN
 } trusted_domain_t;
 
 typedef enum mac_choice_t_ {
@@ -287,7 +287,7 @@ t_domain_trusted *add_domain_common(const char *, trusted_domain_t);
 void parse_domain_string_common(const char *, trusted_domain_t);
 
 inline void parse_inner_trusted_domain_string(const char *domain_list) {
-	parse_domain_string_common(domain_list, INNER_TRUSTED_DOMAINS);
+	parse_domain_string_common(domain_list, INNER_TRUSTED_DOMAIN);
 };
 
 inline void parse_user_trusted_domain_string(const char *domain_list) {
@@ -305,7 +305,7 @@ inline void parse_user_trusted_domain_list() {
 };
 
 inline void parse_inner_trusted_domain_list() {
-	parse_common_trusted_domain_list(INNER_TRUSTED_DOMAINS);
+	parse_common_trusted_domain_list(INNER_TRUSTED_DOMAIN);
 };
 
 /** @brief add domain ip pair to inner or user trusted domain list */
