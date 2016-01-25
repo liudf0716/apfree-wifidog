@@ -75,16 +75,18 @@ char *arp_get(const char *);
 
 //>>>> liudf added 20151224
 /** @brief refer to iptables_fw_clear_domains_trusted */
-void fw_clear_domains_trusted(void);
+void fw_clear_user_domains_trusted(void);
 
 /** @brief refer to iptables_fw_set_domains_trusted */
-void fw_set_domains_trusted(void);
+void fw_set_user_domains_trusted(void);
 
 /** @brief refer to iptables_fw_refresh_domains_trusted */
-void fw_refresh_domains_trusted(void);
+void fw_refresh_user_domains_trusted(void);
 
-/** @brief refer to iptables_fw_refresh_domains_trusted_safely */
-void fw_refresh_domains_trusted_safely(void);
+void fw_set_inner_domains_trusted(void);
+void fw_clear_inner_domains_trusted(void);
+void fw_refresh_inner_domains_trusted(void);
+
 
 void fw_clear_roam_maclist(void);
 

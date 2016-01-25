@@ -39,6 +39,7 @@
 #define CHAIN_AUTHSERVERS "WiFiDog_$ID$_AuthServers"
 //>>> liudf added 20151223 
 #define CHAIN_DOMAIN_TRUSTED "WiFiDog_$ID$_TDomains"
+#define CHAIN_INNER_DOMAIN_TRUSTED "WiFiDog_$ID$_ITDomains"
 #define	CHAIN_ROAM			"WiFiDog_$ID$_Roam"
 #define	CHAIN_UNTRUSTED		"WiFiDog_$ID$_Untrusted"
 //<<< liudf added end
@@ -56,6 +57,7 @@ typedef enum fw_access_t_ {
     FW_ACCESS_ALLOW,
     FW_ACCESS_DENY
 } fw_access_t;
+
 
 /** @brief Initialize the firewall */
 int iptables_fw_init(void);
@@ -89,17 +91,19 @@ int iptables_fw_counters_update(void);
 
 //>>>> liudf added 20151224
 
-/** @brief */
-void iptables_fw_refresh_domains_trusted_safely(void);
-
 /** @brief Clear domain_trusted chain; parse domain name then add its ips to chain */
-void iptables_fw_refresh_domains_trusted(void);
+void iptables_fw_refresh_user_domains_trusted(void);
 
 /** @brief Set trust domains table */
-void iptables_fw_set_domains_trusted(void);
+void iptables_fw_set_user_domains_trusted(void);
 
 /** @brief Clear trust domains table */
-void iptables_fw_clear_domains_trusted(void);
+void iptables_fw_clear_user_domains_trusted(void);
+
+/** @brief inner trust domains operation*/
+void iptables_fw_refresh_inner_domains_trusted(void);
+void iptables_fw_set_inner_domains_trusted(void);
+void iptables_fw_clear_inner_domains_trusted(void);
 
 void iptables_fw_set_roam_mac(const char *);
 

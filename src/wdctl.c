@@ -66,6 +66,7 @@ static void wdctl_clear_untrusted_maclist(void);
 static void wdctl_add_roam_maclist(void);
 static void wdctl_show_roam_maclist(void);
 static void wdctl_clear_roam_maclist(void);
+static void wdctl_user_cfg_save(void);
 //<<< liudf added end
 
 /** @internal
@@ -102,6 +103,7 @@ usage(void)
 	//fprintf(stdout, "  add_roam_mac				Add roaming mac list\n");
 	//fprintf(stdout, "  clear_roam_mac			Clear roaming mac list\n");
     //fprintf(stdout, "  show_roam_mac			Show roaming mac list\n");
+    fprintf(stdout, "  user_cfg_save			Show untrusted mac list\n");
 	//<<< liudf added end
     fprintf(stdout, "\n");
 }
@@ -667,6 +669,30 @@ wdctl_clear_untrusted_maclist()
     close(sock);
 }
 
+static void
+wdctl_user_cfg_save()
+{
+	int sock;
+    char buffer[4096] = {0};
+    char request[36] = {0};
+    ssize_t len;
+
+    sock = connect_to_server(config.socket);
+
+    strncpy(request, "user_cfg_save\r\n\r\n", 35);
+
+    send_request(sock, request);
+
+    // -1: need some space for \0!
+    while ((len = read(sock, buffer, sizeof(buffer) - 1)) > 0) {
+        buffer[len] = '\0';
+        fprintf(stdout, "%s\n", buffer);
+    }
+
+    shutdown(sock, 2);
+    close(sock);
+
+}
 //<<< liudf added end
 
 static void
@@ -854,6 +880,10 @@ main(int argc, char **argv)
 
 	case WDCTL_CLEAR_UNTRUSTED_MACLIST:
 		wdctl_clear_untrusted_maclist();
+		break;
+	
+	case WDCTL_USER_CFG_SAVE:
+		wdctl_user_cfg_save();
 		break;
 	//<<< liudf end
 

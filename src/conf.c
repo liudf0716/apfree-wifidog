@@ -110,6 +110,8 @@ typedef enum {
 	
 	// >>>>liudf added 20151224
 	oTrustedDomains,
+	oInnerTrustedDomains,
+	oUntrustedMACList,
 	oJsFilter,
 	// <<< liudf added end
 } OpCodes;
@@ -162,6 +164,7 @@ static const struct {
 	
 	//>>>>> liudf added 20151224
 	"trustedDomains", oTrustedDomains}, {
+	"untrustedmaclist", oUntrustedMACList}, {
 	"jsFilter", oJsFilter}, {
 	// <<<< liudf added end
 NULL, oBadOption},};
@@ -827,7 +830,10 @@ config_read(const char *filename)
                     break;
 				// >>> liudf added 20151224
 				case oTrustedDomains:
-                    parse_domain_trusted(rawarg);
+					parse_user_trusted_domain_string(rawarg);
+					break;
+				case oUntrustedMACList:
+					parse_untrusted_mac_list(p1);
 					break;
 				case oJsFilter:
                     config.js_filter = parse_boolean_value(p1);
@@ -848,6 +854,10 @@ config_read(const char *filename)
             rawarg = NULL;
         }
     }
+	
+	// liudf added 20160125
+	// parse inner trusted domain string
+	parse_inner_trusted_domain_string(INNER_TRUSTED_DOMAIN);
 
     if (config.httpdusername && !config.httpdpassword) {
         debug(LOG_ERR, "HTTPDUserName requires a HTTPDPassword to be set.");
@@ -937,6 +947,8 @@ static void
 add_trusted_mac(const char *mac)
 {
 	debug(LOG_DEBUG, "Adding MAC address [%s] to trusted mac list", mac);
+	
+	LOCK_CONFIG();
 
 	if (config.trustedmaclist == NULL) {
 		config.trustedmaclist = safe_malloc(sizeof(t_trusted_mac));
@@ -964,6 +976,8 @@ add_trusted_mac(const char *mac)
 				mac);
 		}
 	}
+
+	UNLOCK_CONFIG();
 }
 
 static void
@@ -1000,7 +1014,7 @@ add_untrusted_mac(const char *mac)
 }
 
 void
-add_mac(const char *mac, int which)
+add_mac(const char *mac, mac_choice_t which)
 {
 	switch(which) {
 	case TRUSTED_MAC:
@@ -1016,7 +1030,7 @@ add_mac(const char *mac, int which)
 }
 
 void
-parse_mac_list(const char *ptr, int which)
+parse_mac_list(const char *ptr, mac_choice_t which)
 {
     char *ptrcopy = NULL, *pt = NULL;
     char *possiblemac = NULL;
@@ -1144,50 +1158,100 @@ parse_popular_servers(const char *ptr)
 
 /*
  * liudf added 20151224
- * trust domain related functio
+ * trust domain related function
  */
 
-static t_domain_trusted *
-__add_domain_trusted(const char *domain)
+t_domain_trusted *
+__add_domain_common(const char *domain, trusted_domain_t which)
 {
     t_domain_trusted *p = NULL;
 	
-    if (config.domains_trusted == NULL) {
-    	p = (t_domain_trusted *)safe_malloc(sizeof(t_domain_trusted));
-    	p->domain = safe_strdup(domain);
-        p->next = NULL;
-        config.domains_trusted = p;
-    } else {
-		for(p = config.domains_trusted; p != NULL; p = p->next) {
-			if(strcmp(p->domain, domain) == 0)
-				break;
-		}
-		if(p == NULL) {
+	if(which == USER_TRUSTED_DOMAIN) {	
+    	if (config.domains_trusted == NULL) {
     		p = (t_domain_trusted *)safe_malloc(sizeof(t_domain_trusted));
     		p->domain = safe_strdup(domain);
-        	p->next = config.domains_trusted;
-        	config.domains_trusted = p;
-		}
-    }
+    	    p->next = NULL;
+    	    config.domains_trusted = p;
+    	} else {
+			for(p = config.domains_trusted; p != NULL; p = p->next) {
+				if(strcmp(p->domain, domain) == 0)
+					break;
+			}
+			if(p == NULL) {
+    			p = (t_domain_trusted *)safe_malloc(sizeof(t_domain_trusted));
+    			p->domain = safe_strdup(domain);
+    	    	p->next = config.domains_trusted;
+    	    	config.domains_trusted = p;
+			}
+    	}
+		
+		return p;
+	} else if (which == INNER_TRUSTED_DOMAIN) {
+		if (config.inner_domains_trusted == NULL) {
+    		p = (t_domain_trusted *)safe_malloc(sizeof(t_domain_trusted));
+    		p->domain = safe_strdup(domain);
+    	    p->next = NULL;
+    	    config.inner_domains_trusted = p;
+    	} else {
+			for(p = config.inner_domains_trusted; p != NULL; p = p->next) {
+				if(strcmp(p->domain, domain) == 0)
+					break;
+			}
+			if(p == NULL) {
+    			p = (t_domain_trusted *)safe_malloc(sizeof(t_domain_trusted));
+    			p->domain = safe_strdup(domain);
+    	    	p->next = config.inner_domains_trusted;
+    	    	config.inner_domains_trusted = p;
+			}
+    	}
+		
+		return p;
+	}
 	
-	return p;
+	return NULL;
 }
 
 
-static t_domain_trusted *
-add_domain_trusted(const char *domain)
+t_domain_trusted *
+add_domain_common(const char *domain, trusted_domain_t which)
 {
     t_domain_trusted *p = NULL;
 	
 	LOCK_CONFIG();
-	p= __add_domain_trusted(domain);
+	p = __add_domain_common(domain, which);
     UNLOCK_CONFIG();
 	
 	return p;
 }
 
+// add domain to user trusted domain list
+t_domain_trusted *
+add_user_trusted_domain(const char *domain)
+{
+	return add_domain_common(domain, USER_TRUSTED_DOMAIN);
+}
+
+t_domain_trusted *
+__add_user_trusted_domain(const char *domain)
+{
+	return __add_domain_common(domain, USER_TRUSTED_DOMAIN);
+}
+
+// add domain to inner trusted domain list
+t_domain_trusted *
+add_inner_trusted_domain(const char *domain)
+{
+	return add_domain_common(domain, INNER_TRUSTED_DOMAIN);
+}
+
+t_domain_trusted *
+__add_inner_trusted_domain(const char *domain)
+{
+	return	__add_domain_common(domain, INNER_TRUSTED_DOMAIN);
+}
+
 void
-parse_domain_trusted(const char *ptr)
+parse_domain_string_common(const char *ptr, trusted_domain_t which)
 {
     char *ptrcopy = NULL, *pt = NULL;
     char *hostname = NULL;
@@ -1217,14 +1281,15 @@ parse_domain_trusted(const char *ptr)
             *tmp = '\0';
         }
         debug(LOG_DEBUG, "Adding trust domain [%s] to list", hostname);
-        add_domain_trusted(hostname);
+        add_domain_common(hostname, which);
     }
 
     free(pt);
 }
 
+// add ip to domain list
 static t_ip_trusted *
-__add_domain_ip(t_domain_trusted *dt, const char *ip)
+__add_ip_2_domain(t_domain_trusted *dt, const char *ip)
 {
 	t_ip_trusted *ipt = dt->ips_trusted;
 	for(; ipt != NULL && strcmp(ipt->ip, ip) != 0; ipt = ipt->next)
@@ -1241,42 +1306,46 @@ __add_domain_ip(t_domain_trusted *dt, const char *ip)
 	return ipt;
 }
 
+// add domain:ip to user define & inner trusted domains
 void
-add_domain_ip(const char *args)
+add_domain_ip_pair(const char *args, trusted_domain_t which)
 {
 	char *domain 	= NULL;
 	char *ip 		= NULL;
 	t_domain_trusted	*dt = NULL;
     char *ptrcopy = NULL, *pt = NULL;
 
-    debug(LOG_DEBUG, "add domain ip (%s)", args);
+    debug(LOG_DEBUG, "add domain ip pair (%s)", args);
     ptrcopy = safe_strdup(args);
 	pt = ptrcopy;
 
 	if((domain = strsep(&ptrcopy, ":")) == NULL) {	
         debug(LOG_DEBUG, "args is illegal");
+		free(pt);
 		return;
 	}
 
 	ip = ptrcopy;	
 	if(ip == NULL || !(strlen(ip) >= 7 && strlen(ip) <= 15)) {
 		debug(LOG_DEBUG, "illegal ip");
+		free(pt);
 		return;
 	}
 		
 	LOCK_CONFIG();
 
-	dt = __add_domain_trusted(domain);
-	
-	__add_domain_ip(dt, ip);
+	dt = __add_domain_common(domain, which);
+	if(dt)
+		__add_ip_2_domain(dt, ip);
 	
 	UNLOCK_CONFIG();
 
 	free(pt);
 }
 
-static void
-add_trusted_domain_ip(t_domain_trusted *p)
+// parse domain to get ip and add it to its list
+void
+parse_trusted_domain_2_ip(t_domain_trusted *p)
 {
 	struct hostent *he;
     struct in_addr **addr_list;
@@ -1295,6 +1364,9 @@ add_trusted_domain_ip(t_domain_trusted *p)
 		inet_ntop(AF_INET, addr_list[i], hostname, HTTP_IP_ADDR_LEN);
 		hostname[HTTP_IP_ADDR_LEN-1] = '\0';
         debug(LOG_DEBUG, "hostname ip is(%s)", hostname);
+		
+		LOCK_CONFIG();
+
 		if(p->ips_trusted == NULL) {
 			ipt = (t_ip_trusted *)malloc(sizeof(t_ip_trusted));
 			memset(ipt, 0, sizeof(t_ip_trusted));
@@ -1317,29 +1389,29 @@ add_trusted_domain_ip(t_domain_trusted *p)
 				p->ips_trusted = ipt; 
 			}
 		}
+
+		UNLOCK_CONFIG();
 	}	
 }
 
-// parse domain_trusted list and add new ip of domain
-void
-parse_trusted_domains_ip(void)
-{
-	LOCK_CONFIG();
-	__parse_trusted_domains_ip();
-	UNLOCK_CONFIG();
-}
-
-void
-__parse_trusted_domains_ip(void)
+void 
+parse_common_trusted_domain_list(trusted_domain_t which)
 {
 	t_domain_trusted *p = NULL;
+	
+	if(which == INNER_TRUSTED_DOMAIN)
+		p = config.inner_domains_trusted;
+	else if (which == USER_TRUSTED_DOMAIN)
+		p = config.domains_trusted;
+	else
+		return;
 
-	p = config.domains_trusted;
 	while(p && p->domain) {
         debug(LOG_DEBUG, "parse domain (%s)", p->domain);
-		add_trusted_domain_ip(p);	
+		parse_trusted_domain_2_ip(p);
 		p = p->next;
 	}
+
 }
 
 void 
@@ -1367,8 +1439,9 @@ __fix_weixin_http_dns_ip(void)
             	p = rindex(buf, '<');
                 *p='\0';
 				ip = buf+4;
-				dt = __add_domain_trusted("short.weixin.qq.com");
-    			__add_domain_ip(dt, ip);
+				dt = __add_inner_trusted_domain("short.weixin.qq.com");
+				if (dt)
+					__add_ip_2_domain(dt, ip);
             }
        	}
     	pclose(file);
@@ -1377,7 +1450,7 @@ __fix_weixin_http_dns_ip(void)
 
 // clear domain's ip collection
 static void
-clear_trusted_domain_ip(t_ip_trusted *ipt)
+__clear_trusted_domain_ip(t_ip_trusted *ipt)
 {
 	t_ip_trusted *p, *p1;
 	for(p = ipt; p != NULL;) {
@@ -1395,7 +1468,7 @@ __clear_trusted_domains(void)
     for (p = config.domains_trusted; p != NULL;) {
     	p1 = p;
         p = p->next;
-        clear_trusted_domain_ip(p1->ips_trusted);
+        __clear_trusted_domain_ip(p1->ips_trusted);
         free(p1->domain);
         free(p1);
     }

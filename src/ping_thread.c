@@ -104,6 +104,7 @@ ping(void)
     t_auth_serv *auth_server = NULL;
     auth_server = get_auth_server();
     static int authdown = 0;
+	char	ssid[32] = {0};
 
     debug(LOG_DEBUG, "Entering ping()");
     memset(request, 0, sizeof(request));
@@ -152,12 +153,38 @@ ping(void)
 
         fclose(fh);
     }
+	//<<< liudf added 20160121
+	// get first ssid
+	if ((fh = popen("uci get wireless.@wifi-iface[0].ssid", "r"))) {
+		fgets(ssid, 31, fh);	
+		pclose(fh);
+	}
+	
+	if(!g_version) {
+		char version[32] = {0};
+		if ((fh = popen("uci get version.@version[0].firmware_version", "r"))) {
+			fgets(version, 31, fh);
+			pclose(fh);
+			g_version = safe_strdup(version);
+		}
+	}
+	
+	if(!g_type) {
+		char name[32] = {0};
+		if ((fh = popen("uci get version.@version[0].model_name", "r"))) {
+			fgets(name, 31, fh);
+			pclose(fh);
+			g_type = safe_strdup(name);
+		}
+	}
 
+	//>>>
+	
     /*
      * Prep & send request
      */
     snprintf(request, sizeof(request) - 1,
-             "GET %s%sgw_id=%s&sys_uptime=%lu&sys_memfree=%u&sys_load=%.2f&wifidog_uptime=%lu&online_clients=%d HTTP/1.0\r\n"
+             "GET %s%sgw_id=%s&sys_uptime=%lu&sys_memfree=%u&sys_load=%.2f&wifidog_uptime=%lu&online_clients=%d&ssid=%s&version=%s&type=%s HTTP/1.0\r\n"
              "User-Agent: WiFiDog %s\r\n"
              "Host: %s\r\n"
              "\r\n",
@@ -170,6 +197,9 @@ ping(void)
              (long unsigned int)((long unsigned int)time(NULL) - (long unsigned int)started_time),
 			 //>>> liudf added 20160112
 			 g_online_clients,
+			 ssid,
+			 g_version?g_version:"null",
+			 g_type?g_type:"null",
 			 //<<< liudf added end
              VERSION, auth_server->authserv_hostname);
 

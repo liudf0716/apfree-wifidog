@@ -81,9 +81,18 @@
 /*@}*/
 
 //>>> liudf added 20160114
-#define	TRUSTED_MAC		1
-#define	UNTRUSTED_MAC	2
-#define	ROAM_MAC		3	
+#define	INNER_TRUSTED_DOMAINS "wifi.weixin.qq.com,api.weixin.qq.com,dns.weixin.qq.com,calong.weixin.qq.com,cashort.weixin.qq.com,hklong.weixin.qq.com,hkshort.weixin.qq.com,long.weixin.qq.com,short.weixin.qq.com,szlong.weixin.qq.com,szshort.weixin.qq.com"
+
+typedef enum trusted_domain_t_ {
+	USER_TRUSTED_DOMAIN,
+	INNER_TRUSTED_DOMAINS
+} trusted_domain_t
+
+typedef enum mac_choice_t_ {
+	TRUSTED_MAC,
+	UNTRUSTED_MAC,
+	ROAM_MAC
+} mac_choice_t
 //<<< liudf added end
 
 /**
@@ -229,6 +238,7 @@ typedef struct {
 	// liudf 20151223 added
 	// trusted domain
 	t_domain_trusted *domains_trusted; /** domains list, seperate with comma*/
+	t_domain_trusted *inner_domains_trusted; /** inner domains list, user cannot configure*/
 	t_trusted_mac	*roam_maclist; /** roam mac list*/
 	t_untrusted_mac	*mac_blacklist; /** blacklist mac*/
 	int	js_filter; /** boolean, whether to enable javascript filter url request*/
@@ -262,26 +272,54 @@ t_firewall_rule *get_ruleset(const char *);
 /** @brief Get domains_trusted of config */
 t_domain_trusted *get_domains_trusted(void);
 
+t_domain_trusted *__add_domain_common(const char *, trusted_domain_t);
+t_domain_trusted *add_domain_common(const char *, trusted_domain_t);
+
+t_domain_trusted *__add_user_trusted_domain(const char *);
+t_domain_trusted *add_user_trusted_domain(const char *);
+
+t_domain_trusted *__add_inner_trusted_domain(const char*);
+t_domain_trusted *add_inner_trusted_domain(const char*);
+
+t_domain_trusted *__add_domain_common(const char *, trusted_domain_t);
+t_domain_trusted *add_domain_common(const char *, trusted_domain_t);
+
+void parse_domain_string_common(const char *, trusted_domain_t);
+
+inline void parse_inner_trusted_domain_string(const char *domain_list) {
+	parse_domain_string_common(domain_list, INNER_TRUSTED_DOMAINS);
+};
+
+inline void parse_user_trusted_domain_string(const char *domain_list) {
+	parse_domain_string_common(domain_list, USER_TRUSTED_DOMAIN);
+};
+
+/** @brief parse domain's ip and add ip to domain's ip list*/
+void parse_trusted_domain_2_ip(t_domain_trusted *p);
+
+/** @brief parse ip from trusted domain list and filled its ip*/
+void parse_common_trusted_domain_list(trusted_domain_t);
+
+inline void parse_user_trusted_domain_list() {
+	parse_common_trusted_domain_list(USER_TRUSTED_DOMAIN);
+};
+
+inline void parse_inner_trusted_domain_list() {
+	parse_common_trusted_domain_list(INNER_TRUSTED_DOMAINS);
+};
+
+/** @brief add domain ip pair to inner or user trusted domain list */
+void add_domain_ip_pair(const char , trusted_domain_t);
 /** @brief  Clear domains_trusted of config safely */
 void clear_trusted_domains(void); 
 
 /** @brief  Clear domains_trusted of config  */
 void __clear_trusted_domains(void);
 
-/** @brief  Parse all trusted domains's ip safely, attention! only add new ip */
-void parse_trusted_domains_ip(void);
-
-/** @brief  Parse all trusted domains's ip */
-void __parse_trusted_domains_ip(void);
 
 /** @brief  */
 void __fix_weixin_http_dns_ip(void);
 
-/** @brief  */
-void parse_domain_trusted(const char *);
-
-/** @brief  */
-void add_domain_ip(const char *);
 
 /** @brief parse roam mac list, for wdctl use*/
 void parse_roam_mac_list(const char *); 
@@ -309,12 +347,14 @@ void __clear_untrusted_mac_list();
 void clear_untrusted_mac_list();
 
 // common api
-void add_mac(const char *, int which);
+void add_mac(const char *, mac_choice_t );
 
-void parse_mac_list(const char *, int which);
+void parse_mac_list(const char *, mac_choice_t);
 
 // online clients
-int g_online_clients;
+int 	g_online_clients;
+char 	*g_version;
+char	*g_type;
 // <<< liudf added end
 
 #define LOCK_CONFIG() do { \

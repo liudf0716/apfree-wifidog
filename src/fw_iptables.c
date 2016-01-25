@@ -277,29 +277,22 @@ iptables_fw_set_authservers(void)
 }
 
 // >>>liudf added 20151223
+
 void
-iptables_fw_refresh_domains_trusted_safely(void)
+iptables_fw_refresh_user_domains_trusted(void)
 {
-	LOCK_CONFIG();
-	iptables_fw_refresh_domains_trusted();
-	UNLOCK_CONFIG();
+	iptables_fw_clear_user_domains_trusted();
+	iptables_fw_set_user_domains_trusted();
 }
 
 void
-iptables_fw_refresh_domains_trusted(void)
-{
-	iptables_fw_clear_domains_trusted();
-	iptables_fw_set_domains_trusted();
-}
-
-void
-iptables_fw_clear_domains_trusted(void)
+iptables_fw_clear_user_domains_trusted(void)
 {
 	ipset_do_command("flush " CHAIN_DOMAIN_TRUSTED);
 }
 
 void
-iptables_fw_set_domains_trusted(void)
+iptables_fw_set_user_domains_trusted(void)
 {
 	const s_config *config;
 	t_domain_trusted *domain_trusted = NULL;
@@ -313,6 +306,37 @@ iptables_fw_set_domains_trusted(void)
 		}
 	}
 }
+
+// set inner trusted domains
+void
+iptables_fw_refresh_inner_domains_trusted(void)
+{
+	iptables_fw_clear_inner_domains_trusted();
+	iptables_fw_set_inner_domains_trusted();
+}
+
+void
+iptables_fw_clear_inner_domains_trusted(void)
+{
+	ipset_do_command("flush " CHAIN_INNER_DOMAIN_TRUSTED);
+}
+
+void
+iptables_fw_set_inner_domains_trusted(void)
+{
+	const s_config *config;
+	t_domain_trusted *domain_trusted = NULL;
+
+    config = config_get_config();
+	
+	for (domain_trusted = config->inner_domains_trusted; domain_trusted != NULL; domain_trusted = domain_trusted->next) {
+		t_ip_trusted *ip_trusted = NULL;
+		for(ip_trusted = domain_trusted->ips_trusted; ip_trusted != NULL; ip_trusted = ip_trusted->next) {
+			ipset_do_command("add " CHAIN_INNER_DOMAIN_TRUSTED " %s ", ip_trusted->ip);
+		}
+	}
+}
+
 
 void
 iptables_fw_clear_roam_maclist(void)
@@ -396,6 +420,7 @@ iptables_fw_init(void)
 	ipset_do_command("create " CHAIN_ROAM " hash:mac");
 	ipset_do_command("create " CHAIN_UNTRUSTED " hash:mac");
 	ipset_do_command("create " CHAIN_DOMAIN_TRUSTED " hash:ip ");
+	ipset_do_command("create " CHAIN_INNER_DOMAIN_TRUSTED " hash:ip ");
 
     /*
      *
@@ -476,6 +501,7 @@ iptables_fw_init(void)
 	// liudf added 20151224
     iptables_do_command("-t nat -A " CHAIN_UNKNOWN " -j " CHAIN_DOMAIN_TRUSTED);
 	iptables_do_command("-t nat -A " CHAIN_DOMAIN_TRUSTED " -m set --match-set " CHAIN_DOMAIN_TRUSTED " dst -j ACCEPT");
+	iptables_do_command("-t nat -A " CHAIN_DOMAIN_TRUSTED " -m set --match-set " CHAIN_INNER_DOMAIN_TRUSTED " dst -j ACCEPT");
     iptables_do_command("-t nat -A " CHAIN_UNKNOWN " -j " CHAIN_GLOBAL);
     if (got_authdown_ruleset) {
         iptables_do_command("-t nat -A " CHAIN_UNKNOWN " -j " CHAIN_AUTH_IS_DOWN);
@@ -532,12 +558,13 @@ iptables_fw_init(void)
 	// liudf added 20151224
     iptables_do_command("-t filter -A " CHAIN_TO_INTERNET " -j " CHAIN_DOMAIN_TRUSTED);
 	iptables_do_command("-t filter -A " CHAIN_DOMAIN_TRUSTED " -m set --match-set " CHAIN_DOMAIN_TRUSTED " dst -j ACCEPT");
+	iptables_do_command("-t filter -A " CHAIN_DOMAIN_TRUSTED " -m set --match-set " CHAIN_INNER_DOMAIN_TRUSTED " dst -j ACCEPT");
 	
     iptables_do_command("-t filter -A " CHAIN_TO_INTERNET " -m mark --mark 0x%u -j " CHAIN_LOCKED, FW_MARK_LOCKED);
     iptables_load_ruleset("filter", FWRULESET_LOCKED_USERS, CHAIN_LOCKED);
 
     iptables_do_command("-t filter -A " CHAIN_TO_INTERNET " -j " CHAIN_GLOBAL);
-    iptables_load_ruleset("filter", FWRULESET_GLOBAL, CHAIN_GLOBAL);
+  	iptables_load_ruleset("filter", FWRULESET_GLOBAL, CHAIN_GLOBAL);
     iptables_load_ruleset("nat", FWRULESET_GLOBAL, CHAIN_GLOBAL);
 
     iptables_do_command("-t filter -A " CHAIN_TO_INTERNET " -m mark --mark 0x%u -j " CHAIN_VALIDATE, FW_MARK_PROBATION);
@@ -556,8 +583,14 @@ iptables_fw_init(void)
     iptables_load_ruleset("filter", FWRULESET_UNKNOWN_USERS, CHAIN_UNKNOWN);
     iptables_do_command("-t filter -A " CHAIN_UNKNOWN " -j REJECT --reject-with icmp-port-unreachable");
 
+	
+	__fix_weixin_http_dns_ip();
+
     UNLOCK_CONFIG();
 	
+	parse_user_trusted_domain_list();
+	parse_inner_trusted_domain_list();
+
     free(ext_interface);
 
 	//>>> liudf added 20160114
@@ -566,9 +599,8 @@ iptables_fw_init(void)
 	fw_set_trusted_maclist();
 	fw_set_untrusted_maclist();
 	
-	__parse_trusted_domains_ip();
-	__fix_weixin_http_dns_ip();
-    iptables_fw_set_domains_trusted();
+	iptables_fw_set_inner_domains_trusted();
+    iptables_fw_set_user_domains_trusted();
 	//<<< liudf added end
 
     return 1;
@@ -682,6 +714,7 @@ iptables_fw_destroy(void)
 	ipset_do_command("destroy " CHAIN_ROAM);
 	ipset_do_command("destroy " CHAIN_UNTRUSTED);
 	ipset_do_command("destroy " CHAIN_DOMAIN_TRUSTED);
+	ipset_do_command("destroy " CHAIN_INNER_DOMAIN_TRUSTED);
 
     return 1;
 }

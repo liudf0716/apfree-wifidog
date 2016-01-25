@@ -239,31 +239,46 @@ fw_set_authservers(void)
 
 //>>>>> liudf added 20151224
 void
-fw_refresh_domains_trusted_safely(void)
+fw_refresh_inner_domains_trusted(void)
 {
-    debug(LOG_INFO, "Refresh trust domains list safely");
-	iptables_fw_refresh_domains_trusted_safely();
+    debug(LOG_INFO, "Refresh inner trust domains list");
+	iptables_fw_refresh_inner_domains_trusted();
 }
+
+void 
+fw_clear_inner_domains_trusted(void)
+{
+    debug(LOG_INFO, "Clear inner trust domains list");
+	iptables_fw_clear_inner_domains_trusted();
+}
+
+void 
+fw_set_inner_domains_trusted(void)
+{
+    debug(LOG_INFO, "Setting inner trust domains list");
+	iptables_fw_set_inner_domains_trusted();
+}
+
 
 void
-fw_refresh_domains_trusted(void)
+fw_refresh_user_domains_trusted(void)
 {
-    debug(LOG_INFO, "Refresh trust domains list");
-	iptables_fw_refresh_domains_trusted();
+    debug(LOG_INFO, "Refresh user trust domains list");
+	iptables_fw_refresh_user_domains_trusted();
 }
 
 void 
-fw_clear_domains_trusted(void)
+fw_clear_user_domains_trusted(void)
 {
-    debug(LOG_INFO, "Clear trust domains list");
-	iptables_fw_clear_domains_trusted();
+    debug(LOG_INFO, "Clear user trust domains list");
+	iptables_fw_clear_user_domains_trusted();
 }
 
 void 
-fw_set_domains_trusted(void)
+fw_set_user_domains_trusted(void)
 {
-    debug(LOG_INFO, "Setting the trust domains list");
-	iptables_fw_set_domains_trusted();
+    debug(LOG_INFO, "Setting user trust domains list");
+	iptables_fw_set_user_domains_trusted();
 }
 
 void
