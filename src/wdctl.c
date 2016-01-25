@@ -279,9 +279,9 @@ wdctl_add_trusted_domains(void)
 
     sock = connect_to_server(config.socket);
 
-    strncpy(request, "add_trusted_domains ", 64);
-    strncat(request, config.param, (64 - strlen(request) - 1));
-    strncat(request, "\r\n\r\n", (64 - strlen(request) - 1));
+    strncpy(request, "add_trusted_domains ", 4096);
+    strncat(request, config.param, (4096 - strlen(request) - 1));
+    strncat(request, "\r\n\r\n", (4096 - strlen(request) - 1));
 
     send_request(sock, request);
 
