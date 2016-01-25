@@ -857,7 +857,7 @@ config_read(const char *filename)
 	
 	// liudf added 20160125
 	// parse inner trusted domain string
-	parse_inner_trusted_domain_string(INNER_TRUSTED_DOMAIN);
+	parse_inner_trusted_domain_string(g_inner_trusted_domains);
 
     if (config.httpdusername && !config.httpdpassword) {
         debug(LOG_ERR, "HTTPDUserName requires a HTTPDPassword to be set.");

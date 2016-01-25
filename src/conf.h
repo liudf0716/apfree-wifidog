@@ -81,18 +81,18 @@
 /*@}*/
 
 //>>> liudf added 20160114
-#define	INNER_TRUSTED_DOMAINS "wifi.weixin.qq.com,api.weixin.qq.com,dns.weixin.qq.com,calong.weixin.qq.com,cashort.weixin.qq.com,hklong.weixin.qq.com,hkshort.weixin.qq.com,long.weixin.qq.com,short.weixin.qq.com,szlong.weixin.qq.com,szshort.weixin.qq.com"
+const char	*g_inner_trusted_domains = "wifi.weixin.qq.com,api.weixin.qq.com,dns.weixin.qq.com,calong.weixin.qq.com,cashort.weixin.qq.com,hklong.weixin.qq.com,hkshort.weixin.qq.com,long.weixin.qq.com,short.weixin.qq.com,szlong.weixin.qq.com,szshort.weixin.qq.com";
 
 typedef enum trusted_domain_t_ {
 	USER_TRUSTED_DOMAIN,
 	INNER_TRUSTED_DOMAINS
-} trusted_domain_t
+} trusted_domain_t;
 
 typedef enum mac_choice_t_ {
 	TRUSTED_MAC,
 	UNTRUSTED_MAC,
 	ROAM_MAC
-} mac_choice_t
+} mac_choice_t;
 //<<< liudf added end
 
 /**
