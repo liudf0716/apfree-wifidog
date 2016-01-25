@@ -246,12 +246,11 @@ get_serialize_trusted_domains()
 	pstr_t *pstr = NULL;
     s_config *config;
 	t_domain_trusted *domain_trusted = NULL;
-	t_ip_trusted	*ip_trusted = NULL;
 	int line = 0;
 
     config = config_get_config();
     
-	domain_trusted = config->domain_trusted;
+	domain_trusted = config->domains_trusted;
 	if(domain_trusted == NULL)
 		return NULL;
 
