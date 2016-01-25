@@ -517,7 +517,7 @@ wdctl_show_trusted_domains(int fd)
 static void
 wdctl_add_domain_ip(int fd, const char *args)
 {
-	add_domain_ip_pair(args);
+	add_domain_ip_pair(args, USER_TRUSTED_DOMAIN);
 
 	fw_refresh_user_domains_trusted();	
 
