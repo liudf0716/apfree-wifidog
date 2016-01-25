@@ -1250,6 +1250,16 @@ __add_inner_trusted_domain(const char *domain)
 	return	__add_domain_common(domain, INNER_TRUSTED_DOMAIN);
 }
 
+void parse_inner_trusted_domain_string(const char *domain_list)
+{
+	parse_domain_string_common(domain_list, INNER_TRUSTED_DOMAIN);
+}
+
+void parse_user_trusted_domain_string(const char *domain_list)
+{
+	parse_domain_string_common(domain_list, USER_TRUSTED_DOMAIN);
+}
+
 void
 parse_domain_string_common(const char *ptr, trusted_domain_t which)
 {
@@ -1412,6 +1422,16 @@ parse_common_trusted_domain_list(trusted_domain_t which)
 		p = p->next;
 	}
 
+}
+
+void parse_user_trusted_domain_list()
+{
+	parse_common_trusted_domain_list(USER_TRUSTED_DOMAIN);
+}
+
+void parse_inner_trusted_domain_list()
+{	
+	parse_common_trusted_domain_list(INNER_TRUSTED_DOMAIN);
 }
 
 void 

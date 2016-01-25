@@ -286,13 +286,9 @@ t_domain_trusted *add_domain_common(const char *, trusted_domain_t);
 
 void parse_domain_string_common(const char *, trusted_domain_t);
 
-inline void parse_inner_trusted_domain_string(const char *domain_list) {
-	parse_domain_string_common(domain_list, INNER_TRUSTED_DOMAIN);
-};
+void parse_inner_trusted_domain_string(const char *);
 
-inline void parse_user_trusted_domain_string(const char *domain_list) {
-	parse_domain_string_common(domain_list, USER_TRUSTED_DOMAIN);
-};
+void parse_user_trusted_domain_string(const char *);
 
 /** @brief parse domain's ip and add ip to domain's ip list*/
 void parse_trusted_domain_2_ip(t_domain_trusted *p);
@@ -300,13 +296,9 @@ void parse_trusted_domain_2_ip(t_domain_trusted *p);
 /** @brief parse ip from trusted domain list and filled its ip*/
 void parse_common_trusted_domain_list(trusted_domain_t);
 
-inline void parse_user_trusted_domain_list() {
-	parse_common_trusted_domain_list(USER_TRUSTED_DOMAIN);
-};
+void parse_user_trusted_domain_list();
 
-inline void parse_inner_trusted_domain_list() {
-	parse_common_trusted_domain_list(INNER_TRUSTED_DOMAIN);
-};
+void parse_inner_trusted_domain_list();
 
 /** @brief add domain ip pair to inner or user trusted domain list */
 void add_domain_ip_pair(const char *, trusted_domain_t);
