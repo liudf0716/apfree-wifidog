@@ -1089,7 +1089,7 @@ iptables_fw_counters_update(void)
 				// liudf added 20160127
 				// get client name	
 				if(p1->name)
-					__get_client_name();
+					__get_client_name(p1);
 
             } else {
                 debug(LOG_ERR,
