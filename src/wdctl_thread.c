@@ -670,6 +670,8 @@ wdctl_user_cfg_save(int fd)
 			   *trusted_domains = NULL;
 	char	szcmd[2048] = {0};
 	
+	iptables_fw_save_online_clients();
+	
 	LOCK_CONFIG();
 
 	trusted_maclist 	= get_serialize_maclist(TRUSTED_MAC);

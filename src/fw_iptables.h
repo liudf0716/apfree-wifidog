@@ -116,5 +116,7 @@ void iptables_fw_clear_trusted_maclist(void);
 void iptables_fw_set_untrusted_maclist(void);
 
 void iptables_fw_clear_untrusted_maclist(void);
+
+void iptables_fw_save_online_clients(void);
 //<<< liudf added end
 #endif                          /* _IPTABLES_H_ */

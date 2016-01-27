@@ -90,7 +90,7 @@ auth_server_request(t_authresponse * authresponse, const char *request_type, con
     safe_token = httpdUrlEncode(token);
     if(config -> deltatraffic) {
            snprintf(buf, (sizeof(buf) - 1),
-             "GET %s%sstage=%s&ip=%s&mac=%s&token=%s&incoming=%llu&outgoing=%llu&incomingdelta=%llu&outgoingdelta=%llu&first_login=%ld&online_time=%d&gw_id=%s HTTP/1.0\r\n"
+             "GET %s%sstage=%s&ip=%s&mac=%s&token=%s&incoming=%llu&outgoing=%llu&incomingdelta=%llu&outgoingdelta=%llu&first_login=%ld&online_time=%d&gw_id=%s&channel_path=%s HTTP/1.0\r\n"
              "User-Agent: WiFiDog %s\r\n"
              "Host: %s\r\n"
              "\r\n",
@@ -104,11 +104,12 @@ auth_server_request(t_authresponse * authresponse, const char *request_type, con
              outgoing_delta,
 			 (long)first_login,
 			 online_time,
-             config->gw_id, 
+             config->gw_id,
+			 g_channel_path?g_channel_path:"null", 
 			 VERSION, auth_server->authserv_hostname);
     } else {
             snprintf(buf, (sizeof(buf) - 1),
-             "GET %s%sstage=%s&ip=%s&mac=%s&token=%s&incoming=%llu&outgoing=%llu&first_login=%ld&online_time=%d&gw_id=%s HTTP/1.0\r\n"
+             "GET %s%sstage=%s&ip=%s&mac=%s&token=%s&incoming=%llu&outgoing=%llu&first_login=%ld&online_time=%d&gw_id=%s&channel_path=%s HTTP/1.0\r\n"
              "User-Agent: WiFiDog %s\r\n"
              "Host: %s\r\n"
              "\r\n",
@@ -118,7 +119,9 @@ auth_server_request(t_authresponse * authresponse, const char *request_type, con
              ip,
              mac, safe_token, incoming, outgoing, 
 			 (long)first_login, online_time,
-			 config->gw_id, VERSION, auth_server->authserv_hostname);
+			 config->gw_id, 
+			 g_channel_path?g_channel_path:"null",
+			 VERSION, auth_server->authserv_hostname);
         }
     free(safe_token);
 

@@ -345,6 +345,7 @@ void parse_mac_list(const char *, mac_choice_t);
 int 	g_online_clients;
 char 	*g_version;
 char	*g_type;
+char	*g_channel_path;
 // <<< liudf added end
 
 #define LOCK_CONFIG() do { \

@@ -216,6 +216,8 @@ parse_commandline(int argc, char **argv)
 		config.command = WDCTL_SHOW_UNTRUSTED_MACLIST;
 	} else if (strcmp(*(argv + optind), "clear_untrusted_mac") == 0) {
 		config.command = WDCTL_CLEAR_UNTRUSTED_MACLIST;
+	} else if (strcmp(*(argv + optind), "user_cfg_save") == 0) {
+		config.command = WDCTL_USER_CFG_SAVE;
 	//<<< liudf added end
     } else {
         fprintf(stderr, "wdctl: Error: Invalid command \"%s\"\n", *(argv + optind));

@@ -245,7 +245,10 @@ authenticate_client(request * r)
 		if(type) {
         	send_http_page(r, "weixin auth", "Weixin auth come here");
 		} else {
-        	safe_asprintf(&urlFragment, "%sgw_id=%s", auth_server->authserv_portal_script_path_fragment, config->gw_id);
+        	safe_asprintf(&urlFragment, "%sgw_id=%s&channel_path=%s", 
+				auth_server->authserv_portal_script_path_fragment, 
+				config->gw_id,
+				g_channel_path?g_channel_path:"null");
         	http_send_redirect_to_auth(r, urlFragment, "Redirect to portal");
         	free(urlFragment);
 		}

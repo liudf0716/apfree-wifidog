@@ -60,7 +60,8 @@ typedef struct _t_client {
     t_counters counters;                /**< @brief Counters for input/output of
 					     the client. */
 	//<<< liudf added 20160112	
-	time_t first_login;		/**< @brief first login time */
+	time_t 	first_login;		/**< @brief first login time */
+	char	*name;			/**< @brief device name */
 } t_client;
 
 /** @brief Get a new client struct, not added to the list yet */
