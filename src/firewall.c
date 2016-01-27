@@ -374,7 +374,8 @@ fw_sync_with_authserver(void)
             auth_server_request(&authresponse, REQUEST_TYPE_COUNTERS, p1->ip, p1->mac, p1->token, p1->counters.incoming,
                                 p1->counters.outgoing, p1->counters.incoming_delta, p1->counters.outgoing_delta,
 								// liudf added 20160112
-								p1->first_login, (p1->counters.last_updated - p1->first_login));
+								p1->first_login, (p1->counters.last_updated - p1->first_login), 
+								p1->name?p1->name:"null");
         }
 
         time_t current_time = time(NULL);
