@@ -181,9 +181,9 @@ ping(void)
 	if(g_type) {
 		char channel_path[128] = {0};
 		if ((fh = popen("uci get firmwareinfo.@version[0].channel_path", "r"))) {
-			fgets(name, 127, fh);
+			fgets(channel_path, 127, fh);
 			pclose(fh);
-			g_type = safe_strdup(name);
+			g_type = safe_strdup(channel_path);
 		}
 
 	}
@@ -193,7 +193,7 @@ ping(void)
      * Prep & send request
      */
     snprintf(request, sizeof(request) - 1,
-             "GET %s%sgw_id=%s&sys_uptime=%lu&sys_memfree=%u&sys_load=%.2f&wifidog_uptime=%lu&online_clients=%d&ssid=%s&version=%s&type=%s&channel_path HTTP/1.0\r\n"
+             "GET %s%sgw_id=%s&sys_uptime=%lu&sys_memfree=%u&sys_load=%.2f&wifidog_uptime=%lu&online_clients=%d&ssid=%s&version=%s&type=%s&channel_path=%s HTTP/1.0\r\n"
              "User-Agent: WiFiDog %s\r\n"
              "Host: %s\r\n"
              "\r\n",
