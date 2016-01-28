@@ -451,7 +451,7 @@ f_fw_init_open()
 
 	f_fw_init = fopen(fw_init_script, "w"); 
 	if(f_fw_init) {
-		fprintf(f_fw_init, "#!/bin/sh");
+		fprintf(f_fw_init, "#!/bin/sh\n");
 	}
 }
 
@@ -492,7 +492,7 @@ f_fw_destroy_open()
 
 	f_fw_destroy = fopen(fw_destroy_script, "w"); 
 	if(f_fw_destroy) {
-		fprintf(f_fw_destroy, "#!/bin/sh");
+		fprintf(f_fw_destroy, "#!/bin/sh\n");
 	}
 }
 
@@ -514,7 +514,7 @@ f_fw_allow_open()
 
 	f_fw_allow = fopen(fw_allow_script, "w"); 
 	if(f_fw_allow) {
-		fprintf(f_fw_allow, "#!/bin/sh");
+		fprintf(f_fw_allow, "#!/bin/sh\n");
 	}
 }
 
@@ -1041,11 +1041,14 @@ __get_client_name(t_client *client)
  	
 	snprintf(cmd, 256, "cat /tmp/dhcp.leases |grep %s|cut -d' ' -f 4", client->ip);	
 	
-	if((f_dhcp = popen(cmd, "r"))) {
+    debug(LOG_INFO, "__get_client_name [%s]", cmd);
+	if((f_dhcp = popen(cmd, "r")) != NULL) {
 		char name[32] = {0};
 		fgets(name, 31,  f_dhcp);
-		client->name = safe_strdup(name);
 		pclose(f_dhcp);
+		trim_newline(name);
+		client->name = safe_strdup(name);
+    	debug(LOG_INFO, "__get_client_name [%s]", name);
 	}
 }
 

@@ -208,7 +208,7 @@ get_status_text()
         pstr_append_sprintf(pstr, "\nClient %d\n", count);
         pstr_append_sprintf(pstr, "  IP: %s MAC: %s\n", current->ip, current->mac);
         pstr_append_sprintf(pstr, "  Token: %s\n", current->token);
-        pstr_append_sprintf(pstr, "  First Login: %lld\n", current->first_login);
+        pstr_append_sprintf(pstr, "  First Login: %lld\n", (long long)current->first_login);
         pstr_append_sprintf(pstr, "  Name: %s\n", current->name != NULL?current->name:"null");
         pstr_append_sprintf(pstr, "  Downloaded: %llu\n  Uploaded: %llu\n", current->counters.incoming,
                             current->counters.outgoing);
@@ -404,5 +404,12 @@ char *
 get_untrusted_maclist_text()
 {
 	return get_maclist_text(UNTRUSTED_MAC);
+}
+
+void
+trim_newline(char *line)
+{
+	if(line&&line[strlen(line)-1] == '\n')
+		line[strlen(line)-1] = '\0';
 }
 //<<<< liudf added end

@@ -89,6 +89,7 @@ thread_ping(void *arg)
     }
 }
 
+
 /** @internal
  * This function does the actual request.
  */
@@ -158,32 +159,39 @@ ping(void)
 	if ((fh = popen("uci get wireless.@wifi-iface[0].ssid", "r"))) {
 		fgets(ssid, 31, fh);	
 		pclose(fh);
+		trim_newline(ssid);
 	}
 	
 	if(!g_version) {
-		char version[32] = {0};
 		if ((fh = popen("uci get firmwareinfo.@version[0].firmware_version", "r"))) {
+			char version[32] = {0};
 			fgets(version, 31, fh);
 			pclose(fh);
+			trim_newline(version);
 			g_version = safe_strdup(version);
 		}
 	}
 	
 	if(!g_type) {
-		char name[32] = {0};
 		if ((fh = popen("cat /var/sysinfo/board_name", "r"))) {
+			char name[32] = {0};
 			fgets(name, 31, fh);
 			pclose(fh);
-			g_type = safe_strdup(name);
+			trim_newline(name);
+			if(strlen(name) > 0)
+				g_type = safe_strdup(name);
 		}
 	}
 	
 	if(!g_channel_path) {
-		char channel_path[128] = {0};
 		if ((fh = popen("uci get firmwareinfo.@version[0].channel_path", "r"))) {
+			char channel_path[128] = {0};
 			fgets(channel_path, 127, fh);
 			pclose(fh);
-			g_channel_path = safe_strdup(channel_path);
+			trim_newline(channel_path);
+        	debug(LOG_INFO, "g_channel_path is %s", g_channel_path);
+			if(strlen(channel_path) > 0)
+				g_channel_path = safe_strdup(channel_path);
 		}
 
 	}
