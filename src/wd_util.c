@@ -208,6 +208,8 @@ get_status_text()
         pstr_append_sprintf(pstr, "\nClient %d\n", count);
         pstr_append_sprintf(pstr, "  IP: %s MAC: %s\n", current->ip, current->mac);
         pstr_append_sprintf(pstr, "  Token: %s\n", current->token);
+        pstr_append_sprintf(pstr, "  First Login: %lld\n", current->first_login);
+        pstr_append_sprintf(pstr, "  Name: %s\n", current->name != NULL?current->name:"null");
         pstr_append_sprintf(pstr, "  Downloaded: %llu\n  Uploaded: %llu\n", current->counters.incoming,
                             current->counters.outgoing);
         count++;

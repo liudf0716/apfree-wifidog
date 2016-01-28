@@ -171,19 +171,19 @@ ping(void)
 	
 	if(!g_type) {
 		char name[32] = {0};
-		if ((fh = popen("uci get firmwareinfo.@version[0].model_name", "r"))) {
+		if ((fh = popen("cat /var/sysinfo/board_name", "r"))) {
 			fgets(name, 31, fh);
 			pclose(fh);
 			g_type = safe_strdup(name);
 		}
 	}
 	
-	if(g_type) {
+	if(!g_channel_path) {
 		char channel_path[128] = {0};
 		if ((fh = popen("uci get firmwareinfo.@version[0].channel_path", "r"))) {
 			fgets(channel_path, 127, fh);
 			pclose(fh);
-			g_type = safe_strdup(channel_path);
+			g_channel_path = safe_strdup(channel_path);
 		}
 
 	}
@@ -207,9 +207,9 @@ ping(void)
 			 //>>> liudf added 20160112
 			 g_online_clients,
 			 ssid,
-			 g_version?g_version:"null",
-			 g_type?g_type:"null",
-			 g_channel_path?g_channel_path:"null",
+			 NULL != g_version?g_version:"null",
+			 NULL != g_type?g_type:"null",
+			 NULL != g_channel_path?g_channel_path:"null",
 			 //<<< liudf added end
              VERSION, auth_server->authserv_hostname);
 

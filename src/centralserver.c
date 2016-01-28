@@ -67,7 +67,7 @@ t_authcode
 auth_server_request(t_authresponse * authresponse, const char *request_type, const char *ip, const char *mac,
                     const char *token, unsigned long long int incoming, unsigned long long int outgoing, 
 					unsigned long long int incoming_delta, unsigned long long int outgoing_delta,
-					time_t first_login, int online_time, char *name)
+					time_t first_login, unsigned int online_time, char *name)
 {
     s_config *config = config_get_config();
     int sockfd;
@@ -90,7 +90,7 @@ auth_server_request(t_authresponse * authresponse, const char *request_type, con
     safe_token = httpdUrlEncode(token);
     if(config -> deltatraffic) {
            snprintf(buf, (sizeof(buf) - 1),
-             "GET %s%sstage=%s&ip=%s&mac=%s&token=%s&incoming=%llu&outgoing=%llu&incomingdelta=%llu&outgoingdelta=%llu&first_login=%ld&online_time=%d&gw_id=%s&channel_path=%s&name=%s HTTP/1.0\r\n"
+             "GET %s%sstage=%s&ip=%s&mac=%s&token=%s&incoming=%llu&outgoing=%llu&incomingdelta=%llu&outgoingdelta=%llu&first_login=%lld&online_time=%u&gw_id=%s&channel_path=%s&name=%s HTTP/1.0\r\n"
              "User-Agent: WiFiDog %s\r\n"
              "Host: %s\r\n"
              "\r\n",
@@ -102,7 +102,7 @@ auth_server_request(t_authresponse * authresponse, const char *request_type, con
              outgoing, 
              incoming_delta, 
              outgoing_delta,
-			 (long)first_login,
+			 (long long)first_login,
 			 online_time,
              config->gw_id,
 			 g_channel_path?g_channel_path:"null", 
@@ -110,7 +110,7 @@ auth_server_request(t_authresponse * authresponse, const char *request_type, con
 			 VERSION, auth_server->authserv_hostname);
     } else {
             snprintf(buf, (sizeof(buf) - 1),
-             "GET %s%sstage=%s&ip=%s&mac=%s&token=%s&incoming=%llu&outgoing=%llu&first_login=%ld&online_time=%d&gw_id=%s&channel_path=%s&name=%s HTTP/1.0\r\n"
+             "GET %s%sstage=%s&ip=%s&mac=%s&token=%s&incoming=%llu&outgoing=%llu&first_login=%lld&online_time=%u&gw_id=%s&channel_path=%s&name=%s HTTP/1.0\r\n"
              "User-Agent: WiFiDog %s\r\n"
              "Host: %s\r\n"
              "\r\n",
@@ -119,7 +119,7 @@ auth_server_request(t_authresponse * authresponse, const char *request_type, con
              request_type,
              ip,
              mac, safe_token, incoming, outgoing, 
-			 (long)first_login, online_time,
+			 (long long)first_login, online_time,
 			 config->gw_id, 
 			 g_channel_path?g_channel_path:"null",
 			 name,

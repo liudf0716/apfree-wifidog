@@ -437,6 +437,7 @@ static void
 f_fw_init_close()
 {
 	if(f_fw_init) {
+		fchmod(f_fw_init, S_IXOTH|S_IXUSR|S_IXGRP);
 		fclose(f_fw_init);
 		f_fw_init = NULL;
 	}
@@ -450,7 +451,6 @@ f_fw_init_open()
 
 	f_fw_init = fopen(fw_init_script, "w"); 
 	if(f_fw_init) {
-		fchmod(f_fw_init, S_IXOTH);
 		fprintf(f_fw_init, "#!/bin/sh");
 	}
 }
@@ -458,20 +458,27 @@ f_fw_init_open()
 static void
 f_fw_script_write(const char *cmd)
 {
-	if(f_fw_init) 
+	if(f_fw_init){ 
 		fprintf(f_fw_init, cmd);
-	
-	if(f_fw_destroy)
+		fprintf(f_fw_init, "\n");
+	}
+
+	if(f_fw_destroy) {
 		fprintf(f_fw_destroy, cmd);
-	
-	if(f_fw_allow)
+		fprintf(f_fw_destroy, "\n");
+	}
+
+	if(f_fw_allow) {
 		fprintf(f_fw_allow, cmd);
+		fprintf(f_fw_allow, "\n");
+	}
 }
 
 static void
 f_fw_destroy_close()
 {
 	if(f_fw_destroy) {
+		fchmod(f_fw_destroy, S_IXOTH|S_IXUSR|S_IXGRP);
 		fclose(f_fw_destroy);
 		f_fw_destroy = NULL;
 	}
@@ -485,7 +492,6 @@ f_fw_destroy_open()
 
 	f_fw_destroy = fopen(fw_destroy_script, "w"); 
 	if(f_fw_destroy) {
-		fchmod(f_fw_destroy, S_IXOTH);
 		fprintf(f_fw_destroy, "#!/bin/sh");
 	}
 }
@@ -494,6 +500,7 @@ static void
 f_fw_allow_close()
 {
 	if(f_fw_allow) {
+		fchmod(f_fw_allow, S_IXOTH|S_IXUSR|S_IXGRP);
 		fclose(f_fw_allow);
 		f_fw_allow = NULL;
 	}
@@ -507,7 +514,6 @@ f_fw_allow_open()
 
 	f_fw_allow = fopen(fw_allow_script, "w"); 
 	if(f_fw_allow) {
-		fchmod(f_fw_allow, S_IXOTH);
 		fprintf(f_fw_allow, "#!/bin/sh");
 	}
 }
@@ -713,14 +719,14 @@ iptables_fw_init(void)
     /* TCPMSS rule for PPPoE */
     iptables_do_command("-t filter -A " CHAIN_TO_INTERNET
                         " -o %s -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu", ext_interface);
-
-    iptables_do_command("-t filter -A " CHAIN_TO_INTERNET " -j " CHAIN_AUTHSERVERS);
-    iptables_fw_set_authservers();
 	
 	// liudf added 20151224
     iptables_do_command("-t filter -A " CHAIN_TO_INTERNET " -m mark --mark 0x%u -j " CHAIN_LOCKED, FW_MARK_LOCKED);
     iptables_load_ruleset("filter", FWRULESET_LOCKED_USERS, CHAIN_LOCKED);
-    
+
+    iptables_do_command("-t filter -A " CHAIN_TO_INTERNET " -j " CHAIN_AUTHSERVERS);
+    iptables_fw_set_authservers();
+	    
 	iptables_do_command("-t filter -A " CHAIN_TO_INTERNET " -j " CHAIN_DOMAIN_TRUSTED);
 	iptables_do_command("-t filter -A " CHAIN_DOMAIN_TRUSTED " -m set --match-set " CHAIN_DOMAIN_TRUSTED " dst -j ACCEPT");
 	iptables_do_command("-t filter -A " CHAIN_DOMAIN_TRUSTED " -m set --match-set " CHAIN_INNER_DOMAIN_TRUSTED " dst -j ACCEPT");
@@ -1088,7 +1094,7 @@ iptables_fw_counters_update(void)
 				
 				// liudf added 20160127
 				// get client name	
-				if(p1->name)
+				if(p1->name == NULL)
 					__get_client_name(p1);
 
             } else {
