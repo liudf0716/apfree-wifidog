@@ -436,9 +436,10 @@ iptables_fw_set_untrusted_maclist(void)
 static void
 f_fw_init_close()
 {
+    debug(LOG_INFO, "f_fw_init_close ==================");
 	if(f_fw_init) {
-		fchmod(f_fw_init, S_IXOTH|S_IXUSR|S_IXGRP);
 		fclose(f_fw_init);
+		chmod(fw_init_script, S_IXOTH|S_IXUSR|S_IXGRP);
 		f_fw_init = NULL;
 	}
 }
@@ -448,7 +449,8 @@ f_fw_init_open()
 {
 	if(f_fw_init)
 		return;
-
+	
+    debug(LOG_INFO, "f_fw_init_open ==================");
 	f_fw_init = fopen(fw_init_script, "w"); 
 	if(f_fw_init) {
 		fprintf(f_fw_init, "#!/bin/sh\n");
@@ -478,8 +480,8 @@ static void
 f_fw_destroy_close()
 {
 	if(f_fw_destroy) {
-		fchmod(f_fw_destroy, S_IXOTH|S_IXUSR|S_IXGRP);
 		fclose(f_fw_destroy);
+		chmod(fw_destroy_script, S_IXOTH|S_IXUSR|S_IXGRP);
 		f_fw_destroy = NULL;
 	}
 }
@@ -500,8 +502,8 @@ static void
 f_fw_allow_close()
 {
 	if(f_fw_allow) {
-		fchmod(f_fw_allow, S_IXOTH|S_IXUSR|S_IXGRP);
 		fclose(f_fw_allow);
+		chmod(fw_allow_script, S_IXOTH|S_IXUSR|S_IXGRP);
 		f_fw_allow = NULL;
 	}
 }

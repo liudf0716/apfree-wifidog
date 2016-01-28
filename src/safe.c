@@ -37,6 +37,7 @@
 
 #include "safe.h"
 #include "debug.h"
+#include "firewall.h"
 
 /** @brief Clean up all the registered fds. */
 static void cleanup_fds(void);
@@ -87,6 +88,7 @@ safe_malloc(size_t size)
     void *retval = NULL;
     retval = malloc(size);
     if (!retval) {
+		fw_destroy();
         debug(LOG_CRIT, "Failed to malloc %d bytes of memory: %s.  Bailing out", size, strerror(errno));
         exit(1);
     }
@@ -108,6 +110,7 @@ safe_realloc(void *ptr, size_t newsize)
     void *retval = NULL;
     retval = realloc(ptr, newsize);
     if (NULL == retval) {
+		fw_destroy();
         debug(LOG_CRIT, "Failed to realloc buffer to %d bytes of memory: %s. Bailing out", newsize, strerror(errno));
         exit(1);
     }
@@ -123,11 +126,13 @@ safe_strdup(const char *s)
 {
     char *retval = NULL;
     if (!s) {
+		fw_destroy();
         debug(LOG_CRIT, "safe_strdup called with NULL which would have crashed strdup. Bailing out");
         exit(1);
     }
     retval = strdup(s);
     if (!retval) {
+		fw_destroy();
         debug(LOG_CRIT, "Failed to duplicate a string: %s.  Bailing out", strerror(errno));
         exit(1);
     }
@@ -169,6 +174,7 @@ safe_vasprintf(char **strp, const char *fmt, va_list ap)
     retval = vasprintf(strp, fmt, ap);
 
     if (retval == -1) {
+		fw_destroy();
         debug(LOG_CRIT, "Failed to vasprintf: %s.  Bailing out", strerror(errno));
         exit(1);
     }

@@ -198,7 +198,8 @@ client_dup(const t_client * src)
     new->counters.last_updated = src->counters.last_updated;
 	
 	// liudf added 20160128
-	new->name = safe_strdup(src->name);
+	if(src->name)
+		new->name = safe_strdup(src->name);
 	new->first_login = src->first_login;
     new->next = NULL;
 
