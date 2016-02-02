@@ -672,13 +672,11 @@ wdctl_user_cfg_save(int fd)
 	
 	iptables_fw_save_online_clients();
 	
-	LOCK_CONFIG();
 
 	trusted_maclist 	= get_serialize_maclist(TRUSTED_MAC);
 	untrusted_maclist 	= get_serialize_maclist(UNTRUSTED_MAC);
 	trusted_domains		= get_serialize_trusted_domains();
 	
-	UNLOCK_CONFIG();
 	
 	if(trusted_domains) {
 		snprintf(szcmd, 2048, "uci set wifidog.@wifidog[0].trusted_domains='%s'", trusted_domains);
