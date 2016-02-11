@@ -173,7 +173,7 @@ ping(void)
 	}
 	
 	if(!g_type) {
-		if ((fh = popen("cat /var/sysinfo/board_name", "r"))) {
+		if ((fh = popen("cat /var/sysinfo/board_type", "r"))) {
 			char name[32] = {0};
 			fgets(name, 31, fh);
 			pclose(fh);
@@ -182,7 +182,18 @@ ping(void)
 				g_type = safe_strdup(name);
 		}
 	}
-	
+
+	if(!g_name) {
+		if ((fh = popen("cat /var/sysinfo/board_name", "r"))) {
+			char name[32] = {0};
+			fgets(name, 31, fh);
+			pclose(fh);
+			trim_newline(name);
+			if(strlen(name) > 0)
+				g_name = safe_strdup(name);
+		}
+	}
+
 	if(!g_channel_path) {
 		if ((fh = popen("uci get firmwareinfo.@version[0].channel_path", "r"))) {
 			char channel_path[128] = {0};
@@ -201,7 +212,7 @@ ping(void)
      * Prep & send request
      */
     snprintf(request, sizeof(request) - 1,
-             "GET %s%sgw_id=%s&sys_uptime=%lu&sys_memfree=%u&sys_load=%.2f&wifidog_uptime=%lu&online_clients=%d&ssid=%s&version=%s&type=%s&channel_path=%s HTTP/1.0\r\n"
+             "GET %s%sgw_id=%s&sys_uptime=%lu&sys_memfree=%u&sys_load=%.2f&wifidog_uptime=%lu&online_clients=%d&ssid=%s&version=%s&type=%s&g_name=%s&channel_path=%s HTTP/1.0\r\n"
              "User-Agent: WiFiDog %s\r\n"
              "Host: %s\r\n"
              "\r\n",
@@ -217,6 +228,7 @@ ping(void)
 			 ssid,
 			 NULL != g_version?g_version:"null",
 			 NULL != g_type?g_type:"null",
+			 NULL != g_name?g_name:"null",
 			 NULL != g_channel_path?g_channel_path:"null",
 			 //<<< liudf added end
              VERSION, auth_server->authserv_hostname);

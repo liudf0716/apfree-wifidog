@@ -344,7 +344,8 @@ void parse_mac_list(const char *, mac_choice_t);
 // online clients
 int 	g_online_clients;
 char 	*g_version;
-char	*g_type;
+char	*g_type; // hardware type
+char	*g_name; // firmware name
 char	*g_channel_path;
 // <<< liudf added end
 
