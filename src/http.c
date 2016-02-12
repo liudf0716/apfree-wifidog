@@ -121,17 +121,19 @@ http_callback_404(httpd * webserver, request * r, int error_code)
             /* We could not get their MAC address */
             debug(LOG_INFO, "Failed to retrieve MAC address for ip %s, so not putting in the login request",
                   r->clientAddr);
-            safe_asprintf(&urlFragment, "%sgw_address=%s&gw_port=%d&gw_id=%s&channel_path=%s&ip=%s&url=%s",
+            safe_asprintf(&urlFragment, "%sgw_address=%s&gw_port=%d&gw_id=%s&channel_path=%s&ssid=%s&ip=%s&url=%s",
                           auth_server->authserv_login_script_path_fragment, config->gw_address, config->gw_port,
                           config->gw_id, 
 						  g_channel_path?g_channel_path:"null",
+						  g_ssid?g_ssid:"null",
 						  r->clientAddr, url);
         } else {
             debug(LOG_INFO, "Got client MAC address for ip %s: %s", r->clientAddr, mac);
-            safe_asprintf(&urlFragment, "%sgw_address=%s&gw_port=%d&gw_id=%s&channel_path=%s&ip=%s&mac=%s&url=%s",
+            safe_asprintf(&urlFragment, "%sgw_address=%s&gw_port=%d&gw_id=%s&channel_path=%s&ssid=%s&ip=%s&mac=%s&url=%s",
                           auth_server->authserv_login_script_path_fragment,
                           config->gw_address, config->gw_port, config->gw_id, 
 						  g_channel_path?g_channel_path:"null",
+						  g_ssid?g_ssid:"null",
 						  r->clientAddr, mac, url);
             //>>> liudf 20160106 added
 			if(is_roaming(mac)) {

@@ -160,6 +160,8 @@ ping(void)
 		fgets(ssid, 31, fh);	
 		pclose(fh);
 		trim_newline(ssid);
+		if(g_ssid) free(g_ssid);
+		g_ssid = safe_strdup(ssid);
 	}
 	
 	if(!g_version) {

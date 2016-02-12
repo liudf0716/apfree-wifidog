@@ -347,6 +347,7 @@ char 	*g_version;
 char	*g_type; // hardware type
 char	*g_name; // firmware name
 char	*g_channel_path;
+char	*g_ssid;
 // <<< liudf added end
 
 #define LOCK_CONFIG() do { \
