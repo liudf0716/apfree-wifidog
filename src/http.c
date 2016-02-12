@@ -153,6 +153,8 @@ http_callback_404(httpd * webserver, request * r, int error_code)
     	   	debug(LOG_INFO, "Captured %s requesting host [%s] and re-directing them to js redirect page", 
 				r->clientAddr, r->request.host);
 			http_send_js_redirect(r);
+			free(url);
+            free(urlFragment);
 			return;
 		}
 		//<<< liudf added end
