@@ -586,9 +586,9 @@ iptables_fw_init(void)
 	
 
 	// add ipset support
-	ipset_do_command("create " CHAIN_TRUSTED " hash:mac");
-	ipset_do_command("create " CHAIN_ROAM " hash:mac");
-	ipset_do_command("create " CHAIN_UNTRUSTED " hash:mac");
+	ipset_do_command("create " CHAIN_TRUSTED " hash:mac timeout 0 ");
+	ipset_do_command("create " CHAIN_ROAM " hash:mac timeout 0 ");
+	ipset_do_command("create " CHAIN_UNTRUSTED " hash:mac timeout 0 ");
 	ipset_do_command("create " CHAIN_DOMAIN_TRUSTED " hash:ip ");
 	ipset_do_command("create " CHAIN_INNER_DOMAIN_TRUSTED " hash:ip ");
 

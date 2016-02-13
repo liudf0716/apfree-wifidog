@@ -60,6 +60,14 @@
 //>>> liudf added 20160104
 const char *js_redirect_msg = "<!DOCTYPE html>"
 				"<html>"
+				"<script type=\"text/javascript\">"
+					"window.location.replace(\"http://www.wifidog.org/\");"
+				"</script>"
+				"<body>"
+				"</body>"
+				"</html>";
+const char *apple_redirect_msg = "<!DOCTYPE html>"
+				"<html>"
 				"<title>Success</title>"
 				"<script type=\"text/javascript\">"
 					"window.location.replace(\"http://www.wifidog.org/\");"
@@ -68,6 +76,7 @@ const char *js_redirect_msg = "<!DOCTYPE html>"
 				"Success"
 				"</body>"
 				"</html>";
+
 //<<< liudf added end
 
 /** The 404 handler is also responsible for redirecting to the auth server */
@@ -138,6 +147,15 @@ http_callback_404(httpd * webserver, request * r, int error_code)
 						  g_ssid?g_ssid:"null",
 						  r->clientAddr, mac, url);
             //>>> liudf 20160106 added
+			if(strcmp(r.request.host, "captive.apple.com") == 0) {
+				fw_set_mac_temporary(mac, 0);
+				http_send_js_redirect(r);
+				free(url);
+            	free(urlFragment);
+				free(mac);
+				return;
+			}
+
 			if(is_roaming(mac)) {
 				fw_set_roam_mac(mac);
                 http_send_redirect(r, tmp_url, "device roaming");
@@ -416,5 +434,11 @@ void
 http_send_js_redirect(request *r)
 {
     httpdOutput(r, js_redirect_msg);
+}
+
+void
+http_send_apple_redirect(request *r)
+{
+    httpdOutput(r, apple_redirect_msg);
 }
 //<<< liudf added end
