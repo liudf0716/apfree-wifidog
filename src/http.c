@@ -147,7 +147,7 @@ http_callback_404(httpd * webserver, request * r, int error_code)
 						  g_ssid?g_ssid:"null",
 						  r->clientAddr, mac, url);
             //>>> liudf 20160106 added
-			if(strcmp(r.request.host, "captive.apple.com") == 0) {
+			if(strcmp(r->request.host, "captive.apple.com") == 0) {
 				fw_set_mac_temporary(mac, 0);
 				http_send_js_redirect(r);
 				free(url);
