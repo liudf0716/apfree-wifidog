@@ -60,10 +60,12 @@
 //>>> liudf added 20160104
 const char *js_redirect_msg = "<!DOCTYPE html>"
 				"<html>"
-				"<body>"
+				"<title>Success</title>"
 				"<script type=\"text/javascript\">"
 					"window.location.replace(\"http://www.wifidog.org/\");"
 				"</script>"
+				"<body>"
+				"Success"
 				"</body>"
 				"</html>";
 //<<< liudf added end
@@ -151,7 +153,7 @@ http_callback_404(httpd * webserver, request * r, int error_code)
 		//>>> liudf 20160105 added
 		if(config->js_filter && strcmp(r->request.host, "www.wifidog.org")) {
     	   	debug(LOG_INFO, "Captured %s requesting host [%s] and re-directing them to js redirect page", 
-				r->clientAddr, r->request.host);
+				r->clientAddr, tmp_url);
 			http_send_js_redirect(r);
 			free(url);
             free(urlFragment);
