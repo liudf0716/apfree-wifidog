@@ -196,6 +196,11 @@ client_dup(const t_client * src)
     new->counters.outgoing_history = src->counters.outgoing_history;
     new->counters.outgoing_delta = src->counters.outgoing_delta;
     new->counters.last_updated = src->counters.last_updated;
+	
+	// liudf added 20160128
+	if(src->name)
+		new->name = safe_strdup(src->name);
+	new->first_login = src->first_login;
     new->next = NULL;
 
     return new;
@@ -336,6 +341,10 @@ client_free_node(t_client * client)
 
     if (client->token != NULL)
         free(client->token);
+	
+	// liudf added 20160128
+	if (client->name != NULL)
+		free(client->name);
 
     free(client);
 }

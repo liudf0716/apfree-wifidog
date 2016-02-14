@@ -12,3 +12,7 @@ u can join our qq group 331230369
 			Add online_clients to ping interface
 20160114	Add trusted&untrusted maclist
 			Use ipset to trusted&untrusted&roam maclist and trusted domain
+20160125	Add inner trusted domains chain 
+20160127	Add user config save
+			Add fw rule chains file save
+			Add client name

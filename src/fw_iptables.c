@@ -38,6 +38,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <sys/stat.h>
 
 #include "common.h"
 
@@ -48,6 +49,26 @@
 #include "debug.h"
 #include "util.h"
 #include "client_list.h"
+#include "wd_util.h"
+
+//>>> liudf added 20160127
+static FILE	*f_fw_init = NULL;
+static FILE	*f_fw_destroy = NULL;
+static FILE	*f_fw_allow  = NULL;
+
+static void f_fw_init_close();
+static void f_fw_init_open();
+static void f_fw_destroy_close();
+static void f_fw_destroy_open();
+static void f_fw_allow_close();
+static void f_fw_allow_open();
+static void f_fw_script_write(const char *cmd);
+
+static char *fw_init_script 	= "/tmp/fw_init";
+static char *fw_destroy_script 	= "/tmp/fw_destroy";
+static char *fw_allow_script	= "/tmp/fw_allow";
+
+//<<< liudf add end
 
 static int iptables_do_command(const char *format, ...);
 static char *iptables_compile(const char *, const char *, const t_firewall_rule *);
@@ -86,7 +107,7 @@ iptables_insert_gateway_id(char **input)
     *input = buffer;
 }
 
-/** @internal 
+/** @internal
  * */
 static int
 ipset_do_command(const char *format, ...)
@@ -106,6 +127,9 @@ ipset_do_command(const char *format, ...)
     iptables_insert_gateway_id(&cmd);
 
     debug(LOG_DEBUG, "Executing command: %s", cmd);
+	
+	// liudf added 20160127
+	f_fw_script_write(cmd);
 
     rc = execute(cmd, fw_quiet);
 
@@ -122,6 +146,28 @@ ipset_do_command(const char *format, ...)
     return rc;
 }
 
+/** @internal
+ * */
+static void
+iptables_do_command_save(const char *format, ...)
+{
+    va_list vlist;
+    char *fmt_cmd;
+    char *cmd;
+
+    va_start(vlist, format);
+    safe_vasprintf(&fmt_cmd, format, vlist);
+    va_end(vlist);
+
+    safe_asprintf(&cmd, "iptables %s", fmt_cmd);
+    free(fmt_cmd);
+
+    iptables_insert_gateway_id(&cmd);
+
+	f_fw_script_write(cmd);
+
+    free(cmd);
+}
 
 /** @internal 
  * */
@@ -141,6 +187,8 @@ iptables_do_command(const char *format, ...)
     free(fmt_cmd);
 
     iptables_insert_gateway_id(&cmd);
+
+	f_fw_script_write(cmd);
 
     debug(LOG_DEBUG, "Executing command: %s", cmd);
 
@@ -277,29 +325,22 @@ iptables_fw_set_authservers(void)
 }
 
 // >>>liudf added 20151223
+
 void
-iptables_fw_refresh_domains_trusted_safely(void)
+iptables_fw_refresh_user_domains_trusted(void)
 {
-	LOCK_CONFIG();
-	iptables_fw_refresh_domains_trusted();
-	UNLOCK_CONFIG();
+	iptables_fw_clear_user_domains_trusted();
+	iptables_fw_set_user_domains_trusted();
 }
 
 void
-iptables_fw_refresh_domains_trusted(void)
-{
-	iptables_fw_clear_domains_trusted();
-	iptables_fw_set_domains_trusted();
-}
-
-void
-iptables_fw_clear_domains_trusted(void)
+iptables_fw_clear_user_domains_trusted(void)
 {
 	ipset_do_command("flush " CHAIN_DOMAIN_TRUSTED);
 }
 
 void
-iptables_fw_set_domains_trusted(void)
+iptables_fw_set_user_domains_trusted(void)
 {
 	const s_config *config;
 	t_domain_trusted *domain_trusted = NULL;
@@ -313,6 +354,37 @@ iptables_fw_set_domains_trusted(void)
 		}
 	}
 }
+
+// set inner trusted domains
+void
+iptables_fw_refresh_inner_domains_trusted(void)
+{
+	iptables_fw_clear_inner_domains_trusted();
+	iptables_fw_set_inner_domains_trusted();
+}
+
+void
+iptables_fw_clear_inner_domains_trusted(void)
+{
+	ipset_do_command("flush " CHAIN_INNER_DOMAIN_TRUSTED);
+}
+
+void
+iptables_fw_set_inner_domains_trusted(void)
+{
+	const s_config *config;
+	t_domain_trusted *domain_trusted = NULL;
+
+    config = config_get_config();
+	
+	for (domain_trusted = config->inner_domains_trusted; domain_trusted != NULL; domain_trusted = domain_trusted->next) {
+		t_ip_trusted *ip_trusted = NULL;
+		for(ip_trusted = domain_trusted->ips_trusted; ip_trusted != NULL; ip_trusted = ip_trusted->next) {
+			ipset_do_command("add " CHAIN_INNER_DOMAIN_TRUSTED " %s ", ip_trusted->ip);
+		}
+	}
+}
+
 
 void
 iptables_fw_clear_roam_maclist(void)
@@ -361,6 +433,129 @@ iptables_fw_set_untrusted_maclist(void)
 	for (p = config->mac_blacklist; p != NULL; p = p->next)
 		ipset_do_command("add " CHAIN_UNTRUSTED " %s", p->mac);
 }
+
+void
+iptables_fw_set_mac_temporary(const char *mac, int which)
+{
+	if(which == 0) { // trusted
+		ipset_do_command("add " CHAIN_TRUSTED " %s timeout 60 ", mac);	
+	} else if(which == 1) { // untrusted
+		ipset_do_command("add " CHAIN_UNTRUSTED " %s timeout 60 ", mac);	
+	}
+}
+
+static void
+f_fw_init_close()
+{
+    debug(LOG_INFO, "f_fw_init_close ==================");
+	if(f_fw_init) {
+		fclose(f_fw_init);
+		chmod(fw_init_script, S_IXOTH|S_IXUSR|S_IXGRP);
+		f_fw_init = NULL;
+	}
+}
+
+static void
+f_fw_init_open()
+{
+	if(f_fw_init)
+		return;
+	
+    debug(LOG_INFO, "f_fw_init_open ==================");
+	f_fw_init = fopen(fw_init_script, "w"); 
+	if(f_fw_init) {
+		fprintf(f_fw_init, "#!/bin/sh\n");
+	}
+}
+
+static void
+f_fw_script_write(const char *cmd)
+{
+	if(f_fw_init){ 
+		fprintf(f_fw_init, cmd);
+		fprintf(f_fw_init, "\n");
+	}
+
+	if(f_fw_destroy) {
+		fprintf(f_fw_destroy, cmd);
+		fprintf(f_fw_destroy, "\n");
+	}
+
+	if(f_fw_allow) {
+		fprintf(f_fw_allow, cmd);
+		fprintf(f_fw_allow, "\n");
+	}
+}
+
+static void
+f_fw_destroy_close()
+{
+	if(f_fw_destroy) {
+		fclose(f_fw_destroy);
+		chmod(fw_destroy_script, S_IXOTH|S_IXUSR|S_IXGRP);
+		f_fw_destroy = NULL;
+	}
+}
+
+static void
+f_fw_destroy_open()
+{
+	if(f_fw_destroy)
+		return;
+
+	f_fw_destroy = fopen(fw_destroy_script, "w"); 
+	if(f_fw_destroy) {
+		fprintf(f_fw_destroy, "#!/bin/sh\n");
+	}
+}
+
+static void
+f_fw_allow_close()
+{
+	if(f_fw_allow) {
+		fclose(f_fw_allow);
+		chmod(fw_allow_script, S_IXOTH|S_IXUSR|S_IXGRP);
+		f_fw_allow = NULL;
+	}
+}
+
+static void
+f_fw_allow_open()
+{
+	if(f_fw_allow)
+		return;
+
+	f_fw_allow = fopen(fw_allow_script, "w"); 
+	if(f_fw_allow) {
+		fprintf(f_fw_allow, "#!/bin/sh\n");
+	}
+}
+
+void
+iptables_fw_save_online_clients()
+{
+	t_client *sublist, *current;
+
+	LOCK_CLIENT_LIST();
+
+    client_list_dup(&sublist);
+
+    UNLOCK_CLIENT_LIST();
+
+    current = sublist;
+	
+	f_fw_allow_open();
+
+    while (current != NULL) {
+		iptables_do_command_save("-t mangle -A " CHAIN_OUTGOING " -s %s -m mac --mac-source %s -j MARK --set-mark %d", 
+					current->ip, current->mac, FW_MARK_KNOWN);
+        iptables_do_command_save("-t mangle -A " CHAIN_INCOMING " -d %s -j ACCEPT", current->ip);
+
+        current = current->next;
+    }
+
+	f_fw_allow_close();	
+}
 // <<< liudf added end
 
 /** Initialize the firewall rules
@@ -374,7 +569,15 @@ iptables_fw_init(void)
     int proxy_port;
     fw_quiet = 0;
     int got_authdown_ruleset = NULL == get_ruleset(FWRULESET_AUTH_IS_DOWN) ? 0 : 1;
-
+	
+	// liudf added 20160127	
+	if(access(fw_init_script, F_OK|X_OK)) {
+		// need to create it
+		f_fw_init_open();
+	} else {
+		// execut fw_init_script
+	}
+	
     LOCK_CONFIG();
     config = config_get_config();
     gw_port = config->gw_port;
@@ -386,16 +589,19 @@ iptables_fw_init(void)
 
     if (ext_interface == NULL) {
         UNLOCK_CONFIG();
+		f_fw_init_close();	
         debug(LOG_ERR, "FATAL: no external interface");
         return 0;
     }
 	
-	//>>> liudf added 20160114
+	
+
 	// add ipset support
-	ipset_do_command("create " CHAIN_TRUSTED " hash:mac");
-	ipset_do_command("create " CHAIN_ROAM " hash:mac");
-	ipset_do_command("create " CHAIN_UNTRUSTED " hash:mac");
+	ipset_do_command("create " CHAIN_TRUSTED " hash:mac timeout 0 ");
+	ipset_do_command("create " CHAIN_ROAM " hash:mac timeout 0 ");
+	ipset_do_command("create " CHAIN_UNTRUSTED " hash:mac timeout 0 ");
 	ipset_do_command("create " CHAIN_DOMAIN_TRUSTED " hash:ip ");
+	ipset_do_command("create " CHAIN_INNER_DOMAIN_TRUSTED " hash:ip ");
 
     /*
      *
@@ -436,6 +642,7 @@ iptables_fw_init(void)
      */
 
     /* Create new chains */
+	iptables_do_command("-t nat -N " CHAIN_UNTRUSTED);
     iptables_do_command("-t nat -N " CHAIN_OUTGOING);
     iptables_do_command("-t nat -N " CHAIN_TO_ROUTER);
     iptables_do_command("-t nat -N " CHAIN_TO_INTERNET);
@@ -448,7 +655,12 @@ iptables_fw_init(void)
 	if (got_authdown_ruleset)
         iptables_do_command("-t nat -N " CHAIN_AUTH_IS_DOWN);
 	
-	
+	//>>> liudf added 20160113
+	// add this rule for mac blacklist
+ 	iptables_do_command("-t nat -A PREROUTING -i %s -j " CHAIN_UNTRUSTED, config->gw_interface);
+	iptables_do_command("-t nat -A " CHAIN_UNTRUSTED " -m set --match-set " CHAIN_UNTRUSTED " src -j MARK --set-mark 0x%u", FW_MARK_LOCKED);
+	//<<<
+
     /* Assign links and rules to these new chains */
     iptables_do_command("-t nat -A PREROUTING -i %s -j " CHAIN_OUTGOING, config->gw_interface);
 	
@@ -476,6 +688,7 @@ iptables_fw_init(void)
 	// liudf added 20151224
     iptables_do_command("-t nat -A " CHAIN_UNKNOWN " -j " CHAIN_DOMAIN_TRUSTED);
 	iptables_do_command("-t nat -A " CHAIN_DOMAIN_TRUSTED " -m set --match-set " CHAIN_DOMAIN_TRUSTED " dst -j ACCEPT");
+	iptables_do_command("-t nat -A " CHAIN_DOMAIN_TRUSTED " -m set --match-set " CHAIN_INNER_DOMAIN_TRUSTED " dst -j ACCEPT");
     iptables_do_command("-t nat -A " CHAIN_UNKNOWN " -j " CHAIN_GLOBAL);
     if (got_authdown_ruleset) {
         iptables_do_command("-t nat -A " CHAIN_UNKNOWN " -j " CHAIN_AUTH_IS_DOWN);
@@ -493,7 +706,6 @@ iptables_fw_init(void)
     iptables_do_command("-t filter -N " CHAIN_TO_INTERNET);
     iptables_do_command("-t filter -N " CHAIN_AUTHSERVERS);
 	// liudf added 20151224
-	iptables_do_command("-t filter -N " CHAIN_UNTRUSTED);
     iptables_do_command("-t filter -N " CHAIN_DOMAIN_TRUSTED);
     iptables_do_command("-t filter -N " CHAIN_LOCKED);
     iptables_do_command("-t filter -N " CHAIN_GLOBAL);
@@ -504,12 +716,7 @@ iptables_fw_init(void)
         iptables_do_command("-t filter -N " CHAIN_AUTH_IS_DOWN);
 
     /* Assign links and rules to these new chains */
-	//>>> liudf added 20160113
-	// add this rule for mac blacklist
-    iptables_do_command("-t filter -A INPUT -i %s -j " CHAIN_UNTRUSTED, config->gw_interface);
-	iptables_do_command("-t filter -A " CHAIN_UNTRUSTED " -m set --match-set " CHAIN_UNTRUSTED " src -j DROP");
-	//<<<
-
+	
     /* Insert at the beginning */
     iptables_do_command("-t filter -I FORWARD -i %s -j " CHAIN_TO_INTERNET, config->gw_interface);
 
@@ -525,19 +732,21 @@ iptables_fw_init(void)
     /* TCPMSS rule for PPPoE */
     iptables_do_command("-t filter -A " CHAIN_TO_INTERNET
                         " -o %s -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu", ext_interface);
-
-    iptables_do_command("-t filter -A " CHAIN_TO_INTERNET " -j " CHAIN_AUTHSERVERS);
-    iptables_fw_set_authservers();
 	
 	// liudf added 20151224
-    iptables_do_command("-t filter -A " CHAIN_TO_INTERNET " -j " CHAIN_DOMAIN_TRUSTED);
-	iptables_do_command("-t filter -A " CHAIN_DOMAIN_TRUSTED " -m set --match-set " CHAIN_DOMAIN_TRUSTED " dst -j ACCEPT");
-	
     iptables_do_command("-t filter -A " CHAIN_TO_INTERNET " -m mark --mark 0x%u -j " CHAIN_LOCKED, FW_MARK_LOCKED);
     iptables_load_ruleset("filter", FWRULESET_LOCKED_USERS, CHAIN_LOCKED);
 
+    iptables_do_command("-t filter -A " CHAIN_TO_INTERNET " -j " CHAIN_AUTHSERVERS);
+    iptables_fw_set_authservers();
+	    
+	iptables_do_command("-t filter -A " CHAIN_TO_INTERNET " -j " CHAIN_DOMAIN_TRUSTED);
+	iptables_do_command("-t filter -A " CHAIN_DOMAIN_TRUSTED " -m set --match-set " CHAIN_DOMAIN_TRUSTED " dst -j ACCEPT");
+	iptables_do_command("-t filter -A " CHAIN_DOMAIN_TRUSTED " -m set --match-set " CHAIN_INNER_DOMAIN_TRUSTED " dst -j ACCEPT");
+	
+
     iptables_do_command("-t filter -A " CHAIN_TO_INTERNET " -j " CHAIN_GLOBAL);
-    iptables_load_ruleset("filter", FWRULESET_GLOBAL, CHAIN_GLOBAL);
+  	iptables_load_ruleset("filter", FWRULESET_GLOBAL, CHAIN_GLOBAL);
     iptables_load_ruleset("nat", FWRULESET_GLOBAL, CHAIN_GLOBAL);
 
     iptables_do_command("-t filter -A " CHAIN_TO_INTERNET " -m mark --mark 0x%u -j " CHAIN_VALIDATE, FW_MARK_PROBATION);
@@ -556,8 +765,14 @@ iptables_fw_init(void)
     iptables_load_ruleset("filter", FWRULESET_UNKNOWN_USERS, CHAIN_UNKNOWN);
     iptables_do_command("-t filter -A " CHAIN_UNKNOWN " -j REJECT --reject-with icmp-port-unreachable");
 
+	
+	__fix_weixin_http_dns_ip();
+
     UNLOCK_CONFIG();
 	
+	parse_user_trusted_domain_list();
+	parse_inner_trusted_domain_list();
+
     free(ext_interface);
 
 	//>>> liudf added 20160114
@@ -566,9 +781,10 @@ iptables_fw_init(void)
 	fw_set_trusted_maclist();
 	fw_set_untrusted_maclist();
 	
-	__parse_trusted_domains_ip();
-	__fix_weixin_http_dns_ip();
-    iptables_fw_set_domains_trusted();
+	iptables_fw_set_inner_domains_trusted();
+    iptables_fw_set_user_domains_trusted();
+
+	f_fw_init_close();
 	//<<< liudf added end
 
     return 1;
@@ -586,6 +802,11 @@ iptables_fw_destroy(void)
 
     debug(LOG_DEBUG, "Destroying our iptables entries");
 	
+	// liudf added 20160127	
+	if(access(fw_destroy_script, F_OK|X_OK)) {
+		f_fw_destroy_open();
+	} else {
+	}
 	
     /*
      *
@@ -621,6 +842,7 @@ iptables_fw_destroy(void)
      *
      */
     debug(LOG_DEBUG, "Destroying chains in the NAT table");
+    iptables_fw_destroy_mention("nat", "PREROUTING", CHAIN_UNTRUSTED);
     iptables_fw_destroy_mention("nat", "PREROUTING", CHAIN_OUTGOING);
     iptables_do_command("-t nat -F " CHAIN_AUTHSERVERS);
 	// liudf added 20151224
@@ -635,6 +857,7 @@ iptables_fw_destroy(void)
     iptables_do_command("-t nat -F " CHAIN_UNKNOWN);
     iptables_do_command("-t nat -X " CHAIN_AUTHSERVERS);
 	// liudf added 20151224
+   	iptables_do_command("-t nat -X " CHAIN_UNTRUSTED);
     iptables_do_command("-t nat -X " CHAIN_DOMAIN_TRUSTED);
     iptables_do_command("-t nat -X " CHAIN_OUTGOING);
     if (got_authdown_ruleset)
@@ -651,11 +874,9 @@ iptables_fw_destroy(void)
      */
     debug(LOG_DEBUG, "Destroying chains in the FILTER table");
     iptables_fw_destroy_mention("filter", "FORWARD", CHAIN_TO_INTERNET);
-    iptables_fw_destroy_mention("filter", "INPUT", CHAIN_UNTRUSTED);
     iptables_do_command("-t filter -F " CHAIN_TO_INTERNET);
     iptables_do_command("-t filter -F " CHAIN_AUTHSERVERS);
 	// liudf added 20151224
-    iptables_do_command("-t filter -F " CHAIN_UNTRUSTED);
     iptables_do_command("-t filter -F " CHAIN_DOMAIN_TRUSTED);
     iptables_do_command("-t filter -F " CHAIN_LOCKED);
     iptables_do_command("-t filter -F " CHAIN_GLOBAL);
@@ -667,7 +888,6 @@ iptables_fw_destroy(void)
     iptables_do_command("-t filter -X " CHAIN_TO_INTERNET);
     iptables_do_command("-t filter -X " CHAIN_AUTHSERVERS);
 	// liudf added 20151224
-   	iptables_do_command("-t filter -X " CHAIN_UNTRUSTED);
     iptables_do_command("-t filter -X " CHAIN_DOMAIN_TRUSTED);
     iptables_do_command("-t filter -X " CHAIN_LOCKED);
     iptables_do_command("-t filter -X " CHAIN_GLOBAL);
@@ -682,6 +902,10 @@ iptables_fw_destroy(void)
 	ipset_do_command("destroy " CHAIN_ROAM);
 	ipset_do_command("destroy " CHAIN_UNTRUSTED);
 	ipset_do_command("destroy " CHAIN_DOMAIN_TRUSTED);
+	ipset_do_command("destroy " CHAIN_INNER_DOMAIN_TRUSTED);
+	
+	// liudf added 20160127
+	f_fw_destroy_close();
 
     return 1;
 }
@@ -820,6 +1044,27 @@ iptables_fw_auth_reachable(void)
         return 1;
 }
 
+// liudf added 20160127
+/***/
+void
+__get_client_name(t_client *client)
+{
+	char cmd[256] = {0};
+	FILE *f_dhcp = NULL;
+ 	
+	snprintf(cmd, 256, "cat /tmp/dhcp.leases |grep %s|cut -d' ' -f 4", client->ip);	
+	
+    debug(LOG_INFO, "__get_client_name [%s]", cmd);
+	if((f_dhcp = popen(cmd, "r")) != NULL) {
+		char name[32] = {0};
+		fgets(name, 31,  f_dhcp);
+		pclose(f_dhcp);
+		trim_newline(name);
+		client->name = safe_strdup(name);
+    	debug(LOG_INFO, "__get_client_name [%s]", name);
+	}
+}
+
 /** Update the counters of all the clients in the client list */
 int
 iptables_fw_counters_update(void)
@@ -862,6 +1107,12 @@ iptables_fw_counters_update(void)
                     debug(LOG_DEBUG, "%s - Outgoing traffic %llu bytes, updated counter.outgoing to %llu bytes.  Updated last_updated to %d", ip,
                           counter, p1->counters.outgoing, p1->counters.last_updated);
                 }
+				
+				// liudf added 20160127
+				// get client name	
+				if(p1->name == NULL)
+					__get_client_name(p1);
+
             } else {
                 debug(LOG_ERR,
                       "iptables_fw_counters_update(): Could not find %s in client list, this should not happen unless if the gateway crashed",
@@ -871,6 +1122,7 @@ iptables_fw_counters_update(void)
                 debug(LOG_ERR, "Preventively deleting firewall rules for %s in table %s", ip, CHAIN_INCOMING);
                 iptables_fw_destroy_mention("mangle", CHAIN_INCOMING, ip);
             }
+			
             UNLOCK_CLIENT_LIST();
         }
     }

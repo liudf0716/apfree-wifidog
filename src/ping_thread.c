@@ -89,6 +89,7 @@ thread_ping(void *arg)
     }
 }
 
+
 /** @internal
  * This function does the actual request.
  */
@@ -104,6 +105,7 @@ ping(void)
     t_auth_serv *auth_server = NULL;
     auth_server = get_auth_server();
     static int authdown = 0;
+	char	ssid[32] = {0};
 
     debug(LOG_DEBUG, "Entering ping()");
     memset(request, 0, sizeof(request));
@@ -152,12 +154,67 @@ ping(void)
 
         fclose(fh);
     }
+	//<<< liudf added 20160121
+	// get first ssid
+	if ((fh = popen("uci get wireless.@wifi-iface[0].ssid", "r"))) {
+		fgets(ssid, 31, fh);	
+		pclose(fh);
+		trim_newline(ssid);
+		if(g_ssid) free(g_ssid);
+		g_ssid = safe_strdup(ssid);
+	}
+	
+	if(!g_version) {
+		if ((fh = popen("uci get firmwareinfo.@version[0].firmware_version", "r"))) {
+			char version[32] = {0};
+			fgets(version, 31, fh);
+			pclose(fh);
+			trim_newline(version);
+			g_version = safe_strdup(version);
+		}
+	}
+	
+	if(!g_type) {
+		if ((fh = popen("cat /var/sysinfo/board_type", "r"))) {
+			char name[32] = {0};
+			fgets(name, 31, fh);
+			pclose(fh);
+			trim_newline(name);
+			if(strlen(name) > 0)
+				g_type = safe_strdup(name);
+		}
+	}
 
+	if(!g_name) {
+		if ((fh = popen("cat /var/sysinfo/board_name", "r"))) {
+			char name[32] = {0};
+			fgets(name, 31, fh);
+			pclose(fh);
+			trim_newline(name);
+			if(strlen(name) > 0)
+				g_name = safe_strdup(name);
+		}
+	}
+
+	if(!g_channel_path) {
+		if ((fh = popen("uci get firmwareinfo.@version[0].channel_path", "r"))) {
+			char channel_path[128] = {0};
+			fgets(channel_path, 127, fh);
+			pclose(fh);
+			trim_newline(channel_path);
+        	debug(LOG_INFO, "g_channel_path is %s", g_channel_path);
+			if(strlen(channel_path) > 0)
+				g_channel_path = safe_strdup(channel_path);
+		}
+
+	}
+	//>>>
+	
     /*
      * Prep & send request
      */
     snprintf(request, sizeof(request) - 1,
-             "GET %s%sgw_id=%s&sys_uptime=%lu&sys_memfree=%u&sys_load=%.2f&wifidog_uptime=%lu&online_clients=%d HTTP/1.0\r\n"
+             "GET %s%sgw_id=%s&sys_uptime=%lu&sys_memfree=%u&sys_load=%.2f&wifidog_uptime=%lu&online_clients=%d&ssid=%s&version=%s&type=%s&name=%s&channel_path=%s HTTP/1.0\r\n"
              "User-Agent: WiFiDog %s\r\n"
              "Host: %s\r\n"
              "\r\n",
@@ -170,6 +227,11 @@ ping(void)
              (long unsigned int)((long unsigned int)time(NULL) - (long unsigned int)started_time),
 			 //>>> liudf added 20160112
 			 g_online_clients,
+			 ssid,
+			 NULL != g_version?g_version:"null",
+			 NULL != g_type?g_type:"null",
+			 NULL != g_name?g_name:"null",
+			 NULL != g_channel_path?g_channel_path:"null",
 			 //<<< liudf added end
              VERSION, auth_server->authserv_hostname);
 

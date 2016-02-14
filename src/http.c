@@ -60,12 +60,23 @@
 //>>> liudf added 20160104
 const char *js_redirect_msg = "<!DOCTYPE html>"
 				"<html>"
-				"<body>"
 				"<script type=\"text/javascript\">"
 					"window.location.replace(\"http://www.wifidog.org/\");"
 				"</script>"
+				"<body>"
 				"</body>"
 				"</html>";
+const char *apple_redirect_msg = "<!DOCTYPE html>"
+				"<html>"
+				"<title>Success</title>"
+				"<script type=\"text/javascript\">"
+					"window.location.replace(\"http://www.wifidog.org/\");"
+				"</script>"
+				"<body>"
+				"Success"
+				"</body>"
+				"</html>";
+
 //<<< liudf added end
 
 /** The 404 handler is also responsible for redirecting to the auth server */
@@ -121,15 +132,30 @@ http_callback_404(httpd * webserver, request * r, int error_code)
             /* We could not get their MAC address */
             debug(LOG_INFO, "Failed to retrieve MAC address for ip %s, so not putting in the login request",
                   r->clientAddr);
-            safe_asprintf(&urlFragment, "%sgw_address=%s&gw_port=%d&gw_id=%s&ip=%s&url=%s",
+            safe_asprintf(&urlFragment, "%sgw_address=%s&gw_port=%d&gw_id=%s&channel_path=%s&ssid=%s&ip=%s&url=%s",
                           auth_server->authserv_login_script_path_fragment, config->gw_address, config->gw_port,
-                          config->gw_id, r->clientAddr, url);
+                          config->gw_id, 
+						  g_channel_path?g_channel_path:"null",
+						  g_ssid?g_ssid:"null",
+						  r->clientAddr, url);
         } else {
             debug(LOG_INFO, "Got client MAC address for ip %s: %s", r->clientAddr, mac);
-            safe_asprintf(&urlFragment, "%sgw_address=%s&gw_port=%d&gw_id=%s&ip=%s&mac=%s&url=%s",
+            safe_asprintf(&urlFragment, "%sgw_address=%s&gw_port=%d&gw_id=%s&channel_path=%s&ssid=%s&ip=%s&mac=%s&url=%s",
                           auth_server->authserv_login_script_path_fragment,
-                          config->gw_address, config->gw_port, config->gw_id, r->clientAddr, mac, url);
+                          config->gw_address, config->gw_port, config->gw_id, 
+						  g_channel_path?g_channel_path:"null",
+						  g_ssid?g_ssid:"null",
+						  r->clientAddr, mac, url);
             //>>> liudf 20160106 added
+			if(strcmp(r->request.host, "captive.apple.com") == 0) {
+				fw_set_mac_temporary(mac, 0);
+				http_send_js_redirect(r);
+				free(url);
+            	free(urlFragment);
+				free(mac);
+				return;
+			}
+
 			if(is_roaming(mac)) {
 				fw_set_roam_mac(mac);
                 http_send_redirect(r, tmp_url, "device roaming");
@@ -145,8 +171,10 @@ http_callback_404(httpd * webserver, request * r, int error_code)
 		//>>> liudf 20160105 added
 		if(config->js_filter && strcmp(r->request.host, "www.wifidog.org")) {
     	   	debug(LOG_INFO, "Captured %s requesting host [%s] and re-directing them to js redirect page", 
-				r->clientAddr, r->request.host);
+				r->clientAddr, tmp_url);
 			http_send_js_redirect(r);
+			free(url);
+            free(urlFragment);
 			return;
 		}
 		//<<< liudf added end
@@ -406,5 +434,11 @@ void
 http_send_js_redirect(request *r)
 {
     httpdOutput(r, js_redirect_msg);
+}
+
+void
+http_send_apple_redirect(request *r)
+{
+    httpdOutput(r, apple_redirect_msg);
 }
 //<<< liudf added end

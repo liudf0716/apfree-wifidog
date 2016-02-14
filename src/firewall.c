@@ -239,31 +239,46 @@ fw_set_authservers(void)
 
 //>>>>> liudf added 20151224
 void
-fw_refresh_domains_trusted_safely(void)
+fw_refresh_inner_domains_trusted(void)
 {
-    debug(LOG_INFO, "Refresh trust domains list safely");
-	iptables_fw_refresh_domains_trusted_safely();
+    debug(LOG_INFO, "Refresh inner trust domains list");
+	iptables_fw_refresh_inner_domains_trusted();
 }
+
+void 
+fw_clear_inner_domains_trusted(void)
+{
+    debug(LOG_INFO, "Clear inner trust domains list");
+	iptables_fw_clear_inner_domains_trusted();
+}
+
+void 
+fw_set_inner_domains_trusted(void)
+{
+    debug(LOG_INFO, "Setting inner trust domains list");
+	iptables_fw_set_inner_domains_trusted();
+}
+
 
 void
-fw_refresh_domains_trusted(void)
+fw_refresh_user_domains_trusted(void)
 {
-    debug(LOG_INFO, "Refresh trust domains list");
-	iptables_fw_refresh_domains_trusted();
+    debug(LOG_INFO, "Refresh user trust domains list");
+	iptables_fw_refresh_user_domains_trusted();
 }
 
 void 
-fw_clear_domains_trusted(void)
+fw_clear_user_domains_trusted(void)
 {
-    debug(LOG_INFO, "Clear trust domains list");
-	iptables_fw_clear_domains_trusted();
+    debug(LOG_INFO, "Clear user trust domains list");
+	iptables_fw_clear_user_domains_trusted();
 }
 
 void 
-fw_set_domains_trusted(void)
+fw_set_user_domains_trusted(void)
 {
-    debug(LOG_INFO, "Setting the trust domains list");
-	iptables_fw_set_domains_trusted();
+    debug(LOG_INFO, "Setting user trust domains list");
+	iptables_fw_set_user_domains_trusted();
 }
 
 void
@@ -307,6 +322,14 @@ fw_clear_untrusted_maclist()
     debug(LOG_INFO, "Clear untrusted maclist");
 	iptables_fw_clear_untrusted_maclist();
 }
+
+void
+fw_set_mac_temporary(const char *mac, int which)
+{
+    debug(LOG_INFO, "Set trusted||untrusted mac temporary");
+	iptables_fw_set_mac_temporary(mac, which);
+}
+
 //<<<<< liudf added end
 
 /** Remove the firewall rules
@@ -359,7 +382,8 @@ fw_sync_with_authserver(void)
             auth_server_request(&authresponse, REQUEST_TYPE_COUNTERS, p1->ip, p1->mac, p1->token, p1->counters.incoming,
                                 p1->counters.outgoing, p1->counters.incoming_delta, p1->counters.outgoing_delta,
 								// liudf added 20160112
-								p1->first_login, (p1->counters.last_updated - p1->first_login));
+								p1->first_login, (p1->counters.last_updated - p1->first_login), 
+								p1->name?p1->name:"null");
         }
 
         time_t current_time = time(NULL);

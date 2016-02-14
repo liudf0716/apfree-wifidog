@@ -208,6 +208,8 @@ get_status_text()
         pstr_append_sprintf(pstr, "\nClient %d\n", count);
         pstr_append_sprintf(pstr, "  IP: %s MAC: %s\n", current->ip, current->mac);
         pstr_append_sprintf(pstr, "  Token: %s\n", current->token);
+        pstr_append_sprintf(pstr, "  First Login: %lld\n", (long long)current->first_login);
+        pstr_append_sprintf(pstr, "  Name: %s\n", current->name != NULL?current->name:"null");
         pstr_append_sprintf(pstr, "  Downloaded: %llu\n  Uploaded: %llu\n", current->counters.incoming,
                             current->counters.outgoing);
         count++;
@@ -240,7 +242,39 @@ get_status_text()
 }
 
 //>>>> liudf added 20151225
-char *get_trusted_domains_text()
+char *
+get_serialize_trusted_domains()
+{
+	pstr_t *pstr = NULL;
+    s_config *config;
+	t_domain_trusted *domain_trusted = NULL;
+	int line = 0;
+
+    config = config_get_config();
+    
+	domain_trusted = config->domains_trusted;
+	if(domain_trusted == NULL)
+		return NULL;
+
+	pstr = pstr_new();
+
+	LOCK_CONFIG();
+	
+	for (; domain_trusted != NULL; domain_trusted = domain_trusted->next, line++) {
+		if(line == 0)
+        	pstr_append_sprintf(pstr, "%s", domain_trusted->domain);
+		else
+        	pstr_append_sprintf(pstr, ",%s", domain_trusted->domain);
+	}
+	
+	UNLOCK_CONFIG();
+    
+	return pstr_to_string(pstr);
+
+}
+
+char *
+get_trusted_domains_text()
 {
 	pstr_t *pstr = pstr_new();
     s_config *config;
@@ -263,6 +297,50 @@ char *get_trusted_domains_text()
 	UNLOCK_CONFIG();
     
 	return pstr_to_string(pstr);
+}
+
+char *
+get_serialize_maclist(int which)
+{
+	pstr_t *pstr = NULL;
+    s_config *config;
+	t_trusted_mac *maclist = NULL;
+	int line = 0;
+    config = config_get_config();
+	
+	switch(which) {
+	case TRUSTED_MAC:
+		maclist = config->trustedmaclist; 
+		break;
+	case UNTRUSTED_MAC:
+		maclist = config->mac_blacklist;
+		break;
+	case ROAM_MAC:
+		maclist = config->roam_maclist;
+		break;
+	default:
+		return NULL;
+	}
+	
+	if(maclist != NULL)
+		pstr = pstr_new();
+	else
+		return NULL;
+
+	LOCK_CONFIG();
+	
+	
+	for (; maclist != NULL; maclist = maclist->next, line++) {
+		if(line == 0)
+        	pstr_append_sprintf(pstr, "%s", maclist->mac);
+		else	
+        	pstr_append_sprintf(pstr, ",%s", maclist->mac);
+	}
+	
+	UNLOCK_CONFIG();
+    
+	return pstr_to_string(pstr);
+
 }
 
 static char *
@@ -293,7 +371,7 @@ get_maclist_text(int which)
 	default:
 		return NULL;
 	}
-
+	
 	LOCK_CONFIG();
 	
 	for (; maclist != NULL; maclist = maclist->next) {
@@ -326,5 +404,12 @@ char *
 get_untrusted_maclist_text()
 {
 	return get_maclist_text(UNTRUSTED_MAC);
+}
+
+void
+trim_newline(char *line)
+{
+	if(line&&line[strlen(line)-1] == '\n')
+		line[strlen(line)-1] = '\0';
 }
 //<<<< liudf added end
