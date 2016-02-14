@@ -106,7 +106,7 @@ iptables_insert_gateway_id(char **input)
     *input = buffer;
 }
 
-/** @internal 
+/** @internal
  * */
 static int
 ipset_do_command(const char *format, ...)
@@ -431,6 +431,16 @@ iptables_fw_set_untrusted_maclist(void)
 
 	for (p = config->mac_blacklist; p != NULL; p = p->next)
 		ipset_do_command("add " CHAIN_UNTRUSTED " %s", p->mac);
+}
+
+void
+iptables_fw_set_mac_temporary(const char *mac, int which)
+{
+	if(which == 0) { // trusted
+		ipset_do_command("add " CHAIN_TRUSTED " %s timeout 60 ", mac);	
+	} elseif(which == 1) { // untrusted
+		ipset_do_command("add " CHAIN_UNTRUSTED " %s timeout 60 ", mac);	
+	}
 }
 
 static void

@@ -118,5 +118,7 @@ void iptables_fw_set_untrusted_maclist(void);
 void iptables_fw_clear_untrusted_maclist(void);
 
 void iptables_fw_save_online_clients(void);
+
+void iptables_fw_set_mac_temporary(const char *, int);
 //<<< liudf added end
 #endif                          /* _IPTABLES_H_ */

@@ -326,11 +326,8 @@ fw_clear_untrusted_maclist()
 void
 fw_set_mac_temporary(const char *mac, int which)
 {
-	if(which == 0) {
-		ipset_do_command("add " CHAIN_TRUSTED " %s timeout 60 ", mac);	
-	} else {
-		ipset_do_command("add " CHAIN_UNTRUSTED " %s timeout 60 ", mac);	
-	}
+    debug(LOG_INFO, "Set trusted||untrusted mac temporary");
+	iptables_fw_set_mac_temporary(mac, which);
 }
 
 //<<<<< liudf added end
