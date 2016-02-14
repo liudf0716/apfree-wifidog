@@ -49,6 +49,7 @@
 #include "debug.h"
 #include "util.h"
 #include "client_list.h"
+#include "wd_util.h"
 
 //>>> liudf added 20160127
 static FILE	*f_fw_init = NULL;
@@ -438,7 +439,7 @@ iptables_fw_set_mac_temporary(const char *mac, int which)
 {
 	if(which == 0) { // trusted
 		ipset_do_command("add " CHAIN_TRUSTED " %s timeout 60 ", mac);	
-	} elseif(which == 1) { // untrusted
+	} else if(which == 1) { // untrusted
 		ipset_do_command("add " CHAIN_UNTRUSTED " %s timeout 60 ", mac);	
 	}
 }
