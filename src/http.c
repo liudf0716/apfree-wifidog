@@ -147,6 +147,7 @@ http_callback_404(httpd * webserver, request * r, int error_code)
 						  g_ssid?g_ssid:"null",
 						  r->clientAddr, mac, url);
             //>>> liudf 20160106 added
+			/*
 			if(strcmp(r->request.host, "captive.apple.com") == 0) {
 				fw_set_mac_temporary(mac, 0);
 				http_send_js_redirect(r);
@@ -155,7 +156,7 @@ http_callback_404(httpd * webserver, request * r, int error_code)
 				free(mac);
 				return;
 			}
-
+			*/
 			if(is_roaming(mac)) {
 				fw_set_roam_mac(mac);
                 http_send_redirect(r, tmp_url, "device roaming");
