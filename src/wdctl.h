@@ -50,6 +50,7 @@
 #define	WDCTL_CLEAR_TRUSTED_MACLIST		17
 #define	WDCTL_SHOW_TRUSTED_MACLIST		18
 #define	WDCTL_USER_CFG_SAVE				19
+#define	WDCTL_ADD_WILDCARD_DOMAIN		20
 //<<<< liudf added end
 
 typedef struct {

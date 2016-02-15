@@ -887,6 +887,9 @@ main(int argc, char **argv)
 	case WDCTL_USER_CFG_SAVE:
 		wdctl_user_cfg_save();
 		break;
+	
+	case WDCTL_ADD_WILDCARD_DOMAIN:
+		break;
 	//<<< liudf end
 
     default:
