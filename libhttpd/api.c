@@ -485,12 +485,20 @@ httpdReadRequest(httpd * server, request * r)
     return (0);
 }
 
+void _httpd_closeSocket(request *r)
+{
+	if(r->clientSock > 0) {
+		shutdown(r->clientSock, 2);
+    	close(r->clientSock);
+		r->clientSock = -1;
+	}
+}
+
 void
 httpdEndRequest(request * r)
 {
     _httpd_freeVariables(r->variables);
-    shutdown(r->clientSock, 2);
-    close(r->clientSock);
+	_httpd_closeSocket(r);
     free(r);
 }
 

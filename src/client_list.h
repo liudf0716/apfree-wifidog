@@ -30,6 +30,7 @@
 
 /** Global mutex to protect access to the client list */
 extern pthread_mutex_t client_list_mutex;
+extern pthread_mutex_t offline_client_list_mutex;
 
 /** Counters struct for a client's bandwidth usage (in bytes)
  */
@@ -64,23 +65,46 @@ typedef struct _t_client {
 	char	*name;			/**< @brief device name */
 } t_client;
 
+// liudf added 20160216
+typedef struct _t_offline_client {
+	struct _t_offline_client *next;
+	char *ip;
+	char *mac;
+	
+	time_t first_login;	
+	int client_type; // 1 is apple;
+	unsigned int hit_counts;
+} t_offline_client;
+
 /** @brief Get a new client struct, not added to the list yet */
 t_client *client_get_new(void);
+
+t_offline_client *offline_client_get_new(void);
 
 /** @brief Get the first element of the list of connected clients */
 t_client *client_get_first_client(void);
 
+t_offline_client *client_get_first_offline_client(void);
+
 /** @brief Initializes the client list */
 void client_list_init(void);
+
+void offline_client_list_init(void);
 
 /** @brief Insert client at head of list */
 void client_list_insert_client(t_client *);
 
+void offline_client_list_insert_client(t_offline_client *);
+
 /** @brief Destroy the client list. Including all free... */
 void client_list_destroy(t_client *);
 
+void offline_client_list_destroy(t_offline_client *);
+
 /** @brief Adds a new client to the connections list */
 t_client *client_list_add(const char *, const char *, const char *);
+
+t_offline_client *offline_client_list_add(const char *, const char *);
 
 /** Duplicate the whole client list to process in a thread safe way */
 int client_list_dup(t_client **);
@@ -101,17 +125,37 @@ t_client *client_list_find_by_ip(const char *); /* needed by fw_iptables.c, auth
 /** @brief Finds a client only by its Mac */
 t_client *client_list_find_by_mac(const char *);        /* needed by wdctl_thread.c */
 
+t_offline_client *offline_client_list_find_by_mac(const char *);
+
 /** @brief Finds a client by its token */
 t_client *client_list_find_by_token(const char *);
 
 /** @brief Deletes a client from the connections list and frees its memory*/
 void client_list_delete(t_client *);
 
+void offline_client_list_delete(t_offline_client *);
+
 /** @brief Removes a client from the connections list */
 void client_list_remove(t_client *);
 
+void offline_client_list_remove(t_offline_client *);
+
 /** @brief Free memory associated with a client */
 void client_free_node(t_client *);
+
+void offline_client_free_node(t_offline_client *);
+
+#define LOCK_OFFLINE_CLIENT_LIST() do { \
+	debug(LOG_DEBUG, "Locking offline client list"); \
+	pthread_mutex_lock(&offline_client_list_mutex); \
+	debug(LOG_DEBUG, "Offline client list locked"); \
+} while (0)
+
+#define UNLOCK_OFFLINE_CLIENT_LIST() do { \
+	debug(LOG_DEBUG, "Unlocking offline client list"); \
+	pthread_mutex_unlock(&offline_client_list_mutex); \
+	debug(LOG_DEBUG, "Offline client list unlocked"); \
+} while (0)
 
 #define LOCK_CLIENT_LIST() do { \
 	debug(LOG_DEBUG, "Locking client list"); \

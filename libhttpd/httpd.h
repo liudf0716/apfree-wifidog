@@ -174,6 +174,8 @@ extern "C" {
     void httpdAddHeader __ANSI_PROTO((request *, const char *));
     void httpdSetContentType __ANSI_PROTO((request *, const char *));
     void httpdSetResponse __ANSI_PROTO((request *, const char *));
+	// liudf added 20160216
+	void _httpd_closeSocket __ANSI_PROTO((request *));
     void httpdEndRequest __ANSI_PROTO((request *));
 
     httpd *httpdCreate __ANSI_PROTO(());
