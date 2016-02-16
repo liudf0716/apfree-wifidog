@@ -135,6 +135,7 @@ authenticate_client(request * r)
 	// liudf 20160115
 	// for support weixin lian
 	int type = 0;
+	t_offline_client *o_client = NULL;
 
     LOCK_CLIENT_LIST();
 
@@ -241,6 +242,11 @@ authenticate_client(request * r)
     	UNLOCK_CLIENT_LIST();
 		//>>> liudf added 20160112
 		client->first_login = time(NULL);
+		LOCK_OFFLINE_CLIENT_LIST();
+		o_client = offline_client_list_find_by_mac(client->mac);	
+		if(o_client)
+			offline_client_list_delete(o_client);
+		UNLOCK_OFFLINE_CLIENT_LIST();
 		//<<< liudf added end
         served_this_session++;
 		if(type) {

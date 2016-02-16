@@ -218,6 +218,8 @@ get_status_text()
 
     client_list_destroy(sublist);
 
+    pstr_append_sprintf(pstr, "%d clients " "unconnected.\n", offline_client_number());
+
     config = config_get_config();
 
     if (config->trustedmaclist != NULL) {

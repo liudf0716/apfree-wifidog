@@ -449,6 +449,22 @@ offline_client_free_node(t_offline_client *client)
 	free(client);
 }
 
+int 
+offline_client_number()
+{
+	t_offline_client *ptr;
+	int number = 0;
+	
+	LOCK_OFFLINE_CLIENT_LIST();	
+	ptr = first_offline_client;
+	while(NULL != ptr) {
+		ptr = ptr->next;
+		number++;
+	}
+	UNLOCK_OFFLINE_CLIENT_LIST();
+	return number;
+}
+
 /**
  * @brief Deletes a client from the connections list
  *
