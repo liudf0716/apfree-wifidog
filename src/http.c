@@ -103,7 +103,7 @@ _special_process(request *r, const char *mac, const char *url)
 			http_send_js_redirect(r);
 		}
 		return 1;
-	} else if(strncmp(tmp_url, "http://short.weixin.qq.com", strlen("http://short.weixin.qq.com")) == 0) {
+	} else if(strncmp(url, "http://short.weixin.qq.com", strlen("http://short.weixin.qq.com")) == 0) {
 		debug(LOG_INFO, "Into short.weixin.qq.com ======");
 
 		_httpd_closeSocket(r);
