@@ -63,6 +63,7 @@ typedef struct _t_client {
 	//<<< liudf added 20160112	
 	time_t 	first_login;		/**< @brief first login time */
 	char	*name;			/**< @brief device name */
+	int 	is_online;
 } t_client;
 
 // liudf added 20160216
@@ -146,6 +147,8 @@ void client_free_node(t_client *);
 void offline_client_free_node(t_offline_client *);
 
 int offline_client_number();
+
+void reset_client_list();
 
 #define LOCK_OFFLINE_CLIENT_LIST() do { \
 	debug(LOG_DEBUG, "Locking offline client list"); \

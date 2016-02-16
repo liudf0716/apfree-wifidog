@@ -378,7 +378,7 @@ fw_sync_with_authserver(void)
          * short:  Shorter than config->checkinterval * config->clienttimeout */
         icmp_ping(p1->ip);
         /* Update the counters on the remote server only if we have an auth server */
-        if (config->auth_servers != NULL) {
+        if (config->auth_servers != NULL && p1->is_online) {
             auth_server_request(&authresponse, REQUEST_TYPE_COUNTERS, p1->ip, p1->mac, p1->token, p1->counters.incoming,
                                 p1->counters.outgoing, p1->counters.incoming_delta, p1->counters.outgoing_delta,
 								// liudf added 20160112

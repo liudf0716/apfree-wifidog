@@ -328,6 +328,7 @@ client_list_find_by_ip(const char *ip)
     return NULL;
 }
 
+
 /**
  * Finds a  client by its Mac, returns NULL if the client could not
  * be found
@@ -539,3 +540,17 @@ client_list_remove(t_client * client)
         }
     }
 }
+
+// liudf 20160216 added
+void
+reset_client_list()
+{
+	t_client *ptr;
+
+    ptr = firstclient;
+    while (NULL != ptr) {
+		ptr->is_online = 0;
+        ptr = ptr->next;
+    }
+}
+
