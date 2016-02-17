@@ -1162,7 +1162,7 @@ iptables_fw_counters_update(void)
                     p1->counters.incoming_delta = p1->counters.incoming_history + counter - p1->counters.incoming;
                     p1->counters.incoming = p1->counters.incoming_history + counter;
                     debug(LOG_DEBUG, "%s - Incoming traffic %llu bytes, Updated counter.incoming to %llu bytes", ip, counter, p1->counters.incoming);
-					p1->is_online = 1;
+					//p1->is_online = 1;
                 }
             } else {
                 debug(LOG_ERR,
