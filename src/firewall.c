@@ -421,7 +421,7 @@ fw_sync_with_authserver(void)
                 continue;       /* Next client please */
             }
 
-            if (config->auth_servers != NULL) {
+            if (config->auth_servers != NULL && tmp->is_online) {
                 switch (authresponse.authcode) {
                 case AUTH_DENIED:
                     debug(LOG_NOTICE, "%s - Denied. Removing client and firewall rules", tmp->ip);
