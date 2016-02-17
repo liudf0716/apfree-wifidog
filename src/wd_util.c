@@ -205,7 +205,7 @@ get_status_text()
 
     count = 1;
     while (current != NULL) {
-        pstr_append_sprintf(pstr, "\nClient %d\n", count);
+        pstr_append_sprintf(pstr, "\nClient %d status [%d]\n", count, current->is_online);
         pstr_append_sprintf(pstr, "  IP: %s MAC: %s\n", current->ip, current->mac);
         pstr_append_sprintf(pstr, "  Token: %s\n", current->token);
         pstr_append_sprintf(pstr, "  First Login: %lld\n", (long long)current->first_login);

@@ -262,6 +262,7 @@ client_dup(const t_client * src)
 	if(src->name)
 		new->name = safe_strdup(src->name);
 	new->first_login = src->first_login;
+	new->is_online = src->is_online;
     new->next = NULL;
 
     return new;
