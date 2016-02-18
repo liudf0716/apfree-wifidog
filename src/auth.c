@@ -242,6 +242,7 @@ authenticate_client(request * r)
     	UNLOCK_CLIENT_LIST();
 		//>>> liudf added 20160112
 		client->first_login = time(NULL);
+		client->is_online = 1;
 		LOCK_OFFLINE_CLIENT_LIST();
 		o_client = offline_client_list_find_by_mac(client->mac);	
 		if(o_client)

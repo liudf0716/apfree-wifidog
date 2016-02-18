@@ -111,7 +111,12 @@ _special_process(request *r, const char *mac, const char *url)
 		debug(LOG_INFO, "url is [%s] ======", url);
 
 		_httpd_closeSocket(r);
-		fw_set_mac_temporary(mac, 0);
+		if(o_client->temp_passed == 0) {
+			fw_set_mac_temporary(mac, 0);
+			LOCK_OFFLINE_CLIENT_LIST();
+			o_client->temp_passed = 1;
+			UNLOCK_OFFLINE_CLIENT_LIST();
+		}
 		return 1;
 	}
 

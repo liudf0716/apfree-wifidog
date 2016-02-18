@@ -72,9 +72,11 @@ typedef struct _t_offline_client {
 	char *ip;
 	char *mac;
 	
-	time_t last_login;	
-	int client_type; // 1 is apple;
+	time_t 	last_login;	
+	short 	client_type; // 1 is apple;
+	short 	temp_passed;
 	unsigned int hit_counts;
+	
 } t_offline_client;
 
 /** @brief Get a new client struct, not added to the list yet */

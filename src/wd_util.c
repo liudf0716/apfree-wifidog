@@ -167,6 +167,7 @@ get_status_text()
     time_t uptime = 0;
     unsigned int days = 0, hours = 0, minutes = 0, seconds = 0;
     t_trusted_mac *p;
+	t_offline_client *oc_list;
 
     pstr_cat(pstr, "WiFiDog status\n\n");
 
@@ -218,7 +219,15 @@ get_status_text()
 
     client_list_destroy(sublist);
 
+	LOCK_OFFLINE_CLIENT_LIST();
     pstr_append_sprintf(pstr, "%d clients " "unconnected.\n", offline_client_number());
+	oc_list = client_get_first_offline_client();
+	while(oc_list != NULL) {	
+        pstr_append_sprintf(pstr, "  IP: %s MAC: %s Last Login: %lld Hit Counts: %d Client Type: %d Temp Passed: %d\n", 
+			oc_list->ip, oc_list->mac, oc_list->last_login, oc_list->hit_counts, oc_list->client_type, oc_list->temp_passed);
+		oc_list = oc_list->next;
+	}
+	UNLOCK_OFFLINE_CLIENT_LIST();
 
     config = config_get_config();
 

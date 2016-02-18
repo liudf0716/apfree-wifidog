@@ -188,6 +188,7 @@ offline_client_list_add(const char *ip, const char *mac)
 	curclient->last_login = time(NULL);
 	curclient->client_type = 0;
 	curclient->hit_counts = 1;
+	curclient->temp_passed = 0;
 
 	offline_client_list_insert_client(curclient);
 	
@@ -457,13 +458,11 @@ offline_client_number()
 	t_offline_client *ptr;
 	int number = 0;
 	
-	LOCK_OFFLINE_CLIENT_LIST();	
 	ptr = first_offline_client;
 	while(NULL != ptr) {
 		ptr = ptr->next;
 		number++;
 	}
-	UNLOCK_OFFLINE_CLIENT_LIST();
 	return number;
 }
 
