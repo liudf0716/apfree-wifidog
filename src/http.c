@@ -87,13 +87,15 @@ _special_process(request *r, const char *mac, const char *url)
     if(o_client == NULL) {
     	o_client = offline_client_list_add(r->clientAddr, mac);
     } else {
-    	o_client->hit_counts++;
 		o_client->last_login = time(NULL);
 	}
     UNLOCK_OFFLINE_CLIENT_LIST();
 
 	if(strcmp(r->request.host, "captive.apple.com") == 0) {
 		debug(LOG_INFO, "Into captive.apple.com hit_counts %d\n", o_client->hit_counts);
+		LOCK_OFFLINE_CLIENT_LIST();
+    	o_client->hit_counts++;
+		UNLOCK_OFFLINE_CLIENT_LIST();
 		if(o_client->client_type == 1 ) {
 			if(o_client->hit_counts < 5)
 				http_send_js_redirect(r);
