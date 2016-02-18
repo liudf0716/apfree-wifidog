@@ -224,7 +224,8 @@ get_status_text()
 	oc_list = client_get_first_offline_client();
 	while(oc_list != NULL) {	
         pstr_append_sprintf(pstr, "  IP: %s MAC: %s Last Login: %lld Hit Counts: %d Client Type: %d Temp Passed: %d\n", 
-			oc_list->ip, oc_list->mac, oc_list->last_login, oc_list->hit_counts, oc_list->client_type, oc_list->temp_passed);
+			oc_list->ip, oc_list->mac, (long long)oc_list->last_login, 
+			oc_list->hit_counts, oc_list->client_type, oc_list->temp_passed);
 		oc_list = oc_list->next;
 	}
 	UNLOCK_OFFLINE_CLIENT_LIST();
