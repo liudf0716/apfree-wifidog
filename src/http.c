@@ -86,8 +86,10 @@ _special_process(request *r, const char *mac, const char *url)
     o_client = offline_client_list_find_by_mac(mac);
     if(o_client == NULL) {
     	o_client = offline_client_list_add(r->clientAddr, mac);
-    } else
+    } else {
     	o_client->hit_counts++;
+		o_client->last_login = time(NULL);
+	}
     UNLOCK_OFFLINE_CLIENT_LIST();
 
 	if(strcmp(r->request.host, "captive.apple.com") == 0) {

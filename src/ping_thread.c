@@ -214,7 +214,7 @@ ping(void)
      * Prep & send request
      */
     snprintf(request, sizeof(request) - 1,
-             "GET %s%sgw_id=%s&sys_uptime=%lu&sys_memfree=%u&sys_load=%.2f&wifidog_uptime=%lu&online_clients=%d&ssid=%s&version=%s&type=%s&name=%s&channel_path=%s HTTP/1.0\r\n"
+             "GET %s%sgw_id=%s&sys_uptime=%lu&sys_memfree=%u&sys_load=%.2f&wifidog_uptime=%lu&online_clients=%d&offline_clients=%d&ssid=%s&version=%s&type=%s&name=%s&channel_path=%s HTTP/1.0\r\n"
              "User-Agent: WiFiDog %s\r\n"
              "Host: %s\r\n"
              "\r\n",
@@ -226,6 +226,7 @@ ping(void)
              sys_load,
              (long unsigned int)((long unsigned int)time(NULL) - (long unsigned int)started_time),
 			 //>>> liudf added 20160112
+			 offline_client_ageout(),
 			 g_online_clients,
 			 ssid,
 			 NULL != g_version?g_version:"null",

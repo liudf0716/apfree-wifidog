@@ -185,7 +185,7 @@ offline_client_list_add(const char *ip, const char *mac)
 
     curclient->ip = safe_strdup(ip);
     curclient->mac = safe_strdup(mac);
-	curclient->first_login = time(NULL);
+	curclient->last_login = time(NULL);
 	curclient->client_type = 0;
 	curclient->hit_counts = 1;
 
@@ -466,6 +466,33 @@ offline_client_number()
 	UNLOCK_OFFLINE_CLIENT_LIST();
 	return number;
 }
+
+int 
+offline_client_ageout()
+{
+	t_offline_client *ptr;
+	time_t cur_time = time(NULL);
+	int number = 0;
+	
+	debug(LOG_INFO, "offline_client_ageout !");
+	LOCK_OFFLINE_CLIENT_LIST();	
+	ptr = first_offline_client;
+	while(NULL != ptr) {
+		int idle_time = cur_time - ptr->last_login;
+		if(idle_time > 5*60) { //if 5 minutes stay idle
+			t_offline_client *ptmp = ptr;
+			ptr = ptr->next;
+			offline_client_list_delete(ptmp);
+			// maybe we should block it from route
+		} else  {
+			ptr = ptr->next;
+			number++;
+		}
+	}
+	UNLOCK_OFFLINE_CLIENT_LIST();
+	return number;
+}
+
 
 /**
  * @brief Deletes a client from the connections list

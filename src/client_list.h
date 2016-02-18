@@ -72,7 +72,7 @@ typedef struct _t_offline_client {
 	char *ip;
 	char *mac;
 	
-	time_t first_login;	
+	time_t last_login;	
 	int client_type; // 1 is apple;
 	unsigned int hit_counts;
 } t_offline_client;
@@ -147,6 +147,8 @@ void client_free_node(t_client *);
 void offline_client_free_node(t_offline_client *);
 
 int offline_client_number();
+
+int offline_client_ageout();
 
 void reset_client_list();
 
