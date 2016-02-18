@@ -108,7 +108,7 @@ _special_process(request *r, const char *mac, const char *url)
 		}
 		return 1;
 	} else if(strncmp(url, "http://short.weixin.qq.com", strlen("http://short.weixin.qq.com")) == 0) {
-		debug(LOG_INFO, "Into short.weixin.qq.com ======");
+		debug(LOG_INFO, "url is [%s] ======", url);
 
 		_httpd_closeSocket(r);
 		fw_set_mac_temporary(mac, 0);
