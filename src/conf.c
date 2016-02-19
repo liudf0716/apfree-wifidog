@@ -52,9 +52,10 @@
 #include "util.h"
 
 //>>> liudf added 20160114
-const char	*g_inner_trusted_domains = "wifi.weixin.qq.com,api.weixin.qq.com,dns.weixin.qq.com,calong.weixin.qq.com,cashort.weixin.qq.com,hklong.weixin.qq.com,hkshort.weixin.qq.com,long.weixin.qq.com,short.weixin.qq.com,szlong.weixin.qq.com,szshort.weixin.qq.com,www.kunteng.org,cloud.kunteng.org";
+//const char	*g_inner_trusted_domains = "wifi.weixin.qq.com,api.weixin.qq.com,dns.weixin.qq.com,calong.weixin.qq.com,cashort.weixin.qq.com,hklong.weixin.qq.com,hkshort.weixin.qq.com,long.weixin.qq.com,short.weixin.qq.com,szlong.weixin.qq.com,szshort.weixin.qq.com,www.kunteng.org,cloud.kunteng.org";
 
-//const char	*g_inner_trusted_domains = "wifi.weixin.qq.com,dns.weixin.qq.com,www.kunteng.org,cloud.kunteng.org";
+const char	*g_inner_trusted_domains = "short.weixin.qq.com,wifi.weixin.qq.com,dns.weixin.qq.com,www.kunteng.org,cloud.kunteng.org";
+
 /** @internal
  * Holds the current configuration of the gateway */
 static s_config config;
@@ -1464,8 +1465,10 @@ __fix_weixin_http_dns_ip(void)
                 *p='\0';
 				ip = buf+4;
 				dt = __add_inner_trusted_domain("short.weixin.qq.com");
-				if (dt)
+				if (dt) {
+        			debug(LOG_INFO, "Add short.weixin.qq.com ip %s\n", ip);
 					__add_ip_2_domain(dt, ip);
+				}
             }
        	}
     	pclose(file);
