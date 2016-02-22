@@ -83,7 +83,7 @@ const char *apple_redirect_msg = "<!DOCTYPE html>"
 				"</body>"
 				"</html>";
 
-statci int
+static int
 _is_apple_captive(const char *domain)
 {
 	int i = 0;
