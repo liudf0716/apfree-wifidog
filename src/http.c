@@ -58,6 +58,12 @@
 #include "../config.h"
 
 //>>> liudf added 20160104
+const char *apple_domains[] = {
+					"captive.apple.com",
+					"www.apple.com",
+					NULL
+};
+
 const char *js_redirect_msg = "<!DOCTYPE html>"
 				"<html>"
 				"<script type=\"text/javascript\">"
@@ -77,6 +83,18 @@ const char *apple_redirect_msg = "<!DOCTYPE html>"
 				"</body>"
 				"</html>";
 
+statci int
+_is_apple_captive(const char *domain)
+{
+	int i = 0;
+	while(apple_domains[i] != NULL) {
+		if(strcmp(domain, apple_domains[i]) == 0)
+			return 1;
+	}
+
+	return 0;
+}
+
 static int
 _special_process(request *r, const char *mac, const char *url)
 {
@@ -91,13 +109,14 @@ _special_process(request *r, const char *mac, const char *url)
 	}
     UNLOCK_OFFLINE_CLIENT_LIST();
 
-	if(strcmp(r->request.host, "captive.apple.com") == 0) {
-		debug(LOG_INFO, "Into captive.apple.com hit_counts %d\n", o_client->hit_counts);
+	if(_is_apple_captive(r->request.host)) {
+		unsigned int interval = time(NULL) - o_client->first_login;
+		debug(LOG_INFO, "Into captive.apple.com hit_counts %d interval %d\n", o_client->hit_counts, interval);
 		LOCK_OFFLINE_CLIENT_LIST();
     	o_client->hit_counts++;
 		UNLOCK_OFFLINE_CLIENT_LIST();
 		if(o_client->client_type == 1 ) {
-			if(o_client->hit_counts < 5)
+			if(o_client->hit_counts < 5 && interval < 30 )
 				http_send_js_redirect(r);
 			else {
 				http_send_apple_redirect(r);

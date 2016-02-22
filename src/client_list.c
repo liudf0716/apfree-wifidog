@@ -183,12 +183,13 @@ offline_client_list_add(const char *ip, const char *mac)
 	
     curclient = offline_client_get_new();
 
-    curclient->ip = safe_strdup(ip);
-    curclient->mac = safe_strdup(mac);
-	curclient->last_login = time(NULL);
-	curclient->client_type = 0;
-	curclient->hit_counts = 1;
-	curclient->temp_passed = 0;
+    curclient->ip 			= safe_strdup(ip);
+    curclient->mac 			= safe_strdup(mac);
+	curclient->last_login 	= time(NULL);
+	curclient->first_login 	= time(NULL);
+	curclient->client_type 	= 0;
+	curclient->hit_counts 	= 1;
+	curclient->temp_passed 	= 0;
 
 	offline_client_list_insert_client(curclient);
 	

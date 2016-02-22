@@ -73,9 +73,10 @@ typedef struct _t_offline_client {
 	char *mac;
 	
 	time_t 	last_login;	
-	short 	client_type; // 1 is apple;
-	short 	temp_passed;
-	unsigned int hit_counts;
+	time_t	first_login;
+	char 	client_type; // 1 is apple;
+	char 	temp_passed;
+	short 	hit_counts; 
 	
 } t_offline_client;
 
