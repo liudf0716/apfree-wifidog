@@ -90,6 +90,7 @@ _is_apple_captive(const char *domain)
 	while(apple_domains[i] != NULL) {
 		if(strcmp(domain, apple_domains[i]) == 0)
 			return 1;
+		i++;
 	}
 
 	return 0;
