@@ -97,12 +97,16 @@ int
 execute(const char *cmd_line, int quiet)
 {
     int pid, status, rc;
+	sighandler_t old_handler;
+ 
 
     const char *new_argv[4];
     new_argv[0] = WD_SHELL_PATH;
     new_argv[1] = "-c";
     new_argv[2] = cmd_line;
     new_argv[3] = NULL;
+
+   	old_handler = signal(SIGCHLD, SIG_DFL);	
 
     pid = safe_fork();
     if (pid == 0) {             /* for the child process:         */
@@ -121,7 +125,9 @@ execute(const char *cmd_line, int quiet)
     debug(LOG_DEBUG, "Waiting for PID %d to exit", pid);
     rc = waitpid(pid, &status, 0);
     debug(LOG_DEBUG, "Process PID %d exited", rc);
-    
+ 	
+	signal(SIGCHLD, old_handler);
+   
     if (-1 == rc) {
         debug(LOG_ERR, "waitpid() failed (%s)", strerror(errno));
         return 1; /* waitpid failed. */

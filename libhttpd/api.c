@@ -399,8 +399,12 @@ httpdReadRequest(httpd * server, request * r)
             *cp2 = 0;
             if (strcasecmp(cp, "GET") == 0)
                 r->request.method = HTTP_GET;
+#if	0
+			// liudf 20160223 commented
+			// only supoort GET
             if (strcasecmp(cp, "POST") == 0)
                 r->request.method = HTTP_POST;
+#endif
             if (r->request.method == 0) {
                 _httpd_net_write(r->clientSock, HTTP_METHOD_ERROR, strlen(HTTP_METHOD_ERROR));
                 _httpd_net_write(r->clientSock, cp, strlen(cp));
@@ -431,7 +435,7 @@ httpdReadRequest(httpd * server, request * r)
                  */
                 break;
             }
-
+#if	0
             if (strncasecmp(buf, "Authorization: ", 15) == 0) {
                 cp = strchr(buf, ':');
                 if (cp) {
@@ -456,6 +460,7 @@ httpdReadRequest(httpd * server, request * r)
                     }
                 }
             }
+#endif
             /* acv@acv.ca/wifidog: Added decoding of host: if
              * present. */
             if (strncasecmp(buf, "Host: ", 6) == 0) {
@@ -464,6 +469,9 @@ httpdReadRequest(httpd * server, request * r)
                     cp += 2;
                     strncpy(r->request.host, cp, HTTP_MAX_URL);
                     r->request.host[HTTP_MAX_URL - 1] = 0;
+					// liudf added 20160223
+					// only parse Host
+					inHeaders = 0;
                 }
             }
             /* End modification */
