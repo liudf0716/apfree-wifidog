@@ -72,6 +72,28 @@ time_t started_time = 0;
 /* The internal web server */
 httpd * webserver = NULL;
 
+//>>> liudf added 20160224
+static int
+create_thread(pthread_t * thread, void *(*start_routine)(void*), void *arg)
+{
+	pthread_attr_t attr;
+  	int ret;
+
+    if (0 != (ret = pthread_attr_init (&attr)))
+    	goto ERR;
+    if (0 != (ret = pthread_attr_setstacksize (&attr, 1024*256))){
+      	pthread_attr_destroy (&attr);
+      	goto ERR;
+    }
+	
+	ret = pthread_create (thread, &attr, start_routine, arg);
+    pthread_attr_destroy (&attr);
+  	return ret;
+ERR:
+  	errno = EINVAL;
+  	return ret;	
+}
+//<<< liudf added end
 /* Appends -x, the current PID, and NULL to restartargv
  * see parse_commandline in commandline.c for details
  *
@@ -472,8 +494,10 @@ main_loop(void)
             params = safe_malloc(2 * sizeof(void *));
             *params = webserver;
             *(params + 1) = r;
-
-            result = pthread_create(&tid, NULL, (void *)thread_httpd, (void *)params);
+			
+			// liudf modified 20160224
+            //result = pthread_create(&tid, NULL, (void *)thread_httpd, (void *)params);
+			result = create_thread(&tid, (void*)thread_httpd, (void *)params);
             if (result != 0) {
                 debug(LOG_ERR, "FATAL: Failed to create a new thread (httpd) - exiting");
                 termination_handler(0);
