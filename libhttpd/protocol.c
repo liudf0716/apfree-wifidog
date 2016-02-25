@@ -385,17 +385,27 @@ _httpd_formatTimeString(char *ptr, int clock)
 void
 _httpd_sendHeaders(request * r, int contentLength, int modTime)
 {
-    char tmpBuf[80], timeBuf[HTTP_TIME_STRING_LEN];
+    char timeBuf[HTTP_TIME_STRING_LEN] = {0};
+	char hdrBuf[HTTP_READ_BUF_LEN] = {0};
 
     if (r->response.headersSent)
         return;
 
     r->response.headersSent = 1;
-    _httpd_net_write(r->clientSock, "HTTP/1.0 ", 9);
+	snprintf(hdrBuf, HTTP_READ_BUF_LEN, "HTTP/1.1 ");
+	snprintf(hdrBuf+strlen(hdrBuf), HTTP_READ_BUF_LEN-strlen(hdrBuf), "%s", r->response.response);
+	snprintf(hdrBuf+strlen(hdrBuf), HTTP_READ_BUF_LEN-strlen(hdrBuf), "%s", r->response.headers);
+	/*
+    _httpd_net_write(r->clientSock, "HTTP/1.1 ", 9);
     _httpd_net_write(r->clientSock, r->response.response, strlen(r->response.response));
     _httpd_net_write(r->clientSock, r->response.headers, strlen(r->response.headers));
-
-    _httpd_formatTimeString(timeBuf, 0);
+	*/
+    _httpd_formatTimeString(timeBuf, 0);	
+	snprintf(hdrBuf+strlen(hdrBuf), HTTP_READ_BUF_LEN-strlen(hdrBuf), "Date: ");
+	snprintf(hdrBuf+strlen(hdrBuf), HTTP_READ_BUF_LEN-strlen(hdrBuf), "%s\r\n", timeBuf);
+	snprintf(hdrBuf+strlen(hdrBuf), HTTP_READ_BUF_LEN-strlen(hdrBuf), "Connection: close\r\nContent-Type: %s\r\n", 
+				r->response.contentType);
+	/*
     _httpd_net_write(r->clientSock, "Date: ", 6);
     _httpd_net_write(r->clientSock, timeBuf, strlen(timeBuf));
     _httpd_net_write(r->clientSock, "\n", 1);
@@ -404,19 +414,28 @@ _httpd_sendHeaders(request * r, int contentLength, int modTime)
     _httpd_net_write(r->clientSock, "Content-Type: ", 14);
     _httpd_net_write(r->clientSock, r->response.contentType, strlen(r->response.contentType));
     _httpd_net_write(r->clientSock, "\n", 1);
+	*/
 
-    if (contentLength > 0) {
-        _httpd_net_write(r->clientSock, "Content-Length: ", 16);
+    if (contentLength > 0) {	
+		/*
+		char tmpBuf[80] = {0};
         snprintf(tmpBuf, sizeof(tmpBuf), "%d", contentLength);
+        _httpd_net_write(r->clientSock, "Content-Length: ", 16);
         _httpd_net_write(r->clientSock, tmpBuf, strlen(tmpBuf));
         _httpd_net_write(r->clientSock, "\n", 1);
+		*/
 
         _httpd_formatTimeString(timeBuf, modTime);
+		/*
         _httpd_net_write(r->clientSock, "Last-Modified: ", 15);
         _httpd_net_write(r->clientSock, timeBuf, strlen(timeBuf));
         _httpd_net_write(r->clientSock, "\n", 1);
+		*/
+		snprintf(hdrBuf+strlen(hdrBuf), HTTP_READ_BUF_LEN-strlen(hdrBuf), "Content-Length: %d\r\nLast-Modified: %s\r\n", 
+			contentLength, timeBuf);
     }
-    _httpd_net_write(r->clientSock, "\n", 1);
+	_httpd_net_write(r->clientSock, hdrBuf, strlen(hdrBuf));
+    //_httpd_net_write(r->clientSock, "\n", 1);
 }
 
 httpDir *

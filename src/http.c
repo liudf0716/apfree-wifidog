@@ -365,7 +365,7 @@ http_send_redirect(request * r, const char *url, const char *text)
     debug(LOG_DEBUG, "Redirecting client browser to %s", url);
     safe_asprintf(&header, "Location: %s", url);
 	// liudf 20160104; change 302 to 307
-    safe_asprintf(&response, "307 %s\n", text ? text : "Redirecting");
+    safe_asprintf(&response, "307 %s\r\n", text ? text : "Redirecting");
     httpdSetResponse(r, response);
     httpdAddHeader(r, header);
     free(response);

@@ -372,9 +372,9 @@ httpdReadRequest(httpd * server, request * r)
     /*
      ** Setup for a standard response
      */
-    strcpy(r->response.headers, "Server: Hughes Technologies Embedded Server\n");
-    strcpy(r->response.contentType, "text/html");
-    strcpy(r->response.response, "200 Output Follows\n");
+    strcpy(r->response.headers, "Server: Hughes Technologies Embedded Server\r\n");
+    strcpy(r->response.contentType, "text/html\r\n");
+    strcpy(r->response.response, "200 Output Follows\r\n");
     r->response.headersSent = 0;
 
     /*
@@ -731,7 +731,7 @@ void
 httpdOutput(request * r, const char *msg)
 {
     const char *src;
-    char buf[HTTP_MAX_LEN], varName[80], *dest;
+    char buf[HTTP_MAX_LEN], varName[80] = {0}, *dest;
     int count;
 
     src = msg;
@@ -890,10 +890,10 @@ httpdAuthenticate(request * r, const char *realm)
     char buffer[255];
 
     if (r->request.authLength == 0) {
-        httpdSetResponse(r, "401 Please Authenticate");
-        snprintf(buffer, sizeof(buffer), "WWW-Authenticate: Basic realm=\"%s\"\n", realm);
+        httpdSetResponse(r, "401 Please Authenticate\r\n");
+        snprintf(buffer, sizeof(buffer), "WWW-Authenticate: Basic realm=\"%s\"\r\n", realm);
         httpdAddHeader(r, buffer);
-        httpdOutput(r, "\n");
+        httpdOutput(r, "\r\n");
         return (0);
     }
     return (1);
