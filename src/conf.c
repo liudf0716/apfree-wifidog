@@ -201,6 +201,7 @@ config_init(void)
     debug(LOG_DEBUG, "Setting default config parameters");
     config.configfile = safe_strdup(DEFAULT_CONFIGFILE);
     config.htmlmsgfile = safe_strdup(DEFAULT_HTMLMSGFILE);
+	config.htmlredirfile = safe_strdup(DEFAULT_REDIRECTFILE);
     config.httpdmaxconn = DEFAULT_HTTPDMAXCONN;
     config.external_interface = NULL;
     config.gw_id = DEFAULT_GATEWAYID;

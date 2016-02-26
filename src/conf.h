@@ -35,9 +35,11 @@
 #ifndef SYSCONFDIR
 #define DEFAULT_CONFIGFILE "/etc/wifidog.conf"
 #define DEFAULT_HTMLMSGFILE "/etc/wifidog-msg.html"
+#define DEFAULT_REDIRECTFILE "/etc/wifidog-redir.html"
 #else
 #define DEFAULT_CONFIGFILE SYSCONFDIR"/wifidog.conf"
 #define DEFAULT_HTMLMSGFILE SYSCONFDIR"/wifidog-msg.html"
+#define DEFAULT_REDIRECTFILE "/wifidog-redir.html"
 #endif
 #define DEFAULT_DAEMON 1
 #define DEFAULT_DEBUGLEVEL LOG_INFO
@@ -240,6 +242,7 @@ typedef struct {
 	t_trusted_mac	*roam_maclist; /** roam mac list*/
 	t_untrusted_mac	*mac_blacklist; /** blacklist mac*/
 	int	js_filter; /** boolean, whether to enable javascript filter url request*/
+	char *htmlredirfile;
 } s_config;
 
 /** @brief Get the current gateway configuration */

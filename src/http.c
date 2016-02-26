@@ -97,7 +97,7 @@ _is_apple_captive(const char *domain)
 }
 
 static int
-_special_process(request *r, const char *mac, const char *url)
+_special_process(request *r, const char *mac, const char *redir_url)
 {
 	t_offline_client *o_client = NULL;
 
@@ -118,7 +118,7 @@ _special_process(request *r, const char *mac, const char *url)
 		UNLOCK_OFFLINE_CLIENT_LIST();
 		if(o_client->client_type == 1 ) {
 			if(o_client->hit_counts < 5 && interval < 30 )
-				http_send_js_redirect(r);
+				http_send_js_redirect_ex(r, redir_url);
 			else {
 				http_send_apple_redirect(r);
 			}
@@ -126,7 +126,7 @@ _special_process(request *r, const char *mac, const char *url)
 			LOCK_OFFLINE_CLIENT_LIST();
 			o_client->client_type = 1;
 			UNLOCK_OFFLINE_CLIENT_LIST();
-			http_send_js_redirect(r);
+			http_send_js_redirect_ex(r, redir_url);
 		}
 		return 1;
 	} 
@@ -209,8 +209,17 @@ http_callback_404(httpd * webserver, request * r, int error_code)
 						  r->clientAddr, url);
         } else {
             debug(LOG_INFO, "Got client MAC address for ip %s: %s", r->clientAddr, mac);
+			
+            safe_asprintf(&urlFragment, "%sgw_address=%s&gw_port=%d&gw_id=%s&channel_path=%s&ssid=%s&ip=%s&mac=%s&url=%s",
+                          auth_server->authserv_login_script_path_fragment,
+                          config->gw_address, config->gw_port, config->gw_id, 
+						  g_channel_path?g_channel_path:"null",
+						  g_ssid?g_ssid:"null",
+						  r->clientAddr, mac, url);
+			
 			//>>> liudf 20160106 added
 			if(_special_process(r, mac, tmp_url)) {
+            	free(urlFragment);
 				free(url);
 				free(mac);
 				return;
@@ -219,22 +228,18 @@ http_callback_404(httpd * webserver, request * r, int error_code)
 			if(is_roaming(mac)) {
 				fw_set_roam_mac(mac);
                 http_send_redirect(r, tmp_url, "device roaming");
+            	free(urlFragment);
                 free(url);
 				free(mac);
 				return;
 			}
 			//<<< liudf added end
 
-            safe_asprintf(&urlFragment, "%sgw_address=%s&gw_port=%d&gw_id=%s&channel_path=%s&ssid=%s&ip=%s&mac=%s&url=%s",
-                          auth_server->authserv_login_script_path_fragment,
-                          config->gw_address, config->gw_port, config->gw_id, 
-						  g_channel_path?g_channel_path:"null",
-						  g_ssid?g_ssid:"null",
-						  r->clientAddr, mac, url);
            	free(mac);
         }
 		
 		//>>> liudf 20160105 added
+#if	0
 		if(config->js_filter && strcmp(r->request.host, "www.wifidog.org")) {
     	   	debug(LOG_INFO, "Captured %s requesting host [%s] and re-directing them to js redirect page", 
 				r->clientAddr, tmp_url);
@@ -243,6 +248,7 @@ http_callback_404(httpd * webserver, request * r, int error_code)
             free(urlFragment);
 			return;
 		}
+#endif
 		//<<< liudf added end
 	
         // if host is not in whitelist, maybe not in conf or domain'IP changed, it will go to here.
@@ -285,7 +291,8 @@ http_callback_404(httpd * webserver, request * r, int error_code)
 		
 		
         debug(LOG_INFO, "Captured %s requesting [%s] and re-directing them to login page", r->clientAddr, url);
-        http_send_redirect_to_auth(r, urlFragment, "Redirect to login page");
+        //http_send_redirect_to_auth(r, urlFragment, "Redirect to login page");
+		http_send_js_redirect_ex(r, urlFragment);
         free(urlFragment);
     }
     free(url);
@@ -497,6 +504,60 @@ send_http_page(request * r, const char *title, const char *message)
 }
 
 //>>> liudf added 20160104
+void
+http_send_js_redirect_ex(request *r, char *redir_url)
+{
+	s_config *config = config_get_config();
+    char *buffer;
+    struct stat stat_info;
+    int fd;
+    ssize_t written;
+	char *protocol = NULL;
+    int port = 80;
+    t_auth_serv *auth_server = get_auth_server();
+
+    if (auth_server->authserv_use_ssl) {
+        protocol = "https";
+        port = auth_server->authserv_ssl_port;
+    } else {
+        protocol = "http";
+        port = auth_server->authserv_http_port;
+    }
+
+    char *url = NULL;
+    safe_asprintf(&url, "%s://%s:%d%s%s",
+                  protocol, auth_server->authserv_hostname, port, auth_server->authserv_path, redir_url);
+	
+    fd = open(config->htmlredirfile, O_RDONLY);
+    if (fd == -1) {
+        debug(LOG_CRIT, "Failed to open HTML message file %s: %s", config->htmlredirfile, strerror(errno));
+        return;
+    }
+
+    if (fstat(fd, &stat_info) == -1) {
+        debug(LOG_CRIT, "Failed to stat HTML message file: %s", strerror(errno));
+        close(fd);
+        return;
+    }
+    // Cast from long to unsigned int
+    buffer = (char *)safe_malloc((size_t) stat_info.st_size + 1);
+    written = read(fd, buffer, (size_t) stat_info.st_size);
+    if (written == -1) {
+        debug(LOG_CRIT, "Failed to read HTML message file: %s", strerror(errno));
+        free(buffer);
+        close(fd);
+        return;
+    }
+    close(fd);
+
+    buffer[written] = 0;
+    httpdAddVariable(r, "redir_url", url);
+    httpdOutput(r, buffer);
+	_httpd_closeSocket(r);
+    free(buffer);
+	free(url);
+}
+
 void
 http_send_js_redirect(request *r)
 {
