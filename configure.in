@@ -107,7 +107,8 @@ echo "libhttpd dependencies check complete"
 
 AC_OUTPUT( 		Makefile 
 	   		wifidog.spec
-                        wifidog-msg.html
+            wifidog-msg.html
+			wifidog-redir.html
 			src/Makefile
 			libhttpd/Makefile
 			doc/Makefile

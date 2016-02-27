@@ -113,12 +113,12 @@ EXTRA_DIST =    FAQ   wifidog.spec.in   wifidog.spec   config   scripts   contri
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 mkinstalldirs = $(SHELL) $(top_srcdir)/config/mkinstalldirs
 CONFIG_HEADER = config.h
-CONFIG_CLEAN_FILES =  wifidog.spec wifidog-msg.html
+CONFIG_CLEAN_FILES =  wifidog.spec wifidog-msg.html wifidog-redir.html
 DATA =  $(doc_DATA)
 
 DIST_COMMON =  README ./stamp-h.in AUTHORS COPYING ChangeLog INSTALL \
 Makefile.am Makefile.in NEWS aclocal.m4 config.h.in configure \
-configure.in wifidog-msg.html.in wifidog.spec.in
+configure.in wifidog-msg.html.in wifidog.spec.in wifidog-redir.html.in
 
 
 DISTFILES = $(DIST_COMMON) $(SOURCES) $(HEADERS) $(TEXINFOS) $(EXTRA_DIST)
@@ -172,6 +172,8 @@ maintainer-clean-hdr:
 wifidog.spec: $(top_builddir)/config.status wifidog.spec.in
 	cd $(top_builddir) && CONFIG_FILES=$@ CONFIG_HEADERS= $(SHELL) ./config.status
 wifidog-msg.html: $(top_builddir)/config.status wifidog-msg.html.in
+	cd $(top_builddir) && CONFIG_FILES=$@ CONFIG_HEADERS= $(SHELL) ./config.status
+wifidog-redir.html: $(top_builddir)/config.status wifidog-redir.html.in
 	cd $(top_builddir) && CONFIG_FILES=$@ CONFIG_HEADERS= $(SHELL) ./config.status
 
 install-docDATA: $(doc_DATA)
