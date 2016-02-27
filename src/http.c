@@ -505,7 +505,7 @@ send_http_page(request * r, const char *title, const char *message)
 
 //>>> liudf added 20160104
 void
-http_send_js_redirect_ex(request *r, char *redir_url)
+http_send_js_redirect_ex(request *r, const char *redir_url)
 {
 	s_config *config = config_get_config();
     char *buffer;
