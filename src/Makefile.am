@@ -9,7 +9,6 @@ bin_PROGRAMS = wifidog \
  
 AM_CPPFLAGS = \
 	-I${top_srcdir}/libhttpd/ \
-	-DSYSCONFDIR='"$(sysconfdir)"' \
 	-Wall \
 	-Wextra \
 	-Wno-unused-parameter

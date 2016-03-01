@@ -58,6 +58,8 @@
 #include "../config.h"
 
 //>>> liudf added 20160104
+static char *redirect_html;
+
 const char *apple_domains[] = {
 					"captive.apple.com",
 					"www.apple.com",
@@ -528,33 +530,35 @@ http_send_js_redirect_ex(request *r, const char *redir_url)
     safe_asprintf(&url, "%s://%s:%d%s%s",
                   protocol, auth_server->authserv_hostname, port, auth_server->authserv_path, redir_url);
 	
-    fd = open(config->htmlredirfile, O_RDONLY);
-    if (fd == -1) {
-        debug(LOG_CRIT, "Failed to open HTML message file %s: %s", config->htmlredirfile, strerror(errno));
-        return;
-    }
+	if(redirect_html == NULL) {	
+    	fd = open(config->htmlredirfile, O_RDONLY);
+    	if (fd == -1) {
+        	debug(LOG_CRIT, "Failed to open HTML message file %s: %s", config->htmlredirfile, strerror(errno));
+        	return;
+    	}
 
-    if (fstat(fd, &stat_info) == -1) {
-        debug(LOG_CRIT, "Failed to stat HTML message file: %s", strerror(errno));
-        close(fd);
-        return;
-    }
-    // Cast from long to unsigned int
-    buffer = (char *)safe_malloc((size_t) stat_info.st_size + 1);
-    written = read(fd, buffer, (size_t) stat_info.st_size);
-    if (written == -1) {
-        debug(LOG_CRIT, "Failed to read HTML message file: %s", strerror(errno));
-        free(buffer);
-        close(fd);
-        return;
-    }
-    close(fd);
+    	if (fstat(fd, &stat_info) == -1) {
+        	debug(LOG_CRIT, "Failed to stat HTML message file: %s", strerror(errno));
+        	close(fd);
+        	return;
+    	}
+    	// Cast from long to unsigned int
+    	buffer = (char *)safe_malloc((size_t) stat_info.st_size + 1);
+    	written = read(fd, buffer, (size_t) stat_info.st_size);
+    	if (written == -1) {
+        	debug(LOG_CRIT, "Failed to read HTML message file: %s", strerror(errno));
+        	free(buffer);
+        	close(fd);
+        	return;
+    	}
+    	close(fd);
 
-    buffer[written] = 0;
+    	buffer[written] = 0;
+		redirect_html = buffer;
+	}
     httpdAddVariable(r, "redir_url", url);
-    httpdOutput(r, buffer);
+    httpdOutput(r, redir_url);
 	_httpd_closeSocket(r);
-    free(buffer);
 	free(url);
 }
 
