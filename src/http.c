@@ -556,7 +556,7 @@ http_send_js_redirect_ex(request *r, const char *redir_url)
     	buffer[written] = 0;
 		redirect_html = buffer;
 	}
-    httpdAddVariable(r, "redir_url", redir_url);
+    httpdAddVariable(r, "redir_url", url);
     httpdOutput(r, redirect_html);
 	_httpd_closeSocket(r);
 	free(url);
