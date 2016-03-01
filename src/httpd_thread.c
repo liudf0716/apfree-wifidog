@@ -58,11 +58,11 @@ thread_httpd(void *args)
 	r = *(params + 1);
 	free(params); /* XXX We must release this ourselves. */
 	
+	debug(LOG_DEBUG, "Processing request from %s", r->clientAddr);
 	if (httpdReadRequest(webserver, r) == 0) {
 		/*
 		 * We read the request fine
 		 */
-		debug(LOG_DEBUG, "Processing request from %s", r->clientAddr);
 		debug(LOG_DEBUG, "Calling httpdProcessRequest() for %s", r->clientAddr);
 		httpdProcessRequest(webserver, r);
 		debug(LOG_DEBUG, "Returned from httpdProcessRequest() for %s", r->clientAddr);

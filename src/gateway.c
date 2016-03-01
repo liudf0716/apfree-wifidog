@@ -59,6 +59,7 @@
 #include "ping_thread.h"
 #include "httpd_thread.h"
 #include "util.h"
+#include "threadpool.h"
 
 /** XXX Ugly hack 
  * We need to remember the thread IDs of threads that simulate wait with pthread_cond_timedwait
@@ -66,6 +67,7 @@
  */
 static pthread_t tid_fw_counter = 0;
 static pthread_t tid_ping = 0;
+static threadpool_t *pool = NULL; 
 
 time_t started_time = 0;
 
@@ -309,6 +311,10 @@ termination_handler(int s)
         debug(LOG_INFO, "Explicitly killing the ping thread");
         pthread_kill(tid_ping, SIGKILL);
     }
+	// liudf added 20160301
+	if(pool != NULL) {
+		threadpool_destroy(pool, 0);
+	}
 
     debug(LOG_NOTICE, "Exiting...");
     exit(s == 0 ? 1 : 0);
@@ -462,9 +468,20 @@ main_loop(void)
         termination_handler(0);
     }
     pthread_detach(tid_ping);
+	
+	//>>> liudf added 20160301
+	pool = threadpool_create(20, 1000, 0);
+	if(pool == NULL) {
+        debug(LOG_ERR, "FATAL: Failed to create threadpool - exiting");
+		termination_handler(0);
+	}	
+	//<<< liudf added end
 
     debug(LOG_NOTICE, "Waiting for connections");
     while (1) {
+		// liudf added 20160301
+		int pool_mode = 1;
+
         r = httpdGetConnection(webserver, NULL);
 
         /* We can't convert this to a switch because there might be
@@ -482,6 +499,17 @@ main_loop(void)
              */
             debug(LOG_ERR, "FATAL: httpdGetConnection returned unexpected value %d, exiting.", webserver->lastError);
             termination_handler(0);
+		} else if (r != NULL && pool_mode) {
+            debug(LOG_INFO, "Received connection from %s, add to work queue", r->clientAddr);
+			params = safe_malloc(2 * sizeof(void *));
+            *params = webserver;
+            *(params + 1) = r;
+			
+			result = threadpool_add(pool, (void *)thread_httpd, (void *)params, 1);
+            if(result != 0) {
+            	free(params);
+            	httpdEndRequest(r);
+            }
         } else if (r != NULL) {
             /*
              * We got a connection
