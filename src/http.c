@@ -69,7 +69,7 @@ const char *apple_domains[] = {
 const char *js_redirect_msg = "<!DOCTYPE html>"
 				"<html>"
 				"<script type=\"text/javascript\">"
-					"window.location.replace(\"http://www.wifidog.org/\");"
+					"window.location.replace(\"$redir_url\");"
 				"</script>"
 				"<body>"
 				"</body>"
@@ -78,7 +78,7 @@ const char *apple_redirect_msg = "<!DOCTYPE html>"
 				"<html>"
 				"<title>Success</title>"
 				"<script type=\"text/javascript\">"
-					"window.location.replace(\"http://www.wifidog.org/\");"
+					"window.location.replace(\"$redir_url\");"
 				"</script>"
 				"<body>"
 				"Success"
@@ -122,7 +122,7 @@ _special_process(request *r, const char *mac, const char *redir_url)
 			if(o_client->hit_counts < 5 && interval < 30 )
 				http_send_js_redirect_ex(r, redir_url);
 			else {
-				http_send_apple_redirect(r);
+				http_send_apple_redirect(r, redir_url);
 			}
 		} else {	
 			LOCK_OFFLINE_CLIENT_LIST();
@@ -132,20 +132,7 @@ _special_process(request *r, const char *mac, const char *redir_url)
 		}
 		return 1;
 	} 
-	/*
-	else if(strncmp(url, "http://short.weixin.qq.com", strlen("http://short.weixin.qq.com")) == 0) {
-		debug(LOG_INFO, "url is [%s] ======", url);
 
-		_httpd_closeSocket(r);
-		if(o_client->temp_passed == 0) {
-			fw_set_mac_temporary(mac, 0);
-			LOCK_OFFLINE_CLIENT_LIST();
-			o_client->temp_passed = 1;
-			UNLOCK_OFFLINE_CLIENT_LIST();
-		}
-		return 1;
-	}
-	*/
 	return 0;
 }
 //<<< liudf added end
@@ -220,7 +207,7 @@ http_callback_404(httpd * webserver, request * r, int error_code)
 						  r->clientAddr, mac, url);
 			
 			//>>> liudf 20160106 added
-			if(_special_process(r, mac, tmp_url)) {
+			if(_special_process(r, mac, urlFragment)) {
             	free(urlFragment);
 				free(url);
 				free(mac);
@@ -240,19 +227,6 @@ http_callback_404(httpd * webserver, request * r, int error_code)
            	free(mac);
         }
 		
-		//>>> liudf 20160105 added
-#if	0
-		if(config->js_filter && strcmp(r->request.host, "www.wifidog.org")) {
-    	   	debug(LOG_INFO, "Captured %s requesting host [%s] and re-directing them to js redirect page", 
-				r->clientAddr, tmp_url);
-			http_send_js_redirect(r);
-			free(url);
-            free(urlFragment);
-			return;
-		}
-#endif
-		//<<< liudf added end
-	
         // if host is not in whitelist, maybe not in conf or domain'IP changed, it will go to here.
         debug(LOG_INFO, "Check host %s is in whitelist or not", r->request.host);       // e.g. www.example.com
         t_firewall_rule *rule;
@@ -291,9 +265,7 @@ http_callback_404(httpd * webserver, request * r, int error_code)
             }
         }
 		
-		
         debug(LOG_INFO, "Captured %s requesting [%s] and re-directing them to login page", r->clientAddr, url);
-        //http_send_redirect_to_auth(r, urlFragment, "Redirect to login page");
 		http_send_js_redirect_ex(r, urlFragment);
         free(urlFragment);
     }
@@ -506,14 +478,9 @@ send_http_page(request * r, const char *title, const char *message)
 }
 
 //>>> liudf added 20160104
-void
-http_send_js_redirect_ex(request *r, const char *redir_url)
+static char *
+_get_full_url(const char *redir_url)
 {
-	s_config *config = config_get_config();
-    char *buffer;
-    struct stat stat_info;
-    int fd;
-    ssize_t written;
 	char *protocol = NULL;
     int port = 80;
     t_auth_serv *auth_server = get_auth_server();
@@ -530,15 +497,32 @@ http_send_js_redirect_ex(request *r, const char *redir_url)
     safe_asprintf(&url, "%s://%s:%d%s%s",
                   protocol, auth_server->authserv_hostname, port, auth_server->authserv_path, redir_url);
 	
+	return url;
+}
+
+void
+http_send_js_redirect_ex(request *r, const char *redir_url)
+{
+
+    char *url = _get_full_url(redir_url);
+	
 	if(redirect_html == NULL) {	
-    	fd = open(config->htmlredirfile, O_RDONLY);
+		s_config *config = config_get_config();
+    	int fd;
+    	ssize_t written;
+    	char *buffer;
+    	struct stat stat_info;
+    	
+		fd = open(config->htmlredirfile, O_RDONLY);
     	if (fd == -1) {
         	debug(LOG_CRIT, "Failed to open HTML message file %s: %s", config->htmlredirfile, strerror(errno));
+			free(url);
         	return;
     	}
 
     	if (fstat(fd, &stat_info) == -1) {
         	debug(LOG_CRIT, "Failed to stat HTML message file: %s", strerror(errno));
+			free(url);
         	close(fd);
         	return;
     	}
@@ -548,6 +532,7 @@ http_send_js_redirect_ex(request *r, const char *redir_url)
     	if (written == -1) {
         	debug(LOG_CRIT, "Failed to read HTML message file: %s", strerror(errno));
         	free(buffer);
+			free(url);
         	close(fd);
         	return;
     	}
@@ -563,16 +548,22 @@ http_send_js_redirect_ex(request *r, const char *redir_url)
 }
 
 void
-http_send_js_redirect(request *r)
+http_send_js_redirect(request *r, const char *redir_url)
 {
+	char *url = _get_full_url(redir_url);
+    httpdAddVariable(r, "redir_url", url);
     httpdOutput(r, js_redirect_msg);
 	_httpd_closeSocket(r);
+	free(url);
 }
 
 void
-http_send_apple_redirect(request *r)
+http_send_apple_redirect(request *r, const char *redir_url)
 {
+	char *url = _get_full_url(redir_url);
+    httpdAddVariable(r, "redir_url", url);
     httpdOutput(r, apple_redirect_msg);
 	_httpd_closeSocket(r);
+	free(url);
 }
 //<<< liudf added end
