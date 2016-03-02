@@ -513,6 +513,7 @@ http_send_js_redirect_ex(request *r, const char *redir_url)
     	char *buffer;
     	struct stat stat_info;
     
+		debug(LOG_CRIT, "pool_mode is %d", config->pool_mode);
 		debug(LOG_CRIT, "htmlredirfile is %s", config->htmlredirfile);
 	
 		fd = open(config->htmlredirfile, O_RDONLY);
