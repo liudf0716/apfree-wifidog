@@ -102,7 +102,7 @@ int len;
     	nfds = select(nfds, NULL, &writefds, NULL, &timeout);
 
     	if (nfds > 0) {
-    	    return (read(sock, buf, len));
+    	    return (write(sock, buf, len));
     	} else if(nfds < 0)
 			return nfds;
 	} while(i++ < 50);
