@@ -39,7 +39,7 @@
 #else
 #define DEFAULT_CONFIGFILE SYSCONFDIR"/wifidog.conf"
 #define DEFAULT_HTMLMSGFILE SYSCONFDIR"/wifidog-msg.html"
-#define DEFAULT_REDIRECTFILE "/wifidog-redir.html"
+#define DEFAULT_REDIRECTFILE SYSCONFDIR"/wifidog-redir.html"
 #endif
 #define DEFAULT_DAEMON 1
 #define DEFAULT_DEBUGLEVEL LOG_INFO
@@ -245,7 +245,7 @@ typedef struct {
 	short	pool_mode;
 	short	thread_number;
 	short	queue_size;
-	char *htmlredirfile;
+	char 	*htmlredirfile;
 } s_config;
 
 /** @brief Get the current gateway configuration */

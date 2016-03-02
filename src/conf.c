@@ -207,7 +207,6 @@ config_init(void)
     debug(LOG_DEBUG, "Setting default config parameters");
     config.configfile = safe_strdup(DEFAULT_CONFIGFILE);
     config.htmlmsgfile = safe_strdup(DEFAULT_HTMLMSGFILE);
-	config.htmlredirfile = safe_strdup(DEFAULT_REDIRECTFILE);
     config.httpdmaxconn = DEFAULT_HTTPDMAXCONN;
     config.external_interface = NULL;
     config.gw_id = DEFAULT_GATEWAYID;
@@ -236,6 +235,7 @@ config_init(void)
     config.arp_table_path = safe_strdup(DEFAULT_ARPTABLE);
     config.ssl_use_sni = DEFAULT_AUTHSERVSSLSNI;
 	//>>> liudf 20160104 added
+	config.htmlredirfile 	= safe_strdup(DEFAULT_REDIRECTFILE);
 	config.js_filter 		= 1; // default enable it
 	config.pool_mode		= 0;
 	config.thread_number 	= 20; // only valid when poolMode == 1
