@@ -512,7 +512,10 @@ http_send_js_redirect_ex(request *r, const char *redir_url)
     	ssize_t written;
     	char *buffer;
     	struct stat stat_info;
-    	
+    
+		if(config == NULL)
+			debug(LOG_CRIT, "config is NULL !!!!!!!!!!!");
+	
 		fd = open(config->htmlredirfile, O_RDONLY);
     	if (fd == -1) {
         	debug(LOG_CRIT, "Failed to open HTML message file %s: %s", strerror(errno), 
