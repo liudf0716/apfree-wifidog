@@ -66,7 +66,7 @@ int len;
     	if (nfds > 0) {
     	    return (read(sock, buf, len));
     	}
-	} while(i++ < 10);
+	} while(i++ < 20);
 
     return (nfds);
 #endif
