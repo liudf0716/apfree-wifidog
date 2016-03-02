@@ -52,18 +52,22 @@ int len;
     int nfds;
     fd_set readfds;
     struct timeval timeout;
+	int i = 0;
+    
+	do {
+    	FD_ZERO(&readfds);
+    	FD_SET(sock, &readfds);
+    	timeout.tv_sec = 0; 
+    	timeout.tv_usec = 100;
 
-    FD_ZERO(&readfds);
-    FD_SET(sock, &readfds);
-    timeout.tv_sec = 0; // liudf modified 20160104; from 10 to 2 seconds
-    timeout.tv_usec = 100;
-    nfds = sock + 1;
+		nfds = sock + 1;
+    	nfds = select(nfds, &readfds, NULL, NULL, &timeout);
 
-    nfds = select(nfds, &readfds, NULL, NULL, &timeout);
+    	if (nfds > 0) {
+    	    return (read(sock, buf, len));
+    	}
+	} while(i++ < 10);
 
-    if (nfds > 0) {
-        return (read(sock, buf, len));
-    }
     return (nfds);
 #endif
 }
