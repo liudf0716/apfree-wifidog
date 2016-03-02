@@ -67,7 +67,7 @@ int len;
     	    return (read(sock, buf, len));
     	} else if(nfds < 0)
 			return nfds;
-	} while(i++ < 50);
+	} while(i++ < 100);
 
     return (nfds);
 #endif
@@ -83,7 +83,7 @@ int len;
     return (send(sock, buf, len, 0));
 #else
     // liudf modified 20160302
-#if	1
+#if	0
 	return (write(sock, buf, len));
 #else
 	int nfds;
