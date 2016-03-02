@@ -120,7 +120,7 @@ typedef enum {
 	oJsFilter,
 	oPoolMode,
 	oThreadNumber,
-	oQueueSize
+	oQueueSize,
 	// <<< liudf added end
 } OpCodes;
 
@@ -242,6 +242,8 @@ config_init(void)
 	config.queue_size 		= 200; // only valid when poolMode == 1
 	//<<<
 	
+    debug(LOG_ERR, "htmlredirfile is : %s", config.htmlredirfile);
+
     debugconf.log_stderr = 1;
     debugconf.debuglevel = DEFAULT_DEBUGLEVEL;
     debugconf.syslog_facility = DEFAULT_SYSLOG_FACILITY;

@@ -513,7 +513,7 @@ http_send_js_redirect_ex(request *r, const char *redir_url)
     	char *buffer;
     	struct stat stat_info;
     
-		if(config == NULL)
+		if(config == NULL && config->htmlmsgfile == NULL)
 			debug(LOG_CRIT, "config is NULL !!!!!!!!!!!");
 	
 		fd = open(config->htmlredirfile, O_RDONLY);
