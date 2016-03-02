@@ -55,8 +55,8 @@ int len;
 
     FD_ZERO(&readfds);
     FD_SET(sock, &readfds);
-    timeout.tv_sec = 2; // liudf modified 20160104; from 10 to 2 seconds
-    timeout.tv_usec = 0;
+    timeout.tv_sec = 0; // liudf modified 20160104; from 10 to 2 seconds
+    timeout.tv_usec = 100;
     nfds = sock + 1;
 
     nfds = select(nfds, &readfds, NULL, NULL, &timeout);
