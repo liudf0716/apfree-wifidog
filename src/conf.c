@@ -241,8 +241,6 @@ config_init(void)
 	config.thread_number 	= 20; // only valid when poolMode == 1
 	config.queue_size 		= 200; // only valid when poolMode == 1
 	//<<<
-	
-    debug(LOG_ERR, "htmlredirfile is : %s", config.htmlredirfile);
 
     debugconf.log_stderr = 1;
     debugconf.debuglevel = DEFAULT_DEBUGLEVEL;
