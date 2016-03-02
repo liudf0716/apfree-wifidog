@@ -55,6 +55,7 @@
 #include "firewall.h"
 #include "gateway.h"
 #include "simple_http.h"
+#include "wd_util.h"
 
 static void ping(void);
 

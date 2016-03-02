@@ -52,6 +52,7 @@ int is_auth_online(void);
 char *get_status_text(void);
 
 //>>> liudf added 20151225
+char *get_serialize_maclist(int);
 char *get_trusted_domains_text(void);
 char *get_untrusted_maclist_text(void);
 char *get_trusted_maclist_text(void);
