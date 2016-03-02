@@ -118,6 +118,9 @@ typedef enum {
 	oInnerTrustedDomains,
 	oUntrustedMACList,
 	oJsFilter,
+	oPoolMode,
+	oThreadNumber,
+	oQueueSize
 	// <<< liudf added end
 } OpCodes;
 
@@ -171,6 +174,9 @@ static const struct {
 	"trustedDomains", oTrustedDomains}, {
 	"untrustedmaclist", oUntrustedMACList}, {
 	"jsFilter", oJsFilter}, {
+	"poolMode", oPoolMode}, {
+	"threadNumber", oThreadNumber}, {
+	"queueSize", oQueueSize}, {
 	// <<<< liudf added end
 NULL, oBadOption},};
 
@@ -230,7 +236,10 @@ config_init(void)
     config.arp_table_path = safe_strdup(DEFAULT_ARPTABLE);
     config.ssl_use_sni = DEFAULT_AUTHSERVSSLSNI;
 	//>>> liudf 20160104 added
-	config.js_filter = 1; // default enable it
+	config.js_filter 		= 1; // default enable it
+	config.pool_mode		= 0;
+	config.thread_number 	= 20; // only valid when poolMode == 1
+	config.queue_size 		= 200; // only valid when poolMode == 1
 	//<<<
 	
     debugconf.log_stderr = 1;
@@ -843,6 +852,15 @@ config_read(const char *filename)
 					break;
 				case oJsFilter:
                     config.js_filter = parse_boolean_value(p1);
+					break;
+				case oPoolMode:
+					config.pool_mode = parse_boolean_value(p1);
+					break;
+				case oThreadNumber:
+                    sscanf(p1, "%d", &config.thread_number);
+					break;
+				case oQueueSize:
+                    sscanf(p1, "%d", &config.queue_size);
 					break;
 				// <<< liudf added end
                 case oBadOption:

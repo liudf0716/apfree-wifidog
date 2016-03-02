@@ -74,28 +74,6 @@ time_t started_time = 0;
 /* The internal web server */
 httpd * webserver = NULL;
 
-//>>> liudf added 20160224
-static int
-create_thread(pthread_t * thread, void *(*start_routine)(void*), void *arg)
-{
-	pthread_attr_t attr;
-  	int ret;
-
-    if (0 != (ret = pthread_attr_init (&attr)))
-    	goto ERR;
-    if (0 != (ret = pthread_attr_setstacksize (&attr, 1024*256))){
-      	pthread_attr_destroy (&attr);
-      	goto ERR;
-    }
-	
-	ret = pthread_create (thread, &attr, start_routine, arg);
-    pthread_attr_destroy (&attr);
-  	return ret;
-ERR:
-  	errno = EINVAL;
-  	return ret;	
-}
-//<<< liudf added end
 /* Appends -x, the current PID, and NULL to restartargv
  * see parse_commandline in commandline.c for details
  *
@@ -384,6 +362,7 @@ main_loop(void)
     s_config *config = config_get_config();
     request *r;
     void **params;
+	int pool_mode = config->pool_mode;
 
     /* Set the time when wifidog started */
     if (!started_time) {
@@ -470,17 +449,20 @@ main_loop(void)
     pthread_detach(tid_ping);
 	
 	//>>> liudf added 20160301
-	pool = threadpool_create(20, 1000, 0);
-	if(pool == NULL) {
-        debug(LOG_ERR, "FATAL: Failed to create threadpool - exiting");
-		termination_handler(0);
+	if(pool_mode) {
+		int thread_number = config->thread_number;
+		int queue_size = config->queue_size;
+		pool = threadpool_create(thread_number, queue_size, 0);
+		if(pool == NULL) {
+    	    debug(LOG_ERR, "FATAL: Failed to create threadpool - exiting");
+			termination_handler(0);
+		}
+    	debug(LOG_NOTICE, "Create thread pool thread_num %d, queue_size %d", thread_num, queue_size);
 	}	
 	//<<< liudf added end
 
     debug(LOG_NOTICE, "Waiting for connections");
     while (1) {
-		// liudf added 20160301
-		int pool_mode = 0;
 
         r = httpdGetConnection(webserver, NULL);
 
@@ -509,6 +491,7 @@ main_loop(void)
             if(result != 0) {
             	free(params);
             	httpdEndRequest(r);
+            	debug(LOG_ERR, "threadpool_add failed, result is %d", result);
             }
         } else if (r != NULL) {
             /*

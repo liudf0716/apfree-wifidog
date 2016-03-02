@@ -65,8 +65,9 @@ int len;
 
     	if (nfds > 0) {
     	    return (read(sock, buf, len));
-    	}
-	} while(i++ < 20);
+    	} else if(nfds < 0)
+			return nfds;
+	} while(i++ < 50);
 
     return (nfds);
 #endif
@@ -81,7 +82,32 @@ int len;
 #if defined(_WIN32)
     return (send(sock, buf, len, 0));
 #else
-    return (write(sock, buf, len));
+    // liudf modified 20160302
+	/*
+	return (write(sock, buf, len));
+	*/
+
+	int nfds;
+    fd_set writefds;
+    struct timeval timeout;
+	int i = 0;
+    
+	do {
+    	FD_ZERO(&writefds);
+    	FD_SET(sock, &writefds);
+    	timeout.tv_sec = 0; 
+    	timeout.tv_usec = 100;
+
+		nfds = sock + 1;
+    	nfds = select(nfds, NULL, &writefds, NULL, &timeout);
+
+    	if (nfds > 0) {
+    	    return (read(sock, buf, len));
+    	} else if(nfds < 0)
+			return nfds;
+	} while(i++ < 50);
+
+    return (nfds);
 #endif
 }
 

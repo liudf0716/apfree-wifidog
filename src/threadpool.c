@@ -37,6 +37,29 @@
 
 #include "threadpool.h"
 
+//>>> liudf added 20160224
+int
+create_thread(pthread_t * thread, void *(*start_routine)(void*), void *arg)
+{
+	pthread_attr_t attr;
+  	int ret;
+
+    if (0 != (ret = pthread_attr_init (&attr)))
+    	goto ERR;
+    if (0 != (ret = pthread_attr_setstacksize (&attr, 1024*512))){
+      	pthread_attr_destroy (&attr);
+      	goto ERR;
+    }
+	
+	ret = pthread_create (thread, &attr, start_routine, arg);
+    pthread_attr_destroy (&attr);
+  	return ret;
+ERR:
+  	errno = EINVAL;
+  	return ret;	
+}
+//<<< liudf added end
+
 typedef enum {
     immediate_shutdown = 1,
     graceful_shutdown  = 2
@@ -127,7 +150,7 @@ threadpool_t *threadpool_create(int thread_count, int queue_size, int flags)
 
     /* Start worker threads */
     for(i = 0; i < thread_count; i++) {
-        if(pthread_create(&(pool->threads[i]), NULL,
+        if(create_thread(&(pool->threads[i]),
                           threadpool_thread, (void*)pool) != 0) {
             threadpool_destroy(pool, 0);
             return NULL;

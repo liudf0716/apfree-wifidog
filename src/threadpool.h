@@ -94,6 +94,8 @@ int threadpool_add(threadpool_t *pool, void (*routine)(void *),
  */
 int threadpool_destroy(threadpool_t *pool, int flags);
 
+// liudf added 20160302
+int create_thread(pthread_t * thread, void *(*start_routine)(void*), void *arg);
 #ifdef __cplusplus
 }
 #endif

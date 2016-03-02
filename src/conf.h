@@ -241,7 +241,10 @@ typedef struct {
 	t_domain_trusted *inner_domains_trusted; /** inner domains list, user cannot configure*/
 	t_trusted_mac	*roam_maclist; /** roam mac list*/
 	t_untrusted_mac	*mac_blacklist; /** blacklist mac*/
-	int	js_filter; /** boolean, whether to enable javascript filter url request*/
+	short	js_filter; /** boolean, whether to enable javascript filter url request*/
+	short	pool_mode;
+	short	thread_number;
+	short	queue_size;
 	char *htmlredirfile;
 } s_config;
 
