@@ -105,7 +105,7 @@ int len;
     	    return (write(sock, buf, len));
     	} else if(nfds < 0)
 			return nfds;
-	} while(i++ < 50);
+	} while(i++ < 100);
 
     return (nfds);
 #endif
