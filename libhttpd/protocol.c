@@ -83,10 +83,9 @@ int len;
     return (send(sock, buf, len, 0));
 #else
     // liudf modified 20160302
-	/*
+#if	1
 	return (write(sock, buf, len));
-	*/
-
+#else
 	int nfds;
     fd_set writefds;
     struct timeval timeout;
@@ -108,6 +107,7 @@ int len;
 	} while(i++ < 100);
 
     return (nfds);
+#endif
 #endif
 }
 

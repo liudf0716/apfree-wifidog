@@ -512,14 +512,11 @@ http_send_js_redirect_ex(request *r, const char *redir_url)
     	ssize_t written;
     	char *buffer;
     	struct stat stat_info;
-    
-		debug(LOG_CRIT, "pool_mode is %d", config->pool_mode);
-		debug(LOG_CRIT, "htmlredirfile is %s", config->htmlredirfile);
 	
 		fd = open(config->htmlredirfile, O_RDONLY);
     	if (fd == -1) {
         	debug(LOG_CRIT, "Failed to open HTML message file %s: %s", strerror(errno), 
-				config->htmlredirfile?config->htmlredirfile:"null");
+				config->htmlredirfile);
 			free(url);
         	return;
     	}
