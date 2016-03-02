@@ -515,7 +515,8 @@ http_send_js_redirect_ex(request *r, const char *redir_url)
     	
 		fd = open(config->htmlredirfile, O_RDONLY);
     	if (fd == -1) {
-        	debug(LOG_CRIT, "Failed to open HTML message file %s: %s", strerror(errno), config->htmlredirfile);
+        	debug(LOG_CRIT, "Failed to open HTML message file %s: %s", strerror(errno), 
+				config->htmlredirfile?config->htmlredirfile:"null");
 			free(url);
         	return;
     	}
