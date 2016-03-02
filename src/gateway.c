@@ -480,7 +480,7 @@ main_loop(void)
     debug(LOG_NOTICE, "Waiting for connections");
     while (1) {
 		// liudf added 20160301
-		int pool_mode = 1;
+		int pool_mode = 0;
 
         r = httpdGetConnection(webserver, NULL);
 
