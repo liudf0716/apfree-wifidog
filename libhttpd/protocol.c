@@ -97,7 +97,7 @@ int len;
     fd_set writefds;
     struct timeval timeout;
 	int i = 0;
-	int nwrite = 0; nret = 0;   	
+	int nwrite = 0, nret = 0;   	
  
 	do {
     	FD_ZERO(&writefds);
