@@ -53,7 +53,8 @@ int len;
     fd_set readfds;
     struct timeval timeout;
 	int i = 0;
-    
+   	int nread = 0, nret = 0;
+ 
 	do {
     	FD_ZERO(&readfds);
     	FD_SET(sock, &readfds);
@@ -64,10 +65,16 @@ int len;
     	nfds = select(nfds, &readfds, NULL, NULL, &timeout);
 
     	if (nfds > 0) {
-    	    return (read(sock, buf, len));
+			nret = read(sock, buf+nread, len-nread);
+			if(nret == 0)
+				return nread;
+			else if(nret > 0)
+				nread += nret;
+			else
+				return nread;
     	} else if(nfds < 0)
 			return nfds;
-	} while(i++ < 100);
+	} while(nread < len && i++ < 20);
 
     return (nfds);
 #endif
@@ -90,7 +97,8 @@ int len;
     fd_set writefds;
     struct timeval timeout;
 	int i = 0;
-    
+	int nwrite = 0; nret = 0;   	
+ 
 	do {
     	FD_ZERO(&writefds);
     	FD_SET(sock, &writefds);
@@ -101,10 +109,16 @@ int len;
     	nfds = select(nfds, NULL, &writefds, NULL, &timeout);
 
     	if (nfds > 0) {
-    	    return (write(sock, buf, len));
+			nret = write(sock, buf+nwrite, len-nwrite);
+			if(nret == 0)
+				return nwrite;
+			else if(nret > 0)
+				nwrite += nret;
+			else
+				return nwrite;
     	} else if(nfds < 0)
 			return nfds;
-	} while(i++ < 100);
+	} while(nwrite < len && i++ < 20);
 
     return (nfds);
 #endif
