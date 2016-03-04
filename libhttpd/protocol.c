@@ -72,6 +72,8 @@ int len;
 					return nread;
 			} else if (nret == 0)
 				return nread;
+			else if (nret < 0 && errno == EINTR)
+				continue;
 			else
 				return -1;
     	} else if(nfds < 0)
@@ -118,6 +120,8 @@ int len;
 					return nwrite;
 			} else if (nret == 0)
 				return nwrite;
+			else if (nret < 0 && errno == EINTR)
+				continue;
 			else
 				return -1;
     	} else if(nfds < 0)
