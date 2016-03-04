@@ -65,7 +65,7 @@ int len;
 		nfds = sock + 1;
     	nfds = select(nfds, &readfds, NULL, NULL, &timeout);
 
-    	if (nfds > 0) {
+    	if (nfds > 0 && FD_ISSET(sock, &readfds)) {
 			nret = read(sock, buf+nread, len-nread);
 			if (nret > 0) {
 				nread += nret;
@@ -113,7 +113,7 @@ int len;
 		nfds = sock + 1;
     	nfds = select(nfds, NULL, &writefds, NULL, &timeout);
 
-    	if (nfds > 0) {
+    	if (nfds > 0 && FD_ISSET(sock, &writefds)) {
 			nret = write(sock, buf+nwrite, len-nwrite);
 			if	(nret > 0) {
 				nwrite += nret;
