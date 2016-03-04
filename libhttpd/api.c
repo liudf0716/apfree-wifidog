@@ -284,7 +284,7 @@ int port;
         free(new);
         return (NULL);
     }
-    listen(sock, 512);
+    listen(sock, 20);
     new->startTime = time(NULL);
     return (new);
 }

@@ -67,7 +67,6 @@ int len;
 
     	if (nfds > 0 && FD_ISSET(sock, &readfds)) {
 			nret = read(sock, buf+nread, len-nread);
-			printf("_httpd_net_read  : %d len %d\n", nret, len);
 			if (nret > 0 && nret <= (len-nread)) {
 				nread += nret;
 				return nread;
@@ -80,7 +79,7 @@ int len;
 				return -1;
     	} else if(nfds < 0)
 			return nfds;
-	} while(nread < len && i++ < 50);
+	} while(nread < len && i++ < 100);
 	
     return (nfds);
 #endif
@@ -96,9 +95,6 @@ int len;
     return (send(sock, buf, len, 0));
 #else
     // liudf modified 20160302
-#if	0
-	return (write(sock, buf, len));
-#else
 	int nfds;
     fd_set writefds;
     struct timeval timeout;
@@ -128,10 +124,9 @@ int len;
 				return -1;
     	} else if(nfds < 0)
 			return nfds;
-	} while(nwrite < len && i++ < 20);
+	} while(nwrite < len && i++ < 100);
 
     return (nfds);
-#endif
 #endif
 }
 
