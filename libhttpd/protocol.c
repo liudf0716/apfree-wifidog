@@ -140,8 +140,10 @@ _httpd_readChar(request * r, char *cp)
     if (r->readBufRemain == 0) {
         bzero(r->readBuf, HTTP_READ_BUF_LEN + 1);
         r->readBufRemain = _httpd_net_read(r->clientSock, r->readBuf, HTTP_READ_BUF_LEN);
-        if (r->readBufRemain < 1)
+        if (r->readBufRemain < 1){
+			printf("_httpd_net_read error : %d\n", r->readBufRemain);
             return (0);
+		}
         r->readBuf[r->readBufRemain] = 0;
         r->readBufPtr = r->readBuf;
     }
