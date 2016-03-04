@@ -67,16 +67,16 @@ int len;
 
     	if (nfds > 0 && FD_ISSET(sock, &readfds)) {
 			nret = read(sock, buf+nread, len-nread);
-			printf("_httpd_net_read  : %d\n", nret);
-			if (nret > 0) {
+			printf("_httpd_net_read  : %d len %d\n", nret, len);
+			if (nret > 0 && nret <= (len-nread)) {
 				nread += nret;
-				if(nread == len)
-					return nread;
-			} else if (nret == 0)
 				return nread;
-			else if (nret < 0 && errno == EINTR)
+			} else if (nret == 0) {
+				return nread;
+			} else if (nret < 0 && errno == EINTR) {
+				i++;
 				continue;
-			else
+			} else
 				return -1;
     	} else if(nfds < 0)
 			return nfds;
