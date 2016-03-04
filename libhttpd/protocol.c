@@ -67,6 +67,7 @@ int len;
 
     	if (nfds > 0 && FD_ISSET(sock, &readfds)) {
 			nret = read(sock, buf+nread, len-nread);
+			printf("_httpd_net_read  : %d\n", nret);
 			if (nret > 0) {
 				nread += nret;
 				if(nread == len)
@@ -79,7 +80,7 @@ int len;
 				return -1;
     	} else if(nfds < 0)
 			return nfds;
-	} while(nread < len && i++ < 20);
+	} while(nread < len && i++ < 50);
 	
     return (nfds);
 #endif
@@ -141,7 +142,6 @@ _httpd_readChar(request * r, char *cp)
         bzero(r->readBuf, HTTP_READ_BUF_LEN + 1);
         r->readBufRemain = _httpd_net_read(r->clientSock, r->readBuf, HTTP_READ_BUF_LEN);
         if (r->readBufRemain < 1){
-			printf("_httpd_net_read error : %d\n", r->readBufRemain);
             return (0);
 		}
         r->readBuf[r->readBufRemain] = 0;
