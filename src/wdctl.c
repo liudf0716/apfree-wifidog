@@ -103,7 +103,7 @@ usage(void)
 	//fprintf(stdout, "  add_roam_mac				Add roaming mac list\n");
 	//fprintf(stdout, "  clear_roam_mac			Clear roaming mac list\n");
     //fprintf(stdout, "  show_roam_mac			Show roaming mac list\n");
-    fprintf(stdout, "  user_cfg_save			Show untrusted mac list\n");
+    fprintf(stdout, "  user_cfg_save			User config save\n");
 	//<<< liudf added end
     fprintf(stdout, "\n");
 }

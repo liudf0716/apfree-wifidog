@@ -197,7 +197,9 @@ ping(void)
 		}
 	}
 
-	if(!g_channel_path) {
+	{
+		if(!g_channel_path) 
+			free(g_channel_path);
 		if ((fh = popen("uci get firmwareinfo.@version[0].channel_path", "r"))) {
 			char channel_path[128] = {0};
 			fgets(channel_path, 127, fh);
