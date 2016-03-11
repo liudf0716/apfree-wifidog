@@ -680,20 +680,26 @@ wdctl_user_cfg_save(int fd)
 	
 	if(trusted_domains) {
 		snprintf(szcmd, 2048, "uci set wifidog.@wifidog[0].trusted_domains='%s'", trusted_domains);
-		execute(szcmd, 1);
+	} else {
+		snprintf(szcmd, 2048, "uci delete wifidog.@wifidog[0].trusted_domains");
 	}
+	execute(szcmd, 1);
 	
 	memset(szcmd, 0, 2048);
 	if(trusted_maclist) {
 		snprintf(szcmd, 2048, "uci set wifidog.@wifidog[0].trusted_maclist='%s'", trusted_maclist);
-		execute(szcmd, 1);
+	} else {
+		snprintf(szcmd, 2048, "uci delete wifidog.@wifidog[0].trusted_maclist");
 	}
+	execute(szcmd, 1);
 
 	memset(szcmd, 0, 2048);
 	if(untrusted_maclist) {
 		snprintf(szcmd, 2048, "uci set wifidog.@wifidog[0].untrusted_maclist='%s'", untrusted_maclist);
-		execute(szcmd, 1);
+	} else {
+		snprintf(szcmd, 2048, "uci delete wifidog.@wifidog[0].untrusted_maclist");
 	}
+	execute(szcmd, 1);
 
 	memset(szcmd, 0, 2048);
 	snprintf(szcmd, 2048, "uci commit wifidog");
