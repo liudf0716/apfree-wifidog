@@ -74,6 +74,9 @@ void fw_sync_with_authserver(void);
 char *arp_get(const char *);
 
 //>>>> liudf added 20151224
+/** @brief Get a Mac's ip from ARP cache*/
+char *arp_get_ip(const char *);
+
 /** @brief refer to iptables_fw_clear_domains_trusted */
 void fw_clear_user_domains_trusted(void);
 

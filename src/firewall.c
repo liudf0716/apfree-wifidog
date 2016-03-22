@@ -160,25 +160,58 @@ fw_set_authup(void)
 char *
 arp_get(const char *req_ip)
 {
-    FILE *proc;
+    file *proc;
     char ip[16] 	= {0};
     char mac[18] 	= {0};
     char *reply;
     s_config *config = config_get_config();
 
     if (!(proc = fopen(config->arp_table_path, "r"))) {
-        return NULL;
+        return null;
     }
 
-    /* Skip first line */
+    /* skip first line */
     while (!feof(proc) && fgetc(proc) != '\n') ;
 
-    /* Find ip, copy mac in reply */
-    reply = NULL;
-    while (!feof(proc) && (fscanf(proc, " %15[0-9.] %*s %*s %17[A-Fa-f0-9:] %*s %*s", ip, mac) == 2)) {
+    /* find ip, copy mac in reply */
+    reply = null;
+    while (!feof(proc) && (fscanf(proc, " %15[0-9.] %*s %*s %17[a-fa-f0-9:] %*s %*s", ip, mac) == 2)) {
         if (strcmp(ip, req_ip) == 0) {
             reply = safe_strdup(mac);
             break;
+        }
+    }
+
+    fclose(proc);
+
+    return reply;
+}
+
+char *
+arp_get_ip(const char *req_mac)
+{
+    file *proc;
+    char ip[16] 	= {0};
+    char mac[18] 	= {0};
+    char *reply;
+    s_config *config = config_get_config();
+
+    if (!(proc = fopen(config->arp_table_path, "r"))) {
+        return null;
+    }
+
+    /* skip first line */
+    while (!feof(proc) && fgetc(proc) != '\n') ;
+
+    /* find last mac, copy ip in reply */
+    reply = null;
+    while (!feof(proc) && (fscanf(proc, " %15[0-9.] %*s %*s %17[a-fa-f0-9:] %*s %*s", ip, mac) == 2)) {
+        if (strcmp(mac, req_mac) == 0) {
+			if(reply) {
+				free(reply);
+				reply = NULL;
+			}
+            reply = safe_strdup(ip);
         }
     }
 
@@ -344,6 +377,53 @@ fw_destroy(void)
     return iptables_fw_destroy();
 }
 
+// liudf added 20160321
+void
+update_trusted_mac_status(t_trusted_mac *tmac)
+{
+	tmac->is_online = 0;
+
+	if(tmac->ip == NULL) {
+		tmac->ip = arp_get_ip(tmac->mac);
+	}
+
+	if(tmac->ip != NULL) {
+		char cmd[128] = {0};
+		FILE *fd = NULL;
+		
+		snprintf(cmd, 128, "wdping %s", tmac->ip);
+		if((fd = popen()) != NULL) {
+			char result[4] = {0};
+			fgets(fd, 3, result);
+			pclose(fd);
+			if(result[0] == '1')
+				tmac->is_online = 1;
+		}		
+	}
+}
+
+void
+update_trusted_mac_list_status(void)
+{
+    t_authresponse authresponse;
+	t_trusted_mac *p1 = NULL, *tmac_list = NULL;
+    s_config *config = config_get_config();
+
+	if(trusted_mac_list_dup(&tmac_list) == 0)
+		return;
+	
+	for(p1 = tmac_list; p1 != NULL; p1 = p1->next) {
+		update_trusted_mac_status(p1);
+		if (config->auth_servers != NULL && p1->is_online) {
+            auth_server_request(&authresponse, REQUEST_TYPE_COUNTERS, p1->ip, p1->mac, "null", 0,
+                                0, 0, 0, 0, 0, "null");
+        }
+			
+	}
+	
+	clear_dup_trusted_mac_list(tmac_list);
+}
+
 /**Probably a misnomer, this function actually refreshes the entire client list's traffic counter, re-authenticates every client with the central server and update's the central servers traffic counters and notifies it if a client has logged-out.
  * @todo Make this function smaller and use sub-fonctions
  */
@@ -358,7 +438,8 @@ fw_sync_with_authserver(void)
         debug(LOG_ERR, "Could not get counters from firewall!");
         return;
     }
-
+	
+	
     LOCK_CLIENT_LIST();
 
     /* XXX Ideally, from a thread safety PoV, this function should build a list of client pointers,
@@ -481,4 +562,8 @@ fw_sync_with_authserver(void)
     }
 
     client_list_destroy(worklist);
+	
+	// liudf added 20160321
+	// report online trusted mac	
+	update_trusted_mac_list_status();
 }

@@ -156,7 +156,9 @@ typedef struct _firewall_ruleset_t {
  * Trusted MAC Addresses
  */
 typedef struct _trusted_mac_t {
-    char *mac;
+    char 	*mac;
+	char 	*ip;
+	int		is_online;
     struct _trusted_mac_t *next;
 } t_trusted_mac;
 
@@ -342,10 +344,15 @@ void __clear_untrusted_mac_list();
 
 void clear_untrusted_mac_list();
 
+void clear_dup_trusted_mac_list(t_trusted_mac *);
 // common api
 void add_mac(const char *, mac_choice_t );
 
 void parse_mac_list(const char *, mac_choice_t);
+
+void reset_trusted_mac_list();
+
+int trusted_mac_list_dup(t_trusted_mac **);
 
 // online clients
 int 	g_online_clients;

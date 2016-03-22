@@ -1578,12 +1578,27 @@ is_roaming(const char *mac)
 }
 
 void
+clear_dup_trusted_mac_list(t_trusted_mac *dup_list)
+{
+	t_trusted_mac *p, *p1;
+    for (p = dup_list; p != NULL;) {
+    	p1 = p;
+        p = p->next;
+		if(p1->ip) free(p1->ip);
+        free(p1->mac);
+        free(p1);
+    }
+    dup_list = NULL;
+}
+
+void
 __clear_trusted_mac_list()
 {
 	t_trusted_mac *p, *p1;
     for (p = config.trustedmaclist; p != NULL;) {
     	p1 = p;
         p = p->next;
+		if(p1->ip) free(p1->ip);
         free(p1->mac);
         free(p1);
     }
@@ -1605,6 +1620,7 @@ __clear_untrusted_mac_list()
     for (p = config.mac_blacklist; p != NULL;) {
     	p1 = p;
         p = p->next;
+		if(p1->ip) free(p1->ip);
         free(p1->mac);
         free(p1);
     }
@@ -1619,6 +1635,82 @@ clear_untrusted_mac_list()
 	UNLOCK_CONFIG();
 }
 
+// set all trusted mac to offline
+void
+__reset_trusted_mac_list()
+{
+	t_trusted_mac *p;
+    for (p = config.trustedmaclist; p != NULL; p = p->next) {
+		p->is_online = 0;
+    }
+}
+
+void
+reset_trusted_mac_list()
+{
+	LOCK_CONFIG();
+	__reset_trusted_mac_list();
+	UNLOCK_CONFIG();
+}
+
+t_trusted_mac *
+trusted_mac_dup(t_trusted_mac *src)
+{
+	t_trusted_mac *new = NULL;
+	
+	if(src == NULL)
+		return NULL;
+
+	new = safe_malloc(sizeof(t_trusted_mac));	
+	new->mac 	= safe_strdup(src->mac);
+	new->ip 	= NULL;
+	new->is_online = 0;
+
+	return new;
+}
+
+int
+__trusted_mac_list_dup(t_trusted_mac ** dest)
+{
+	t_trusted_mac *new, *cur, *top, *prev;
+	int copied = 0;
+
+	cur = config.trustedmaclist;
+    new = top = prev = NULL;
+	
+	if (NULL == cur) {
+        *dest = new;            /* NULL */
+        return copied;
+    }
+
+    while (NULL != cur) {
+        new = trusted_mac_dup(cur);
+        if (NULL == top) {
+            /* first item */
+            top = new;
+        } else {
+            prev->next = new;
+        }
+        prev = new;
+        copied++;
+        cur = cur->next;
+    }
+
+    *dest = top;
+    return copied;
+
+}
+
+int 
+trusted_mac_list_dup(t_trusted_mac **worklist)
+{
+	int num = 0;
+	LOCK_CONFIG();
+	num = __trusted_mac_list_dup(worklist);
+	UNLOCK_CONFIG();
+	
+	return num;
+}
 // >>> end liudf added
 
 /** Verifies if the configuration is complete and valid.  Terminates the program if it isn't */
@@ -1643,6 +1735,7 @@ validate_popular_servers(void)
 {
     if (config.popular_servers == NULL) {
         debug(LOG_WARNING, "PopularServers not set in config file, this will become fatal in a future version.");
+        add_popular_server("www.kunteng.org");
         add_popular_server("www.baidu.com");
         add_popular_server("www.qq.com");
     }
