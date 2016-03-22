@@ -160,14 +160,14 @@ fw_set_authup(void)
 char *
 arp_get(const char *req_ip)
 {
-    file *proc;
+    FILE *proc 		= NULL;
     char ip[16] 	= {0};
     char mac[18] 	= {0};
     char *reply;
     s_config *config = config_get_config();
 
     if (!(proc = fopen(config->arp_table_path, "r"))) {
-        return null;
+        return NULL;
     }
 
     /* skip first line */
@@ -190,14 +190,14 @@ arp_get(const char *req_ip)
 char *
 arp_get_ip(const char *req_mac)
 {
-    file *proc;
+    FILE *proc 		= NULL;
     char ip[16] 	= {0};
     char mac[18] 	= {0};
     char *reply;
     s_config *config = config_get_config();
 
     if (!(proc = fopen(config->arp_table_path, "r"))) {
-        return null;
+        return NULL;
     }
 
     /* skip first line */
@@ -394,7 +394,7 @@ update_trusted_mac_status(t_trusted_mac *tmac)
 		snprintf(cmd, 128, "wdping %s", tmac->ip);
 		if((fd = popen()) != NULL) {
 			char result[4] = {0};
-			fgets(fd, 3, result);
+			fgets(result, 3, fd);
 			pclose(fd);
 			if(result[0] == '1')
 				tmac->is_online = 1;
