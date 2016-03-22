@@ -174,7 +174,7 @@ arp_get(const char *req_ip)
     while (!feof(proc) && fgetc(proc) != '\n') ;
 
     /* find ip, copy mac in reply */
-    reply = null;
+    reply = NULL;
     while (!feof(proc) && (fscanf(proc, " %15[0-9.] %*s %*s %17[a-fa-f0-9:] %*s %*s", ip, mac) == 2)) {
         if (strcmp(ip, req_ip) == 0) {
             reply = safe_strdup(mac);
@@ -204,7 +204,7 @@ arp_get_ip(const char *req_mac)
     while (!feof(proc) && fgetc(proc) != '\n') ;
 
     /* find last mac, copy ip in reply */
-    reply = null;
+    reply = NULL;
     while (!feof(proc) && (fscanf(proc, " %15[0-9.] %*s %*s %17[a-fa-f0-9:] %*s %*s", ip, mac) == 2)) {
         if (strcmp(mac, req_mac) == 0) {
 			if(reply) {
