@@ -392,7 +392,7 @@ update_trusted_mac_status(t_trusted_mac *tmac)
 		FILE *fd = NULL;
 		
 		snprintf(cmd, 128, "wdping %s", tmac->ip);
-		if((fd = popen()) != NULL) {
+		if((fd = popen(cmd, "r")) != NULL) {
 			char result[4] = {0};
 			fgets(result, 3, fd);
 			pclose(fd);
