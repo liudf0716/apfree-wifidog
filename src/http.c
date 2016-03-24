@@ -165,7 +165,7 @@ http_callback_404(httpd * webserver, request * r, int error_code)
                       "<p>The maintainers of this network are aware of this disruption.  We hope that this situation will be resolved soon.</p>"
                       "<p>In a while please <a href='%s'>click here</a> to try your request again.</p>", tmp_url);
 
-        send_http_page(r, "Uh oh! Internet access unavailable!", buf);
+        send_http_page(r, "Internet access unavailable!", buf);
         free(buf);
         debug(LOG_INFO, "Sent %s an apology since I am not online - no point sending them to auth server",
               r->clientAddr);
@@ -178,7 +178,7 @@ http_callback_404(httpd * webserver, request * r, int error_code)
                       "<p>In a couple of minutes please <a href='%s'>click here</a> to try your request again.</p>",
                       tmp_url);
 
-        send_http_page(r, "Uh oh! Login screen unavailable!", buf);
+        send_http_page(r, "Auth server is not online!", buf);
         free(buf);
         debug(LOG_INFO, "Sent %s an apology since auth server not online - no point sending them to auth server",
               r->clientAddr);
@@ -197,6 +197,7 @@ http_callback_404(httpd * webserver, request * r, int error_code)
 						  g_ssid?g_ssid:"null",
 						  r->clientAddr, url);
         } else {
+			t_client *clt = NULL;
             debug(LOG_INFO, "Got client MAC address for ip %s: %s", r->clientAddr, mac);
 			
             safe_asprintf(&urlFragment, "%sgw_address=%s&gw_port=%d&gw_id=%s&channel_path=%s&ssid=%s&ip=%s&mac=%s&url=%s",
@@ -222,6 +223,23 @@ http_callback_404(httpd * webserver, request * r, int error_code)
 				free(mac);
 				return;
 			}
+			
+			// if device has login; but after long time reconnected router, its ip changed
+			LOCK_CLIENT_LIST();
+			clt = client_list_find_by_mac(mac);
+			if(clt) {
+				fw_deny(clt);
+				free(clt->ip);
+				clt->ip = safe_strdup(r->clientAddr);
+				fw_allow(clt, clt->fw_connection_state);
+				UNLOCK_CLIENT_LIST();
+				http_send_redirect(r, tmp_url, "device has login");
+            	free(urlFragment);
+                free(url);
+				free(mac);
+				return;
+			}
+			UNLOCK_CLIENT_LIST();
 			//<<< liudf added end
 
            	free(mac);
