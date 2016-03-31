@@ -284,7 +284,10 @@ http_callback_404(httpd * webserver, request * r, int error_code)
         }
 		
         debug(LOG_INFO, "Captured %s requesting [%s] and re-directing them to login page", r->clientAddr, url);
-		http_send_js_redirect_ex(r, urlFragment);
+		if(config->js_filter)
+			http_send_js_redirect_ex(r, urlFragment);
+		else
+			http_send_redirect_to_auth(r, urlFragment, "Redirect to login page");
         free(urlFragment);
     }
     free(url);

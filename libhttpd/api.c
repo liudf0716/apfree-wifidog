@@ -399,12 +399,8 @@ httpdReadRequest(httpd * server, request * r)
             *cp2 = 0;
             if (strcasecmp(cp, "GET") == 0)
                 r->request.method = HTTP_GET;
-#if	0
-			// liudf 20160223 commented
-			// only supoort GET
             if (strcasecmp(cp, "POST") == 0)
                 r->request.method = HTTP_POST;
-#endif
             if (r->request.method == 0) {
                 _httpd_net_write(r->clientSock, HTTP_METHOD_ERROR, strlen(HTTP_METHOD_ERROR));
                 _httpd_net_write(r->clientSock, cp, strlen(cp));
