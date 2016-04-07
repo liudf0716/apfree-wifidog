@@ -417,6 +417,19 @@ iptables_fw_set_trusted_maclist(void)
 }
 
 void
+iptables_fw_set_trusted_mac(const char *mac)
+{
+	const s_config *config;
+	t_trusted_mac *p = NULL;
+	
+    config = config_get_config();
+
+	for (p = config->trustedmaclist; p != NULL; p = p->next)
+		ipset_do_command("add " CHAIN_TRUSTED " %s", mac);
+
+}
+
+void
 iptables_fw_clear_untrusted_maclist(void)
 {
 	ipset_do_command("flush " CHAIN_UNTRUSTED);
@@ -1086,9 +1099,9 @@ iptables_fw_counters_update(void)
     }
 	
 	// liudf added 20160216
-	LOCK_CONFIG();
+	LOCK_CLIENT_LIST();
 	reset_client_list();
-	UNLOCK_CONFIG();
+	UNLOCK_CLIENT_LIST();
 
     /* skip the first two lines */
     while (('\n' != fgetc(output)) && !feof(output)) ;
@@ -1118,8 +1131,13 @@ iptables_fw_counters_update(void)
 				// get client name	
 				if(p1->name == NULL)
 					__get_client_name(p1);
-
+				
+				if(p1->wired == -1) {
+					p1->wired = is_device_wired(p1->mac);
+				}
+            	UNLOCK_CLIENT_LIST();
             } else {
+            	UNLOCK_CLIENT_LIST();
                 debug(LOG_ERR,
                       "iptables_fw_counters_update(): Could not find %s in client list, this should not happen unless if the gateway crashed",
                       ip);
@@ -1129,7 +1147,6 @@ iptables_fw_counters_update(void)
                 iptables_fw_destroy_mention("mangle", CHAIN_INCOMING, ip);
             }
 			
-            UNLOCK_CLIENT_LIST();
         }
     }
     pclose(output);

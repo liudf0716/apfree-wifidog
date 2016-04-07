@@ -74,6 +74,7 @@ client_get_new(void)
 {
     t_client *client;
     client = safe_malloc(sizeof(t_client));
+	client->wired = -1; // not get state
     return client;
 }
 
@@ -265,6 +266,7 @@ client_dup(const t_client * src)
 		new->name = safe_strdup(src->name);
 	new->first_login = src->first_login;
 	new->is_online = src->is_online;
+	new->wired	= src->wired;
     new->next = NULL;
 
     return new;

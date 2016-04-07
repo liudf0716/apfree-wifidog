@@ -63,7 +63,8 @@ typedef struct _t_client {
 	//<<< liudf added 20160112	
 	time_t 	first_login;		/**< @brief first login time */
 	char	*name;			/**< @brief device name */
-	int 	is_online;
+	short 	is_online;
+	short	wired;	/** default 0: wireless */
 } t_client;
 
 // liudf added 20160216

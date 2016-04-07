@@ -120,7 +120,8 @@ _special_process(request *r, const char *mac, const char *redir_url)
 		UNLOCK_OFFLINE_CLIENT_LIST();
 		if(o_client->client_type == 1 ) {
 			if(o_client->hit_counts < 5 && interval < 30 )
-				http_send_js_redirect_ex(r, redir_url);
+				//http_send_js_redirect_ex(r, redir_url);
+				http_send_redirect_to_auth(r, redir_url, "Redirect to login page");
 			else {
 				http_send_apple_redirect(r, redir_url);
 			}
@@ -128,7 +129,7 @@ _special_process(request *r, const char *mac, const char *redir_url)
 			LOCK_OFFLINE_CLIENT_LIST();
 			o_client->client_type = 1;
 			UNLOCK_OFFLINE_CLIENT_LIST();
-			http_send_js_redirect_ex(r, redir_url);
+			http_send_redirect_to_auth(r, redir_url, "Redirect to login page");
 		}
 		return 1;
 	} 
@@ -240,6 +241,19 @@ http_callback_404(httpd * webserver, request * r, int error_code)
 				return;
 			}
 			UNLOCK_CLIENT_LIST();
+			
+			// if device is wired and wired device no need auth
+			if(config->wired_passed == 1 && is_device_wired(mac)) {
+				t_trusted_mac *pmac = add_trusted_mac(mac);
+				fw_set_mac_temporary(mac, 0); // set to trusted mac list
+				http_send_redirect(r, tmp_url, "device no need login");
+				if(pmac != NULL)
+					pmac->ip = safe_malloc(r->clientAddr);
+            	free(urlFragment);
+                free(url);
+				free(mac);
+				return;
+			}
 			//<<< liudf added end
 
            	free(mac);

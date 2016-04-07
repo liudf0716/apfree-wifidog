@@ -108,7 +108,7 @@ logout_client(t_client * client)
 							client->counters.incoming_delta, client->counters.outgoing_delta,
 							//>>> liudf added 20160112
 							client->first_login, (client->counters.last_updated - client->first_login),
-							client->name?client->name:"null");
+							client->name?client->name:"null", client->wired);
 
         if (authresponse.authcode == AUTH_ERROR)
             debug(LOG_WARNING, "Auth server error when reporting logout");
@@ -169,7 +169,7 @@ authenticate_client(request * r)
      * take multiple seconds to do and the gateway would effectively be frozen if we
      * kept the lock.
      */
-    auth_server_request(&auth_response, REQUEST_TYPE_LOGIN, client->ip, client->mac, token, 0, 0, 0, 0, 0, 0, "null");
+    auth_server_request(&auth_response, REQUEST_TYPE_LOGIN, client->ip, client->mac, token, 0, 0, 0, 0, 0, 0, "null", client->wired);
 
     LOCK_CLIENT_LIST();
 

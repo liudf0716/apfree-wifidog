@@ -119,6 +119,7 @@ typedef enum {
 	oPoolMode,
 	oThreadNumber,
 	oQueueSize,
+	oWiredPassed,
 	// <<< liudf added end
 } OpCodes;
 
@@ -175,6 +176,7 @@ static const struct {
 	"poolMode", oPoolMode}, {
 	"threadNumber", oThreadNumber}, {
 	"queueSize", oQueueSize}, {
+	"wiredPassed", oWiredPassed}, {
 	// <<<< liudf added end
 NULL, oBadOption},};
 
@@ -238,6 +240,7 @@ config_init(void)
 	config.pool_mode		= 0;
 	config.thread_number 	= 20; // only valid when poolMode == 1
 	config.queue_size 		= 200; // only valid when poolMode == 1
+	config.wired_passed		= 0; // default wired device must login
 	//<<<
 
     debugconf.log_stderr = 1;
@@ -860,6 +863,9 @@ config_read(const char *filename)
 				case oQueueSize:
                     sscanf(p1, "%d", &config.queue_size);
 					break;
+				case oWiredPassed:
+                    config.wired_passed = parse_boolean_value(p1);
+					break;
 				// <<< liudf added end
                 case oBadOption:
                     /* FALL THROUGH */
@@ -964,10 +970,11 @@ add_roam_mac(const char *mac)
 	}
 }
 
-
-static void
+t_trusted_mac *
 add_trusted_mac(const char *mac)
 {
+	t_trusted_mac *pret = NULL;
+
 	debug(LOG_DEBUG, "Adding MAC address [%s] to trusted mac list", mac);
 	
 	LOCK_CONFIG();
@@ -976,6 +983,7 @@ add_trusted_mac(const char *mac)
 		config.trustedmaclist = safe_malloc(sizeof(t_trusted_mac));
 		config.trustedmaclist->mac = safe_strdup(mac);
 		config.trustedmaclist->next = NULL;
+		pret = config.trustedmaclist;
 	} else {
 		int skipmac;
 		/* Advance to the last entry */
@@ -992,6 +1000,7 @@ add_trusted_mac(const char *mac)
 			p->mac = safe_strdup(mac);
 			p->next = config.trustedmaclist;
 			config.trustedmaclist = p;
+			pret = p;
 		} else {
 			debug(LOG_ERR,
 				"MAC address [%s] already on trusted mac list.  ",
@@ -1000,6 +1009,7 @@ add_trusted_mac(const char *mac)
 	}
 
 	UNLOCK_CONFIG();
+	return pret;
 }
 
 static void
@@ -1382,7 +1392,12 @@ parse_trusted_domain_2_ip(t_domain_trusted *p)
 	struct hostent *he;
     struct in_addr **addr_list;
     int i;
-
+	
+	// in case of parsing too long
+	// if this server not allow ping; fuck it
+	if(is_server_reachable(p->domain) == 0)
+		return;
+ 
     if ( (he=gethostbyname2(p->domain, AF_INET) ) == NULL)
     {
         return ;

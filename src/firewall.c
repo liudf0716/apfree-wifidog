@@ -388,17 +388,7 @@ update_trusted_mac_status(t_trusted_mac *tmac)
 	}
 
 	if(tmac->ip != NULL) {
-		char cmd[128] = {0};
-		FILE *fd = NULL;
-		
-		snprintf(cmd, 128, "wdping %s", tmac->ip);
-		if((fd = popen(cmd, "r")) != NULL) {
-			char result[4] = {0};
-			fgets(result, 3, fd);
-			pclose(fd);
-			if(result[0] == '1')
-				tmac->is_online = 1;
-		}		
+		tmac->is_online = is_server_reachable(tmac->ip);
 	}
 }
 
@@ -416,7 +406,7 @@ update_trusted_mac_list_status(void)
 		update_trusted_mac_status(p1);
 		if (config->auth_servers != NULL && p1->is_online) {
             auth_server_request(&authresponse, REQUEST_TYPE_COUNTERS, p1->ip, p1->mac, "null", 0,
-                                0, 0, 0, 0, 0, "null");
+                                0, 0, 0, 0, 0, "null", 0);
         }
 			
 	}
@@ -464,7 +454,7 @@ fw_sync_with_authserver(void)
                                 p1->counters.outgoing, p1->counters.incoming_delta, p1->counters.outgoing_delta,
 								// liudf added 20160112
 								p1->first_login, (p1->counters.last_updated - p1->first_login), 
-								p1->name?p1->name:"null");
+								p1->name?p1->name:"null", p1->wired);
         }
 
         time_t current_time = time(NULL);

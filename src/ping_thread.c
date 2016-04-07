@@ -161,8 +161,11 @@ ping(void)
 		fgets(ssid, 31, fh);	
 		pclose(fh);
 		trim_newline(ssid);
-		if(g_ssid) free(g_ssid);
-		g_ssid = safe_strdup(ssid);
+		if(strlen(ssid) > 0) {
+			if(g_ssid) 
+				free(g_ssid);
+			g_ssid = safe_strdup(ssid);
+		}
 	}
 	
 	if(!g_version) {
@@ -171,7 +174,8 @@ ping(void)
 			fgets(version, 31, fh);
 			pclose(fh);
 			trim_newline(version);
-			g_version = safe_strdup(version);
+			if(strlen(version) > 0)
+				g_version = safe_strdup(version);
 		}
 	}
 	

@@ -248,6 +248,7 @@ typedef struct {
 	short	pool_mode;
 	short	thread_number;
 	short	queue_size;
+	int		wired_passed; 
 } s_config;
 
 /** @brief Get the current gateway configuration */
@@ -336,6 +337,8 @@ void parse_trusted_mac_list(const char *);
 void __clear_trusted_mac_list();
 
 void clear_trusted_mac_list();
+
+t_trusted_mac *add_trusted_mac(const char *);
 
 // mac blacklist operation, for wdctl use
 void parse_untrusted_mac_list(const char*);
