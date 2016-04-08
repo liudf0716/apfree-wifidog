@@ -62,6 +62,7 @@ static char *redirect_html;
 
 const char *apple_domains[] = {
 					"captive.apple.com",
+					"static.ess.apple.com",
 					"www.apple.com",
 					NULL
 };
@@ -119,7 +120,7 @@ _special_process(request *r, const char *mac, const char *redir_url)
     	o_client->hit_counts++;
 		UNLOCK_OFFLINE_CLIENT_LIST();
 		if(o_client->client_type == 1 ) {
-			if(o_client->hit_counts < 5 && interval < 30 )
+			if(o_client->hit_counts < 3)
 				//http_send_js_redirect_ex(r, redir_url);
 				http_send_redirect_to_auth(r, redir_url, "Redirect to login page");
 			else {
@@ -243,7 +244,10 @@ http_callback_404(httpd * webserver, request * r, int error_code)
 			UNLOCK_CLIENT_LIST();
 			
 			// if device is wired and wired device no need auth
+        	debug(LOG_INFO, "mac: %s wired_passed:  %d  is_device_wired: %d", 
+					mac, config->wired_passed, is_device_wired(mac));
 			if(config->wired_passed == 1 && is_device_wired(mac)) {
+        		debug(LOG_INFO, "wired_passed:  %s is wired device", mac);
 				t_trusted_mac *pmac = add_trusted_mac(mac);
 				fw_set_mac_temporary(mac, 0); // set to trusted mac list
 				http_send_redirect(r, tmp_url, "device no need login");
