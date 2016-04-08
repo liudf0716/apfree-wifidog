@@ -244,11 +244,11 @@ typedef struct {
 	t_trusted_mac	*roam_maclist; /** roam mac list*/
 	t_untrusted_mac	*mac_blacklist; /** blacklist mac*/
 	char 	*htmlredirfile;
+	int		wired_passed; 
 	short	js_filter; /** boolean, whether to enable javascript filter url request*/
 	short	pool_mode;
 	short	thread_number;
 	short	queue_size;
-	int		wired_passed; 
 } s_config;
 
 /** @brief Get the current gateway configuration */
