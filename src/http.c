@@ -120,7 +120,7 @@ _special_process(request *r, const char *mac, const char *redir_url)
     	o_client->hit_counts++;
 		UNLOCK_OFFLINE_CLIENT_LIST();
 		if(o_client->client_type == 1 ) {
-			if(o_client->hit_counts < 3)
+			if(o_client->hit_counts < 2)
 				//http_send_js_redirect_ex(r, redir_url);
 				http_send_redirect_to_auth(r, redir_url, "Redirect to login page");
 			else {

@@ -865,6 +865,7 @@ config_read(const char *filename)
 					break;
 				case oWiredPassed:
                     config.wired_passed = parse_boolean_value(p1);
+                    debug(LOG_ERR, "oWiredPassed: %d %s", config.wired_passed, p1);
 					break;
 				// <<< liudf added end
                 case oBadOption:
