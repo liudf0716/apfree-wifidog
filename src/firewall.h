@@ -104,5 +104,7 @@ void fw_set_untrusted_maclist();
 void fw_clear_untrusted_maclist();
 
 void fw_set_mac_temporary(const char *, int);
+
+void fw_set_trusted_mac(const char *);
 //<<<< liudf added end
 #endif                          /* _FIREWALL_H_ */

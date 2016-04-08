@@ -363,6 +363,12 @@ fw_set_mac_temporary(const char *mac, int which)
 	iptables_fw_set_mac_temporary(mac, which);
 }
 
+void
+fw_set_trusted_mac(const char *mac)
+{
+    debug(LOG_INFO, "Clear untrusted maclist");
+	iptables_fw_set_trusted_mac(mac);
+}
 //<<<<< liudf added end
 
 /** Remove the firewall rules

@@ -111,6 +111,8 @@ void iptables_fw_clear_roam_maclist(void);
 
 void iptables_fw_set_trusted_maclist(void);
 
+void iptables_fw_set_trusted_mac(const char *);
+
 void iptables_fw_clear_trusted_maclist(void);
 
 void iptables_fw_set_untrusted_maclist(void);

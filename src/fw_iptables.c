@@ -419,14 +419,7 @@ iptables_fw_set_trusted_maclist(void)
 void
 iptables_fw_set_trusted_mac(const char *mac)
 {
-	const s_config *config;
-	t_trusted_mac *p = NULL;
-	
-    config = config_get_config();
-
-	for (p = config->trustedmaclist; p != NULL; p = p->next)
-		ipset_do_command("add " CHAIN_TRUSTED " %s", mac);
-
+	ipset_do_command("add " CHAIN_TRUSTED " %s", mac);
 }
 
 void

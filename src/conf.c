@@ -120,6 +120,7 @@ typedef enum {
 	oThreadNumber,
 	oQueueSize,
 	oWiredPassed,
+	oParseChecked,
 	// <<< liudf added end
 } OpCodes;
 
@@ -177,6 +178,7 @@ static const struct {
 	"threadNumber", oThreadNumber}, {
 	"queueSize", oQueueSize}, {
 	"wiredPassed", oWiredPassed}, {
+	"parseChecked", oParseChecked}, {
 	// <<<< liudf added end
 NULL, oBadOption},};
 
@@ -241,6 +243,7 @@ config_init(void)
 	config.thread_number 	= 20; // only valid when poolMode == 1
 	config.queue_size 		= 200; // only valid when poolMode == 1
 	config.wired_passed		= 0; // default wired device must login
+	config.parse_checked	= 1; // before parse domain's ip; fping check it
 	//<<<
 
     debugconf.log_stderr = 1;
@@ -865,7 +868,9 @@ config_read(const char *filename)
 					break;
 				case oWiredPassed:
                     config.wired_passed = parse_boolean_value(p1);
-                    debug(LOG_ERR, "oWiredPassed: %d %s", config.wired_passed, p1);
+					break;
+				case oParseChecked:
+					config.parse_checked = parse_boolean_value(p1);
 					break;
 				// <<< liudf added end
                 case oBadOption:
@@ -1394,11 +1399,12 @@ parse_trusted_domain_2_ip(t_domain_trusted *p)
     struct in_addr **addr_list;
     int i;
 	
-	// in case of parsing too long
-	// if this server not allow ping; fuck it
-	if(is_server_reachable(p->domain) == 0)
+	// if has parsed; then passed it	
+	if(p->ips_trusted != NULL) {	
+        debug(LOG_INFO, "domain has parsed (%s)", p->domain);
 		return;
- 
+	}
+	 
     if ( (he=gethostbyname2(p->domain, AF_INET) ) == NULL)
     {
         return ;
