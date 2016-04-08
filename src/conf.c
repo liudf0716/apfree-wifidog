@@ -240,7 +240,7 @@ config_init(void)
 	config.pool_mode		= 0;
 	config.thread_number 	= 20; // only valid when poolMode == 1
 	config.queue_size 		= 200; // only valid when poolMode == 1
-	config.wired_passed		= 0; // default wired device must login
+	config.wired_passed		= 1; // default wired device must login
 	//<<<
 
     debugconf.log_stderr = 1;
