@@ -100,6 +100,9 @@ typedef enum mac_choice_t_ {
  * functions. */
 extern pthread_mutex_t config_mutex;
 
+// liudf added 20160411
+extern pthread_mutex_t domains_mutex;
+
 /**
  * Information about the authentication server
  */
