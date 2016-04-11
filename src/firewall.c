@@ -406,13 +406,13 @@ update_trusted_mac_list_status(void)
     s_config *config = config_get_config();
 
 	if(trusted_mac_list_dup(&tmac_list) == 0) {
-		Debug(LOG_INFO, "update_trusted_mac_list_status: list is empty");
+		debug(LOG_INFO, "update_trusted_mac_list_status: list is empty");
 		return;
 	}
 	
 	for(p1 = tmac_list; p1 != NULL; p1 = p1->next) {
 		update_trusted_mac_status(p1);
-		Debug(LOG_INFO, "update_trusted_mac_list_status: %s %s %d", p1->ip, p1->mac, p1->is_online);
+		debug(LOG_INFO, "update_trusted_mac_list_status: %s %s %d", p1->ip, p1->mac, p1->is_online);
 		if (config->auth_servers != NULL && p1->is_online) {
             auth_server_request(&authresponse, REQUEST_TYPE_COUNTERS, p1->ip, p1->mac, "null", 0,
                                 0, 0, 0, 0, 0, "null", 0);
