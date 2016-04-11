@@ -74,10 +74,10 @@ thread_ping(void *arg)
 	// move from fw_init to here
 	__fix_weixin_http_dns_ip();
 
-	parse_user_trusted_domain_list();
+	parse_inner_trusted_domain_list();
 	iptables_fw_set_inner_domains_trusted();
 
-	parse_inner_trusted_domain_list();
+	parse_user_trusted_domain_list();
     iptables_fw_set_user_domains_trusted();
 
 	fw_set_trusted_maclist();

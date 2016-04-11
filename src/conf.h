@@ -376,9 +376,10 @@ char	*g_ssid;
 } while (0)
 
 #define UNLOCK_DOMAIN() do { \
-	debug(LOG_DEBUG, "Locking domain"); \
+	debug(LOG_DEBUG, "Unlocking domain"); \
 	pthread_mutex_unlock(&domains_mutex);	\
-} while(0)
+	debug(LOG_DEBUG, "Domain unlocked"); \
+} while (0)
 // <<< liudf added end
 
 #define LOCK_CONFIG() do { \
