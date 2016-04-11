@@ -318,7 +318,7 @@ void __clear_trusted_domains(void);
 
 
 /** @brief  */
-void __fix_weixin_http_dns_ip(void);
+int __fix_weixin_http_dns_ip(void);
 
 
 /** @brief parse roam mac list, for wdctl use*/
@@ -365,6 +365,17 @@ char	*g_type; // hardware type
 char	*g_name; // firmware name
 char	*g_channel_path;
 char	*g_ssid;
+
+#define	LOCK_DOMAIN() do { \
+	debug(LOG_DEBUG, "Locking domain"); \
+	pthread_mutex_lock(&domains_mutex);	\
+	debug(LOG_DEBUG, "Domains locked"); \
+} while (0)
+
+#define UNLOCK_DOMAIN() do { \
+	debug(LOG_DEBUG, "Locking domain"); \
+	pthread_mutex_unlock(&domains_mutex);	\
+} while(0)
 // <<< liudf added end
 
 #define LOCK_CONFIG() do { \

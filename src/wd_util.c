@@ -270,7 +270,7 @@ get_serialize_trusted_domains()
 
 	pstr = pstr_new();
 
-	LOCK_CONFIG();
+	LOCK_DOMAIN();
 	
 	for (; domain_trusted != NULL; domain_trusted = domain_trusted->next, line++) {
 		if(line == 0)
@@ -278,8 +278,7 @@ get_serialize_trusted_domains()
 		else
         	pstr_append_sprintf(pstr, ",%s", domain_trusted->domain);
 	}
-	
-	UNLOCK_CONFIG();
+	UNLOCK_DOMAIN();	
     
 	return pstr_to_string(pstr);
 
@@ -297,7 +296,7 @@ get_trusted_domains_text()
     
 	pstr_cat(pstr, "\nTrusted domains and its ip:\n");
 
-	LOCK_CONFIG();
+	LOCK_DOMAIN();
 	
 	for (domain_trusted = config->domains_trusted; domain_trusted != NULL; domain_trusted = domain_trusted->next) {
         pstr_append_sprintf(pstr, "\nDomain: %s \n", domain_trusted->domain);
@@ -306,7 +305,7 @@ get_trusted_domains_text()
 		}
 	}
 	
-	UNLOCK_CONFIG();
+	UNLOCK_DOMAIN();
     
 	return pstr_to_string(pstr);
 }

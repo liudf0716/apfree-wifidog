@@ -63,6 +63,10 @@ static s_config config;
  * functions. */
 pthread_mutex_t config_mutex = PTHREAD_MUTEX_INITIALIZER;
 
+// liudf added 20160409
+// Mutex for trusted domains; used by domains parese releated 
+pthread_mutex_t domains_mutex = PTHREAD_MUTEX_INITIALIZER;
+
 /** @internal
  * A flag.  If set to 1, there are missing or empty mandatory parameters in the config
  */
@@ -1255,9 +1259,11 @@ add_domain_common(const char *domain, trusted_domain_t which)
 {
     t_domain_trusted *p = NULL;
 	
-	LOCK_CONFIG();
+	LOCK_DOMAIN();
+
 	p = __add_domain_common(domain, which);
-    UNLOCK_CONFIG();
+	
+	UNLOCK_DOMAIN();
 	
 	return p;
 }
@@ -1380,13 +1386,13 @@ add_domain_ip_pair(const char *args, trusted_domain_t which)
 		return;
 	}
 		
-	LOCK_CONFIG();
+	LOCK_DOMAIN();
 
 	dt = __add_domain_common(domain, which);
 	if(dt)
 		__add_ip_2_domain(dt, ip);
 	
-	UNLOCK_CONFIG();
+	UNLOCK_DOMAIN();	
 
 	free(pt);
 }
@@ -1419,7 +1425,7 @@ parse_trusted_domain_2_ip(t_domain_trusted *p)
 		hostname[HTTP_IP_ADDR_LEN-1] = '\0';
         debug(LOG_DEBUG, "hostname ip is(%s)", hostname);
 		
-		LOCK_CONFIG();
+		LOCK_DOMAIN();
 
 		if(p->ips_trusted == NULL) {
 			ipt = (t_ip_trusted *)malloc(sizeof(t_ip_trusted));
@@ -1444,7 +1450,7 @@ parse_trusted_domain_2_ip(t_domain_trusted *p)
 			}
 		}
 
-		UNLOCK_CONFIG();
+		UNLOCK_DOMAIN();
 	}	
 }
 
@@ -1478,7 +1484,7 @@ void parse_inner_trusted_domain_list()
 	parse_common_trusted_domain_list(INNER_TRUSTED_DOMAIN);
 }
 
-void 
+int 
 __fix_weixin_http_dns_ip(void)
 {
 	const char *get_weixin_ip_cmd = "curl --compressed http://dns.weixin.qq.com/cgi-bin/micromsg-bin/newgetdns 2>/dev/null";
@@ -1503,15 +1509,24 @@ __fix_weixin_http_dns_ip(void)
             	p = rindex(buf, '<');
                 *p='\0';
 				ip = buf+4;
+				
+				LOCK_DOMAIN();
+				
 				dt = __add_inner_trusted_domain("short.weixin.qq.com");
 				if (dt) {
         			debug(LOG_INFO, "Add short.weixin.qq.com ip %s\n", ip);
 					__add_ip_2_domain(dt, ip);
+					UNLOCK_DOMAIN();
+					return 1; // parse weixin dns success
 				}
+
+				UNLOCK_DOMAIN();
             }
        	}
     	pclose(file);
 	}
+	
+	return 0; // parse weixin dns failed
 }
 
 // clear domain's ip collection
@@ -1544,9 +1559,9 @@ __clear_trusted_domains(void)
 void
 clear_trusted_domains(void)
 {
-	LOCK_CONFIG();
+	LOCK_DOMAIN();
 	__clear_trusted_domains();
-	UNLOCK_CONFIG();
+	UNLOCK_DOMAIN();
 }
 
 t_domain_trusted *

@@ -347,12 +347,16 @@ iptables_fw_set_user_domains_trusted(void)
 
     config = config_get_config();
 	
+	LOCK_DOMAIN();
+		
 	for (domain_trusted = config->domains_trusted; domain_trusted != NULL; domain_trusted = domain_trusted->next) {
 		t_ip_trusted *ip_trusted = NULL;
 		for(ip_trusted = domain_trusted->ips_trusted; ip_trusted != NULL; ip_trusted = ip_trusted->next) {
 			ipset_do_command("add " CHAIN_DOMAIN_TRUSTED " %s ", ip_trusted->ip);
 		}
 	}
+
+	UNLOCK_DOMAIN();
 }
 
 // set inner trusted domains
@@ -377,12 +381,16 @@ iptables_fw_set_inner_domains_trusted(void)
 
     config = config_get_config();
 	
+	LOCK_DOMAIN();
+	
 	for (domain_trusted = config->inner_domains_trusted; domain_trusted != NULL; domain_trusted = domain_trusted->next) {
 		t_ip_trusted *ip_trusted = NULL;
 		for(ip_trusted = domain_trusted->ips_trusted; ip_trusted != NULL; ip_trusted = ip_trusted->next) {
 			ipset_do_command("add " CHAIN_INNER_DOMAIN_TRUSTED " %s ", ip_trusted->ip);
 		}
 	}
+
+	UNLOCK_DOMAIN();
 }
 
 
@@ -584,7 +592,6 @@ iptables_fw_init(void)
 		// execut fw_init_script
 	}
 	
-    LOCK_CONFIG();
     config = config_get_config();
     gw_port = config->gw_port;
     if (config->external_interface) {
@@ -594,7 +601,6 @@ iptables_fw_init(void)
     }
 
     if (ext_interface == NULL) {
-        UNLOCK_CONFIG();
 		f_fw_init_close();	
         debug(LOG_ERR, "FATAL: no external interface");
         return 0;
@@ -770,26 +776,9 @@ iptables_fw_init(void)
     iptables_do_command("-t filter -A " CHAIN_TO_INTERNET " -j " CHAIN_UNKNOWN);
     iptables_load_ruleset("filter", FWRULESET_UNKNOWN_USERS, CHAIN_UNKNOWN);
     iptables_do_command("-t filter -A " CHAIN_UNKNOWN " -j REJECT --reject-with icmp-port-unreachable");
-
 	
-	__fix_weixin_http_dns_ip();
-
-    UNLOCK_CONFIG();
-	
-	parse_user_trusted_domain_list();
-	parse_inner_trusted_domain_list();
-
     free(ext_interface);
-
-	//>>> liudf added 20160114
-	// after initialize firewall chain; 
-	// add trusted&untrusted mac list; parse and add trusted domain	
-	fw_set_trusted_maclist();
-	fw_set_untrusted_maclist();
 	
-	iptables_fw_set_inner_domains_trusted();
-    iptables_fw_set_user_domains_trusted();
-
 	f_fw_init_close();
 	//<<< liudf added end
 

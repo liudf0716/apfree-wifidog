@@ -69,7 +69,20 @@ thread_ping(void *arg)
     pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
     pthread_mutex_t cond_mutex = PTHREAD_MUTEX_INITIALIZER;
     struct timespec timeout;
+	
+	//>>> liudf added 20160411
+	// move from fw_init to here
+	__fix_weixin_http_dns_ip();
 
+	parse_user_trusted_domain_list();
+	iptables_fw_set_inner_domains_trusted();
+
+	parse_inner_trusted_domain_list();
+    iptables_fw_set_user_domains_trusted();
+
+	fw_set_trusted_maclist();
+	fw_set_untrusted_maclist();
+	
     while (1) {
         /* Make sure we check the servers at the very begining */
         debug(LOG_DEBUG, "Running ping()");
@@ -136,7 +149,9 @@ ping(void)
             debug(LOG_CRIT, "Failed to read uptime");
 
         fclose(fh);
+		fh = NULL;
     }
+
     if ((fh = fopen("/proc/meminfo", "r"))) {
         while (!feof(fh)) {
             if (fscanf(fh, "MemFree: %u", &sys_memfree) == 0) {
@@ -148,18 +163,22 @@ ping(void)
             }
         }
         fclose(fh);
+		fh = NULL;
     }
+
     if ((fh = fopen("/proc/loadavg", "r"))) {
         if (fscanf(fh, "%f", &sys_load) != 1)
             debug(LOG_CRIT, "Failed to read loadavg");
 
         fclose(fh);
+		fh = NULL;
     }
 	//<<< liudf added 20160121
 	// get first ssid
 	if ((fh = popen("uci get wireless.@wifi-iface[0].ssid", "r"))) {
 		fgets(ssid, 31, fh);	
 		pclose(fh);
+		fh = NULL;
 		trim_newline(ssid);
 		if(strlen(ssid) > 0) {
 			if(g_ssid) 
@@ -173,6 +192,7 @@ ping(void)
 			char version[32] = {0};
 			fgets(version, 31, fh);
 			pclose(fh);
+			fh = NULL;
 			trim_newline(version);
 			if(strlen(version) > 0)
 				g_version = safe_strdup(version);
@@ -184,6 +204,7 @@ ping(void)
 			char name[32] = {0};
 			fgets(name, 31, fh);
 			pclose(fh);
+			fh = NULL;
 			trim_newline(name);
 			if(strlen(name) > 0)
 				g_type = safe_strdup(name);
@@ -195,6 +216,7 @@ ping(void)
 			char name[32] = {0};
 			fgets(name, 31, fh);
 			pclose(fh);
+			fh = NULL;
 			trim_newline(name);
 			if(strlen(name) > 0)
 				g_name = safe_strdup(name);
@@ -202,12 +224,16 @@ ping(void)
 	}
 
 	{
-		if(!g_channel_path) 
+		if(!g_channel_path) { 
 			free(g_channel_path);
+			g_channel_path = NULL;
+		}
+
 		if ((fh = popen("uci get firmwareinfo.@version[0].channel_path", "r"))) {
 			char channel_path[128] = {0};
 			fgets(channel_path, 127, fh);
 			pclose(fh);
+			fh = NULL;
 			trim_newline(channel_path);
         	debug(LOG_INFO, "g_channel_path is %s", g_channel_path);
 			if(strlen(channel_path) > 0)

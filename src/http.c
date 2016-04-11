@@ -62,7 +62,8 @@ static char *redirect_html;
 
 const char *apple_domains[] = {
 					"captive.apple.com",
-					"static.ess.apple.com",
+					"static.ess.apple.com:80",
+					"init-p01st.push.apple.com",
 					"www.apple.com",
 					NULL
 };

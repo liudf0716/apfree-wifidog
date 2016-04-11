@@ -3,14 +3,12 @@
 <head>
 	<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
     <title>正在为您加载，请稍候...</title>
-	<!--hiwifi_portal_96HwYxWx-->
     <style>
         /* general styling */
         body {
         text-align: center;
         }
 
-        /* position the bars and balls correctly (rotate them and translate them outward)*/
         .bar1 {
             -moz-transform:rotate(0deg) translate(0, -40px);
             -webkit-transform:rotate(0deg) translate(0, -40px);opacity:0.12;
@@ -44,7 +42,6 @@
             -webkit-transform:rotate(315deg) translate(0, -40px);opacity:1;
         }
 
-        /* set up the three bar spinners */
          #div2 {
             position:relative;
             width:100px;
@@ -70,7 +67,6 @@
             left:45px;
         }
 
-        /* rounded outer corners for the second */
         #div2 div {
             -moz-border-radius-topleft:10px;
             -moz-border-radius-topright:10px;
@@ -86,10 +82,6 @@
         .text{ display: block; text-align: center;}
     </style>
     <script>
-
-        //simple script to rotate all spinners 45 degrees on each tick
-        //this works differently from the css transforms, which is smooth
-
         var count = 0;
         function rotate() {
             var elem2 = document.getElementById('div2');
