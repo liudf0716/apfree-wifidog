@@ -1405,8 +1405,8 @@ parse_trusted_domain_2_ip(t_domain_trusted *p)
     struct in_addr **addr_list;
     int i;
 	
-	// if has parsed; then passed it	
-	if(p->ips_trusted != NULL) {	
+	// if has parsed or ip list; then passed it	
+	if(p->ips_trusted != NULL || strcmp(p->domain, "iplist") == 0) {	
         debug(LOG_INFO, "domain has parsed (%s)", p->domain);
 		return;
 	}
@@ -1482,6 +1482,56 @@ void parse_user_trusted_domain_list()
 void parse_inner_trusted_domain_list()
 {	
 	parse_common_trusted_domain_list(INNER_TRUSTED_DOMAIN);
+}
+
+void add_trusted_ip_list(const char *ptr)
+{
+	char *ptrcopy = NULL, *pt = NULL;
+    char *ip = NULL;
+    char *tmp = NULL;
+	t_domain_trusted *p = NULL;
+
+    debug(LOG_DEBUG, "Parsing string [%s] for trust domains", ptr);
+	
+	p = add_domain_common("iplist", USER_TRUSTED_DOMAIN);
+	if(p == NULL) {
+    	debug(LOG_ERR, "Impossible: add iplist domain failed");
+		return;
+	}
+	
+    /* strsep modifies original, so let's make a copy */
+    ptrcopy = safe_strdup(ptr);
+	pt = ptrcopy;
+
+    while ((ip = strsep(&ptrcopy, ","))) {  /* ip does *not* need allocation. strsep
+                                                     provides a pointer in ptrcopy. */
+        /* Skip leading spaces. */
+        while (*ip != '\0' && isblank(*ip)) { 
+            ip++;
+        }
+        if (*ip == '\0') {  /* Equivalent to strcmp(ip, "") == 0 */
+            continue;
+        }
+        /* Remove any trailing blanks. */
+        tmp = ip;
+        while (*tmp != '\0' && !isblank(*tmp)) {
+            tmp++;
+        }
+        if (*tmp != '\0' && isblank(*tmp)) {
+            *tmp = '\0';
+        }
+		
+		if(is_valid_ip(ip) == 0) // not valid ip address
+			continue;
+        debug(LOG_DEBUG, "Adding trust ip [%s] to list", ip);
+
+		LOCK_DOMAIN();
+		__add_ip_2_domain(p, ip);
+		UNLOCK_DOMAIN();
+    }
+
+    free(pt);
+
 }
 
 int 

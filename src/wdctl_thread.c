@@ -65,6 +65,7 @@ static void wdctl_reset(int, const char *);
 static void wdctl_restart(int);
 //>>> liudf added 20151225
 static void wdctl_add_trusted_domains(int, const char *);
+static void wdctl_add_trusted_iplist(int, const char *);
 static void wdctl_reparse_trusted_domains(int);
 static void wdctl_clear_trusted_domains(int);
 static void wdctl_show_trusted_domains(int);
@@ -228,7 +229,8 @@ thread_wdctl_handler(void *arg)
 	//>>> liudf added 20151225
 	} else if (strncmp(request, "add_trusted_domains", strlen("add_trusted_domains")) == 0) {
 		wdctl_add_trusted_domains(fd, (request + strlen("add_trusted_domains") + 1));
-
+	} else if (strcmp(request, "add_trusted_iplist") == 0) {
+		wdctl_add_trusted_iplist(fd, (request + strlen("add_trusted_iplist") + 1));
 	} else if (strncmp(request, "reparse_trusted_domains", strlen("reparse_trusted_domains")) == 0) {
 		wdctl_reparse_trusted_domains(fd);
 
@@ -450,6 +452,24 @@ wdctl_reset(int fd, const char *arg)
 }
 
 //>>> liudf added 20151225
+static void
+wdctl_add_trusted_iplist(int fd, const char *arg)
+{
+	debug(LOG_DEBUG, "Entering wdctl_add_trusted_iplist ...");
+	
+    debug(LOG_DEBUG, "Argument: %s ", arg);
+
+    debug(LOG_DEBUG, "parse trusted ip list");
+	add_trusted_ip_list(arg);
+
+	fw_refresh_user_domains_trusted();	
+
+    write_to_socket(fd, "Yes", 3);
+
+    debug(LOG_DEBUG, "Exiting wdctl_add_trusted_domains...");
+
+}
+
 static void
 wdctl_add_trusted_domains(int fd, const char *arg)
 {

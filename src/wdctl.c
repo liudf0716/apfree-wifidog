@@ -52,6 +52,7 @@ static void wdctl_stop(void);
 static void wdctl_reset(void);
 static void wdctl_restart(void);
 //>>> liudf added 20151225
+static void wdctl_add_trusted_iplist(void);
 static void wdctl_add_trusted_domains(void);
 static void wdctl_reparse_trusted_domains(void);
 static void wdctl_clear_trusted_domains(void);
@@ -90,6 +91,7 @@ usage(void)
     fprintf(stdout, "  restart           Re-start the running wifidog (without disconnecting active users!)\n");
 	//>>> liudf added 20151225
     fprintf(stdout, "  add_trusted_domains		Add trusted domains\n");
+    fprintf(stdout, "  add_trusted_iplist		Add trusted ip list\n");
     fprintf(stdout, "  reparse_trusted_domains	Reparse trusted domains ip\n");
     fprintf(stdout, "  clear_trusted_domains	Clear all trusted domains\n");
     fprintf(stdout, "  show_trusted_domains 	Show all trusted domains and its ip\n");
@@ -174,6 +176,14 @@ parse_commandline(int argc, char **argv)
 		config.command = WDCTL_ADD_TRUSTED_DOMAINS;
 		if ((argc - (optind + 1)) <= 0) {
 			fprintf(stderr, "wdctl: Error: You must specify trusted domains" "seperated with comma\n");
+            usage();
+            exit(1);
+		}
+        config.param = strdup(*(argv + optind + 1));
+	} else if (strcmp(*(argv + optind), "add_trusted_iplist") == 0) {
+		config.command = WDCTL_ADD_TRUSTED_IPLIST;
+		if ((argc - (optind + 1)) <= 0) {
+			fprintf(stderr, "wdctl: Error: You must specify trusted ip list" "seperated with comma\n");
             usage();
             exit(1);
 		}
@@ -270,6 +280,42 @@ send_request(int sock, const char *request)
 }
 
 //>>> liudf added 20151225
+static void
+wdctl_add_trusted_iplist(void)
+{
+	int sock;
+    char buffer[4196] = {0};
+    char request[4096] = {0};
+    size_t len;
+    ssize_t rlen;
+
+    sock = connect_to_server(config.socket);
+
+    strncpy(request, "add_trusted_iplist ", 4096);
+    strncat(request, config.param, (4096 - strlen(request) - 1));
+    strncat(request, "\r\n\r\n", (4096 - strlen(request) - 1));
+
+    send_request(sock, request);
+
+    len = 0;
+    memset(buffer, 0, sizeof(buffer));
+    while ((len < sizeof(buffer)) && ((rlen = read(sock, (buffer + len), (sizeof(buffer) - len))) > 0)) {
+        len += (size_t) rlen;
+    }
+
+    if (strcmp(buffer, "Yes") == 0) {
+        fprintf(stdout, "Connection %s successfully add_trusted_iplist.\n", config.param);
+    } else if (strcmp(buffer, "No") == 0) {
+        fprintf(stdout, "Connection %s was not active.\n", config.param);
+    } else {
+        fprintf(stderr, "wdctl: Error: WiFiDog sent an abnormal " "reply.\n");
+    }
+
+    shutdown(sock, 2);
+    close(sock);
+
+}
+
 static void
 wdctl_add_trusted_domains(void)
 {
@@ -832,6 +878,10 @@ main(int argc, char **argv)
 		wdctl_add_trusted_domains();
 		break;
 
+	case WDCTL_ADD_TRUSTED_IPLIST:
+		wdctl_add_trusted_iplist();
+		break;
+	
 	case WDCTL_REPARSE_TRUSTED_DOMAINS:
 		wdctl_reparse_trusted_domains();
 		break;

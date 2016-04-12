@@ -61,4 +61,5 @@ void icmp_ping(const char *);
 /** @brief Save pid of this wifidog in pid file */
 void save_pid_file(const char *);
 
+int is_valid_ip(const char *);
 #endif                          /* _UTIL_H_ */
