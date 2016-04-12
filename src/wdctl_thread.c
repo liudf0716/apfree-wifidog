@@ -229,7 +229,7 @@ thread_wdctl_handler(void *arg)
 	//>>> liudf added 20151225
 	} else if (strncmp(request, "add_trusted_domains", strlen("add_trusted_domains")) == 0) {
 		wdctl_add_trusted_domains(fd, (request + strlen("add_trusted_domains") + 1));
-	} else if (strcmp(request, "add_trusted_iplist") == 0) {
+	} else if (strncmp(request, "add_trusted_iplist", strlen("add_trusted_iplist")) == 0) {
 		wdctl_add_trusted_iplist(fd, (request + strlen("add_trusted_iplist") + 1));
 	} else if (strncmp(request, "reparse_trusted_domains", strlen("reparse_trusted_domains")) == 0) {
 		wdctl_reparse_trusted_domains(fd);
