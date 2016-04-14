@@ -107,7 +107,6 @@ _special_process(request *r, const char *mac, const char *redir_url)
 
 	
 	if(_is_apple_captive(r->request.host)) {
-		debug(LOG_INFO, "Into captive.apple.com hit_counts %d interval\n", o_client->hit_counts);
 		LOCK_OFFLINE_CLIENT_LIST();
     	o_client = offline_client_list_find_by_mac(mac);
     	if(o_client == NULL) {
@@ -115,6 +114,7 @@ _special_process(request *r, const char *mac, const char *redir_url)
     	} else {
 			o_client->last_login = time(NULL);
 		}
+		debug(LOG_INFO, "Into captive.apple.com hit_counts %d interval\n", o_client->hit_counts);
     	o_client->hit_counts++;
 
 		if(o_client->client_type == 1 ) {
@@ -198,7 +198,7 @@ http_callback_404(httpd * webserver, request * r, int error_code)
         } else {
 			t_client *clt = NULL;
             debug(LOG_INFO, "Got client MAC address for ip %s: %s", r->clientAddr, mac);
-			
+	
             safe_asprintf(&urlFragment, "%sgw_address=%s&gw_port=%d&gw_id=%s&channel_path=%s&ssid=%s&ip=%s&mac=%s&url=%s",
                           auth_server->authserv_login_script_path_fragment,
                           config->gw_address, config->gw_port, config->gw_id, 
