@@ -105,30 +105,26 @@ _special_process(request *r, const char *mac, const char *redir_url)
 {
 	t_offline_client *o_client = NULL;
 
-	LOCK_OFFLINE_CLIENT_LIST();
-    o_client = offline_client_list_find_by_mac(mac);
-    if(o_client == NULL) {
-    	o_client = offline_client_list_add(r->clientAddr, mac);
-    } else {
-		o_client->last_login = time(NULL);
-	}
-    UNLOCK_OFFLINE_CLIENT_LIST();
-
+	
 	if(_is_apple_captive(r->request.host)) {
-		unsigned int interval = time(NULL) - o_client->first_login;
-		debug(LOG_INFO, "Into captive.apple.com hit_counts %d interval %d\n", o_client->hit_counts, interval);
+		debug(LOG_INFO, "Into captive.apple.com hit_counts %d interval\n", o_client->hit_counts);
 		LOCK_OFFLINE_CLIENT_LIST();
+    	o_client = offline_client_list_find_by_mac(mac);
+    	if(o_client == NULL) {
+    		o_client = offline_client_list_add(r->clientAddr, mac);
+    	} else {
+			o_client->last_login = time(NULL);
+		}
     	o_client->hit_counts++;
-		UNLOCK_OFFLINE_CLIENT_LIST();
+
 		if(o_client->client_type == 1 ) {
+    		UNLOCK_OFFLINE_CLIENT_LIST();
 			if(o_client->hit_counts < 2)
-				//http_send_js_redirect_ex(r, redir_url);
 				http_send_redirect_to_auth(r, redir_url, "Redirect to login page");
 			else {
 				http_send_apple_redirect(r, redir_url);
 			}
 		} else {	
-			LOCK_OFFLINE_CLIENT_LIST();
 			o_client->client_type = 1;
 			UNLOCK_OFFLINE_CLIENT_LIST();
 			http_send_redirect_to_auth(r, redir_url, "Redirect to login page");
@@ -230,7 +226,7 @@ http_callback_404(httpd * webserver, request * r, int error_code)
 			// if device has login; but after long time reconnected router, its ip changed
 			LOCK_CLIENT_LIST();
 			clt = client_list_find_by_mac(mac);
-			if(clt) {
+			if(clt && strcmp(clt->ip, r->clientAddr) != 0) {
 				fw_deny(clt);
 				free(clt->ip);
 				clt->ip = safe_strdup(r->clientAddr);

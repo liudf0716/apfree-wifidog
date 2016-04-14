@@ -333,7 +333,9 @@ void clear_roam_mac_list();
 
 t_trusted_mac *get_roam_maclist();
 
-int is_roaming(const char *mac);
+int is_roaming(const char *);
+
+int is_untrusted_mac(const char *);
 
 // trustedmaclist operation, for wdctl use
 void parse_trusted_mac_list(const char *);

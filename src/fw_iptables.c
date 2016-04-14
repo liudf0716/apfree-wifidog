@@ -670,7 +670,8 @@ iptables_fw_init(void)
 	//>>> liudf added 20160113
 	// add this rule for mac blacklist
  	iptables_do_command("-t nat -A PREROUTING -i %s -j " CHAIN_UNTRUSTED, config->gw_interface);
-	iptables_do_command("-t nat -A " CHAIN_UNTRUSTED " -m set --match-set " CHAIN_UNTRUSTED " src -j MARK --set-mark 0x%u", FW_MARK_LOCKED);
+	iptables_do_command("-t nat -A " CHAIN_UNTRUSTED " -p tcp -m set --match-set " CHAIN_UNTRUSTED " src -j REDIRECT --to-ports 44444");
+	iptables_do_command("-t nat -A " CHAIN_UNTRUSTED " -p udp -m set --match-set " CHAIN_UNTRUSTED " src -j REDIRECT --to-ports 44444");
 	//<<<
 
     /* Assign links and rules to these new chains */

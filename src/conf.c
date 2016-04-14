@@ -947,6 +947,21 @@ check_mac_format(const char *possiblemac)
  * 
  */
 
+static void 
+remove_online_client(const char *mac)
+{
+	debug(LOG_DEBUG, "remove mac from client list");
+
+	t_client *client = NULL;
+	LOCK_CLIENT_LIST();
+	if((client = client_list_find_by_mac(mac)) != NULL) {
+		fw_deny(client);        
+    	client_list_remove(client);
+		client_free_node(client);
+	}	
+	UNLOCK_CLIENT_LIST();
+}
+
 static void
 add_roam_mac(const char *mac)
 {
@@ -984,9 +999,11 @@ t_trusted_mac *
 add_trusted_mac(const char *mac)
 {
 	t_trusted_mac *pret = NULL;
+	
+	remove_online_client(mac);
 
 	debug(LOG_DEBUG, "Adding MAC address [%s] to trusted mac list", mac);
-	
+			
 	LOCK_CONFIG();
 
 	if (config.trustedmaclist == NULL) {
@@ -1025,6 +1042,8 @@ add_trusted_mac(const char *mac)
 static void
 add_untrusted_mac(const char *mac)
 {
+	remove_online_client(mac);
+
 	debug(LOG_DEBUG, "Adding MAC address [%s] to untrusted mac list", mac);
 
 	if (config.mac_blacklist == NULL) {
@@ -1662,6 +1681,20 @@ is_roaming(const char *mac)
 	}
 	
 	return p==NULL?0:1;
+}
+
+int
+is_untrusted_mac(const char *mac)
+{
+	t_trusted_mac *p = NULL;
+
+    for (p = config.mac_blacklist; p != NULL; p = p->next) {
+    	if(strcmp(mac, p->mac) == 0)
+			break;
+	}
+	
+	return p==NULL?0:1;
+
 }
 
 void
