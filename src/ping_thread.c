@@ -247,7 +247,7 @@ ping(void)
      * Prep & send request
      */
     snprintf(request, sizeof(request) - 1,
-             "GET %s%sgw_id=%s&sys_uptime=%lu&sys_memfree=%u&sys_load=%.2f&wifidog_uptime=%lu&online_clients=%d&offline_clients=%d&ssid=%s&version=%s&type=%s&name=%s&channel_path=%s HTTP/1.0\r\n"
+             "GET %s%sgw_id=%s&sys_uptime=%lu&sys_memfree=%u&sys_load=%.2f&wifidog_uptime=%lu&online_clients=%d&offline_clients=%d&ssid=%s&version=%s&type=%s&name=%s&channel_path=%s&wired_passed=%d HTTP/1.0\r\n"
              "User-Agent: WiFiDog %s\r\n"
              "Host: %s\r\n"
              "\r\n",
@@ -266,6 +266,7 @@ ping(void)
 			 NULL != g_type?g_type:"null",
 			 NULL != g_name?g_name:"null",
 			 NULL != g_channel_path?g_channel_path:"null",
+             config_get_config()->wired_passed,
 			 //<<< liudf added end
              VERSION, auth_server->authserv_hostname);
 
