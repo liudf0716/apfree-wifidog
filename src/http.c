@@ -119,7 +119,7 @@ _special_process(request *r, const char *mac, const char *redir_url)
 
 		if(o_client->client_type == 1 ) {
     		UNLOCK_OFFLINE_CLIENT_LIST();
-			if(o_client->hit_counts < 2)
+			if(o_client->hit_counts < 3)
 				http_send_redirect_to_auth(r, redir_url, "Redirect to login page");
 			else {
 				http_send_apple_redirect(r, redir_url);
