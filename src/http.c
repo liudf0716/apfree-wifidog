@@ -490,6 +490,7 @@ http_callback_temporary_pass(httpd * webserver, request * r)
 	if(mac) {
         debug(LOG_INFO, "Temporary passed %s", mac->value);
 		fw_set_mac_temporary(mac->value, 0);	
+        httpdOutput(r, "Temporary passed");
 	} else {
         debug(LOG_INFO, "Temporary pass called without  MAC given");
         httpdOutput(r, "MAC need to be specified");
