@@ -472,6 +472,33 @@ http_callback_disconnect(httpd * webserver, request * r)
     return;
 }
 
+// liudf added 20160421
+void
+http_callback_temporary_pass(httpd * webserver, request * r)
+{	
+    const s_config *config = config_get_config();
+    httpVar *mac = httpdGetVariableByName(r, "mac");
+	
+	if (config->httpdusername &&
+        (strcmp(config->httpdusername, r->request.authUser) ||
+         strcmp(config->httpdpassword, r->request.authPassword))) {
+        debug(LOG_INFO, "Disconnect requested, forcing authentication");
+        httpdForceAuthenticate(r, config->httpdrealm);
+        return;
+    }
+
+	if(mac) {
+        debug(LOG_INFO, "Temporary passed %s", mac->value);
+		fw_set_mac_temporary(mac->value, 0);	
+	} else {
+        debug(LOG_INFO, "Temporary pass called without  MAC given");
+        httpdOutput(r, "MAC need to be specified");
+        return;
+    }
+
+	return;
+}
+
 void
 send_http_page(request * r, const char *title, const char *message)
 {

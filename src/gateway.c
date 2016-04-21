@@ -413,7 +413,11 @@ main_loop(void)
     httpdAddCContent(webserver, "/wifidog", "status", 0, NULL, http_callback_status);
     httpdAddCContent(webserver, "/wifidog", "auth", 0, NULL, http_callback_auth);
     httpdAddCContent(webserver, "/wifidog", "disconnect", 0, NULL, http_callback_disconnect);
-
+	
+	// liudf added 20160421
+	// added temporary pass api
+	httpdAddCContent(webserver, "/wifidog", "temporary_pass", 0, NULL, http_callback_temporary_pass);
+	
     httpdSetErrorFunction(webserver, 404, http_callback_404);
 
     /* Reset the firewall (if WiFiDog crashed) */
