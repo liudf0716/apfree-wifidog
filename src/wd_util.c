@@ -255,6 +255,46 @@ get_status_text()
 
 //>>>> liudf added 20151225
 char *
+get_serialize_iplist()
+{
+	pstr_t *pstr = NULL;
+    s_config *config;
+	t_domain_trusted *domain_trusted = NULL;
+	t_ip_trusted	*iplist = NULL;
+	int line = 0;
+
+    config = config_get_config();
+    
+	domain_trusted = config->domains_trusted;
+	if(domain_trusted == NULL)
+		return NULL;
+
+	pstr = pstr_new();
+
+	LOCK_DOMAIN();
+	
+	for (; domain_trusted != NULL; domain_trusted = domain_trusted->next) {
+		if(strcmp(domain_trusted->domain, "iplist") == 0) {
+			break;
+		}
+	}
+	
+	iplist = domains_trusted->ips_trusted;
+	for(; iplist != NULL; iplist = iplist->next, line++) {
+		if(line == 0)
+        	pstr_append_sprintf(pstr, "%s", iplist->ip);
+		else
+        	pstr_append_sprintf(pstr, ",%s", iplist->ip);	
+	}
+
+	UNLOCK_DOMAIN();	
+    
+	return pstr_to_string(pstr);
+
+
+}
+
+char *
 get_serialize_trusted_domains()
 {
 	pstr_t *pstr = NULL;
@@ -273,6 +313,10 @@ get_serialize_trusted_domains()
 	LOCK_DOMAIN();
 	
 	for (; domain_trusted != NULL; domain_trusted = domain_trusted->next, line++) {
+		if(strcmp(domain_trusted->domain, "iplist") == 0) {
+			line--;
+			continue;
+		}
 		if(line == 0)
         	pstr_append_sprintf(pstr, "%s", domain_trusted->domain);
 		else

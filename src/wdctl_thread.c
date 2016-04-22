@@ -480,12 +480,13 @@ wdctl_add_trusted_domains(int fd, const char *arg)
     debug(LOG_DEBUG, "parse trusted domains");
 	parse_user_trusted_domain_string(arg);
 	
+    write_to_socket(fd, "Yes", 3);
+
     debug(LOG_DEBUG, "parse trusted domains ip");
 	parse_user_trusted_domain_list();
 
 	fw_refresh_user_domains_trusted();	
 
-    write_to_socket(fd, "Yes", 3);
 
     debug(LOG_DEBUG, "Exiting wdctl_add_trusted_domains...");
 }
@@ -688,6 +689,7 @@ wdctl_user_cfg_save(int fd)
 	const char *trusted_maclist = NULL, 
 			   *untrusted_maclist = NULL, 
 			   *trusted_domains = NULL;
+			   *trusted_iplist = NULL;
 	char	szcmd[2048] = {0};
 	
 	iptables_fw_save_online_clients();
@@ -696,7 +698,7 @@ wdctl_user_cfg_save(int fd)
 	trusted_maclist 	= get_serialize_maclist(TRUSTED_MAC);
 	untrusted_maclist 	= get_serialize_maclist(UNTRUSTED_MAC);
 	trusted_domains		= get_serialize_trusted_domains();
-	
+	trusted_iplist		= get_serialize_iplist();
 	
 	if(trusted_domains) {
 		snprintf(szcmd, 2048, "uci set wifidog.@wifidog[0].trusted_domains='%s'", trusted_domains);
@@ -705,6 +707,14 @@ wdctl_user_cfg_save(int fd)
 	}
 	execute(szcmd, 1);
 	
+	memset(szcmd, 0, 2048);
+	if(trusted_maclist) {
+		snprintf(szcmd, 2048, "uci set wifidog.@wifidog[0].trusted_iplist='%s'", trusted_iplist);
+	} else {
+		snprintf(szcmd, 2048, "uci delete wifidog.@wifidog[0].trusted_iplist");
+	}
+	execute(szcmd, 1);
+
 	memset(szcmd, 0, 2048);
 	if(trusted_maclist) {
 		snprintf(szcmd, 2048, "uci set wifidog.@wifidog[0].trusted_maclist='%s'", trusted_maclist);

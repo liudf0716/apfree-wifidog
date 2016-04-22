@@ -340,9 +340,9 @@ wdctl_add_trusted_domains(void)
     }
 
     if (strcmp(buffer, "Yes") == 0) {
-        fprintf(stdout, "Connection %s successfully add_trusted_domains.\n", config.param);
+        fprintf(stdout, "Connection successfully add_trusted_domains.\n");
     } else if (strcmp(buffer, "No") == 0) {
-        fprintf(stdout, "Connection %s was not active.\n", config.param);
+        fprintf(stdout, "Connection  was not active.\n");
     } else {
         fprintf(stderr, "wdctl: Error: WiFiDog sent an abnormal " "reply.\n");
     }

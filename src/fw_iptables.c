@@ -419,9 +419,11 @@ iptables_fw_set_trusted_maclist(void)
 	t_trusted_mac *p = NULL;
 	
     config = config_get_config();
-
+	
+	LOCK_CONFIG();
 	for (p = config->trustedmaclist; p != NULL; p = p->next)
 		ipset_do_command("add " CHAIN_TRUSTED " %s", p->mac);
+	UNLOCK_CONFIG();
 }
 
 void
@@ -444,8 +446,10 @@ iptables_fw_set_untrusted_maclist(void)
 
     config = config_get_config();
 
+	LOCK_CONFIG();
 	for (p = config->mac_blacklist; p != NULL; p = p->next)
 		ipset_do_command("add " CHAIN_UNTRUSTED " %s", p->mac);
+	UNLOCK_CONFIG();
 }
 
 void
