@@ -40,6 +40,15 @@
 #include <netdb.h>
 #include <arpa/inet.h>
 
+#include <setjmp.h>
+#include <signal.h>
+#include <time.h>
+#include <sys/time.h>
+
+#include <netinet/in.h>
+#include <arpa/nameser.h>
+#include <resolv.h>
+
 #include "common.h"
 #include "safe.h"
 #include "debug.h"
@@ -196,6 +205,17 @@ static void validate_popular_servers(void);
 static void add_popular_server(const char *);
 
 static OpCodes config_parse_token(const char *, const char *, int);
+
+static sigjmp_buf jmpbuf;
+static volatile sig_atomic_t canjump;
+static void alarm_handle(int signo)
+{
+    if(canjump == 0)
+        return;
+    canjump = 0;
+    siglongjmp(jmpbuf,1);
+}
+
 
 /** Accessor for the current gateway configuration
 @return:  A pointer to the current config.  The pointer isn't opaque, but should be treated as READ-ONLY
@@ -1423,17 +1443,28 @@ parse_trusted_domain_2_ip(t_domain_trusted *p)
 	struct hostent *he;
     struct in_addr **addr_list;
     int i;
+	sigset_t mask,oldmask;
+	int timeout = 2;
 	
 	// if has parsed or ip list; then passed it	
 	if(p->ips_trusted != NULL || strcmp(p->domain, "iplist") == 0 || p->invalid == 1) {	
         debug(LOG_INFO, "domain has parsed (%s)", p->domain);
 		return;
 	}
-	 
-    if ( (he=gethostbyname2(p->domain, AF_INET) ) == NULL)
-    {
+	
+    sigemptyset(&mask);
+    sigaddset(&mask, SIGALRM);
+    pthread_sigmask(SIG_UNBLOCK, &mask, &oldmask);
+	signal(SIGALRM, alarm_handle);
+    alarm(timeout);
+    if ( sigsetjmp(jmpbuf, 1) != 0 ) {
+		goto err;
+    }
+    canjump = 1; /* sigsetjmp() is ok */	 
+
+    if ( (he=gethostbyname2(p->domain, AF_INET) ) == NULL){
 		p->invalid = 1;
-        return ;
+        goto err;
     }
 
     addr_list = (struct in_addr **) he->h_addr_list;
@@ -1468,7 +1499,13 @@ parse_trusted_domain_2_ip(t_domain_trusted *p)
 			}
 		}
 
-	}	
+	}
+
+err:	
+	alarm(0); // cancel timer
+    signal(SIGALRM,SIG_IGN);
+	pthread_sigmask(SIG_SETMASK,&oldmask,NULL);
+
 }
 
 void 
