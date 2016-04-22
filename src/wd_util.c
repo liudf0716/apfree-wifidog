@@ -279,7 +279,7 @@ get_serialize_iplist()
 		}
 	}
 	
-	iplist = domains_trusted->ips_trusted;
+	iplist = domain_trusted->ips_trusted;
 	for(; iplist != NULL; iplist = iplist->next, line++) {
 		if(line == 0)
         	pstr_append_sprintf(pstr, "%s", iplist->ip);
