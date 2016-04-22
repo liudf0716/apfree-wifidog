@@ -1425,13 +1425,14 @@ parse_trusted_domain_2_ip(t_domain_trusted *p)
     int i;
 	
 	// if has parsed or ip list; then passed it	
-	if(p->ips_trusted != NULL || strcmp(p->domain, "iplist") == 0) {	
+	if(p->ips_trusted != NULL || strcmp(p->domain, "iplist") == 0 || p->invalid == 1) {	
         debug(LOG_INFO, "domain has parsed (%s)", p->domain);
 		return;
 	}
 	 
     if ( (he=gethostbyname2(p->domain, AF_INET) ) == NULL)
     {
+		p->invalid = 1;
         return ;
     }
 

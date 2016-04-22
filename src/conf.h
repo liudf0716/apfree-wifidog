@@ -189,6 +189,7 @@ typedef struct _ip_trusted_t {
 typedef struct _domain_trusted_t {
 	char *domain;
 	t_ip_trusted	*ips_trusted;
+	int		invalid;
 	struct _domain_trusted_t *next;
 } t_domain_trusted;
 
