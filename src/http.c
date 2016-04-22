@@ -247,7 +247,7 @@ http_callback_404(httpd * webserver, request * r, int error_code)
 				fw_set_trusted_mac(mac);
 				http_send_redirect(r, tmp_url, "device no need login");
 				if(pmac != NULL)
-					pmac->ip = safe_malloc(r->clientAddr);
+					pmac->ip = safe_strdup(r->clientAddr);
             	free(urlFragment);
                 free(url);
 				free(mac);

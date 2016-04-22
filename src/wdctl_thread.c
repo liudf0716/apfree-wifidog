@@ -688,7 +688,7 @@ wdctl_user_cfg_save(int fd)
 {
 	const char *trusted_maclist = NULL, 
 			   *untrusted_maclist = NULL, 
-			   *trusted_domains = NULL;
+			   *trusted_domains = NULL,
 			   *trusted_iplist = NULL;
 	char	szcmd[2048] = {0};
 	

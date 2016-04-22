@@ -865,10 +865,10 @@ config_read(const char *filename)
 					config.pool_mode = parse_boolean_value(p1);
 					break;
 				case oThreadNumber:
-                    sscanf(p1, "%d", &config.thread_number);
+                    sscanf(p1, "%hd", &config.thread_number);
 					break;
 				case oQueueSize:
-                    sscanf(p1, "%d", &config.queue_size);
+                    sscanf(p1, "%hd", &config.queue_size);
 					break;
 				case oWiredPassed:
                     config.wired_passed = parse_boolean_value(p1);
