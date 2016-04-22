@@ -1443,8 +1443,6 @@ parse_trusted_domain_2_ip(t_domain_trusted *p)
 		inet_ntop(AF_INET, addr_list[i], hostname, HTTP_IP_ADDR_LEN);
 		hostname[HTTP_IP_ADDR_LEN-1] = '\0';
         debug(LOG_DEBUG, "hostname ip is(%s)", hostname);
-		
-		LOCK_DOMAIN();
 
 		if(p->ips_trusted == NULL) {
 			ipt = (t_ip_trusted *)malloc(sizeof(t_ip_trusted));
@@ -1469,7 +1467,6 @@ parse_trusted_domain_2_ip(t_domain_trusted *p)
 			}
 		}
 
-		UNLOCK_DOMAIN();
 	}	
 }
 
@@ -1485,12 +1482,15 @@ parse_common_trusted_domain_list(trusted_domain_t which)
 	else
 		return;
 
+	LOCK_DOMAIN();
+
 	while(p && p->domain) {
         debug(LOG_DEBUG, "parse domain (%s)", p->domain);
 		parse_trusted_domain_2_ip(p);
 		p = p->next;
 	}
 
+	UNLOCK_DOMAIN();
 }
 
 void parse_user_trusted_domain_list()
