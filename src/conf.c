@@ -1451,7 +1451,8 @@ parse_trusted_domain_2_ip(t_domain_trusted *p)
         debug(LOG_INFO, "domain has parsed (%s)", p->domain);
 		return;
 	}
-	
+
+#if	0	
     sigemptyset(&mask);
     sigaddset(&mask, SIGALRM);
     pthread_sigmask(SIG_UNBLOCK, &mask, &oldmask);
@@ -1461,6 +1462,7 @@ parse_trusted_domain_2_ip(t_domain_trusted *p)
 		goto err;
     }
     canjump = 1; /* sigsetjmp() is ok */	 
+#endif
 
     if ( (he=gethostbyname2(p->domain, AF_INET) ) == NULL){
 		p->invalid = 1;
@@ -1502,10 +1504,12 @@ parse_trusted_domain_2_ip(t_domain_trusted *p)
 	}
 
 err:	
+#if	0
 	alarm(0); // cancel timer
     signal(SIGALRM,SIG_IGN);
 	pthread_sigmask(SIG_SETMASK,&oldmask,NULL);
-
+#endif
+	return;
 }
 
 void 

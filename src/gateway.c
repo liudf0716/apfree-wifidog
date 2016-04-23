@@ -67,6 +67,7 @@
  */
 static pthread_t tid_fw_counter = 0;
 static pthread_t tid_ping = 0;
+static pthread_t tid_wdctl = 0;
 static threadpool_t *pool = NULL; 
 
 time_t started_time = 0;
@@ -290,6 +291,10 @@ termination_handler(int s)
         pthread_kill(tid_ping, SIGKILL);
     }
 	// liudf added 20160301
+	if (tid_wdctl && self != tid_wdctl) {
+        debug(LOG_INFO, "Explicitly killing the wdctl thread");
+		pthread_kill(tid_wdctl, SIGKILL);
+	}
 	if(pool != NULL) {
 		threadpool_destroy(pool, 0);
 	}
@@ -437,12 +442,12 @@ main_loop(void)
     pthread_detach(tid_fw_counter);
 
     /* Start control thread */
-    result = pthread_create(&tid, NULL, (void *)thread_wdctl, (void *)safe_strdup(config->wdctl_sock));
+    result = pthread_create(&tid_wdctl, NULL, (void *)thread_wdctl, (void *)safe_strdup(config->wdctl_sock));
     if (result != 0) {
         debug(LOG_ERR, "FATAL: Failed to create a new thread (wdctl) - exiting");
         termination_handler(0);
     }
-    pthread_detach(tid);
+    pthread_detach(tid_wdctl);
 
     /* Start heartbeat thread */
     result = pthread_create(&tid_ping, NULL, (void *)thread_ping, NULL);
