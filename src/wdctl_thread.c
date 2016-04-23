@@ -475,7 +475,6 @@ wdctl_add_trusted_domains(int fd, const char *arg)
 {
     debug(LOG_DEBUG, "Entering wdctl_add_trusted_domains...");
 	
-    write_to_socket(fd, "Yes", 3);
 
     debug(LOG_DEBUG, "Argument: %s ", arg);
 
@@ -485,8 +484,9 @@ wdctl_add_trusted_domains(int fd, const char *arg)
     debug(LOG_DEBUG, "parse trusted domains ip");
 	parse_user_trusted_domain_list();
 
-	fw_refresh_user_domains_trusted();	
+    write_to_socket(fd, "Yes", 3);
 
+	fw_refresh_user_domains_trusted();	
 
     debug(LOG_DEBUG, "Exiting wdctl_add_trusted_domains...");
 }
