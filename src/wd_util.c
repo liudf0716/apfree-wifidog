@@ -232,6 +232,8 @@ get_status_text()
 
     config = config_get_config();
 
+    LOCK_CONFIG();
+
     if (config->trustedmaclist != NULL) {
         pstr_cat(pstr, "\nTrusted MAC addresses:\n");
 
@@ -242,7 +244,6 @@ get_status_text()
 
     pstr_cat(pstr, "\nAuthentication servers:\n");
 
-    LOCK_CONFIG();
 
     for (auth_server = config->auth_servers; auth_server != NULL; auth_server = auth_server->next) {
         pstr_append_sprintf(pstr, "  Host: %s (%s)\n", auth_server->authserv_hostname, auth_server->last_ip);

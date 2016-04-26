@@ -248,8 +248,10 @@ sigchld_handler(int s)
     pid_t rc;
 
     debug(LOG_DEBUG, "Handler for SIGCHLD called. Trying to reap a child");
-
-    rc = waitpid(-1, &status, WNOHANG);
+	
+	do {
+    	rc = waitpid(-1, &status, WNOHANG);
+	} while(rc != (pid_t)0 && rc != (pid_t)-1)
 
     debug(LOG_DEBUG, "Handler for SIGCHLD reaped child PID %d", rc);
 }
