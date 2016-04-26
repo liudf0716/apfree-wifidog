@@ -708,7 +708,7 @@ wdctl_user_cfg_save(int fd)
 	execute(szcmd, 1);
 	
 	memset(szcmd, 0, 2048);
-	if(trusted_maclist) {
+	if(trusted_iplist) {
 		snprintf(szcmd, 2048, "uci set wifidog.@wifidog[0].trusted_iplist='%s'", trusted_iplist);
 	} else {
 		snprintf(szcmd, 2048, "uci delete wifidog.@wifidog[0].trusted_iplist");
