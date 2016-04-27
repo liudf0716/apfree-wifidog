@@ -270,7 +270,6 @@ get_serialize_iplist()
 	if(domain_trusted == NULL)
 		return NULL;
 
-	pstr = pstr_new();
 
 	LOCK_DOMAIN();
 	
@@ -280,8 +279,15 @@ get_serialize_iplist()
 		}
 	}
 	
-	if(domain_trusted)	
+	if(domain_trusted != NULL)	
 		iplist = domain_trusted->ips_trusted;
+	else {
+		UNLOCK_DOMAIN();
+        debug(LOG_DEBUG, "no iplist ");
+		return NULL;
+	}
+
+	pstr = pstr_new();
 
 	for(; iplist != NULL; iplist = iplist->next, line++) {
 		if(line == 0)
