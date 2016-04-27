@@ -57,6 +57,8 @@
 #include "simple_http.h"
 #include "wd_util.h"
 
+#include "httpd_priv.h"
+
 static void ping(void);
 
 /** Launches a thread that periodically checks in with the wifidog auth server to perform heartbeat function.
@@ -183,7 +185,8 @@ ping(void)
 		if(strlen(ssid) > 0) {
 			if(g_ssid) 
 				free(g_ssid);
-			g_ssid = safe_strdup(ssid);
+			//g_ssid = safe_strdup(ssid);
+			g_ssid = _httpd_escape(ssid);
 		}
 	}
 	
