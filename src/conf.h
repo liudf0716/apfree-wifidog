@@ -364,6 +364,8 @@ void reset_trusted_mac_list();
 
 int trusted_mac_list_dup(t_trusted_mac **);
 
+void add_trusted_ip_list(const char *);
+
 // online clients
 int 	g_online_clients;
 char 	*g_version;

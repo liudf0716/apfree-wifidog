@@ -77,10 +77,10 @@ thread_ping(void *arg)
 	__fix_weixin_http_dns_ip();
 
 	parse_inner_trusted_domain_list();
-	iptables_fw_set_inner_domains_trusted();
+	fw_set_inner_domains_trusted();
 
 	parse_user_trusted_domain_list();
-    iptables_fw_set_user_domains_trusted();
+    fw_set_user_domains_trusted();
 
 	fw_set_trusted_maclist();
 	fw_set_untrusted_maclist();
@@ -185,7 +185,6 @@ ping(void)
 		if(strlen(ssid) > 0) {
 			if(g_ssid) 
 				free(g_ssid);
-			//g_ssid = safe_strdup(ssid);
 			g_ssid = _httpd_escape(ssid);
 		}
 	}
