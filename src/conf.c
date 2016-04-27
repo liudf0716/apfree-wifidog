@@ -206,16 +206,6 @@ static void add_popular_server(const char *);
 
 static OpCodes config_parse_token(const char *, const char *, int);
 
-static sigjmp_buf jmpbuf;
-static volatile sig_atomic_t canjump;
-static void alarm_handle(int signo)
-{
-    if(canjump == 0)
-        return;
-    canjump = 0;
-    siglongjmp(jmpbuf,1);
-}
-
 
 /** Accessor for the current gateway configuration
 @return:  A pointer to the current config.  The pointer isn't opaque, but should be treated as READ-ONLY
@@ -1443,8 +1433,6 @@ parse_trusted_domain_2_ip(t_domain_trusted *p)
 	struct hostent *he;
     struct in_addr **addr_list;
     int i;
-	sigset_t mask,oldmask;
-	int timeout = 2;
 	
 	// if has parsed or ip list; then passed it	
 	if(p->ips_trusted != NULL || strcmp(p->domain, "iplist") == 0 || p->invalid == 1) {	
