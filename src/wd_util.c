@@ -280,7 +280,9 @@ get_serialize_iplist()
 		}
 	}
 	
-	iplist = domain_trusted->ips_trusted;
+	if(domain_trusted)	
+		iplist = domain_trusted->ips_trusted;
+
 	for(; iplist != NULL; iplist = iplist->next, line++) {
 		if(line == 0)
         	pstr_append_sprintf(pstr, "%s", iplist->ip);
@@ -291,7 +293,6 @@ get_serialize_iplist()
 	UNLOCK_DOMAIN();	
     
 	return pstr_to_string(pstr);
-
 
 }
 
