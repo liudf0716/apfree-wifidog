@@ -84,6 +84,12 @@ static void wdctl_user_cfg_save(int);
 
 static int wdctl_socket_server;
 
+void
+close_wdctl_socket()
+{
+	close(wdctl_socket_server);
+}
+
 static int
 create_unix_socket(const char *sock_name)
 {

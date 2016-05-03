@@ -32,4 +32,6 @@
 /** @brief Listen for WiFiDog control messages on a unix domain socket */
 void thread_wdctl(void *arg);
 
+void close_wdctl_socket();
+
 #endif
