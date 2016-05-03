@@ -111,8 +111,6 @@ execute(const char *cmd_line, int quiet)
 
     pid = safe_fork();
     if (pid == 0) {             /* for the child process:         */
-		close_wdctl_socket();
-	
         /* We don't want to see any errors if quiet flag is on */
         if (quiet)
             close(2);

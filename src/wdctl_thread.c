@@ -160,6 +160,8 @@ thread_wdctl(void *arg)
     if (-1 == wdctl_socket_server) {
         termination_handler(0);
     }
+	
+	register_fd_cleanup_on_fork(wdctl_socket_server);
 
     while (1) {
         len = sizeof(sa_un);
