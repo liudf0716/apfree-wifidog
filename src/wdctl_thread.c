@@ -104,7 +104,7 @@ create_unix_socket(const char *sock_name)
         return -1;
     }
 
-    sock = socket(PF_UNIX, SOCK_STREAM, 0);
+    sock = socket(PF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
 
     if (sock < 0) {
         debug(LOG_DEBUG, "Could not get unix socket: %s", strerror(errno));
