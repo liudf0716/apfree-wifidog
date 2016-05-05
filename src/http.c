@@ -62,8 +62,6 @@ static char *redirect_html;
 
 const char *apple_domains[] = {
 					"captive.apple.com",
-					"static.ess.apple.com:80",
-					"init-p01st.push.apple.com",
 					"www.apple.com",
 					NULL
 };
@@ -107,22 +105,30 @@ _special_process(request *r, const char *mac, const char *redir_url)
 
 	
 	if(_is_apple_captive(r->request.host)) {
+		int interval = 0
 		LOCK_OFFLINE_CLIENT_LIST();
     	o_client = offline_client_list_find_by_mac(mac);
     	if(o_client == NULL) {
     		o_client = offline_client_list_add(r->clientAddr, mac);
     	} else {
 			o_client->last_login = time(NULL);
+			interval = o_client->last_login - o_client->first_login;
 		}
-		debug(LOG_INFO, "Into captive.apple.com hit_counts %d interval\n", o_client->hit_counts);
-    	o_client->hit_counts++;
+
+		debug(LOG_INFO, "Into captive.apple.com hit_counts %d interval %d http version %d\n", 
+				o_client->hit_counts, interval, r->request.version);
+    	
+		o_client->hit_counts++;
 
 		if(o_client->client_type == 1 ) {
     		UNLOCK_OFFLINE_CLIENT_LIST();
-			if(o_client->hit_counts < 3)
+			if(interval > 40) {
+				iptables_fw_set_mac_temporary(mac, 0);	
 				http_send_redirect_to_auth(r, redir_url, "Redirect to login page");
-			else {
+			} else if(o_client->hit_counts > 2 && r->request.version == HTTP_1_0)
 				http_send_apple_redirect(r, redir_url);
+			else {
+				http_send_redirect_to_auth(r, redir_url, "Redirect to login page");
 			}
 		} else {	
 			o_client->client_type = 1;

@@ -66,6 +66,9 @@ extern "C" {
 #define	HTTP_GET		1
 #define	HTTP_POST		2
 
+#define	HTTP_1_0		1
+#define	HTTP_1_1		2
+
 #define	HTTP_TRUE		1
 #define HTTP_FALSE		0
 
@@ -93,7 +96,7 @@ extern "C" {
 */
 
     typedef struct {
-        int method, contentLength, authLength;
+        int method, contentLength, authLength, version;
         char path[HTTP_MAX_URL], query[HTTP_MAX_URL], host[HTTP_MAX_URL],       /* acv@acv.ca/wifidog: Added decoding
                                                                                    of host: header if present. */
          ifModified[HTTP_MAX_URL];

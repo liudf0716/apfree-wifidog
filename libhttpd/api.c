@@ -417,6 +417,12 @@ httpdReadRequest(httpd * server, request * r)
             strncpy(r->request.path, cp, HTTP_MAX_URL);
             r->request.path[HTTP_MAX_URL - 1] = 0;
             _httpd_sanitiseUrl(r->request.path);
+			
+			cp = cp2 + 1;
+			if(memcmp(cp, "HTTP/1.0", 8) == 0)
+				r->request.version = HTTP_1_0;
+			else 
+				r->request.version = HTTP_1_1; 
             continue;
         }
 
