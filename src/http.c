@@ -105,7 +105,7 @@ _special_process(request *r, const char *mac, const char *redir_url)
 
 	
 	if(_is_apple_captive(r->request.host)) {
-		int interval = 0
+		int interval = 0;
 		LOCK_OFFLINE_CLIENT_LIST();
     	o_client = offline_client_list_find_by_mac(mac);
     	if(o_client == NULL) {
@@ -123,7 +123,7 @@ _special_process(request *r, const char *mac, const char *redir_url)
 		if(o_client->client_type == 1 ) {
     		UNLOCK_OFFLINE_CLIENT_LIST();
 			if(interval > 40) {
-				iptables_fw_set_mac_temporary(mac, 0);	
+				fw_set_mac_temporary(mac, 0);	
 				http_send_redirect_to_auth(r, redir_url, "Redirect to login page");
 			} else if(o_client->hit_counts > 2 && r->request.version == HTTP_1_0)
 				http_send_apple_redirect(r, redir_url);
