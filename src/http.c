@@ -124,7 +124,7 @@ _special_process(request *r, const char *mac, const char *redir_url)
     		UNLOCK_OFFLINE_CLIENT_LIST();
 			if(interval > 40) {
 				fw_set_mac_temporary(mac, 0);	
-				http_send_redirect_to_auth(r, redir_url, "Redirect to login page");
+				http_send_apple_redirect(r, redir_url);
 			} else if(o_client->hit_counts > 2 && r->request.version == HTTP_1_0)
 				http_send_apple_redirect(r, redir_url);
 			else {
