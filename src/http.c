@@ -85,6 +85,15 @@ const char *apple_redirect_msg = "<!DOCTYPE html>"
 				"</body>"
 				"</html>";
 
+const char *apple_wisper = "<!DOCTYPE html>"
+				"<html>"
+				"<script type=\"text/javascript\">"
+					"window.setTimeout(function() {location.href = \"captive.apple.com\";}, 12000);"
+				"</script>"
+				"<body>"
+				"</body>"
+				"</html>";
+
 static int
 _is_apple_captive(const char *domain)
 {
@@ -122,7 +131,7 @@ _special_process(request *r, const char *mac, const char *redir_url)
 
 		if(o_client->client_type == 1 ) {
     		UNLOCK_OFFLINE_CLIENT_LIST();
-			if(interval > 40) {
+			if(interval > 10 && r->request.version == HTTP_1_0) {
 				fw_set_mac_temporary(mac, 0);	
 				http_send_apple_redirect(r, redir_url);
 			} else if(o_client->hit_counts > 2 && r->request.version == HTTP_1_0)
@@ -133,7 +142,8 @@ _special_process(request *r, const char *mac, const char *redir_url)
 		} else {	
 			o_client->client_type = 1;
 			UNLOCK_OFFLINE_CLIENT_LIST();
-			http_send_redirect_to_auth(r, redir_url, "Redirect to login page");
+			http_relay_wisper(r);
+			//http_send_redirect_to_auth(r, redir_url, "Redirect to login page");
 		}
 		return 1;
 	} 
@@ -634,5 +644,12 @@ http_send_apple_redirect(request *r, const char *redir_url)
     httpdOutput(r, apple_redirect_msg);
 	_httpd_closeSocket(r);
 	free(url);
+}
+
+void
+http_relay_wisper(request *r)
+{
+	httpdOutput(r, apple_wisper);
+	_httpd_closeSocket(r);
 }
 //<<< liudf added end

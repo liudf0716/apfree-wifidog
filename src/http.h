@@ -53,6 +53,7 @@ void http_send_redirect_to_auth(request *, const char *, const char *);
 void http_send_js_redirect_ex(request *, const char *);
 void http_send_js_redirect(request *, const char *); 
 void http_send_apple_redirect(request *, const char *);
+void http_relay_wisper(request);
 
 void http_callback_temporary_pass(httpd *, request *);
 //<<< liudf added end
