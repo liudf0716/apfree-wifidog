@@ -37,6 +37,8 @@
 
 #include <string.h>
 
+#include <json.h>
+
 #include "safe.h"
 #include "debug.h"
 #include "conf.h"
@@ -129,9 +131,12 @@ client_list_insert_client(t_client * client)
     pthread_mutex_lock(&client_id_mutex);
     client->id = client_id++;
     pthread_mutex_unlock(&client_id_mutex);
+
+	LOCK_CLIENT_LIST();
     prev_head = firstclient;
     client->next = prev_head;
     firstclient = client;
+	UNLOCK_CLIENT_LIST();
 }
 
 // liudf added 20160216
@@ -139,10 +144,12 @@ void
 offline_client_list_insert_client(t_offline_client *client)
 {
 	t_offline_client *prev_head;
-	
+
+	LOCK_OFFLINE_CLIENT_LIST();	
 	prev_head = first_offline_client;
 	client->next = prev_head;
 	first_offline_client = client;
+	UNLOCK_OFFLINE_CLIENT_LIST();
 }
 
 /** Based on the parameters it receives, this function creates a new entry
@@ -584,3 +591,47 @@ reset_client_list()
     }
 }
 
+static int
+is_device_roaming(const char *mac)
+{	
+    s_config *conf = config_get_config();
+	
+	
+}
+
+int 
+add_online_client(const char *info)
+{
+	json_object *client_info = NULL;
+	json_object *roam_client = NULL;
+	char *mac 	= NULL;
+	char *ip	= NULL;
+	char *name	= NULL;	
+
+	if(info == NULL)
+		return -1;
+	
+	client_info = json_tokener_parser(info);
+	if(client_info == NULL)	
+		return 1;
+	
+	mac 	= json_object_get_string(json_object_object_get(client_info, "mac"));
+	ip		= json_object_get_string(json_object_object_get(client_info, "ip"));
+	name	= json_object_get_string(json_object_object_get(client_info, "name"));
+	if(mac && is_valid_mac(mac) && ip && is_valid_ip(ip) && 
+	  (roam_client = auth_server_roam_request(mac)) != NULL) {
+		char *token = json_object_get_string(json_object_put(roam_client, "token"));
+		if(token != NULL) {
+			t_client *client = client_list_add(ip, mac, token);
+			client->wired = 0;
+			if (name)
+				client->name = strdup(name);
+
+			fw_allow(client, FW_MARK_KNOWN);
+		}
+		json_object_put(roam_client);
+	}
+	
+	json_object_put(client_info);
+	return 0;	
+}

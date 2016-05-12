@@ -52,6 +52,7 @@
 #define	WDCTL_USER_CFG_SAVE				19
 #define	WDCTL_ADD_WILDCARD_DOMAIN		20
 #define	WDCTL_ADD_TRUSTED_IPLIST		21
+#define	WDCTL_ADD_ONLINE_CLIENT			22
 //<<<< liudf added end
 
 typedef struct {

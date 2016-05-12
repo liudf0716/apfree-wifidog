@@ -49,15 +49,22 @@
 static CYASSL_CTX *get_cyassl_ctx(const char *hostname);
 #endif
 
+char *
+http_get(const int sockfd, const char *req)
+{
+	return http_get_ex(sockfd, req, 30);
+}
+
 /**
  * Perform an HTTP request, caller frees both request and response,
  * NULL returned on error.
  * @param sockfd Socket to use, already connected
  * @param req Request to send, fully formatted.
+ * @param timeout
  * @return char Response as a string
  */
 char *
-http_get(const int sockfd, const char *req)
+http_get_ex(const int sockfd, const char *req, int timeout)
 {
     ssize_t numbytes;
     int done, nfds;
@@ -89,7 +96,7 @@ http_get(const int sockfd, const char *req)
     do {
         FD_ZERO(&readfds);
         FD_SET(sockfd, &readfds);
-        timeout.tv_sec = 30;    /* XXX magic... 30 second is as good a timeout as any */
+        timeout.tv_sec = timeout;    /* XXX magic... 30 second is as good a timeout as any */
         timeout.tv_usec = 0;
         nfds = sockfd + 1;
 

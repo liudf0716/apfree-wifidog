@@ -80,6 +80,7 @@ static void wdctl_add_untrusted_maclist(int, const char *);
 static void wdctl_show_untrusted_maclist(int);
 static void wdctl_clear_untrusted_maclist(int);
 static void wdctl_user_cfg_save(int);
+static void wdctl_add_online_client(int, const char *);
 //<<< liudf added end
 
 static int wdctl_socket_server;
@@ -280,6 +281,9 @@ thread_wdctl_handler(void *arg)
 	
 	} else if (strncmp(request, "user_cfg_save", strlen("user_cfg_save")) == 0) {
 		wdctl_user_cfg_save(fd);
+
+	} else if (strncmp(request, "add_online_client", strlen("add_online_client")) == 0) {
+		wdctl_add_online_client(fd, (request + strlen("add_online_client") + 1));
 
 	//<<< liudf added end
     } else {
@@ -698,7 +702,7 @@ wdctl_user_cfg_save(int fd)
 			   *untrusted_maclist = NULL, 
 			   *trusted_domains = NULL,
 			   *trusted_iplist = NULL;
-	char	szcmd[2048] = {0};
+	char	szcmd[4096] = {0};
 	
 	iptables_fw_save_online_clients();
 	
@@ -709,41 +713,54 @@ wdctl_user_cfg_save(int fd)
 	trusted_iplist		= get_serialize_iplist();
 	
 	if(trusted_domains) {
-		snprintf(szcmd, 2048, "uci set wifidog.@wifidog[0].trusted_domains='%s'", trusted_domains);
+		snprintf(szcmd, 4096, "uci set wifidog.@wifidog[0].trusted_domains='%s'", trusted_domains);
 	} else {
-		snprintf(szcmd, 2048, "uci delete wifidog.@wifidog[0].trusted_domains");
+		snprintf(szcmd, 4096, "uci delete wifidog.@wifidog[0].trusted_domains");
 	}
 	execute(szcmd, 1);
 	
-	memset(szcmd, 0, 2048);
+	memset(szcmd, 0, 4096);
 	if(trusted_iplist) {
-		snprintf(szcmd, 2048, "uci set wifidog.@wifidog[0].trusted_iplist='%s'", trusted_iplist);
+		snprintf(szcmd, 4096, "uci set wifidog.@wifidog[0].trusted_iplist='%s'", trusted_iplist);
 	} else {
-		snprintf(szcmd, 2048, "uci delete wifidog.@wifidog[0].trusted_iplist");
+		snprintf(szcmd, 4096, "uci delete wifidog.@wifidog[0].trusted_iplist");
 	}
 	execute(szcmd, 1);
 
-	memset(szcmd, 0, 2048);
+	memset(szcmd, 0, 4096);
 	if(trusted_maclist) {
-		snprintf(szcmd, 2048, "uci set wifidog.@wifidog[0].trusted_maclist='%s'", trusted_maclist);
+		snprintf(szcmd, 4096, "uci set wifidog.@wifidog[0].trusted_maclist='%s'", trusted_maclist);
 	} else {
-		snprintf(szcmd, 2048, "uci delete wifidog.@wifidog[0].trusted_maclist");
+		snprintf(szcmd, 4096, "uci delete wifidog.@wifidog[0].trusted_maclist");
 	}
 	execute(szcmd, 1);
 
-	memset(szcmd, 0, 2048);
+	memset(szcmd, 0, 4096);
 	if(untrusted_maclist) {
-		snprintf(szcmd, 2048, "uci set wifidog.@wifidog[0].untrusted_maclist='%s'", untrusted_maclist);
+		snprintf(szcmd, 4096, "uci set wifidog.@wifidog[0].untrusted_maclist='%s'", untrusted_maclist);
 	} else {
-		snprintf(szcmd, 2048, "uci delete wifidog.@wifidog[0].untrusted_maclist");
+		snprintf(szcmd, 4096, "uci delete wifidog.@wifidog[0].untrusted_maclist");
 	}
 	execute(szcmd, 1);
 
-	memset(szcmd, 0, 2048);
-	snprintf(szcmd, 2048, "uci commit wifidog");
+	memset(szcmd, 0, 4096);
+	snprintf(szcmd, 4096, "uci commit wifidog");
 	execute(szcmd, 1);
 
     write_to_socket(fd, "Yes", 3);
+}
+
+static void
+wdctl_add_online_client(int fd, const char *args)
+{
+	int nret = 0;
+    
+	nret = add_online_client(args);
+	
+	if(nret == 0)
+    	write_to_socket(fd, "Yes", 3);
+	else
+		write_to_socket(fd, "No", 2);
 }
 
 //>>> liudf added end

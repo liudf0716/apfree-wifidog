@@ -28,6 +28,8 @@
 #ifndef _CENTRALSERVER_H_
 #define _CENTRALSERVER_H_
 
+#include <json.h>
+
 #include "auth.h"
 
 /** @brief Ask the central server to login a client */
@@ -45,6 +47,8 @@
 #define GATEWAY_MESSAGE_ACCOUNT_VALIDATION_FAILED     "failed_validation"
 /** @brief Sent after the user performed a manual log-out on the gateway  */
 #define GATEWAY_MESSAGE_ACCOUNT_LOGGED_OUT     "logged-out"
+
+json_object *auth_server_roam_request(const char *mac);
 
 /** @brief Initiates a transaction with the auth server */
 t_authcode auth_server_request(t_authresponse * authresponse,

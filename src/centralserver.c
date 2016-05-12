@@ -53,6 +53,80 @@
 
 #include "simple_http.h"
 
+json_object *
+auth_server_roam_request(const char *mac)
+{
+	s_config *config = config_get_config();
+    int sockfd;
+    char buf[MAX_BUF];
+    char *tmp;
+    t_auth_serv *auth_server = NULL;
+    auth_server = get_auth_server();
+
+
+    sockfd = connect_auth_server();
+
+     /**
+	 * TODO: XXX change the PHP so we can harmonize stage as request_type
+	 * everywhere.
+	 */
+    memset(buf, 0, sizeof(buf));
+	snprintf(buf, sizeof(buf),
+		"GET %sroam?gw_id=%s&mac=%s&channel_path=%s HTTP/1.1\r\n"
+        "User-Agent: WiFiDog %s\r\n"
+        "Host: %s\r\n"
+        "\r\n",
+        auth_server->authserv_path,
+        config->gw_id,
+		mac,
+		g_channel_path?g_channel_path:"null",
+		VERSION, auth_server->authserv_hostname);
+
+    char *res;
+#ifdef USE_CYASSL
+    if (auth_server->authserv_use_ssl) {
+        res = https_get(sockfd, buf, auth_server->authserv_hostname);
+    } else {
+        res = http_get(sockfd, buf);
+    }
+#endif
+#ifndef USE_CYASSL
+    res = http_get_ex(sockfd, buf, 2);
+#endif
+    if (NULL == res) {
+        debug(LOG_ERR, "There was a problem talking to the auth server!");
+        return NULL;
+    }
+
+    if ((tmp = strstr(res, "{\"roam\":"))) {
+		char *is_roam = NULL;
+		json_object *roam_info = json_tokener_parser(tmp);
+		if(roam_info == NULL) {
+        	debug(LOG_ERR, "error parse json info %s!", tmp);
+			free(res);
+			return NULL;
+		}
+	
+		is_roam = json_object_get_string(json_object_object_get(roam_info), "roam");
+		if(is_roam && strcmp(is_roam, "yes") == 0) {
+			json_object *client = json_object_object_get(roam_info, "client");
+			if(client != NULL) {
+				json_object *client_dup = json_tokener_parser(json_object_to_json_string(client));
+        		debug(LOG_INFO, "roam client is %s!", json_object_to_json_string(client));
+				free(res);
+				json_object_put(roam_info);
+				return client_dup;
+			}
+		}
+
+		free(res);
+		json_object_put(roam_info);
+		return NULL;
+    }
+    free(res);
+    return NULL;
+}
+
 /** Initiates a transaction with the auth server, either to authenticate or to
  * update the traffic counters at the server
 @param authresponse Returns the information given by the central server 
@@ -71,7 +145,7 @@ auth_server_request(t_authresponse * authresponse, const char *request_type, con
 {
     s_config *config = config_get_config();
     int sockfd;
-    char buf[MAX_BUF];
+    char buf[MAX_BUF] = {0};
     char *tmp;
     char *safe_token;
     t_auth_serv *auth_server = NULL;
@@ -86,11 +160,10 @@ auth_server_request(t_authresponse * authresponse, const char *request_type, con
 	 * TODO: XXX change the PHP so we can harmonize stage as request_type
 	 * everywhere.
 	 */
-    memset(buf, 0, sizeof(buf));
     safe_token = httpdUrlEncode(token);
     if(config -> deltatraffic) {
            snprintf(buf, (sizeof(buf) - 1),
-             "GET %s%sstage=%s&ip=%s&mac=%s&token=%s&incoming=%llu&outgoing=%llu&incomingdelta=%llu&outgoingdelta=%llu&first_login=%lld&online_time=%u&gw_id=%s&channel_path=%s&name=%s&wired=%d HTTP/1.0\r\n"
+             "GET %s%sstage=%s&ip=%s&mac=%s&token=%s&incoming=%llu&outgoing=%llu&incomingdelta=%llu&outgoingdelta=%llu&first_login=%lld&online_time=%u&gw_id=%s&channel_path=%s&name=%s&wired=%d HTTP/1.1\r\n"
              "User-Agent: WiFiDog %s\r\n"
              "Host: %s\r\n"
              "\r\n",
@@ -111,7 +184,7 @@ auth_server_request(t_authresponse * authresponse, const char *request_type, con
 			 VERSION, auth_server->authserv_hostname);
     } else {
             snprintf(buf, (sizeof(buf) - 1),
-             "GET %s%sstage=%s&ip=%s&mac=%s&token=%s&incoming=%llu&outgoing=%llu&first_login=%lld&online_time=%u&gw_id=%s&channel_path=%s&name=%s&wired=%d HTTP/1.0\r\n"
+             "GET %s%sstage=%s&ip=%s&mac=%s&token=%s&incoming=%llu&outgoing=%llu&first_login=%lld&online_time=%u&gw_id=%s&channel_path=%s&name=%s&wired=%d HTTP/1.1\r\n"
              "User-Agent: WiFiDog %s\r\n"
              "Host: %s\r\n"
              "\r\n",

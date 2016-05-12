@@ -62,4 +62,6 @@ void icmp_ping(const char *);
 void save_pid_file(const char *);
 
 int is_valid_ip(const char *);
+
+int is_valid_mac(const char *);
 #endif                          /* _UTIL_H_ */

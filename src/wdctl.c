@@ -68,6 +68,7 @@ static void wdctl_add_roam_maclist(void);
 static void wdctl_show_roam_maclist(void);
 static void wdctl_clear_roam_maclist(void);
 static void wdctl_user_cfg_save(void);
+static void wdctl_add_online_client(void);
 //<<< liudf added end
 
 /** @internal
@@ -106,6 +107,7 @@ usage(void)
 	//fprintf(stdout, "  clear_roam_mac			Clear roaming mac list\n");
     //fprintf(stdout, "  show_roam_mac			Show roaming mac list\n");
     fprintf(stdout, "  user_cfg_save			User config save\n");
+	fprintf(stdout, "  add_online_client		Add online client\n");
 	//<<< liudf added end
     fprintf(stdout, "\n");
 }
@@ -228,6 +230,14 @@ parse_commandline(int argc, char **argv)
 		config.command = WDCTL_CLEAR_UNTRUSTED_MACLIST;
 	} else if (strcmp(*(argv + optind), "user_cfg_save") == 0) {
 		config.command = WDCTL_USER_CFG_SAVE;
+	} else if (strcmp(*(argv + optind), "add_online_client") == 0) {
+		config.command = WDCTL_ADD_ONLINE_CLIENT;
+		if ((argc - (optind + 1)) <= 0) {
+			fprintf(stderr, "wdctl: Error: You must specify client's ip mac token\n");
+            usage();
+            exit(1);
+		}
+        config.param = strdup(*(argv + optind + 1));
 	//<<< liudf added end
     } else {
         fprintf(stderr, "wdctl: Error: Invalid command \"%s\"\n", *(argv + optind));
@@ -741,6 +751,43 @@ wdctl_user_cfg_save()
     close(sock);
 
 }
+
+static void
+wdctl_add_online_client(void)
+{
+	int sock;
+    char buffer[4096] = {0};
+    char request[4096] = {0};
+    size_t len;
+    ssize_t rlen;
+
+    sock = connect_to_server(config.socket);
+
+    strncpy(request, "add_online_client ", 4096);
+    strncat(request, config.param, (4096 - strlen(request) - 1));
+    strncat(request, "\r\n\r\n", (4096 - strlen(request) - 1));
+
+    send_request(sock, request);
+
+    len = 0;
+    memset(buffer, 0, sizeof(buffer));
+    while ((len < sizeof(buffer)) && ((rlen = read(sock, (buffer + len), (sizeof(buffer) - len))) > 0)) {
+        len += (size_t) rlen;
+    }
+
+    if (strcmp(buffer, "Yes") == 0) {
+        fprintf(stdout, "Client %s successfully added.\n", config.param);
+    } else if (strcmp(buffer, "No") == 0) {
+        fprintf(stdout, "Client %s was not added.\n", config.param);
+    } else {
+        fprintf(stderr, "wdctl: Error: WiFiDog sent an abnormal " "reply.\n");
+    }
+
+    shutdown(sock, 2);
+    close(sock);
+
+}
+
 //<<< liudf added end
 
 static void
@@ -938,6 +985,10 @@ main(int argc, char **argv)
 		wdctl_user_cfg_save();
 		break;
 	
+	case WDCTL_ADD_ONLINE_CLIENT:
+		wdctl_add_online_client();
+		break;
+
 	case WDCTL_ADD_WILDCARD_DOMAIN:
 		break;
 	//<<< liudf end
