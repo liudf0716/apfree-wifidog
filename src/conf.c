@@ -1233,7 +1233,7 @@ parse_popular_servers(const char *ptr)
  */
 
 t_domain_trusted *
-__del_domain_common(const char *domain, trusted_domain_t_ which)
+__del_domain_common(const char *domain, trusted_domain_t which)
 {
 	t_domain_trusted *p = NULL, *p1 = NULL;
 	
@@ -1423,7 +1423,7 @@ parse_domain_string_common_action(const char *ptr, trusted_domain_t which, int a
         if (*tmp != '\0' && isblank(*tmp)) {
             *tmp = '\0';
         }
-        debug(LOG_DEBUG, "Adding&Delete [%d] trust domain [%s] to&from list", add, hostname);
+        debug(LOG_DEBUG, "Adding&Delete [%d] trust domain [%s] to&from list", action, hostname);
 		if(action) // 1: add
         	add_domain_common(hostname, which);
 		else // 0: del
@@ -1444,9 +1444,6 @@ parse_del_trusted_domain_string(const char *ptr)
 {
 	parse_domain_string_common_action(ptr, USER_TRUSTED_DOMAIN, 0);
 }
-
-void t_ip_trusted *
-__add_trusted_ip(const char *ip)
 
 // add ip to domain list
 static t_ip_trusted *
@@ -1734,10 +1731,9 @@ clear_trusted_domains(void)
 }
 
 void
-__clear_trusted_ip_list(void)
+__clear_trusted_iplist(void)
 {
 	t_domain_trusted *p, *p1;
-	int has_iplist = 0;
     for (p = config.domains_trusted, p1 = p; p != NULL; p1 = p, p = p->next) {
 		if(strcmp(p->domain, "iplist") == 0) {
 			if(p == config.domains_trusted)
