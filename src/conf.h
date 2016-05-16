@@ -328,7 +328,7 @@ void clear_trusted_domains(void);
 /** @brief  Clear domains_trusted of config  */
 void __clear_trusted_domains(void);
 
-void __clear_trusted_domain_ip(t_ip_trusted *)
+void __clear_trusted_domain_ip(t_ip_trusted *);
 
 
 /** @brief  */
