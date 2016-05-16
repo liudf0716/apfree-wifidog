@@ -65,7 +65,9 @@ static void wdctl_reset(int, const char *);
 static void wdctl_restart(int);
 //>>> liudf added 20151225
 static void wdctl_add_trusted_domains(int, const char *);
+static void wdctl_del_trusted_domains(int, const char *);
 static void wdctl_add_trusted_iplist(int, const char *);
+static void wdctl_clear_trusted_iplist(int);
 static void wdctl_reparse_trusted_domains(int);
 static void wdctl_clear_trusted_domains(int);
 static void wdctl_show_trusted_domains(int);
@@ -238,8 +240,16 @@ thread_wdctl_handler(void *arg)
 	//>>> liudf added 20151225
 	} else if (strncmp(request, "add_trusted_domains", strlen("add_trusted_domains")) == 0) {
 		wdctl_add_trusted_domains(fd, (request + strlen("add_trusted_domains") + 1));
+
+	} else if (strncmp(request, "del_trusted_domains", strlen("del_trusted_domains")) == 0) {
+		wdctl_del_trusted_domains(fd, (request + strlen("del_trusted_domains") + 1));
+
 	} else if (strncmp(request, "add_trusted_iplist", strlen("add_trusted_iplist")) == 0) {
 		wdctl_add_trusted_iplist(fd, (request + strlen("add_trusted_iplist") + 1));
+
+	} else if (strncmp(request, "clear_trusted_iplist", strlen("clear_trusted_iplist")) == 0) {
+		wdctl_clear_trusted_iplist(fd);
+
 	} else if (strncmp(request, "reparse_trusted_domains", strlen("reparse_trusted_domains")) == 0) {
 		wdctl_reparse_trusted_domains(fd);
 
@@ -483,6 +493,21 @@ wdctl_add_trusted_iplist(int fd, const char *arg)
 }
 
 static void
+wdctl_clear_trusted_iplist(int fd)
+{
+	debug(LOG_DEBUG, "Entering wdctl_clear_trusted_domains...");
+	
+	
+	clear_trusted_ip_list();
+
+	fw_refresh_user_domains_trusted();	
+
+    write_to_socket(fd, "Yes", 3);
+
+    debug(LOG_DEBUG, "Exiting wdctl_clear_trusted_domains...");
+}
+
+static void
 wdctl_add_trusted_domains(int fd, const char *arg)
 {
     debug(LOG_DEBUG, "Entering wdctl_add_trusted_domains...");
@@ -501,6 +526,24 @@ wdctl_add_trusted_domains(int fd, const char *arg)
 	fw_refresh_user_domains_trusted();	
 
     debug(LOG_DEBUG, "Exiting wdctl_add_trusted_domains...");
+}
+
+static void
+wdctl_del_trusted_domains(int fd, const char *arg)
+{
+    debug(LOG_DEBUG, "Entering wdctl_del_trusted_domains...");
+	
+
+    debug(LOG_DEBUG, "Argument: %s ", arg);
+
+    debug(LOG_DEBUG, "parse & del trusted domains");
+	parse_del_trusted_domain_string(arg);
+	
+    write_to_socket(fd, "Yes", 3);
+
+	fw_refresh_user_domains_trusted();	
+
+    debug(LOG_DEBUG, "Exiting wdctl_del_trusted_domains...");
 }
 
 static void
@@ -526,7 +569,7 @@ wdctl_clear_trusted_domains(int fd)
 	
 	clear_trusted_domains();
 
-	fw_clear_user_domains_trusted();
+	fw_refresh_user_domains_trusted();	
 
     write_to_socket(fd, "Yes", 3);
 

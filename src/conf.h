@@ -247,6 +247,7 @@ typedef struct {
 	t_domain_trusted *inner_domains_trusted; /** inner domains list, user cannot configure*/
 	t_trusted_mac	*roam_maclist; /** roam mac list*/
 	t_untrusted_mac	*mac_blacklist; /** blacklist mac*/
+	t_ip_trusted	*trusted_iplist; /** trusted ip list*/
 	char 	*htmlredirfile;
 	short	wired_passed;
 	short	parse_checked; 
@@ -296,11 +297,18 @@ t_domain_trusted *add_inner_trusted_domain(const char*);
 t_domain_trusted *__add_domain_common(const char *, trusted_domain_t);
 t_domain_trusted *add_domain_common(const char *, trusted_domain_t);
 
+t_domain_trusted  *__del_domain_common(const char *, trusted_domain_t );
+void del_domain_common(const char *, trusted_domain_t);
+
+void parse_domain_string_common_action(const char *, trusted_domain_t, int);
+
 void parse_domain_string_common(const char *, trusted_domain_t);
 
 void parse_inner_trusted_domain_string(const char *);
 
 void parse_user_trusted_domain_string(const char *);
+
+void parse_del_trusted_domain_string(const char *);
 
 /** @brief parse domain's ip and add ip to domain's ip list*/
 void parse_trusted_domain_2_ip(t_domain_trusted *p);
@@ -319,6 +327,8 @@ void clear_trusted_domains(void);
 
 /** @brief  Clear domains_trusted of config  */
 void __clear_trusted_domains(void);
+
+void __clear_trusted_domain_ip(t_ip_trusted *)
 
 
 /** @brief  */

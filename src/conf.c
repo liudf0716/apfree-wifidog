@@ -1233,6 +1233,66 @@ parse_popular_servers(const char *ptr)
  */
 
 t_domain_trusted *
+__del_domain_common(const char *domain, trusted_domain_t_ which)
+{
+	t_domain_trusted *p = NULL, *p1 = NULL;
+	
+	if(which == USER_TRUSTED_DOMAIN) {	
+    	if (config.domains_trusted != NULL) {
+			for(p = config.domains_trusted; p != NULL; p1 = p, p = p->next) {
+				if(strcmp(p->domain, domain) == 0) {
+					break;
+				}
+			}
+
+			if(p == NULL)
+				return NULL;
+	
+			if(p1 != NULL) {
+				p1->next = p->next;
+			} else {
+				config.domains_trusted = p->next;
+			}
+    	}
+	} else if (which == INNER_TRUSTED_DOMAIN) {
+		if (config.inner_domains_trusted != NULL) {
+			for(p = config.inner_domains_trusted; p != NULL; p1 = p, p = p->next) {
+				if(strcmp(p->domain, domain) == 0) {
+					break;
+				}
+			}
+			
+			if(p == NULL)
+				return NULL;
+	
+			if(p1 != NULL) {
+				p1->next = p->next;
+			} else {
+				config.inner_domains_trusted = p->next;
+			}
+
+    	}
+	}
+
+	return p;
+}
+
+void
+del_domain_common(const char *domain, trusted_domain_t which)
+{
+	t_domain_trusted *p = NULL;
+	LOCK_DOMAIN();
+	p = __del_domain_common(domain, which);
+	UNLOCK_DOMAIN();
+
+	if(p) {
+		__clear_trusted_domain_ip(p->ips_trusted);
+		free(p->domain);
+		free(p);
+	}
+}
+
+t_domain_trusted *
 __add_domain_common(const char *domain, trusted_domain_t which)
 {
     t_domain_trusted *p = NULL;
@@ -1334,7 +1394,7 @@ void parse_user_trusted_domain_string(const char *domain_list)
 }
 
 void
-parse_domain_string_common(const char *ptr, trusted_domain_t which)
+parse_domain_string_common_action(const char *ptr, trusted_domain_t which, int action)
 {
     char *ptrcopy = NULL, *pt = NULL;
     char *hostname = NULL;
@@ -1363,12 +1423,30 @@ parse_domain_string_common(const char *ptr, trusted_domain_t which)
         if (*tmp != '\0' && isblank(*tmp)) {
             *tmp = '\0';
         }
-        debug(LOG_DEBUG, "Adding trust domain [%s] to list", hostname);
-        add_domain_common(hostname, which);
+        debug(LOG_DEBUG, "Adding&Delete [%d] trust domain [%s] to&from list", add, hostname);
+		if(action) // 1: add
+        	add_domain_common(hostname, which);
+		else // 0: del
+			del_domain_common(hostname, which);
     }
 
     free(pt);
 }
+
+void
+parse_domain_string_common(const char *ptr, trusted_domain_t which)
+{
+	parse_domain_string_common_action(ptr, which, 1);
+}
+
+void
+parse_del_trusted_domain_string(const char *ptr)
+{
+	parse_domain_string_common_action(ptr, USER_TRUSTED_DOMAIN, 0);
+}
+
+void t_ip_trusted *
+__add_trusted_ip(const char *ip)
 
 // add ip to domain list
 static t_ip_trusted *
@@ -1612,7 +1690,7 @@ __fix_weixin_http_dns_ip(void)
 }
 
 // clear domain's ip collection
-static void
+void
 __clear_trusted_domain_ip(t_ip_trusted *ipt)
 {
 	t_ip_trusted *p, *p1;
@@ -1628,14 +1706,23 @@ void
 __clear_trusted_domains(void)
 {
 	t_domain_trusted *p, *p1;
+	int has_iplist = 0;
     for (p = config.domains_trusted; p != NULL;) {
-    	p1 = p;
-        p = p->next;
-        __clear_trusted_domain_ip(p1->ips_trusted);
-        free(p1->domain);
-        free(p1);
+		if(strcmp(p->domain, "iplist") != 0) {
+    		p1 = p;
+        	p = p->next;
+        	__clear_trusted_domain_ip(p1->ips_trusted);
+        	free(p1->domain);
+        	free(p1);
+		} else {
+			config.domains_trusted = p;
+			has_iplist = 1;
+			p = p->next;
+			config.domains_trusted->next = NULL;
+		}
     }
-    config.domains_trusted = NULL;
+	if(has_iplist == 0)
+    	config.domains_trusted = NULL;
 }
 
 void
@@ -1643,6 +1730,37 @@ clear_trusted_domains(void)
 {
 	LOCK_DOMAIN();
 	__clear_trusted_domains();
+	UNLOCK_DOMAIN();
+}
+
+void
+__clear_trusted_ip_list(void)
+{
+	t_domain_trusted *p, *p1;
+	int has_iplist = 0;
+    for (p = config.domains_trusted, p1 = p; p != NULL; p1 = p, p = p->next) {
+		if(strcmp(p->domain, "iplist") == 0) {
+			if(p == config.domains_trusted)
+				config.domains_trusted = p->next;
+			else
+				p1->next = p->next;
+			p->next = NULL;
+			break;
+		}
+    }
+	
+	if(p != NULL) {
+		__clear_trusted_domain_ip(p->ips_trusted);
+		free(p->domain);
+		free(p);
+	}
+}
+
+void
+clear_trusted_ip_list(void)
+{
+	LOCK_DOMAIN();
+	__clear_trusted_iplist();
 	UNLOCK_DOMAIN();
 }
 
