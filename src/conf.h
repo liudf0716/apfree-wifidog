@@ -378,7 +378,7 @@ void add_trusted_ip_list(const char *);
 
 void __clear_trusted_iplist(void);
 
-void clear_trusted_ip_list(void)
+void clear_trusted_ip_list(void);
 
 // online clients
 int 	g_online_clients;
