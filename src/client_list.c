@@ -37,7 +37,7 @@
 
 #include <string.h>
 
-#include <json.h>
+#include <json-c/json.h>
 
 #include "safe.h"
 #include "debug.h"

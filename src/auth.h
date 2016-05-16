@@ -28,7 +28,7 @@
 #ifndef _AUTH_H_
 #define _AUTH_H_
 
-#include <json.h>
+#include <json-c/json.h>
 
 #include "httpd.h"
 #include "client_list.h"
