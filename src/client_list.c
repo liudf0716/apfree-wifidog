@@ -611,7 +611,7 @@ add_online_client(const char *info)
 	if(info == NULL)
 		return -1;
 	
-	client_info = json_tokener_parser(info);
+	client_info = json_tokener_parse(info);
 	if(client_info == NULL)	
 		return 1;
 	

@@ -100,18 +100,18 @@ auth_server_roam_request(const char *mac)
 
     if ((tmp = strstr(res, "{\"roam\":"))) {
 		char *is_roam = NULL;
-		json_object *roam_info = json_tokener_parser(tmp);
+		json_object *roam_info = json_tokener_parse(tmp);
 		if(roam_info == NULL) {
         	debug(LOG_ERR, "error parse json info %s!", tmp);
 			free(res);
 			return NULL;
 		}
 	
-		is_roam = json_object_get_string(json_object_object_get(roam_info), "roam");
+		is_roam = json_object_get_string(json_object_object_get(roam_info, "roam"));
 		if(is_roam && strcmp(is_roam, "yes") == 0) {
 			json_object *client = json_object_object_get(roam_info, "client");
 			if(client != NULL) {
-				json_object *client_dup = json_tokener_parser(json_object_to_json_string(client));
+				json_object *client_dup = json_tokener_parse(json_object_to_json_string(client));
         		debug(LOG_INFO, "roam client is %s!", json_object_to_json_string(client));
 				free(res);
 				json_object_put(roam_info);
