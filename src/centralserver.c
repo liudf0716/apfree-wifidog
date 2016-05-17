@@ -46,11 +46,10 @@
 #include "wd_util.h"
 #include "auth.h"
 #include "conf.h"
-#include "debug.h"
 #include "centralserver.h"
 #include "firewall.h"
 #include "../config.h"
-
+#include "debug.h"
 #include "simple_http.h"
 
 json_object *
