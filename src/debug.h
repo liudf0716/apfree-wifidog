@@ -24,8 +24,8 @@
     @author Copyright (C) 2004 Philippe April <papril777@yahoo.com>
 */
 
-#ifndef _DEBUG_H_
-#define _DEBUG_H_
+#ifndef _WIFIDOG_DEBUG_H_
+#define _WIFIDOG_DEBUG_H_
 
 typedef struct _debug_conf {
     int debuglevel;      /**< @brief Debug information verbosity */
