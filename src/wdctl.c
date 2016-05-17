@@ -201,6 +201,10 @@ parse_commandline(int argc, char **argv)
             exit(1);
 		}
         config.param = strdup(*(argv + optind + 1));
+
+	} else if (strcmp(*(argv + optind), "clear_trusted_iplist") == 0) {
+		config.command = WDCTL_CLEAR_TRUSTED_IPLIST;
+		
 	} else if (strcmp(*(argv + optind), "reparse_trusted_domains") == 0) {
 		config.command = WDCTL_REPARSE_TRUSTED_DOMAINS;
 	} else if (strcmp(*(argv + optind), "clear_trusted_domains") == 0) {
