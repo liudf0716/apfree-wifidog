@@ -45,6 +45,8 @@
 #include <cyassl/ctaocrypt/error-crypt.h>
 #endif
 
+#include "simple_http.h"
+
 #ifdef USE_CYASSL
 static CYASSL_CTX *get_cyassl_ctx(const char *hostname);
 #endif
@@ -60,11 +62,11 @@ http_get(const int sockfd, const char *req)
  * NULL returned on error.
  * @param sockfd Socket to use, already connected
  * @param req Request to send, fully formatted.
- * @param timeout
+ * @param wait 
  * @return char Response as a string
  */
 char *
-http_get_ex(const int sockfd, const char *req, int timeout)
+http_get_ex(const int sockfd, const char *req, int wait)
 {
     ssize_t numbytes;
     int done, nfds;
@@ -96,7 +98,7 @@ http_get_ex(const int sockfd, const char *req, int timeout)
     do {
         FD_ZERO(&readfds);
         FD_SET(sockfd, &readfds);
-        timeout.tv_sec = timeout;    /* XXX magic... 30 second is as good a timeout as any */
+        timeout.tv_sec = wait;    /* XXX magic... 30 second is as good a timeout as any */
         timeout.tv_usec = 0;
         nfds = sockfd + 1;
 
