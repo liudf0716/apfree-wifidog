@@ -43,6 +43,9 @@
 #include "debug.h"
 #include "conf.h"
 #include "client_list.h"
+#include "firewall.h"
+#include "util.h"
+#include "centralserver.h"
 
 /** @internal
  * Holds a pointer to the first element of the list 
@@ -620,7 +623,7 @@ add_online_client(const char *info)
 	name	= json_object_get_string(json_object_object_get(client_info, "name"));
 	if(mac && is_valid_mac(mac) && ip && is_valid_ip(ip) && 
 	  (roam_client = auth_server_roam_request(mac)) != NULL) {
-		char *token = json_object_get_string(json_object_put(roam_client, "token"));
+		char *token = json_object_get_string(json_object_object_get(roam_client, "token"));
 		if(token != NULL) {
 			t_client *client = client_list_add(ip, mac, token);
 			client->wired = 0;
