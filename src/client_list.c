@@ -136,9 +136,11 @@ client_list_insert_client(t_client * client)
     pthread_mutex_unlock(&client_id_mutex);
 
 	LOCK_CLIENT_LIST();
+
     prev_head = firstclient;
     client->next = prev_head;
     firstclient = client;
+
 	UNLOCK_CLIENT_LIST();
 }
 
@@ -599,9 +601,9 @@ add_online_client(const char *info)
 {
 	json_object *client_info = NULL;
 	json_object *roam_client = NULL;
-	char *mac 	= NULL;
-	char *ip	= NULL;
-	char *name	= NULL;	
+	const char *mac 	= NULL;
+	const char *ip		= NULL;
+	const char *name	= NULL;	
 
 	if(info == NULL)
 		return -1;
