@@ -594,14 +594,6 @@ reset_client_list()
     }
 }
 
-static int
-is_device_roaming(const char *mac)
-{	
-    s_config *conf = config_get_config();
-	
-	
-}
-
 int 
 add_online_client(const char *info)
 {
