@@ -145,16 +145,15 @@ client_list_insert_client(t_client * client)
 }
 
 // liudf added 20160216
+// before use this api, must lock offline_client_list
 void
 offline_client_list_insert_client(t_offline_client *client)
 {
 	t_offline_client *prev_head;
 
-	LOCK_OFFLINE_CLIENT_LIST();	
 	prev_head = first_offline_client;
 	client->next = prev_head;
 	first_offline_client = client;
-	UNLOCK_OFFLINE_CLIENT_LIST();
 }
 
 /** Based on the parameters it receives, this function creates a new entry
