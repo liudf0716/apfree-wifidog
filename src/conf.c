@@ -134,6 +134,7 @@ typedef enum {
 	oQueueSize,
 	oWiredPassed,
 	oParseChecked,
+	oTrustedIpList,
 	// <<< liudf added end
 } OpCodes;
 
@@ -192,6 +193,7 @@ static const struct {
 	"queueSize", oQueueSize}, {
 	"wiredPassed", oWiredPassed}, {
 	"parseChecked", oParseChecked}, {
+	"trustedIpList", oTrustedIpList}, {
 	// <<<< liudf added end
 NULL, oBadOption},};
 
@@ -256,7 +258,7 @@ config_init(void)
 	config.pool_mode		= 0;
 	config.thread_number 	= 20; // only valid when poolMode == 1
 	config.queue_size 		= 200; // only valid when poolMode == 1
-	config.wired_passed		= 0; // default wired device must login
+	config.wired_passed		= 1; // default wired device no need login
 	config.parse_checked	= 1; // before parse domain's ip; fping check it
 	//<<<
 
@@ -885,6 +887,9 @@ config_read(const char *filename)
 					break;
 				case oParseChecked:
 					config.parse_checked = parse_boolean_value(p1);
+					break;
+				case oTrustedIpList:
+					add_trusted_ip_list(rawarg);
 					break;
 				// <<< liudf added end
                 case oBadOption:

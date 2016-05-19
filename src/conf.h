@@ -247,7 +247,6 @@ typedef struct {
 	t_domain_trusted *inner_domains_trusted; /** inner domains list, user cannot configure*/
 	t_trusted_mac	*roam_maclist; /** roam mac list*/
 	t_untrusted_mac	*mac_blacklist; /** blacklist mac*/
-	t_ip_trusted	*trusted_iplist; /** trusted ip list*/
 	char 	*htmlredirfile;
 	short	wired_passed;
 	short	parse_checked; 
