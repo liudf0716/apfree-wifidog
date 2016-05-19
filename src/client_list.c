@@ -135,13 +135,9 @@ client_list_insert_client(t_client * client)
     client->id = client_id++;
     pthread_mutex_unlock(&client_id_mutex);
 
-	LOCK_CLIENT_LIST();
-
     prev_head = firstclient;
     client->next = prev_head;
     firstclient = client;
-
-	UNLOCK_CLIENT_LIST();
 }
 
 // liudf added 20160216
