@@ -90,7 +90,7 @@ auth_server_roam_request(const char *mac)
     }
 #endif
 #ifndef USE_CYASSL
-    res = http_get_ex(sockfd, buf, 2);
+    res = http_get_ex(sockfd, buf);
 #endif
     if (NULL == res) {
         debug(LOG_ERR, "There was a problem talking to the auth server!");
