@@ -15,7 +15,7 @@
 */
 
 
-
+#include <syslog.h>
 #include <string.h>
 #include <errno.h>
 #include <sys/types.h>
@@ -107,7 +107,7 @@ static int new_add_to_ipset(const char *setname, const struct in_addr *ipaddr, i
 	uint8_t proto;
 	int addrsz = INADDRSZ;
 
-	debug(LOG_INFO, "new_add_to_ipset ====== ");
+	debug(LOG_DEBUG, "new_add_to_ipset ====== ");
 
 	if (strlen(setname) >= IPSET_MAXNAMELEN) 
 	{
