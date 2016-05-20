@@ -141,8 +141,7 @@ static int new_add_to_ipset(const char *setname, const struct in_addr *ipaddr, i
 	nested[1]->nla_len = (void *)buffer + NL_ALIGN(nlh->nlmsg_len) - (void *)nested[1];
 	nested[0]->nla_len = (void *)buffer + NL_ALIGN(nlh->nlmsg_len) - (void *)nested[0];
 
-	while (retry_send(sendto(ipset_sock, buffer, nlh->nlmsg_len, 0,
-		(struct sockaddr *)&snl, sizeof(snl))));
+	sendto(ipset_sock, buffer, nlh->nlmsg_len, 0, (struct sockaddr *)&snl, sizeof(snl));
 
 	return errno == 0 ? 0 : -1;
 }
