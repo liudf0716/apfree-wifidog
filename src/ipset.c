@@ -26,6 +26,7 @@
 
 #include "ipset.h"
 #include "safe.h"
+#include "debug.h"
 	
 
 /* We want to be able to compile against old header files
@@ -106,6 +107,7 @@ static int new_add_to_ipset(const char *setname, const struct in_addr *ipaddr, i
 	uint8_t proto;
 	int addrsz = INADDRSZ;
 
+	debug(LOG_DEBUG, "new_add_to_ipset ====== ");
 
 	if (strlen(setname) >= IPSET_MAXNAMELEN) 
 	{
@@ -151,6 +153,8 @@ int add_to_ipset(const char *setname, const char *ipaddr, int remove)
 {
 	int af = AF_INET;
 	struct in_addr addr;
+	
+	debug(LOG_DEBUG, "add_to_ipset [%s] [%s] [%d]", setname, ipaddr, remove);
 	
 	if (inet_aton(ipaddr, &addr) == 0) 
 		return -1;
