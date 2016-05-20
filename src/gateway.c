@@ -371,6 +371,11 @@ main_loop(void)
     void **params;
 	int pool_mode = config->pool_mode;
 
+	if(ipset_init() == 0) {
+ 		debug(LOG_ERR, "failed to create IPset control socket: %s");
+		exit(1);
+	}
+	 
     /* Set the time when wifidog started */
     if (!started_time) {
         debug(LOG_INFO, "Setting started_time");

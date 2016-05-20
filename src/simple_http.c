@@ -118,7 +118,8 @@ http_get_ex(const int sockfd, const char *req, int wait)
                 readbuf[numbytes] = '\0';
                 pstr_cat(response, readbuf);
                 debug(LOG_DEBUG, "Read %d bytes", numbytes);
-				done = 1;
+				if(numbytes < MAX_BUF - 1)
+					done = 1;
             }
         } else if (nfds == 0) {
             debug(LOG_ERR, "Timed out reading data via select() from auth server");
