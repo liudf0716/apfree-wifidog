@@ -93,7 +93,7 @@ http_get_ex(const int sockfd, const char *req, int wait)
         goto error;
     }
 
-    debug(LOG_DEBUG, "Reading response");
+    debug(LOG_DEBUG, "Reading response timeout [%d]", wait);
     done = 0;
     do {
         FD_ZERO(&readfds);
