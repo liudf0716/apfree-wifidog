@@ -107,7 +107,6 @@ static int new_add_to_ipset(const char *setname, const struct in_addr *ipaddr, i
 	uint8_t proto;
 	int addrsz = INADDRSZ;
 
-	debug(LOG_DEBUG, "new_add_to_ipset ====== ");
 
 	if (strlen(setname) >= IPSET_MAXNAMELEN) 
 	{
@@ -144,6 +143,8 @@ static int new_add_to_ipset(const char *setname, const struct in_addr *ipaddr, i
 	nested[0]->nla_len = (void *)buffer + NL_ALIGN(nlh->nlmsg_len) - (void *)nested[0];
 
 	sendto(ipset_sock, buffer, nlh->nlmsg_len, 0, (struct sockaddr *)&snl, sizeof(snl));
+
+	debug(LOG_DEBUG, "new_add_to_ipset [%d] [%s] ====== ", errno, strerror(errno));
 
 	return errno == 0 ? 0 : -1;
 }
