@@ -111,6 +111,22 @@ iptables_insert_gateway_id(char **input)
 /** @internal
  * */
 static int
+add_ip_to_ipset(const char *name, const char *ip, int remove)
+{
+	char *ipset_name =  NULL;
+	if(name == NULL)
+		return -1;
+ 
+	ipset_name = safe_malloc(strlen(name));
+	memcpy(ipset_name, name, strlen(name));
+    iptables_insert_gateway_id(&ipset_name);
+
+	return add_to_ipset(ipset_name, ip, remove);
+}
+
+/** @internal
+ * */
+static int
 ipset_do_command(const char *format, ...)
 {
     va_list vlist;
@@ -354,7 +370,7 @@ iptables_fw_set_user_domains_trusted(void)
 		t_ip_trusted *ip_trusted = NULL;
 		for(ip_trusted = domain_trusted->ips_trusted; ip_trusted != NULL; ip_trusted = ip_trusted->next) {
 			//ipset_do_command("add " CHAIN_DOMAIN_TRUSTED " %s ", ip_trusted->ip);
-			add_to_ipset(CHAIN_DOMAIN_TRUSTED, ip_trusted->ip, 0);	
+			add_ip_to_ipset(CHAIN_DOMAIN_TRUSTED, ip_trusted->ip, 0);	
 		}
 	}
 
@@ -389,7 +405,7 @@ iptables_fw_set_inner_domains_trusted(void)
 		t_ip_trusted *ip_trusted = NULL;
 		for(ip_trusted = domain_trusted->ips_trusted; ip_trusted != NULL; ip_trusted = ip_trusted->next) {
 			//ipset_do_command("add " CHAIN_INNER_DOMAIN_TRUSTED " %s ", ip_trusted->ip);
-			add_to_ipset(CHAIN_INNER_DOMAIN_TRUSTED, ip_trusted->ip, 0);
+			add_ip_to_ipset(CHAIN_INNER_DOMAIN_TRUSTED, ip_trusted->ip, 0);
 		}
 	}
 
