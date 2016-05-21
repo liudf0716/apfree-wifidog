@@ -79,6 +79,34 @@ static const struct sockaddr_nl snl = { .nl_family = AF_NETLINK };
 static int ipset_sock;
 static char *buffer;
 
+static int retry_send(ssize_t rc)
+{
+	static int retries = 0;
+	struct timespec waiter;
+
+	if (rc != -1){
+		retries = 0;
+		errno = 0;
+		return 0;
+	}
+
+	if (errno == EAGAIN || errno == EWOULDBLOCK){
+		waiter.tv_sec = 0;
+		waiter.tv_nsec = 10000;
+		nanosleep(&waiter, NULL);
+		if (retries++ < 1000)
+			return 1;
+	}
+
+	retries = 0;
+
+	if (errno == EINTR)
+		return 1;
+
+	return 0;
+}
+
+
 static inline void add_attr(struct nlmsghdr *nlh, uint16_t type, size_t len, const void *data)
 {
 	struct my_nlattr *attr = (void *)nlh + NL_ALIGN(nlh->nlmsg_len);
@@ -142,7 +170,8 @@ static int new_add_to_ipset(const char *setname, const struct in_addr *ipaddr, i
 	nested[1]->nla_len = (void *)buffer + NL_ALIGN(nlh->nlmsg_len) - (void *)nested[1];
 	nested[0]->nla_len = (void *)buffer + NL_ALIGN(nlh->nlmsg_len) - (void *)nested[0];
 
-	sendto(ipset_sock, buffer, nlh->nlmsg_len, 0, (struct sockaddr *)&snl, sizeof(snl));
+	while(retry_send(sendto(ipset_sock, buffer, nlh->nlmsg_len, 0, (struct sockaddr *)&snl, sizeof(snl)))
+		;
 
 	debug(LOG_DEBUG, "new_add_to_ipset [%d] [%s] ====== ", errno, strerror(errno));
 
