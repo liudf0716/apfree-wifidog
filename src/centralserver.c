@@ -97,8 +97,9 @@ auth_server_roam_request(const char *mac)
         return NULL;
     }
 
-    if ((tmp = strstr(res, "{\"roam\":"))) {
+    if ((tmp = strstr(res, "{\""))) {
 		char *is_roam = NULL;
+		debug(LOG_DEBUG, "tmp is [%s]", tmp);
 		json_object *roam_info = json_tokener_parse(tmp);
 		if(roam_info == NULL) {
         	debug(LOG_ERR, "error parse json info %s!", tmp);
@@ -122,6 +123,7 @@ auth_server_roam_request(const char *mac)
 		json_object_put(roam_info);
 		return NULL;
     }
+
     free(res);
     return NULL;
 }
