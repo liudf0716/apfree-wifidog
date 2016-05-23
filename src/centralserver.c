@@ -97,7 +97,7 @@ auth_server_roam_request(const char *mac)
         return NULL;
     }
 
-    if ((tmp = strstr(res, "{\"")) && end = strrchr(res, '}')) {
+    if ((tmp = strstr(res, "{\"")) && (end = strrchr(res, '}'))) {
 		char *is_roam = NULL;
 		*(end+1) = '\0';
 		debug(LOG_DEBUG, "tmp is [%s]", tmp);
