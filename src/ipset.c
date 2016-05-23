@@ -174,8 +174,6 @@ static int new_add_to_ipset(const char *setname, const struct in_addr *ipaddr, i
 	while(retry_send(sendto(ipset_sock, buffer, nlh->nlmsg_len, 0, (struct sockaddr *)&snl, sizeof(snl))))
 		;
 
-	debug(LOG_DEBUG, "new_add_to_ipset [%d] [%s] ====== ", errno, strerror(errno));
-
 	return errno == 0 ? 0 : -1;
 }
 

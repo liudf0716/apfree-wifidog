@@ -485,7 +485,7 @@ is_device_wired(const char *mac)
 	FILE *fd = NULL;
 	char szcmd[128] = {0}; 
 	
-	snprintf(szcmd, 128, "/usr/sbin/ktpriv get_mac_source %s", mac);
+	snprintf(szcmd, 128, "/usr/bin/ktpriv get_mac_source %s", mac);
 	if((fd = popen(szcmd, "r"))) {
 		char buf[8] = {0};
 		fgets(buf, 7, fd);

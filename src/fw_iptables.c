@@ -369,7 +369,6 @@ iptables_fw_set_user_domains_trusted(void)
 	for (domain_trusted = config->domains_trusted; domain_trusted != NULL; domain_trusted = domain_trusted->next) {
 		t_ip_trusted *ip_trusted = NULL;
 		for(ip_trusted = domain_trusted->ips_trusted; ip_trusted != NULL; ip_trusted = ip_trusted->next) {
-			//ipset_do_command("add " CHAIN_DOMAIN_TRUSTED " %s ", ip_trusted->ip);
 			add_ip_to_ipset(CHAIN_DOMAIN_TRUSTED, ip_trusted->ip, 0);	
 		}
 	}
@@ -404,7 +403,6 @@ iptables_fw_set_inner_domains_trusted(void)
 	for (domain_trusted = config->inner_domains_trusted; domain_trusted != NULL; domain_trusted = domain_trusted->next) {
 		t_ip_trusted *ip_trusted = NULL;
 		for(ip_trusted = domain_trusted->ips_trusted; ip_trusted != NULL; ip_trusted = ip_trusted->next) {
-			//ipset_do_command("add " CHAIN_INNER_DOMAIN_TRUSTED " %s ", ip_trusted->ip);
 			add_ip_to_ipset(CHAIN_INNER_DOMAIN_TRUSTED, ip_trusted->ip, 0);
 		}
 	}
