@@ -58,7 +58,7 @@ auth_server_roam_request(const char *mac)
 	s_config *config = config_get_config();
     int sockfd;
     char buf[MAX_BUF];
-    char *tmp;
+    char *tmp = NULL, *end = NULL;
     t_auth_serv *auth_server = NULL;
     auth_server = get_auth_server();
 
@@ -97,8 +97,9 @@ auth_server_roam_request(const char *mac)
         return NULL;
     }
 
-    if ((tmp = strstr(res, "{\""))) {
+    if ((tmp = strstr(res, "{\"")) && end = strrchr(res, '}')) {
 		char *is_roam = NULL;
+		*(end+1) = '\0';
 		debug(LOG_DEBUG, "tmp is [%s]", tmp);
 		json_object *roam_info = json_tokener_parse(tmp);
 		if(roam_info == NULL) {
