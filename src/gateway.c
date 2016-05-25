@@ -60,6 +60,7 @@
 #include "httpd_thread.h"
 #include "util.h"
 #include "threadpool.h"
+#include "ipset.h"
 
 /** XXX Ugly hack 
  * We need to remember the thread IDs of threads that simulate wait with pthread_cond_timedwait
