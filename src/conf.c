@@ -1015,7 +1015,7 @@ remove_trusted_mac(const char *mac)
 {
 	t_trusted_mac *p = config.trustedmaclist, *p1 = p;
 	debug(LOG_DEBUG, "Remove MAC address [%s] to trusted mac list", mac);
-	if(config.mac_blacklist == NULL)
+	if(config.trustedmaclist== NULL)
 		return;
 
 	LOCK_CONFIG();
@@ -1030,7 +1030,7 @@ remove_trusted_mac(const char *mac)
 	
 	if(p) {
 		if(p == config.trustedmaclist)
-			config.mac_blacklist = p->next;
+			config.trustedmaclist = p->next;
 		else
 			p1->next = p->next;
 		free(p->mac);
