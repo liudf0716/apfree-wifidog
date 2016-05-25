@@ -350,6 +350,8 @@ int is_untrusted_mac(const char *);
 // trustedmaclist operation, for wdctl use
 void parse_trusted_mac_list(const char *);
 
+void parse_del_trusted_mac_list(const char *);
+
 void __clear_trusted_mac_list();
 
 void clear_trusted_mac_list();
@@ -359,6 +361,8 @@ t_trusted_mac *add_trusted_mac(const char *);
 // mac blacklist operation, for wdctl use
 void parse_untrusted_mac_list(const char*);
 
+void parse_del_untrusted_mac_list(const char *);
+
 void __clear_untrusted_mac_list();
 
 void clear_untrusted_mac_list();
@@ -366,6 +370,8 @@ void clear_untrusted_mac_list();
 void clear_dup_trusted_mac_list(t_trusted_mac *);
 // common api
 void add_mac(const char *, mac_choice_t );
+
+void remove_mac(const char *, mac_choice_t );
 
 void parse_mac_list(const char *, mac_choice_t);
 

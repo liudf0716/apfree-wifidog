@@ -1010,6 +1010,37 @@ add_roam_mac(const char *mac)
 	}
 }
 
+static void
+remove_trusted_mac(const char *mac)
+{
+	t_trusted_mac *p = config.trustedmaclist, p1 = p;
+	debug(LOG_DEBUG, "Remove MAC address [%s] to trusted mac list", mac);
+	if(config.mac_blacklist == NULL)
+		return;
+
+	LOCK_CONFIG();
+	
+	while(p) {
+		if(strcmp(p->mac, mac) == 0) {
+			break;
+		}
+		p1 = p;
+		p = p->next;
+	}	
+	
+	if(p) {
+		if(p == config.trustedmaclist)
+			config.mac_blacklist = p->next;
+		else
+			p1->next = p->next;
+		free(p->mac);
+		if(p->ip) free(p->ip);
+		free(p);	
+	}
+	
+	UNLOCK_CONFIG();
+}
+
 t_trusted_mac *
 add_trusted_mac(const char *mac)
 {
@@ -1089,6 +1120,50 @@ add_untrusted_mac(const char *mac)
 	}
 }
 
+static void
+remove_untrusted_mac(const char *mac)
+{
+	t_untrusted_mac *p = config.mac_blacklist, p1 = p;
+	debug(LOG_DEBUG, "Remove MAC address [%s] to untrusted mac list", mac);
+	if(config.mac_blacklist == NULL)
+		return;
+
+	LOCK_CONFIG();
+	
+	while(p) {
+		if(strcmp(p->mac, mac) == 0) {
+			break;
+		}
+		p1 = p;
+		p = p->next;
+	}	
+	
+	if(p) {
+		if(p == config.mac_blacklist)
+			config.mac_blacklist = p->next;
+		else
+			p1->next = p->next;
+		free(p->mac);
+		if(p->ip) free(p->ip);
+		free(p);	
+	}
+
+	UNLOCK_CONFIG();
+}
+
+void
+remove_mac(const char *mac, mac_choice_t which)
+{
+	switch(which) {
+	case TRUSTED_MAC:
+		remove_trusted_mac(mac);
+		break;
+	case UNTRUSTED_MAC:
+		remove_untrusted_mac(mac);
+		break;
+	}
+}
+
 void
 add_mac(const char *mac, mac_choice_t which)
 {
@@ -1106,7 +1181,22 @@ add_mac(const char *mac, mac_choice_t which)
 }
 
 void
+parse_remove_mac_list(const char *ptr, mac_choice_t which)
+{
+	parse_mac_list_action(ptr, which, 0);;
+}
+
+void
 parse_mac_list(const char *ptr, mac_choice_t which)
+{
+	parse_mac_list_action(ptr, which, 1);
+}
+
+/* *
+ * action: 1 add, 0 remove
+ */
+static void
+parse_mac_list_action(const char *ptr, mac_choice_t which, int action)
 {
     char *ptrcopy = NULL, *pt = NULL;
     char *possiblemac = NULL;
@@ -1118,10 +1208,13 @@ parse_mac_list(const char *ptr, mac_choice_t which)
 	while(isspace(*ptr))
 		ptr++;
 	
-	if (check_mac_format(ptr)) {
+	if(is_valid_mac(ptr)) {
 		// in case only one mac
     	debug(LOG_DEBUG, "add mac [%s] to list", ptr);
-		add_mac(ptr, which);
+		if(action)
+			add_mac(ptr, which);
+		else
+			remove_mac(ptr, which);
 		return;
 	}
 
@@ -1137,17 +1230,13 @@ parse_mac_list(const char *ptr, mac_choice_t which)
 	
     while ((possiblemac = strsep(&ptrcopy, ","))) {
         /* check for valid format */
-        if (!check_mac_format(possiblemac)) {
-            debug(LOG_ERR,
-                  "[%s] not a valid MAC address ",
-                  possiblemac);
-			break;
-        } else {
-            if (sscanf(possiblemac, " %17[A-Fa-f0-9:]", mac) == 1) {
-                /* Copy mac to the list */
+		if (is_valid_mac(possiblemac)) {
+			if(action)
 				add_mac(mac, which);
-            }
-        }
+			else
+				remove_mac(mac, which);
+		} else
+            debug(LOG_ERR, "[%s] not a valid MAC address ", possiblemac);
     }
 
     free(pt);
@@ -1161,9 +1250,21 @@ parse_trusted_mac_list(const char *pstr)
 }
 
 void
+parse_del_trusted_mac_list(const char *pstr)
+{
+	parse_remove_mac_list(pstr, TRUSTED_MAC);
+}
+
+void
 parse_untrusted_mac_list(const char *pstr)
 {
 	parse_mac_list(pstr, UNTRUSTED_MAC);
+}
+
+void
+parse_del_untrusted_mac_list(const char *pstr)
+{
+	parse_remove_mac_list(pstr, UNTRUSTED_MAC);
 }
 
 void 

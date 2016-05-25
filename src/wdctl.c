@@ -53,6 +53,7 @@ static void wdctl_reset(void);
 static void wdctl_restart(void);
 //>>> liudf added 20151225
 static void wdctl_add_trusted_iplist(void);
+static void wdctl_del_trusted_iplist(void);
 static void wdctl_clear_trusted_iplist(void);
 static void wdctl_add_trusted_domains(void);
 static void wdctl_del_trusted_domains(void);
@@ -61,9 +62,11 @@ static void wdctl_clear_trusted_domains(void);
 static void wdctl_show_trusted_domains(void);
 static void wdctl_add_domain_ip(void);
 static void wdctl_add_trusted_maclist(void);
+static void wdctl_del_trusted_maclist(void);
 static void wdctl_show_trusted_maclist(void);
 static void wdctl_clear_trusted_maclist(void);
 static void wdctl_add_untrusted_maclist(void);
+static void wdctl_del_untrusted_maclist(void);
 static void wdctl_show_untrusted_maclist(void);
 static void wdctl_clear_untrusted_maclist(void);
 static void wdctl_add_roam_maclist(void);
@@ -98,13 +101,16 @@ usage(void)
     fprintf(stdout, "  clear_trusted_domains	Clear all trusted domains\n");
     fprintf(stdout, "  reparse_trusted_domains	Reparse trusted domains ip\n");
     fprintf(stdout, "  add_trusted_iplist [ip1,ip2...]		Add trusted ip list\n");
+    //fprintf(stdout, "  del_trusted_iplist [ip1,ip2...]		Del trusted ip list\n");
     fprintf(stdout, "  clear_trusted_iplist		Clear trusted ip list\n");
     fprintf(stdout, "  show_trusted_domains 	Show all trusted domains and its ip\n");
     fprintf(stdout, "  add_domain_ip [domain:ip] 	Add domain and its ip\n");
     fprintf(stdout, "  add_trusted_mac [mac1,mac2...]			Add trusted mac list\n");
+    fprintf(stdout, "  del_trusted_mac [mac1,mac2...]			Del trusted mac list\n");
     fprintf(stdout, "  clear_trusted_mac		Clear trusted mac list\n");
     fprintf(stdout, "  show_trusted_mac			Show trusted mac list\n");
     fprintf(stdout, "  add_untrusted_mac [mac1,mac2...]		Add untrusted mac list\n");
+    fprintf(stdout, "  del_untrusted_mac [mac1,mac2...]		Del untrusted mac list\n");
 	fprintf(stdout, "  clear_untrusted_mac		Clear untrusted mac list\n");
     fprintf(stdout, "  show_untrusted_mac		Show untrusted mac list\n");
     fprintf(stdout, "  user_cfg_save			User config save\n");
@@ -201,6 +207,15 @@ parse_commandline(int argc, char **argv)
             exit(1);
 		}
         config.param = strdup(*(argv + optind + 1));
+	
+	} else if (strcmp(*(argv + optind), "del_trusted_iplist") == 0) {
+		config.command = WDCTL_DEL_TRUSTED_IPLIST;
+		if ((argc - (optind + 1)) <= 0) {
+			fprintf(stderr, "wdctl: Error: You must specify trusted ip list" "seperated with comma\n");
+            usage();
+            exit(1);
+		}
+        config.param = strdup(*(argv + optind + 1));
 
 	} else if (strcmp(*(argv + optind), "clear_trusted_iplist") == 0) {
 		config.command = WDCTL_CLEAR_TRUSTED_IPLIST;
@@ -227,10 +242,21 @@ parse_commandline(int argc, char **argv)
             exit(1);
 		}
         config.param = strdup(*(argv + optind + 1));
+	
+	} else if (strcmp(*(argv + optind), "del_trusted_mac") == 0) {
+		config.command = WDCTL_DEL_TRUSTED_MACLIST;
+		if ((argc - (optind + 1)) <= 0) {
+			fprintf(stderr, "wdctl: Error: You must specify mac list\n");
+            usage();
+            exit(1);
+		}
+        config.param = strdup(*(argv + optind + 1));
+
 	} else if (strcmp(*(argv + optind), "show_trusted_mac") == 0) {
 		config.command = WDCTL_SHOW_TRUSTED_MACLIST;
 	} else if (strcmp(*(argv + optind), "clear_trusted_mac") == 0) {
 		config.command = WDCTL_CLEAR_TRUSTED_MACLIST;
+	
 	} else if (strcmp(*(argv + optind), "add_untrusted_mac") == 0) {
 		config.command = WDCTL_ADD_UNTRUSTED_MACLIST;
 		if ((argc - (optind + 1)) <= 0) {
@@ -239,6 +265,16 @@ parse_commandline(int argc, char **argv)
             exit(1);
 		}
         config.param = strdup(*(argv + optind + 1));
+	
+	} else if (strcmp(*(argv + optind), "del_untrusted_mac") == 0) {
+		config.command = WDCTL_DEL_UNTRUSTED_MACLIST;
+		if ((argc - (optind + 1)) <= 0) {
+			fprintf(stderr, "wdctl: Error: You must specify mac list\n");
+            usage();
+            exit(1);
+		}
+        config.param = strdup(*(argv + optind + 1));
+
 	} else if (strcmp(*(argv + optind), "show_untrusted_mac") == 0) {
 		config.command = WDCTL_SHOW_UNTRUSTED_MACLIST;
 	} else if (strcmp(*(argv + optind), "clear_untrusted_mac") == 0) {
@@ -306,19 +342,20 @@ send_request(int sock, const char *request)
 
 //>>> liudf added 20151225
 static void
-wdctl_add_trusted_iplist(void)
+wdctl_command_action(const char *command)
 {
 	int sock;
-    char buffer[4196] = {0};
+    char buffer[4096] = {0};
     char request[4096] = {0};
     size_t len;
     ssize_t rlen;
 
     sock = connect_to_server(config.socket);
-
-    strncpy(request, "add_trusted_iplist ", 4096);
-    strncat(request, config.param, (4096 - strlen(request) - 1));
-    strncat(request, "\r\n\r\n", (4096 - strlen(request) - 1));
+	
+	if(config.param)	
+		snprintf(request, 4096, "%s %s\r\n\r\n", command, config.param);
+	else
+		snprintf(request, 4096, "%s \r\n\r\n", command);
 
     send_request(sock, request);
 
@@ -329,7 +366,7 @@ wdctl_add_trusted_iplist(void)
     }
 
     if (strcmp(buffer, "Yes") == 0) {
-        fprintf(stdout, "Connection %s successfully add_trusted_iplist.\n", config.param);
+        fprintf(stdout, "Connection set %s successfully .\n", config.param);
     } else if (strcmp(buffer, "No") == 0) {
         fprintf(stdout, "Connection %s was not active.\n", config.param);
     } else {
@@ -338,33 +375,63 @@ wdctl_add_trusted_iplist(void)
 
     shutdown(sock, 2);
     close(sock);
+}
 
+static void
+wdctl_command(int command)
+{
+	char *action = NULL;
+	switch(command) {
+	case WDCTL_ADD_TRUSTED_MACLIST:
+		action = "add_trusted_mac";
+		break;
+	case WDCTL_DEL_TRUSTED_MACLIST:
+		action = "del_trusted_mac";	
+		break;
+	case WDCTL_CLEAR_TRUSTED_MACLIST:
+		action = "clear_trusted_mac";
+		break;
+	case WDCTL_ADD_UNTRUSTED_MACLIST:
+		action = "add_untrusted_mac";
+		break;
+	case WDCTL_DEL_UNTRUSTED_MACLIST:
+		action = "del_untrusted_mac";
+		break;
+	case WDCTL_CLEAR_UNTRUSTED_MACLIST:
+		action = "clear_untrusted_mac";
+		break;
+	case WDCTL_DEL_TRUSTED_IPLIST:
+		action = "del_trusted_iplist";
+		break;
+	case WDCTL_ADD_TRUSTED_IPLIST:
+		action = "add_trusted_iplist";
+		break;
+	case WDCTL_CLEAR_TRUSTED_IPLIST:
+		action = "clear_trusted_iplist";
+		break;
+	}
+
+	if(action)
+		wdctl_command_action(action);
+}
+
+static void
+wdctl_add_trusted_iplist(void)
+{
+	wdctl_command(WDCTL_ADD_TRUSTED_IPLIST);
+}
+
+static void
+wdctl_del_trusted_iplist(void)
+{
+	wdctl_command(WDCTL_DEL_TRUSTED_IPLIST);
 }
 
 static void
 wdctl_clear_trusted_iplist(void)
 {
-	int sock;
-    char buffer[4096] = {0};
-    char request[36] = {0};
-    ssize_t len;
-
-    sock = connect_to_server(config.socket);
-
-    strncpy(request, "clear_trusted_iplist\r\n\r\n", 35);
-
-    send_request(sock, request);
-
-    // -1: need some space for \0!
-    while ((len = read(sock, buffer, sizeof(buffer) - 1)) > 0) {
-        buffer[len] = '\0';
-        fprintf(stdout, "%s\n", buffer);
-    }
-
-    shutdown(sock, 2);
-    close(sock);
+	wdctl_command(WDCTL_CLEAR_TRUSTED_IPLIST);
 }
-
 
 static void
 wdctl_add_trusted_domains(void)
@@ -669,6 +736,12 @@ wdctl_add_trusted_maclist()
 
 }
 
+static void 
+wdctl_del_trusted_maclist()
+{
+	wdctl_command(WDCTL_DEL_TRUSTED_MACLIST);
+}
+
 static void
 wdctl_show_trusted_maclist()
 {
@@ -719,6 +792,12 @@ wdctl_clear_trusted_maclist()
 }
 
 // untrusted maclist
+static void
+wdctl_del_untrusted_maclist()
+{
+	wdctl_command(WDCTL_DEL_UNTRUSTED_MACLIST);
+}
+
 static void 
 wdctl_add_untrusted_maclist()
 {
@@ -1009,6 +1088,10 @@ main(int argc, char **argv)
 		wdctl_add_trusted_iplist();
 		break;
 
+	case WDCTL_DEL_TRUSTED_IPLIST:
+		wdctl_del_trusted_iplist();
+		break;
+
 	case WDCTL_CLEAR_TRUSTED_IPLIST:
 		wdctl_clear_trusted_iplist();
 		break;
@@ -1045,6 +1128,10 @@ main(int argc, char **argv)
 		wdctl_add_trusted_maclist();
 		break;
 
+	case WDCTL_DEL_TRUSTED_MACLIST:
+		wdctl_del_trusted_maclist();
+		break;
+
 	case WDCTL_SHOW_TRUSTED_MACLIST:
 		wdctl_show_trusted_maclist();
 		break;
@@ -1055,6 +1142,10 @@ main(int argc, char **argv)
 
 	case WDCTL_ADD_UNTRUSTED_MACLIST:
 		wdctl_add_untrusted_maclist();
+		break;
+
+	case WDCTL_DEL_UNTRUSTED_MACLIST:
+		wdctl_del_untrusted_maclist();
 		break;
 
 	case WDCTL_SHOW_UNTRUSTED_MACLIST:

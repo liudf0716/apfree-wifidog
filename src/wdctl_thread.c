@@ -67,6 +67,7 @@ static void wdctl_restart(int);
 static void wdctl_add_trusted_domains(int, const char *);
 static void wdctl_del_trusted_domains(int, const char *);
 static void wdctl_add_trusted_iplist(int, const char *);
+static void wdctl_del_trusted_iplist(int, const char *);
 static void wdctl_clear_trusted_iplist(int);
 static void wdctl_reparse_trusted_domains(int);
 static void wdctl_clear_trusted_domains(int);
@@ -76,9 +77,11 @@ static void wdctl_add_roam_maclist(int, const char *);
 static void wdctl_show_roam_maclist(int);
 static void wdctl_clear_roam_maclist(int);
 static void wdctl_add_trusted_maclist(int, const char *);
+static void wdctl_del_trusted_maclist(int, const char *);
 static void wdctl_show_trusted_maclist(int);
 static void wdctl_clear_trusted_maclist(int);
 static void wdctl_add_untrusted_maclist(int, const char *);
+static void wdctl_del_untrusted_maclist(int, const char *);
 static void wdctl_show_untrusted_maclist(int);
 static void wdctl_clear_untrusted_maclist(int);
 static void wdctl_user_cfg_save(int);
@@ -246,6 +249,9 @@ thread_wdctl_handler(void *arg)
 
 	} else if (strncmp(request, "add_trusted_iplist", strlen("add_trusted_iplist")) == 0) {
 		wdctl_add_trusted_iplist(fd, (request + strlen("add_trusted_iplist") + 1));
+	
+	} else if (strncmp(request, "del_trusted_iplist", strlen("del_trusted_iplist")) == 0) {
+		wdctl_del_trusted_iplist(fd, (request + strlen("del_trusted_iplist") + 1));
 
 	} else if (strncmp(request, "clear_trusted_iplist", strlen("clear_trusted_iplist")) == 0) {
 		wdctl_clear_trusted_iplist(fd);
@@ -273,6 +279,9 @@ thread_wdctl_handler(void *arg)
 
 	} else if (strncmp(request, "add_trusted_mac", strlen("add_trusted_mac")) == 0) {
 		wdctl_add_trusted_maclist(fd, (request + strlen("add_trusted_mac") + 1));	
+	
+	} else if (strncmp(request, "del_trusted_mac", strlen("del_trusted_mac")) == 0) {
+		wdctl_del_trusted_maclist(fd, (request + strlen("del_trusted_mac") + 1));	
 
 	} else if (strncmp(request, "show_trusted_mac", strlen("show_trusted_maclist")) == 0) {
 		wdctl_show_trusted_maclist(fd);
@@ -282,6 +291,9 @@ thread_wdctl_handler(void *arg)
 
 	} else if (strncmp(request, "add_untrusted_mac", strlen("add_untrusted_mac")) == 0) {
 		wdctl_add_untrusted_maclist(fd, (request + strlen("add_untrusted_mac") + 1));	
+	
+	} else if (strncmp(request, "del_untrusted_mac", strlen("del_untrusted_mac")) == 0) {
+		wdctl_del_untrusted_maclist(fd, (request + strlen("del_untrusted_mac") + 1));	
 
 	} else if (strncmp(request, "show_untrusted_mac", strlen("show_untrusted_mac")) == 0) {
 		wdctl_show_untrusted_maclist(fd);
@@ -493,6 +505,24 @@ wdctl_add_trusted_iplist(int fd, const char *arg)
 }
 
 static void
+wdctl_del_trusted_iplist(int fd, const char *arg)
+{
+	debug(LOG_DEBUG, "Entering wdctl_del_trusted_iplist ...");
+	
+    debug(LOG_DEBUG, "Argument: %s ", arg);
+
+    debug(LOG_DEBUG, "parse&del trusted ip list");
+	add_trusted_ip_list(arg);
+
+	fw_refresh_user_domains_trusted();	
+
+    write_to_socket(fd, "Yes", 3);
+
+    debug(LOG_DEBUG, "Exiting wdctl_del_trusted_domains...");
+
+}
+
+static void
 wdctl_clear_trusted_iplist(int fd)
 {
 	debug(LOG_DEBUG, "Entering wdctl_clear_trusted_domains...");
@@ -650,6 +680,25 @@ wdctl_clear_roam_maclist(int fd)
 
 // trusted maclist
 static void
+wdctl_del_trusted_maclist(int fd, const char *args)
+{
+    debug(LOG_DEBUG, "Entering wdctl_del_trusted_maclist...");
+	
+    debug(LOG_DEBUG, "Argument: %s ", args);
+	
+    debug(LOG_DEBUG, "parse&del trusted maclist");
+
+	parse_del_trusted_mac_list(args);	
+	
+	fw_set_trusted_maclist();	
+	fw_clear_trusted_maclist();
+	
+    write_to_socket(fd, "Yes", 3);
+
+    debug(LOG_DEBUG, "Exiting wdctl_add_trusted_maclist...");
+}
+
+static void
 wdctl_add_trusted_maclist(int fd, const char *args)
 {
     debug(LOG_DEBUG, "Entering wdctl_add_trusted_maclist...");
@@ -660,6 +709,7 @@ wdctl_add_trusted_maclist(int fd, const char *args)
 
 	parse_trusted_mac_list(args);	
 	
+	fw_clear_trusted_maclist();
 	fw_set_trusted_maclist();	
 	
     write_to_socket(fd, "Yes", 3);
@@ -693,6 +743,24 @@ wdctl_clear_trusted_maclist(int fd)
 
 // untrusted maclist
 static void
+wdctl_del_untrusted_maclist(int fd, const char *args)
+{
+    debug(LOG_DEBUG, "Entering wdctl_del_untrusted_maclist...");
+	
+    debug(LOG_DEBUG, "Argument: %s ", args);
+	
+    debug(LOG_DEBUG, "parse&del untrusted maclist");
+	parse_del_untrusted_mac_list(args);	
+		
+	fw_clear_untrusted_maclist();	
+	fw_set_untrusted_maclist();
+	
+    write_to_socket(fd, "Yes", 3);
+
+    debug(LOG_DEBUG, "Exiting wdctl_add_untrusted_maclist...");
+}
+
+static void
 wdctl_add_untrusted_maclist(int fd, const char *args)
 {
     debug(LOG_DEBUG, "Entering wdctl_add_untrusted_maclist...");
@@ -700,12 +768,8 @@ wdctl_add_untrusted_maclist(int fd, const char *args)
     debug(LOG_DEBUG, "Argument: %s ", args);
 	
     debug(LOG_DEBUG, "parse untrusted maclist");
-	LOCK_CONFIG();
-
 	parse_untrusted_mac_list(args);	
-	
-	UNLOCK_CONFIG();
-	
+		
 	fw_clear_untrusted_maclist();	
 	fw_set_untrusted_maclist();
 	
