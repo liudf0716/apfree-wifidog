@@ -127,6 +127,22 @@ add_ip_to_ipset(const char *name, const char *ip, int remove)
 /** @internal
  * */
 static int
+flush_ipset(const char *name)
+{
+	char *ipset_name =  NULL;
+	if(name == NULL)
+		return -1;
+ 
+	ipset_name = safe_malloc(strlen(name) + 1);
+	memcpy(ipset_name, name, strlen(name));
+    iptables_insert_gateway_id(&ipset_name);
+
+	return flush_ipset(ipset_name);
+}
+
+/** @internal
+ * */
+static int
 ipset_do_command(const char *format, ...)
 {
     va_list vlist;
@@ -353,7 +369,11 @@ iptables_fw_refresh_user_domains_trusted(void)
 void
 iptables_fw_clear_user_domains_trusted(void)
 {
+#if	0
 	ipset_do_command("flush " CHAIN_DOMAIN_TRUSTED);
+#else
+	flush_ipset(CHAIN_DOMAIN_TRUSTED);
+#endif
 }
 
 void
@@ -387,7 +407,11 @@ iptables_fw_refresh_inner_domains_trusted(void)
 void
 iptables_fw_clear_inner_domains_trusted(void)
 {
+#if	0
 	ipset_do_command("flush " CHAIN_INNER_DOMAIN_TRUSTED);
+#else
+	flush_ipset(CHAIN_INNER_DOMAIN_TRUSTED);
+#endif
 }
 
 void
@@ -426,7 +450,11 @@ iptables_fw_set_roam_mac(const char *mac)
 void
 iptables_fw_clear_trusted_maclist(void)
 {
+#if	1
 	ipset_do_command("flush " CHAIN_TRUSTED);
+#else
+	flush_ipset(CHAIN_TRUSTED);
+#endif
 }
 
 void

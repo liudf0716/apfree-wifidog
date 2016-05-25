@@ -366,9 +366,9 @@ wdctl_command_action(const char *command)
     }
 
     if (strcmp(buffer, "Yes") == 0) {
-        fprintf(stdout, "Connection set %s successfully .\n", config.param);
+        fprintf(stdout, "Connection set successfully .\n");
     } else if (strcmp(buffer, "No") == 0) {
-        fprintf(stdout, "Connection %s was not active.\n", config.param);
+        fprintf(stdout, "Connection was not active.\n");
     } else {
         fprintf(stderr, "wdctl: Error: WiFiDog sent an abnormal " "reply.\n");
     }

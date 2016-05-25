@@ -43,6 +43,7 @@
 #define IPSET_ATTR_SETNAME 2
 #define IPSET_CMD_ADD 9
 #define IPSET_CMD_DEL 10
+#define	IPSET_CMD_FLUSH	4
 #define IPSET_MAXNAMELEN 32
 #define IPSET_PROTOCOL 6
 
@@ -78,7 +79,6 @@ struct my_nfgenmsg {
 #define NL_ALIGN(len) (((len)+3) & ~(3))
 static const struct sockaddr_nl snl = { .nl_family = AF_NETLINK };
 static int ipset_sock;
-static char *buffer;
 
 static int retry_send(ssize_t rc)
 {
@@ -120,8 +120,7 @@ static inline void add_attr(struct nlmsghdr *nlh, uint16_t type, size_t len, con
 
 int  ipset_init(void)
 {
-  	if ((buffer = safe_malloc(BUFF_SZ)) &&
-        (ipset_sock = socket(AF_NETLINK, SOCK_RAW, NETLINK_NETFILTER)) != -1 &&
+  	if ((ipset_sock = socket(AF_NETLINK, SOCK_RAW, NETLINK_NETFILTER)) != -1 &&
         (bind(ipset_sock, (struct sockaddr *)&snl, sizeof(snl)) != -1))
 		return 1;
 	
@@ -135,15 +134,13 @@ static int new_add_to_ipset(const char *setname, const struct in_addr *ipaddr, i
 	struct my_nlattr *nested[2];
 	uint8_t proto;
 	int addrsz = INADDRSZ;
-
+	char buffer[BUFF_SZ] = {0};
 
 	if (strlen(setname) >= IPSET_MAXNAMELEN) 
 	{
 		errno = ENAMETOOLONG;
 		return -1;
 	}
-
-	memset(buffer, 0, BUFF_SZ);
 
 	nlh = (struct nlmsghdr *)buffer;
 	nlh->nlmsg_len = NL_ALIGN(sizeof(struct nlmsghdr));
@@ -177,6 +174,39 @@ static int new_add_to_ipset(const char *setname, const struct in_addr *ipaddr, i
 	return errno == 0 ? 0 : -1;
 }
 
+int flush_ipset(const char *setname)
+{
+	struct nlmsghdr *nlh;
+	struct my_nfgenmsg *nfg;
+	uint8_t proto;
+	char buffer[BUFF_SZ] = {0};
+
+	if (setname != NULL || strlen(setname) >= IPSET_MAXNAMELEN) {
+		errno = ENAMETOOLONG;
+		return -1;
+	}
+
+	nlh = (struct nlmsghdr *)buffer;
+	nlh->nlmsg_len = NL_ALIGN(sizeof(struct nlmsghdr));
+	nlh->nlmsg_type = IPSET_CMD_FLUSH | (NFNL_SUBSYS_IPSET << 8);
+	nlh->nlmsg_flags = NLM_F_REQUEST;
+
+	nfg = (struct my_nfgenmsg *)(buffer + nlh->nlmsg_len);
+	nlh->nlmsg_len += NL_ALIGN(sizeof(struct my_nfgenmsg));
+	nfg->nfgen_family = AF_INET;
+	nfg->version = NFNETLINK_V0;
+	nfg->res_id = htons(0);
+
+	proto = IPSET_PROTOCOL;
+	add_attr(nlh, IPSET_ATTR_PROTOCOL, sizeof(proto), &proto);
+	add_attr(nlh, IPSET_ATTR_SETNAME, strlen(setname) + 1, setname);
+	
+	while(retry_send(sendto(ipset_sock, buffer, nlh->nlmsg_len, 0, (struct sockaddr *)&snl, sizeof(snl))))
+		;
+
+	return errno == 0 ? 0 : -1;
+
+}
 
 int add_to_ipset(const char *setname, const char *ipaddr, int remove)
 {
