@@ -690,8 +690,8 @@ wdctl_del_trusted_maclist(int fd, const char *args)
 
 	parse_del_trusted_mac_list(args);	
 	
-	fw_set_trusted_maclist();	
 	fw_clear_trusted_maclist();
+	fw_set_trusted_maclist();	
 	
     write_to_socket(fd, "Yes", 3);
 

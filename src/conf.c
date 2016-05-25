@@ -965,7 +965,7 @@ check_mac_format(const char *possiblemac)
 static void 
 remove_online_client(const char *mac)
 {
-	debug(LOG_DEBUG, "remove mac from client list");
+	debug(LOG_DEBUG, "remove mac [%s] from client list", mac);
 
 	t_client *client = NULL;
 	LOCK_CLIENT_LIST();
@@ -1191,7 +1191,6 @@ parse_mac_list_action(const char *ptr, mac_choice_t which, int action)
 {
     char *ptrcopy = NULL, *pt = NULL;
     char *possiblemac = NULL;
-    char *mac = NULL;
 	int  len = 0;
 
     debug(LOG_DEBUG, "Parsing string [%s] for  MAC addresses", ptr);
@@ -1201,15 +1200,13 @@ parse_mac_list_action(const char *ptr, mac_choice_t which, int action)
 	
 	if(is_valid_mac(ptr)) {
 		// in case only one mac
-    	debug(LOG_DEBUG, "add mac [%s] to list", ptr);
+    	debug(LOG_DEBUG, "add|remove [%d] mac [%s] to list", action, ptr);
 		if(action)
 			add_mac(ptr, which);
 		else
 			remove_mac(ptr, which);
 		return;
 	}
-
-    mac = safe_malloc(18);
 
     /* strsep modifies original, so let's make a copy */
     ptrcopy = safe_strdup(ptr);
@@ -1222,17 +1219,18 @@ parse_mac_list_action(const char *ptr, mac_choice_t which, int action)
     while ((possiblemac = strsep(&ptrcopy, ","))) {
         /* check for valid format */
 		if (is_valid_mac(possiblemac)) {
+			debug(LOG_DEBUG, "add|remove [%d] mac [%s]", possiblemac);
 			if(action)
-				add_mac(mac, which);
+				add_mac(possiblemac, which);
 			else
-				remove_mac(mac, which);
+				remove_mac(possiblemac, which);
 		} else
             debug(LOG_ERR, "[%s] not a valid MAC address ", possiblemac);
     }
 
     free(pt);
-    free(mac);
 }
+
 void
 parse_remove_mac_list(const char *ptr, mac_choice_t which)
 {
