@@ -1013,7 +1013,7 @@ add_roam_mac(const char *mac)
 static void
 remove_trusted_mac(const char *mac)
 {
-	t_trusted_mac *p = config.trustedmaclist, p1 = p;
+	t_trusted_mac *p = config.trustedmaclist, *p1 = p;
 	debug(LOG_DEBUG, "Remove MAC address [%s] to trusted mac list", mac);
 	if(config.mac_blacklist == NULL)
 		return;
@@ -1161,6 +1161,9 @@ remove_mac(const char *mac, mac_choice_t which)
 	case UNTRUSTED_MAC:
 		remove_untrusted_mac(mac);
 		break;
+	case ROAM_MAC:
+		// no operation
+		break;
 	}
 }
 
@@ -1178,18 +1181,6 @@ add_mac(const char *mac, mac_choice_t which)
 		add_roam_mac(mac);
 		break;
 	}
-}
-
-void
-parse_remove_mac_list(const char *ptr, mac_choice_t which)
-{
-	parse_mac_list_action(ptr, which, 0);;
-}
-
-void
-parse_mac_list(const char *ptr, mac_choice_t which)
-{
-	parse_mac_list_action(ptr, which, 1);
 }
 
 /* *
@@ -1241,6 +1232,17 @@ parse_mac_list_action(const char *ptr, mac_choice_t which, int action)
 
     free(pt);
     free(mac);
+}
+void
+parse_remove_mac_list(const char *ptr, mac_choice_t which)
+{
+	parse_mac_list_action(ptr, which, 0);;
+}
+
+void
+parse_mac_list(const char *ptr, mac_choice_t which)
+{
+	parse_mac_list_action(ptr, which, 1);
 }
 
 void
