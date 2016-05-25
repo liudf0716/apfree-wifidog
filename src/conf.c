@@ -1123,7 +1123,7 @@ add_untrusted_mac(const char *mac)
 static void
 remove_untrusted_mac(const char *mac)
 {
-	t_untrusted_mac *p = config.mac_blacklist, p1 = p;
+	t_untrusted_mac *p = config.mac_blacklist, *p1 = p;
 	debug(LOG_DEBUG, "Remove MAC address [%s] to untrusted mac list", mac);
 	if(config.mac_blacklist == NULL)
 		return;
