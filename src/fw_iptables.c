@@ -403,11 +403,7 @@ iptables_fw_refresh_inner_domains_trusted(void)
 void
 iptables_fw_clear_inner_domains_trusted(void)
 {
-#if	0
-	ipset_do_command("flush " CHAIN_INNER_DOMAIN_TRUSTED);
-#else
-	flush_ipset(CHAIN_INNER_DOMAIN_TRUSTED);
-#endif
+	iptables_flush_ipset(CHAIN_INNER_DOMAIN_TRUSTED);
 }
 
 void
@@ -434,7 +430,7 @@ iptables_fw_set_inner_domains_trusted(void)
 void
 iptables_fw_clear_roam_maclist(void)
 {
-	ipset_do_command("flush " CHAIN_ROAM);
+	iptables_flush_ipset(CHAIN_ROAM);
 }
 
 void
@@ -472,7 +468,6 @@ iptables_fw_set_trusted_mac(const char *mac)
 void
 iptables_fw_clear_untrusted_maclist(void)
 {
-	//ipset_do_command("flush " CHAIN_UNTRUSTED);
 	iptables_flush_ipset(CHAIN_UNTRUSTED);
 }
 
