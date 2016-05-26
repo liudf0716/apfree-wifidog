@@ -181,7 +181,7 @@ int flush_ipset(const char *setname)
 	uint8_t proto;
 	char buffer[BUFF_SZ] = {0};
 
-	if (setname != NULL || strlen(setname) >= IPSET_MAXNAMELEN) {
+	if (setname == NULL || strlen(setname) >= IPSET_MAXNAMELEN) {
 		errno = ENAMETOOLONG;
 		return -1;
 	}
