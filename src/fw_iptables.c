@@ -111,6 +111,22 @@ iptables_insert_gateway_id(char **input)
 /** @internal
  * */
 static int
+add_mac_to_ipset(const char *name, const char *mac, int timeout)
+{
+	char *ipset_name =  NULL;
+	if(name == NULL)
+		return -1;
+ 
+	ipset_name = safe_malloc(strlen(name) + 1);
+	memcpy(ipset_name, name, strlen(name));
+    iptables_insert_gateway_id(&ipset_name);
+
+	return add_to_ipset(ipset_name, mac, timeout);
+}
+
+/** @internal
+ * */
+static int
 add_ip_to_ipset(const char *name, const char *ip, int remove)
 {
 	char *ipset_name =  NULL;
@@ -481,7 +497,8 @@ iptables_fw_set_untrusted_maclist(void)
 
 	LOCK_CONFIG();
 	for (p = config->mac_blacklist; p != NULL; p = p->next)
-		ipset_do_command("add " CHAIN_UNTRUSTED " %s", p->mac);
+		//ipset_do_command("add " CHAIN_UNTRUSTED " %s", p->mac);
+		add_mac_to_ipset(CHAIN_UNTRUSTED, p->mac, 0);
 	UNLOCK_CONFIG();
 }
 

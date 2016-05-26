@@ -24,6 +24,7 @@
 #include <arpa/inet.h>
 #include <linux/version.h>
 #include <linux/netlink.h>
+#include <net/ethernet.h>
 
 #include "ipset.h"
 #include "safe.h"
@@ -35,6 +36,8 @@
 
 #define NFNL_SUBSYS_IPSET 6
 
+#define IPSET_ATTR_ETHER	17
+#define IPSET_ATTR_TIMEOUT	6
 #define IPSET_ATTR_DATA 7
 #define IPSET_ATTR_IP 1
 #define IPSET_ATTR_IPADDR_IPV4 1
@@ -60,6 +63,7 @@
 #endif
 
 #define INADDRSZ        4
+#define INETHSZ			6
 
 struct my_nlattr {
         __u16           nla_len;
@@ -174,6 +178,88 @@ static int new_add_to_ipset(const char *setname, const struct in_addr *ipaddr, i
 	return errno == 0 ? 0 : -1;
 }
 
+static int new_add_mac_to_ipset(const char *setname, const struct ether_addr *eth_addr, int af, int timeout)
+{
+	struct nlmsghdr *nlh;
+	struct my_nfgenmsg *nfg;
+	struct my_nlattr *nested[2];
+	uint8_t proto;
+	int addrsz = INETHSZ;
+	char buffer[BUFF_SZ] = {0};
+
+	if (strlen(setname) >= IPSET_MAXNAMELEN) 
+	{
+		errno = ENAMETOOLONG;
+		return -1;
+	}
+
+	nlh = (struct nlmsghdr *)buffer;
+	nlh->nlmsg_len = NL_ALIGN(sizeof(struct nlmsghdr));
+	nlh->nlmsg_type = IPSET_CMD_ADD | (NFNL_SUBSYS_IPSET << 8);
+	nlh->nlmsg_flags = NLM_F_REQUEST;
+
+	nfg = (struct my_nfgenmsg *)(buffer + nlh->nlmsg_len);
+	nlh->nlmsg_len += NL_ALIGN(sizeof(struct my_nfgenmsg));
+	nfg->nfgen_family = af;
+	nfg->version = NFNETLINK_V0;
+	nfg->res_id = htons(0);
+
+	proto = IPSET_PROTOCOL;
+	add_attr(nlh, IPSET_ATTR_PROTOCOL, sizeof(proto), &proto);
+	add_attr(nlh, IPSET_ATTR_SETNAME, strlen(setname) + 1, setname);
+	nested[0] = (struct my_nlattr *)(buffer + NL_ALIGN(nlh->nlmsg_len));
+	nlh->nlmsg_len += NL_ALIGN(sizeof(struct my_nlattr));
+	nested[0]->nla_type = NLA_F_NESTED | IPSET_ATTR_DATA;
+	nested[1] = (struct my_nlattr *)(buffer + NL_ALIGN(nlh->nlmsg_len));
+	nlh->nlmsg_len += NL_ALIGN(sizeof(struct my_nlattr));
+	nested[1]->nla_type = NLA_F_NESTED | IPSET_ATTR_ETHER;
+	add_attr(nlh, 
+		(af == AF_INET ? IPSET_ATTR_IPADDR_IPV4 : IPSET_ATTR_IPADDR_IPV6) | NLA_F_NET_BYTEORDER,
+		addrsz, eth_addr->ether_addr_octet);
+	nested[1]->nla_len = (void *)buffer + NL_ALIGN(nlh->nlmsg_len) - (void *)nested[1];
+	nested[0]->nla_len = (void *)buffer + NL_ALIGN(nlh->nlmsg_len) - (void *)nested[0];
+
+	while(retry_send(sendto(ipset_sock, buffer, nlh->nlmsg_len, 0, (struct sockaddr *)&snl, sizeof(snl))))
+		;
+
+	debug(LOG_DEBUG, "new_add_mac_to_ipset [%s] [%s]", setname, strerror(errno));
+	return errno == 0 ? 0 : -1;
+}
+
+int flush_ipset(const char *setname)
+{
+	struct nlmsghdr *nlh;
+	struct my_nfgenmsg *nfg;
+	uint8_t proto;
+	char buffer[BUFF_SZ] = {0};
+
+	if (setname == NULL || strlen(setname) >= IPSET_MAXNAMELEN) {
+		errno = ENAMETOOLONG;
+		return -1;
+	}
+
+	nlh = (struct nlmsghdr *)buffer;
+	nlh->nlmsg_len = NL_ALIGN(sizeof(struct nlmsghdr));
+	nlh->nlmsg_type = IPSET_CMD_FLUSH | (NFNL_SUBSYS_IPSET << 8);
+	nlh->nlmsg_flags = NLM_F_REQUEST;
+
+	nfg = (struct my_nfgenmsg *)(buffer + nlh->nlmsg_len);
+	nlh->nlmsg_len += NL_ALIGN(sizeof(struct my_nfgenmsg));
+	nfg->nfgen_family = AF_INET;
+	nfg->version = NFNETLINK_V0;
+	nfg->res_id = htons(0);
+
+	proto = IPSET_PROTOCOL;
+	add_attr(nlh, IPSET_ATTR_PROTOCOL, sizeof(proto), &proto);
+	add_attr(nlh, IPSET_ATTR_SETNAME, strlen(setname) + 1, setname);
+	
+	while(retry_send(sendto(ipset_sock, buffer, nlh->nlmsg_len, 0, (struct sockaddr *)&snl, sizeof(snl))))
+		;
+
+	return errno == 0 ? 0 : -1;
+
+}
+
 int flush_ipset(const char *setname)
 {
 	struct nlmsghdr *nlh;
@@ -209,16 +295,25 @@ int flush_ipset(const char *setname)
 
 }
 
-int add_to_ipset(const char *setname, const char *ipaddr, int remove)
+int add_to_ipset(const char *setname, const char *val, int flag)
 {
 	int af = AF_INET;
-	struct in_addr addr;
 	
-	debug(LOG_DEBUG, "add_to_ipset [%s] [%s] [%d]", setname, ipaddr, remove);
-	
-	if (inet_aton(ipaddr, &addr) == 0) 
-		return -1;
+	debug(LOG_DEBUG, "add_to_ipset [%s] [%s] [%d]", setname, val, flag);
+	if(is_valid_ip(val)) {	
+		struct in_addr addr;
+		if (inet_aton(val, &addr) == 0) 
+			return -1;
 
-	return new_add_to_ipset(setname, &addr, af, remove);
+		return new_add_to_ipset(setname, &addr, af, flag);
+	} else if (is_valid_mac(val)) {
+		struct ether_addr *addr = ether_aton(val);
+		if(addr == NULL)
+			return -1;
+
+		return new_add_mac_to_ipset(setname, addr, af, flag);	
+	}
+
+	return -1;
 }
 

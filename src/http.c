@@ -131,7 +131,7 @@ _special_process(request *r, const char *mac, const char *redir_url)
 
 		if(o_client->client_type == 1 ) {
     		UNLOCK_OFFLINE_CLIENT_LIST();
-			if(interval > 10 && r->request.version == HTTP_1_0) {
+			if(interval > 20 && r->request.version == HTTP_1_0) {
 				fw_set_mac_temporary(mac, 0);	
 				http_send_apple_redirect(r, redir_url);
 			} else if(o_client->hit_counts > 2 && r->request.version == HTTP_1_0)
@@ -143,7 +143,6 @@ _special_process(request *r, const char *mac, const char *redir_url)
 			o_client->client_type = 1;
 			UNLOCK_OFFLINE_CLIENT_LIST();
 			http_relay_wisper(r);
-			//http_send_redirect_to_auth(r, redir_url, "Redirect to login page");
 		}
 		return 1;
 	} 

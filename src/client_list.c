@@ -488,7 +488,7 @@ offline_client_ageout()
 	ptr = first_offline_client;
 	while(NULL != ptr) {
 		int idle_time = cur_time - ptr->last_login;
-		if(idle_time > 5*60) { //if 5 minutes stay idle
+		if(idle_time > 60) { //if 1 minutes stay idle
 			t_offline_client *ptmp = ptr;
 			ptr = ptr->next;
 			offline_client_list_delete(ptmp);
