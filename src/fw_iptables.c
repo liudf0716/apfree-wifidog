@@ -127,7 +127,7 @@ add_ip_to_ipset(const char *name, const char *ip, int remove)
 /** @internal
  * */
 static int
-iptable_flush_ipset(const char *name)
+iptables_flush_ipset(const char *name)
 {
 	char *ipset_name =  NULL;
 	if(name == NULL)
@@ -369,11 +369,7 @@ iptables_fw_refresh_user_domains_trusted(void)
 void
 iptables_fw_clear_user_domains_trusted(void)
 {
-#if	0
-	ipset_do_command("flush " CHAIN_DOMAIN_TRUSTED);
-#else
-	iptable_flush_ipset(CHAIN_DOMAIN_TRUSTED);
-#endif
+	iptables_flush_ipset(CHAIN_DOMAIN_TRUSTED);
 }
 
 void
@@ -450,11 +446,7 @@ iptables_fw_set_roam_mac(const char *mac)
 void
 iptables_fw_clear_trusted_maclist(void)
 {
-#if	1
-	ipset_do_command("flush " CHAIN_TRUSTED);
-#else
-	iptable_flush_ipset(CHAIN_TRUSTED);
-#endif
+	iptables_flush_ipset(CHAIN_TRUSTED);
 }
 
 void
@@ -480,7 +472,8 @@ iptables_fw_set_trusted_mac(const char *mac)
 void
 iptables_fw_clear_untrusted_maclist(void)
 {
-	ipset_do_command("flush " CHAIN_UNTRUSTED);
+	//ipset_do_command("flush " CHAIN_UNTRUSTED);
+	iptables_flush_ipset(CHAIN_UNTRUSTED);
 }
 
 void
