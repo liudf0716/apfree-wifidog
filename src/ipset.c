@@ -25,10 +25,13 @@
 #include <linux/version.h>
 #include <linux/netlink.h>
 #include <net/ethernet.h>
+#include <netinet/ether.h>
+
 
 #include "ipset.h"
 #include "safe.h"
 #include "debug.h"
+#include "util.h"
 	
 
 /* We want to be able to compile against old header files
