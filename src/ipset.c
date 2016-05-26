@@ -204,6 +204,7 @@ int flush_ipset(const char *setname)
 	while(retry_send(sendto(ipset_sock, buffer, nlh->nlmsg_len, 0, (struct sockaddr *)&snl, sizeof(snl))))
 		;
 
+	debug(LOG_DEBUG, "flush_ipset [%s] [%s]", setname, strerror(errno));
 	return errno == 0 ? 0 : -1;
 
 }
