@@ -259,40 +259,6 @@ int flush_ipset(const char *setname)
 	while(retry_send(sendto(ipset_sock, buffer, nlh->nlmsg_len, 0, (struct sockaddr *)&snl, sizeof(snl))))
 		;
 
-	return errno == 0 ? 0 : -1;
-
-}
-
-int flush_ipset(const char *setname)
-{
-	struct nlmsghdr *nlh;
-	struct my_nfgenmsg *nfg;
-	uint8_t proto;
-	char buffer[BUFF_SZ] = {0};
-
-	if (setname == NULL || strlen(setname) >= IPSET_MAXNAMELEN) {
-		errno = ENAMETOOLONG;
-		return -1;
-	}
-
-	nlh = (struct nlmsghdr *)buffer;
-	nlh->nlmsg_len = NL_ALIGN(sizeof(struct nlmsghdr));
-	nlh->nlmsg_type = IPSET_CMD_FLUSH | (NFNL_SUBSYS_IPSET << 8);
-	nlh->nlmsg_flags = NLM_F_REQUEST;
-
-	nfg = (struct my_nfgenmsg *)(buffer + nlh->nlmsg_len);
-	nlh->nlmsg_len += NL_ALIGN(sizeof(struct my_nfgenmsg));
-	nfg->nfgen_family = AF_INET;
-	nfg->version = NFNETLINK_V0;
-	nfg->res_id = htons(0);
-
-	proto = IPSET_PROTOCOL;
-	add_attr(nlh, IPSET_ATTR_PROTOCOL, sizeof(proto), &proto);
-	add_attr(nlh, IPSET_ATTR_SETNAME, strlen(setname) + 1, setname);
-	
-	while(retry_send(sendto(ipset_sock, buffer, nlh->nlmsg_len, 0, (struct sockaddr *)&snl, sizeof(snl))))
-		;
-
 	debug(LOG_DEBUG, "flush_ipset [%s] [%s]", setname, strerror(errno));
 	return errno == 0 ? 0 : -1;
 
