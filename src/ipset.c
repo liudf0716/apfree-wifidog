@@ -42,7 +42,8 @@
 #define IPSET_ATTR_ETHER	17
 #define IPSET_ATTR_TIMEOUT	6
 #define IPSET_ATTR_DATA 7
-#define IPSET_ATTR_IP 1
+#define IPSET_ATTR_IP 	1
+#define	IPSET_ATTR_MAC	4
 #define IPSET_ATTR_IPADDR_IPV4 1
 #define IPSET_ATTR_IPADDR_IPV6 2
 #define IPSET_ATTR_PROTOCOL 1
@@ -215,9 +216,9 @@ static int new_add_mac_to_ipset(const char *setname, const struct ether_addr *et
 	nested[0]->nla_type = NLA_F_NESTED | IPSET_ATTR_DATA;
 	nested[1] = (struct my_nlattr *)(buffer + NL_ALIGN(nlh->nlmsg_len));
 	nlh->nlmsg_len += NL_ALIGN(sizeof(struct my_nlattr));
-	nested[1]->nla_type = NLA_F_NESTED | IPSET_ATTR_ETHER;
+	nested[1]->nla_type = NLA_F_NESTED | IPSET_ATTR_MAC;
 	add_attr(nlh, 
-		(af == AF_INET ? IPSET_ATTR_IPADDR_IPV4 : IPSET_ATTR_IPADDR_IPV6) | NLA_F_NET_BYTEORDER,
+		IPSET_ATTR_ETHER | NLA_F_NET_BYTEORDER,
 		addrsz, eth_addr->ether_addr_octet);
 	nested[1]->nla_len = (void *)buffer + NL_ALIGN(nlh->nlmsg_len) - (void *)nested[1];
 	nested[0]->nla_len = (void *)buffer + NL_ALIGN(nlh->nlmsg_len) - (void *)nested[0];
