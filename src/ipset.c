@@ -67,7 +67,7 @@
 #endif
 
 #define INADDRSZ        4
-#define INETHSZ			6
+#define INETHSZ			8
 
 struct my_nlattr {
         __u16           nla_len;

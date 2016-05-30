@@ -177,7 +177,7 @@ ping(void)
     }
 	//<<< liudf added 20160121
 	// get first ssid
-	if ((fh = popen("uci get wireless.@wifi-iface[0].ssid", "r"))) {
+	if ((fh = popen("/sbin/uci get wireless.@wifi-iface[0].ssid 2> /dev/null", "r"))) {
 		fgets(ssid, 31, fh);	
 		pclose(fh);
 		fh = NULL;
@@ -190,7 +190,7 @@ ping(void)
 	}
 	
 	if(!g_version) {
-		if ((fh = popen("uci get firmwareinfo.@version[0].firmware_version", "r"))) {
+		if ((fh = popen("/sbin/uci get firmwareinfo.@version[0].firmware_version 2> /dev/null", "r"))) {
 			char version[32] = {0};
 			fgets(version, 31, fh);
 			pclose(fh);
@@ -202,7 +202,7 @@ ping(void)
 	}
 	
 	if(!g_type) {
-		if ((fh = popen("cat /var/sysinfo/board_type", "r"))) {
+		if ((fh = popen("/bin/cat /var/sysinfo/board_type", "r"))) {
 			char name[32] = {0};
 			fgets(name, 31, fh);
 			pclose(fh);
@@ -214,7 +214,7 @@ ping(void)
 	}
 
 	if(!g_name) {
-		if ((fh = popen("cat /var/sysinfo/board_name", "r"))) {
+		if ((fh = popen("/bin/cat /var/sysinfo/board_name", "r"))) {
 			char name[32] = {0};
 			fgets(name, 31, fh);
 			pclose(fh);
@@ -231,7 +231,7 @@ ping(void)
 			g_channel_path = NULL;
 		}
 
-		if ((fh = popen("uci get firmwareinfo.@version[0].channel_path", "r"))) {
+		if ((fh = popen("/sbin/uci get firmwareinfo.@version[0].channel_path", "r"))) {
 			char channel_path[128] = {0};
 			fgets(channel_path, 127, fh);
 			pclose(fh);
