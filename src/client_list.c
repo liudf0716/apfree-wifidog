@@ -622,6 +622,7 @@ add_online_client(const char *info)
 				client->wired = 0;
 				if (name)
 					client->name = safe_strdup(name);
+				debug(LOG_DEBUG, "first_login is %s", first_login);
 				if (first_login) 
 					client->first_login = (time_t)atol(first_login);
 				else
