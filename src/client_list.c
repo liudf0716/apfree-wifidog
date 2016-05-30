@@ -611,27 +611,32 @@ add_online_client(const char *info)
 	mac 	= json_object_get_string(json_object_object_get(client_info, "mac"));
 	ip		= json_object_get_string(json_object_object_get(client_info, "ip"));
 	name	= json_object_get_string(json_object_object_get(client_info, "name"));
-	if(mac && is_valid_mac(mac) && ip && is_valid_ip(ip) && !(old_client = client_list_find_by_mac(mac)) && 
+	if(mac && is_valid_mac(mac) && ip && is_valid_ip(ip) &&  
 	  (roam_client = auth_server_roam_request(mac)) != NULL) {
-		char *token = json_object_get_string(json_object_object_get(roam_client, "token"));
-		char *first_login = json_object_get_int(json_object_object_get(roam_client, "first_login"));
-		if(token != NULL) {
-			t_client *client = client_list_add(ip, mac, token);
-			client->wired = 0;
-			if (name)
-				client->name = safe_strdup(name);
-			if (first_login) 
-				client->first_login = (time_t)atol(first_login);
-			fw_allow(client, FW_MARK_KNOWN);
+		old_client = client_list_find_by_mac(mac);
+		if(old_client == NULL) {
+			char *token = json_object_get_string(json_object_object_get(roam_client, "token"));
+			char *first_login = json_object_get_int(json_object_object_get(roam_client, "first_login"));
+			if(token != NULL) {
+				t_client *client = client_list_add(ip, mac, token);
+				client->wired = 0;
+				if (name)
+					client->name = safe_strdup(name);
+				if (first_login) 
+					client->first_login = (time_t)atol(first_login);
+				else
+					client->first_login = time(NULL);
+				fw_allow(client, FW_MARK_KNOWN);
+			}
+		} else if (strcmp(old_client->ip, ip) != 0) { // has login; but ip changed
+			fw_deny(old_client);
+			free(old_client->ip);
+			old_client->ip = safe_strdup(ip);
+			fw_allow(old_client, FW_MARK_KNOWN);
 		}
 		json_object_put(roam_client);
-	} else if (old_client && strcmp(old_client->ip, ip) != 0) { // has login; but ip changed
-		fw_deny(old_client);
-		free(old_client->ip);
-		old_client->ip = safe_strdup(ip);
-		fw_allow(old_client, FW_MARK_KNOWN);
 	}
-	
+
 	json_object_put(client_info);
 	return 0;	
 }
