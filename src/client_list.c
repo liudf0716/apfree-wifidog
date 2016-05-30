@@ -616,13 +616,13 @@ add_online_client(const char *info)
 		old_client = client_list_find_by_mac(mac);
 		if(old_client == NULL) {
 			char *token = json_object_get_string(json_object_object_get(roam_client, "token"));
-			char *first_login = json_object_get_int(json_object_object_get(roam_client, "first_login"));
+			char *first_login = json_object_get_string(json_object_object_get(roam_client, "first_login"));
 			if(token != NULL) {
 				t_client *client = client_list_add(ip, mac, token);
 				client->wired = 0;
 				if (name)
 					client->name = safe_strdup(name);
-				debug(LOG_DEBUG, "first_login is %s", first_login);
+
 				if (first_login) 
 					client->first_login = (time_t)atol(first_login);
 				else
