@@ -215,7 +215,7 @@ static int new_add_mac_to_ipset(const char *setname, const struct ether_addr *et
 	while(retry_send(sendto(ipset_sock, buffer, nlh->nlmsg_len, 0, (struct sockaddr *)&snl, sizeof(snl))))
 		;
 
-	debug(LOG_DEBUG, "new_add_mac_to_ipset [%s] [%s] [%s]", setname, eth_addr->ether_addr_octet, strerror(errno));
+	debug(LOG_DEBUG, "new_add_mac_to_ipset [%s] [%s] [%s]", setname, ether_ntoa(eth_addr), strerror(errno));
 	return errno == 0 ? 0 : -1;
 }
 
