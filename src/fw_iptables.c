@@ -497,8 +497,8 @@ iptables_fw_set_untrusted_maclist(void)
 
 	LOCK_CONFIG();
 	for (p = config->mac_blacklist; p != NULL; p = p->next)
-		ipset_do_command("add " CHAIN_UNTRUSTED " %s", p->mac);
-		//add_mac_to_ipset(CHAIN_UNTRUSTED, p->mac, 0);
+		//ipset_do_command("add " CHAIN_UNTRUSTED " %s", p->mac);
+		add_mac_to_ipset(CHAIN_UNTRUSTED, p->mac, 0);
 	UNLOCK_CONFIG();
 }
 

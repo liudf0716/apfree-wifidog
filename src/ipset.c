@@ -67,7 +67,7 @@
 #endif
 
 #define INADDRSZ        4
-#define INETHSZ			8
+#define INETHSZ			6
 
 struct my_nlattr {
         __u16           nla_len;
@@ -186,7 +186,6 @@ static int new_add_mac_to_ipset(const char *setname, const struct ether_addr *et
 {
 	struct nlmsghdr *nlh;
 	struct my_nfgenmsg *nfg;
-	struct my_nlattr *nested[2];
 	uint8_t proto;
 	int addrsz = INETHSZ;
 	char buffer[BUFF_SZ] = {0};
@@ -211,17 +210,7 @@ static int new_add_mac_to_ipset(const char *setname, const struct ether_addr *et
 	proto = IPSET_PROTOCOL;
 	add_attr(nlh, IPSET_ATTR_PROTOCOL, sizeof(proto), &proto);
 	add_attr(nlh, IPSET_ATTR_SETNAME, strlen(setname) + 1, setname);
-	nested[0] = (struct my_nlattr *)(buffer + NL_ALIGN(nlh->nlmsg_len));
-	nlh->nlmsg_len += NL_ALIGN(sizeof(struct my_nlattr));
-	nested[0]->nla_type = NLA_F_NESTED | IPSET_ATTR_DATA;
-	nested[1] = (struct my_nlattr *)(buffer + NL_ALIGN(nlh->nlmsg_len));
-	nlh->nlmsg_len += NL_ALIGN(sizeof(struct my_nlattr));
-	nested[1]->nla_type = NLA_F_NESTED | IPSET_ATTR_MAC;
-	add_attr(nlh, 
-		IPSET_ATTR_ETHER | NLA_F_NET_BYTEORDER,
-		addrsz, eth_addr->ether_addr_octet);
-	nested[1]->nla_len = (void *)buffer + NL_ALIGN(nlh->nlmsg_len) - (void *)nested[1];
-	nested[0]->nla_len = (void *)buffer + NL_ALIGN(nlh->nlmsg_len) - (void *)nested[0];
+	add_attr(nlh, IPSET_ATTR_ETHER, addrsz, eth_addr->ether_addr_octet);
 
 	while(retry_send(sendto(ipset_sock, buffer, nlh->nlmsg_len, 0, (struct sockaddr *)&snl, sizeof(snl))))
 		;
