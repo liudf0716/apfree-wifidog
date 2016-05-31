@@ -210,7 +210,7 @@ static int new_add_mac_to_ipset(const char *setname, const struct ether_addr *et
 	proto = IPSET_PROTOCOL;
 	add_attr(nlh, IPSET_ATTR_PROTOCOL, sizeof(proto), &proto);
 	add_attr(nlh, IPSET_ATTR_SETNAME, strlen(setname) + 1, setname);
-	add_attr(nlh, IPSET_ATTR_ETHER, addrsz, eth_addr->ether_addr_octet);
+	add_attr(nlh, IPSET_ATTR_ETHER | NLA_F_NET_BYTEORDER, addrsz, eth_addr->ether_addr_octet);
 
 	while(retry_send(sendto(ipset_sock, buffer, nlh->nlmsg_len, 0, (struct sockaddr *)&snl, sizeof(snl))))
 		;
