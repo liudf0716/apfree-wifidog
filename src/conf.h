@@ -85,7 +85,8 @@
 
 typedef enum trusted_domain_t_ {
 	USER_TRUSTED_DOMAIN,
-	INNER_TRUSTED_DOMAIN
+	INNER_TRUSTED_DOMAIN,
+	TRUSTED_PAN_DOMAIN,
 } trusted_domain_t;
 
 typedef enum mac_choice_t_ {
@@ -243,6 +244,7 @@ typedef struct {
 	
 	// liudf 20151223 added
 	// trusted domain
+	t_domain_trusted *pan_domains_trusted; /** pan-domain trusted list*/
 	t_domain_trusted *domains_trusted; /** domains list, seperate with comma*/
 	t_domain_trusted *inner_domains_trusted; /** inner domains list, user cannot configure*/
 	t_trusted_mac	*roam_maclist; /** roam mac list*/
@@ -307,7 +309,11 @@ void parse_inner_trusted_domain_string(const char *);
 
 void parse_user_trusted_domain_string(const char *);
 
+void parse_trusted_pan_domain_string(const char *);
+
 void parse_del_trusted_domain_string(const char *);
+
+void parse_del_trusted_pan_domain_string(const char *);
 
 /** @brief parse domain's ip and add ip to domain's ip list*/
 void parse_trusted_domain_2_ip(t_domain_trusted *p);
@@ -323,6 +329,8 @@ void parse_inner_trusted_domain_list();
 void add_domain_ip_pair(const char *, trusted_domain_t);
 /** @brief  Clear domains_trusted of config safely */
 void clear_trusted_domains(void); 
+
+void clear_trusted_pan_domains(void);
 
 /** @brief  Clear domains_trusted of config  */
 void __clear_trusted_domains(void);

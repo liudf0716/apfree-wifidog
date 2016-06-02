@@ -59,6 +59,7 @@ char *get_trusted_domains_text(void);
 char *get_untrusted_maclist_text(void);
 char *get_trusted_maclist_text(void);
 char *get_roam_maclist_text(void);
+char *get_serialize_trusted_pan_domains(void);
 
 void trim_newline(char *);
 

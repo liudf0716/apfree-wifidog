@@ -39,6 +39,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <sys/stat.h>
+#include <sys/types.h>
 
 #include "common.h"
 
@@ -410,6 +411,48 @@ iptables_fw_set_user_domains_trusted(void)
 
 // set inner trusted domains
 void
+iptables_fw_clear_ipset_domains_trusted(void)
+{
+	char f_ipset_name[128] = {0};
+	snprintf(f_ipset_name, 128, "%s/%s", DNSMASQ_CONF_D, CHAIN_IPSET_TDOMAIN);
+	
+	remove(f_ipset_name);
+	iptables_flush_ipset(CHAIN_IPSET_TDOMAIN);
+	execute("/etc/init.d/dnsmasq restart");		
+}
+
+void
+iptables_fw_set_ipset_domains_trusted(void)
+{
+	const s_config *config;
+	t_domain_trusted *domain_trusted = NULL;
+	FILE *fd_ipset = NULL;
+	char f_ipset_name[128] = {0};
+	
+	config = config_get_config();
+	
+	mkdir(DNSMASQ_CONF_D, S_IRWXU|S_IRWXG|S_IRWXO);	
+	snprintf(f_ipset_name, 128, "%s/%s", DNSMASQ_CONF_D, CHAIN_IPSET_TDOMAIN);
+	fd_ipset = fopen(f_ipset_name, "w");
+	if(fd_ipset == NULL) {
+		return;
+	}
+
+	LOCK_DOMAIN();
+	
+	for (domain_trusted = config->pan_domains_trusted; domain_trusted != NULL; domain_trusted = domain_trusted->next) {
+		fprintf(fd_ipset, "/%s/%s\n", domain_trusted->domain, CHAIN_IPSET_TDOMAIN);	
+	}
+
+	UNLOCK_DOMAIN();
+
+	fclose(fd_ipset);
+
+	iptables_flush_ipset(CHAIN_IPSET_TDOMAIN);
+	execute("/etc/init.d/dnsmasq restart");		
+}
+
+void
 iptables_fw_refresh_inner_domains_trusted(void)
 {
 	iptables_fw_clear_inner_domains_trusted();
@@ -668,6 +711,7 @@ iptables_fw_init(void)
 	ipset_do_command("create " CHAIN_UNTRUSTED " hash:mac timeout 0 ");
 	ipset_do_command("create " CHAIN_DOMAIN_TRUSTED " hash:ip ");
 	ipset_do_command("create " CHAIN_INNER_DOMAIN_TRUSTED " hash:ip ");
+	ipset_do_command("create " CHAIN_IPSET_TDOMAIN " hash:ip ");
 
     /*
      *
@@ -754,6 +798,7 @@ iptables_fw_init(void)
     iptables_do_command("-t nat -A " CHAIN_UNKNOWN " -j " CHAIN_AUTHSERVERS);
 	// liudf added 20151224
     iptables_do_command("-t nat -A " CHAIN_UNKNOWN " -j " CHAIN_DOMAIN_TRUSTED);
+	iptables_do_command("-t nat -A " CHAIN_DOMAIN_TRUSTED " -m set --match-set " CHAIN_IPSET_TDOMAIN " dst -j ACCEPT");
 	iptables_do_command("-t nat -A " CHAIN_DOMAIN_TRUSTED " -m set --match-set " CHAIN_DOMAIN_TRUSTED " dst -j ACCEPT");
 	iptables_do_command("-t nat -A " CHAIN_DOMAIN_TRUSTED " -m set --match-set " CHAIN_INNER_DOMAIN_TRUSTED " dst -j ACCEPT");
     iptables_do_command("-t nat -A " CHAIN_UNKNOWN " -j " CHAIN_GLOBAL);
@@ -808,6 +853,7 @@ iptables_fw_init(void)
     iptables_fw_set_authservers();
 	    
 	iptables_do_command("-t filter -A " CHAIN_TO_INTERNET " -j " CHAIN_DOMAIN_TRUSTED);
+	iptables_do_command("-t filter -A " CHAIN_DOMAIN_TRUSTED " -m set --match-set " CHAIN_IPSET_TDOMAIN " dst -j ACCEPT");
 	iptables_do_command("-t filter -A " CHAIN_DOMAIN_TRUSTED " -m set --match-set " CHAIN_DOMAIN_TRUSTED " dst -j ACCEPT");
 	iptables_do_command("-t filter -A " CHAIN_DOMAIN_TRUSTED " -m set --match-set " CHAIN_INNER_DOMAIN_TRUSTED " dst -j ACCEPT");
 	
@@ -953,6 +999,7 @@ iptables_fw_destroy(void)
 	ipset_do_command("destroy " CHAIN_UNTRUSTED);
 	ipset_do_command("destroy " CHAIN_DOMAIN_TRUSTED);
 	ipset_do_command("destroy " CHAIN_INNER_DOMAIN_TRUSTED);
+	ipset_do_command("destroy " CHAIN_IPSET_TDOMAIN);
 	
 	// liudf added 20160127
 	f_fw_destroy_close();

@@ -337,6 +337,37 @@ get_serialize_trusted_domains()
 }
 
 char *
+get_serialize_trusted_pan_domains()
+{
+	pstr_t *pstr = NULL;
+    s_config *config;
+	t_domain_trusted *domain_trusted = NULL;
+	int line = 0;
+
+    config = config_get_config();
+    
+	domain_trusted = config->pan_domains_trusted;
+	if(domain_trusted == NULL)
+		return NULL;
+
+	pstr = pstr_new();
+
+	LOCK_DOMAIN();
+	
+	for (; domain_trusted != NULL; domain_trusted = domain_trusted->next, line++) {
+		if(line == 0)
+        	pstr_append_sprintf(pstr, "%s", domain_trusted->domain);
+		else
+        	pstr_append_sprintf(pstr, ",%s", domain_trusted->domain);
+	}
+
+	UNLOCK_DOMAIN();	
+    
+	return pstr_to_string(pstr);
+
+}
+
+char *
 get_trusted_domains_text()
 {
 	pstr_t *pstr = pstr_new();

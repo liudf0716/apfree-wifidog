@@ -273,6 +273,20 @@ fw_set_authservers(void)
 
 //>>>>> liudf added 20151224
 void
+fw_clear_pan_domains_trusted(void)
+{
+    debug(LOG_DEBUG, "Clear pan trust domains list");
+	iptables_fw_clear_ipset_domains_trusted();
+}
+
+void
+fw_set_pan_domains_trusted(void)
+{
+    debug(LOG_DEBUG, "Set pan trust domains list");
+	iptables_fw_set_ipset_domains_trusted();
+}
+
+void
 fw_refresh_inner_domains_trusted(void)
 {
     debug(LOG_INFO, "Refresh inner trust domains list");

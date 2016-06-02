@@ -52,6 +52,10 @@ static void wdctl_stop(void);
 static void wdctl_reset(void);
 static void wdctl_restart(void);
 //>>> liudf added 20151225
+static void wdctl_add_trusted_pan_domains(void);
+static void wdctl_del_trusted_pan_domains(void);
+static void wdctl_clear_trusted_pan_domains(void);
+static void wdctl_show_trusted_pan_domains(void);
 static void wdctl_add_trusted_iplist(void);
 static void wdctl_del_trusted_iplist(void);
 static void wdctl_clear_trusted_iplist(void);
@@ -366,11 +370,11 @@ wdctl_command_action(const char *command)
     }
 
     if (strcmp(buffer, "Yes") == 0) {
-        fprintf(stdout, "Connection set successfully .\n");
+        fprintf(stdout, "Yes\n");
     } else if (strcmp(buffer, "No") == 0) {
-        fprintf(stdout, "Connection was not active.\n");
+        fprintf(stdout, "No\n");
     } else {
-        fprintf(stderr, "wdctl: Error: WiFiDog sent an abnormal " "reply.\n");
+        fprintf(stderr, "Error\n");
     }
 
     shutdown(sock, 2);
@@ -409,6 +413,18 @@ wdctl_command(int command)
 	case WDCTL_CLEAR_TRUSTED_IPLIST:
 		action = "clear_trusted_iplist";
 		break;
+	case WDCTL_ADD_TRUSTED_PAN_DOMAINS:
+		action = "add_trusted_pdomains";
+		break;
+	case WDCTL_DEL_TRUSTED_PAN_DOMAINS:
+		action = "del_trusted_pdomains";
+		break;
+	case WDCTL_CLEAR_TRUSTED_PAN_DOMAINS:
+		action = "clear_trusted_pdomains"
+		break;
+	case WDCTL_SHOW_TRUSTED_PAN_DOMAINS:
+		action = "show_trusted_pdomains";
+		break;
 	}
 
 	if(action)
@@ -419,6 +435,30 @@ static void
 wdctl_add_trusted_iplist(void)
 {
 	wdctl_command(WDCTL_ADD_TRUSTED_IPLIST);
+}
+
+static void
+wdctl_add_trusted_pan_domains(void)
+{
+	wdctl_commond(WDCTL_ADD_TRUSTED_PAN_DOMAINS);
+}
+
+static void
+wdctl_del_trusted_pan_domains(void)
+{
+	wdctl_commond(WDCTL_DEL_TRUSTED_PAN_DOMAINS);
+}
+
+static void
+wdctl_clear_trusted_pan_domains(void)
+{
+	wdctl_commond(WDCTL_CLEAR_TRUSTED_PAN_DOMAINS);
+}
+
+static void
+wdctl_show_trusted_pan_domains(void)
+{
+	wdctl_commond(WDCTL_SHOW_TRUSTED_PAN_DOMAINS);
 }
 
 static void

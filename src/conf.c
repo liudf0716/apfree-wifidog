@@ -125,6 +125,7 @@ typedef enum {
     oSSLUseSNI,
 	
 	// >>>>liudf added 20151224
+	oTrustedPanDomains,
 	oTrustedDomains,
 	oInnerTrustedDomains,
 	oUntrustedMACList,
@@ -185,6 +186,7 @@ static const struct {
     "sslusesni", oSSLUseSNI}, {
 	
 	//>>>>> liudf added 20151224
+	"trustedPanDomains", oTrustedPanDomains}, {
 	"trustedDomains", oTrustedDomains}, {
 	"untrustedmaclist", oUntrustedMACList}, {
 	"jsFilter", oJsFilter}, {
@@ -864,6 +866,9 @@ config_read(const char *filename)
 #endif
                     break;
 				// >>> liudf added 20151224
+				case oTrustedPanDomains:
+					parse_trusted_pan_domain_string(rawarg);
+					break;
 				case oTrustedDomains:
 					parse_user_trusted_domain_string(rawarg);
 					break;
@@ -1376,7 +1381,23 @@ __del_domain_common(const char *domain, trusted_domain_t which)
 			} else {
 				config.inner_domains_trusted = p->next;
 			}
-
+    	}
+	} else if (which == TRUSTED_PAN_DOMAIN) {	
+		if (config.pan_domains_trusted != NULL) {
+			for(p = config.pan_domains_trusted; p != NULL; p1 = p, p = p->next) {
+				if(strcmp(p->domain, domain) == 0) {
+					break;
+				}
+			}
+			
+			if(p == NULL)
+				return NULL;
+	
+			if(p1 != NULL) {
+				p1->next = p->next;
+			} else {
+				config.pan_domains_trusted = p->next;
+			}
     	}
 	}
 
@@ -1443,6 +1464,26 @@ __add_domain_common(const char *domain, trusted_domain_t which)
     	}
 		
 		return p;
+	} else if ( which == TRUSTED_PAN_DOMAIN) {
+		if (config.pan_domains_trusted == NULL) {
+    		p = (t_domain_trusted *)safe_malloc(sizeof(t_domain_trusted));
+    		p->domain = safe_strdup(domain);
+    	    p->next = NULL;
+    	    config.pan_domains_trusted = p;
+    	} else {
+			for(p = config.pan_domains_trusted; p != NULL; p = p->next) {
+				if(strcmp(p->domain, domain) == 0)
+					break;
+			}
+			if(p == NULL) {
+    			p = (t_domain_trusted *)safe_malloc(sizeof(t_domain_trusted));
+    			p->domain = safe_strdup(domain);
+    	    	p->next = config.pan_domains_trusted;
+    	    	config.pan_domains_trusted = p;
+			}
+    	}
+		
+		return p;
 	}
 	
 	return NULL;
@@ -1499,6 +1540,11 @@ void parse_user_trusted_domain_string(const char *domain_list)
 	parse_domain_string_common(domain_list, USER_TRUSTED_DOMAIN);
 }
 
+void parse_trusted_pan_domain_string(const char *domain_list)
+{
+	parse_domain_string_common(domain_list, TRUSTED_PAN_DOMAIN);
+}
+
 void
 parse_domain_string_common_action(const char *ptr, trusted_domain_t which, int action)
 {
@@ -1543,6 +1589,12 @@ void
 parse_domain_string_common(const char *ptr, trusted_domain_t which)
 {
 	parse_domain_string_common_action(ptr, which, 1);
+}
+
+void
+parse_del_trusted_pan_domain_string(const char *ptr)
+{
+	parse_domain_string_common_action(ptr, TRUSTED_PAN_DOMAIN, 0);
 }
 
 void
@@ -1833,6 +1885,28 @@ clear_trusted_domains(void)
 {
 	LOCK_DOMAIN();
 	__clear_trusted_domains();
+	UNLOCK_DOMAIN();
+}
+
+static void
+__clear_trusted_pan_domains(void)
+{
+	t_domain_trusted *p, *p1;
+    for (p = config.pan_domains_trusted; p != NULL;) {
+    	p1 = p;
+       	p = p->next;
+       	free(p1->domain);
+       	free(p1);
+    }
+
+   	config.pan_domains_trusted = NULL;
+}
+
+void
+clear_trusted_pan_domains(void)
+{
+	LOCK_DOMAIN();
+	__clear_trusted_pan_domains();
 	UNLOCK_DOMAIN();
 }
 
