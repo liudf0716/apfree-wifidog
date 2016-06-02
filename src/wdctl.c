@@ -463,19 +463,19 @@ wdctl_add_trusted_iplist(void)
 static void
 wdctl_add_trusted_pan_domains(void)
 {
-	wdctl_commond(WDCTL_ADD_TRUSTED_PAN_DOMAINS);
+	wdctl_command(WDCTL_ADD_TRUSTED_PAN_DOMAINS);
 }
 
 static void
 wdctl_del_trusted_pan_domains(void)
 {
-	wdctl_commond(WDCTL_DEL_TRUSTED_PAN_DOMAINS);
+	wdctl_command(WDCTL_DEL_TRUSTED_PAN_DOMAINS);
 }
 
 static void
 wdctl_clear_trusted_pan_domains(void)
 {
-	wdctl_commond(WDCTL_CLEAR_TRUSTED_PAN_DOMAINS);
+	wdctl_command(WDCTL_CLEAR_TRUSTED_PAN_DOMAINS);
 }
 
 static void
@@ -1139,6 +1139,16 @@ main(int argc, char **argv)
         break;
 	
 	//>>> liudf added 20151225
+	case WDCTL_ADD_TRUSTED_PAN_DOMAINS:
+		wdctl_add_trusted_pan_domains();
+		break;
+	case WDCTL_DEL_TRUSTED_PAN_DOMAINS:
+		wdctl_del_trusted_pan_domains();
+		break;
+	case WDCTL_CLEAR_TRUSTED_PAN_DOMAINS:
+		wdctl_clear_trusted_pan_domains();
+		break;
+
 	case WDCTL_ADD_TRUSTED_DOMAINS:
 		wdctl_add_trusted_domains();
 		break;
