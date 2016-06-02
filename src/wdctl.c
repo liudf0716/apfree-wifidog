@@ -188,6 +188,24 @@ parse_commandline(int argc, char **argv)
     } else if (strcmp(*(argv + optind), "restart") == 0) {
         config.command = WDCTL_RESTART;
 	//>>> liudf added 20151225
+	} else if (strcmp(*(argv + optind), "add_trusted_pdomains") == 0) {
+		config.command = WDCTL_ADD_TRUSTED_PAN_DOMAINS;
+		if ((argc - (optind + 1)) <= 0) {
+			fprintf(stderr, "wdctl: Error: You must specify trusted domains" "seperated with comma\n");
+            usage();
+            exit(1);
+		}
+        config.param = strdup(*(argv + optind + 1));
+	
+	} else if (strcmp(*(argv + optind), "del_trusted_pdomains") == 0) {
+		config.command = WDCTL_DEL_TRUSTED_PAN_DOMAINS;
+		if ((argc - (optind + 1)) <= 0) {
+			fprintf(stderr, "wdctl: Error: You must specify trusted domains" "seperated with comma\n");
+            usage();
+            exit(1);
+		}
+        config.param = strdup(*(argv + optind + 1));	
+
 	} else if (strcmp(*(argv + optind), "add_trusted_domains") == 0) {
 		config.command = WDCTL_ADD_TRUSTED_DOMAINS;
 		if ((argc - (optind + 1)) <= 0) {
@@ -225,12 +243,14 @@ parse_commandline(int argc, char **argv)
         config.param = strdup(*(argv + optind + 1));
 
 	} else if (strcmp(*(argv + optind), "clear_trusted_iplist") == 0) {
-		config.command = WDCTL_CLEAR_TRUSTED_IPLIST;
-		
+		config.command = WDCTL_CLEAR_TRUSTED_IPLIST;	
 	} else if (strcmp(*(argv + optind), "reparse_trusted_domains") == 0) {
 		config.command = WDCTL_REPARSE_TRUSTED_DOMAINS;
 	} else if (strcmp(*(argv + optind), "clear_trusted_domains") == 0) {
 		config.command = WDCTL_CLEAR_TRUSTED_DOMAINS;
+	} else if (strcmp(*(argv + optind), "clear_trusted_pdomains") == 0) {
+		config.command = WDCTL_CLEAR_TRUSTED_PAN_DOMAINS;
+
 	} else if (strcmp(*(argv + optind), "show_trusted_domains") == 0) {
 		config.command = WDCTL_SHOW_TRUSTED_DOMAINS;
 	} else if (strcmp(*(argv + optind), "add_domain_ip") == 0) {
@@ -423,7 +443,7 @@ wdctl_command(int command)
 		action = "del_trusted_pdomains";
 		break;
 	case WDCTL_CLEAR_TRUSTED_PAN_DOMAINS:
-		action = "clear_trusted_pdomains"
+		action = "clear_trusted_pdomains";
 		break;
 	case WDCTL_SHOW_TRUSTED_PAN_DOMAINS:
 		action = "show_trusted_pdomains";
