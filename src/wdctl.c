@@ -100,6 +100,9 @@ usage(void)
     fprintf(stdout, "  stop              Stop the running wifidog\n");
     fprintf(stdout, "  restart           Re-start the running wifidog (without disconnecting active users!)\n");
 	//>>> liudf added 20151225
+    fprintf(stdout, "  add_trusted_pdomains [domain1,domain2...]	Add trusted pan-domains\n");
+    fprintf(stdout, "  del_trusted_pdomains [domain1,domain2...]	Del trusted pan-domains\n");
+    fprintf(stdout, "  clear_trusted_pdomains	Clear all trusted pan-domains\n");
     fprintf(stdout, "  add_trusted_domains [domain1,domain2...]	Add trusted domains\n");
     fprintf(stdout, "  del_trusted_domains [domain1,domain2...]		Del trusted domains\n");
     fprintf(stdout, "  clear_trusted_domains	Clear all trusted domains\n");

@@ -540,13 +540,20 @@ wdctl_clear_trusted_pan_domains(int fd)
 {
 	debug(LOG_DEBUG, "Entering wdctl_clear_trusted_pan_domains ...");
 	
-	clear_trusted_pdomains();
+	clear_trusted_pan_domains();
 
-	fw_clear_ipset_domains_trusted();	
+	fw_clear_pan_domains_trusted();	
 
     write_to_socket(fd, "Yes", 3);
 
     debug(LOG_DEBUG, "Exiting wdctl_clear_trusted_pan_domains...");
+}
+
+// todo
+static void
+wdctl_show_trusted_pan_domains(int fd)
+{	
+    write_to_socket(fd, "Yes", 3);
 }
 
 static void
