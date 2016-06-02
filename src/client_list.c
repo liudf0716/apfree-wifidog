@@ -611,7 +611,7 @@ add_online_client(const char *info)
 	mac 	= json_object_get_string(json_object_object_get(client_info, "mac"));
 	ip		= json_object_get_string(json_object_object_get(client_info, "ip"));
 	name	= json_object_get_string(json_object_object_get(client_info, "name"));
-	if(mac && is_valid_mac(mac) && ip && is_valid_ip(ip) &&  
+	if(mac && is_valid_mac(mac) && ip && is_valid_ip(ip) && !is_trusted_mac(mac) && !is_untrusted_mac(mac) && 
 	  (roam_client = auth_server_roam_request(mac)) != NULL) {
 		old_client = client_list_find_by_mac(mac);
 		if(old_client == NULL) {

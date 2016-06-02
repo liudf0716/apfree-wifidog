@@ -355,6 +355,8 @@ int is_roaming(const char *);
 
 int is_untrusted_mac(const char *);
 
+int is_trusted_mac(const char *);
+
 // trustedmaclist operation, for wdctl use
 void parse_trusted_mac_list(const char *);
 

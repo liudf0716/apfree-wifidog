@@ -1991,6 +1991,20 @@ is_roaming(const char *mac)
 }
 
 int
+is_trusted_mac(const char *mac)
+{
+	t_trusted_mac *p = NULL;
+
+    for (p = config.trustedmaclist; p != NULL; p = p->next) {
+    	if(strcmp(mac, p->mac) == 0)
+			break;
+	}
+	
+	return p==NULL?0:1;
+
+}
+
+int
 is_untrusted_mac(const char *mac)
 {
 	t_trusted_mac *p = NULL;
