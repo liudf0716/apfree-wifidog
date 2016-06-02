@@ -418,7 +418,7 @@ iptables_fw_clear_ipset_domains_trusted(void)
 	
 	remove(f_ipset_name);
 	iptables_flush_ipset(CHAIN_IPSET_TDOMAIN);
-	execute("/etc/init.d/dnsmasq restart");		
+	execute("/etc/init.d/dnsmasq restart", 1);		
 }
 
 void
@@ -449,7 +449,7 @@ iptables_fw_set_ipset_domains_trusted(void)
 	fclose(fd_ipset);
 
 	iptables_flush_ipset(CHAIN_IPSET_TDOMAIN);
-	execute("/etc/init.d/dnsmasq restart");		
+	execute("/etc/init.d/dnsmasq restart", 1);		
 }
 
 void
