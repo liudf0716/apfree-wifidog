@@ -481,7 +481,7 @@ wdctl_clear_trusted_pan_domains(void)
 static void
 wdctl_show_trusted_pan_domains(void)
 {
-	wdctl_commond(WDCTL_SHOW_TRUSTED_PAN_DOMAINS);
+	wdctl_command(WDCTL_SHOW_TRUSTED_PAN_DOMAINS);
 }
 
 static void
