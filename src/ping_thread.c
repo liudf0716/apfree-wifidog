@@ -73,7 +73,9 @@ thread_ping(void *arg)
     struct timespec timeout;
 	
 	//>>> liudf added 20160411
-	// move from fw_init to here
+	// move from fw_init to here	
+	fw_set_pan_domains_trusted();
+
 	__fix_weixin_http_dns_ip();
 
 	parse_inner_trusted_domain_list();

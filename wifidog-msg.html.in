@@ -1,104 +1,73 @@
 <html>
 <head>
-<title>$title</title>
-<meta HTTP-EQUIV='Pragma' CONTENT='no-cache'>
+    <title>坤腾畅联</title>
+    <!--<meta HTTP-EQUIV='Pragma' CONTENT='no-cache'>-->
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
 
-<style>
-body {
-  margin: 10px 60px 0 60px; 
-  font-family : bitstream vera sans, sans-serif;
-  color: #46a43a;
-}
+    <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no"/>
+    <meta http-equiv="X-UA-COMPATIBLE" content="IE=edge,chrome=1"/>
+    <style>
+        body {
+            font-family: "Microsoft YaHei";
+            background-color: #2573bf;
+            margin: 20px 40px;
+        }
 
-a {
-  color: #46a43a;
-}
+        .logo {
+            width: 90%;
+            margin: 0 auto;
+            height: 60px;
+        }
 
-a:active {
-  color: #46a43a;
-}
+        .logo span {
+            display: block;
+            font-size: 32px;
+            color: #fff;
+        }
 
-a:link {
-  color: #46a43a;
-}
+        .container {
+            width: 90%;
+            height: 70%;
+            margin: 0 auto;
+            padding: 50px 30px;
+            background-color: #fff;
+            border: 1px solid #f0f0f0;
+            border-radius: 6px;
+            overflow-y: auto;
+        }
 
-a:visited {
-  color: #46a43a;
-}
-
-#header {
-  height: 30px;
-  background-color: #B4F663;
-  padding: 20px;
-  font-size: 20pt;
-  text-align: center;
-  border: 2px solid #46a43a;
-  border-bottom: 0;
-}
-
-#header h2 {
-  margin: 0pt;
-}
-
-#menu {
-  width: 200px;
-  float: right;
-  background-color: #B4F663;
-  border: 2px solid #46a43a;
-  font-size: 80%;
-  min-height: 300px;
-}
-
-#menu h2 {
-  margin: 0;
-  background-color: #46a43a;
-  text-align: center;
-  color: #B4F663;
-}
-
-#copyright {
-}
-
-#content {
-  padding: 20px;
-  border: 2px solid #46a43a;
-  min-height: 300px;
-}
-</style>
-
+        .title {
+            font-size: 24px;
+            color: #666;
+            font-weight: normal;
+        }
+        .message{
+            color:#666;
+        }
+        @media  screen and (max-width:690px){
+            body{
+                margin:20px;
+            }
+            .container{
+                height:80%;
+                padding:20px 10px;
+            }
+        }
+    </style>
 </head>
 
-<body
-
-<div id="header">
-    <h2>$title</h2>
+<body>
+<div class="logo">
+    <span>坤腾畅联</span>
 </div>
+<div class="container">
+    <div id="header">
+        <h2 class="title">$title</h2>
+    </div>
+    <div id="content">
+        <p class="message">$message</p>
+    </div>
 
-<div id="menu">
-
-
-    <h2>Info</h2>
-    <ul>
-    <li>Version: @WIFIDOG_VERSION@
-
-    <li>Node ID: $nodeID
-    </ul>
-    <br>
-
-    <h2>Menu</h2>
-    <ul>
-    <li><a href='/wifidog/status'>WiFiDog Status</a>
-    <li><a href='/wifidog/about'>About WiFiDog</a>
-    <li><a href='http://www.wifidog.org'>WiFiDog's homepage</a>
-    </ul>
-</div>
-
-<div id="content">
-<h2>$message</h2>
-</div>
-
-<div id="copyright">
-Copyright (C) 2004-2005.  This software is released under the GNU GPL license.
 </div>
 
 
