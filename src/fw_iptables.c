@@ -428,7 +428,8 @@ iptables_fw_set_ipset_domains_trusted(void)
 	t_domain_trusted *domain_trusted = NULL;
 	FILE *fd_ipset = NULL;
 	char f_ipset_name[128] = {0};
-	
+	int  has_content = 0;	
+
 	config = config_get_config();
 	
 	mkdir(DNSMASQ_CONF_D, S_IRWXU|S_IRWXG|S_IRWXO);	
@@ -441,12 +442,16 @@ iptables_fw_set_ipset_domains_trusted(void)
 	LOCK_DOMAIN();
 	
 	for (domain_trusted = config->pan_domains_trusted; domain_trusted != NULL; domain_trusted = domain_trusted->next) {
+		has_content = 1;
 		fprintf(fd_ipset, "ipset=/.%s/%s\n", domain_trusted->domain, CHAIN_IPSET_TDOMAIN);	
 	}
 
 	UNLOCK_DOMAIN();
 
 	fclose(fd_ipset);
+	
+	if(!has_content)
+		remove(f_ipset_name);
 
 	iptables_flush_ipset(CHAIN_IPSET_TDOMAIN);
 	execute("/etc/init.d/dnsmasq restart", 1);		
