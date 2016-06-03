@@ -34,9 +34,10 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <errno.h>
-#include <unistd.h>
 #include <string.h>
 #include <syslog.h>
+#include <unistd.h>
+#include <fcntl.h>
 
 #include "httpd.h"
 
@@ -431,7 +432,8 @@ _connect_auth_server(int level)
         		FD_SET(sockfd, &myset); 
         		if (select(sockfd+1, NULL, &myset, NULL, &tv) > 0) { 
            			socklen_t lon = sizeof(int); 
-           			getsockopt(soc, SOL_SOCKET, SO_ERROR, (void*)(&valopt), &lon); 
+					int valopt;
+           			getsockopt(sockfd, SOL_SOCKET, SO_ERROR, (void*)(&valopt), &lon); 
            			if (!valopt)  
 						goto success;
         		}
