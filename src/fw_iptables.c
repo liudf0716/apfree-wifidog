@@ -441,7 +441,7 @@ iptables_fw_set_ipset_domains_trusted(void)
 	LOCK_DOMAIN();
 	
 	for (domain_trusted = config->pan_domains_trusted; domain_trusted != NULL; domain_trusted = domain_trusted->next) {
-		fprintf(fd_ipset, "/%s/%s\n", domain_trusted->domain, CHAIN_IPSET_TDOMAIN);	
+		fprintf(fd_ipset, "ipset=/.%s/%s\n", domain_trusted->domain, CHAIN_IPSET_TDOMAIN);	
 	}
 
 	UNLOCK_DOMAIN();

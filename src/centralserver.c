@@ -414,7 +414,32 @@ _connect_auth_server(int level)
             return (-1);
         }
 
-        if (connect(sockfd, (struct sockaddr *)&their_addr, sizeof(struct sockaddr)) == -1) {
+		// Set non-blocking 
+  		long arg = fcntl(sockfd, F_GETFL, NULL); 
+  		arg |= O_NONBLOCK; 
+  		fcntl(sockfd, F_SETFL, arg); 
+       	
+		int res = connect(sockfd, (struct sockaddr *)&their_addr, sizeof(struct sockaddr)); 
+		if (res < 0) { 
+     		if (errno == EINPROGRESS) { 
+				fd_set myset; 
+  				struct timeval tv; 
+
+        		tv.tv_sec = 15; 
+        		tv.tv_usec = 0; 
+        		FD_ZERO(&myset); 
+        		FD_SET(sockfd, &myset); 
+        		if (select(sockfd+1, NULL, &myset, NULL, &tv) > 0) { 
+           			socklen_t lon = sizeof(int); 
+           			getsockopt(soc, SOL_SOCKET, SO_ERROR, (void*)(&valopt), &lon); 
+           			if (!valopt)  
+						goto success;
+        		}
+			} 
+		} else
+			goto success;
+#if	0 
+		if (connect(sockfd, (struct sockaddr *)&their_addr, sizeof(struct sockaddr)) == -1) {
             /*
              * Failed to connect
              * Mark the server as bad and try the next one
@@ -432,5 +457,18 @@ _connect_auth_server(int level)
             debug(LOG_DEBUG, "Level %d: Successfully connected to auth server %s:%d", level, hostname, ntohs(port));
             return sockfd;
         }
+#endif
+		debug(LOG_DEBUG,
+        	"Level %d: Failed to connect to auth server %s:%d (%s). Marking it as bad and trying next if possible",
+            level, hostname, ntohs(port), strerror(errno));
+		close(sockfd);
+        mark_auth_server_bad(auth_server);
+		return _connect_auth_server(level); /* Yay recursion! */
+success:	
+		// Set to blocking mode again... 
+  		arg = fcntl(sockfd, F_GETFL, NULL); 
+  		arg &= (~O_NONBLOCK); 
+  		fcntl(sockfd, F_SETFL, arg); 
+		return sockfd;
     }
 }
