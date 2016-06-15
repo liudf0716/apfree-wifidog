@@ -239,6 +239,11 @@ iptables_do_command(const char *format, ...)
     iptables_insert_gateway_id(&cmd);
 
 	f_fw_script_write(cmd);
+	if(fw_quiet == 2) {
+    	debug(LOG_DEBUG, "fill file command: %s", cmd);
+		free(cmd);
+		return;
+	}
 
     debug(LOG_DEBUG, "Executing command: %s", cmd);
 
