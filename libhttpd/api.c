@@ -269,8 +269,8 @@ int port;
         free(new);
         return NULL;
     }
-	setsockopt(listen_fd, IPPROTO_TCP, TCP_NODELAY, (int[]) {1}, sizeof(int));
-    setsockopt(listen_fd, IPPROTO_TCP, TCP_QUICKACK, (int[]) {1}, sizeof(int));
+	setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, (int[]) {1}, sizeof(int));
+    setsockopt(sock, IPPROTO_TCP, TCP_QUICKACK, (int[]) {1}, sizeof(int));
 	
     new->serverSock = sock;
     bzero(&addr, sizeof(addr));
