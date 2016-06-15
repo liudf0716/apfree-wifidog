@@ -25,6 +25,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <time.h>
+#include <netinet/tcp.h>
 
 #if defined(_WIN32)
 #include <winsock2.h>
