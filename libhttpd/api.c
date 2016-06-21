@@ -476,7 +476,8 @@ httpdReadRequest(httpd * server, request * r)
                     r->request.host[HTTP_MAX_URL - 1] = 0;
 					// liudf added 20160223
 					// only parse Host
-					inHeaders = 0;
+					//inHeaders = 0;
+					break;
                 }
             }
             /* End modification */

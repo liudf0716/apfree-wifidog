@@ -59,8 +59,8 @@ int len;
 	do {
     	FD_ZERO(&readfds);
     	FD_SET(sock, &readfds);
-    	timeout.tv_sec = 1; 
-    	timeout.tv_usec = 0;
+    	timeout.tv_sec = 0; 
+    	timeout.tv_usec = 100;
 
 		nfds = sock + 1;
     	nfds = select(nfds, &readfds, NULL, NULL, &timeout);
