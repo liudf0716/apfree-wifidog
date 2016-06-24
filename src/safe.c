@@ -194,10 +194,13 @@ safe_fork(void)
     if (result == -1) {
         debug(LOG_CRIT, "Failed to fork: %s.  Bailing out", strerror(errno));
         exit(1);
-    } else if (result == 0) {
+    }
+#if	0 
+	else if (result == 0) {
         /* I'm the child - do some cleanup */
         cleanup_fds();
     }
+#endif
 
     return result;
 }
