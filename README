@@ -17,5 +17,7 @@ u can join our qq group 331230369
 			Add fw rule chains file save
 			Add client name
 
+已知bug：
+频繁调用wdctl命令会导致会出现多wifidog进程的现象，原因是 多线程环境下调用fork导致，后面会想办法解决
 
 powered by www.kunteng.org
