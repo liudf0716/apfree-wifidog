@@ -204,7 +204,7 @@ http_callback_404(httpd * webserver, request * r, int error_code)
             /* We could not get their MAC address */
             debug(LOG_INFO, "Failed to retrieve MAC address for ip %s, so not putting in the login request",
                   r->clientAddr);
-            safe_asprintf(&urlFragment, "%sgw_address=%s&gw_port=%d&gw_id=%s&channel_path=%s&ssid=%s&ip=%s&url=%s",
+            safe_asprintf(&urlFragment, "%sgw_address=%s&gw_port=%d&gw_id=%s&channel_path=%s&ssid=%s&ip=%s&mac=ff:ff:ff:ff:ff:ff&url=%s",
                           auth_server->authserv_login_script_path_fragment, config->gw_address, config->gw_port,
                           config->gw_id, 
 						  g_channel_path?g_channel_path:"null",
@@ -225,15 +225,6 @@ http_callback_404(httpd * webserver, request * r, int error_code)
 			if(_special_process(r, mac, urlFragment)) {
             	free(urlFragment);
 				free(url);
-				free(mac);
-				return;
-			}
-	
-			if(is_roaming(mac)) {
-				fw_set_roam_mac(mac);
-                http_send_redirect(r, tmp_url, "device roaming");
-            	free(urlFragment);
-                free(url);
 				free(mac);
 				return;
 			}

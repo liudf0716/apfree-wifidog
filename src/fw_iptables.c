@@ -1269,12 +1269,14 @@ iptables_fw_counters_update(void)
             debug(LOG_DEBUG, "Read incoming traffic for %s: Bytes=%llu", ip, counter);
             LOCK_CLIENT_LIST();
             if ((p1 = client_list_find_by_ip(ip))) {
+            	UNLOCK_CLIENT_LIST();
                 if ((p1->counters.incoming - p1->counters.incoming_history) < counter) {
                     p1->counters.incoming_delta = p1->counters.incoming_history + counter - p1->counters.incoming;
                     p1->counters.incoming = p1->counters.incoming_history + counter;
                     debug(LOG_DEBUG, "%s - Incoming traffic %llu bytes, Updated counter.incoming to %llu bytes", ip, counter, p1->counters.incoming);
                 }
             } else {
+            	UNLOCK_CLIENT_LIST();
                 debug(LOG_ERR,
                       "iptables_fw_counters_update(): Could not find %s in client list, this should not happen unless if the gateway crashed",
                       ip);
@@ -1283,7 +1285,6 @@ iptables_fw_counters_update(void)
                 debug(LOG_ERR, "Preventively deleting firewall rules for %s in table %s", ip, CHAIN_INCOMING);
                 iptables_fw_destroy_mention("mangle", CHAIN_INCOMING, ip);
             }
-            UNLOCK_CLIENT_LIST();
         }
     }
     pclose(output);

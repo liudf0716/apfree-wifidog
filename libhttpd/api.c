@@ -258,7 +258,7 @@ int port;
     }
 #endif
 
-    sock = socket(AF_INET, SOCK_STREAM, 0);
+    sock = socket(AF_INET, SOCK_STREAM|SOCK_CLOEXEC, 0);
     if (sock < 0) {
         free(new);
         return (NULL);

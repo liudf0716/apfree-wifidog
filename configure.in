@@ -103,6 +103,7 @@ AC_HAVE_LIBRARY(nsl)
 AC_HAVE_LIBRARY(crypto)
 AC_HAVE_LIBRARY(m)
 AC_HAVE_LIBRARY(json-c)
+AC_HAVE_LIBRARY(ip4tc)
 echo "libhttpd dependencies check complete"
 
 AC_OUTPUT( 		Makefile 
