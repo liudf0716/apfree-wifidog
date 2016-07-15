@@ -245,21 +245,6 @@ http_callback_404(httpd * webserver, request * r, int error_code)
 				return;
 			}
 			UNLOCK_CLIENT_LIST();
-			
-			// if device is wired and wired device no need auth
-			if(config->wired_passed == 1 && is_device_wired(mac)) {
-        		debug(LOG_INFO, "wired_passed:  %s is wired device", mac);
-				t_trusted_mac *pmac = add_trusted_mac(mac);
-				fw_set_trusted_mac(mac);
-				http_send_redirect(r, tmp_url, "device no need login");
-				if(pmac != NULL)
-					pmac->ip = safe_strdup(r->clientAddr);
-            	free(urlFragment);
-                free(url);
-				free(mac);
-				return;
-			}
-			//<<< liudf added end
 
            	free(mac);
         }
