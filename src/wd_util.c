@@ -163,7 +163,7 @@ get_status_text()
     s_config *config;
     t_auth_serv *auth_server;
     t_client *sublist, *current;
-    int count;
+    int count, active_count;
     time_t uptime = 0;
     unsigned int days = 0, hours = 0, minutes = 0, seconds = 0;
     t_trusted_mac *p;
@@ -205,6 +205,7 @@ get_status_text()
     pstr_append_sprintf(pstr, "%d clients " "connected.\n", count);
 
     count = 1;
+	active_count = 1;
     while (current != NULL) {
         pstr_append_sprintf(pstr, "\nClient %d status [%d]\n", count, current->is_online);
         pstr_append_sprintf(pstr, "  IP: %s MAC: %s\n", current->ip, current->mac);
@@ -214,10 +215,14 @@ get_status_text()
         pstr_append_sprintf(pstr, "  Downloaded: %llu\n  Uploaded: %llu\n", current->counters.incoming,
                             current->counters.outgoing);
         count++;
+		if(current->is_online)
+			active_count++;
         current = current->next;
     }
 
     client_list_destroy(sublist);
+
+    pstr_append_sprintf(pstr, "%d client " " %d active .\n", count, active_count);
 
 	LOCK_OFFLINE_CLIENT_LIST();
     pstr_append_sprintf(pstr, "%d clients " "unconnected.\n", offline_client_number());
