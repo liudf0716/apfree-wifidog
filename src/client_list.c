@@ -614,6 +614,8 @@ add_online_client(const char *info)
 	roam_client	= json_object_object_get(client_info, "client");
 	if(mac && is_valid_mac(mac) && ip && is_valid_ip(ip) && !is_trusted_mac(mac) && !is_untrusted_mac(mac) && 
 	  (roam_client != NULL || (roam_client = auth_server_roam_request(mac)) != NULL)) {
+		LOCK_CLIENT_LIST();
+
 		old_client = client_list_find_by_mac(mac);
 		if(old_client == NULL) {
 			char *token = json_object_get_string(json_object_object_get(roam_client, "token"));
@@ -636,6 +638,8 @@ add_online_client(const char *info)
 			old_client->ip = safe_strdup(ip);
 			fw_allow(old_client, FW_MARK_KNOWN);
 		}
+
+		UNLOCK_CLIENT_LIST();
 
 		if(roam_client != NULL)
 			json_object_put(roam_client);
