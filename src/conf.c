@@ -136,6 +136,7 @@ typedef enum {
 	oWiredPassed,
 	oParseChecked,
 	oTrustedIpList,
+	oNoAuth,
 	// <<< liudf added end
 } OpCodes;
 
@@ -196,6 +197,7 @@ static const struct {
 	"wiredPassed", oWiredPassed}, {
 	"parseChecked", oParseChecked}, {
 	"trustedIpList", oTrustedIpList}, {
+	"noAuth", oNoAuth}, {
 	// <<<< liudf added end
 NULL, oBadOption},};
 
@@ -257,11 +259,12 @@ config_init(void)
 	//>>> liudf 20160104 added
 	config.htmlredirfile 	= safe_strdup(DEFAULT_REDIRECTFILE);
 	config.js_filter 		= 1; // default enable it
-	config.pool_mode		= 0;
-	config.thread_number 	= 20; // only valid when poolMode == 1
-	config.queue_size 		= 200; // only valid when poolMode == 1
+	config.pool_mode		= 1;
+	config.thread_number 	= 10; // only valid when poolMode == 1
+	config.queue_size 		= 30; // only valid when poolMode == 1
 	config.wired_passed		= 1; // default wired device no need login
 	config.parse_checked	= 1; // before parse domain's ip; fping check it
+	config.no_auth 			= 0; // 
 	//<<<
 
     debugconf.log_stderr = 1;
@@ -895,6 +898,9 @@ config_read(const char *filename)
 					break;
 				case oTrustedIpList:
 					add_trusted_ip_list(rawarg);
+					break;
+				case oNoAuth:
+					config.no_auth = parse_boolean_value(p1);	
 					break;
 				// <<< liudf added end
                 case oBadOption:

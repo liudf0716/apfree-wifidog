@@ -771,6 +771,7 @@ iptables_fw_init(void)
     iptables_do_command("-t nat -N " CHAIN_AUTHSERVERS);
 	//>>> liudf added 20151224
     iptables_do_command("-t nat -N " CHAIN_DOMAIN_TRUSTED);
+    iptables_do_command("-t nat -N " CHAIN_TO_PASS);
     //<<< liudf added end
 	if (got_authdown_ruleset)
         iptables_do_command("-t nat -N " CHAIN_AUTH_IS_DOWN);
@@ -790,13 +791,17 @@ iptables_fw_init(void)
     iptables_do_command("-t nat -A " CHAIN_TO_ROUTER " -j ACCEPT");
 
     iptables_do_command("-t nat -A " CHAIN_OUTGOING " -j " CHAIN_TO_INTERNET);
-
-    if ((proxy_port = config_get_config()->proxy_port) != 0) {
+	iptables_do_command("-t nat -A " CHAIN_TO_INTERNET " -j " CHAIN_TO_PASS);
+	
+	if( config_get_config()->no_auth != 0 ) {
+        debug(LOG_DEBUG, "No auth set");
+		iptables_do_command("-t nat -A " CHAIN_TO_PASS " -j ACCEPT");
+	} else if ((proxy_port = config_get_config()->proxy_port) != 0) {
         debug(LOG_DEBUG, "Proxy port set, setting proxy rule");
-        iptables_do_command("-t nat -A " CHAIN_TO_INTERNET
+        iptables_do_command("-t nat -A " CHAIN_TO_PASS
                             " -p tcp --dport 80 -m mark --mark 0x%u -j REDIRECT --to-port %u", FW_MARK_KNOWN,
                             proxy_port);
-        iptables_do_command("-t nat -A " CHAIN_TO_INTERNET
+        iptables_do_command("-t nat -A " CHAIN_TO_PASS
                             " -p tcp --dport 80 -m mark --mark 0x%u -j REDIRECT --to-port %u", FW_MARK_PROBATION,
                             proxy_port);
     }
@@ -962,6 +967,8 @@ iptables_fw_destroy(void)
     iptables_do_command("-t nat -F " CHAIN_GLOBAL);
     iptables_do_command("-t nat -F " CHAIN_UNKNOWN);
     iptables_do_command("-t nat -X " CHAIN_AUTHSERVERS);
+	iptables_do_command("-t nat -F " CHAIN_TO_PASS);
+	iptables_do_command("-t nat -X " CHAIN_TO_PASS);
 	// liudf added 20151224
    	iptables_do_command("-t nat -X " CHAIN_UNTRUSTED);
     iptables_do_command("-t nat -X " CHAIN_DOMAIN_TRUSTED);

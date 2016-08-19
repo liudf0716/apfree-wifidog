@@ -44,6 +44,7 @@
 #define CHAIN_INNER_DOMAIN_TRUSTED "WiFiDog_$ID$_ITDomains"
 #define	CHAIN_ROAM			"WiFiDog_$ID$_Roam"
 #define	CHAIN_UNTRUSTED		"WiFiDog_$ID$_Untrusted"
+#define	CHAIN_TO_PASS		"WiFiDog_$ID$_Pass"
 //<<< liudf added end
 #define CHAIN_GLOBAL  "WiFiDog_$ID$_Global"
 #define CHAIN_VALIDATE  "WiFiDog_$ID$_Validate"

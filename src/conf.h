@@ -256,6 +256,8 @@ typedef struct {
 	short	pool_mode;
 	short	thread_number;
 	short	queue_size;
+	short	no_auth;
+	short	reseve;
 } s_config;
 
 /** @brief Get the current gateway configuration */
