@@ -744,8 +744,8 @@ iptables_fw_init(void)
     iptables_do_command("-t mangle -I PREROUTING 1 -i %s -j " CHAIN_TRUSTED, config->gw_interface);     //this rule will be inserted before the prior one
 	// liudf added 20160106
 	iptables_do_command("-t mangle -I PREROUTING 1 -i %s -j " CHAIN_TO_PASS, config->gw_interface);
+    debug(LOG_DEBUG, "No auth set");
 	if( config->no_auth != 0 ) {
-        debug(LOG_DEBUG, "No auth set");
 		iptables_do_command("-t mangle -A " CHAIN_TO_PASS " -j MARK --set-mark %d", FW_MARK_KNOWN);
 	}
     iptables_do_command("-t mangle -I PREROUTING 1 -i %s -j " CHAIN_ROAM, config->gw_interface);    
@@ -962,6 +962,7 @@ iptables_fw_destroy(void)
     iptables_fw_destroy_mention("nat", "PREROUTING", CHAIN_OUTGOING);
     iptables_do_command("-t nat -F " CHAIN_AUTHSERVERS);
 	// liudf added 20151224
+	iptables_do_command("-t nat -F " CHAIN_TO_PASS);
     iptables_do_command("-t nat -F " CHAIN_UNTRUSTED);
     iptables_do_command("-t nat -F " CHAIN_DOMAIN_TRUSTED);
     iptables_do_command("-t nat -F " CHAIN_OUTGOING);
@@ -972,7 +973,6 @@ iptables_fw_destroy(void)
     iptables_do_command("-t nat -F " CHAIN_GLOBAL);
     iptables_do_command("-t nat -F " CHAIN_UNKNOWN);
     iptables_do_command("-t nat -X " CHAIN_AUTHSERVERS);
-	iptables_do_command("-t nat -F " CHAIN_TO_PASS);
 	iptables_do_command("-t nat -X " CHAIN_TO_PASS);
 	// liudf added 20151224
    	iptables_do_command("-t nat -X " CHAIN_UNTRUSTED);
