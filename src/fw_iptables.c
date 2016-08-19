@@ -746,7 +746,7 @@ iptables_fw_init(void)
 	iptables_do_command("-t mangle -I PREROUTING 1 -i %s -j " CHAIN_TO_PASS, config->gw_interface);
 	if( config->no_auth != 0 ) {
         debug(LOG_DEBUG, "No auth set");
-		iptables_do_command("-t mangle -A " CHAIN_TO_PASS " -j MARK --set-mark 1");
+		iptables_do_command("-t mangle -A " CHAIN_TO_PASS " -j MARK --set-mark %d", FW_MARK_KNOWN);
 	}
     iptables_do_command("-t mangle -I PREROUTING 1 -i %s -j " CHAIN_ROAM, config->gw_interface);    
 	iptables_do_command("-t mangle -A " CHAIN_ROAM " -m set --match-set " CHAIN_ROAM " src -j MARK --set-mark %d",
