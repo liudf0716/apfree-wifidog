@@ -744,10 +744,12 @@ iptables_fw_init(void)
     iptables_do_command("-t mangle -I PREROUTING 1 -i %s -j " CHAIN_TRUSTED, config->gw_interface);     //this rule will be inserted before the prior one
 	// liudf added 20160106
 	iptables_do_command("-t mangle -I PREROUTING 1 -i %s -j " CHAIN_TO_PASS);
+#if	0
 	if( config_get_config()->no_auth != 0 ) {
         debug(LOG_DEBUG, "No auth set");
 		iptables_do_command("-t mangle -A " CHAIN_TO_PASS " -j MARK --set-mark 1");
 	}
+#endif
     iptables_do_command("-t mangle -I PREROUTING 1 -i %s -j " CHAIN_ROAM, config->gw_interface);    
 	iptables_do_command("-t mangle -A " CHAIN_ROAM " -m set --match-set " CHAIN_ROAM " src -j MARK --set-mark %d",
 		 				FW_MARK_KNOWN);
