@@ -735,6 +735,7 @@ iptables_fw_init(void)
     iptables_do_command("-t mangle -N " CHAIN_TRUSTED);
     iptables_do_command("-t mangle -N " CHAIN_OUTGOING);
     iptables_do_command("-t mangle -N " CHAIN_INCOMING);
+	iptables_do_command("-t mangle -N " CHAIN_TO_PASS);
     if (got_authdown_ruleset)
         iptables_do_command("-t mangle -N " CHAIN_AUTH_IS_DOWN);
 
@@ -742,6 +743,11 @@ iptables_fw_init(void)
     iptables_do_command("-t mangle -I PREROUTING 1 -i %s -j " CHAIN_OUTGOING, config->gw_interface);
     iptables_do_command("-t mangle -I PREROUTING 1 -i %s -j " CHAIN_TRUSTED, config->gw_interface);     //this rule will be inserted before the prior one
 	// liudf added 20160106
+	iptables_do_command("-t mangle -I PREROUTING 1 -i %s -j " CHAIN_TO_PASS);
+	if( config_get_config()->no_auth != 0 ) {
+        debug(LOG_DEBUG, "No auth set");
+		iptables_do_command("-t mangle -A " CHAIN_TO_PASS " -j MARK --set-mark 1");
+	}
     iptables_do_command("-t mangle -I PREROUTING 1 -i %s -j " CHAIN_ROAM, config->gw_interface);    
 	iptables_do_command("-t mangle -A " CHAIN_ROAM " -m set --match-set " CHAIN_ROAM " src -j MARK --set-mark %d",
 		 				FW_MARK_KNOWN);
@@ -793,10 +799,7 @@ iptables_fw_init(void)
     iptables_do_command("-t nat -A " CHAIN_OUTGOING " -j " CHAIN_TO_INTERNET);
 	iptables_do_command("-t nat -A " CHAIN_TO_INTERNET " -j " CHAIN_TO_PASS);
 	
-	if( config_get_config()->no_auth != 0 ) {
-        debug(LOG_DEBUG, "No auth set");
-		iptables_do_command("-t nat -A " CHAIN_TO_PASS " -j ACCEPT");
-	} else if ((proxy_port = config_get_config()->proxy_port) != 0) {
+	if ((proxy_port = config_get_config()->proxy_port) != 0) {
         debug(LOG_DEBUG, "Proxy port set, setting proxy rule");
         iptables_do_command("-t nat -A " CHAIN_TO_PASS
                             " -p tcp --dport 80 -m mark --mark 0x%u -j REDIRECT --to-port %u", FW_MARK_KNOWN,
@@ -933,6 +936,7 @@ iptables_fw_destroy(void)
         iptables_fw_destroy_mention("mangle", "PREROUTING", CHAIN_AUTH_IS_DOWN);
     iptables_fw_destroy_mention("mangle", "POSTROUTING", CHAIN_INCOMING);
 	// liudf added 20160106
+	iptables_do_command("-t mangle -F " CHAIN_TO_PASS);
     iptables_do_command("-t mangle -F " CHAIN_ROAM);
     iptables_do_command("-t mangle -F " CHAIN_TRUSTED);
     iptables_do_command("-t mangle -F " CHAIN_OUTGOING);
@@ -940,6 +944,7 @@ iptables_fw_destroy(void)
         iptables_do_command("-t mangle -F " CHAIN_AUTH_IS_DOWN);
     iptables_do_command("-t mangle -F " CHAIN_INCOMING);
 	// liudf added 20160106
+	iptables_do_command("-t mangle -X " CHAIN_TO_PASS);
     iptables_do_command("-t mangle -X " CHAIN_ROAM);
     iptables_do_command("-t mangle -X " CHAIN_TRUSTED);
     iptables_do_command("-t mangle -X " CHAIN_OUTGOING);
