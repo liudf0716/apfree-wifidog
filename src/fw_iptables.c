@@ -929,6 +929,7 @@ iptables_fw_destroy(void)
      */
     debug(LOG_DEBUG, "Destroying chains in the MANGLE table");
 	// liudf added 20160106
+    iptables_fw_destroy_mention("mangle", "PREROUTING", CHAIN_TO_PASS);
     iptables_fw_destroy_mention("mangle", "PREROUTING", CHAIN_ROAM);
     iptables_fw_destroy_mention("mangle", "PREROUTING", CHAIN_TRUSTED);
     iptables_fw_destroy_mention("mangle", "PREROUTING", CHAIN_OUTGOING);
