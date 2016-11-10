@@ -257,7 +257,11 @@ typedef struct {
 	short	thread_number;
 	short	queue_size;
 	short	no_auth;
-	short	reseve;
+	short	reserve;
+	
+	// liudf added 20161110
+	short	tls_support;
+	short	tls_listen_port;
 } s_config;
 
 /** @brief Get the current gateway configuration */
