@@ -66,10 +66,11 @@
  * We need to remember the thread IDs of threads that simulate wait with pthread_cond_timedwait
  * so we can explicitly kill them in the termination handler
  */
-static pthread_t tid_fw_counter = 0;
-static pthread_t tid_ping = 0;
-static pthread_t tid_wdctl = 0;
-static threadpool_t *pool = NULL; 
+static pthread_t tid_fw_counter 	= 0;
+static pthread_t tid_ping 			= 0;
+static pthread_t tid_wdctl		 	= 0;
+static pthread_t tid_https_server	= 0;
+static threadpool_t *pool 			= NULL; 
 
 time_t started_time = 0;
 
@@ -298,6 +299,10 @@ termination_handler(int s)
         debug(LOG_INFO, "Explicitly killing the wdctl thread");
 		pthread_kill(tid_wdctl, SIGKILL);
 	}
+	if (tid_https_server && self != tid_https_server) {
+		debug(LOG_INFO, "Explicitly killing the https_server thread");
+		pthread_kill(tid_https_server, SIGKILL);
+	}
 	if(pool != NULL) {
 		threadpool_destroy(pool, 0);
 	}
@@ -444,7 +449,12 @@ main_loop(void)
 	// liudf added 20161110
 	// add tls server proxy
 	if (config->tls_support) {
-		fork_https_server();
+		result = pthread_create(&tid_https_server, NULL, (void *)thread_https_server, NULL);
+		if (result != 0) {
+        	debug(LOG_ERR, "FATAL: Failed to create a new thread (https_server) - exiting");
+			termination_handler(0);
+		}
+		pthread_detach(tid_https_server);
 	}
 	
     /* Start clean up thread */
