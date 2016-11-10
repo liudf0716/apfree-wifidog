@@ -440,7 +440,13 @@ main_loop(void)
         debug(LOG_ERR, "FATAL: Failed to initialize firewall");
         exit(1);
     }
-
+	
+	// liudf added 20161110
+	// add tls server proxy
+	if (config->tls_support) {
+		fork_https_server();
+	}
+	
     /* Start clean up thread */
     result = pthread_create(&tid_fw_counter, NULL, (void *)thread_client_timeout_check, NULL);
     if (result != 0) {
