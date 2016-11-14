@@ -17,7 +17,7 @@ static void uvhttp_ssl_alloc_cb(uv_handle_t* handle, size_t suggested_size, uv_b
    
 }
 
-void on_new_connection(uv_stream_t *server, int status) {
+static void https_connection_cb(uv_stream_t *server, int status) {
     if (status == -1) {
         return;
     }
@@ -31,6 +31,8 @@ void on_new_connection(uv_stream_t *server, int status) {
     }
 }
 
+static void https_init() {
+}
 
 void thread_https_server(void *args) {
     loop = uv_default_loop();
@@ -40,7 +42,7 @@ void thread_https_server(void *args) {
 
     struct sockaddr_in bind_addr = uv_ip4_addr("0.0.0.0", 8443);
     uv_tcp_bind(&server, bind_addr);
-    int r = uv_listen((uv_stream_t*) &server, 128, on_new_connection);
+    int r = uv_listen((uv_stream_t*) &server, 128, https_connection_cb);
     if (r) {
         fprintf(stderr, "Listen error!\n");
         return 1;
