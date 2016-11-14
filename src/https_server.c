@@ -45,7 +45,7 @@ static void *https_session_new() {
     return ssl;
 }
 
-static void https_read_cb(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
+static void https_connection_cb(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
     
 }
 
@@ -62,7 +62,7 @@ static void https_connection_cb(uv_stream_t *server, int status) {
     uv_tcp_t *client = (uv_tcp_t*) malloc(sizeof(uv_tcp_t));
     uv_tcp_init(loop, client);
     if (uv_accept(server, (uv_stream_t*) client) == 0) {
-        uv_read_start((uv_stream_t*) client, https_alloc_cb, https_read_cb);
+        uv_read_start((uv_stream_t*) client, https_alloc_cb, https_connection_cb);
     } else {
         uv_close((uv_handle_t*) client, NULL);
     }
