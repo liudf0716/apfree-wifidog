@@ -11,8 +11,7 @@ uv_loop_t *loop;
 static void *https_session_new() {
     int ret = 0;
     ssl_context *ssl;
-    entropy_context entropy;
-    ctr_drbg_context ctr_drbg;
+
     
     ssl = calloc(1, sizeof(ssl_context));
     if (!ssl)
@@ -24,11 +23,7 @@ static void *https_session_new() {
         return NULL
     }
     
-    ret = ctr_drbg_init(&ctr_drbg, entropy_func, &entropy, (const unsigned char *) pers, strlen(pers));
-    if (ret != 0) {
-        free(ssl);
-        return NULL;
-    }
+    
     
     ssl_set_endpoint(ssl, SSL_IS_SERVER );
     ssl_set_authmode(ssl, SSL_VERIFY_NONE );
@@ -70,8 +65,10 @@ static void https_connection_cb(uv_stream_t *server, int status) {
 
 static void https_init() {
     int ret = 0;
-    x509_crt *srvcert;
-    pk_context *pkey;
+    x509_crt *srvcert           = config->ssl_ctx->srvcert;
+    pk_context *pkey            = config->ssl_ctx->pkey;
+    entropy_context *entropy    = config->ssl_ctx->entropy;
+    ctr_drbg_context *ctr_drbg  = config->ssl_ctx->ctr_drbg;
 
     x509_crt_init( srvcert );
     pk_init( pkey );
@@ -85,7 +82,10 @@ static void https_init() {
     if (ret != 0) {
     }
     
-
+    ret = ctr_drbg_init(ctr_drbg, entropy_func, entropy, 
+                        (const unsigned char *) "apfree_wifidog", strlen("apfree_wifidog"));
+    if (ret != 0) {
+    }
 }
 
 static void https_exit() {
