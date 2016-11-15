@@ -82,11 +82,9 @@ static void https_connection_read_cb(uv_stream_t* stream, ssize_t nread, const u
     if (nread < 0) {
         /* Error or EOF */
         ASSERT(nread == UV_EOF);
-
         if (buf->base) {
             free(buf->base);
         }
-
         req = malloc(sizeof *req);
         uv_shutdown(req, handle, after_shutdown);
 
@@ -100,7 +98,23 @@ static void https_connection_read_cb(uv_stream_t* stream, ssize_t nread, const u
     }
     
     if (ssl->state != SSL_HANDSHAKE_OVER ) {
-        int ret = ssl_handshake(ssl);
+        while ((ret = ssl_handshake(ssl)) != 0 ){
+            if (ret != POLARSSL_ERR_NET_WANT_READ && ret != POLARSSL_ERR_NET_WANT_WRITE) {   
+                polarssl_printf( " failed\n  ! ssl_handshake returned -0x%x\n\n", -ret );
+                goto cleanup;
+            }
+        }
+    } else {
+        do {
+            len = sizeof( buf ) - 1;
+            memset( buf, 0, sizeof( buf ) );
+            ret = ssl_read( &ssl, buf, len );
+            if (ret == POLARSSL_ERR_NET_WANT_READ || ret == POLARSSL_ERR_NET_WANT_WRITE)
+                continue;
+            if (ret <= 0)
+                break;
+            
+        } while(1)
     }
 }
 
