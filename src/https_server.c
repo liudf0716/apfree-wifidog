@@ -21,9 +21,7 @@ static ssl_context* https_session_new() {
     if (ret != 0) {
         free(ssl);
         return NULL;
-    }
-    
-    
+    }  
     
     ssl_set_endpoint(ssl, SSL_IS_SERVER );
     ssl_set_authmode(ssl, SSL_VERIFY_NONE );
@@ -46,12 +44,67 @@ static ssl_context* https_session_new() {
     return ssl;
 }
 
-static void https_process_connection_cb(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
+static void https_connection_done(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
+    uv_shutdown_t* req;
+
+    if (nread < 0) {
+        /* Error or EOF */
+        ASSERT(nread == UV_EOF);
+
+        if (buf->base) {
+            free(buf->base);
+        }
+
+        req = malloc(sizeof *req);
+        uv_shutdown(req, handle, after_shutdown);
+
+        return;
+    }
+
+    if (nread == 0) {
+        /* Everything OK, but nothing read. */
+        free(buf->base);
+        return;
+    }
     
+    https_process_req();
 }
 
+static void https_recv() {
+}
 
-static void https_alloc_cb(uv_handle_t* handle, size_t suggested_size, uv_buf_t* buf){
+static void https_send() {
+}
+
+static void https_connection_read_cb(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
+    uv_shutdown_t* req;
+
+    if (nread < 0) {
+        /* Error or EOF */
+        ASSERT(nread == UV_EOF);
+
+        if (buf->base) {
+            free(buf->base);
+        }
+
+        req = malloc(sizeof *req);
+        uv_shutdown(req, handle, after_shutdown);
+
+        return;
+    }
+
+    if (nread == 0) {
+        /* Everything OK, but nothing read. */
+        free(buf->base);
+        return;
+    }
+    
+    if (ssl->state != SSL_HANDSHAKE_OVER ) {
+        int ret = ssl_handshake(ssl);
+    }
+}
+
+static void https_connection_alloc_cb(uv_handle_t* handle, size_t suggested_size, uv_buf_t* buf){
    
 }
 
@@ -64,9 +117,9 @@ static void https_connection_cb(uv_stream_t *server, int status) {
     
     uv_tcp_t *client = (uv_tcp_t*) malloc(sizeof(uv_tcp_t));
     uv_tcp_init(loop, client);
-    if (uv_accept(server, (uv_stream_t*) client) == 0) {
-        ssl_set_bio(ssl, net_recv, &client, net_send, &client );
-        uv_read_start((uv_stream_t*) client, https_alloc_cb, https_process_connection_cb);
+    ssl_set_bio(ssl, https_recv, client, https_send, client );
+    if (uv_accept(server, (uv_stream_t*) client) == 0) {      
+        uv_read_start((uv_stream_t*) client, https_connection_alloc_cb, https_connection_read_cb);
     } else {
         uv_close((uv_handle_t*) client, NULL);
     }
