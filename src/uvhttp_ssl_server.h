@@ -5,13 +5,30 @@
 #include <crtdbg.h>
 #endif
 #include <uv.h>
+#ifdef  _MBEDTLS_
 #include "mbedtls/config.h"
 #include "mbedtls/platform.h"
 #include "mbedtls/entropy.h"
 #include "mbedtls/ctr_drbg.h"
 #include "mbedtls/ssl.h"
+#else
+#include <polarssl/entropy.h>
+#include <polarssl/ctr_drbg.h>
+#include <polarssl/certs.h>
+#include <polarssl/x509.h>
+#include <polarssl/ssl.h>
+#include <polarssl/error.h>
+#include <polarssl/debug.h>
+#endif
 #include "uvhttp_internal.h"
 #include "uvhttp_util.h"
+
+#ifndef _MBEDTLS_
+typedef mbedtls_pk_context pk_context;
+typedef mbedtls_entropy_context entropy_context;
+typedef mbedtls_ctr_drbg_context ctr_drbg_context;
+typedef mbedtls_x509_crt x509_crt; 
+#endif
 
 struct uvhttp_ssl_session {
     uv_tcp_t tcp;
@@ -41,7 +58,9 @@ struct uvhttp_ssl_server {
     mbedtls_pk_context key;
     mbedtls_entropy_context entropy;
     mbedtls_ctr_drbg_context ctr_drbg;
+#ifdef _MBEDTLS_
     mbedtls_ssl_config conf;
+#endif
     mbedtls_x509_crt srvcert;
 };
 
