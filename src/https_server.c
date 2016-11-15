@@ -8,7 +8,7 @@
 
 uv_loop_t *loop;
 
-static void *https_session_new() {
+static ssl_context* https_session_new() {
     int ret = 0;
     ssl_context *ssl;
 
@@ -20,7 +20,7 @@ static void *https_session_new() {
     ret = ssl_int(ssl);
     if (ret != 0) {
         free(ssl);
-        return NULL
+        return NULL;
     }
     
     
@@ -35,13 +35,19 @@ static void *https_session_new() {
     
     ssl_set_rng(ssl, ctr_drbg_random, &ctr_drbg);
     
+    ssl_set_ca_chain( &ssl, srvcert.next, NULL, NULL );
+    if( ( ret = ssl_set_own_cert( &ssl, &srvcert, &pkey ) ) != 0 ){
+        free(ssl);
+        return NULL;
+    }
+    
     ssl_session_reset(ssl);
     
     return ssl;
 }
 
 static void https_process_connection_cb(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
-    ssl_context *ssl = https_session_new();
+    
 }
 
 
@@ -53,10 +59,13 @@ static void https_connection_cb(uv_stream_t *server, int status) {
     if (status == -1) {
         return;
     }
-
+    
+    ssl_context *ssl = https_session_new();
+    
     uv_tcp_t *client = (uv_tcp_t*) malloc(sizeof(uv_tcp_t));
     uv_tcp_init(loop, client);
     if (uv_accept(server, (uv_stream_t*) client) == 0) {
+        ssl_set_bio(ssl, net_recv, &client, net_send, &client );
         uv_read_start((uv_stream_t*) client, https_alloc_cb, https_process_connection_cb);
     } else {
         uv_close((uv_handle_t*) client, NULL);
