@@ -171,8 +171,8 @@ void thread_https_server(void *args) {
         uvhttp_server server_ssl = uvhttp_server_new( loop);
         if ( server_ssl) {
             uvhttp_server_set_option( server_ssl, UVHTTP_SRV_OPT_SSL, 1);
-            if ( uvhttp_server_ip4_listen( server_ssl, "0.0.0.0", 8443) == UVHTTP_OK) {
-                printf("https on 8443 success\n");
+            if ( uvhttp_server_ip4_listen( server_ssl, config->gw_address, config->ssl_port) == UVHTTP_OK) {
+                
             }
         }
         uvhttp_run( loop);
