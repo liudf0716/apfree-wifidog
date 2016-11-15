@@ -1,9 +1,8 @@
-
-#include <netinet/in.h>  /* INET6_ADDRSTRLEN */
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 #include <uv.h>
-
+#include "uvhttp.h"
 #include "https_server.h"
 
 uv_loop_t *loop;
@@ -167,19 +166,19 @@ static void https_exit() {
 }
 
 void thread_https_server(void *args) {
-    loop = uv_default_loop();
-    
-    https_int();
-
-    uv_tcp_t server;
-    uv_tcp_init(loop, &server);
-
-    struct sockaddr_in bind_addr = uv_ip4_addr("0.0.0.0", 8443);
-    uv_tcp_bind(&server, bind_addr);
-    int r = uv_listen((uv_stream_t*) &server, 16, https_connection_cb);
-    if (r) {
-        fprintf(stderr, "Listen error!\n");
-        return 1;
+    uvhttp_loop loop = uvhttp_loop_new();
+    if ( loop) {
+        uvhttp_server server_ssl = uvhttp_server_new( loop);
+        if ( server_ssl) {
+            uvhttp_server_set_option( server_ssl, UVHTTP_SRV_OPT_SSL, 1);
+            if ( uvhttp_server_ip4_listen( server_ssl, "0.0.0.0", 8443) == UVHTTP_OK) {
+                printf("https on 8443 success\n");
+            }
+        }
+        uvhttp_run( loop);
+        uvhttp_server_delete( server_ssl);
+        uvhttp_loop_delete( loop);
     }
-    return uv_run(loop, UV_RUN_DEFAULT);
+    
+    return 0;
 }
