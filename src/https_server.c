@@ -99,8 +99,7 @@ static void https_connection_read_cb(uv_stream_t* stream, ssize_t nread, const u
     
     if (ssl->state != SSL_HANDSHAKE_OVER ) {
         while ((ret = ssl_handshake(ssl)) != 0 ){
-            if (ret != POLARSSL_ERR_NET_WANT_READ && ret != POLARSSL_ERR_NET_WANT_WRITE) {   
-                polarssl_printf( " failed\n  ! ssl_handshake returned -0x%x\n\n", -ret );
+            if (ret != POLARSSL_ERR_NET_WANT_READ && ret != POLARSSL_ERR_NET_WANT_WRITE) { 
                 goto cleanup;
             }
         }
