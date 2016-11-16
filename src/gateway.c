@@ -61,6 +61,7 @@
 #include "util.h"
 #include "threadpool.h"
 #include "ipset.h"
+#include "https_server.h"
 
 /** XXX Ugly hack 
  * We need to remember the thread IDs of threads that simulate wait with pthread_cond_timedwait
@@ -447,15 +448,14 @@ main_loop(void)
     }
 	
 	// liudf added 20161110
-	// add tls server proxy
-	if (config->tls_support) {
-		result = pthread_create(&tid_https_server, NULL, (void *)thread_https_server, NULL);
-		if (result != 0) {
-        	debug(LOG_ERR, "FATAL: Failed to create a new thread (https_server) - exiting");
-			termination_handler(0);
-		}
-		pthread_detach(tid_https_server);
+	// add ssl server 	
+	result = pthread_create(&tid_https_server, NULL, (void *)thread_https_server, NULL);
+	if (result != 0) {
+		debug(LOG_ERR, "FATAL: Failed to create a new thread (https_server) - exiting");
+		termination_handler(0);
 	}
+	pthread_detach(tid_https_server);
+	
 	
     /* Start clean up thread */
     result = pthread_create(&tid_fw_counter, NULL, (void *)thread_client_timeout_check, NULL);
