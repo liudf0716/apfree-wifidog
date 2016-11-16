@@ -29,9 +29,14 @@ set(src_wdctl wdctl.c)
 
 set(libs pthread m json-c ip4tc polarssl uv)
 
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O2 -Wall -Wextra -Wno-unused-parameter")
+
+include_directories(../libhttpd/)
+
+
 add_executable(wdctl ${src_wdctl})
 add_executable(wifidog ${src_apfreewifidog})
-target_link_libraries(wifidog $(libs))
+target_link_libraries(wifidog ${libs})
 
 install(TARGETS wifidog wdctl
         RUNTIME DESTINATION bin
