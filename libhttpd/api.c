@@ -42,11 +42,8 @@
 #include "httpd.h"
 #include "httpd_priv.h"
 
-#ifdef HAVE_STDARG_H
 #include <stdarg.h>
-#else
-#include <varargs.h>
-#endif
+
 
 char *
 httpdUrlEncode(str)
