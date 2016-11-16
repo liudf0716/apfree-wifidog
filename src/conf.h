@@ -199,7 +199,7 @@ typedef struct _domain_trusted_t {
 	struct _domain_trusted_t *next;
 } t_domain_trusted;
 
-typedef struect _https_server_t {
+typedef struct _https_server_t {
 	char	*ca_crt_file;
 	char	*svr_crt_file;
 	char	*srv_key_file;
