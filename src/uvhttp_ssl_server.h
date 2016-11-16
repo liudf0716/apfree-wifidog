@@ -49,7 +49,7 @@ typedef ssl_context mbedtls_ssl_context;
 #define mbedtls_entropy_free        entropy_free
 
 #define MBEDTLS_ERR_SSL_WANT_WRITE          POLARSSL_ERR_NET_WANT_WRITE
-#define MBEDTLS_ERR_SSL_WANT_READ           POLARSSL_ERR_SSL_WANT_READ
+#define MBEDTLS_ERR_SSL_WANT_READ           POLARSSL_ERR_NET_WANT_READ
 #define MBEDTLS_SSL_HANDSHAKE_OVER          SSL_HANDSHAKE_OVER
 #define MBEDTLS_ERR_SSL_PEER_CLOSE_NOTIFY   POLARSSL_ERR_SSL_PEER_CLOSE_NOTIFY
 #endif
