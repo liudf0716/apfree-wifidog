@@ -56,7 +56,6 @@
 #include "http.h"
 #include "auth.h"
 #include "firewall.h"
-#include "config.h"
 
 #include "util.h"
 
