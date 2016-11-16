@@ -24,10 +24,10 @@
 #include "uvhttp_util.h"
 
 #ifndef _MBEDTLS_
-typedef mbedtls_pk_context pk_context;
-typedef mbedtls_entropy_context entropy_context;
-typedef mbedtls_ctr_drbg_context ctr_drbg_context;
-typedef mbedtls_x509_crt x509_crt; 
+typedef pk_context mbedtls_pk_context;
+typedef entropy_context mbedtls_entropy_context;
+typedef ctr_drbg_context mbedtls_ctr_drbg_context;
+typedef x509_crt mbedtls_x509_crt; 
 #endif
 
 struct uvhttp_ssl_session {
