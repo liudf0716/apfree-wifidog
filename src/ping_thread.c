@@ -44,7 +44,6 @@
 #include <signal.h>
 #include <errno.h>
 
-#include "../config.h"
 #include "safe.h"
 #include "common.h"
 #include "conf.h"
@@ -56,7 +55,7 @@
 #include "gateway.h"
 #include "simple_http.h"
 #include "wd_util.h"
-
+#include "version.h"
 #include "httpd_priv.h"
 
 static void ping(void);

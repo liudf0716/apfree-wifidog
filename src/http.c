@@ -55,7 +55,7 @@
 #include "util.h"
 #include "wd_util.h"
 
-#include "../config.h"
+#include "version.h"
 
 //>>> liudf added 20160104
 static char *redirect_html;
