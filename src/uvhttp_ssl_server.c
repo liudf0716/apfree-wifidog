@@ -1,6 +1,8 @@
 #include "uvhttp_ssl_server.h"
+#ifdef	_MBEDTLS_
 #include "mbedtls/certs.h"
 #include "mbedtls/debug.h"
+#endif
 #include "uvhttp_base.h"
 
 static void uvhttp_ssl_session_close_cb(
@@ -49,7 +51,7 @@ static void uvhttp_ssl_read_cb(
         ssl->ssl_read_buffer_len = nread;
         ssl->ssl_read_buffer_offset = 0;
 
-        //¿ÉÄÜ±¾´ÎÓÉÓÚÃ»ÓÐ¶ÁÈ¡µ½Ò»¸öÍêÕûµÄ¿é£¬µ¼ÖÂÒ»µãÊý¾ÝÒ²²»·µ»Ø¡£
+        //å¯èƒ½æœ¬æ¬¡ç”±äºŽæ²¡æœ‰è¯»å–åˆ°ä¸€ä¸ªå®Œæ•´çš„å—ï¼Œå¯¼è‡´ä¸€ç‚¹æ•°æ®ä¹Ÿä¸è¿”å›žã€‚
         while((read_len = mbedtls_ssl_read( &ssl->ssl, 
             (unsigned char *)ssl->user_read_buf.base,  ssl->user_read_buf.len)) > 0) {
             ssl->user_read_cb( stream, read_len, &ssl->user_read_buf);
@@ -144,7 +146,7 @@ static void ssl_write_cb(
         free( ssl->write_buffer.base);
         ssl->write_buffer.base = 0;
     }
-    //ÎÕÊÖ×´Ì¬
+    //æ¡æ‰‹çŠ¶æ€
     if ( ssl->is_closing) {
         int ret = mbedtls_ssl_close_notify( &ssl->ssl);
         if ( uv_is_closing( (uv_handle_t*)ssl) == 0) {
@@ -164,8 +166,8 @@ static void ssl_write_cb(
         ret = 0;
     }
     else {
-    //´«Êä×´Ì¬
-        //ÐèÒªÐÞ¸ÄžéÊ¹ÓÃwhileÑ­­h
+    	//ä¼ è¾“çŠ¶æ€
+        //éœ€è¦ä¿®æ”¹ç‚ºä½¿ç”¨whileå¾ªç’°
         ret = mbedtls_ssl_write( &ssl->ssl,
             (const unsigned char *)ssl->ssl_write_buffer + ssl->ssl_write_offset, 
             ssl->ssl_write_buffer_len - ssl->ssl_write_offset
@@ -175,10 +177,10 @@ static void ssl_write_cb(
             goto cleanup;
         }
         else if ( ret > 0 ) {
-            //Ð´ÈëÏÂÒ»¸öbuffer
+            //å†™å…¥ä¸‹ä¸€ä¸ªbuffer
             ssl->ssl_write_offset += ret;
             if ( ssl->ssl_write_offset == ssl->ssl_write_buffer_len) {
-                //Ð´ÈëÍê³É»Øµ÷
+                //å†™å…¥å®Œæˆå›žè°ƒ
                 ssl_write_user_call( ssl,  0);
             }
             ret = 0;
@@ -273,15 +275,17 @@ int uvhttp_ssl_server_init(
     int ret = 0;
     struct uvhttp_ssl_server* ssl = (struct uvhttp_ssl_server*)handle;
 
+#ifdef	_MBEDTLS_
     mbedtls_ssl_config_init( &ssl->conf );
-    mbedtls_x509_crt_init( &ssl->srvcert );
     mbedtls_ctr_drbg_init( &ssl->ctr_drbg );
+#endif
+    mbedtls_x509_crt_init( &ssl->srvcert );    
     mbedtls_entropy_init( &ssl->entropy );
     mbedtls_pk_init( &ssl->key );
 
     if( ( ret = mbedtls_ctr_drbg_seed( &ssl->ctr_drbg, mbedtls_entropy_func, &ssl->entropy,
-        (const unsigned char *) "UVHTTP",
-        sizeof( "UVHTTP" ) -1) ) != 0 ) {
+        (const unsigned char *) "ApFreeWiFiDog",
+        sizeof( "ApFreeWiFiDog" ) -1) ) != 0 ) {
             goto cleanup;
     }
 
@@ -303,6 +307,7 @@ int uvhttp_ssl_server_init(
         goto cleanup;
     }
 
+#ifdef	_MBEDTLS_
     if( ( ret = mbedtls_ssl_config_defaults( &ssl->conf,
         MBEDTLS_SSL_IS_SERVER,
         MBEDTLS_SSL_TRANSPORT_STREAM,
@@ -319,6 +324,7 @@ int uvhttp_ssl_server_init(
 
     //mbedtls_ssl_conf_dbg( &ssl->conf, my_debug, stdout );
     //mbedtls_debug_set_threshold( 1 );
+#endif
 
     ret = uv_tcp_init( loop, (uv_tcp_t*)&ssl->tcp);
     if ( ret != 0) {
@@ -340,10 +346,29 @@ int uvhttp_ssl_session_init(
 
     mbedtls_ssl_init( &ssl->ssl );
 
+#ifdef	_MBEDTLS_
     if( ( ret = mbedtls_ssl_setup( &ssl->ssl, &ssl_server->conf ) ) != 0 ) {
         goto cleanup;
     }
-    mbedtls_ssl_set_bio( &ssl->ssl, ssl, ssl_send, ssl_recv, NULL );
+	mbedtls_ssl_set_bio( &ssl->ssl, ssl, ssl_send, ssl_recv, NULL );
+#else
+	ssl_set_endpoint( &ssl->ssl, SSL_IS_SERVER );
+    ssl_set_authmode( &ssl->ssl, SSL_VERIFY_NONE );
+
+    /* SSLv3 is deprecated, set minimum to TLS 1.0 */
+    ssl_set_min_version( &ssl->ssl, SSL_MAJOR_VERSION_3, SSL_MINOR_VERSION_1 );
+    /* RC4 is deprecated, disable it */
+    ssl_set_arc4_support( &ssl->ssl, SSL_ARC4_DISABLED );
+    ssl_set_rng( &ssl->ssl, ctr_drbg_random, &ssl->ctr_drbg );
+	
+	ssl_set_ca_chain( &ssl->ssl, ssl->srvcert.next, NULL, NULL );
+    if( ( ret = ssl_set_own_cert( &ssl->ssl, &ssl->srvcert, &ssl->key ) ) != 0 ) {
+		goto cleanup;
+	}
+	
+	ssl_set_bio( &ssl->ssl, ssl_send, ssl, ssl_recv, ssl );
+#endif
+    
 
     ret = uv_tcp_init( loop, (uv_tcp_t*)&ssl->tcp);
     if ( ret != 0) {
@@ -432,7 +457,9 @@ static void uvhttp_ssl_server_close_cb(
     struct uvhttp_ssl_server* ssl = (struct uvhttp_ssl_server*)handle;
     mbedtls_x509_crt_free( &ssl->srvcert );
     mbedtls_pk_free( &ssl->key );
+#ifdef	_MBEDTLS_
     mbedtls_ssl_config_free( &ssl->conf );
+#endif
     mbedtls_ctr_drbg_free( &ssl->ctr_drbg );
     mbedtls_entropy_free( &ssl->entropy );
     ssl->user_close_cb( handle);
