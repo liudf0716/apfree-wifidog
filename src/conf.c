@@ -913,7 +913,7 @@ config_read(const char *filename)
 					config.no_auth = parse_boolean_value(p1);	
 					break;
 				case oGatewayHttpsPort:
-					sscanf(p1, "%s", &config.https_server->gw_https_port);
+					sscanf(p1, "%hu", &config.https_server->gw_https_port);
 					break;
 				// <<< liudf added end
                 case oBadOption:
