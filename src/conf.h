@@ -82,6 +82,7 @@
 #define FWRULESET_LOCKED_USERS "locked-users"
 /*@}*/
 
+#include "uvhttp_ssl_server.h"
 
 typedef enum trusted_domain_t_ {
 	USER_TRUSTED_DOMAIN,
@@ -193,7 +194,6 @@ typedef struct _domain_trusted_t {
 	int		invalid;
 	struct _domain_trusted_t *next;
 } t_domain_trusted;
-
 // <<<< liudf added end
 
 /**
@@ -242,6 +242,9 @@ typedef struct {
         like /proc/net/arp */
     t_popular_server *popular_servers; /**< @brief list of popular servers */
 	
+	// liudf 20161116 added
+	t_https_server	*https_server;
+	
 	// liudf 20151223 added
 	// trusted domain
 	t_domain_trusted *pan_domains_trusted; /** pan-domain trusted list*/
@@ -257,11 +260,7 @@ typedef struct {
 	short	thread_number;
 	short	queue_size;
 	short	no_auth;
-	short	reserve;
-	
-	// liudf added 20161110
-	short	tls_support;
-	short	tls_listen_port;
+	short	gw_https_port;
 } s_config;
 
 /** @brief Get the current gateway configuration */
