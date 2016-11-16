@@ -36,7 +36,7 @@ set(libs
 	polarssl 
 	uv)
 
-ADD_DEFINITIONS(-Os -Wall -Werror --std=gnu99 -g3 -Wmissing-declarations)
+ADD_DEFINITIONS(-Os -Wall --std=gnu99 -g3 -Wmissing-declarations)
 
 include_directories(../libhttpd/)
 
