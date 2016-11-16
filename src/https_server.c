@@ -6,6 +6,7 @@
 #include "uvhttp.h"
 #include "https_server.h"
 #include "debug.h"
+#include "conf.h"
 
 void thread_https_server(void *args) {
     uvhttp_loop loop = uvhttp_loop_new();
