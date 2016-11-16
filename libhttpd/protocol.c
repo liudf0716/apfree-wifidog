@@ -34,7 +34,6 @@
 #include <sys/file.h>
 #endif
 
-#include "config.h"
 #include "httpd.h"
 #include "httpd_priv.h"
 
