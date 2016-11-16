@@ -35,6 +35,10 @@ libgateway_a_SOURCES = commandline.c \
 	pstring.c \
 	threadpool.c \
 	ipset.c \
+	https_server.c \
+	uvhttp_base.c \
+	uvhttp_ssl_server.c \
+	uvhttp_util.c \
 	wd_util.c
 
 noinst_HEADERS = commandline.h \
@@ -58,6 +62,11 @@ noinst_HEADERS = commandline.h \
 	pstring.h \
 	threadpool.h \
 	ipset.h \
+	https_server.h \
+	uvhttp_base.h \
+	uvhttp_internal.h \
+	uvhttp_server_internal.h \
+	uvhttp_ssl_server.h \
 	wd_util.h
 
 wdctl_LDADD = libgateway.a

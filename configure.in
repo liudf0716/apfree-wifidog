@@ -95,6 +95,9 @@ BB_ENABLE_DOXYGEN
 AC_CHECK_HEADER(pthread.h, , AC_MSG_ERROR(You need the pthread headers) )
 AC_CHECK_LIB(pthread, pthread_create, , AC_MSG_ERROR(You need the pthread library) )
 
+AC_CHECK_LIB(uv, uv_tcp_init, , AC_MSG_ERROR(You need the uv library) )
+AC_CHECK_LIB(polarssl, x509_crt_init, , AC_MSG_ERROR(You need the polarssl library) )
+
 # libhttpd dependencies
 echo "Begining libhttpd dependencies check"
 AC_CHECK_HEADERS(string.h strings.h stdarg.h unistd.h)
@@ -104,6 +107,8 @@ AC_HAVE_LIBRARY(crypto)
 AC_HAVE_LIBRARY(m)
 AC_HAVE_LIBRARY(json-c)
 AC_HAVE_LIBRARY(ip4tc)
+AC_HAVE_LIBRARY(polarssl)
+AC_HAVE_LIBRARY(uv)
 echo "libhttpd dependencies check complete"
 
 AC_OUTPUT( 		Makefile 
