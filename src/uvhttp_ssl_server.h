@@ -61,6 +61,9 @@ typedef ssl_context mbedtls_ssl_context;
 #define MBEDTLS_ERR_SSL_PEER_CLOSE_NOTIFY   POLARSSL_ERR_SSL_PEER_CLOSE_NOTIFY
 #endif
 
+#define MIN(a,b) (((a)<(b))?(a):(b))
+#define MAX(a,b) (((a)>(b))?(a):(b))
+
 struct uvhttp_ssl_session {
     uv_tcp_t tcp;
     uv_buf_t user_read_buf;
