@@ -1,7 +1,7 @@
 set(src_apfreewifidog
     commandline.c 
-	  conf.c 
-	  debug.c 
+	conf.c 
+	debug.c 
     fw_iptables.c 
     firewall.c 
     gateway.c 
