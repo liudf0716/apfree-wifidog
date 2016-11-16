@@ -48,13 +48,6 @@ typedef ssl_context mbedtls_ssl_context;
 #define mbedtls_ctr_drbg_free       ctr_drbg_free
 #define mbedtls_entropy_free        entropy_free
 
-#define mbedtls_test_srv_crt        test_srv_crt
-#define mbedtls_test_srv_crt_len    test_srv_crt_len
-#define mbedtls_test_cas_pem        test_cas_pem
-#define mbedtls_test_cas_pem_len    test_cas_pem_len
-#define mbedtls_test_srv_key        test_srv_key
-#define mbedtls_test_srv_key_len    test_srv_key_len
-
 #define MBEDTLS_ERR_SSL_WANT_WRITE          POLARSSL_ERR_NET_WANT_WRITE
 #define MBEDTLS_ERR_SSL_WANT_READ           POLARSSL_ERR_SSL_WANT_READ
 #define MBEDTLS_SSL_HANDSHAKE_OVER          SSL_HANDSHAKE_OVER
