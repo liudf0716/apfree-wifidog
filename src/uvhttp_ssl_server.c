@@ -4,6 +4,7 @@
 #include "mbedtls/debug.h"
 #endif
 #include "uvhttp_base.h"
+#include "conf.h"
 
 static void uvhttp_ssl_session_close_cb(
     uv_handle_t* handle
@@ -98,6 +99,7 @@ int uvhttp_ssl_listen(
     return ret;
 }
 
+
 static int ssl_recv( 
     void *ctx, 
     unsigned char *buf,
@@ -105,7 +107,7 @@ static int ssl_recv(
     )
 {
     struct uvhttp_ssl_session* ssl = (struct uvhttp_ssl_session*)ctx;
-    int need_copy = min( ssl->ssl_read_buffer_len - ssl->ssl_read_buffer_offset, (int)len);
+    int need_copy = MIN( ssl->ssl_read_buffer_len - ssl->ssl_read_buffer_offset, (int)len);
     if ( need_copy == 0) {
         need_copy = MBEDTLS_ERR_SSL_WANT_READ;
         goto cleanup;
@@ -274,7 +276,8 @@ int uvhttp_ssl_server_init(
 {
     int ret = 0;
     struct uvhttp_ssl_server* ssl = (struct uvhttp_ssl_server*)handle;
-
+	s_config *config = get_config();
+	
 #ifdef	_MBEDTLS_
     mbedtls_ssl_config_init( &ssl->conf );
     mbedtls_ctr_drbg_init( &ssl->ctr_drbg );
@@ -289,20 +292,17 @@ int uvhttp_ssl_server_init(
             goto cleanup;
     }
 
-    ret = mbedtls_x509_crt_parse( &ssl->srvcert, (const unsigned char *) mbedtls_test_srv_crt,
-        mbedtls_test_srv_crt_len );
+    ret = x509_crt_parse_file( &ssl->srvcert,  config->https_server->svr_crt_file);
     if( ret < 0 ) {
         goto cleanup;
     }
 
-    ret = mbedtls_x509_crt_parse( &ssl->srvcert, (const unsigned char *) mbedtls_test_cas_pem,
-        mbedtls_test_cas_pem_len );
+    ret = x509_crt_parse_file( &ssl->srvcert, config->https_server->ca_crt_file);
     if( ret != 0 ) {
         goto cleanup;
     }
 
-    ret =  mbedtls_pk_parse_key( &ssl->key, (const unsigned char *) mbedtls_test_srv_key,
-        mbedtls_test_srv_key_len, NULL, 0 );
+    ret =  pk_parse_keyfile( &ssl->key, config->https_server->svr_key_file);
     if( ret < 0 ) {
         goto cleanup;
     }
