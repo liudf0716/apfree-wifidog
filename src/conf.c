@@ -271,8 +271,8 @@ config_init(void)
 	memset(https_server, 0, sizeof(t_https_server));
 	https_server->gw_https_port	= 8443;
 	https_server->ca_crt_file	= safe_strdup(DEFAULT_CA_CRT_FILE);
-	https_server->srv_crt_file	= safe_strdup(DEFAULT_SVR_CRT_FILE);
-	https_server->srv_key_file	= safe_strdup(DEFAULT_SVR_KEY_FILE);
+	https_server->svr_crt_file	= safe_strdup(DEFAULT_SVR_CRT_FILE);
+	https_server->svr_key_file	= safe_strdup(DEFAULT_SVR_KEY_FILE);
 	
 	config.https_server	= https_server;
 	//<<<
@@ -913,7 +913,7 @@ config_read(const char *filename)
 					config.no_auth = parse_boolean_value(p1);	
 					break;
 				case oGatewayHttpsPort:
-					sscanf(p1, "%d", &config.https_server->gw_https_port);
+					sscanf(p1, "%s", &config.https_server->gw_https_port);
 					break;
 				// <<< liudf added end
                 case oBadOption:
