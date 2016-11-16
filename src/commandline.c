@@ -34,6 +34,7 @@
 #include "safe.h"
 #include "conf.h"
 #include "commandline.h"
+#include "version.h"
 
 
 /*
