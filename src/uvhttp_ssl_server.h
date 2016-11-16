@@ -47,6 +47,7 @@ typedef ssl_context mbedtls_ssl_context;
 #define mbedtls_pk_free             pk_free
 #define mbedtls_ctr_drbg_free       ctr_drbg_free
 #define mbedtls_entropy_free        entropy_free
+#define mbedtls_entropy_func        entropy_func
 
 #define MBEDTLS_ERR_SSL_WANT_WRITE          POLARSSL_ERR_NET_WANT_WRITE
 #define MBEDTLS_ERR_SSL_WANT_READ           POLARSSL_ERR_NET_WANT_READ
