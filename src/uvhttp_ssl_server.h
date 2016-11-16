@@ -28,6 +28,37 @@ typedef pk_context mbedtls_pk_context;
 typedef entropy_context mbedtls_entropy_context;
 typedef ctr_drbg_context mbedtls_ctr_drbg_context;
 typedef x509_crt mbedtls_x509_crt; 
+
+#define mbedtls_ssl_close_notify    ssl_close_notify
+#define mbedtls_ssl_handshake_step  ssl_handshake_step
+#define mbedtls_ssl_read            ssl_read
+#define mbedtls_ssl_write           ssl_write
+#define mbedtls_fprintf             polarssl_fprintf
+#define mbedtls_x509_crt_init       x509_crt_init
+#define mbedtls_ctr_drbg_seed       ctr_drbg_init
+#define mbedtls_entropy_init        entropy_init
+#define mbedtls_pk_init             pk_init
+#define mbedtls_x509_crt_parse      x509_crt_parse
+#define mbedtls_pk_parse_key        pk_parse_key
+#define mbedtls_ssl_init            ssl_init
+#define mbedtls_ssl_free            ssl_free
+#define mbedtls_x509_crt_free       x509_crt_free
+#define mbedtls_pk_free             pk_free
+#define mbedtls_ctr_drbg_free       ctr_drbg_free
+#define mbedtls_entropy_free        entropy_free
+#define mbedtls_ssl_handshake_step  ssl_handshake_step
+
+#define mbedtls_test_srv_crt        test_srv_crt
+#define mbedtls_test_srv_crt_len    test_srv_crt_len
+#define mbedtls_test_cas_pem        test_cas_pem
+#define mbedtls_test_cas_pem_len    test_cas_pem_len
+#define mbedtls_test_srv_key        test_srv_key
+#define mbedtls_test_srv_key_len    test_srv_key_len
+
+#define MBEDTLS_ERR_SSL_WANT_WRITE          POLARSSL_ERR_NET_WANT_WRITE
+#define MBEDTLS_ERR_SSL_WANT_READ           MBEDTLS_ERR_SSL_WANT_READ
+#define MBEDTLS_SSL_HANDSHAKE_OVER          SSL_HANDSHAKE_OVER
+#define MBEDTLS_ERR_SSL_PEER_CLOSE_NOTIFY   POLARSSL_ERR_SSL_PEER_CLOSE_NOTIFY
 #endif
 
 struct uvhttp_ssl_session {
