@@ -27,9 +27,16 @@ set(src_apfreewifidog
 
 set(src_wdctl wdctl.c)
 
-set(libs pthread m json-c ip4tc polarssl uv)
+set(libs 
+	httpd
+	pthread 
+	m 
+	json-c 
+	ip4tc 
+	polarssl 
+	uv)
 
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O2 -Wall -Wextra -Wno-unused-parameter")
+ADD_DEFINITIONS(-Os -Wall -Werror --std=gnu99 -g3 -Wmissing-declarations)
 
 include_directories(../libhttpd/)
 
