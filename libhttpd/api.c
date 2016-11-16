@@ -778,28 +778,14 @@ httpdOutput(request * r, const char *msg)
     _httpd_net_write(r->clientSock, buf, strlen(buf));
 }
 
-#ifdef HAVE_STDARG_H
 void
 httpdPrintf(request * r, const char *fmt, ...)
 {
-#else
-void
-httpdPrintf(va_alist)
-va_dcl
-{
-    request *r;;
-    const char *fmt;
-#endif
     va_list args;
     char buf[HTTP_MAX_LEN];
-
-#ifdef HAVE_STDARG_H
+	
     va_start(args, fmt);
-#else
-    va_start(args);
-    r = (request *) va_arg(args, request *);
-    fmt = (char *)va_arg(args, char *);
-#endif
+
     if (r->response.headersSent == 0)
         httpdSendHeaders(r);
     vsnprintf(buf, HTTP_MAX_LEN, fmt, args);
