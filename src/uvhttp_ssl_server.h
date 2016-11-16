@@ -46,7 +46,6 @@ typedef x509_crt mbedtls_x509_crt;
 #define mbedtls_pk_free             pk_free
 #define mbedtls_ctr_drbg_free       ctr_drbg_free
 #define mbedtls_entropy_free        entropy_free
-#define mbedtls_ssl_handshake_step  ssl_handshake_step
 
 #define mbedtls_test_srv_crt        test_srv_crt
 #define mbedtls_test_srv_crt_len    test_srv_crt_len
