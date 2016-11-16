@@ -276,7 +276,7 @@ int uvhttp_ssl_server_init(
 {
     int ret = 0;
     struct uvhttp_ssl_server* ssl = (struct uvhttp_ssl_server*)handle;
-	s_config *config = get_config();
+	const s_config *config = config_get_config();
 	
 #ifdef	_MBEDTLS_
     mbedtls_ssl_config_init( &ssl->conf );
