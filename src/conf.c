@@ -137,6 +137,7 @@ typedef enum {
 	oParseChecked,
 	oTrustedIpList,
 	oNoAuth,
+	oGatewayHttpsPort,
 	// <<< liudf added end
 } OpCodes;
 
@@ -198,6 +199,7 @@ static const struct {
 	"parseChecked", oParseChecked}, {
 	"trustedIpList", oTrustedIpList}, {
 	"noAuth", oNoAuth}, {
+	"gatewayHttpsPort", oGatewayHttpsPort}, {
 	// <<<< liudf added end
 NULL, oBadOption},};
 
@@ -265,6 +267,15 @@ config_init(void)
 	config.wired_passed		= 1; // default wired device no need login
 	config.parse_checked	= 1; // before parse domain's ip; fping check it
 	config.no_auth 			= 0; // 
+	
+	t_https_server *https_server	= (t_https_server *)malloc(sizeof(t_https_server));
+	memset(https_server, 0, sizeof(t_https_server));
+	https_server->gw_https_port	= 8443;
+	https_server->ca_crt_file	= safe_strdup(DEFAULT_CA_CRT_FILE);
+	https_server->srv_crt_file	= safe_strdup(DEFAULT_SVR_CRT_FILE);
+	https_server->srv_key_file	= safe_strdup(DEFAULT_SVR_KEY_FILE);
+	
+	config.https_server	= https_server;
 	//<<<
 
     debugconf.log_stderr = 1;
@@ -901,6 +912,9 @@ config_read(const char *filename)
 					break;
 				case oNoAuth:
 					config.no_auth = parse_boolean_value(p1);	
+					break;
+				case oGatewayHttpsPort:
+					sscanf(p1, "%d", &config.https_server->gw_https_port);
 					break;
 				// <<< liudf added end
                 case oBadOption:
