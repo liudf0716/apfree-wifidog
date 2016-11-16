@@ -202,7 +202,7 @@ typedef struct _domain_trusted_t {
 typedef struct _https_server_t {
 	char	*ca_crt_file;
 	char	*svr_crt_file;
-	char	*srv_key_file;
+	char	*svr_key_file;
 	short	gw_https_port;
 } t_https_server;
 // <<<< liudf added end
