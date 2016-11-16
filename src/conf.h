@@ -82,6 +82,10 @@
 #define FWRULESET_LOCKED_USERS "locked-users"
 /*@}*/
 
+#define	DEFAULT_CA_CRT_FILE		"/etc/apfree.ca"
+#define	DEFAULT_SVR_CRT_FILE	"/etc/apfree.crt"
+#define	DEFAULT_SVR_KEY_FILE	"/etc/apfree.key"
+
 #include "uvhttp_ssl_server.h"
 
 typedef enum trusted_domain_t_ {
@@ -194,6 +198,13 @@ typedef struct _domain_trusted_t {
 	int		invalid;
 	struct _domain_trusted_t *next;
 } t_domain_trusted;
+
+typedef struect _https_server_t {
+	char	*ca_crt_file;
+	char	*svr_crt_file;
+	char	*srv_key_file;
+	short	gw_https_port;
+} t_https_server;
 // <<<< liudf added end
 
 /**
@@ -260,7 +271,7 @@ typedef struct {
 	short	thread_number;
 	short	queue_size;
 	short	no_auth;
-	short	gw_https_port;
+	short	reserve;
 } s_config;
 
 /** @brief Get the current gateway configuration */
