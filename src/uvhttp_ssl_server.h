@@ -27,7 +27,8 @@
 typedef pk_context mbedtls_pk_context;
 typedef entropy_context mbedtls_entropy_context;
 typedef ctr_drbg_context mbedtls_ctr_drbg_context;
-typedef x509_crt mbedtls_x509_crt; 
+typedef x509_crt mbedtls_x509_crt;
+typedef ssl_context mbedtls_ssl_context;
 
 #define mbedtls_ssl_close_notify    ssl_close_notify
 #define mbedtls_ssl_handshake_step  ssl_handshake_step
