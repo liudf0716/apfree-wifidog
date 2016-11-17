@@ -2,6 +2,7 @@
 #include "uvhttp_base.h"
 #include "uvhttp_server_internal.h"
 #include "uvhttp_ssl_server.h"
+#include "http_parser.h"
 #include <stdarg.h>
 
 static void server_session_connected(
@@ -525,13 +526,13 @@ static void session_closed(
     )
 {
     struct uvhttp_session_obj* session_obj = (struct uvhttp_session_obj*)handle->data;
-    //如果关闭连接之前有错误导致request_end没有调用，则先通知request_end
+    //濡傛灉鍏抽棴杩炴帴涔嬪墠鏈夐敊璇鑷磖equest_end娌℃湁璋冪敤锛屽垯鍏堥�氱煡request_end
     session_error( session_obj);
-    //关闭连接回调
+    //鍏抽棴杩炴帴鍥炶皟
     if ( session_obj->end_callback) {
         session_obj->end_callback( session_obj);
     }
-    //删除会话数据
+    //鍒犻櫎浼氳瘽鏁版嵁
     session_delete( session_obj);
 }
 
@@ -586,7 +587,7 @@ static void session_reset(
         session_obj->request.uri = 0;
     }
 
-    //是否已经接收完成request请求
+    //鏄惁宸茬粡鎺ユ敹瀹屾垚request璇锋眰
     session_obj->request_finished = 0;
     session_obj->last_error = UVHTTP_OK;
 }
