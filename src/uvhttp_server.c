@@ -4,6 +4,8 @@
 #include "uvhttp_ssl_server.h"
 #include "http_parser.h"
 #include <stdarg.h>
+#include <syslog.h>
+#include "debug.h"
 
 static void server_session_connected(
     uv_stream_t* stream,
@@ -202,6 +204,7 @@ int uvhttp_server_ip4_listen(
     struct uvhttp_server_obj* server_obj = (struct uvhttp_server_obj*)server;
     int ret = 0;
     if ( server_obj->ssl) {
+        debug(LOG_INFO, "enter ssl server");
         if ( !server_obj->tcp) {
             server_obj->tcp = (uv_tcp_t*)malloc( sizeof(struct uvhttp_ssl_server) );
             memset( server_obj->tcp, 0, sizeof(struct uvhttp_ssl_server));
