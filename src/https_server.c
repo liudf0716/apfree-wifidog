@@ -10,6 +10,7 @@
 
 void thread_https_server(void *args) {
     uvhttp_loop loop = uvhttp_loop_new();
+    debug(LOG_INFO, "begin thread https server");
     if ( loop) {
         uvhttp_server server_ssl = uvhttp_server_new( loop);
         if ( server_ssl) {
