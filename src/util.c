@@ -182,7 +182,7 @@ get_iface_ip(const char *ifname)
     u_int32_t ip;
 
     /* Create a socket */
-    if ((sockd = socket(AF_INET, SOCK_DGRAM, htons(0x8086))) < 0) {
+    if ((sockd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
         debug(LOG_ERR, "socket(): %s", strerror(errno));
         return NULL;
     }
