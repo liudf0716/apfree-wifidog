@@ -5,6 +5,7 @@
 #include <syslog.h>
 #include "uvhttp.h"
 #include "https_server.h"
+#include "uvhttp_server_internal.h"
 #include "debug.h"
 #include "conf.h"
 
