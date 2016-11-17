@@ -6,7 +6,6 @@
 #include "uvhttp_util.h"
 #include "uvhttp_base.h"
 #include "uvhttp_server.h"
-#include "http_parser.h"
 
 #if defined(__cplusplus)
 extern "C" {
