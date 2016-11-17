@@ -5,6 +5,8 @@
 #endif
 #include "uvhttp_base.h"
 #include "conf.h"
+#include <syslog.h>
+#include "debug.h"
 
 static void uvhttp_ssl_session_close_cb(
     uv_handle_t* handle
@@ -282,6 +284,7 @@ int uvhttp_ssl_server_init(
     mbedtls_ssl_config_init( &ssl->conf );
     mbedtls_ctr_drbg_init( &ssl->ctr_drbg );
 #endif
+	debug(LOG_INFO, "into uvhttp ssl server init============");
     mbedtls_x509_crt_init( &ssl->srvcert );    
     mbedtls_entropy_init( &ssl->entropy );
     mbedtls_pk_init( &ssl->key );
