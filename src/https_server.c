@@ -15,7 +15,7 @@ void thread_https_server(void *args) {
         uvhttp_server server_ssl = uvhttp_server_new( loop);
         if ( server_ssl) {
             const s_config *config = config_get_config();
-            server_ssl->ssl = 1;
+            ((struct uvhttp_server_obj *)server_ssl)->ssl = 1;
             if ( uvhttp_server_ip4_listen( server_ssl, config->gw_address, config->https_server->gw_https_port) == UVHTTP_OK) {
                 debug(LOG_INFO, "https on %d success", config->https_server->gw_https_port);
             }
