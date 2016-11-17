@@ -1,4 +1,5 @@
 set(src_apfreewifidog
+	main.c
     commandline.c 
 	conf.c 
 	debug.c 
@@ -18,6 +19,7 @@ set(src_apfreewifidog
     pstring.c 
     threadpool.c 
     ipset.c 
+	http_parser.c
     https_server.c 
 	uvhttp_server.c
     uvhttp_base.c 
