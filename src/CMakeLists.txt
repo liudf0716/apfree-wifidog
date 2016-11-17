@@ -1,4 +1,5 @@
 set(src_apfreewifidog
+	main.c
     commandline.c 
 	conf.c 
 	debug.c 
