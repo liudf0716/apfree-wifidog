@@ -359,10 +359,10 @@ int uvhttp_ssl_session_init(
     ssl_set_min_version( &ssl->ssl, SSL_MAJOR_VERSION_3, SSL_MINOR_VERSION_1 );
     /* RC4 is deprecated, disable it */
     ssl_set_arc4_support( &ssl->ssl, SSL_ARC4_DISABLED );
-    ssl_set_rng( &ssl->ssl, ctr_drbg_random, &ssl->ctr_drbg );
+    ssl_set_rng( &ssl->ssl, ctr_drbg_random, &ssl_server->ctr_drbg );
 	
-	ssl_set_ca_chain( &ssl->ssl, ssl->srvcert.next, NULL, NULL );
-    if( ( ret = ssl_set_own_cert( &ssl->ssl, &ssl->srvcert, &ssl->key ) ) != 0 ) {
+	ssl_set_ca_chain( &ssl->ssl, ssl_server->srvcert.next, NULL, NULL );
+    if( ( ret = ssl_set_own_cert( &ssl->ssl, &ssl_server->srvcert, &ssl_server->key ) ) != 0 ) {
 		goto cleanup;
 	}
 	
