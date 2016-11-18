@@ -20,9 +20,11 @@ static void uvhttp_ssl_read_cb(
 {
     struct uvhttp_ssl_session* ssl = (struct uvhttp_ssl_session*)stream;
     if ( nread <= 0) {
+		debug(LOG_INFO, "uvhttp_ssl_read_cb nread<=0 %d", nread);
         goto cleanup;
     }
     if ( ssl->is_closing) {
+		debug(LOG_INFO, "debug: mbedtls_ssl_close_notify  ");
         int ret = mbedtls_ssl_close_notify( &ssl->ssl);
         if ( uv_is_closing( (uv_handle_t*)ssl) == 0) {
             uv_close( (uv_handle_t*)stream, uvhttp_ssl_session_close_cb);
@@ -32,11 +34,15 @@ static void uvhttp_ssl_read_cb(
         int ret = 0;
         ssl->ssl_read_buffer_len = nread;
         ssl->ssl_read_buffer_offset = 0;
+		debug(LOG_INFO, "debug: mbedtls_ssl_handshake_step begin nread %d", nread);
         while ( (ret = mbedtls_ssl_handshake_step( &ssl->ssl )) == 0) {
+			debug(LOG_INFO, "debug: mbedtls_ssl_handshake_step  state %d ", ssl->ssl.state);
             if ( ssl->ssl.state == MBEDTLS_SSL_HANDSHAKE_OVER){
                 break;
             }
         }
+		debug(LOG_INFO, "debug: mbedtls_ssl_handshake_step end ssl_read_buffer_offset: %d  ret: %d", 
+			ssl->ssl_read_buffer_offset, ret);
         if ( ssl->ssl_read_buffer_offset != nread) {
             nread = -1;
             goto cleanup;
@@ -53,6 +59,8 @@ static void uvhttp_ssl_read_cb(
         int read_len = 0;
         ssl->ssl_read_buffer_len = nread;
         ssl->ssl_read_buffer_offset = 0;
+
+		debug(LOG_INFO, "debug: mbedtls_ssl_read ");
 
         //可能本次由于没有读取到一个完整的块，导致一点数据也不返回。
         while((read_len = mbedtls_ssl_read( &ssl->ssl, 
@@ -284,7 +292,6 @@ int uvhttp_ssl_server_init(
     mbedtls_ssl_config_init( &ssl->conf );
     mbedtls_ctr_drbg_init( &ssl->ctr_drbg );
 #endif
-	debug(LOG_INFO, "into uvhttp ssl server init============");
     mbedtls_x509_crt_init( &ssl->srvcert );    
     mbedtls_entropy_init( &ssl->entropy );
     mbedtls_pk_init( &ssl->key );
@@ -292,21 +299,25 @@ int uvhttp_ssl_server_init(
     if( ( ret = mbedtls_ctr_drbg_seed( &ssl->ctr_drbg, mbedtls_entropy_func, &ssl->entropy,
         (const unsigned char *) "ApFreeWiFiDog",
         sizeof( "ApFreeWiFiDog" ) -1) ) != 0 ) {
-            goto cleanup;
+		debug(LOG_ERR, "mbedtls_ctr_drbg_seed failed!");
+        goto cleanup;
     }
 
     ret = x509_crt_parse_file( &ssl->srvcert,  config->https_server->svr_crt_file);
     if( ret < 0 ) {
+		debug(LOG_ERR, "x509_crt_parse_file %s failed!", config->https_server->svr_crt_file);
         goto cleanup;
     }
 
     ret = x509_crt_parse_file( &ssl->srvcert, config->https_server->ca_crt_file);
     if( ret != 0 ) {
+		debug(LOG_ERR, "x509_crt_parse_file %s failed!", config->https_server->ca_crt_file);
         goto cleanup;
     }
 
     ret =  pk_parse_keyfile( &ssl->key, config->https_server->svr_key_file, NULL);
     if( ret < 0 ) {
+		debug(LOG_ERR, "pk_parse_keyfile %s failed!", config->https_server->svr_key_file);
         goto cleanup;
     }
 
@@ -321,6 +332,7 @@ int uvhttp_ssl_server_init(
     mbedtls_ssl_conf_authmode( &ssl->conf, MBEDTLS_SSL_VERIFY_OPTIONAL );
     mbedtls_ssl_conf_ca_chain( &ssl->conf, &ssl->srvcert, NULL );
     if( ( ret = mbedtls_ssl_conf_own_cert( &ssl->conf, &ssl->srvcert, &ssl->key) ) != 0 ) {
+		debug(LOG_ERR, "mbedtls_ssl_conf_own_cert failed!");
         goto cleanup;
     }
     mbedtls_ssl_conf_rng( &ssl->conf, mbedtls_ctr_drbg_random, &ssl->ctr_drbg );
@@ -331,6 +343,7 @@ int uvhttp_ssl_server_init(
 
     ret = uv_tcp_init( loop, (uv_tcp_t*)&ssl->tcp);
     if ( ret != 0) {
+		debug(LOG_ERR, "uvhttp_ssl_server_init:  uv_tcp_init failed!");
         goto cleanup;
     }
 cleanup:

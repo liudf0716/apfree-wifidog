@@ -204,7 +204,6 @@ int uvhttp_server_ip4_listen(
     struct uvhttp_server_obj* server_obj = (struct uvhttp_server_obj*)server;
     int ret = 0;
     if ( server_obj->ssl) {
-        debug(LOG_INFO, "enter ssl server");
         if ( !server_obj->tcp) {
             server_obj->tcp = (uv_tcp_t*)malloc( sizeof(struct uvhttp_ssl_server) );
             memset( server_obj->tcp, 0, sizeof(struct uvhttp_ssl_server));
@@ -249,6 +248,7 @@ static void server_session_connected(
     struct uvhttp_session_obj* session_obj = 0;
 
     if ( status != 0) {
+		debug(LOG_ERR, "server_session_connected failed!");
         ret = UVHTTP_ERROR_FAILED;
         goto cleanup;
     }
@@ -267,6 +267,7 @@ static void server_session_connected(
         session_obj->tcp->data = session_obj;
         ret = uvhttp_ssl_session_init( session_obj->loop, session_obj->tcp, server_obj->tcp);
         if ( ret != 0) {
+			debug(LOG_ERR, "uvhttp_ssl_session_init failed!!!");	
             session_delete( session_obj);
             return;
         }
@@ -302,8 +303,7 @@ static void server_session_connected(
         server_obj->session_new_callback( server_obj, session_obj);
     }
 cleanup:
-    if ( ret != 0)
-    {
+    if ( ret != 0) {
         if ( session_obj)
             session_close( session_obj);
     }
@@ -468,7 +468,8 @@ static void session_data_read(
 {
     struct uvhttp_session_obj* session_obj = (struct uvhttp_session_obj*)stream->data;
     size_t nparsed = 0;
-
+	
+	debug(LOG_INFO, "debug: session_data_read %d", nread);
     if ( nread > 0) {
         nparsed = http_parser_execute(&session_obj->parser, &session_parser_settings, buf->base, nread);
         if ( session_obj->parser.http_errno != 0) {
