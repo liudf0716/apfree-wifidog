@@ -146,7 +146,10 @@ static void ssl_write_cb(
 {
     int ret = 0;
     struct uvhttp_ssl_session* ssl = (struct uvhttp_ssl_session*)req->data;
-    if( status != 0) {
+	
+	debug(LOG_INFO, "debug: ssl_write_cb begin  %d ", status);
+    
+	if( status != 0) {
         ret = UVHTTP_ERROR_FAILED;
         goto cleanup;
     }
@@ -166,11 +169,15 @@ static void ssl_write_cb(
         }
     }
     else if ( ssl->ssl.state != MBEDTLS_SSL_HANDSHAKE_OVER ) {
+		debug(LOG_INFO, "debug: ssl_write_cb mbedtls_ssl_handshake_step begin ");
 		while ( (ret = mbedtls_ssl_handshake_step( &ssl->ssl )) == 0) {
+			debug(LOG_INFO, "debug: ssl_write_cb mbedtls_ssl_handshake_step process. state %d ", ssl->ssl.state);
 			if ( ssl->ssl.state == MBEDTLS_SSL_HANDSHAKE_OVER){
 				break;
 			}
 		}
+		debug(LOG_INFO, "debug: ssl_write_cb mbedtls_ssl_handshake_step end. ret %d ", ret);
+
 		if ( ret != 0 && ret != MBEDTLS_ERR_SSL_WANT_WRITE && ret != MBEDTLS_ERR_SSL_WANT_READ) {
             ret = UVHTTP_ERROR_FAILED;
 			goto cleanup;
