@@ -160,7 +160,7 @@ static void server_setup_certs (SSL_CTX *ctx,
     	die_most_horribly_from_openssl_error ("SSL_CTX_check_private_key");
 }
 
-static int serve_some_http (char *gw_ip,  struct t_https_server *https_server) { 
+static int serve_some_http (char *gw_ip,  t_https_server *https_server) { 
 	struct event_base *base;
   	struct evhttp *http;
   	struct evhttp_bound_socket *handle;
