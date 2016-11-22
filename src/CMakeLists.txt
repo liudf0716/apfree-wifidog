@@ -32,8 +32,11 @@ set(libs
 	m 
 	json-c 
 	ip4tc 
-	openssl
-	event2)
+	ssl
+	crypto
+	event
+	event_core
+	event_extar)
 
 ADD_DEFINITIONS(-Os -Wall --std=gnu99 -g3 -Wmissing-declarations)
 
