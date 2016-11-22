@@ -34,9 +34,8 @@ set(libs
 	ip4tc 
 	ssl
 	crypto
-	event
-	event_core
-	event_extar)
+	event-2.0
+	event_openssl-2.0)
 
 ADD_DEFINITIONS(-Os -Wall --std=gnu99 -g3 -Wmissing-declarations)
 
