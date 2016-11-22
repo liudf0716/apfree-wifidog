@@ -19,12 +19,8 @@ set(src_apfreewifidog
     pstring.c 
     threadpool.c 
     ipset.c 
-	http_parser.c
     https_server.c 
-	uvhttp_server.c
-    uvhttp_base.c 
-    uvhttp_ssl_server.c 
-    uvhttp_util.c 
+	https_common.c 
     wd_util.c 
 )
 
