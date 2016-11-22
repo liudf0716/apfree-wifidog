@@ -205,8 +205,8 @@ static int serve_some_http (const char *gw_ip, const struct t_https_server *http
 	/* Now we tell the evhttp what port to listen on */
 	handle = evhttp_bind_socket_with_handle (http, gw_ip, https_server->gw_https_port);
 	if (! handle) { 
-		fprintf (stderr, "couldn't bind to port %d. Exiting.\n",
-               (int) serverPort);
+		debug (LOG_ERR, "couldn't bind to port %d. Exiting.\n",
+               (int) https_server->gw_https_port);
 		return 1;
     }
     
