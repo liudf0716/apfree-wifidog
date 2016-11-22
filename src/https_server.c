@@ -131,8 +131,7 @@ send_document_cb (struct evhttp_request *req, void *arg) {
  * and wrapping it in an OpenSSL bufferevent.  This is the way
  * we implement an https server instead of a plain old http server.
  */
-static struct bufferevent* bevcb (struct event_base *base, void *arg)
-{ 
+static struct bufferevent* bevcb (struct event_base *base, void *arg) { 
 	struct bufferevent* r;
   	SSL_CTX *ctx = (SSL_CTX *) arg;
 
@@ -146,8 +145,7 @@ static struct bufferevent* bevcb (struct event_base *base, void *arg)
 
 static void server_setup_certs (SSL_CTX *ctx,
                                 const char *certificate_chain,
-                                const char *private_key)
-{ 
+                                const char *private_key) { 
 	info_report ("Loading certificate chain from '%s'\n"
                "and private key from '%s'\n",
                certificate_chain, private_key);
@@ -162,8 +160,7 @@ static void server_setup_certs (SSL_CTX *ctx,
     	die_most_horribly_from_openssl_error ("SSL_CTX_check_private_key");
 }
 
-static int serve_some_http (const char *gw_ip, const struct t_https_server *https_server)
-{ 
+static int serve_some_http (char *gw_ip,  struct t_https_server *https_server) { 
 	struct event_base *base;
   	struct evhttp *http;
   	struct evhttp_bound_socket *handle;
