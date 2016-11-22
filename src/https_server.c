@@ -55,15 +55,6 @@
 #define O_RDONLY _O_RDONLY
 #endif
 
-/* Instead of casting between these types, create a union with all of them,
- * to avoid -Wstrict-aliasing warnings. */
-typedef union { 
-	struct sockaddr_storage ss;
-  	struct sockaddr sa;
-  	struct sockaddr_in in;
-  	struct sockaddr_in6 i6;
-} sock_hop;
-
 /* This callback gets invoked when we get any http request that doesn't match
  * any other callback.  Like any evhttp server callback, it has a simple job:
  * it must eventually call evhttp_send_error() or evhttp_send_reply().
@@ -80,12 +71,12 @@ send_document_cb (struct evhttp_request *req, void *arg) {
       	return;
     }
 
-  	printf ("Got a POST request for <%s>\n", uri);
+  	debug (LOG_INFO, "Got a GET request for <%s>\n", uri);
  
   	/* Decode the URI */
   	decoded = evhttp_uri_parse (uri);
   	if (! decoded) { 
-		printf ("It's not a good URI. Sending BADREQUEST\n");
+		debug (LOG_INFO, "It's not a good URI. Sending BADREQUEST\n");
       	evhttp_send_error (req, HTTP_BADREQUEST, 0);
       	return;
     }
@@ -97,7 +88,7 @@ send_document_cb (struct evhttp_request *req, void *arg) {
 	evbuffer_add (buf, "", 1);    /* NUL-terminate the buffer */
 	char *payload = (char *) evbuffer_pullup (buf, -1);
 	if (0 != evhttp_parse_query_str (payload, &kv)) { 
-		printf ("Malformed payload. Sending BADREQUEST\n");
+		debug (LOG_INFO, "Malformed payload. Sending BADREQUEST\n");
 	  	evhttp_send_error (req, HTTP_BADREQUEST, 0);
 	  	return;
 	}
