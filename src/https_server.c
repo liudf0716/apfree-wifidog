@@ -1,7 +1,4 @@
 
-#include "debug.h"
-#include "conf.h"
-
 #include "https_common.h"
 
 #include <stdio.h>
@@ -54,6 +51,11 @@
 #define close _close
 #define O_RDONLY _O_RDONLY
 #endif
+
+#include <syslog.h>
+
+#include "debug.h"
+#include "conf.h"
 
 /* This callback gets invoked when we get any http request that doesn't match
  * any other callback.  Like any evhttp server callback, it has a simple job:
