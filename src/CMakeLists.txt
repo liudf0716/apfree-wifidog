@@ -36,8 +36,8 @@ set(libs
 	m 
 	json-c 
 	ip4tc 
-	polarssl 
-	uv)
+	openssl
+	event2)
 
 ADD_DEFINITIONS(-Os -Wall --std=gnu99 -g3 -Wmissing-declarations)
 
