@@ -30,18 +30,8 @@
 
 #include <stdio.h>
 
-#include <event2/event.h>
-#include <event2/http.h>
-#include <event2/buffer.h>
-#include <event2/util.h>
-#include <event2/keyvalq_struct.h>
-
 #include "httpd.h"
 
-struct {
-    struct evbuffer *evb_first;
-    struct evbuffer *evb_second;
-} redir_file_buffer;
 
 extern struct redir_file_buffer *wifidog_redir_html;
 
