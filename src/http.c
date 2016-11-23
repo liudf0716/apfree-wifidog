@@ -212,7 +212,7 @@ http_callback_404(httpd * webserver, request * r, int error_code)
 						  r->clientAddr, url);
         } else {
 			t_client *clt = NULL;
-            debug(LOG_INFO, "Got client MAC address for ip %s: %s", r->clientAddr, mac);
+            debug(LOG_DEBUG, "Got client MAC address for ip %s: %s", r->clientAddr, mac);
 	
             safe_asprintf(&urlFragment, "%sgw_address=%s&gw_port=%d&gw_id=%s&channel_path=%s&ssid=%s&ip=%s&mac=%s&url=%s",
                           auth_server->authserv_login_script_path_fragment,
