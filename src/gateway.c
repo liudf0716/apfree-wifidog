@@ -77,7 +77,7 @@ static pthread_t tid_wdctl		 	= 0;
 static pthread_t tid_https_server	= 0;
 static threadpool_t *pool 			= NULL; 
 
-struct redir_file_buffer *wifidog_redir_html;
+struct redir_file_buffer *wifidog_redir_html = NULL;
 
 time_t started_time = 0;
 
@@ -117,8 +117,8 @@ init_wifidog_redir_html(void)
 	}
 	evbuffer_add_file(evb_fix, fd, 0, stat_info.st_size-offset);
 	evbuffer_add_file(evb_change, fd, stat_info.st_size-offset-1, offset);
-	wifidog_redir_html->evb_fix 	= evb_fix;
-	wifidog_redir_html->evb_change	= evb_change;
+	wifidog_redir_html->evb_first 	= evb_fix;
+	wifidog_redir_html->evb_second	= evb_change;
 	if(fd) close(fd);
 	return 1;
 err:
