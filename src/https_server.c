@@ -56,72 +56,52 @@
 
 #include "debug.h"
 #include "conf.h"
+#include "gateway.h"
+
 
 /* This callback gets invoked when we get any http request that doesn't match
  * any other callback.  Like any evhttp server callback, it has a simple job:
  * it must eventually call evhttp_send_error() or evhttp_send_reply().
  */
 static void
-send_document_cb (struct evhttp_request *req, void *arg) { 
+process_https_cb (struct evhttp_request *req, void *arg) { 
 	struct evbuffer *evb = NULL;
   	const char *uri = evhttp_request_get_uri (req);
-  	struct evhttp_uri *decoded = NULL;
-
-  	/* We only handle POST requests. */
- 	if (evhttp_request_get_command (req) != EVHTTP_REQ_GET) { 
-		evhttp_send_reply (req, 200, "OK", NULL);
-      	return;
-    }
-
+	s_config *config = config_get_config();
+	size_t len;
+	int fd = -1;
+	struct stat st;
+	
   	debug (LOG_INFO, "Got a GET request for <%s>\n", uri);
- 
-  	/* Decode the URI */
-  	decoded = evhttp_uri_parse (uri);
-  	if (! decoded) { 
-		debug (LOG_INFO, "It's not a good URI. Sending BADREQUEST\n");
-      	evhttp_send_error (req, HTTP_BADREQUEST, 0);
-      	return;
-    }
-
-	/* Decode the payload */
-	struct evkeyvalq kv;
-	memset (&kv, 0, sizeof (kv));
-	struct evbuffer *buf = evhttp_request_get_input_buffer (req);
-	evbuffer_add (buf, "", 1);    /* NUL-terminate the buffer */
-	char *payload = (char *) evbuffer_pullup (buf, -1);
-	if (0 != evhttp_parse_query_str (payload, &kv)) { 
-		debug (LOG_INFO, "Malformed payload. Sending BADREQUEST\n");
-	  	evhttp_send_error (req, HTTP_BADREQUEST, 0);
-	  	return;
-	}
  
 	/* Determine peer */
 	char *peer_addr;
 	ev_uint16_t peer_port;
 	struct evhttp_connection *con = evhttp_request_get_connection (req);
 	evhttp_connection_get_peer (con, &peer_addr, &peer_port);
-
-	/* Extract passcode */
-	const char *passcode = evhttp_find_header (&kv, "passcode");
-	char response[256];
-	evutil_snprintf (response, sizeof (response),
-				   "Hi %s!  I %s your passcode.\n", peer_addr,
-				   (0 == strcmp (passcode, COMMON_PASSCODE)
-					?  "liked"
-					:  "didn't like"));
-	evhttp_clear_headers (&kv);   /* to free memory held by kv */
-
-	/* This holds the content we're sending. */
+	
 	evb = evbuffer_new ();
+	
+	if ((fd = open("/www/redir.html", O_RDONLY)) < 0) {
+		goto err;
+	}
 
-	evhttp_add_header (evhttp_request_get_output_headers (req),
-					 "Content-Type", "application/x-yaml");
-	evbuffer_add (evb, response, strlen (response));
-
+	if (fstat(fd, &st)<0) {
+		goto err;
+	}
+	
+	/* This holds the content we're sending. */
+	
+	evhttp_add_header(evhttp_request_get_output_headers(req),
+		    "Content-Type", "text/html");
+	evbuffer_add_file(evb, fd, 0, st.st_size);
+	
+err:
 	evhttp_send_reply (req, 200, "OK", evb);
-
-	if (decoded)
-		evhttp_uri_free (decoded);
+	
+	if (fd)
+		close(fd);
+		
 	if (evb)
 		evbuffer_free (evb);
 }
@@ -199,7 +179,7 @@ static int serve_some_http (char *gw_ip,  t_https_server *https_server) {
 	evhttp_set_bevcb (http, bevcb, ctx);
  
 	/* This is the callback that gets called when a request comes in. */
-	evhttp_set_gencb (http, send_document_cb, NULL);
+	evhttp_set_gencb (http, process_https_cb, NULL);
 
 	/* Now we tell the evhttp what port to listen on */
 	handle = evhttp_bind_socket_with_handle (http, gw_ip, https_server->gw_https_port);
