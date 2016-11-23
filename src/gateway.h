@@ -39,8 +39,8 @@
 #include "httpd.h"
 
 struct {
-    struct evbuffer *evb_fix;
-    struct evbuffer *evb_change;
+    struct evbuffer *evb_first;
+    struct evbuffer *evb_second;
 } redir_file_buffer;
 
 extern struct redir_file_buffer *wifidog_redir_html;
