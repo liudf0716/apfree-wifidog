@@ -48,6 +48,8 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
+#include <events/buffer.h>
+
 #include "common.h"
 #include "httpd.h"
 #include "safe.h"
@@ -89,7 +91,6 @@ init_wifidog_redir_html(void)
 {
 	s_config *config = config_get_config();	
 	int fd;
-	ssize_t written;
 	struct stat stat_info;
 	struct evbuffer *evb_fix = NULL;
 	struct evbuffer *evb_change = NULL;
@@ -116,8 +117,8 @@ init_wifidog_redir_html(void)
 	if(evb_fix == NULL || evb_change == NULL)  {
 		goto err;
 	}
-	evbuffer_add_file(evb_fix, fd, 0, st.st_size-offset);
-	evbuffer_add_file(evb_change, fd, st.st_size-offset-1, offset);
+	evbuffer_add_file(evb_fix, fd, 0, stat_info.st_size-offset);
+	evbuffer_add_file(evb_change, fd, stat_info.st_size-offset-1, offset);
 	wifidog_redir_html->evb_fix 	= evb_fix;
 	wifidog_redir_html->evb_change	= evb_change;
 	if(fd) close(fd);
