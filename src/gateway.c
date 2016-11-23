@@ -106,7 +106,7 @@ init_wifidog_redir_html(void)
 		goto err;
 	}
 	
-	wifidog_redir_html = (struct redir_buffer *)malloc(sizeof(wifidog_redir_html));
+	wifidog_redir_html = (struct redir_file_buffer *)malloc(sizeof(wifidog_redir_html));
 	if(wifidog_redir_html == NULL) {
 		goto err;
 	}
