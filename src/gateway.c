@@ -44,6 +44,9 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 
+#include <sys/types.h>
+#include <sys/stat.h>
+
 #include "common.h"
 #include "httpd.h"
 #include "safe.h"
@@ -73,10 +76,56 @@ static pthread_t tid_wdctl		 	= 0;
 static pthread_t tid_https_server	= 0;
 static threadpool_t *pool 			= NULL; 
 
+struct redir_buffer *wifidog_redir_html;
+
 time_t started_time = 0;
 
 /* The internal web server */
 httpd * webserver = NULL;
+
+int
+init_wifidog_redir_html(void)
+{
+	s_config *config = config_get_config();	
+	int fd;
+	ssize_t written;
+	struct stat stat_info;
+	struct evbuffer *evb_fix = NULL;
+	struct evbuffer *evb_change = NULL;
+	int	offset = 200;
+	
+	fd = open(config->htmlredirfile, O_RDONLY);
+	if (fd == -1) {
+		debug(LOG_CRIT, "Failed to open HTML message file %s: %s", strerror(errno), 
+			config->htmlredirfile);
+		return 0;
+	}
+	
+	if (fstat(fd, &stat_info) == -1) {
+		debug(LOG_CRIT, "Failed to stat HTML message file: %s", strerror(errno));
+		goto err;
+	}
+	
+	wifidog_redir_html = (struct redir_buffer *)malloc(sizeof(wifidog_redir_html));
+	if(wifidog_redir_html == NULL) {
+		goto err;
+	}
+	evb_fix 	= evbuffer_new();
+	evb_change	= evbuffer_new();
+	if(evb_fix == NULL || evb_change == NULL)  {
+		goto err;
+	}
+	evbuffer_add_file(evb_fix, fd, 0, st.st_size-offset);
+	evbuffer_add_file(evb_change, fd, st.st_size-offset-1, offset);
+	wifidog_redir_html->evb_fix 	= evb_fix;
+	wifidog_redir_html->evb_change	= evb_change;
+	if(fd) close(fd);
+	return 1;
+err:
+	if(fd) close(fd);
+	if(evb_fix) evbuffer_free(evb_fix);	
+	return 0;
+}
 
 /* Appends -x, the current PID, and NULL to restartargv
  * see parse_commandline in commandline.c for details
