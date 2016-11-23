@@ -29,7 +29,7 @@
 #define _GATEWAY_H_
 
 #include <stdio.h>
-#include <event2/buffer.h>
+#include <event2/evbuffer-internal.h>
 
 #include "httpd.h"
 
