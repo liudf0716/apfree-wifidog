@@ -250,7 +250,7 @@ http_callback_404(httpd * webserver, request * r, int error_code)
         }
 		
         // if host is not in whitelist, maybe not in conf or domain'IP changed, it will go to here.
-        debug(LOG_INFO, "Check host %s is in whitelist or not", r->request.host);       // e.g. www.example.com
+        debug(LOG_DEBUG, "Check host %s is in whitelist or not", r->request.host);       // e.g. www.example.com
         t_firewall_rule *rule;
         //e.g. example.com is in whitelist
         // if request http://www.example.com/, it's not equal example.com.
