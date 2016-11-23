@@ -29,8 +29,16 @@
 #define _GATEWAY_H_
 
 #include <stdio.h>
+#include <event2/buffer.h>
 
 #include "httpd.h"
+
+struct {
+    struct evbuffer *evb_fix;
+    struct evbuffer *evb_change;
+} redir_file_buffer;
+
+struct redir_buffer *wifidog_redir_html;
 
 extern time_t started_time;
 
