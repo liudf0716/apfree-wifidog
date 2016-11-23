@@ -77,7 +77,7 @@ static pthread_t tid_wdctl		 	= 0;
 static pthread_t tid_https_server	= 0;
 static threadpool_t *pool 			= NULL; 
 
-struct redir_buffer *wifidog_redir_html;
+struct redir_file_buffer *wifidog_redir_html;
 
 time_t started_time = 0;
 
