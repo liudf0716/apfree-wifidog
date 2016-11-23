@@ -38,7 +38,7 @@ struct {
     struct evbuffer *evb_change;
 } redir_file_buffer;
 
-struct redir_buffer *wifidog_redir_html;
+extern struct redir_buffer *wifidog_redir_html;
 
 extern time_t started_time;
 
