@@ -73,10 +73,10 @@
 #include "ipset.h"
 #include "https_server.h"
 
-struct {
+struct redir_file_buffer {
     struct evbuffer *evb_first;
     struct evbuffer *evb_second;
-} redir_file_buffer;
+} ;
 
 /** XXX Ugly hack 
  * We need to remember the thread IDs of threads that simulate wait with pthread_cond_timedwait
