@@ -515,7 +515,7 @@ main_loop(void)
             debug(LOG_ERR, "FATAL: httpdGetConnection returned unexpected value %d, exiting.", webserver->lastError);
             termination_handler(0);
 		} else if (r != NULL && pool_mode) {
-            debug(LOG_INFO, "Received connection from %s, add to work queue", r->clientAddr);
+            debug(LOG_DEBUG, "Received connection from %s, add to work queue", r->clientAddr);
 			params = safe_malloc(2 * sizeof(void *));
             *params = webserver;
             *(params + 1) = r;
