@@ -48,8 +48,6 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
-#include <events/buffer.h>
-
 #include "common.h"
 #include "httpd.h"
 #include "safe.h"
