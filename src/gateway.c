@@ -48,6 +48,12 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
+#include <event2/event.h>
+#include <event2/http.h>
+#include <event2/buffer.h>
+#include <event2/util.h>
+#include <event2/keyvalq_struct.h>
+
 #include "common.h"
 #include "httpd.h"
 #include "safe.h"
@@ -66,6 +72,11 @@
 #include "threadpool.h"
 #include "ipset.h"
 #include "https_server.h"
+
+struct {
+    struct evbuffer *evb_first;
+    struct evbuffer *evb_second;
+} redir_file_buffer;
 
 /** XXX Ugly hack 
  * We need to remember the thread IDs of threads that simulate wait with pthread_cond_timedwait
@@ -106,7 +117,7 @@ init_wifidog_redir_html(void)
 		goto err;
 	}
 	
-	wifidog_redir_html = (struct redir_file_buffer *)malloc(sizeof(wifidog_redir_html));
+	wifidog_redir_html = (struct redir_file_buffer *)malloc(sizeof(struct redir_file_buffer));
 	if(wifidog_redir_html == NULL) {
 		goto err;
 	}
