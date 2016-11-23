@@ -46,6 +46,7 @@
 
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <fcntl.h>
 
 #include "common.h"
 #include "httpd.h"
@@ -83,7 +84,7 @@ time_t started_time = 0;
 /* The internal web server */
 httpd * webserver = NULL;
 
-int
+static int
 init_wifidog_redir_html(void)
 {
 	s_config *config = config_get_config();	
