@@ -421,7 +421,7 @@ update_trusted_mac_list_status(void)
     s_config *config = config_get_config();
 
 	if(trusted_mac_list_dup(&tmac_list) == 0) {
-		debug(LOG_INFO, "update_trusted_mac_list_status: list is empty");
+		debug(LOG_DEBUG, "update_trusted_mac_list_status: list is empty");
 		return;
 	}
 	
