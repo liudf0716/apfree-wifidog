@@ -44,6 +44,16 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+
+#include <event2/event.h>
+#include <event2/http.h>
+#include <event2/buffer.h>
+#include <event2/util.h>
+#include <event2/keyvalq_struct.h>
+
 #include "common.h"
 #include "httpd.h"
 #include "safe.h"
@@ -63,6 +73,11 @@
 #include "ipset.h"
 #include "https_server.h"
 
+struct redir_file_buffer {
+    struct evbuffer *evb_first;
+    struct evbuffer *evb_second;
+} ;
+
 /** XXX Ugly hack 
  * We need to remember the thread IDs of threads that simulate wait with pthread_cond_timedwait
  * so we can explicitly kill them in the termination handler
@@ -73,10 +88,55 @@ static pthread_t tid_wdctl		 	= 0;
 static pthread_t tid_https_server	= 0;
 static threadpool_t *pool 			= NULL; 
 
+struct redir_file_buffer *wifidog_redir_html = NULL;
+
 time_t started_time = 0;
 
 /* The internal web server */
 httpd * webserver = NULL;
+
+static int
+init_wifidog_redir_html(void)
+{
+	s_config *config = config_get_config();	
+	int fd;
+	struct stat stat_info;
+	struct evbuffer *evb_fix = NULL;
+	struct evbuffer *evb_change = NULL;
+	int	offset = 200;
+	
+	fd = open(config->htmlredirfile, O_RDONLY);
+	if (fd == -1) {
+		debug(LOG_CRIT, "Failed to open HTML message file %s: %s", strerror(errno), 
+			config->htmlredirfile);
+		return 0;
+	}
+	
+	if (fstat(fd, &stat_info) == -1) {
+		debug(LOG_CRIT, "Failed to stat HTML message file: %s", strerror(errno));
+		goto err;
+	}
+	
+	wifidog_redir_html = (struct redir_file_buffer *)malloc(sizeof(struct redir_file_buffer));
+	if(wifidog_redir_html == NULL) {
+		goto err;
+	}
+	evb_fix 	= evbuffer_new();
+	evb_change	= evbuffer_new();
+	if(evb_fix == NULL || evb_change == NULL)  {
+		goto err;
+	}
+	evbuffer_add_file(evb_fix, fd, 0, stat_info.st_size-offset);
+	evbuffer_add_file(evb_change, fd, stat_info.st_size-offset-1, offset);
+	wifidog_redir_html->evb_first 	= evb_fix;
+	wifidog_redir_html->evb_second	= evb_change;
+	if(fd) close(fd);
+	return 1;
+err:
+	if(fd) close(fd);
+	if(evb_fix) evbuffer_free(evb_fix);	
+	return 0;
+}
 
 /* Appends -x, the current PID, and NULL to restartargv
  * see parse_commandline in commandline.c for details
@@ -515,7 +575,7 @@ main_loop(void)
             debug(LOG_ERR, "FATAL: httpdGetConnection returned unexpected value %d, exiting.", webserver->lastError);
             termination_handler(0);
 		} else if (r != NULL && pool_mode) {
-            debug(LOG_INFO, "Received connection from %s, add to work queue", r->clientAddr);
+            debug(LOG_DEBUG, "Received connection from %s, add to work queue", r->clientAddr);
 			params = safe_malloc(2 * sizeof(void *));
             *params = webserver;
             *(params + 1) = r;

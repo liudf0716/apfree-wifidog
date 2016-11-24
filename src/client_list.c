@@ -483,7 +483,7 @@ offline_client_ageout()
 	time_t cur_time = time(NULL);
 	int number = 0;
 	
-	debug(LOG_INFO, "offline_client_ageout !");
+	debug(LOG_DEBUG, "offline_client_ageout !");
 	LOCK_OFFLINE_CLIENT_LIST();	
 	ptr = first_offline_client;
 	while(NULL != ptr) {

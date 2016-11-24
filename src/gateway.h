@@ -32,6 +32,9 @@
 
 #include "httpd.h"
 
+
+extern struct redir_file_buffer *wifidog_redir_html;
+
 extern time_t started_time;
 
 /** @brief The internal web server */

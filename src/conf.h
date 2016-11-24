@@ -86,7 +86,6 @@
 #define	DEFAULT_SVR_CRT_FILE	"/etc/apfree.crt"
 #define	DEFAULT_SVR_KEY_FILE	"/etc/apfree.key"
 
-#include "uvhttp_ssl_server.h"
 
 typedef enum trusted_domain_t_ {
 	USER_TRUSTED_DOMAIN,
