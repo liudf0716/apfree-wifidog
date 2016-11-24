@@ -78,6 +78,10 @@ struct redir_file_buffer {
     struct evbuffer *evb_rear;
 } ;
 
+struct evbuffer	*evb_internet_offline_page 		= NULL;
+struct evbuffer *evb_authserver_offline_page	= NULL;
+struct redir_file_buffer *wifidog_redir_html 	= NULL;
+
 /** XXX Ugly hack 
  * We need to remember the thread IDs of threads that simulate wait with pthread_cond_timedwait
  * so we can explicitly kill them in the termination handler
@@ -88,23 +92,21 @@ static pthread_t tid_wdctl		 	= 0;
 static pthread_t tid_https_server	= 0;
 static threadpool_t *pool 			= NULL; 
 
-struct redir_file_buffer *wifidog_redir_html = NULL;
-
 time_t started_time = 0;
 
 /* The internal web server */
 httpd * webserver = NULL;
 
 static struct evbuffer *
-read_wifidog_redir_html_file(const char *front_file, struct evbuffer *evb_html)
+evhttp_read_file(const char *filename, struct evbuffer *evb)
 {
 	int fd
 	struct stat stat_info;
 	
-	fd = open(front_file, O_RDONLY);
+	fd = open(filename, O_RDONLY);
 	if (fd == -1) {
 		debug(LOG_CRIT, "Failed to open HTML message file %s: %s", strerror(errno), 
-			front_file);
+			filename);
 		return NULL;
 	}
 	
@@ -114,12 +116,32 @@ read_wifidog_redir_html_file(const char *front_file, struct evbuffer *evb_html)
 		return NULL;
 	}
 	
-	evbuffer_add_file(evb_html, fd, 0, stat_info.st_size);
+	evbuffer_add_file(evb, fd, 0, stat_info.st_size);
 	close(fd);
-	return evb_html;
+	return evb;
 }
 
-int
+static void
+init_wifidog_msg_html()
+{
+	s_config *config 			= config_get_config();	
+	
+	evb_internet_offline_page 	= evbuffer_new();
+	if (!evb_internet_offline_page)
+		exit(0);
+	
+	evb_authserver_offline_page	= evbuffer_new();
+	if (!evb_authserver_offline_page)
+		exit(0);
+	
+	if ( !evhttp_read_file(config->internet_offline_file, evb_internet_offline_page) || 
+		 !evhttp_read_file(config->authserver_offline_file, evb_authserver_offline_page)) {
+		debug(LOG_ERR, "init_wifidog_msg_html failed, exiting...");
+		exit(0);
+	}
+}
+
+static int
 init_wifidog_redir_html(void)
 {
 	s_config *config = config_get_config();	
@@ -142,8 +164,8 @@ init_wifidog_redir_html(void)
 	
 	snprintf(front_file, 128, "%s.front", config->htmlredirfile);
 	snprintf(rear_file, 128, "%s.rear", config->htmlredirfile);
-	if (!read_wifidog_redir_html_file(front_file, evb_front) || 
-		!read_wifidog_redir_html_file(rear_file, evb_rear)) {
+	if (!evhttp_read_file(front_file, evb_front) || 
+		!evhttp_read_file(rear_file, evb_rear)) {
 		goto err;
 	}
 	
@@ -495,7 +517,10 @@ main_loop(void)
             exit(1);
         }
     }
-
+	
+	// liudf added 20161124
+	// read wifidog msg file to memory
+	init_wifidog_msg_html();	
 	if (!init_wifidog_redir_html()) {
 		debug(LOG_ERR, "init_wifidog_redir_html failed, exiting...");
 		exit(1);
