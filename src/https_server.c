@@ -58,6 +58,52 @@
 #include "conf.h"
 #include "gateway.h"
 
+enum reply_type {
+	INTERNET_OFFLINE,
+	AUTHSERVER_OFFLINE
+};
+
+struct evbuffer *
+evhttpd_get_full_redir_url(const char *mac, const char *ip, const char *orig_url) {
+	struct evbuffer *evb = evbuffer_new();
+	s_config *config = config_get_config();
+	char *protocol = NULL;
+    int port = 80;
+    t_auth_serv *auth_server = get_auth_server();
+
+    if (auth_server->authserv_use_ssl) {
+        protocol = "https";
+        port = auth_server->authserv_ssl_port;
+    } else {
+        protocol = "http";
+        port = auth_server->authserv_http_port;
+    }
+	
+	evbuffer_add_printf(evb, "%s://%s:%d%s%sgw_address=%s&gw_port=%d&gw_id=%s&channel_path=%s&ssid=%s&ip=%s&mac=%s&url=%s",
+					protocol, auth_server->authserv_hostname, port, auth_server->authserv_path,
+					auth_server->authserv_login_script_path_fragment,
+					config->gw_address, config->gw_port, config->gw_id, 
+					g_channel_path?g_channel_path:"null",
+					g_ssid?g_ssid:"null",
+					ip, mac, orig_url);
+	
+	return evb;
+}
+
+void
+evhttpd_gw_reply(struct evhttp_request *req, enum reply_type type) {
+	struct evbuffer *evb = NULL;
+	switch (type) {
+	case INTERNET_OFFLINE:
+		evb = evb_internet_offline_page;
+	case AUTHSERVER_OFFLINE:
+		evb = evb_authserver_offline_page;
+	}
+	
+	evhttp_add_header(evhttp_request_get_output_headers(req),
+		    "Content-Type", "text/html");
+	evhttp_send_reply (req, 200, "OK", evb); 	
+}
 
 /* This callback gets invoked when we get any http request that doesn't match
  * any other callback.  Like any evhttp server callback, it has a simple job:
@@ -67,43 +113,42 @@ static void
 process_https_cb (struct evhttp_request *req, void *arg) { 
 	struct evbuffer *evb = NULL;
   	const char *uri = evhttp_request_get_uri (req);
-	s_config *config = config_get_config();
-	size_t len;
-	int fd = -1;
-	struct stat st;
+	s_config *config = config_get_config();  	
 	
-  	debug (LOG_INFO, "Got a GET request for <%s>\n", uri);
- 
 	/* Determine peer */
 	char *peer_addr;
 	ev_uint16_t peer_port;
 	struct evhttp_connection *con = evhttp_request_get_connection (req);
 	evhttp_connection_get_peer (con, &peer_addr, &peer_port);
 	
-	evb = evbuffer_new ();
+	debug (LOG_INFO, "Got a GET request for <%s> from <%s>:<%d>\n", uri, peer_addr, peer_port);
 	
-	if ((fd = open("/www/redir.html", O_RDONLY)) < 0) {
-		goto err;
-	}
+	if (!is_online()) {    
+        debug(LOG_INFO, "Sent %s an apology since I am not online - no point sending them to auth server",
+              peer_addr);
+		return evhttpd_gw_reply(req, INTERNET_OFFLINE);
+    } else if (!is_auth_online()) {  
+        debug(LOG_INFO, "Sent %s an apology since auth server not online - no point sending them to auth server",
+              peer_addr);
+		return evhttpd_gw_reply(req, AUTHSERVER_OFFLINE);
+    }
+	
+	char *mac = arp_get(peer_addr);
+	struct evbuffer *redir_url = evhttpd_get_full_redir_url(mac?=mac:"ff:ff:ff:ff:ff:ff", peer_addr, url);
 
-	if (fstat(fd, &st)<0) {
-		goto err;
-	}
-	
-	/* This holds the content we're sending. */
-	
+	evb = evbuffer_new ();		
 	evhttp_add_header(evhttp_request_get_output_headers(req),
 		    "Content-Type", "text/html");
-	evbuffer_add_file(evb, fd, 0, st.st_size);
+	evbuffer_add_buffer(evb, wifidog_redir_html->evb_front);
 	
-err:
+	evbuffer_add_printf(evb, WIFIDOG_REDIR_HTML_CONTENT, redir_url);
+	
+	evbuffer_add_buffer(evb, wifidog_redir_html->evb_rear);
 	evhttp_send_reply (req, 200, "OK", evb);
-	
-	if (fd)
-		close(fd);
 		
 	if (evb)
 		evbuffer_free (evb);
+	free(peer_addr);
 }
 
 /**
