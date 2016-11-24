@@ -236,7 +236,7 @@ http_callback_404(httpd * webserver, request * r, int error_code)
 				fw_deny(clt);
 				free(clt->ip);
 				clt->ip = safe_strdup(r->clientAddr);
-				fw_allow(clt, clt->fw_connection_state);
+				fw_allow(clt, );
 				UNLOCK_CLIENT_LIST();
 				http_send_redirect(r, tmp_url, "device has login");
             	free(urlFragment);
