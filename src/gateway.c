@@ -74,8 +74,8 @@
 #include "https_server.h"
 
 struct redir_file_buffer {
-    struct evbuffer *evb_first;
-    struct evbuffer *evb_second;
+    struct evbuffer *evb_front;
+    struct evbuffer *evb_rear;
 } ;
 
 /** XXX Ugly hack 
@@ -95,46 +95,67 @@ time_t started_time = 0;
 /* The internal web server */
 httpd * webserver = NULL;
 
-static int
-init_wifidog_redir_html(void)
+static struct evbuffer *
+read_wifidog_redir_html_file(const char *front_file, struct evbuffer *evb_html)
 {
-	s_config *config = config_get_config();	
-	int fd;
+	int fd
 	struct stat stat_info;
-	struct evbuffer *evb_fix = NULL;
-	struct evbuffer *evb_change = NULL;
-	int	offset = 200;
 	
-	fd = open(config->htmlredirfile, O_RDONLY);
+	fd = open(front_file, O_RDONLY);
 	if (fd == -1) {
 		debug(LOG_CRIT, "Failed to open HTML message file %s: %s", strerror(errno), 
-			config->htmlredirfile);
-		return 0;
+			front_file);
+		return NULL;
 	}
 	
 	if (fstat(fd, &stat_info) == -1) {
 		debug(LOG_CRIT, "Failed to stat HTML message file: %s", strerror(errno));
+		close(fd);
+		return NULL;
+	}
+	
+	evbuffer_add_file(evb_html, fd, 0, stat_info.st_size);
+	close(fd);
+	return evb_html;
+}
+
+int
+init_wifidog_redir_html(void)
+{
+	s_config *config = config_get_config();	
+	struct evbuffer *evb_front = NULL;
+	struct evbuffer *evb_rear = NULL;
+	char	front_file[128] = {0};
+	char	rear_file[128] = {0};
+	
+	
+	wifidog_redir_html = (struct redir_file_buffer *)malloc(sizeof(struct redir_file_buffer));
+	if (wifidog_redir_html == NULL) {
 		goto err;
 	}
 	
-	wifidog_redir_html = (struct redir_file_buffer *)malloc(sizeof(struct redir_file_buffer));
-	if(wifidog_redir_html == NULL) {
+	evb_front 	= evbuffer_new();
+	evb_rear	= evbuffer_new();
+	if (evb_front == NULL || evb_rear == NULL)  {
 		goto err;
 	}
-	evb_fix 	= evbuffer_new();
-	evb_change	= evbuffer_new();
-	if(evb_fix == NULL || evb_change == NULL)  {
+	
+	snprintf(front_file, 128, "%s.front", config->htmlredirfile);
+	snprintf(rear_file, 128, "%s.rear", config->htmlredirfile);
+	if (!read_wifidog_redir_html_file(front_file, evb_front) || 
+		!read_wifidog_redir_html_file(rear_file, evb_rear)) {
 		goto err;
 	}
-	evbuffer_add_file(evb_fix, fd, 0, stat_info.st_size-offset);
-	evbuffer_add_file(evb_change, fd, stat_info.st_size-offset-1, offset);
-	wifidog_redir_html->evb_first 	= evb_fix;
-	wifidog_redir_html->evb_second	= evb_change;
-	if(fd) close(fd);
+	
+	wifidog_redir_html->evb_front 	= evb_front;
+	wifidog_redir_html->evb_rear	= evb_rear;
+
 	return 1;
 err:
-	if(fd) close(fd);
-	if(evb_fix) evbuffer_free(evb_fix);	
+	if (evb_front) evbuffer_free(evb_front);	
+	if (evb_rear) evbuffer_free(evb_rear);
+	if (wifidog_redir_html) free(wifidog_redir_html);
+	wifidog_redir_html = NULL;
 	return 0;
 }
 
@@ -469,14 +490,17 @@ main_loop(void)
     /* If we don't have the Gateway ID, construct it from the internal MAC address.
      * "Can't fail" so exit() if the impossible happens. */
     if (!config->gw_id) {
-        debug(LOG_DEBUG, "Finding MAC address of %s", config->gw_interface);
         if ((config->gw_id = get_iface_mac(config->gw_interface)) == NULL) {
             debug(LOG_ERR, "Could not get MAC address information of %s, exiting...", config->gw_interface);
             exit(1);
         }
-        debug(LOG_DEBUG, "%s = %s", config->gw_interface, config->gw_id);
     }
 
+	if (!init_wifidog_redir_html()) {
+		debug(LOG_ERR, "init_wifidog_redir_html failed, exiting...");
+		exit(1);
+	}
+	
     /* Initializes the web server */
     debug(LOG_NOTICE, "Creating web server on %s:%d", config->gw_address, config->gw_port);
     if ((webserver = httpdCreate(config->gw_address, config->gw_port)) == NULL) {
