@@ -36,10 +36,14 @@
 #define DEFAULT_CONFIGFILE "/etc/wifidog.conf"
 #define DEFAULT_HTMLMSGFILE "/etc/wifidog-msg.html"
 #define DEFAULT_REDIRECTFILE "/etc/wifidog-redir.html"
+#define	DEFAULT_INTERNET_OFFLINE_FILE	"/etc/internet-offline.html"
+#define	DEFAULT_AUTHSERVER_OFFLINE_FILE	"/etc/authserver-offline.html"
 #else
 #define DEFAULT_CONFIGFILE SYSCONFDIR"/wifidog.conf"
 #define DEFAULT_HTMLMSGFILE SYSCONFDIR"/wifidog-msg.html"
 #define DEFAULT_REDIRECTFILE SYSCONFDIR"/wifidog-redir.html"
+#define	DEFAULT_INTERNET_OFFLINE_FILE	SYSCONFDIR"/etc/internet-offline.html"
+#define	DEFAULT_AUTHSERVER_OFFLINE_FILE	SYSCONFDIR"/etc/authserver-offline.html"
 #endif
 #define DEFAULT_DAEMON 1
 #define DEFAULT_DEBUGLEVEL LOG_INFO
@@ -265,6 +269,8 @@ typedef struct {
 	t_trusted_mac	*roam_maclist; /** roam mac list*/
 	t_untrusted_mac	*mac_blacklist; /** blacklist mac*/
 	char 	*htmlredirfile;
+	char	*internet_offline_file;
+	char	*authserver_offline_file;
 	short	wired_passed;
 	short	parse_checked; 
 	short	js_filter; /** boolean, whether to enable javascript filter url request*/
