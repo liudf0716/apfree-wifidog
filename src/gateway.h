@@ -32,7 +32,8 @@
 
 #include "httpd.h"
 
-
+extern struct evbuffer	*evb_internet_offline_page;
+extern struct evbuffer *evb_authserver_offline_page;
 extern struct redir_file_buffer *wifidog_redir_html;
 
 extern time_t started_time;
