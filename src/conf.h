@@ -86,6 +86,8 @@
 #define	DEFAULT_SVR_CRT_FILE	"/etc/apfree.crt"
 #define	DEFAULT_SVR_KEY_FILE	"/etc/apfree.key"
 
+#define	WIFIDOG_REDIR_HTML_CONTENT	"setTimeout(function() {location.href = \"%s\";}, 10);"
+
 
 typedef enum trusted_domain_t_ {
 	USER_TRUSTED_DOMAIN,
