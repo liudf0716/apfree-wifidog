@@ -28,6 +28,8 @@
 #ifndef _UTIL_H_
 #define _UTIL_H_
 
+#include <event2/buffer.h>
+
 /** How many times should we try detecting the interface with the default route
  * (in seconds).  If set to 0, it will keep retrying forever */
 #define NUM_EXT_INTERFACE_DETECT_RETRY 0
