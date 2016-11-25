@@ -49,7 +49,7 @@
 #include <netinet/ip.h>
 #include <netinet/ip_icmp.h>
 #include <netpacket/packet.h>
-#include <event2/buffer.h>
+
 #include <string.h>
 #include <netdb.h>
 
