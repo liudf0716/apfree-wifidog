@@ -31,7 +31,7 @@
 
 void thread_https_server(void *args);
 
-char*get_full_redir_url(const char *mac, const char *ip, const char *orig_url);
+char *evhttpd_get_full_redir_url(const char *mac, const char *ip, const char *orig_url);
 void evhttpd_gw_reply(struct evhttp_request *req,  struct evbuffer *evb);
 char *evhttp_get_request_url(struct evhttp_request *req);
 
