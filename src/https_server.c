@@ -58,6 +58,7 @@
 #include "conf.h"
 #include "gateway.h"
 #include "wd_util.h"
+#include "firewall.h"
 
 enum reply_type {
 	INTERNET_OFFLINE,
@@ -144,7 +145,7 @@ process_https_cb (struct evhttp_request *req, void *arg) {
 	struct evhttp_connection *con = evhttp_request_get_connection (req);
 	evhttp_connection_get_peer (con, &peer_addr, &peer_port);
 	
-	debug (LOG_INFO, "Got a GET request for <%s> from <%s>:<%d>\n", uri, peer_addr, peer_port);
+	debug (LOG_INFO, "Got a GET request for <%s> from <%s>:<%d>\n", req_url, peer_addr, peer_port);
 	
 	if (!is_online()) {    
         debug(LOG_INFO, "Sent %s an apology since I am not online - no point sending them to auth server",
