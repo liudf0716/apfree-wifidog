@@ -100,7 +100,7 @@ httpd * webserver = NULL;
 static struct evbuffer *
 evhttp_read_file(const char *filename, struct evbuffer *evb)
 {
-	int fd
+	int fd;
 	struct stat stat_info;
 	
 	fd = open(filename, O_RDONLY);
