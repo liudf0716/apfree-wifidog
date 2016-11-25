@@ -142,7 +142,7 @@ process_https_cb (struct evhttp_request *req, void *arg) {
 	
 	char *mac = (char *)arp_get(peer_addr);
 	char *req_url = evhttp_get_request_url (req); 
-	char *redir_url = evhttpd_get_full_redir_url(mac?mac:"ff:ff:ff:ff:ff:ff", peer_addr, req_url);
+	char *redir_url = evhttpd_get_full_redir_url(mac!=NULL?mac:"ff:ff:ff:ff:ff:ff", peer_addr, req_url);
 	struct evbuffer evb = evbuffer_new ();	
 	
 	evbuffer_add_buffer(evb, wifidog_redir_html->evb_front);
