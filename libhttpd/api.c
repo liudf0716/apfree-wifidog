@@ -730,6 +730,15 @@ httpdSetCookie(request * r, const char *name, const char *value)
 }
 
 void
+httpdOutputDirect(request * r, const char *msg)
+{
+    r->response.responseLength += strlen(msg);
+    if (r->response.headersSent == 0)
+        httpdSendHeaders(r);
+    _httpd_net_write(r->clientSock, msg, strlen(msg));
+}
+
+void
 httpdOutput(request * r, const char *msg)
 {
     const char *src;
