@@ -59,9 +59,6 @@
 
 #include "version.h"
 
-//>>> liudf added 20160104
-static char *redirect_html;
-
 const char *apple_domains[] = {
 					"captive.apple.com",
 					"www.apple.com",
@@ -170,7 +167,7 @@ http_callback_404(httpd * webserver, request * r, int error_code)
               r->clientAddr);
     } else {
 		/* Re-direct them to auth server */
-		config_s *config = config_get_config();
+		const s_config *config = config_get_config();
 		char tmp_url[MAX_BUF] = {0};  
 		char *mac = arp_get(r->clientAddr);
 		
