@@ -61,11 +61,6 @@
 #include "wd_util.h"
 #include "firewall.h"
 
-enum reply_type {
-	INTERNET_OFFLINE,
-	AUTHSERVER_OFFLINE
-};
-
 // !!!remember to free the return url
 char *
 evhttp_get_request_url(struct evhttp_request *req) {
