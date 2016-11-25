@@ -169,16 +169,16 @@ http_callback_404(httpd * webserver, request * r, int error_code)
         debug(LOG_INFO, "Sent %s an apology since auth server not online - no point sending them to auth server",
               r->clientAddr);
     } else {
-		char tmp_url[MAX_BUF] = {0}, *url = NULL, *mac = NULL;
-		char *redir_url = NULL;
-        /* Re-direct them to auth server */
-		mac = arp_get(r->clientAddr);
+		/* Re-direct them to auth server */
+		char tmp_url[MAX_BUF] = {0};
+		char *redir_url = NULL;    
+		char *mac = arp_get(r->clientAddr);
 		
 		snprintf(tmp_url, (sizeof(tmp_url) - 1), "http://%s%s%s%s",
              r->request.host, r->request.path, r->request.query[0] ? "?" : "", r->request.query);
-    	url = httpdUrlEncode(tmp_url);
 		
-		redir_url = evhttpd_get_full_redir_url(mac!=NULL?mac:"ff:ff:ff:ff:ff:ff", peer_addr, url);
+    	char *url = httpdUrlEncode(tmp_url);	
+		char *redir_url = evhttpd_get_full_redir_url(mac!=NULL?mac:"ff:ff:ff:ff:ff:ff", peer_addr, url);
         if (mac) {                 
 			t_client *clt = NULL;
             debug(LOG_DEBUG, "Got client MAC address for ip %s: %s", r->clientAddr, mac);	
