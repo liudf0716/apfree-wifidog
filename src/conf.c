@@ -258,7 +258,9 @@ config_init(void)
     config.arp_table_path = safe_strdup(DEFAULT_ARPTABLE);
     config.ssl_use_sni = DEFAULT_AUTHSERVSSLSNI;
 	//>>> liudf 20160104 added
-	config.htmlredirfile 	= safe_strdup(DEFAULT_REDIRECTFILE);
+	config.htmlredirfile 			= safe_strdup(DEFAULT_REDIRECTFILE);
+	config.internet_offline_file	= safe_strdup(DEFAULT_INTERNET_OFFLINE_FILE);
+	config.authserver_offline_file	= safe_strdup(DEFAULT_AUTHSERVER_OFFLINE_FILE);
 	config.js_filter 		= 1; // default enable it
 	config.pool_mode		= 1;
 	config.thread_number 	= 10; // only valid when poolMode == 1
