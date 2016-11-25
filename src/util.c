@@ -24,6 +24,7 @@
   @brief Misc utility functions
   @author Copyright (C) 2004 Philippe April <papril777@yahoo.com>
   @author Copyright (C) 2006 Benoit Grégoire <bock@step.polymtl.ca>
+  @author Copyright (C) 2016 Dengfeng Liu <liudengfeng@kunteng.org>
  */
 
 #define _GNU_SOURCE
