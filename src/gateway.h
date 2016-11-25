@@ -32,6 +32,11 @@
 
 #include "httpd.h"
 
+struct redir_file_buffer {
+    struct evbuffer *evb_front;
+    struct evbuffer *evb_rear;
+};
+
 extern struct evbuffer	*evb_internet_offline_page;
 extern struct evbuffer *evb_authserver_offline_page;
 extern struct redir_file_buffer *wifidog_redir_html;
