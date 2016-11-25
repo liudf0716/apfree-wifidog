@@ -968,7 +968,7 @@ parse_boolean_value(char *line)
 
 /**
  * Parse possiblemac to see if it is valid MAC address format */
-int
+static int
 check_mac_format(const char *possiblemac)
 {
     char hex2[3];
@@ -1255,7 +1255,7 @@ parse_mac_list_action(const char *ptr, mac_choice_t which, int action)
     free(pt);
 }
 
-void
+static void
 parse_remove_mac_list(const char *ptr, mac_choice_t which)
 {
 	parse_mac_list_action(ptr, which, 0);;
@@ -2096,7 +2096,7 @@ clear_untrusted_mac_list()
 }
 
 // set all trusted mac to offline
-void
+static void
 __reset_trusted_mac_list()
 {
 	t_trusted_mac *p;
@@ -2113,7 +2113,7 @@ reset_trusted_mac_list()
 	UNLOCK_CONFIG();
 }
 
-t_trusted_mac *
+static t_trusted_mac *
 trusted_mac_dup(t_trusted_mac *src)
 {
 	t_trusted_mac *new = NULL;
@@ -2129,7 +2129,7 @@ trusted_mac_dup(t_trusted_mac *src)
 	return new;
 }
 
-int
+static int
 __trusted_mac_list_dup(t_trusted_mac ** dest)
 {
 	t_trusted_mac *new, *cur, *top, *prev;
