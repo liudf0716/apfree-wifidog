@@ -48,7 +48,7 @@
 #include <netinet/ip.h>
 #include <netinet/ip_icmp.h>
 #include <netpacket/packet.h>
-
+#include <event2/buffer.h>
 #include <string.h>
 #include <netdb.h>
 
@@ -454,4 +454,12 @@ is_valid_mac(const char *mac)
 	}
 
 	return (i == 12 && (s == 5 || s == 0));
+}
+
+char *evb_2_string(struct evbuffer *evb) 
+{
+	size_t len = evbuffer_get_length(evb)+1;
+	char *str = (char *)malloc(len);
+	memset(str, 0, len);
+	evbuffer_copyout(evb, str, len);
 }
