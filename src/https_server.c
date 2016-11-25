@@ -113,15 +113,7 @@ evhttpd_get_full_redir_url(const char *mac, const char *ip, const char *orig_url
 }
 
 void
-evhttpd_gw_reply(struct evhttp_request *req, enum reply_type type) {
-	struct evbuffer *evb = NULL;
-	switch (type) {
-	case INTERNET_OFFLINE:
-		evb = evb_internet_offline_page;
-	case AUTHSERVER_OFFLINE:
-		evb = evb_authserver_offline_page;
-	}
-	
+evhttpd_gw_reply(struct evhttp_request *req, struct evbuffer *evb) {
 	evhttp_add_header(evhttp_request_get_output_headers(req),
 		    "Content-Type", "text/html");
 	evhttp_send_reply (req, 200, "OK", evb); 	
@@ -132,10 +124,7 @@ evhttpd_gw_reply(struct evhttp_request *req, enum reply_type type) {
  * it must eventually call evhttp_send_error() or evhttp_send_reply().
  */
 static void
-process_https_cb (struct evhttp_request *req, void *arg) { 
-	struct evbuffer *evb = NULL;
-  	char *req_url = evhttp_get_request_url (req); 	
-	
+process_https_cb (struct evhttp_request *req, void *arg) {  			
 	/* Determine peer */
 	char *peer_addr;
 	ev_uint16_t peer_port;
@@ -147,25 +136,23 @@ process_https_cb (struct evhttp_request *req, void *arg) {
 	if (!is_online()) {    
         debug(LOG_INFO, "Sent %s an apology since I am not online - no point sending them to auth server",
               peer_addr);
-		return evhttpd_gw_reply(req, INTERNET_OFFLINE);
+		return evhttpd_gw_reply(req, evb_internet_offline_page);
     } else if (!is_auth_online()) {  
         debug(LOG_INFO, "Sent %s an apology since auth server not online - no point sending them to auth server",
               peer_addr);
-		return evhttpd_gw_reply(req, AUTHSERVER_OFFLINE);
+		return evhttpd_gw_reply(req, evb_authserver_offline_page);
     }
 	
 	char *mac = (char *)arp_get(peer_addr);
+	char *req_url = evhttp_get_request_url (req); 
 	char *redir_url = evhttpd_get_full_redir_url(mac?mac:"ff:ff:ff:ff:ff:ff", peer_addr, req_url);
-
-	evb = evbuffer_new ();		
-	evhttp_add_header(evhttp_request_get_output_headers(req),
-		    "Content-Type", "text/html");
+	struct evbuffer evb = evbuffer_new ();	
+	
 	evbuffer_add_buffer(evb, wifidog_redir_html->evb_front);
-	
 	evbuffer_add_printf(evb, WIFIDOG_REDIR_HTML_CONTENT, redir_url);
-	
 	evbuffer_add_buffer(evb, wifidog_redir_html->evb_rear);
-	evhttp_send_reply (req, 200, "OK", evb);
+	
+	evhttpd_gw_reply (req, evb);
 		
 	free(req_url);
 	free(redir_url);
