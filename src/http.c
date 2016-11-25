@@ -170,8 +170,8 @@ http_callback_404(httpd * webserver, request * r, int error_code)
               r->clientAddr);
     } else {
 		/* Re-direct them to auth server */
-		char tmp_url[MAX_BUF] = {0};
-		char *redir_url = NULL;    
+		config_s *config = config_get_config();
+		char tmp_url[MAX_BUF] = {0};  
 		char *mac = arp_get(r->clientAddr);
 		
 		snprintf(tmp_url, (sizeof(tmp_url) - 1), "http://%s%s%s%s",
