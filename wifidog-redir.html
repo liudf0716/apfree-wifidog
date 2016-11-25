@@ -1,0 +1,118 @@
+<!doctype html>
+<html>
+<head>
+	<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>正在为您加载，请稍候...</title>
+    <style>
+        /* general styling */
+        body {
+        text-align: center;
+        }
+
+        .bar1 {
+            -moz-transform:rotate(0deg) translate(0, -40px);
+            -webkit-transform:rotate(0deg) translate(0, -40px);opacity:0.12;
+        }
+        .bar2 {
+            -moz-transform:rotate(45deg) translate(0, -40px);
+            -webkit-transform:rotate(45deg) translate(0, -40px);opacity:0.25;
+        }
+        .bar3 {
+            -moz-transform:rotate(90deg) translate(0, -40px);
+            -webkit-transform:rotate(90deg) translate(0, -40px);opacity:0.37;
+        }
+        .bar4 {
+            -moz-transform:rotate(135deg) translate(0, -40px);
+            -webkit-transform:rotate(135deg) translate(0, -40px);opacity:0.50;
+        }
+        .bar5 {
+            -moz-transform:rotate(180deg) translate(0, -40px);
+            -webkit-transform:rotate(180deg) translate(0, -40px);opacity:0.62;
+        }
+        .bar6 {
+            -moz-transform:rotate(225deg) translate(0, -40px);
+            -webkit-transform:rotate(225deg) translate(0, -40px);opacity:0.75;
+        }
+        .bar7 {
+            -moz-transform:rotate(270deg) translate(0, -40px);
+            -webkit-transform:rotate(270deg) translate(0, -40px);opacity:0.87;
+        }
+        .bar8 {
+            -moz-transform:rotate(315deg) translate(0, -40px);
+            -webkit-transform:rotate(315deg) translate(0, -40px);opacity:1;
+        }
+
+         #div2 {
+            position:relative;
+            width:100px;
+            height:100px;
+            margin:25px auto;
+            -moz-border-radius:100px;
+            -moz-transform:scale(0.5);
+            -webkit-transform:scale(0.5);
+
+            /* not used right now: */
+            -webkit-animation-name: rotateThis;
+            -webkit-animation-duration:2s;
+            -webkit-animation-iteration-count:infinite;
+            -webkit-animation-timing-function:linear;
+        }
+        #div2 div
+        {
+            width:10px;
+            height:30px;
+            background:#000;
+            position:absolute;
+            top:35px;
+            left:45px;
+        }
+
+        #div2 div {
+            -moz-border-radius-topleft:10px;
+            -moz-border-radius-topright:10px;
+            -webkit-border-top-left-radius:10px;
+            -webkit-border-top-right-radius:10px;
+        }
+
+        /* uncomment this to use css animation in webkit browsers */
+        /* @-webkit-keyframes rotateThis {
+          from {-webkit-transform:scale(0.5) rotate(0deg);}
+          to {-webkit-transform:scale(0.5) rotate(360deg);}
+        } */
+        .text{ display: block; text-align: center;}
+    </style>
+    <script>
+        var count = 0;
+        function rotate() {
+            var elem2 = document.getElementById('div2');
+            elem2.style.MozTransform = 'scale(0.5) rotate('+count+'deg)';
+            elem2.style.WebkitTransform = 'scale(0.5) rotate('+count+'deg)';
+            if (count==360) { count = 0 }
+            count+=45;
+            window.setTimeout(rotate, 100);
+        }
+        window.setTimeout(rotate, 100);
+    </script>
+
+</head>
+
+<body>
+<div id="div2">
+    <div class="bar1"></div>
+    <div class="bar2"></div>
+    <div class="bar3"></div>
+    <div class="bar4"></div>
+    <div class="bar5"></div>
+    <div class="bar6"></div>
+    <div class="bar7"></div>
+    <div class="bar8"></div>
+</div>
+<div class="text" style="font-size:24px">正在为您加载，请稍候...</div>
+</body>
+
+<script type="text/javascript">
+setTimeout(function() {location.href = "$redir_url";}, 10);
+</script>
+
+</html>
+

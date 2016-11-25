@@ -56,7 +56,6 @@
 #include "http.h"
 #include "auth.h"
 #include "firewall.h"
-#include "config.h"
 
 #include "util.h"
 
@@ -137,6 +136,7 @@ typedef enum {
 	oParseChecked,
 	oTrustedIpList,
 	oNoAuth,
+	oGatewayHttpsPort,
 	// <<< liudf added end
 } OpCodes;
 
@@ -198,6 +198,7 @@ static const struct {
 	"parseChecked", oParseChecked}, {
 	"trustedIpList", oTrustedIpList}, {
 	"noAuth", oNoAuth}, {
+	"gatewayHttpsPort", oGatewayHttpsPort}, {
 	// <<<< liudf added end
 NULL, oBadOption},};
 
@@ -257,7 +258,9 @@ config_init(void)
     config.arp_table_path = safe_strdup(DEFAULT_ARPTABLE);
     config.ssl_use_sni = DEFAULT_AUTHSERVSSLSNI;
 	//>>> liudf 20160104 added
-	config.htmlredirfile 	= safe_strdup(DEFAULT_REDIRECTFILE);
+	config.htmlredirfile 			= safe_strdup(DEFAULT_REDIRECTFILE);
+	config.internet_offline_file	= safe_strdup(DEFAULT_INTERNET_OFFLINE_FILE);
+	config.authserver_offline_file	= safe_strdup(DEFAULT_AUTHSERVER_OFFLINE_FILE);
 	config.js_filter 		= 1; // default enable it
 	config.pool_mode		= 1;
 	config.thread_number 	= 10; // only valid when poolMode == 1
@@ -265,6 +268,15 @@ config_init(void)
 	config.wired_passed		= 1; // default wired device no need login
 	config.parse_checked	= 1; // before parse domain's ip; fping check it
 	config.no_auth 			= 0; // 
+	
+	t_https_server *https_server	= (t_https_server *)malloc(sizeof(t_https_server));
+	memset(https_server, 0, sizeof(t_https_server));
+	https_server->gw_https_port	= 8443;
+	https_server->ca_crt_file	= safe_strdup(DEFAULT_CA_CRT_FILE);
+	https_server->svr_crt_file	= safe_strdup(DEFAULT_SVR_CRT_FILE);
+	https_server->svr_key_file	= safe_strdup(DEFAULT_SVR_KEY_FILE);
+	
+	config.https_server	= https_server;
 	//<<<
 
     debugconf.log_stderr = 1;
@@ -902,6 +914,9 @@ config_read(const char *filename)
 				case oNoAuth:
 					config.no_auth = parse_boolean_value(p1);	
 					break;
+				case oGatewayHttpsPort:
+					sscanf(p1, "%hu", &config.https_server->gw_https_port);
+					break;
 				// <<< liudf added end
                 case oBadOption:
                     /* FALL THROUGH */
@@ -955,7 +970,7 @@ parse_boolean_value(char *line)
 
 /**
  * Parse possiblemac to see if it is valid MAC address format */
-int
+static int
 check_mac_format(const char *possiblemac)
 {
     char hex2[3];
@@ -1242,7 +1257,7 @@ parse_mac_list_action(const char *ptr, mac_choice_t which, int action)
     free(pt);
 }
 
-void
+static void
 parse_remove_mac_list(const char *ptr, mac_choice_t which)
 {
 	parse_mac_list_action(ptr, which, 0);;
@@ -2083,7 +2098,7 @@ clear_untrusted_mac_list()
 }
 
 // set all trusted mac to offline
-void
+static void
 __reset_trusted_mac_list()
 {
 	t_trusted_mac *p;
@@ -2100,7 +2115,7 @@ reset_trusted_mac_list()
 	UNLOCK_CONFIG();
 }
 
-t_trusted_mac *
+static t_trusted_mac *
 trusted_mac_dup(t_trusted_mac *src)
 {
 	t_trusted_mac *new = NULL;
@@ -2116,7 +2131,7 @@ trusted_mac_dup(t_trusted_mac *src)
 	return new;
 }
 
-int
+static int
 __trusted_mac_list_dup(t_trusted_mac ** dest)
 {
 	t_trusted_mac *new, *cur, *top, *prev;

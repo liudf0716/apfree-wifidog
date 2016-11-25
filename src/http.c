@@ -55,7 +55,7 @@
 #include "util.h"
 #include "wd_util.h"
 
-#include "../config.h"
+#include "version.h"
 
 //>>> liudf added 20160104
 static char *redirect_html;
@@ -212,7 +212,7 @@ http_callback_404(httpd * webserver, request * r, int error_code)
 						  r->clientAddr, url);
         } else {
 			t_client *clt = NULL;
-            debug(LOG_INFO, "Got client MAC address for ip %s: %s", r->clientAddr, mac);
+            debug(LOG_DEBUG, "Got client MAC address for ip %s: %s", r->clientAddr, mac);
 	
             safe_asprintf(&urlFragment, "%sgw_address=%s&gw_port=%d&gw_id=%s&channel_path=%s&ssid=%s&ip=%s&mac=%s&url=%s",
                           auth_server->authserv_login_script_path_fragment,
@@ -236,7 +236,7 @@ http_callback_404(httpd * webserver, request * r, int error_code)
 				fw_deny(clt);
 				free(clt->ip);
 				clt->ip = safe_strdup(r->clientAddr);
-				fw_allow(clt, clt->fw_connection_state);
+				fw_allow(clt, FW_MARK_KNOWN);
 				UNLOCK_CLIENT_LIST();
 				http_send_redirect(r, tmp_url, "device has login");
             	free(urlFragment);
@@ -250,7 +250,7 @@ http_callback_404(httpd * webserver, request * r, int error_code)
         }
 		
         // if host is not in whitelist, maybe not in conf or domain'IP changed, it will go to here.
-        debug(LOG_INFO, "Check host %s is in whitelist or not", r->request.host);       // e.g. www.example.com
+        debug(LOG_DEBUG, "Check host %s is in whitelist or not", r->request.host);       // e.g. www.example.com
         t_firewall_rule *rule;
         //e.g. example.com is in whitelist
         // if request http://www.example.com/, it's not equal example.com.
@@ -287,7 +287,7 @@ http_callback_404(httpd * webserver, request * r, int error_code)
             }
         }
 		
-        debug(LOG_INFO, "Captured %s requesting [%s] and re-directing them to login page", r->clientAddr, url);
+        debug(LOG_DEBUG, "Captured %s requesting [%s] and re-directing them to login page", r->clientAddr, url);
 		if(config->js_filter)
 			http_send_js_redirect_ex(r, urlFragment);
 		else

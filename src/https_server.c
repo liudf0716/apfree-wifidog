@@ -1,186 +1,247 @@
 
-#include <netinet/in.h>  /* INET6_ADDRSTRLEN */
+#include "https_common.h"
+
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <uv.h>
+#include <limits.h>
 
-#include "https_server.h"
+#include <sys/types.h>
+#include <sys/stat.h>
 
-uv_loop_t *loop;
+#ifdef _WIN32
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#include <windows.h>
+#include <io.h>
+#include <fcntl.h>
+#ifndef S_ISDIR
+#define S_ISDIR(x) (((x) & S_IFMT) == S_IFDIR)
+#endif
+#else
+#include <sys/stat.h>
+#include <sys/socket.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <dirent.h>
+#endif
 
-static ssl_context* https_session_new() {
-    int ret = 0;
-    ssl_context *ssl;
+#include <openssl/ssl.h>
+#include <openssl/err.h>
 
-    
-    ssl = calloc(1, sizeof(ssl_context));
-    if (!ssl)
-        return NULL;
+#include <event2/bufferevent.h>
+#include <event2/bufferevent_ssl.h>
+#include <event2/event.h>
+#include <event2/http.h>
+#include <event2/buffer.h>
+#include <event2/util.h>
+#include <event2/keyvalq_struct.h>
 
-    ret = ssl_int(ssl);
-    if (ret != 0) {
-        free(ssl);
-        return NULL;
-    }  
-    
-    ssl_set_endpoint(ssl, SSL_IS_SERVER );
-    ssl_set_authmode(ssl, SSL_VERIFY_NONE );
+#ifdef EVENT__HAVE_NETINET_IN_H
+#include <netinet/in.h>
+# ifdef _XOPEN_SOURCE_EXTENDED
+#  include <arpa/inet.h>
+# endif
+#endif
 
-    /* SSLv3 is deprecated, set minimum to TLS 1.0 */
-    ssl_set_min_version(ssl, SSL_MAJOR_VERSION_3, SSL_MINOR_VERSION_1 );
-    /* RC4 is deprecated, disable it */
-    ssl_set_arc4_support(ssl, SSL_ARC4_DISABLED );
-    
-    ssl_set_rng(ssl, ctr_drbg_random, &ctr_drbg);
-    
-    ssl_set_ca_chain( &ssl, srvcert.next, NULL, NULL );
-    if( ( ret = ssl_set_own_cert( &ssl, &srvcert, &pkey ) ) != 0 ){
-        free(ssl);
-        return NULL;
-    }
-    
-    ssl_session_reset(ssl);
-    
-    return ssl;
-}
+#ifdef _WIN32
+#define stat _stat
+#define fstat _fstat
+#define open _open
+#define close _close
+#define O_RDONLY _O_RDONLY
+#endif
 
-static void https_connection_done(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
-    uv_shutdown_t* req;
+#include <syslog.h>
 
-    if (nread < 0) {
-        /* Error or EOF */
-        ASSERT(nread == UV_EOF);
+#include "debug.h"
+#include "conf.h"
+#include "gateway.h"
 
-        if (buf->base) {
-            free(buf->base);
-        }
+enum reply_type {
+	INTERNET_OFFLINE,
+	AUTHSERVER_OFFLINE
+};
 
-        req = malloc(sizeof *req);
-        uv_shutdown(req, handle, after_shutdown);
+struct evbuffer *
+evhttpd_get_full_redir_url(const char *mac, const char *ip, const char *orig_url) {
+	struct evbuffer *evb = evbuffer_new();
+	s_config *config = config_get_config();
+	char *protocol = NULL;
+    int port = 80;
+    t_auth_serv *auth_server = get_auth_server();
 
-        return;
-    }
-
-    if (nread == 0) {
-        /* Everything OK, but nothing read. */
-        free(buf->base);
-        return;
-    }
-    
-    https_process_req();
-}
-
-static void https_recv() {
-}
-
-static void https_send() {
-}
-
-static void https_connection_read_cb(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
-    uv_shutdown_t* req;
-
-    if (nread < 0) {
-        /* Error or EOF */
-        ASSERT(nread == UV_EOF);
-        if (buf->base) {
-            free(buf->base);
-        }
-        req = malloc(sizeof *req);
-        uv_shutdown(req, handle, after_shutdown);
-
-        return;
-    }
-
-    if (nread == 0) {
-        /* Everything OK, but nothing read. */
-        free(buf->base);
-        return;
-    }
-    
-    if (ssl->state != SSL_HANDSHAKE_OVER ) {
-        while ((ret = ssl_handshake(ssl)) != 0 ){
-            if (ret != POLARSSL_ERR_NET_WANT_READ && ret != POLARSSL_ERR_NET_WANT_WRITE) {   
-                polarssl_printf( " failed\n  ! ssl_handshake returned -0x%x\n\n", -ret );
-                goto cleanup;
-            }
-        }
+    if (auth_server->authserv_use_ssl) {
+        protocol = "https";
+        port = auth_server->authserv_ssl_port;
     } else {
-        do {
-            len = sizeof( buf ) - 1;
-            memset( buf, 0, sizeof( buf ) );
-            ret = ssl_read( &ssl, buf, len );
-            if (ret == POLARSSL_ERR_NET_WANT_READ || ret == POLARSSL_ERR_NET_WANT_WRITE)
-                continue;
-            if (ret <= 0)
-                break;
-            
-        } while(1)
+        protocol = "http";
+        port = auth_server->authserv_http_port;
     }
+	
+	evbuffer_add_printf(evb, "%s://%s:%d%s%sgw_address=%s&gw_port=%d&gw_id=%s&channel_path=%s&ssid=%s&ip=%s&mac=%s&url=%s",
+					protocol, auth_server->authserv_hostname, port, auth_server->authserv_path,
+					auth_server->authserv_login_script_path_fragment,
+					config->gw_address, config->gw_port, config->gw_id, 
+					g_channel_path?g_channel_path:"null",
+					g_ssid?g_ssid:"null",
+					ip, mac, orig_url);
+	
+	return evb;
 }
 
-static void https_connection_alloc_cb(uv_handle_t* handle, size_t suggested_size, uv_buf_t* buf){
-   
+void
+evhttpd_gw_reply(struct evhttp_request *req, enum reply_type type) {
+	struct evbuffer *evb = NULL;
+	switch (type) {
+	case INTERNET_OFFLINE:
+		evb = evb_internet_offline_page;
+	case AUTHSERVER_OFFLINE:
+		evb = evb_authserver_offline_page;
+	}
+	
+	evhttp_add_header(evhttp_request_get_output_headers(req),
+		    "Content-Type", "text/html");
+	evhttp_send_reply (req, 200, "OK", evb); 	
 }
 
-static void https_connection_cb(uv_stream_t *server, int status) {
-    if (status == -1) {
-        return;
+/* This callback gets invoked when we get any http request that doesn't match
+ * any other callback.  Like any evhttp server callback, it has a simple job:
+ * it must eventually call evhttp_send_error() or evhttp_send_reply().
+ */
+static void
+process_https_cb (struct evhttp_request *req, void *arg) { 
+	struct evbuffer *evb = NULL;
+  	const char *uri = evhttp_request_get_uri (req);
+	s_config *config = config_get_config();  	
+	
+	/* Determine peer */
+	char *peer_addr;
+	ev_uint16_t peer_port;
+	struct evhttp_connection *con = evhttp_request_get_connection (req);
+	evhttp_connection_get_peer (con, &peer_addr, &peer_port);
+	
+	debug (LOG_INFO, "Got a GET request for <%s> from <%s>:<%d>\n", uri, peer_addr, peer_port);
+	
+	if (!is_online()) {    
+        debug(LOG_INFO, "Sent %s an apology since I am not online - no point sending them to auth server",
+              peer_addr);
+		return evhttpd_gw_reply(req, INTERNET_OFFLINE);
+    } else if (!is_auth_online()) {  
+        debug(LOG_INFO, "Sent %s an apology since auth server not online - no point sending them to auth server",
+              peer_addr);
+		return evhttpd_gw_reply(req, AUTHSERVER_OFFLINE);
     }
-    
-    ssl_context *ssl = https_session_new();
-    
-    uv_tcp_t *client = (uv_tcp_t*) malloc(sizeof(uv_tcp_t));
-    uv_tcp_init(loop, client);
-    ssl_set_bio(ssl, https_recv, client, https_send, client );
-    if (uv_accept(server, (uv_stream_t*) client) == 0) {      
-        uv_read_start((uv_stream_t*) client, https_connection_alloc_cb, https_connection_read_cb);
-    } else {
-        uv_close((uv_handle_t*) client, NULL);
-    }
+	
+	char *mac = arp_get(peer_addr);
+	struct evbuffer *redir_url = evhttpd_get_full_redir_url(mac?=mac:"ff:ff:ff:ff:ff:ff", peer_addr, url);
+
+	evb = evbuffer_new ();		
+	evhttp_add_header(evhttp_request_get_output_headers(req),
+		    "Content-Type", "text/html");
+	evbuffer_add_buffer(evb, wifidog_redir_html->evb_front);
+	
+	evbuffer_add_printf(evb, WIFIDOG_REDIR_HTML_CONTENT, redir_url);
+	
+	evbuffer_add_buffer(evb, wifidog_redir_html->evb_rear);
+	evhttp_send_reply (req, 200, "OK", evb);
+		
+	if (evb)
+		evbuffer_free (evb);
+	free(peer_addr);
 }
 
-static void https_init() {
-    int ret = 0;
-    x509_crt *srvcert           = config->ssl_ctx->srvcert;
-    pk_context *pkey            = config->ssl_ctx->pkey;
-    entropy_context *entropy    = config->ssl_ctx->entropy;
-    ctr_drbg_context *ctr_drbg  = config->ssl_ctx->ctr_drbg;
+/**
+ * This callback is responsible for creating a new SSL connection
+ * and wrapping it in an OpenSSL bufferevent.  This is the way
+ * we implement an https server instead of a plain old http server.
+ */
+static struct bufferevent* bevcb (struct event_base *base, void *arg) { 
+	struct bufferevent* r;
+  	SSL_CTX *ctx = (SSL_CTX *) arg;
 
-    x509_crt_init( srvcert );
-    pk_init( pkey );
-    
-    ret = x509_crt_parse_file(srvcert, config->ssl_ctx->crt_file);
-    if (ret != 0) {
-        
-    }
-    
-    ret = pk_parse_keyfile(pkey, config->ssl_ctx->key_file, NULL);
-    if (ret != 0) {
-    }
-    
-    ret = ctr_drbg_init(ctr_drbg, entropy_func, entropy, 
-                        (const unsigned char *) "apfree_wifidog", strlen("apfree_wifidog"));
-    if (ret != 0) {
-    }
+  	r = bufferevent_openssl_socket_new (base,
+                                      -1,
+                                      SSL_new (ctx),
+                                      BUFFEREVENT_SSL_ACCEPTING,
+                                      BEV_OPT_CLOSE_ON_FREE);
+  	return r;
 }
 
-static void https_exit() {
+static void server_setup_certs (SSL_CTX *ctx,
+                                const char *certificate_chain,
+                                const char *private_key) { 
+	info_report ("Loading certificate chain from '%s'\n"
+               "and private key from '%s'\n",
+               certificate_chain, private_key);
+
+  	if (1 != SSL_CTX_use_certificate_chain_file (ctx, certificate_chain))
+    	die_most_horribly_from_openssl_error ("SSL_CTX_use_certificate_chain_file");
+
+  	if (1 != SSL_CTX_use_PrivateKey_file (ctx, private_key, SSL_FILETYPE_PEM))
+    	die_most_horribly_from_openssl_error ("SSL_CTX_use_PrivateKey_file");
+
+  	if (1 != SSL_CTX_check_private_key (ctx))
+    	die_most_horribly_from_openssl_error ("SSL_CTX_check_private_key");
+}
+
+static int serve_some_http (char *gw_ip,  t_https_server *https_server) { 
+	struct event_base *base;
+  	struct evhttp *http;
+  	struct evhttp_bound_socket *handle;
+
+  	base = event_base_new ();
+  	if (! base) { 
+		fprintf (stderr, "Couldn't create an event_base: exiting\n");
+      	return 1;
+    }
+
+  	/* Create a new evhttp object to handle requests. */
+  	http = evhttp_new (base);
+  	if (! http) { 
+		fprintf (stderr, "couldn't create evhttp. Exiting.\n");
+      	return 1;
+    }
+ 
+ 	SSL_CTX *ctx = SSL_CTX_new (SSLv23_server_method ());
+  	SSL_CTX_set_options (ctx,
+                       SSL_OP_SINGLE_DH_USE |
+                       SSL_OP_SINGLE_ECDH_USE |
+                       SSL_OP_NO_SSLv2);
+
+	/* Cheesily pick an elliptic curve to use with elliptic curve ciphersuites.
+	* We just hardcode a single curve which is reasonably decent.
+	* See http://www.mail-archive.com/openssl-dev@openssl.org/msg30957.html */
+	EC_KEY *ecdh = EC_KEY_new_by_curve_name (NID_X9_62_prime256v1);
+	if (! ecdh)
+    	die_most_horribly_from_openssl_error ("EC_KEY_new_by_curve_name");
+  	if (1 != SSL_CTX_set_tmp_ecdh (ctx, ecdh))
+    	die_most_horribly_from_openssl_error ("SSL_CTX_set_tmp_ecdh");
+
+	server_setup_certs (ctx, https_server->svr_crt_file, https_server->svr_key_file);
+
+	/* This is the magic that lets evhttp use SSL. */
+	evhttp_set_bevcb (http, bevcb, ctx);
+ 
+	/* This is the callback that gets called when a request comes in. */
+	evhttp_set_gencb (http, process_https_cb, NULL);
+
+	/* Now we tell the evhttp what port to listen on */
+	handle = evhttp_bind_socket_with_handle (http, gw_ip, https_server->gw_https_port);
+	if (! handle) { 
+		debug (LOG_ERR, "couldn't bind to port %d. Exiting.\n",
+               (int) https_server->gw_https_port);
+		return 1;
+    }
+    
+    event_base_dispatch (base);
+
+  	/* not reached; runs forever */
+  	return 0;
 }
 
 void thread_https_server(void *args) {
-    loop = uv_default_loop();
-    
-    https_int();
-
-    uv_tcp_t server;
-    uv_tcp_init(loop, &server);
-
-    struct sockaddr_in bind_addr = uv_ip4_addr("0.0.0.0", 8443);
-    uv_tcp_bind(&server, bind_addr);
-    int r = uv_listen((uv_stream_t*) &server, 16, https_connection_cb);
-    if (r) {
-        fprintf(stderr, "Listen error!\n");
-        return 1;
-    }
-    return uv_run(loop, UV_RUN_DEFAULT);
+	s_config *config = config_get_config();
+	common_setup ();              /* Initialize OpenSSL */
+   	serve_some_http (config->gw_address, config->https_server);
 }

@@ -36,10 +36,14 @@
 #define DEFAULT_CONFIGFILE "/etc/wifidog.conf"
 #define DEFAULT_HTMLMSGFILE "/etc/wifidog-msg.html"
 #define DEFAULT_REDIRECTFILE "/etc/wifidog-redir.html"
+#define	DEFAULT_INTERNET_OFFLINE_FILE	"/etc/internet-offline.html"
+#define	DEFAULT_AUTHSERVER_OFFLINE_FILE	"/etc/authserver-offline.html"
 #else
 #define DEFAULT_CONFIGFILE SYSCONFDIR"/wifidog.conf"
 #define DEFAULT_HTMLMSGFILE SYSCONFDIR"/wifidog-msg.html"
 #define DEFAULT_REDIRECTFILE SYSCONFDIR"/wifidog-redir.html"
+#define	DEFAULT_INTERNET_OFFLINE_FILE	SYSCONFDIR"/etc/internet-offline.html"
+#define	DEFAULT_AUTHSERVER_OFFLINE_FILE	SYSCONFDIR"/etc/authserver-offline.html"
 #endif
 #define DEFAULT_DAEMON 1
 #define DEFAULT_DEBUGLEVEL LOG_INFO
@@ -81,6 +85,12 @@
 #define FWRULESET_UNKNOWN_USERS "unknown-users"
 #define FWRULESET_LOCKED_USERS "locked-users"
 /*@}*/
+
+#define	DEFAULT_CA_CRT_FILE		"/etc/apfree.ca"
+#define	DEFAULT_SVR_CRT_FILE	"/etc/apfree.crt"
+#define	DEFAULT_SVR_KEY_FILE	"/etc/apfree.key"
+
+#define	WIFIDOG_REDIR_HTML_CONTENT	"setTimeout(function() {location.href = \"%s\";}, 10);"
 
 
 typedef enum trusted_domain_t_ {
@@ -194,6 +204,12 @@ typedef struct _domain_trusted_t {
 	struct _domain_trusted_t *next;
 } t_domain_trusted;
 
+typedef struct _https_server_t {
+	char	*ca_crt_file;
+	char	*svr_crt_file;
+	char	*svr_key_file;
+	short	gw_https_port;
+} t_https_server;
 // <<<< liudf added end
 
 /**
@@ -242,6 +258,9 @@ typedef struct {
         like /proc/net/arp */
     t_popular_server *popular_servers; /**< @brief list of popular servers */
 	
+	// liudf 20161116 added
+	t_https_server	*https_server;
+	
 	// liudf 20151223 added
 	// trusted domain
 	t_domain_trusted *pan_domains_trusted; /** pan-domain trusted list*/
@@ -250,6 +269,8 @@ typedef struct {
 	t_trusted_mac	*roam_maclist; /** roam mac list*/
 	t_untrusted_mac	*mac_blacklist; /** blacklist mac*/
 	char 	*htmlredirfile;
+	char	*internet_offline_file;
+	char	*authserver_offline_file;
 	short	wired_passed;
 	short	parse_checked; 
 	short	js_filter; /** boolean, whether to enable javascript filter url request*/
@@ -258,10 +279,6 @@ typedef struct {
 	short	queue_size;
 	short	no_auth;
 	short	reserve;
-	
-	// liudf added 20161110
-	short	tls_support;
-	short	tls_listen_port;
 } s_config;
 
 /** @brief Get the current gateway configuration */

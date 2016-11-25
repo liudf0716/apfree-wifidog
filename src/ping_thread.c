@@ -44,7 +44,6 @@
 #include <signal.h>
 #include <errno.h>
 
-#include "../config.h"
 #include "safe.h"
 #include "common.h"
 #include "conf.h"
@@ -56,7 +55,7 @@
 #include "gateway.h"
 #include "simple_http.h"
 #include "wd_util.h"
-
+#include "version.h"
 #include "httpd_priv.h"
 
 static void ping(void);
@@ -204,10 +203,10 @@ ping(void)
 	}
 	
 	if(!g_type) {
-		if ((fh = popen("/bin/cat /var/sysinfo/board_type", "r"))) {
+		if ((fh = fopen("/var/sysinfo/board_type", "r"))) {
 			char name[32] = {0};
-			fgets(name, 31, fh);
-			pclose(fh);
+			fgets(name, 32, fh);
+			fclose(fh);
 			fh = NULL;
 			trim_newline(name);
 			if(strlen(name) > 0)
@@ -216,10 +215,10 @@ ping(void)
 	}
 
 	if(!g_name) {
-		if ((fh = popen("/bin/cat /var/sysinfo/board_name", "r"))) {
+		if ((fh = fopen("/var/sysinfo/board_name", "r"))) {
 			char name[32] = {0};
-			fgets(name, 31, fh);
-			pclose(fh);
+			fgets(name, 32, fh);
+			fclose(fh);
 			fh = NULL;
 			trim_newline(name);
 			if(strlen(name) > 0)
@@ -233,13 +232,13 @@ ping(void)
 			g_channel_path = NULL;
 		}
 
-		if ((fh = popen("/sbin/uci get firmwareinfo.@version[0].channel_path", "r"))) {
+		if ((fh = popen("/sbin/uci get firmwareinfo.@version[0].channel_path 2> /dev/null", "r"))) {
 			char channel_path[128] = {0};
 			fgets(channel_path, 127, fh);
 			pclose(fh);
 			fh = NULL;
 			trim_newline(channel_path);
-        	debug(LOG_INFO, "g_channel_path is %s", g_channel_path);
+        	debug(LOG_DEBUG, "g_channel_path is %s", g_channel_path);
 			if(strlen(channel_path) > 0)
 				g_channel_path = safe_strdup(channel_path);
 		}

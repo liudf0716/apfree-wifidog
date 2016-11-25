@@ -62,7 +62,6 @@
 #include "httpd.h"
 #include "wdctl_thread.h"
 
-#include "../config.h"
 
 #define LOCK_GHBN() do { \
 	debug(LOG_DEBUG, "Locking wd_gethostbyname()"); \
@@ -76,7 +75,6 @@
 	debug(LOG_DEBUG, "wd_gethostbyname() unlocked"); \
 } while (0)
 
-#include "../config.h"
 #ifdef __ANDROID__
 #define WD_SHELL_PATH "/system/bin/sh"
 #else
@@ -184,7 +182,7 @@ get_iface_ip(const char *ifname)
     u_int32_t ip;
 
     /* Create a socket */
-    if ((sockd = socket(AF_INET, SOCK_RAW, htons(0x8086))) < 0) {
+    if ((sockd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
         debug(LOG_ERR, "socket(): %s", strerror(errno));
         return NULL;
     }

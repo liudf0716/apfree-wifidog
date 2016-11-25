@@ -18,6 +18,8 @@ ApFree WiFiDog 完全兼容现有的 wifidog 协议，并支持如下功能：
 
 7. 支持线程池模式
 
+8. 支持https跳转
+
 ----
 
 ## 已知bug：

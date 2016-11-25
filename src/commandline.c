@@ -34,8 +34,8 @@
 #include "safe.h"
 #include "conf.h"
 #include "commandline.h"
+#include "version.h"
 
-#include "../config.h"
 
 /*
  * Holds an argv that could be passed to exec*() if we restart ourselves
