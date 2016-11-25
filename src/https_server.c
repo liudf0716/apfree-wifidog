@@ -54,6 +54,7 @@
 
 #include <syslog.h>
 
+#include "https_server.h"
 #include "debug.h"
 #include "conf.h"
 #include "gateway.h"
