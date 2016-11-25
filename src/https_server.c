@@ -149,6 +149,8 @@ evhttp_gw_reply_js_redirect(struct evhttp_request *req, const char *peer_addr) {
 	char *redir_url = evhttpd_get_full_redir_url(mac!=NULL?mac:"ff:ff:ff:ff:ff:ff", peer_addr, req_url);
 	struct evbuffer *evb = evbuffer_new ();	
 	
+	debug (LOG_INFO, "Got a GET request for <%s> from <%s>:<%d>\n", req_url, peer_addr);
+	
 	evbuffer_add_buffer(evb, wifidog_redir_html->evb_front);
 	evbuffer_add_printf(evb, WIFIDOG_REDIR_HTML_CONTENT, redir_url);
 	evbuffer_add_buffer(evb, wifidog_redir_html->evb_rear);
@@ -172,8 +174,6 @@ process_https_cb (struct evhttp_request *req, void *arg) {
 	ev_uint16_t peer_port;
 	struct evhttp_connection *con = evhttp_request_get_connection (req);
 	evhttp_connection_get_peer (con, &peer_addr, &peer_port);
-	
-	debug (LOG_INFO, "Got a GET request for <%s> from <%s>:<%d>\n", req_url, peer_addr, peer_port);
 	
 	if (!is_online()) {    
         debug(LOG_INFO, "Sent %s an apology since I am not online - no point sending them to auth server",
