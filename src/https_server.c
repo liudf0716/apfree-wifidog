@@ -138,7 +138,7 @@ evhttpd_gw_reply(struct evhttp_request *req, enum reply_type type) {
 static void
 process_https_cb (struct evhttp_request *req, void *arg) { 
 	struct evbuffer *evb = NULL;
-  	const char *req_url = evhttp_get_request_url (req); 	
+  	char *req_url = evhttp_get_request_url (req); 	
 	
 	/* Determine peer */
 	char *peer_addr;
