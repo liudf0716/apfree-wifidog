@@ -76,7 +76,7 @@
 struct redir_file_buffer {
     struct evbuffer *evb_front;
     struct evbuffer *evb_rear;
-} ;
+};
 
 struct evbuffer	*evb_internet_offline_page 		= NULL;
 struct evbuffer *evb_authserver_offline_page	= NULL;
