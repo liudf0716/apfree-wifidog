@@ -24,6 +24,7 @@
   @file fw_iptables.c
   @brief Firewall iptables functions
   @author Copyright (C) 2004 Philippe April <papril777@yahoo.com>
+  @author Copyright (C) 2016 Dengfeng Liu <liudengfeng@kunteng.org>
  */
 
 #define _GNU_SOURCE
@@ -109,9 +110,7 @@ iptables_insert_gateway_id(char **input)
     *input = buffer;
 }
 
-/** @internal
- * */
-static int
+int
 add_mac_to_ipset(const char *name, const char *mac, int timeout)
 {
 	char *ipset_name =  NULL;
