@@ -46,6 +46,10 @@ extern time_t started_time;
 /** @brief The internal web server */
 extern httpd *webserver;
 
+void sigchld_handler(int s);
+void append_x_restartargv(void);
+
+
 /** @brief actual program entry point. */
 int gw_main(int, char **);
 
