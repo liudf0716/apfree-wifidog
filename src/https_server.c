@@ -21,8 +21,9 @@
 
 /* $Id$ */
 /** @file https_server.c
-  @brief HTTP IO functions
+  @brief 
   @author Copyright (C) 2016 Dengfeng Liu <liudengfeng@kunteng.org>
+  */
 
 #include "https_common.h"
 
