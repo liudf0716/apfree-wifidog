@@ -102,11 +102,8 @@ evhttpd_get_full_redir_url(const char *mac, const char *ip, const char *orig_url
 					g_ssid?g_ssid:"null",
 					ip, mac, orig_url);
 	
-	size_t len = evbuffer_get_length(evb)+1;
-	char *redir_url = (char *)malloc(len);
-	memset(redir_url, 0, len);
-	evbuffer_copyout(evb, redir_url, len);
-	
+
+	char *redir_url = evb_2_string(evb);
 	evbuffer_free(evb);
 	
 	return redir_url;
