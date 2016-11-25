@@ -295,8 +295,9 @@ http_send_redirect(request * r, const char *url, const char *text)
     httpdAddHeader(r, header);
     free(response);
     free(header);
-    safe_asprintf(&message, "Please <a href='%s'>click here</a>.", url);
-    send_http_page(r, text ? text : "Redirection to message", message);
+
+    safe_asprintf(&message, "<html><body>Please <a href='%s'>click here</a>.</body></html>", url);
+    httpdOutPutDirect(r, message);
 	_httpd_closeSocket(r);
     free(message);
 }
@@ -471,11 +472,9 @@ http_send_js_redirect(request *r, const char *redir_url)
 void
 http_send_apple_redirect(request *r, const char *redir_url)
 {
-	char *url = _get_full_url(redir_url);
-    httpdAddVariable(r, "redir_url", url);
+    httpdAddVariable(r, "redir_url", redir_url);
     httpdOutput(r, apple_redirect_msg);
 	_httpd_closeSocket(r);
-	free(url);
 }
 
 void
