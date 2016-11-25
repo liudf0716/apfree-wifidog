@@ -113,7 +113,6 @@ _special_process(request *r, const char *mac, const char *redir_url)
 {
 	t_offline_client *o_client = NULL;
 
-	
 	if(_is_apple_captive(r->request.host)) {
 		int interval = 0;
 		LOCK_OFFLINE_CLIENT_LIST();
@@ -156,15 +155,6 @@ _special_process(request *r, const char *mac, const char *redir_url)
 void
 http_callback_404(httpd * webserver, request * r, int error_code)
 {  	
-    /* 
-     * XXX Note the code below assumes that the client's request is a plain
-     * http request to a standard port. At any rate, this handler is called only
-     * if the internet/auth server is down so it's not a huge loss, but still.
-     */
-    snprintf(tmp_url, (sizeof(tmp_url) - 1), "http://%s%s%s%s",
-             r->request.host, r->request.path, r->request.query[0] ? "?" : "", r->request.query);
-    url = httpdUrlEncode(tmp_url);
-
     if (!is_online()) {
 		char *msg = evb_2_string(evb_internet_offline_page);
         send_http_page_direct(r, msg);
@@ -182,6 +172,10 @@ http_callback_404(httpd * webserver, request * r, int error_code)
 		char *redir_url = NULL;
         /* Re-direct them to auth server */
 		mac = arp_get(r->clientAddr);
+		
+		snprintf(tmp_url, (sizeof(tmp_url) - 1), "http://%s%s%s%s",
+             r->request.host, r->request.path, r->request.query[0] ? "?" : "", r->request.query);
+    	url = httpdUrlEncode(tmp_url);
 		
 		redir_url = evhttpd_get_full_redir_url(mac!=NULL?mac:"ff:ff:ff:ff:ff:ff", peer_addr, url);
         if (mac) {                 
