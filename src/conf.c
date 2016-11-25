@@ -24,6 +24,7 @@
   @brief Config file parsing
   @author Copyright (C) 2004 Philippe April <papril777@yahoo.com>
   @author Copyright (C) 2007 Benoit Grégoire, Technologies Coeus inc.
+  @author Copyright (C) 2016 Dengfeng Liu <liudengfeng@kunteng.org>
  */
 
 #define _GNU_SOURCE
