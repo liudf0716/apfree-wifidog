@@ -68,15 +68,16 @@ enum reply_type {
 // !!!remember to free the return url
 char *
 evhttp_get_request_url(struct evhttp_request *req) {
+	struct evhttp_uri *uri = evhttp_request_get_evhttp_uri(req);
 	char *url = malloc(256); // only get 256 char from request url
 	memset(url, 0, 256);
 	
 	snprintf(url, 256, "%s://%s:%d/%s/%s",
-		evhttp_uri_get_scheme(req->uri_elems),
-		evhttp_uri_get_host(req->uri_elems),
-		evhttp_uri_get_scheme(req->uri_elems),
-		evhttp_uri_get_path(req->uri_elems),
-		evhttp_uri_get_query(req->uri_elems));
+		evhttp_uri_get_scheme(uri),
+		evhttp_uri_get_host(uri),
+		evhttp_uri_get_scheme(uri),
+		evhttp_uri_get_path(uri),
+		evhttp_uri_get_query(uri));
 	return url;
 }
 
