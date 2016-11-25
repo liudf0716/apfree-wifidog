@@ -56,6 +56,7 @@
 #include "util.h"
 #include "wd_util.h"
 #include "gateway.h"
+#include "https_server.h"
 
 #include "version.h"
 
