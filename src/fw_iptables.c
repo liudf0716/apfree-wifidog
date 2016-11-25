@@ -242,7 +242,7 @@ iptables_do_command(const char *format, ...)
 	if(fw_quiet == 2) {
     	debug(LOG_DEBUG, "fill file command: %s", cmd);
 		free(cmd);
-		return;
+		return 0;
 	}
 
     debug(LOG_DEBUG, "Executing command: %s", cmd);
