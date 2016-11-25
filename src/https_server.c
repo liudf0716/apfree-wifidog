@@ -116,6 +116,25 @@ evhttpd_gw_reply(struct evhttp_request *req, struct evbuffer *evb) {
 	evhttp_send_reply (req, 200, "OK", evb); 	
 }
 
+void
+evhttp_gw_reply_js_redirect(struct evhttp_request *req, const char *peer_addr) {
+	char *mac = (char *)arp_get(peer_addr);
+	char *req_url = evhttp_get_request_url (req); 
+	char *redir_url = evhttpd_get_full_redir_url(mac!=NULL?mac:"ff:ff:ff:ff:ff:ff", peer_addr, req_url);
+	struct evbuffer *evb = evbuffer_new ();	
+	
+	evbuffer_add_buffer(evb, wifidog_redir_html->evb_front);
+	evbuffer_add_printf(evb, WIFIDOG_REDIR_HTML_CONTENT, redir_url);
+	evbuffer_add_buffer(evb, wifidog_redir_html->evb_rear);
+	
+	evhttpd_gw_reply (req, evb);
+		
+	free(mac);
+	free(req_url);
+	free(redir_url);
+	evbuffer_free (evb);
+}
+
 /* This callback gets invoked when we get any http request that doesn't match
  * any other callback.  Like any evhttp server callback, it has a simple job:
  * it must eventually call evhttp_send_error() or evhttp_send_reply().
@@ -133,27 +152,15 @@ process_https_cb (struct evhttp_request *req, void *arg) {
 	if (!is_online()) {    
         debug(LOG_INFO, "Sent %s an apology since I am not online - no point sending them to auth server",
               peer_addr);
-		return evhttpd_gw_reply(req, evb_internet_offline_page);
+		evhttpd_gw_reply(req, evb_internet_offline_page);
     } else if (!is_auth_online()) {  
         debug(LOG_INFO, "Sent %s an apology since auth server not online - no point sending them to auth server",
               peer_addr);
-		return evhttpd_gw_reply(req, evb_authserver_offline_page);
-    }
-	
-	char *mac = (char *)arp_get(peer_addr);
-	char *req_url = evhttp_get_request_url (req); 
-	char *redir_url = evhttpd_get_full_redir_url(mac!=NULL?mac:"ff:ff:ff:ff:ff:ff", peer_addr, req_url);
-	struct evbuffer evb = evbuffer_new ();	
-	
-	evbuffer_add_buffer(evb, wifidog_redir_html->evb_front);
-	evbuffer_add_printf(evb, WIFIDOG_REDIR_HTML_CONTENT, redir_url);
-	evbuffer_add_buffer(evb, wifidog_redir_html->evb_rear);
-	
-	evhttpd_gw_reply (req, evb);
+		evhttpd_gw_reply(req, evb_authserver_offline_page);
+    } else {
+		evhttp_gw_reply_js_redirect(req, peer_addr);
+	}
 		
-	free(req_url);
-	free(redir_url);
-	evbuffer_free (evb);
 	free(peer_addr);
 }
 
