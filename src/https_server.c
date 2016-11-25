@@ -57,13 +57,30 @@
 #include "debug.h"
 #include "conf.h"
 #include "gateway.h"
+#include "wd_util.h"
 
 enum reply_type {
 	INTERNET_OFFLINE,
 	AUTHSERVER_OFFLINE
 };
 
-struct evbuffer *
+// !!!remember to free the return url
+char *
+evhttp_get_request_url(struct evhttp_request *req) {
+	char *url = malloc(256); // only get 256 char from request url
+	memset(url, 0, 256);
+	
+	snprintf(url, 256, "%s://%s:%d/%s/%s",
+		evhttp_uri_get_scheme(req->uri_elems),
+		evhttp_uri_get_host(req->uri_elems),
+		evhttp_uri_get_scheme(req->uri_elems),
+		evhttp_uri_get_path(req->uri_elems),
+		evhttp_uri_get_query(req->uri_elems));
+	return url;
+}
+
+// !!!remember to free the return redir_url
+char *
 evhttpd_get_full_redir_url(const char *mac, const char *ip, const char *orig_url) {
 	struct evbuffer *evb = evbuffer_new();
 	s_config *config = config_get_config();
@@ -87,7 +104,14 @@ evhttpd_get_full_redir_url(const char *mac, const char *ip, const char *orig_url
 					g_ssid?g_ssid:"null",
 					ip, mac, orig_url);
 	
-	return evb;
+	size_t len = evbuffer_get_length(evb)+1;
+	char *redir_url = (char *)malloc(len);
+	memset(redir_url, 0, len);
+	evbuffer_copyout(evb, redir_url, len);
+	
+	evbuffer_free(evb);
+	
+	return redir_url;
 }
 
 void
@@ -112,8 +136,7 @@ evhttpd_gw_reply(struct evhttp_request *req, enum reply_type type) {
 static void
 process_https_cb (struct evhttp_request *req, void *arg) { 
 	struct evbuffer *evb = NULL;
-  	const char *uri = evhttp_request_get_uri (req);
-	s_config *config = config_get_config();  	
+  	const char *req_url = evhttp_get_request_url (req); 	
 	
 	/* Determine peer */
 	char *peer_addr;
@@ -133,8 +156,8 @@ process_https_cb (struct evhttp_request *req, void *arg) {
 		return evhttpd_gw_reply(req, AUTHSERVER_OFFLINE);
     }
 	
-	char *mac = arp_get(peer_addr);
-	struct evbuffer *redir_url = evhttpd_get_full_redir_url(mac?=mac:"ff:ff:ff:ff:ff:ff", peer_addr, url);
+	char *mac = (char *)arp_get(peer_addr);
+	char *redir_url = evhttpd_get_full_redir_url(mac?mac:"ff:ff:ff:ff:ff:ff", peer_addr, req_url);
 
 	evb = evbuffer_new ();		
 	evhttp_add_header(evhttp_request_get_output_headers(req),
@@ -146,8 +169,9 @@ process_https_cb (struct evhttp_request *req, void *arg) {
 	evbuffer_add_buffer(evb, wifidog_redir_html->evb_rear);
 	evhttp_send_reply (req, 200, "OK", evb);
 		
-	if (evb)
-		evbuffer_free (evb);
+	free(req_url);
+	free(redir_url);
+	evbuffer_free (evb);
 	free(peer_addr);
 }
 
