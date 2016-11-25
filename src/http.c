@@ -42,7 +42,7 @@
 #include <fcntl.h>
 #include <errno.h>
 
-#include "httpd.h"
+#include <httpd.h>
 
 #include "safe.h"
 #include "debug.h"
@@ -176,7 +176,7 @@ http_callback_404(httpd * webserver, request * r, int error_code)
              r->request.host, r->request.path, r->request.query[0] ? "?" : "", r->request.query);
 		
     	char *url = httpdUrlEncode(tmp_url);	
-		char *redir_url = evhttpd_get_full_redir_url(mac!=NULL?mac:"ff:ff:ff:ff:ff:ff", peer_addr, url);
+		char *redir_url = evhttpd_get_full_redir_url(mac!=NULL?mac:"ff:ff:ff:ff:ff:ff", r->clientAddr, url);
         if (mac) {                 
 			t_client *clt = NULL;
             debug(LOG_DEBUG, "Got client MAC address for ip %s: %s", r->clientAddr, mac);	
