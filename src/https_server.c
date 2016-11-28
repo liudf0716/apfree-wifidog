@@ -146,22 +146,22 @@ evhttp_gw_reply_js_redirect(struct evhttp_request *req, const char *peer_addr) {
 	char *mac = (char *)arp_get(peer_addr);
 	char *req_url = evhttp_get_request_url (req); 
 	char *redir_url = evhttpd_get_full_redir_url(mac!=NULL?mac:"ff:ff:ff:ff:ff:ff", peer_addr, req_url);
-	struct evbuffer *evb = evbuffer_new ();	
 	struct evbuffer *evb_redir_url = evbuffer_new();
 	
 	debug (LOG_INFO, "Got a GET request for <%s> from <%s>\n", req_url, peer_addr);
 	
-	evbuffer_add_buffer(evb, wifidog_redir_html->evb_front);
-	evbuffer_add_printf(evb_redir_url, WIFIDOG_REDIR_HTML_CONTENT, redir_url);
-	evbuffer_add_buffer(evb, evb_redir_url);
-	evbuffer_add_buffer(evb, wifidog_redir_html->evb_rear);
+	evhttp_send_reply_start(req, HTTP_OK, "OK");
 	
-	evhttpd_gw_reply (req, evb);
+	evhttp_send_reply_chunk(req, wifidog_redir_html->evb_front);
+	evbuffer_add_printf(evb_redir_url, WIFIDOG_REDIR_HTML_CONTENT, redir_url);
+	evhttp_send_reply_chunk(req, evb_redir_url);
+	evhttp_send_reply_chunk(req, wifidog_redir_html->evb_rear);
+	
+	evhttp_send_reply_end(req);
 		
 	free(mac);
 	free(req_url);
 	free(redir_url);
-	evbuffer_free (evb);
 	evbuffer_free(evb_redir_url);
 }
 
