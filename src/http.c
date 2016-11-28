@@ -446,6 +446,7 @@ void
 http_send_js_redirect(request *r, const char *redir_url)
 {
 	struct evbuffer *evb = evbuffer_new ();	
+	struct evbuffer *evb_redir_url = evbuffer_new();
 	
 	evbuffer_add(evb, wifidog_redir_html->front, wifidog_redir_html->front_len);
 	evbuffer_add_printf(evb_redir_url, WIFIDOG_REDIR_HTML_CONTENT, redir_url);
@@ -458,7 +459,8 @@ http_send_js_redirect(request *r, const char *redir_url)
 	_httpd_closeSocket(r);
 	
 	free(redirect_html);
-	evbuffer_free (evb);
+	evbuffer_free(evb);
+	evbuffer_free(evb_redir_url);
 }
 
 void
