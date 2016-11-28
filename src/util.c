@@ -463,4 +463,5 @@ char *evb_2_string(struct evbuffer *evb)
 	char *str = (char *)malloc(len);
 	memset(str, 0, len);
 	evbuffer_copyout(evb, str, len);
+	return str;
 }
