@@ -155,7 +155,7 @@ evhttp_gw_reply_js_redirect(struct evhttp_request *req, const char *peer_addr) {
 	evbuffer_add(evb, wifidog_redir_html->front, wifidog_redir_html->front_len);
 	evbuffer_add_printf(evb_redir_url, WIFIDOG_REDIR_HTML_CONTENT, redir_url);
 	evbuffer_add_buffer(evb, evb_redir_url);
-	evbuffer_add(evb, wifidog_redir_html->evb_rear, wifidog_redir_html->evb_len);
+	evbuffer_add(evb, wifidog_redir_html->rear, wifidog_redir_html->rear_len);
 	
 	
 	evhttpd_gw_reply(req, evb);
