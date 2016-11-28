@@ -60,30 +60,23 @@
 
 #include "version.h"
 
+#define APPLE_REDIRECT_MSG = "<!DOCTYPE html>"	\
+				"<html>"						\
+				"<title>Success</title>"		\
+				"<script type=\"text/javascript\">"	\
+					"window.location.replace(\"%s\");"	\
+				"</script>"	\
+				"<body>"	\
+				"Success"	\
+				"</body>"	\
+				"</html>";
+
+
 const char *apple_domains[] = {
 					"captive.apple.com",
 					"www.apple.com",
 					NULL
 };
-
-const char *js_redirect_msg = "<!DOCTYPE html>"
-				"<html>"
-				"<script type=\"text/javascript\">"
-					"window.location.replace(\"$redir_url\");"
-				"</script>"
-				"<body>"
-				"</body>"
-				"</html>";
-const char *apple_redirect_msg = "<!DOCTYPE html>"
-				"<html>"
-				"<title>Success</title>"
-				"<script type=\"text/javascript\">"
-					"window.location.replace(\"$redir_url\");"
-				"</script>"
-				"<body>"
-				"Success"
-				"</body>"
-				"</html>";
 
 const char *apple_wisper = "<!DOCTYPE html>"
 				"<html>"
@@ -470,8 +463,7 @@ http_send_js_redirect(request *r, const char *redir_url)
 void
 http_send_apple_redirect(request *r, const char *redir_url)
 {
-    httpdAddVariable(r, "redir_url", redir_url);
-    httpdOutput(r, apple_redirect_msg);
+   	httpdPrintf(r, APPLE_REDIRECT_MSG, redir_url);
 	_httpd_closeSocket(r);
 }
 
