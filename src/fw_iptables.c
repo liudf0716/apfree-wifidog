@@ -567,7 +567,6 @@ iptables_fw_set_mac_temporary(const char *mac, int which)
 static void
 f_fw_init_close()
 {
-    debug(LOG_INFO, "f_fw_init_close ==================");
 	if(f_fw_init) {
 		fclose(f_fw_init);
 		chmod(fw_init_script, S_IXOTH|S_IXUSR|S_IXGRP);
@@ -581,7 +580,6 @@ f_fw_init_open()
 	if(f_fw_init)
 		return;
 	
-    debug(LOG_INFO, "f_fw_init_open ==================");
 	f_fw_init = fopen(fw_init_script, "w"); 
 	if(f_fw_init) {
 		fprintf(f_fw_init, "#!/bin/sh\n");
