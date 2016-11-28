@@ -23,6 +23,7 @@
 /** @file gateway.h
     @brief Main loop
     @author Copyright (C) 2004 Philippe April <papril777@yahoo.com>
+    @author Copyright (C) 2016 Dengfeng Liu <liudengfeng@kunteng.org>
 */
 
 #ifndef _GATEWAY_H_
@@ -33,8 +34,10 @@
 #include "httpd.h"
 
 struct redir_file_buffer {
-    struct evbuffer *evb_front;
-    struct evbuffer *evb_rear;
+    char    *front;
+    int     front_len;
+    char    *rear;
+    int     rear_len;
 };
 
 extern struct evbuffer	*evb_internet_offline_page;
