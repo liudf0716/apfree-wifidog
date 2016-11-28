@@ -95,12 +95,13 @@ evhttp_get_request_url(struct evhttp_request *req) {
 	char *url = malloc(256); // only get 256 char from request url
 	memset(url, 0, 256);
 	
-	snprintf(url, 256, "%s://%s:%d/%s/%s",
+	snprintf(url, 256, "%s://%s:%d/%s",
 		evhttp_uri_get_scheme(uri),
-		evhttp_uri_get_host(uri),
+		evhttp_request_get_host(req),
 		evhttp_uri_get_port(uri),
-		evhttp_uri_get_path(uri),
-		evhttp_uri_get_query(uri));
+		evhttp_request_get_uri(req));
+	
+	debug (LOG_INFO, "url is %s", url);
 	return url;
 }
 
@@ -150,7 +151,7 @@ evhttp_gw_reply_js_redirect(struct evhttp_request *req, const char *peer_addr) {
 	char *redir_url = evhttpd_get_full_redir_url(mac!=NULL?mac:"ff:ff:ff:ff:ff:ff", peer_addr, req_url);
 	struct evbuffer *evb = evbuffer_new ();	
 	
-	debug (LOG_INFO, "Got a GET request for <%s> from <%s>:<%d>\n", req_url, peer_addr);
+	debug (LOG_INFO, "Got a GET request for <%s> from <%s>\n", req_url, peer_addr);
 	
 	evbuffer_add_buffer(evb, wifidog_redir_html->evb_front);
 	evbuffer_add_printf(evb, WIFIDOG_REDIR_HTML_CONTENT, redir_url);
@@ -211,10 +212,6 @@ static struct bufferevent* bevcb (struct event_base *base, void *arg) {
 static void server_setup_certs (SSL_CTX *ctx,
                                 const char *certificate_chain,
                                 const char *private_key) { 
-	info_report ("Loading certificate chain from '%s'\n"
-               "and private key from '%s'\n",
-               certificate_chain, private_key);
-
   	if (1 != SSL_CTX_use_certificate_chain_file (ctx, certificate_chain))
     	die_most_horribly_from_openssl_error ("SSL_CTX_use_certificate_chain_file");
 
@@ -232,14 +229,14 @@ static int serve_some_http (char *gw_ip,  t_https_server *https_server) {
 
   	base = event_base_new ();
   	if (! base) { 
-		fprintf (stderr, "Couldn't create an event_base: exiting\n");
+		debug (LOG_ERR, "Couldn't create an event_base: exiting\n");
       	return 1;
     }
 
   	/* Create a new evhttp object to handle requests. */
   	http = evhttp_new (base);
   	if (! http) { 
-		fprintf (stderr, "couldn't create evhttp. Exiting.\n");
+		debug (LOG_ERR, "couldn't create evhttp. Exiting.\n");
       	return 1;
     }
  
