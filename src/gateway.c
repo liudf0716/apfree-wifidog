@@ -165,9 +165,13 @@ init_wifidog_redir_html(void)
 		goto err;
 	}
 	
-	wifidog_redir_html->evb_front 	= evb_front;
-	wifidog_redir_html->evb_rear	= evb_rear;
-
+	wifidog_redir_html->front 		= evb_2_string(evb_front);
+	wifidog_redir_html->front_len	= evbuffer_get_length(evb_front);
+	wifidog_redir_html->rear		= evb_2_string(evb_rear);
+	wifidog_redir_html->rear_len	= evbuffer_get_length(evb_rear);
+	
+	if (evb_front) evbuffer_free(evb_front);	
+	if (evb_rear) evbuffer_free(evb_rear);
 	return 1;
 err:
 	if (evb_front) evbuffer_free(evb_front);	
