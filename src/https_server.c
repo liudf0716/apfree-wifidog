@@ -92,17 +92,14 @@
 char *
 evhttp_get_request_url(struct evhttp_request *req) {
 	const struct evhttp_uri *uri = evhttp_request_get_evhttp_uri(req);
-	char *url = malloc(256); // only get 256 char from request url
-	memset(url, 0, 256);
+	char url[256] = {0}; // only get 256 char from request url
 	
-	snprintf(url, 256, "%s://%s:%d/%s",
-		evhttp_uri_get_scheme(uri),
+	snprintf(url, 256, "https://%s/%s",
 		evhttp_request_get_host(req),
-		evhttp_uri_get_port(uri),
 		evhttp_request_get_uri(req));
 	
 	debug (LOG_INFO, "url is %s", url);
-	return url;
+	return evhttp_encode_uri(url);
 }
 
 // !!!remember to free the return redir_url
