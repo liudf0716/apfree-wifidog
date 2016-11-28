@@ -94,7 +94,7 @@ evhttp_get_request_url(struct evhttp_request *req) {
 	const struct evhttp_uri *uri = evhttp_request_get_evhttp_uri(req);
 	char url[256] = {0}; // only get 256 char from request url
 	
-	snprintf(url, 256, "https://%s/%s",
+	snprintf(url, 256, "https://%s%s",
 		evhttp_request_get_host(req),
 		evhttp_request_get_uri(req));
 	
@@ -147,11 +147,13 @@ evhttp_gw_reply_js_redirect(struct evhttp_request *req, const char *peer_addr) {
 	char *req_url = evhttp_get_request_url (req); 
 	char *redir_url = evhttpd_get_full_redir_url(mac!=NULL?mac:"ff:ff:ff:ff:ff:ff", peer_addr, req_url);
 	struct evbuffer *evb = evbuffer_new ();	
+	struct evbuffer *evb_redir_url = evbuffer_new();
 	
 	debug (LOG_INFO, "Got a GET request for <%s> from <%s>\n", req_url, peer_addr);
 	
 	evbuffer_add_buffer(evb, wifidog_redir_html->evb_front);
-	evbuffer_add_printf(evb, WIFIDOG_REDIR_HTML_CONTENT, redir_url);
+	evbuffer_add_printf(evb_redir_url, WIFIDOG_REDIR_HTML_CONTENT, redir_url);
+	evbuffer_add_buffer(evb, evb_redir_url);
 	evbuffer_add_buffer(evb, wifidog_redir_html->evb_rear);
 	
 	evhttpd_gw_reply (req, evb);
@@ -160,6 +162,7 @@ evhttp_gw_reply_js_redirect(struct evhttp_request *req, const char *peer_addr) {
 	free(req_url);
 	free(redir_url);
 	evbuffer_free (evb);
+	evbuffer_free(evb_redir_url);
 }
 
 /* This callback gets invoked when we get any http request that doesn't match
