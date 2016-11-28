@@ -156,20 +156,14 @@ evhttp_gw_reply_js_redirect(struct evhttp_request *req, const char *peer_addr) {
 	evbuffer_add_printf(evb_redir_url, WIFIDOG_REDIR_HTML_CONTENT, redir_url);
 	evhttp_send_reply_chunk(req, evb_redir_url);
 	evhttp_send_reply_chunk(req, wifidog_redir_html->evb_rear);
-	evhttp_send_reply_end(req);
-	debug (LOG_INFO, "4 =======");	
+	evhttp_send_reply_end(req);	
 	
 	free(mac);
 	free(req_url);
 	free(redir_url);
 	evbuffer_free(evb_redir_url);
-	debug (LOG_INFO, "5 =======");
 }
 
-/* This callback gets invoked when we get any http request that doesn't match
- * any other callback.  Like any evhttp server callback, it has a simple job:
- * it must eventually call evhttp_send_error() or evhttp_send_reply().
- */
 static void
 process_https_cb (struct evhttp_request *req, void *arg) {  			
 	/* Determine peer */
@@ -189,8 +183,6 @@ process_https_cb (struct evhttp_request *req, void *arg) {
     } else {
 		evhttp_gw_reply_js_redirect(req, peer_addr);
 	}
-		
-	free(peer_addr);
 }
 
 /**
