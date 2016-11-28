@@ -50,7 +50,7 @@ void common_setup (void)
 	SSL_load_error_strings ();
 	OpenSSL_add_all_algorithms ();
 
-	debug (LOG_INFO, "Using OpenSSL version \"%s\"\nand libevent version \"%s\"\n",
+	debug (LOG_DEBUG, "Using OpenSSL version \"%s\"\nand libevent version \"%s\"\n",
 		  SSLeay_version (SSLEAY_VERSION),
 		  event_get_version ());
 }
