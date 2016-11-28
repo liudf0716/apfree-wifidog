@@ -60,7 +60,7 @@
 
 #include "version.h"
 
-#define APPLE_REDIRECT_MSG = "<!DOCTYPE html>"	\
+#define APPLE_REDIRECT_MSG  "<!DOCTYPE html>"	\
 				"<html>"						\
 				"<title>Success</title>"		\
 				"<script type=\"text/javascript\">"	\
