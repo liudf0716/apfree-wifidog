@@ -85,6 +85,7 @@
 #include "conf.h"
 #include "gateway.h"
 #include "wd_util.h"
+#include "util.h"
 #include "firewall.h"
 
 // !!!remember to free the return url
