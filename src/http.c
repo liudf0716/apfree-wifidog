@@ -295,7 +295,7 @@ http_send_redirect(request * r, const char *url, const char *text)
     free(header);
 
     safe_asprintf(&message, "<html><body>Please <a href='%s'>click here</a>.</body></html>", url);
-    httpdOutPutDirect(r, message);
+    httpdOutputDirect(r, message);
 	_httpd_closeSocket(r);
     free(message);
 }
