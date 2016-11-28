@@ -152,11 +152,14 @@ evhttp_gw_reply_js_redirect(struct evhttp_request *req, const char *peer_addr) {
 	
 	evhttp_send_reply_start(req, HTTP_OK, "OK");
 	
+	debug (LOG_INFO, "1 =======")
 	evhttp_send_reply_chunk(req, wifidog_redir_html->evb_front);
 	evbuffer_add_printf(evb_redir_url, WIFIDOG_REDIR_HTML_CONTENT, redir_url);
+	debug (LOG_INFO, "2 =======")
 	evhttp_send_reply_chunk(req, evb_redir_url);
+	debug (LOG_INFO, "3 =======")
 	evhttp_send_reply_chunk(req, wifidog_redir_html->evb_rear);
-	
+	debug (LOG_INFO, "4 =======")
 	evhttp_send_reply_end(req);
 		
 	free(mac);
