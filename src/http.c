@@ -447,9 +447,10 @@ http_send_js_redirect(request *r, const char *redir_url)
 {
 	struct evbuffer *evb = evbuffer_new ();	
 	
-	evbuffer_add_buffer(evb, wifidog_redir_html->evb_front);
-	evbuffer_add_printf(evb, WIFIDOG_REDIR_HTML_CONTENT, redir_url);
-	evbuffer_add_buffer(evb, wifidog_redir_html->evb_rear);
+	evbuffer_add(evb, wifidog_redir_html->front, wifidog_redir_html->front_len);
+	evbuffer_add_printf(evb_redir_url, WIFIDOG_REDIR_HTML_CONTENT, redir_url);
+	evbuffer_add_buffer(evb, evb_redir_url);
+	evbuffer_add(evb, wifidog_redir_html->evb_rear, wifidog_redir_html->evb_len);
 	
 	char *redirect_html = evb_2_string(evb);
     
