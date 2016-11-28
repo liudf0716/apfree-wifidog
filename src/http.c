@@ -69,7 +69,7 @@
 				"<body>"	\
 				"Success"	\
 				"</body>"	\
-				"</html>";
+				"</html>"
 
 
 const char *apple_domains[] = {
