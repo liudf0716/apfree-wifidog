@@ -151,10 +151,18 @@ evhttp_gw_reply_js_redirect(struct evhttp_request *req, const char *peer_addr) {
 	
 	debug (LOG_INFO, "Got a GET request for <%s> from <%s>\n", req_url, peer_addr);
 	
-	evbuffer_remove_buffer(evb, wifidog_redir_html->evb_front, EV_UINT32_MAX);
+	debug (LOG_INFO, "1: evb_front length is %d evb_rear length is %d",
+		evbuffer_get_length(wifidog_redir_html->evb_front),
+		evbuffer_get_length(wifidog_redir_html->evb_rear));
+		
+	evbuffer_add_buffer(evb, wifidog_redir_html->evb_front);
 	evbuffer_add_printf(evb_redir_url, WIFIDOG_REDIR_HTML_CONTENT, redir_url);
 	evbuffer_add_buffer(evb, evb_redir_url);
-	evbuffer_remove_buffer(evb, wifidog_redir_html->evb_rear, EV_UINT32_MAX);
+	evbuffer_add_buffer(evb, wifidog_redir_html->evb_rear);
+	
+	debug (LOG_INFO, "2: evb_front length is %d evb_rear length is %d",
+		evbuffer_get_length(wifidog_redir_html->evb_front),
+		evbuffer_get_length(wifidog_redir_html->evb_rear));
 	
 	evhttpd_gw_reply(req, evb);
 	
