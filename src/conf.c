@@ -50,6 +50,12 @@
 #include <arpa/nameser.h>
 #include <resolv.h>
 
+#include <event2/dns.h>
+#include <event2/util.h>
+#include <event2/event.h>
+
+#include <sys/socket.h>
+
 #include "common.h"
 #include "safe.h"
 #include "debug.h"
@@ -1738,8 +1744,55 @@ err:
 	return;
 }
 
-int n_pending_requests = 0;
-struct event_base *base = NULL;
+void evdns_add_trusted_domain_ip_cb(int errcode, struct evutil_addrinfo *addr, void *ptr)
+{
+	t_domain_trusted *p = ptr;
+    if (!errcode) {
+        struct evutil_addrinfo *ai;
+		char hostname[HTTP_IP_ADDR_LEN]
+        for (ai = addr; ai; ai = ai->ai_next) {           
+            const char *s = NULL;
+			t_ip_trusted *ipt = NULL;
+			memset(hostname, 0, HTTP_IP_ADDR_LEN);
+            if (ai->ai_family == AF_INET) {
+                struct sockaddr_in *sin = (struct sockaddr_in *)ai->ai_addr;
+                s = evutil_inet_ntop(AF_INET, &sin->sin_addr, hostname, HTTP_IP_ADDR_LEN);
+            } else if (ai->ai_family == AF_INET6) {
+                //do nothing
+            }
+            if (s) {
+				debug(LOG_INFO, "parse domain (%s) ip (%s)", p->domain, s);
+				if(p->ips_trusted == NULL) {
+					ipt = (t_ip_trusted *)malloc(sizeof(t_ip_trusted));
+					memset(ipt, 0, sizeof(t_ip_trusted));
+					strncpy(ipt->ip, hostname, HTTP_IP_ADDR_LEN); 
+					ipt->next = NULL;
+					p->ips_trusted = ipt;
+				} else {
+					ipt = p->ips_trusted;
+					while(ipt) {
+						if(strcmp(ipt->ip, hostname) == 0)
+							break;
+						ipt = ipt->next;
+					}
+
+					if(ipt == NULL) {
+						ipt = (t_ip_trusted *)malloc(sizeof(t_ip_trusted));
+						memset(ipt, 0, sizeof(t_ip_trusted));
+						strncpy(ipt->ip, hostname, HTTP_IP_ADDR_LEN);
+						ipt->next = p->ips_trusted;
+						p->ips_trusted = ipt; 
+					}
+				}
+			}     
+        }
+        evutil_freeaddrinfo(addr);
+    }
+	
+    if (--n_pending_requests == 0)
+        event_base_loopexit(base, NULL);
+}
+
 void evdns_parse_trusted_domain_2_ip(t_domain_trusted *p)
 {
 	struct event_base *base 	= NULL;
@@ -1761,9 +1814,11 @@ void evdns_parse_trusted_domain_2_ip(t_domain_trusted *p)
 
 		hints.ai_socktype = SOCK_STREAM;
 		hints.ai_protocol = IPPROTO_TCP;
-		
+			
 		evdns_getaddrinfo( dnsbase, p->domain, NULL ,
-			  &hints, callback, user_data);
+			  &hints, evdns_add_trusted_domain_ip_cb, p);
+		
+		p = p->next;
 	}
 	
 	if (n_pending_requests)
