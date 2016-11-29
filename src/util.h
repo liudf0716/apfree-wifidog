@@ -28,7 +28,13 @@
 #ifndef _UTIL_H_
 #define _UTIL_H_
 
+#include <event2/dns.h>
+#include <event2/util.h>
+#include <event2/event.h>
 #include <event2/buffer.h>
+
+#include <sys/socket.h>
+
 
 /** How many times should we try detecting the interface with the default route
  * (in seconds).  If set to 0, it will keep retrying forever */
@@ -36,6 +42,9 @@
 /** How often should we try to detect the interface with the default route
  *  if it isn't up yet (interval in seconds) */
 #define EXT_INTERFACE_DETECT_RETRY_INTERVAL 1
+
+int n_pending_requests = 0;
+struct event_base *base = NULL;
 
 /** @brief Execute a shell command */
 int execute(const char *, int);
