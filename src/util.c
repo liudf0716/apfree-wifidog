@@ -527,6 +527,8 @@ void evdns_parse_trusted_domain_2_ip(t_domain_trusted *p)
     if (!dnsbase)
         return;
 	
+	LOCK_DOMAIN();
+	
 	while(p && p->domain) {
 		struct evutil_addrinfo hints;
 		struct evdns_getaddrinfo_request *req;
@@ -546,6 +548,8 @@ void evdns_parse_trusted_domain_2_ip(t_domain_trusted *p)
 	
 	if (n_pending_requests)
 		event_base_dispatch(base);
+	
+	UNLOCK_DOMAIN();
 	
 	evdns_base_free(dnsbase, 0);
     event_base_free(base);
