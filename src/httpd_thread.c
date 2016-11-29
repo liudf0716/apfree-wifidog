@@ -23,6 +23,7 @@
 /** @file httpd_thread.c
     @brief Handles on web request.
     @author Copyright (C) 2004 Alexandre Carmel-Veilleux <acv@acv.ca>
+    @author Copyright (C) 2016 Dengfeng Liu <liudengfeng@kunteng.org>
 */
 
 #define _GNU_SOURCE
