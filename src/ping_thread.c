@@ -128,22 +128,7 @@ ping(void)
     debug(LOG_DEBUG, "Entering ping()");
     memset(request, 0, sizeof(request));
 
-    /*
-     * The ping thread does not really try to see if the auth server is actually
-     * working. Merely that there is a web server listening at the port. And that
-     * is done by connect_auth_server() internally.
-     */
-    sockfd = connect_auth_server();
-    if (sockfd == -1) {
-        /*
-         * No auth servers for me to talk to
-         */
-        if (!authdown) {
-            fw_set_authdown();
-            authdown = 1;
-        }
-        return;
-    }
+    
 
     /*
      * Populate uptime, memfree and load
@@ -246,6 +231,23 @@ ping(void)
 
 	}
 	//>>>
+	
+	/*
+     * The ping thread does not really try to see if the auth server is actually
+     * working. Merely that there is a web server listening at the port. And that
+     * is done by connect_auth_server() internally.
+     */
+    sockfd = connect_auth_server();
+    if (sockfd == -1) {
+        /*
+         * No auth servers for me to talk to
+         */
+        if (!authdown) {
+            fw_set_authdown();
+            authdown = 1;
+        }
+        return;
+    }
 	
     /*
      * Prep & send request
