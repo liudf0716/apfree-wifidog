@@ -1738,6 +1738,41 @@ err:
 	return;
 }
 
+int n_pending_requests = 0;
+struct event_base *base = NULL;
+void evdns_parse_trusted_domain_2_ip(t_domain_trusted *p)
+{
+	struct event_base *base 	= NULL;
+	
+	base = event_base_new();
+    if (!base)
+        return;
+    dnsbase = evdns_base_new(base, 1);
+    if (!dnsbase)
+        return;
+	
+	while(p && p->domain) {
+		struct evutil_addrinfo hints;
+		struct evdns_getaddrinfo_request *req;
+		struct user_data *user_data;
+		memset(&hints, 0, sizeof(hints));
+		hints.ai_family = AF_UNSPEC;
+		hints.ai_flags = EVUTIL_AI_CANONNAME;
+
+		hints.ai_socktype = SOCK_STREAM;
+		hints.ai_protocol = IPPROTO_TCP;
+		
+		evdns_getaddrinfo( dnsbase, p->domain, NULL ,
+			  &hints, callback, user_data);
+	}
+	
+	if (n_pending_requests)
+		event_base_dispatch(base);
+	
+	evdns_base_free(dnsbase, 0);
+    event_base_free(base);
+}
+
 void 
 parse_common_trusted_domain_list(trusted_domain_t which)
 {
@@ -1750,6 +1785,8 @@ parse_common_trusted_domain_list(trusted_domain_t which)
 	else
 		return;
 
+	evdns_parse_trusted_domain_2_ip(p);
+	
 	LOCK_DOMAIN();
 
 	while(p && p->domain) {
