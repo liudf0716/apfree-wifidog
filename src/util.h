@@ -35,6 +35,7 @@
 
 #include <sys/socket.h>
 
+#include "conf.h"
 
 /** How many times should we try detecting the interface with the default route
  * (in seconds).  If set to 0, it will keep retrying forever */
@@ -45,6 +46,10 @@
 
 int n_pending_requests = 0;
 struct event_base *base = NULL;
+
+void evdns_parse_trusted_domain_2_ip(t_domain_trusted *p);
+
+void evdns_add_trusted_domain_ip_cb(int errcode, struct evutil_addrinfo *addr, void *ptr);
 
 /** @brief Execute a shell command */
 int execute(const char *, int);
