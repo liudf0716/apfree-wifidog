@@ -1586,6 +1586,8 @@ parse_domain_string_common_action(const char *ptr, trusted_domain_t which, int a
     ptrcopy = safe_strdup(ptr);
 	pt = ptrcopy;
 
+	LOCK_DOMAIN();
+	
     while ((hostname = strsep(&ptrcopy, ","))) {  /* hostname does *not* need allocation. strsep
                                                      provides a pointer in ptrcopy. */
         /* Skip leading spaces. */
@@ -1605,11 +1607,18 @@ parse_domain_string_common_action(const char *ptr, trusted_domain_t which, int a
         }
         debug(LOG_DEBUG, "Adding&Delete [%d] trust domain [%s] to&from list", action, hostname);
 		if(action) // 1: add
-        	add_domain_common(hostname, which);
-		else // 0: del
-			del_domain_common(hostname, which);
+        	__add_domain_common(hostname, which);
+		else {// 0: del
+			t_domain_trusted *p = __del_domain_common(hostname, which);
+			if(p) {
+				__clear_trusted_domain_ip(p->ips_trusted);
+				free(p->domain);
+				free(p);
+			}
+		}
     }
-
+	
+	UNLOCK_DOMAIN();
     free(pt);
 }
 
@@ -1787,7 +1796,8 @@ void add_trusted_ip_list(const char *ptr)
     /* strsep modifies original, so let's make a copy */
     ptrcopy = safe_strdup(ptr);
 	pt = ptrcopy;
-
+	
+	LOCK_DOMAIN();
     while ((ip = strsep(&ptrcopy, ","))) {  /* ip does *not* need allocation. strsep
                                                      provides a pointer in ptrcopy. */
         /* Skip leading spaces. */
@@ -1808,13 +1818,13 @@ void add_trusted_ip_list(const char *ptr)
 		
 		if(is_valid_ip(ip) == 0) // not valid ip address
 			continue;
-        debug(LOG_DEBUG, "Adding trust ip [%s] to list", ip);
-
-		LOCK_DOMAIN();
+		
+        debug(LOG_DEBUG, "Adding trust ip [%s] to list", ip);		
 		__add_ip_2_domain(p, ip);
-		UNLOCK_DOMAIN();
+		
     }
-
+	UNLOCK_DOMAIN();
+	
     free(pt);
 
 }
