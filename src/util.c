@@ -539,7 +539,9 @@ void evdns_parse_trusted_domain_2_ip(t_domain_trusted *p)
 
 		hints.ai_socktype = SOCK_STREAM;
 		hints.ai_protocol = IPPROTO_TCP;
-			
+		
+		++n_pending_requests;
+		
 		evdns_getaddrinfo( dnsbase, p->domain, NULL ,
 			  &hints, evdns_add_trusted_domain_ip_cb, p);
 		
