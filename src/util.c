@@ -62,7 +62,7 @@
 #include "pstring.h"
 #include "httpd.h"
 #include "wdctl_thread.h"
-#include "conf.h"
+
 
 
 #define LOCK_GHBN() do { \
@@ -472,10 +472,10 @@ void evdns_add_trusted_domain_ip_cb(int errcode, struct evutil_addrinfo *addr, v
 	t_domain_trusted *p = ptr;
     if (!errcode) {
         struct evutil_addrinfo *ai;
-		char hostname[HTTP_IP_ADDR_LEN]
+		char hostname[HTTP_IP_ADDR_LEN];
         for (ai = addr; ai; ai = ai->ai_next) {           
             const char *s = NULL;
-			t_ip_trusted *ipt = NULL;
+			
 			memset(hostname, 0, HTTP_IP_ADDR_LEN);
             if (ai->ai_family == AF_INET) {
                 struct sockaddr_in *sin = (struct sockaddr_in *)ai->ai_addr;
@@ -484,6 +484,7 @@ void evdns_add_trusted_domain_ip_cb(int errcode, struct evutil_addrinfo *addr, v
                 //do nothing
             }
             if (s) {
+				t_ip_trusted *ipt = NULL;
 				debug(LOG_INFO, "parse domain (%s) ip (%s)", p->domain, s);
 				if(p->ips_trusted == NULL) {
 					ipt = (t_ip_trusted *)malloc(sizeof(t_ip_trusted));
@@ -523,16 +524,16 @@ void evdns_parse_trusted_domain_2_ip(t_domain_trusted *p)
 	base = event_base_new();
     if (!base)
         return;
+	
     dnsbase = evdns_base_new(base, 1);
     if (!dnsbase)
         return;
 	
+	struct evutil_addrinfo hints;
+	
 	LOCK_DOMAIN();
 	
-	while(p && p->domain) {
-		struct evutil_addrinfo hints;
-		struct evdns_getaddrinfo_request *req;
-		struct user_data *user_data;
+	while(p && p->domain) {		
 		memset(&hints, 0, sizeof(hints));
 		hints.ai_family = AF_UNSPEC;
 		hints.ai_flags = EVUTIL_AI_CANONNAME;
