@@ -44,9 +44,6 @@
  *  if it isn't up yet (interval in seconds) */
 #define EXT_INTERFACE_DETECT_RETRY_INTERVAL 1
 
-int n_pending_requests = 0;
-struct event_base *base = NULL;
-
 void evdns_parse_trusted_domain_2_ip(t_domain_trusted *p);
 
 void evdns_add_trusted_domain_ip_cb(int errcode, struct evutil_addrinfo *addr, void *ptr);
