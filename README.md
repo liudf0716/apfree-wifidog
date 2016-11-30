@@ -32,3 +32,5 @@ ApFree WiFiDog 完全兼容现有的 wifidog 协议，并支持如下功能：
 ----
 
 powered by www.kunteng.org
+
+加qq群讨论： 331230369 
