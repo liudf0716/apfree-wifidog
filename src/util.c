@@ -519,7 +519,7 @@ void evdns_add_trusted_domain_ip_cb(int errcode, struct evutil_addrinfo *addr, v
 
 void evdns_parse_trusted_domain_2_ip(t_domain_trusted *p)
 {
-	struct event_base *base 	= NULL;
+	struct evdns_base  *dnsbase 	= NULL;
 	
 	base = event_base_new();
     if (!base)
