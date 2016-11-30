@@ -29,6 +29,10 @@ ApFree WiFiDog 完全兼容现有的 wifidog 协议，并支持如下功能：
 原因是: 多线程环境下调用fork导致，后面会想办法解决.
 
 
+## 感谢如下开源项目的帮助：
+
+1， https://github.com/ppelleti/https-example
+2， https://github.com/sosopop/uvhttp
 ----
 
 powered by www.kunteng.org
