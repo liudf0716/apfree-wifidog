@@ -24,16 +24,19 @@ ApFree WiFiDog 完全兼容现有的 wifidog 协议，并支持如下功能：
 
 ## 已知bug：
 
-频繁调用`wdctl`命令会导致会出现多`wifidog`进程的现象.
+非常频繁调用`wdctl`命令会导致会出现多`wifidog`进程的现象.
 
 原因是: 多线程环境下调用fork导致，后面会想办法解决.
 
 
-## 感谢如下开源项目的帮助：
+## 感谢如下开源项目提供的思路和帮助：
 
-1， https://github.com/wifidog/wifidog-gateway
+1， https://github.com/wifidog/wifidog-gateway  
+
 2， https://github.com/ppelleti/https-example
+
 3， https://github.com/sosopop/uvhttp
+
 ----
 
 powered by www.kunteng.org
