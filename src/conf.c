@@ -63,8 +63,10 @@
 #include "http.h"
 #include "auth.h"
 #include "firewall.h"
-
+#include "simple_http.h"
+#include "ezxml.h"
 #include "util.h"
+
 
 //>>> liudf added 20160114
 const char	*g_inner_trusted_domains = "szextshort.weixin.qq.com,short.weixin.qq.com,wifi.weixin.qq.com,dns.weixin.qq.com,www.kunteng.org,cloud.kunteng.org,mqtt.kunteng.org,log1.kunteng.org";
@@ -1827,6 +1829,45 @@ void add_trusted_ip_list(const char *ptr)
 	
     free(pt);
 
+}
+
+static void parse_weixin_http_dns_ip_cb(char *xml_buffer, int buffer_size)
+{
+	ezxml_t xml_dns = ezxml_parse_str(xml_buffer, buffer_size);
+	ezxml_t domain, ip;
+	
+	if (xml_dns) {
+		debug(LOG_INFO, "ezxml_parse_str failed ");
+		return;
+	}
+ 	
+	LOCK_DOMAIN();
+	
+	t_domain_trusted *dt = __add_inner_trusted_domain("short.weixin.qq.com");
+	
+	for (domain = ezxml_child(xml_dns, "domain"); domain; domain = domain->next) {
+		char *name = ezxml_attr(domain, "name");
+		if (name && strcmp(name, "short.weixin.qq.com") == 0) {
+			for (ip = ezxml_child(domain, "ip"); ip; ip = ip->next) {
+				char *ip = ip->txt;			
+				if (dt) {
+        			debug(LOG_INFO, "Add short.weixin.qq.com ip %s\n", ip);
+					__add_ip_2_domain(dt, ip);
+				}
+			}
+		}
+	}
+	
+	UNLOCK_DOMAIN();
+	
+	return ;
+}
+
+int
+fix_weixin_http_dns_ip (void)
+{
+	const char *url_weixin_dns = "http://dns.weixin.qq.com/cgi-bin/micromsg-bin/newgetdns";
+	start_http_request(url_weixin_dns, REQUEST_GET_FLAG, NULL, NULL, parse_weixin_http_dns_ip_cb);
 }
 
 int 
