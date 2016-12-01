@@ -79,8 +79,6 @@ void http_request_free(struct http_request_get *, int);
 
 int inflate_read(char *, int , char **, int *, int );
 
-char *http_get_uncompressed(const int , const char *);
-
 char *http_get(const int, const char *);
 
 char *http_get_ex(const int, const char *, int);
