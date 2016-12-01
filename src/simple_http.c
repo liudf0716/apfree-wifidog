@@ -305,42 +305,6 @@ inflate_read(char *source, int len, char **dest, int *rlen, int gzip)
 	return ret == Z_STREAM_END ? Z_OK : Z_DATA_ERROR;  
 }
 
-/*
- * this function assume u know this http request get deflate response
- */
-char *
-http_get_uncompressed(const int sockfd, const char *req)
-{
-	char *uncompressed = NULL;
-	char *http_response = http_get(sockfd, req);
-	if (!http_response) {
-		goto err;
-	}
-	
-	char *presponse = strstr(http_response, "Content-Encoding: deflate");
-	if (! presponse)
-		goto err;
-	
-	char *pcontent = strstr(presponse+strlen("Content-Encoding: deflate"), "\r\n\r\n");
-	if (!pcontent) 
-		goto err;
-	
-	pcontent += strlen("\r\n\r\n");
-		
-	int ret = inflate_read (pcontent, strlen(pcontent), &uncompressed, 1);
-	if (ret != Z_OK) {
-		goto err;
-	}
-	
-	debug(LOG_INFO, "uncompressed is OK, its length is %d", strlen(uncompressed));
-	free(http_response);
-	return uncompressed;
-err:
-	if (!uncompressed) free(uncompressed);
-	if (!http_response) free(http_response);
-	return NULL;
-}
-
 char *
 http_get(const int sockfd, const char *req)
 {
