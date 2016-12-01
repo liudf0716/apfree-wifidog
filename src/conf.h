@@ -363,8 +363,8 @@ void __clear_trusted_domain_ip(t_ip_trusted *);
 
 
 /** @brief  */
-int __fix_weixin_http_dns_ip(void);
-
+int __fix_weixin_http_dns_ip(void); // deprecated
+int fix_weixin_http_dns_ip(void);
 
 /** @brief parse roam mac list, for wdctl use*/
 void parse_roam_mac_list(const char *); 
