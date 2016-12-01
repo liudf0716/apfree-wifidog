@@ -29,11 +29,13 @@ set(src_wdctl wdctl.c)
 set(libs 
 	httpd
 	pthread 
-	m 
+	m
+	z
 	json-c 
 	ip4tc 
 	ssl
 	crypto
+	xml2
 	event
 	event_openssl)
 
