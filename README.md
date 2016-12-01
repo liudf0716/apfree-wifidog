@@ -1,4 +1,8 @@
 # ApFree WiFiDog
+## 演示视频
+
+http://v.qq.com/x/page/f03507zyfvv.html
+
 ## 编译说明
 1，将package中的apfree_wifidog目录拷贝到openwrt&lede的package目录
 
@@ -50,8 +54,8 @@ ApFree WiFiDog 完全兼容现有的 wifidog 协议，并支持如下功能：
 
 ----
 
-powered by www.kunteng.org
+## powered by www.kunteng.org
 
-加qq群讨论： 331230369 
+## 加qq群讨论： 331230369 
 
-如果决定该项目对您有帮助，烦请点个赞，给作者点鼓励和动力，谢谢！
+## 如果决定该项目对您有帮助，烦请点个赞，给作者点鼓励和动力，谢谢！
