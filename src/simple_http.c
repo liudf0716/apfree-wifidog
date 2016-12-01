@@ -31,7 +31,7 @@
 #include <string.h>
 #include <syslog.h>
 
-#include <zlib/zlib.h>
+#include <zlib.h>
 
 #include "common.h"
 #include "debug.h"
@@ -52,13 +52,214 @@
 static CYASSL_CTX *get_cyassl_ctx(const char *hostname);
 #endif
 
+void http_process_user_data(struct evhttp_request *req, struct http_request_get *http_req_get)
+{
+	struct evbuffer* buf = evhttp_request_get_input_buffer(req);
+	size_t len = evbuffer_get_length(buf);
+	char	*encoding = evhttp_find_header(evhttp_request_get_input_headers(req), "Content-Encoding");
+	unsigned char *tmp = malloc(len+1);
+	memset(tmp, 0, len+1);
+	memcpy(tmp, evbuffer_pullup(buf, -1), len);
+	
+	if (encoding && strcmp(encoding, "deflate") == 0) {
+		char *uncompressed = NULL;
+		int ret = inflate_read(tmp, len, &uncompressed, 1);
+		if (ret != Z_OK) {
+			if (uncompressed) free(uncompressed);
+			goto err;
+		}
+		free(tmp);
+		tmp = uncompressed;
+	} 
+
+	if (http_req_get->user_cb)
+		http_req_get->user_cb(tmp);
+err:
+	event_base_loopexit(http_req_get->base, 0);
+	free(tmp);
+}
+
+void http_request_post_cb(struct evhttp_request *req, void *arg)
+{
+    struct http_request_post *http_req_post = (struct http_request_post *)arg;
+    switch(req->response_code)
+    {
+        case HTTP_OK:
+        {
+            http_process_user_data(req, (struct http_request_get *)arg);
+            break;
+        }
+        case HTTP_MOVEPERM:
+            break;
+        case HTTP_MOVETEMP:
+        {
+            const char *new_location = evhttp_find_header(req->input_headers, "Location");
+            struct evhttp_uri *new_uri = evhttp_uri_parse(new_location);
+            evhttp_uri_free(http_req_post->uri);
+            http_req_post->uri = new_uri;
+            start_url_request((struct http_request_get *)http_req_post, REQUEST_POST_FLAG);
+            return;
+        }
+            
+        default:
+            event_base_loopexit(http_req_post->base, 0);
+            return;
+    }
+}
+
+void http_request_get_cb(struct evhttp_request *req, void *arg)
+{
+    struct http_request_get *http_req_get = (struct http_request_get *)arg;
+    switch(req->response_code)
+    {
+        case HTTP_OK:
+        {
+           	http_process_user_data(req, (struct http_request_get *)arg);
+            break;
+        }
+        case HTTP_MOVEPERM:
+            break;
+        case HTTP_MOVETEMP:
+        {
+            const char *new_location = evhttp_find_header(req->input_headers, "Location");
+            struct evhttp_uri *new_uri = evhttp_uri_parse(new_location);
+            evhttp_uri_free(http_req_get->uri);
+            http_req_get->uri = new_uri;
+            start_url_request(http_req_get, REQUEST_GET_FLAG);
+            return;
+        }
+            
+        default:
+            event_base_loopexit(http_req_get->base, 0);
+            return;
+    }
+}
+
+int start_url_request(struct http_request_get *http_req, int req_get_flag)
+{
+    if (http_req->cn)
+        evhttp_connection_free(http_req->cn);
+    
+    int port = evhttp_uri_get_port(http_req->uri);
+    http_req->cn = evhttp_connection_base_new(http_req->base,
+							   NULL,
+							   evhttp_uri_get_host(http_req->uri),
+							   (port == -1 ? 80 : port));
+    
+    /**
+     * Request will be released by evhttp connection
+     * See info of evhttp_make_request()
+     */
+    if (req_get_flag == REQUEST_POST_FLAG) {
+        http_req->req = evhttp_request_new(http_request_post_cb, http_req);
+    } else if (req_get_flag ==  REQUEST_GET_FLAG) {
+        http_req->req = evhttp_request_new(http_request_get_cb, http_req);
+    }
+    
+    if (req_get_flag == REQUEST_POST_FLAG) {
+        const char *path = evhttp_uri_get_path(http_req->uri);
+        evhttp_make_request(http_req->cn, http_req->req, EVHTTP_REQ_POST,
+                            path ? path : "/");
+        /** Set the post data */
+        struct http_request_post *http_req_post = (struct http_request_post *)http_req;
+        evbuffer_add(http_req_post->req->output_buffer, http_req_post->post_data, strlen(http_req_post->post_data));
+        evhttp_add_header(http_req_post->req->output_headers, "Content-Type", http_req_post->content_type);
+    } else if (req_get_flag == REQUEST_GET_FLAG) {
+        const char *query = evhttp_uri_get_query(http_req->uri);
+        const char *path = evhttp_uri_get_path(http_req->uri);
+        size_t len = (query ? strlen(query) : 0) + (path ? strlen(path) : 0) + 1;
+        char *path_query = NULL;
+        if (len > 1) {
+            path_query = calloc(len, sizeof(char));
+			if (query)
+            	snprintf(path_query, len, "%s?%s", path, query);
+			else	
+            	snprintf(path_query, len, "%s", path);
+        }        
+        evhttp_make_request(http_req->cn, http_req->req, EVHTTP_REQ_GET,
+                             path_query ? path_query: "/");
+    }
+    /** Set the header properties */
+    evhttp_add_header(http_req->req->output_headers, "Host", evhttp_uri_get_host(http_req->uri));
+    
+    return 0;
+}
+
+void *http_request_new(struct event_base* base, const char *url, int req_get_flag, 
+                       const char *content_type, const char* data)
+{
+    int len = 0;
+    if (req_get_flag == REQUEST_GET_FLAG) {
+        len = sizeof(struct http_request_get);
+    } else if(req_get_flag == REQUEST_POST_FLAG) {
+        len = sizeof(struct http_request_post);
+    }
+    
+    struct http_request_get *http_req_get = calloc(1, len);
+    http_req_get->uri = evhttp_uri_parse(url);
+    print_uri_parts_info(http_req_get->uri);
+    
+    http_req_get->base = base;
+    
+    if (req_get_flag == REQUEST_POST_FLAG) {
+        struct http_request_post *http_req_post = (struct http_request_post *)http_req_get;
+        if (content_type == NULL) {
+            content_type = HTTP_CONTENT_TYPE_URL_ENCODED;
+        }
+        http_req_post->content_type = strdup(content_type);
+        
+        if (data == NULL) {
+            http_req_post->post_data = NULL;
+        } else {
+            http_req_post->post_data = strdup(data);
+        }
+    }
+    
+    return http_req_get;
+}
+
+void http_request_free(struct http_request_get *http_req_get, int req_get_flag)
+{
+    evhttp_connection_free(http_req_get->cn);
+    evhttp_uri_free(http_req_get->uri);
+    if (req_get_flag == REQUEST_GET_FLAG) {
+        free(http_req_get);
+    } else if(req_get_flag == REQUEST_POST_FLAG) {
+        struct http_request_post *http_req_post = (struct http_request_post*)http_req_get;
+        if (http_req_post->content_type) {
+            free(http_req_post->content_type);
+        }
+        if (http_req_post->post_data) {
+            free(http_req_post->post_data);
+        }
+        free(http_req_post);
+    }
+    http_req_get = NULL;
+}
+
+void start_http_request(const char *url, int req_get_flag, 
+					const char *content_type, const char* data,
+					user_process_data_cb	user_cb)
+{
+	struct event_base* base = event_base_new();
+    struct http_request_get *http_req_get = http_request_new(base, url, req_get_flag, content_type, data);
+    
+	http_req_get->user_cb = user_cb;
+	start_url_request(http_req_get, req_get_flag);
+    
+	event_base_dispatch(base);
+	
+    http_request_free(http_req_get, req_get_flag);
+    event_base_free(base);
+}
+
 int 
 inflate_read(char *source, int len, char **dest, int gzip)
 {  
 	int ret;  
 	unsigned have;  
 	z_stream strm;  
-	unsigned char out[CHUNK];  
+	unsigned char out[CHUNK] = {0};  
 	int totalsize = 0;  
 
 	/* allocate inflate state */  
@@ -69,7 +270,7 @@ inflate_read(char *source, int len, char **dest, int gzip)
 	strm.next_in = Z_NULL;  
 
 	if(gzip)  
-		ret = inflateInit2(&strm, 47);  
+		ret = inflateInit2(&strm, -MAX_WBITS);  
 	else  
 		ret = inflateInit(&strm);  
 
@@ -83,8 +284,7 @@ inflate_read(char *source, int len, char **dest, int gzip)
 	do {  
 		strm.avail_out = CHUNK;  
 		strm.next_out = out;  
-		ret = inflate(&strm, Z_NO_FLUSH);  
-		assert(ret != Z_STREAM_ERROR); /* state not clobbered */  
+		ret = inflate(&strm, Z_NO_FLUSH);   
 		switch (ret) {  
 		case Z_NEED_DICT:  
 			ret = Z_DATA_ERROR; /* and fall through */  
