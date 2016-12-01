@@ -1,6 +1,7 @@
 # ApFree WiFiDog
 ## 编译说明
 1，将package中的apfree_wifidog目录拷贝到openwrt&lede的package目录
+
 2，make menuconfig
   进入 ApFree
   选择 apfree_wifidog
