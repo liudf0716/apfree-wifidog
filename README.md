@@ -1,4 +1,12 @@
 # ApFree WiFiDog
+## 编译说明
+1，将package中的apfree_wifidog目录拷贝到openwrt&lede的package目录
+2，make menuconfig
+  进入 ApFree
+  选择 apfree_wifidog
+
+注意事项：
+如果要支持https劫持跳转，需要修改openwrt&lede的libevent package，将其版本升级到release-2.1.7-rc版本
 
 ## 功能描述
 
@@ -42,3 +50,5 @@ ApFree WiFiDog 完全兼容现有的 wifidog 协议，并支持如下功能：
 powered by www.kunteng.org
 
 加qq群讨论： 331230369 
+
+如果决定该项目对您有帮助，烦请点个赞，给作者点鼓励和动力，谢谢！
