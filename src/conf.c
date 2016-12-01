@@ -1836,12 +1836,10 @@ static void parse_weixin_http_dns_ip_cb(char *xml_buffer, int buffer_size)
 	ezxml_t xml_dns = ezxml_parse_str(xml_buffer, buffer_size);
 	ezxml_t domain, ip;
 	
-	if (xml_dns) {
+	if (!xml_dns) {
 		debug(LOG_INFO, "ezxml_parse_str failed ");
 		return;
 	}
- 	
-	debug(LOG_INFO, "parse_weixin_http_dns_ip_cb ================ ");
 	
 	LOCK_DOMAIN();
 	
