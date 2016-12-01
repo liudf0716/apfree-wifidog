@@ -198,7 +198,6 @@ void *http_request_new(struct event_base* base, const char *url, int req_get_fla
     
     struct http_request_get *http_req_get = calloc(1, len);
     http_req_get->uri = evhttp_uri_parse(url);
-    print_uri_parts_info(http_req_get->uri);
     
     http_req_get->base = base;
     
@@ -255,7 +254,7 @@ void start_http_request(const char *url, int req_get_flag,
 }
 
 int 
-inflate_read(char *source, int len, char **dest, int gzip)
+inflate_read(char *source, int len, char **dest, int *rlen, int gzip)
 {  
 	int ret;  
 	unsigned have;  
@@ -302,6 +301,7 @@ inflate_read(char *source, int len, char **dest, int gzip)
 
 	/* clean up and return */  
 	(void)inflateEnd(&strm);  
+	*rlen = totalsize;
 	return ret == Z_STREAM_END ? Z_OK : Z_DATA_ERROR;  
 }
 
