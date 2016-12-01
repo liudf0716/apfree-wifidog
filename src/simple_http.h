@@ -60,22 +60,22 @@ struct http_request_post {
     char *post_data;	
 };
 
-void http_process_user_data(struct evhttp_request *req, struct http_request_get *http_req_get);
+void http_process_user_data(struct evhttp_request *, struct http_request_get *);
 
-void http_request_post_cb(struct evhttp_request *req, void *arg);
+void http_request_post_cb(struct evhttp_request *, void *);
 
-void http_request_get_cb(struct evhttp_request *req, void *arg);
+void http_request_get_cb(struct evhttp_request *, void *);
 
-int start_url_request(struct http_request_get *http_req, int req_get_flag);
+int start_url_request(struct http_request_get *, int);
 
-void start_http_request(const char *url, int req_get_flag, 
-						const char *content_type, const char* data, 
-						user_process_data_cb	user_cb);
+void start_http_request(const char *, int , 
+						const char *, const char* , 
+						user_process_data_cb);
 
-void *http_request_new(struct event_base* base, const char *url, int req_get_flag, 
-                       const char *content_type, const char* data);
+void *http_request_new(struct event_base* , const char *, int , 
+                       const char *, const char* );
 
-void http_request_free(struct http_request_get *http_req_get, int req_get_flag)
+void http_request_free(struct http_request_get *, int);
 
 int inflate_read(char *source, int len, char **dest, int gzip);
 
