@@ -22,6 +22,65 @@
 #ifndef _SIMPLE_HTTP_H_
 #define _SIMPLE_HTTP_H_
 
+#include <event2/event.h>
+#include <event2/buffer.h>
+#include <event2/http.h>
+#include <event2/http_struct.h>
+#include <event2/keyvalq_struct.h>
+
+#define CHUNK   16384  
+
+// (default)
+#define HTTP_CONTENT_TYPE_URL_ENCODED   "application/x-www-form-urlencoded"   
+// (use for files: picture, mp3, tar-file etc.)                                        
+#define HTTP_CONTENT_TYPE_FORM_DATA     "multipart/form-data"                 
+// (use for plain text)
+#define HTTP_CONTENT_TYPE_TEXT_PLAIN    "text/plain"
+
+#define REQUEST_POST_FLAG               2
+#define REQUEST_GET_FLAG                3
+
+typedef void (*user_process_data_cb)(void *data);
+
+struct http_request_get {
+	user_process_data_cb	user_cb;
+    struct evhttp_uri *uri;
+    struct event_base *base;
+    struct evhttp_connection *cn;
+    struct evhttp_request *req;
+};
+
+struct http_request_post {
+	user_process_data_cb	user_cb;
+    struct evhttp_uri *uri;
+    struct event_base *base;
+    struct evhttp_connection *cn;
+    struct evhttp_request *req;
+    char *content_type;
+    char *post_data;	
+};
+
+void http_process_user_data(struct evhttp_request *req, struct http_request_get *http_req_get);
+
+void http_request_post_cb(struct evhttp_request *req, void *arg);
+
+void http_request_get_cb(struct evhttp_request *req, void *arg);
+
+int start_url_request(struct http_request_get *http_req, int req_get_flag);
+
+void start_http_request(const char *url, int req_get_flag, 
+						const char *content_type, const char* data, 
+						user_process_data_cb	user_cb);
+
+void *http_request_new(struct event_base* base, const char *url, int req_get_flag, 
+                       const char *content_type, const char* data);
+
+void http_request_free(struct http_request_get *http_req_get, int req_get_flag)
+
+int inflate_read(char *source, int len, char **dest, int gzip);
+
+char *http_get_uncompressed(const int sockfd, const char *req);
+
 char *http_get(const int, const char *);
 
 char *http_get_ex(const int, const char *, int);
