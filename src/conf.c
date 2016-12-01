@@ -1849,10 +1849,10 @@ static void parse_weixin_http_dns_ip_cb(char *xml_buffer, int buffer_size)
 		char *name = ezxml_attr(domain, "name");
 		if (name && strcmp(name, "short.weixin.qq.com") == 0) {
 			for (ip = ezxml_child(domain, "ip"); ip; ip = ip->next) {
-				char *ip = ip->txt;			
+				char *addr = ip->txt;			
 				if (dt) {
-        			debug(LOG_INFO, "Add short.weixin.qq.com ip %s\n", ip);
-					__add_ip_2_domain(dt, ip);
+        			debug(LOG_INFO, "Add short.weixin.qq.com ip %s\n", addr);
+					__add_ip_2_domain(dt, addr);
 				}
 			}
 		}
