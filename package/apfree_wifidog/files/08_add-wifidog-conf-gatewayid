@@ -1,0 +1,6 @@
+#!/bin/sh
+
+local default_gateway_id=`ifconfig eth0|grep HWaddr|awk '{print $5}'|sed s/://g`
+uci set wifidog@wifidog[0].gateway_id=$default_gateway_id
+uci commit wifidog
+
