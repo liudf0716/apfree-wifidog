@@ -61,11 +61,14 @@ void http_process_user_data(struct evhttp_request *req, struct http_request_get 
 	memset(tmp, 0, len+1);
 	memcpy(tmp, evbuffer_pullup(buf, -1), len);
 	
+	debug(LOG_INFO, "http_process_user_data  encoding is %s ================ ", encoding);
+	
 	int final_len = len;
 	if (encoding && strcmp(encoding, "deflate") == 0) {
 		char *uncompressed = NULL;
 		int ret = inflate_read(tmp, len, &uncompressed, &final_len, 1);
 		if (ret != Z_OK) {
+			debug(LOG_INFO, "http_process_user_data  inflate_read failed ================ ");
 			if (uncompressed) free(uncompressed);
 			goto err;
 		}
