@@ -61,9 +61,10 @@ void http_process_user_data(struct evhttp_request *req, struct http_request_get 
 	memset(tmp, 0, len+1);
 	memcpy(tmp, evbuffer_pullup(buf, -1), len);
 	
+	int final_len = len;
 	if (encoding && strcmp(encoding, "deflate") == 0) {
 		char *uncompressed = NULL;
-		int ret = inflate_read(tmp, len, &uncompressed, 1);
+		int ret = inflate_read(tmp, len, &uncompressed, &final_len, 1);
 		if (ret != Z_OK) {
 			if (uncompressed) free(uncompressed);
 			goto err;
@@ -73,7 +74,7 @@ void http_process_user_data(struct evhttp_request *req, struct http_request_get 
 	} 
 
 	if (http_req_get->user_cb)
-		http_req_get->user_cb(tmp);
+		http_req_get->user_cb(tmp, final_len);
 err:
 	event_base_loopexit(http_req_get->base, 0);
 	free(tmp);
