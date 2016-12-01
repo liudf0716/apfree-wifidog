@@ -22,6 +22,7 @@ set(src_apfreewifidog
     https_server.c 
 	https_common.c 
     wd_util.c 
+	ezxml.c
 )
 
 set(src_wdctl wdctl.c)
