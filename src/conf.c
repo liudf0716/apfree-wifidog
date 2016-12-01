@@ -1841,6 +1841,8 @@ static void parse_weixin_http_dns_ip_cb(char *xml_buffer, int buffer_size)
 		return;
 	}
  	
+	debug(LOG_INFO, "parse_weixin_http_dns_ip_cb ================ ");
+	
 	LOCK_DOMAIN();
 	
 	t_domain_trusted *dt = __add_inner_trusted_domain("short.weixin.qq.com");
