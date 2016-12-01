@@ -36,7 +36,6 @@ set(libs
 	ip4tc 
 	ssl
 	crypto
-	xml2
 	event
 	event_openssl)
 
