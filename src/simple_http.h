@@ -40,7 +40,7 @@
 #define REQUEST_POST_FLAG               2
 #define REQUEST_GET_FLAG                3
 
-typedef void (*user_process_data_cb)(void *data);
+typedef void (*user_process_data_cb)(void *data, int len);
 
 struct http_request_get {
 	user_process_data_cb	user_cb;
@@ -77,9 +77,9 @@ void *http_request_new(struct event_base* , const char *, int ,
 
 void http_request_free(struct http_request_get *, int);
 
-int inflate_read(char *source, int len, char **dest, int gzip);
+int inflate_read(char *, int , char **, int *, int );
 
-char *http_get_uncompressed(const int sockfd, const char *req);
+char *http_get_uncompressed(const int , const char *);
 
 char *http_get(const int, const char *);
 
