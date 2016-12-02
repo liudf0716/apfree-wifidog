@@ -599,11 +599,11 @@ main_loop(void)
     	    debug(LOG_ERR, "FATAL: Failed to create threadpool - exiting");
 			termination_handler(0);
 		}
-    	debug(LOG_NOTICE, "Create thread pool thread_num %d, queue_size %d", thread_number, queue_size);
+    	debug(LOG_DEBUG, "Create thread pool thread_num %d, queue_size %d", thread_number, queue_size);
 	}	
 	//<<< liudf added end
 
-    debug(LOG_NOTICE, "Waiting for connections");
+    debug(LOG_DEBUG, "Waiting for connections");
     while (1) {
 
         r = httpdGetConnection(webserver, NULL);
