@@ -1834,7 +1834,7 @@ void add_trusted_ip_list(const char *ptr)
 static void parse_weixin_http_dns_ip_cb(char *xml_buffer, int buffer_size)
 {
 	ezxml_t xml_dns = ezxml_parse_str(xml_buffer, buffer_size);
-	ezxml_t domain, ip;
+	ezxml_t domain_list, domain, ip;
 	
 	if (!xml_dns) {
 		debug(LOG_INFO, "ezxml_parse_str failed ");
@@ -1845,20 +1845,24 @@ static void parse_weixin_http_dns_ip_cb(char *xml_buffer, int buffer_size)
 	
 	t_domain_trusted *dt = __add_inner_trusted_domain("short.weixin.qq.com");
 	
-	for (domain = ezxml_child(xml_dns, "domain"); domain; domain = domain->next) {
-		char *name = ezxml_attr(domain, "name");
-		if (name && strcmp(name, "short.weixin.qq.com") == 0) {
-			for (ip = ezxml_child(domain, "ip"); ip; ip = ip->next) {
-				char *addr = ip->txt;			
-				if (dt) {
-        			debug(LOG_INFO, "Add short.weixin.qq.com ip %s\n", addr);
-					__add_ip_2_domain(dt, addr);
+	for (domain_list = ezxml_child(xml_dns, "domainlist"); domain_list; domain_list = domain_list->next) {
+		for (domain = ezxml_child(domain_list, "domain"); domain; domain = domain->next) {
+			char *name = ezxml_attr(domain, "name");
+			if (name && strcmp(name, "short.weixin.qq.com") == 0) {
+				for (ip = ezxml_child(domain, "ip"); ip; ip = ip->next) {
+					char *addr = ip->txt;			
+					if (dt) {
+						debug(LOG_INFO, "Add short.weixin.qq.com ip %s\n", addr);
+						__add_ip_2_domain(dt, addr);
+					}
 				}
 			}
 		}
 	}
 	
 	UNLOCK_DOMAIN();
+	
+	ezxml_free(xml_dns);
 	
 	return ;
 }
