@@ -1,4 +1,7 @@
 # ApFree WiFiDog
+ApFree WiFidog 在完全兼容原版WiFiDog的基础上，在功能、性能和稳定性方面做了大量工作、改进及优化，目前在坤腾固件和家平米的项目中广泛使用，使用ApFree WiFidog的在线路由器数量达到1万多台
+
+
 ## 演示视频
 
 http://v.qq.com/x/page/f03507zyfvv.html
@@ -45,9 +48,11 @@ ApFree WiFiDog 完全兼容现有的 wifidog 协议，并支持如下功能：
 
 3， https://github.com/sosopop/uvhttp
 
+4, http://ezxml.sourceforge.net/
+
 ----
 
-## powered by www.kunteng.org
+## powered by 坤腾畅联固件团队 （ www.kunteng.org）
 
 ## 加qq群讨论： 331230369 
 
