@@ -3,7 +3,7 @@ ApFree WiFiDog 在完全兼容原版WiFiDog的基础上，在功能、性能和�
 
 由于ApFree WiFiDog完全兼容原有的WiFiDog协议，在将原有WiFiDog迁移到ApFree WiFiDog可以做到无缝切换
 
-## 演示视频
+## HTTPS跳转演示视频
 
 http://v.qq.com/x/page/f03507zyfvv.html
 
