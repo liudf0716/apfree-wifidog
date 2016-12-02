@@ -289,7 +289,7 @@ _connect_auth_server(int level)
     for (auth_server = config->auth_servers; auth_server; auth_server = auth_server->next) {
         num_servers++;
     }
-    debug(LOG_DEBUG, "Level %d: Calculated %d auth servers in list", level, num_servers);
+    debug(LOG_INFO, "Level %d: Calculated %d auth servers in list", level, num_servers);
 
     if (level > num_servers) {
         /*
@@ -305,23 +305,23 @@ _connect_auth_server(int level)
      */
     auth_server = config->auth_servers;
     hostname = auth_server->authserv_hostname;
-    debug(LOG_DEBUG, "Level %d: Resolving auth server [%s]", level, hostname);
+    debug(LOG_INFO, "Level %d: Resolving auth server [%s]", level, hostname);
     h_addr = wd_gethostbyname(hostname);
     if (!h_addr) {
         /*
          * DNS resolving it failed
          */
-        debug(LOG_DEBUG, "Level %d: Resolving auth server [%s] failed", level, hostname);
+        debug(LOG_INFO, "Level %d: Resolving auth server [%s] failed", level, hostname);
 
         for (popular_server = config->popular_servers; popular_server; popular_server = popular_server->next) {
             debug(LOG_DEBUG, "Level %d: Resolving popular server [%s]", level, popular_server->hostname);
             h_addr = wd_gethostbyname(popular_server->hostname);
             if (h_addr) {
-                debug(LOG_DEBUG, "Level %d: Resolving popular server [%s] succeeded = [%s]", level, popular_server->hostname,
+                debug(LOG_INFO, "Level %d: Resolving popular server [%s] succeeded = [%s]", level, popular_server->hostname,
                       inet_ntoa(*h_addr));
                 break;
             } else {
-                debug(LOG_DEBUG, "Level %d: Resolving popular server [%s] failed", level, popular_server->hostname);
+                debug(LOG_INFO, "Level %d: Resolving popular server [%s] failed", level, popular_server->hostname);
             }
         }
 
@@ -337,7 +337,7 @@ _connect_auth_server(int level)
              *
              * The auth server's DNS server is probably dead. Try the next auth server
              */
-            debug(LOG_DEBUG, "Level %d: Marking auth server [%s] as bad and trying next if possible", level, hostname);
+            debug(LOG_INFO, "Level %d: Marking auth server [%s] as bad and trying next if possible", level, hostname);
             if (auth_server->last_ip) {
                 free(auth_server->last_ip);
                 auth_server->last_ip = NULL;
@@ -352,7 +352,7 @@ _connect_auth_server(int level)
              * and nothing we can do will make it work
              */
             mark_offline();
-            debug(LOG_DEBUG, "Level %d: Failed to resolve auth server and all popular servers. "
+            debug(LOG_INFO, "Level %d: Failed to resolve auth server and all popular servers. "
                   "The internet connection is probably down", level);
             return (-1);
         }
@@ -364,14 +364,14 @@ _connect_auth_server(int level)
 		ip = safe_malloc(HTTP_IP_ADDR_LEN);
 		inet_ntop(AF_INET, h_addr, ip, HTTP_IP_ADDR_LEN);
 		ip[HTTP_IP_ADDR_LEN-1] = '\0';
-        debug(LOG_DEBUG, "Level %d: Resolving auth server [%s] succeeded = [%s]", level, hostname, ip);
+        debug(LOG_INFO, "Level %d: Resolving auth server [%s] succeeded = [%s]", level, hostname, ip);
 
         if (!auth_server->last_ip || strcmp(auth_server->last_ip, ip) != 0) {
             /*
              * But the IP address is different from the last one we knew
              * Update it
              */
-            debug(LOG_DEBUG, "Level %d: Updating last_ip IP of server [%s] to [%s]", level, hostname, ip);
+            debug(LOG_INFO, "Level %d: Updating last_ip IP of server [%s] to [%s]", level, hostname, ip);
             if (auth_server->last_ip)
                 free(auth_server->last_ip);
             auth_server->last_ip = ip;
@@ -427,8 +427,8 @@ _connect_auth_server(int level)
 				fd_set myset; 
   				struct timeval tv; 
 
-        		tv.tv_sec = 15; 
-        		tv.tv_usec = 0; 
+        		tv.tv_sec = 0; 
+        		tv.tv_usec = 100; 
         		FD_ZERO(&myset); 
         		FD_SET(sockfd, &myset); 
         		if (select(sockfd+1, NULL, &myset, NULL, &tv) > 0) { 
@@ -441,27 +441,8 @@ _connect_auth_server(int level)
 			} 
 		} else
 			goto success;
-#if	0 
-		if (connect(sockfd, (struct sockaddr *)&their_addr, sizeof(struct sockaddr)) == -1) {
-            /*
-             * Failed to connect
-             * Mark the server as bad and try the next one
-             */
-            debug(LOG_DEBUG,
-                  "Level %d: Failed to connect to auth server %s:%d (%s). Marking it as bad and trying next if possible",
-                  level, hostname, ntohs(port), strerror(errno));
-            close(sockfd);
-            mark_auth_server_bad(auth_server);
-            return _connect_auth_server(level); /* Yay recursion! */
-        } else {
-            /*
-             * We have successfully connected
-             */
-            debug(LOG_DEBUG, "Level %d: Successfully connected to auth server %s:%d", level, hostname, ntohs(port));
-            return sockfd;
-        }
-#endif
-		debug(LOG_DEBUG,
+		
+		debug(LOG_INFO,
         	"Level %d: Failed to connect to auth server %s:%d (%s). Marking it as bad and trying next if possible",
             level, hostname, ntohs(port), strerror(errno));
 		close(sockfd);
