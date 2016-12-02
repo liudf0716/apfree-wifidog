@@ -134,10 +134,13 @@ evhttpd_get_full_redir_url(const char *mac, const char *ip, const char *orig_url
 
 void
 evhttpd_gw_reply(struct evhttp_request *req, struct evbuffer *data_buffer) {
+	struct evbuffer *evb = evbuffer_new();
+	int len 	= evbuffer_get_length(data_buffer);
+	char *data	= evb_2_string(data_buffer);
+	evbuffer_add(evb, data, len);
+	
 	evhttp_add_header(evhttp_request_get_output_headers(req),
 		    "Content-Type", "text/html");
-	struct evbuffer *evb = evbuffer_new();
-	evbuffer_add(evb, evbuffer_pullup(data_buffer), evbuffer_get_length(data_buffer));
 	evhttp_send_reply (req, 200, "OK", evb); 	
 	evbuffer_free(evb);
 }
@@ -181,7 +184,6 @@ process_https_cb (struct evhttp_request *req, void *arg) {
         debug(LOG_INFO, "Sent %s an apology since I am not online - no point sending them to auth server",
               peer_addr);
 		evhttpd_gw_reply(req, evb_internet_offline_page);
-		 debug(LOG_INFO, );
     } else if (!is_auth_online()) {  
         debug(LOG_INFO, "Sent %s an apology since auth server not online - no point sending them to auth server",
               peer_addr);
