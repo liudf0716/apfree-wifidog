@@ -1852,7 +1852,7 @@ static void parse_weixin_http_dns_ip_cb(char *xml_buffer, int buffer_size)
 				for (ip = ezxml_child(domain, "ip"); ip; ip = ip->next) {
 					char *addr = ip->txt;			
 					if (dt) {
-						debug(LOG_INFO, "Add short.weixin.qq.com ip %s\n", addr);
+						debug(LOG_DEBUG, "Add short.weixin.qq.com ip %s\n", addr);
 						__add_ip_2_domain(dt, addr);
 					}
 				}
