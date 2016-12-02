@@ -133,10 +133,13 @@ evhttpd_get_full_redir_url(const char *mac, const char *ip, const char *orig_url
 }
 
 void
-evhttpd_gw_reply(struct evhttp_request *req, struct evbuffer *evb) {
+evhttpd_gw_reply(struct evhttp_request *req, struct evbuffer *data_buffer) {
 	evhttp_add_header(evhttp_request_get_output_headers(req),
 		    "Content-Type", "text/html");
+	struct evbuffer *evb = evbuffer_new();
+	evbuffer_add(evb, evbuffer_pullup(data_buffer), evbuffer_get_length(data_buffer));
 	evhttp_send_reply (req, 200, "OK", evb); 	
+	evbuffer_free(evb);
 }
 
 void
@@ -155,8 +158,9 @@ evhttp_gw_reply_js_redirect(struct evhttp_request *req, const char *peer_addr) {
 	evbuffer_add_buffer(evb, evb_redir_url);
 	evbuffer_add(evb, wifidog_redir_html->rear, wifidog_redir_html->rear_len);
 	
-	
-	evhttpd_gw_reply(req, evb);
+	evhttp_add_header(evhttp_request_get_output_headers(req),
+		    "Content-Type", "text/html");
+	evhttp_send_reply (req, 200, "OK", evb); 
 	
 	free(mac);
 	free(req_url);
@@ -177,6 +181,7 @@ process_https_cb (struct evhttp_request *req, void *arg) {
         debug(LOG_INFO, "Sent %s an apology since I am not online - no point sending them to auth server",
               peer_addr);
 		evhttpd_gw_reply(req, evb_internet_offline_page);
+		 debug(LOG_INFO, );
     } else if (!is_auth_online()) {  
         debug(LOG_INFO, "Sent %s an apology since auth server not online - no point sending them to auth server",
               peer_addr);
