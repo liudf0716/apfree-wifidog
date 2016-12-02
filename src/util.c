@@ -488,7 +488,7 @@ void evdns_add_trusted_domain_ip_cb(int errcode, struct evutil_addrinfo *addr, v
             }
             if (s) {
 				t_ip_trusted *ipt = NULL;
-				debug(LOG_INFO, "parse domain (%s) ip (%s)", p->domain, s);
+				debug(LOG_DEBUG, "parse domain (%s) ip (%s)", p->domain, s);
 				if(p->ips_trusted == NULL) {
 					ipt = (t_ip_trusted *)malloc(sizeof(t_ip_trusted));
 					memset(ipt, 0, sizeof(t_ip_trusted));
