@@ -110,9 +110,9 @@ void http_request_post_cb(struct evhttp_request *req, void *arg)
 }
 
 void http_request_get_cb(struct evhttp_request *req, void *arg)
-{
-	debug(LOG_INFO, "http_request_get_cb [%d] ......", req->response_code);
+{	
     struct http_request_get *http_req_get = (struct http_request_get *)arg;
+	debug(LOG_INFO, "http_request_get_cb [%d] ......", req->response_code);
     switch(req->response_code)
     {
         case HTTP_OK:
@@ -246,6 +246,8 @@ void start_http_request(const char *url, int req_get_flag,
 	struct event_base* base = event_base_new();
     struct http_request_get *http_req_get = http_request_new(base, url, req_get_flag, content_type, data);
     
+	debug(LOG_INFO, "start_http_request  ......");
+	
 	http_req_get->user_cb = user_cb;
 	start_url_request(http_req_get, req_get_flag);
     
