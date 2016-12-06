@@ -143,6 +143,7 @@ int start_url_request(struct http_request_get *http_req, int req_get_flag)
     if (http_req->cn)
         evhttp_connection_free(http_req->cn);
     
+	debug(LOG_INFO, "1. start_url_request  ......");
     int port = evhttp_uri_get_port(http_req->uri);
     http_req->cn = evhttp_connection_base_new(http_req->base,
 							   NULL,
@@ -153,12 +154,14 @@ int start_url_request(struct http_request_get *http_req, int req_get_flag)
      * Request will be released by evhttp connection
      * See info of evhttp_make_request()
      */
+	debug(LOG_INFO, "2. start_url_request  ......");
     if (req_get_flag == REQUEST_POST_FLAG) {
         http_req->req = evhttp_request_new(http_request_post_cb, http_req);
     } else if (req_get_flag ==  REQUEST_GET_FLAG) {
         http_req->req = evhttp_request_new(http_request_get_cb, http_req);
     }
     
+	debug(LOG_INFO, "3. start_url_request  ......");
     if (req_get_flag == REQUEST_POST_FLAG) {
         const char *path = evhttp_uri_get_path(http_req->uri);
         evhttp_make_request(http_req->cn, http_req->req, EVHTTP_REQ_POST,
@@ -182,6 +185,7 @@ int start_url_request(struct http_request_get *http_req, int req_get_flag)
         evhttp_make_request(http_req->cn, http_req->req, EVHTTP_REQ_GET,
                              path_query ? path_query: "/");
     }
+	debug(LOG_INFO, "4. start_url_request  ......");
     /** Set the header properties */
     evhttp_add_header(http_req->req->output_headers, "Host", evhttp_uri_get_host(http_req->uri));
     
@@ -245,19 +249,14 @@ void start_http_request(const char *url, int req_get_flag,
 {
 	struct event_base* base = event_base_new();
     struct http_request_get *http_req_get = http_request_new(base, url, req_get_flag, content_type, data);
-    
-	debug(LOG_INFO, "1, start_http_request  ......");
 	
 	http_req_get->user_cb = user_cb;
 	start_url_request(http_req_get, req_get_flag);
     
-	debug(LOG_INFO, "2. start_http_request  ......");
 	event_base_dispatch(base);
-	debug(LOG_INFO, "3. start_http_request  ......");
+
     http_request_free(http_req_get, req_get_flag);
-	debug(LOG_INFO, "4. start_http_request  ......");
     event_base_free(base);
-	debug(LOG_INFO, "5. start_http_request  ......");
 }
 
 int 
