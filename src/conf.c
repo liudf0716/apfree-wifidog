@@ -1874,6 +1874,7 @@ int
 fix_weixin_http_dns_ip (void)
 {
 	const char *url_weixin_dns = "http://dns.weixin.qq.com/cgi-bin/micromsg-bin/newgetdns";
+	debug(LOG_INFO, "fix_weixin_http_dns_ip ..............");
 	start_http_request(url_weixin_dns, REQUEST_GET_FLAG, NULL, NULL, parse_weixin_http_dns_ip_cb);
 }
 
