@@ -1877,51 +1877,6 @@ fix_weixin_http_dns_ip (void)
 	start_http_request(url_weixin_dns, REQUEST_GET_FLAG, NULL, NULL, parse_weixin_http_dns_ip_cb);
 }
 
-int 
-__fix_weixin_http_dns_ip(void)
-{
-	const char *get_weixin_ip_cmd = "curl --compressed http://dns.weixin.qq.com/cgi-bin/micromsg-bin/newgetdns 2>/dev/null";
-	const char *short_weixin_begin="<domain name=\"short.weixin.qq.com";
-    FILE *file = NULL;
-
-    if((file = popen(get_weixin_ip_cmd, "r")) != NULL) {
-    	char buf[512];
-        char *ip = NULL, *p = NULL;
-        int flag = 0;
-
-        while(memset(buf, 0, 512) && fgets(buf, 512, file)) {
-        	if(!flag&&strncmp(buf, short_weixin_begin, strlen(short_weixin_begin)) == 0) {
-            	flag = 1;
-            }
-            if(flag&&strncmp(buf, "</domain>", 9) == 0) {
-            	flag = 0;
-                break;
-            }
-            if(flag&&strncmp(buf, "<ip>", 4) == 0) {
-				t_domain_trusted	*dt = NULL;
-            	p = rindex(buf, '<');
-                *p='\0';
-				ip = buf+4;
-				
-				LOCK_DOMAIN();
-				
-				dt = __add_inner_trusted_domain("short.weixin.qq.com");
-				if (dt) {
-        			debug(LOG_INFO, "Add short.weixin.qq.com ip %s\n", ip);
-					__add_ip_2_domain(dt, ip);
-					UNLOCK_DOMAIN();
-					return 1; // parse weixin dns success
-				}
-
-				UNLOCK_DOMAIN();
-            }
-       	}
-    	pclose(file);
-	}
-	
-	return 0; // parse weixin dns failed
-}
-
 // clear domain's ip collection
 void
 __clear_trusted_domain_ip(t_ip_trusted *ipt)
