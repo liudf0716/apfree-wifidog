@@ -111,6 +111,7 @@ void http_request_post_cb(struct evhttp_request *req, void *arg)
 
 void http_request_get_cb(struct evhttp_request *req, void *arg)
 {
+	debug(LOG_INFO, "http_request_get_cb ......");
     struct http_request_get *http_req_get = (struct http_request_get *)arg;
     switch(req->response_code)
     {
