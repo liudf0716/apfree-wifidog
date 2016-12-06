@@ -246,15 +246,18 @@ void start_http_request(const char *url, int req_get_flag,
 	struct event_base* base = event_base_new();
     struct http_request_get *http_req_get = http_request_new(base, url, req_get_flag, content_type, data);
     
-	debug(LOG_INFO, "start_http_request  ......");
+	debug(LOG_INFO, "1, start_http_request  ......");
 	
 	http_req_get->user_cb = user_cb;
 	start_url_request(http_req_get, req_get_flag);
     
+	debug(LOG_INFO, "2. start_http_request  ......");
 	event_base_dispatch(base);
-	
+	debug(LOG_INFO, "3. start_http_request  ......");
     http_request_free(http_req_get, req_get_flag);
+	debug(LOG_INFO, "4. start_http_request  ......");
     event_base_free(base);
+	debug(LOG_INFO, "5. start_http_request  ......");
 }
 
 int 
