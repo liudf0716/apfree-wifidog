@@ -84,6 +84,11 @@ err:
 void http_request_post_cb(struct evhttp_request *req, void *arg)
 {
     struct http_request_post *http_req_post = (struct http_request_post *)arg;
+	if (req == NULL) {
+		debug (LOG_INFO, "http_request_post_cb req is NULL ");
+		goto out;
+	}
+	
     switch(req->response_code)
     {
         case HTTP_OK:
@@ -103,16 +108,20 @@ void http_request_post_cb(struct evhttp_request *req, void *arg)
             return;
         }
             
-        default:
-            event_base_loopexit(http_req_post->base, 0);
-            return;
+        default: 
+            break;
     }
+out:
+	event_base_loopexit(http_req_post->base, 0);
 }
 
 void http_request_get_cb(struct evhttp_request *req, void *arg)
 {	
-	debug(LOG_INFO, "http_request_get_cb [%d] ......");
     struct http_request_get *http_req_get = (struct http_request_get *)arg;
+	if (req == NULL) {
+		debug (LOG_INFO, "http_request_get_cb req is NULL ");
+		goto out;
+	}
     switch(req->response_code)
     {
         case HTTP_OK:
@@ -132,10 +141,12 @@ void http_request_get_cb(struct evhttp_request *req, void *arg)
             return;
         }
             
-        default:
-            event_base_loopexit(http_req_get->base, 0);
-            return;
+        default:   
+            break;
     }
+	
+out:
+	 event_base_loopexit(http_req_get->base, 0);
 }
 
 int start_url_request(struct http_request_get *http_req, int req_get_flag)
