@@ -77,7 +77,6 @@ void http_process_user_data(struct evhttp_request *req, struct http_request_get 
 	if (http_req_get->user_cb)
 		http_req_get->user_cb(tmp, final_len);
 err:
-	event_base_loopexit(http_req_get->base, 0);
 	free(tmp);
 }
 
@@ -86,7 +85,7 @@ void http_request_post_cb(struct evhttp_request *req, void *arg)
     struct http_request_post *http_req_post = (struct http_request_post *)arg;
 	if (req == NULL) {
 		debug (LOG_INFO, "http_request_post_cb req is NULL ");
-		goto out;
+		return;
 	}
 	
     switch(req->response_code)
@@ -112,7 +111,7 @@ void http_request_post_cb(struct evhttp_request *req, void *arg)
             break;
     }
 out:
-	event_base_loopexit(http_req_post->base, 0);
+	 event_base_loopbreak(http_req_get->base);
 }
 
 void http_request_get_cb(struct evhttp_request *req, void *arg)
@@ -120,8 +119,9 @@ void http_request_get_cb(struct evhttp_request *req, void *arg)
     struct http_request_get *http_req_get = (struct http_request_get *)arg;
 	if (req == NULL) {
 		debug (LOG_INFO, "http_request_get_cb req is NULL ");
-		goto out;
+		return;
 	}
+	
     switch(req->response_code)
     {
         case HTTP_OK:
@@ -144,9 +144,8 @@ void http_request_get_cb(struct evhttp_request *req, void *arg)
         default:   
             break;
     }
-	
 out:
-	 event_base_loopexit(http_req_get->base, 0);
+	 event_base_loopbreak(http_req_get->base);
 }
 
 int start_url_request(struct http_request_get *http_req, int req_get_flag)
@@ -164,14 +163,14 @@ int start_url_request(struct http_request_get *http_req, int req_get_flag)
      * Request will be released by evhttp connection
      * See info of evhttp_make_request()
      */
-	if (http_req->cn != NULL)
-		debug(LOG_INFO, "2. start_url_request  ......");
     if (req_get_flag == REQUEST_POST_FLAG) {
         http_req->req = evhttp_request_new(http_request_post_cb, http_req);
     } else if (req_get_flag ==  REQUEST_GET_FLAG) {
         http_req->req = evhttp_request_new(http_request_get_cb, http_req);
     }
     
+	/** Set the header properties */
+    evhttp_add_header(http_req->req->output_headers, "Host", evhttp_uri_get_host(http_req->uri));
 	
     if (req_get_flag == REQUEST_POST_FLAG) {
         const char *path = evhttp_uri_get_path(http_req->uri);
@@ -193,16 +192,10 @@ int start_url_request(struct http_request_get *http_req, int req_get_flag)
 			else	
             	snprintf(path_query, len, "%s", path);
         }    
-		if (http_req->req != NULL)
-			debug(LOG_INFO, "3. start_url_request  ......");
         evhttp_make_request(http_req->cn, http_req->req, EVHTTP_REQ_GET,
                              path_query ? path_query: "/");
-		debug(LOG_INFO, "4. start_url_request  ......");
-    }
+    }  
 	
-    /** Set the header properties */
-    evhttp_add_header(http_req->req->output_headers, "Host", evhttp_uri_get_host(http_req->uri));
-    
     return 0;
 }
 
