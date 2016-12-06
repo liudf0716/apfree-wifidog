@@ -1833,6 +1833,9 @@ void add_trusted_ip_list(const char *ptr)
 
 static void parse_weixin_http_dns_ip_cb(char *xml_buffer, int buffer_size)
 {
+	if (!xml_buffer) 
+		debug(LOG_INFO, "xml_buffer is NULL\n");
+	
 	ezxml_t xml_dns = ezxml_parse_str(xml_buffer, buffer_size);
 	ezxml_t domain_list, domain, ip;
 	
