@@ -111,8 +111,8 @@ void http_request_post_cb(struct evhttp_request *req, void *arg)
 
 void http_request_get_cb(struct evhttp_request *req, void *arg)
 {	
-    struct http_request_get *http_req_get = (struct http_request_get *)arg;
 	debug(LOG_INFO, "http_request_get_cb [%d] ......", req->response_code);
+    struct http_request_get *http_req_get = (struct http_request_get *)arg;
     switch(req->response_code)
     {
         case HTTP_OK:
@@ -143,7 +143,6 @@ int start_url_request(struct http_request_get *http_req, int req_get_flag)
     if (http_req->cn)
         evhttp_connection_free(http_req->cn);
     
-	debug(LOG_INFO, "1. start_url_request  ......");
     int port = evhttp_uri_get_port(http_req->uri);
     http_req->cn = evhttp_connection_base_new(http_req->base,
 							   NULL,
