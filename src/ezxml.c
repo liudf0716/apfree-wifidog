@@ -472,7 +472,12 @@ ezxml_t ezxml_parse_str(char *s, size_t len)
     ezxml_root_t root = (ezxml_root_t)ezxml_new(NULL);
     char q, e, *d, **attr, **a = NULL; // initialize a to avoid compile warning
     int l, i, j;
-
+    
+    if (!s) {
+        ezxml_free(root);
+        return NULL;
+    }
+    
     root->m = s;
     if (! len) return ezxml_err(root, NULL, "root tag missing");
     root->u = ezxml_str2utf8(&s, &len); // convert utf-16 to utf-8
