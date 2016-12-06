@@ -154,7 +154,8 @@ int start_url_request(struct http_request_get *http_req, int req_get_flag)
      * Request will be released by evhttp connection
      * See info of evhttp_make_request()
      */
-	debug(LOG_INFO, "2. start_url_request  ......");
+	if (http_req->cn != NULL)
+		debug(LOG_INFO, "2. start_url_request  ......");
     if (req_get_flag == REQUEST_POST_FLAG) {
         http_req->req = evhttp_request_new(http_request_post_cb, http_req);
     } else if (req_get_flag ==  REQUEST_GET_FLAG) {
@@ -182,7 +183,8 @@ int start_url_request(struct http_request_get *http_req, int req_get_flag)
 			else	
             	snprintf(path_query, len, "%s", path);
         }    
-		debug(LOG_INFO, "3. start_url_request  ......");
+		if (http_req->req != NULL)
+			debug(LOG_INFO, "3. start_url_request  ......");
         evhttp_make_request(http_req->cn, http_req->req, EVHTTP_REQ_GET,
                              path_query ? path_query: "/");
 		debug(LOG_INFO, "4. start_url_request  ......");
