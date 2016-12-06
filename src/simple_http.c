@@ -77,6 +77,7 @@ void http_process_user_data(struct evhttp_request *req, struct http_request_get 
 	if (http_req_get->user_cb)
 		http_req_get->user_cb(tmp, final_len);
 err:
+	event_base_loopbreak(http_req_get->base);
 	free(tmp);
 }
 
@@ -111,7 +112,7 @@ void http_request_post_cb(struct evhttp_request *req, void *arg)
             break;
     }
 out:
-	 event_base_loopbreak(http_req_get->base);
+	 event_base_loopbreak(http_req_post->base);
 }
 
 void http_request_get_cb(struct evhttp_request *req, void *arg)
