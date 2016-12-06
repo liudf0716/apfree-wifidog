@@ -161,7 +161,7 @@ int start_url_request(struct http_request_get *http_req, int req_get_flag)
         http_req->req = evhttp_request_new(http_request_get_cb, http_req);
     }
     
-	debug(LOG_INFO, "3. start_url_request  ......");
+	
     if (req_get_flag == REQUEST_POST_FLAG) {
         const char *path = evhttp_uri_get_path(http_req->uri);
         evhttp_make_request(http_req->cn, http_req->req, EVHTTP_REQ_POST,
@@ -181,11 +181,13 @@ int start_url_request(struct http_request_get *http_req, int req_get_flag)
             	snprintf(path_query, len, "%s?%s", path, query);
 			else	
             	snprintf(path_query, len, "%s", path);
-        }        
+        }    
+		debug(LOG_INFO, "3. start_url_request  ......");
         evhttp_make_request(http_req->cn, http_req->req, EVHTTP_REQ_GET,
                              path_query ? path_query: "/");
+		debug(LOG_INFO, "4. start_url_request  ......");
     }
-	debug(LOG_INFO, "4. start_url_request  ......");
+	
     /** Set the header properties */
     evhttp_add_header(http_req->req->output_headers, "Host", evhttp_uri_get_host(http_req->uri));
     
