@@ -427,8 +427,8 @@ _connect_auth_server(int level)
 				fd_set myset; 
   				struct timeval tv; 
 
-        		tv.tv_sec = 0; 
-        		tv.tv_usec = 100; 
+        		tv.tv_sec = 1; 
+        		tv.tv_usec = 0; 
         		FD_ZERO(&myset); 
         		FD_SET(sockfd, &myset); 
         		if (select(sockfd+1, NULL, &myset, NULL, &tv) > 0) { 
