@@ -327,7 +327,7 @@ static int serve_some_http (char *gw_ip,  t_https_server *https_server) {
 	
     event_base_dispatch (base);
 
-	event_del(&ev_timeout);
+	event_del(&timeout);
 	event_base_free(base);
 	close(handle);
 	
