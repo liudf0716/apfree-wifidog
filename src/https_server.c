@@ -91,7 +91,8 @@
 #include "util.h"
 #include "firewall.h"
 
-static struct event_base *base	= NULL;
+static struct event_base *base		= NULL;
+static struct evdns_base *dnsbase 	= NULL;
 
 // !!!remember to free the return url
 char *
@@ -244,7 +245,6 @@ static void check_internet_available_cb(int errcode, struct evutil_addrinfo *add
 static void check_internet_available() {
 	t_popular_server *popular_server = NULL;
 	s_config *config = config_get_config();
-	struct evdns_base  *dnsbase     = evdns_base_new(base, 1);
 	
 	debug (LOG_INFO, "Enter check_internet_available, and mark offline time !\n");
 	
@@ -326,6 +326,12 @@ static int serve_some_http (char *gw_ip,  t_https_server *https_server) {
     }
     
 	// check whether internet available or not
+	dnsbase = evdns_base_new(base, 0);
+	if ( 0 != evdns_base_resolv_conf_parse(dnsbase, DNS_OPTION_NAMESERVERS, "/tmp/resolv.conf.auto") ) {
+		debug (LOG_ERR, "evdns_base_resolv_conf_parse failed %d \n", ret);
+		evdns_base_free(dnsbase, 0);
+		dnsbase = evdns_base_new(base, 1);
+	}
 	
 	check_internet_available();
 	
@@ -339,6 +345,7 @@ static int serve_some_http (char *gw_ip,  t_https_server *https_server) {
 
 	event_del(&timeout);
 	event_base_free(base);
+	evdns_base_free(dnsbase, 0);
 	close(handle);
 	
   	/* not reached; runs forever */
