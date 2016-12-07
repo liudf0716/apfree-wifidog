@@ -320,6 +320,10 @@ static int serve_some_http (char *gw_ip,  t_https_server *https_server) {
 		return 1;
     }
     
+	// check whether internet available or not
+	
+	check_internet_available();
+	
 	event_assign(&timeout, base, -1, EV_PERSIST, schedule_work_cb, (void*) &timeout);
 	evutil_timerclear(&tv);
 	tv.tv_sec = config_get_config()->checkinterval;
