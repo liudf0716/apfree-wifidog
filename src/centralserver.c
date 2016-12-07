@@ -280,6 +280,11 @@ _connect_auth_server(int level)
         return (-1);
     }
 
+	if (!is_online()) {
+		debug(LOG_INFO, "Sorry, internet is not available!");
+		return -1;
+	}
+	
     /* XXX level starts out at 0 and gets incremented by every iterations. */
     level++;
 
@@ -313,6 +318,7 @@ _connect_auth_server(int level)
          */
         debug(LOG_INFO, "Level %d: Resolving auth server [%s] failed", level, hostname);
 
+#if	0
         for (popular_server = config->popular_servers; popular_server; popular_server = popular_server->next) {
             debug(LOG_DEBUG, "Level %d: Resolving popular server [%s]", level, popular_server->hostname);
             h_addr = wd_gethostbyname(popular_server->hostname);
@@ -356,6 +362,9 @@ _connect_auth_server(int level)
                   "The internet connection is probably down", level);
             return (-1);
         }
+#endif	
+		mark_auth_server_bad(auth_server);
+		return _connect_auth_server(level);
     } else {
         /*
          * DNS resolving was successful
@@ -422,26 +431,35 @@ _connect_auth_server(int level)
   		fcntl(sockfd, F_SETFL, arg); 
        	
 		int res = connect(sockfd, (struct sockaddr *)&their_addr, sizeof(struct sockaddr)); 
-		if (res < 0) { 
-     		if (errno == EINPROGRESS) { 
-				fd_set myset; 
-  				struct timeval tv; 
-
-        		tv.tv_sec = 1; 
-        		tv.tv_usec = 0; 
-        		FD_ZERO(&myset); 
-        		FD_SET(sockfd, &myset); 
-        		if (select(sockfd+1, NULL, &myset, NULL, &tv) > 0) { 
-           			socklen_t lon = sizeof(int); 
-					int valopt;
-           			getsockopt(sockfd, SOL_SOCKET, SO_ERROR, (void*)(&valopt), &lon); 
-           			if (!valopt)  
-						goto success;
-        		}
-			} 
-		} else
+		if ((res == -1) && (errno != EINPROGRESS)) {
+			goto error;
+		} else if (res == 0) {
 			goto success;
-		
+		} else {
+			fd_set fdset; 
+			struct timeval tv; 
+			tv.tv_sec = 1; 
+			tv.tv_usec = 0; 
+			FD_ZERO(&myset); 
+			FD_SET(sockfd, &myset);
+			
+			res = select(sockfd+1, NULL, &fdset, NULL, &tv);
+			switch(res) {
+			case 1: // data to read
+				int so_error = 0;
+				int len = sizeof(so_error);
+
+				getsockopt(sockfd, SOL_SOCKET, SO_ERROR, &so_error, &len);
+				if (so_error == 0) {
+					goto success;
+				}
+				break;
+			default: 
+				break;
+			}
+		} 
+
+error:
 		debug(LOG_INFO,
         	"Level %d: Failed to connect to auth server %s:%d (%s). Marking it as bad and trying next if possible",
             level, hostname, ntohs(port), strerror(errno));
