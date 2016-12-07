@@ -55,6 +55,8 @@
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 
+#include <sys/time.h>
+
 #include <event2/bufferevent.h>
 #include <event2/bufferevent_ssl.h>
 #include <event2/event.h>
@@ -87,6 +89,8 @@
 #include "wd_util.h"
 #include "util.h"
 #include "firewall.h"
+
+static struct event_base *base	= NULL;
 
 // !!!remember to free the return url
 char *
@@ -223,17 +227,60 @@ static void server_setup_certs (SSL_CTX *ctx,
     	die_most_horribly_from_openssl_error ("SSL_CTX_check_private_key");
 }
 
-static int serve_some_http (char *gw_ip,  t_https_server *https_server) { 
-	struct event_base *base;
+static void check_internet_available_cb(int errcode, struct evutil_addrinfo *addr, void *ptr) {
+	if (!errcode) {
+		// popular server dns resolve success
+		debug (LOG_INFO, "Internet is available, mark online !\n");
+		mark_online();
+	}
+}
+
+static void check_internet_available() {
+	t_popular_server *popular_server = NULL;
+	s_config *config = config_get_config();
+	struct evdns_base  *dnsbase     = evdns_base_new(base, 1);
+	
+	debug (LOG_INFO, "Enter check_internet_available, and mark offline time !\n");
+	
+	mark_offline_time();
+	
+	struct evutil_addrinfo hints;
+	for (popular_server = config->popular_servers; popular_server; popular_server = popular_server->next) {
+		memset(&hints, 0, sizeof(hints));
+        hints.ai_family = AF_UNSPEC;
+        hints.ai_flags = EVUTIL_AI_CANONNAME;
+
+        hints.ai_socktype = SOCK_STREAM;
+        hints.ai_protocol = IPPROTO_TCP;
+		
+		evdns_getaddrinfo( dnsbase, popular_server->hostname, NULL ,
+              &hints, check_internet_available_cb, NULL);
+	}
+}
+
+static void schedule_work_cb(evutil_socket_t fd, short event, void *arg) {
+	struct event *timeout = (struct event *)arg;
+	struct timeval tv;
+
+	check_internet_available();
+	
+	evutil_timerclear(&tv);
+	tv.tv_sec = config_get_config()->checkinterval;
+	event_add(timeout, &tv);
+}
+
+static int serve_some_http (char *gw_ip,  t_https_server *https_server) { 	
   	struct evhttp *http;
   	struct evhttp_bound_socket *handle;
-
+	struct event timeout;
+	struct timeval tv;
+	
   	base = event_base_new ();
   	if (! base) { 
 		debug (LOG_ERR, "Couldn't create an event_base: exiting\n");
       	return 1;
     }
-
+	
   	/* Create a new evhttp object to handle requests. */
   	http = evhttp_new (base);
   	if (! http) { 
@@ -272,6 +319,12 @@ static int serve_some_http (char *gw_ip,  t_https_server *https_server) {
 		return 1;
     }
     
+	event_assign(&timeout, base, -1, EV_PERSIST, schedule_work_cb, (void*) &timeout);
+	evutil_timerclear(&tv);
+	tv.tv_sec = config_get_config()->checkinterval;
+    event_add(&timeout, &tv);
+
+	
     event_base_dispatch (base);
 
   	/* not reached; runs forever */
