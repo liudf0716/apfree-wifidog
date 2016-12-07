@@ -23,6 +23,7 @@
   @file wd_util.c
   @brief Misc utility functions
   @author Copyright (C) 2015 Alexandre Carmel-Veilleux <acv@miniguru.ca>
+  @author Copyright (C) 2016 Dengfeng Liu <liudengfeng@kunteng.org>
  */
 
 #define _GNU_SOURCE
@@ -70,6 +71,12 @@ mark_online()
 
 }
 
+void
+mark_offline_time() 
+{
+	time(&last_offline_time);
+}
+ 
 void
 mark_offline()
 {
