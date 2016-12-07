@@ -317,52 +317,10 @@ _connect_auth_server(int level)
          */
         debug(LOG_INFO, "Level %d: Resolving auth server [%s] failed", level, hostname);
 
-#if	0
-		t_popular_server *popular_server = NULL;
-        for (popular_server = config->popular_servers; popular_server; popular_server = popular_server->next) {
-            debug(LOG_DEBUG, "Level %d: Resolving popular server [%s]", level, popular_server->hostname);
-            h_addr = wd_gethostbyname(popular_server->hostname);
-            if (h_addr) {
-                debug(LOG_INFO, "Level %d: Resolving popular server [%s] succeeded = [%s]", level, popular_server->hostname,
-                      inet_ntoa(*h_addr));
-                break;
-            } else {
-                debug(LOG_INFO, "Level %d: Resolving popular server [%s] failed", level, popular_server->hostname);
-            }
-        }
-
-        /* 
-         * If we got any h_addr buffer for one of the popular servers, in other
-         * words, if one of the popular servers resolved, we'll assume the DNS
-         * works, otherwise we'll deal with net connection or DNS failure.
-         */
-        if (h_addr) {
-            free(h_addr);
-            /*
-             * Yes
-             *
-             * The auth server's DNS server is probably dead. Try the next auth server
-             */
-            debug(LOG_INFO, "Level %d: Marking auth server [%s] as bad and trying next if possible", level, hostname);
-            if (auth_server->last_ip) {
-                free(auth_server->last_ip);
-                auth_server->last_ip = NULL;
-            }
-            mark_auth_server_bad(auth_server);
-            return _connect_auth_server(level);
-        } else {
-            /*
-             * No
-             *
-             * It's probably safe to assume that the internet connection is malfunctioning
-             * and nothing we can do will make it work
-             */
-            mark_offline();
-            debug(LOG_INFO, "Level %d: Failed to resolve auth server and all popular servers. "
-                  "The internet connection is probably down", level);
-            return (-1);
-        }
-#endif	
+		if (auth_server->last_ip) {
+			free(auth_server->last_ip);
+			auth_server->last_ip = NULL;
+		}
 		mark_auth_server_bad(auth_server);
 		return _connect_auth_server(level);
     } else {
