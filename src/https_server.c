@@ -229,10 +229,15 @@ static void server_setup_certs (SSL_CTX *ctx,
 }
 
 static void check_internet_available_cb(int errcode, struct evutil_addrinfo *addr, void *ptr) {
-	if (!errcode) {
-		// popular server dns resolve success
-		debug (LOG_INFO, "Internet is available, mark online !\n");
-		mark_online();
+	if (errcode) { 
+		debug (LOG_INFO, "dns query error : %s", evutil_gai_strerror(err));
+	} else {
+		if (addr) {
+			// popular server dns resolve success
+			debug (LOG_INFO, "Internet is available, mark online !\n");
+			mark_online();
+			evutil_freeaddrinfo(addr);
+		}
 	}
 }
 
