@@ -22,6 +22,7 @@
 /** @file wd_util.h
   @brief Misc utility functions
   @author Copyright (C) 2015 Alexandre Carmel-Veilleux <acv@miniguru.ca>
+  @author Copyright (C) 2016 Dengfeng Liu <liudengfeng@kunteng.org>
 */
 
 #ifndef _WD_UTIL_H_
@@ -35,6 +36,8 @@ void mark_online(void);
 
 /** @brief Sets hint that an online action (dns/connect/etc using WAN) failed */
 void mark_offline(void);
+
+void mark_offline_time(void);
 
 /** @brief Returns a guess (true or false) on whether we're online or not based on previous calls to mark_online and mark_offline */
 int is_online(void);
