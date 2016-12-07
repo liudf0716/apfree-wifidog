@@ -74,7 +74,16 @@ mark_online()
 void
 mark_offline_time() 
 {
-	time(&last_offline_time);
+	int before;
+    int after;
+
+    before = is_online();
+    time(&last_offline_time);
+    after = is_online();
+
+    if (before != after) {
+        debug(LOG_INFO, "ONLINE status became %s", (after ? "ON" : "OFF"));
+    }
 }
  
 void
