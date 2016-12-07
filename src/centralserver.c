@@ -267,7 +267,6 @@ _connect_auth_server(int level)
 {
     s_config *config = config_get_config();
     t_auth_serv *auth_server = NULL;
-    t_popular_server *popular_server = NULL;
     struct in_addr *h_addr;
     int num_servers = 0;
     char *hostname = NULL;
@@ -319,6 +318,7 @@ _connect_auth_server(int level)
         debug(LOG_INFO, "Level %d: Resolving auth server [%s] failed", level, hostname);
 
 #if	0
+		t_popular_server *popular_server = NULL;
         for (popular_server = config->popular_servers; popular_server; popular_server = popular_server->next) {
             debug(LOG_DEBUG, "Level %d: Resolving popular server [%s]", level, popular_server->hostname);
             h_addr = wd_gethostbyname(popular_server->hostname);
@@ -438,16 +438,18 @@ _connect_auth_server(int level)
 		} else {
 			fd_set fdset; 
 			struct timeval tv; 
+			int so_error = 0;
+			int len = sizeof(so_error);
+			
 			tv.tv_sec = 1; 
 			tv.tv_usec = 0; 
-			FD_ZERO(&myset); 
-			FD_SET(sockfd, &myset);
+			FD_ZERO(&fdset); 
+			FD_SET(sockfd, &fdset);
 			
 			res = select(sockfd+1, NULL, &fdset, NULL, &tv);
 			switch(res) {
 			case 1: // data to read
-				int so_error = 0;
-				int len = sizeof(so_error);
+				
 
 				getsockopt(sockfd, SOL_SOCKET, SO_ERROR, &so_error, &len);
 				if (so_error == 0) {
