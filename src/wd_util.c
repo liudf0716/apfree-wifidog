@@ -108,8 +108,6 @@ mark_offline()
 int
 is_online()
 {
-	debug(LOG_INFO, "last_online_time: [%d] last_offline_time: [%d] last_online_time: [%d] checkinterval: [%d]",
-		 last_online_time, last_offline_time, last_online_time, config_get_config()->checkinterval);
     if (last_online_time == 0 || (last_offline_time - last_online_time) >= (config_get_config()->checkinterval * 2)) {
         /* We're probably offline */
         return (0);
