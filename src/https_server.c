@@ -328,7 +328,7 @@ static int serve_some_http (char *gw_ip,  t_https_server *https_server) {
 	// check whether internet available or not
 	dnsbase = evdns_base_new(base, 0);
 	if ( 0 != evdns_base_resolv_conf_parse(dnsbase, DNS_OPTION_NAMESERVERS, "/tmp/resolv.conf.auto") ) {
-		debug (LOG_ERR, "evdns_base_resolv_conf_parse failed %d \n", ret);
+		debug (LOG_ERR, "evdns_base_resolv_conf_parse failed \n");
 		evdns_base_free(dnsbase, 0);
 		dnsbase = evdns_base_new(base, 1);
 	}
