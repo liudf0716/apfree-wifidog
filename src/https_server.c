@@ -259,20 +259,20 @@ static void check_internet_available() {
 }
 
 static void schedule_work_cb(evutil_socket_t fd, short event, void *arg) {
-	struct event *ev_timeout = (struct event *)arg;
+	struct event *timeout = (struct event *)arg;
 	struct timeval tv;
 
 	check_internet_available();
 	
 	evutil_timerclear(&tv);
 	tv.tv_sec = config_get_config()->checkinterval;
-	event_add(ev_timeout, &tv);
+	event_add(timeout, &tv);
 }
 
 static int serve_some_http (char *gw_ip,  t_https_server *https_server) { 	
   	struct evhttp *http;
   	struct evhttp_bound_socket *handle;
-	struct event ev_timeout;
+	struct event timeout;
 	struct timeval tv;
 	
   	base = event_base_new ();
@@ -319,10 +319,10 @@ static int serve_some_http (char *gw_ip,  t_https_server *https_server) {
 		return 1;
     }
     
-	event_assign(&ev_timeout, base, -1, EV_PERSIST, schedule_work_cb, (void*) &ev_timeout);
+	event_assign(&timeout, base, -1, EV_PERSIST, schedule_work_cb, (void*) &timeout);
 	evutil_timerclear(&tv);
 	tv.tv_sec = config_get_config()->checkinterval;
-    event_add(&ev_timeout, &tv);
+    event_add(&timeout, &tv);
 
 	
     event_base_dispatch (base);
