@@ -65,6 +65,8 @@ mark_online()
     time(&last_online_time);
     after = is_online();        /* XXX is_online() looks at last_online_time... */
 
+	debug(LOG_INFO, "mark_online last_online_time %d ==============", last_online_time);
+	
     if (before != after) {
         debug(LOG_INFO, "ONLINE status became %s", (after ? "ON" : "OFF"));
     }
@@ -81,6 +83,8 @@ mark_offline_time()
     time(&last_offline_time);
     after = is_online();
 
+	debug(LOG_INFO, "mark_offline_time last_offline_time %d ===========", last_offline_time);
+	
     if (before != after) {
         debug(LOG_INFO, "ONLINE status became %s", (after ? "ON" : "OFF"));
     }
@@ -96,6 +100,8 @@ mark_offline()
     time(&last_offline_time);
     after = is_online();
 
+	debug(LOG_INFO, "mark_offline last_offline_time %d =============", last_offline_time);
+		  
     if (before != after) {
         debug(LOG_INFO, "ONLINE status became %s", (after ? "ON" : "OFF"));
     }
