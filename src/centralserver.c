@@ -420,8 +420,8 @@ _connect_auth_server(int level)
 
 error:
 		debug(LOG_INFO,
-        	"Level %d: Failed to connect to auth server %s:%d (%s). Marking it as bad and trying next if possible",
-            level, hostname, ntohs(port), strerror(errno));
+        	"Level %d: Failed to connect to auth server %s:%d (%d - %s). Marking it as bad and trying next if possible",
+            level, hostname, ntohs(port), errno,  strerror(errno));
 		close(sockfd);
         mark_auth_server_bad(auth_server);
 		return _connect_auth_server(level); /* Yay recursion! */
