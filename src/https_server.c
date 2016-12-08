@@ -246,8 +246,6 @@ static void check_internet_available() {
 	t_popular_server *popular_server = NULL;
 	s_config *config = config_get_config();
 	
-	debug (LOG_INFO, "Enter check_internet_available, and mark offline time !\n");
-	
 	mark_offline_time();
 	
 	struct evutil_addrinfo hints;
