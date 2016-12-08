@@ -293,7 +293,7 @@ _connect_auth_server(int level)
     for (auth_server = config->auth_servers; auth_server; auth_server = auth_server->next) {
         num_servers++;
     }
-    debug(LOG_INFO, "Level %d: Calculated %d auth servers in list", level, num_servers);
+    debug(LOG_DEBUG, "Level %d: Calculated %d auth servers in list", level, num_servers);
 
     if (level > num_servers) {
         /*
@@ -309,7 +309,7 @@ _connect_auth_server(int level)
      */
     auth_server = config->auth_servers;
     hostname = auth_server->authserv_hostname;
-    debug(LOG_INFO, "Level %d: Resolving auth server [%s]", level, hostname);
+    debug(LOG_DEBUG, "Level %d: Resolving auth server [%s]", level, hostname);
     h_addr = wd_gethostbyname(hostname);
     if (!h_addr) {
         /*
@@ -330,7 +330,7 @@ _connect_auth_server(int level)
 		ip = safe_malloc(HTTP_IP_ADDR_LEN);
 		inet_ntop(AF_INET, h_addr, ip, HTTP_IP_ADDR_LEN);
 		ip[HTTP_IP_ADDR_LEN-1] = '\0';
-        debug(LOG_INFO, "Level %d: Resolving auth server [%s] succeeded = [%s]", level, hostname, ip);
+        debug(LOG_DEBUG, "Level %d: Resolving auth server [%s] succeeded = [%s]", level, hostname, ip);
 
         if (!auth_server->last_ip || strcmp(auth_server->last_ip, ip) != 0) {
             /*
