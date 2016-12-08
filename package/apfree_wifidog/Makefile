@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=apfree_wifidog
-PKG_VERSION:=1.11.565
+PKG_VERSION:=1.12.653
 PKG_RELEASE=1
 
 
@@ -12,14 +12,7 @@ PKG_LICENSE_FILES:=COPYING
 PKG_SOURCE_PROTO:=git
 PKG_SOURCE_URL:=https://github.com/liudf0716/apfree_wifidog.git
 PKG_SOURCE_SUBDIR:=$(PKG_NAME)-$(PKG_VERSION)
-#PKG_SOURCE_VERSION:=master
-PKG_SOURCE_VERSION:=5d1696eae50f048ac1a6739e4bb71a466d907066
-#PKG_SOURCE_VERSION:=01160737d4c73c1adeef0eaae7e89cf7a40de7a2
-#PKG_SOURCE_VERSION:=ee9781ee58c72cfbe8df655fb64d00dac43bc17f
-#PKG_SOURCE_VERSION:=3d4769c8a2ff28d9c28b3b2773e0b5332818be74
-#PKG_SOURCE_VERSION:=2ae9afb9bd77dddec04843dd39abceba9ebd8c68
-#PKG_SOURCE_VERSION:=9926ac3197be0fca9551540f08d15de8c3f5c726
-#PKG_SOURCE_VERSION:=dcb919818bab1095906b48c01734a258c7f3fe71
+PKG_SOURCE_VERSION:=72813a912bcca1d774fcfff3cb4ff1267f03b97e
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION)-$(PKG_SOURCE_VERSION).tar.gz
 
 
@@ -32,7 +25,7 @@ include $(INCLUDE_DIR)/cmake.mk
 
 define Package/apfree_wifidog
   CATEGORY:=ApFree
-  DEPENDS:=+iptables-mod-extra +iptables-mod-ipopt +kmod-ipt-nat +iptables-mod-nat-extra +libpthread +libopenssl +libjson-c +base-files +curl +ipset +fping +ktpriv +libip4tc +libevent2 +libevent2-openssl
+  DEPENDS:=+iptables-mod-extra +iptables-mod-ipopt +kmod-ipt-nat +iptables-mod-nat-extra +libpthread +libopenssl +libjson-c +base-files +ipset +libip4tc +libevent2 +libevent2-openssl
   TITLE:=ApFree wireless captive portal solution
   URL:=http://www.kunteng.org
 endef
