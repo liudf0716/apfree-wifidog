@@ -1,7 +1,12 @@
-# ApFree WiFiDog
+# About ApFree WiFiDog
 ApFree WiFiDog 在完全兼容原版WiFiDog的基础上，在功能、性能和稳定性方面做了大量工作、改进及优化，目前在坤腾固件中广泛使用，使用ApFree WiFidog的在线路由器数量达到1万多台且还在继续增长。
 
 由于ApFree WiFiDog完全兼容原有的WiFiDog协议，在将原有WiFiDog迁移到ApFree WiFiDog可以做到无缝切换
+
+# ApFree WiFiDog的优势
+1，稳定， 大规模在商业场景下应用，稳定性得到实际场景下的检验
+2，持续更新维护，由坤腾固件研发团队维护，保障其可靠运营
+3，性能优异， http请求页面响应毫秒级别，做到真正的点击页面秒跳
 
 ## HTTPS跳转演示视频
 
