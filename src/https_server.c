@@ -159,7 +159,7 @@ evhttp_gw_reply_js_redirect(struct evhttp_request *req, const char *peer_addr) {
 	struct evbuffer *evb = evbuffer_new();
 	struct evbuffer *evb_redir_url = evbuffer_new();
 	
-	debug (LOG_DEBUG, "Got a GET request for <%s> from <%s>\n", req_url, peer_addr);
+	debug (LOG_INFO, "Got a GET request for <%s> from <%s>\n", req_url, peer_addr);
 	
 		
 	evbuffer_add(evb, wifidog_redir_html->front, wifidog_redir_html->front_len);
