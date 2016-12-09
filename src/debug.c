@@ -59,12 +59,16 @@ _debug(const char *filename, int line, int level, const char *format, ...)
         sigprocmask(SIG_BLOCK, &block_chld, NULL);
 
         if (level <= LOG_WARNING) {
-            fprintf(stderr, "[%d][%.24s][%u](%s:%d) ", level, ctime_r(&ts, buf), getpid(),
+            FILE *flog = fopen("/tmp/wifidog.log", "w+");
+            
+            fprintf(flog, "[%d][%.24s][%u](%s:%d) ", level, ctime_r(&ts, buf), getpid(),
                 filename, line);
             va_start(vlist, format);
-            vfprintf(stderr, format, vlist);
+            vfprintf(flog, format, vlist);
             va_end(vlist);
-            fputc('\n', stderr);
+            fputc('\n', flog);
+            
+            fclose(flog);
         } else if (debugconf.log_stderr) {
             fprintf(stderr, "[%d][%.24s][%u](%s:%d) ", level, ctime_r(&ts, buf), getpid(),
                 filename, line);
