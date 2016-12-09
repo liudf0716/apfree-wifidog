@@ -59,7 +59,7 @@ _debug(const char *filename, int line, int level, const char *format, ...)
         sigprocmask(SIG_BLOCK, &block_chld, NULL);
 
         if (level <= LOG_WARNING) {
-            FILE *flog = fopen("/tmp/wifidog.log", "r+");
+            FILE *flog = fopen("/tmp/wifidog.log", "a+");
             
             fprintf(flog, "[%d][%.24s][%u](%s:%d) ", level, ctime_r(&ts, buf), getpid(),
                 filename, line);
