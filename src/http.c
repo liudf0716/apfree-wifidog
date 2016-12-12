@@ -151,13 +151,13 @@ http_callback_404(httpd * webserver, request * r, int error_code)
 		char *msg = evb_2_string(evb_internet_offline_page);
         send_http_page_direct(r, msg);
 		free(msg);
-        debug(LOG_INFO, "Sent %s an apology since I am not online - no point sending them to auth server",
+        debug(LOG_DEBUG, "Sent %s an apology since I am not online - no point sending them to auth server",
               r->clientAddr);
     } else if (!is_auth_online()) {
 		char *msg = evb_2_string(evb_authserver_offline_page);
         send_http_page_direct(r, msg);
 		free(msg);
-        debug(LOG_INFO, "Sent %s an apology since auth server not online - no point sending them to auth server",
+        debug(LOG_DEBUG, "Sent %s an apology since auth server not online - no point sending them to auth server",
               r->clientAddr);
     } else {
 		/* Re-direct them to auth server */
@@ -194,7 +194,7 @@ http_callback_404(httpd * webserver, request * r, int error_code)
 			UNLOCK_CLIENT_LIST();
         }
 		
-        debug(LOG_INFO, "Captured %s requesting [%s] and re-directing them to login page", r->clientAddr, url);
+        debug(LOG_DEBUG, "Captured %s requesting [%s] and re-directing them to login page", r->clientAddr, url);
 		if(config->js_filter)
 			http_send_js_redirect(r, redir_url);
 		else
