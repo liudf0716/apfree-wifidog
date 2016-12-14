@@ -335,14 +335,27 @@ struct timeval *timeout;
         return (NULL);
     }
     memset((void *)r, 0, sizeof(request));
-    /* Get on with it */
+    
+    r->clientSock = accept(server->serverSock, NULL, NULL);
+	if (r->clientSock < 0) {
+		server->lastError = -1;
+		free(r);
+		return NULL;
+	}
+	
+	/* Get on with it */
     bzero(&addr, sizeof(addr));
     addrLen = sizeof(addr);
-    r->clientSock = accept(server->serverSock, (struct sockaddr *)&addr, &addrLen);
+	if (getpeername(r->clientSock, (struct sockaddr *)&addr, &addrLen)) {
+		server->lastError = -1;
+		free(r);
+		return NULL;
+	} 
+		
 	if(inet_ntop(AF_INET, &addr.sin_addr, r->clientAddr, HTTP_IP_ADDR_LEN)) {
         r->clientAddr[HTTP_IP_ADDR_LEN - 1] = 0;
-    } else
-        *r->clientAddr = 0;
+    } 
+	
     r->readBufRemain = 0;
     r->readBufPtr = NULL;
 
