@@ -648,8 +648,6 @@ main_loop(void)
             *params = webserver;
             *(params + 1) = r;
 			
-			// liudf modified 20160224
-            //result = pthread_create(&tid, NULL, (void *)thread_httpd, (void *)params);
 			result = create_thread(&tid, (void*)thread_httpd, (void *)params);
             if (result != 0) {
                 debug(LOG_ERR, "FATAL: Failed to create a new thread (httpd) - exiting");
