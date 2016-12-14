@@ -10,7 +10,6 @@
 				{
 					sa.style.color = "red";
 					sa.innerHTML = "<%:WifiDog 程序未启动%>";
-					return
 				}
 				
 				if(rp.uptime)
@@ -23,7 +22,7 @@
 				while( tb.rows.length > 1 )
 					tb.deleteRow(1);
 				
-				st = rp.clients;
+				var st = rp.clients ? rp.clients : "";
 				for( var i = 0; i < st.length; i++ )
 				{
 					var timestr = String.format('%t', st[i].logintime);
