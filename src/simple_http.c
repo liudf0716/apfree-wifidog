@@ -111,7 +111,7 @@ void http_request_post_cb(struct evhttp_request *req, void *arg)
         default: 
             break;
     }
-out:
+	
 	 event_base_loopbreak(http_req_post->base);
 }
 
@@ -289,7 +289,7 @@ deflate_write(char *source, int len, char **dest, int *wlen, int gzip)
 					  8,
 					  Z_DEFAULT_STRATEGY);  
 	else  
-		ret = deflateInit(&strm);  
+		ret = deflateInit(&strm, Z_DEFAULT_COMPRESSION);  
 	
 	if (ret != Z_OK)  
 		return ret;  
@@ -318,7 +318,7 @@ deflate_write(char *source, int len, char **dest, int *wlen, int gzip)
 
 	/* clean up and return */  
 	(void)inflateEnd(&strm);  
-	*rlen = totalsize;
+	*wlen = totalsize;
 	return ret == Z_STREAM_END ? Z_OK : Z_DATA_ERROR;
 }
 
