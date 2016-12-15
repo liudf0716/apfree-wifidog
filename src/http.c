@@ -42,6 +42,8 @@
 #include <fcntl.h>
 #include <errno.h>
 
+#include <zlib.h>
+
 #include <httpd.h>
 
 #include "safe.h"
@@ -57,7 +59,7 @@
 #include "wd_util.h"
 #include "gateway.h"
 #include "https_server.h"
-
+#include "simple_http.h"
 #include "version.h"
 
 #define APPLE_REDIRECT_MSG  "<!DOCTYPE html>"	\
