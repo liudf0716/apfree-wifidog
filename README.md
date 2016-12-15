@@ -57,7 +57,7 @@ ApFree WiFiDog 完全兼容现有的 wifidog 协议，并支持如下功能：
 
 ----
 
-## powered by 坤腾畅联固件团队 （ www.kunteng.org ）
+## powered by 坤腾畅联固件研发团队 （ www.kunteng.org ）
 ## 加qq群讨论： 331230369 
 
 ## 如果该项目对您有帮助，请点个赞，谢谢！
