@@ -22,7 +22,7 @@ http://v.qq.com/x/page/f03507zyfvv.html
   选择 apfree_wifidog
 
 注意事项：
-如果要支持https劫持跳转，需要修改openwrt&lede的libevent package，将其版本升级到release-2.1.7-rc版本
+##如果要支持https劫持跳转，需要修改openwrt&lede的libevent package，将其版本升级到release-2.1.7-rc版本
 
 ## 功能描述
 
