@@ -590,18 +590,15 @@ static void
 f_fw_script_write(const char *cmd)
 {
 	if(f_fw_init){ 
-		fprintf(f_fw_init, cmd);
-		fprintf(f_fw_init, "\n");
+		fprintf(f_fw_init, "%s\n", cmd);
 	}
 
 	if(f_fw_destroy) {
-		fprintf(f_fw_destroy, cmd);
-		fprintf(f_fw_destroy, "\n");
+		fprintf(f_fw_destroy, "%s\n", cmd);
 	}
 
 	if(f_fw_allow) {
-		fprintf(f_fw_allow, cmd);
-		fprintf(f_fw_allow, "\n");
+		fprintf(f_fw_allow, "%s\n", cmd);
 	}
 }
 
