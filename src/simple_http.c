@@ -283,7 +283,6 @@ deflate_write(char *source, int len, char **dest, int *wlen, int gzip)
 	strm.avail_in = 0;  
 	strm.next_in = Z_NULL;  
 
-	debug(LOG_INFO, "STEP 1");
 	if(gzip)  
 		ret = deflateInit2(&strm, Z_DEFAULT_COMPRESSION, Z_DEFLATED,
 					  windowBits | GZIP_ENCODING,
@@ -299,11 +298,9 @@ deflate_write(char *source, int len, char **dest, int *wlen, int gzip)
 	strm.next_in = source;  
   
 	do {  
-		debug(LOG_INFO, "STEP 2 %d", ret);
 		strm.avail_out = CHUNK;  
 		strm.next_out = out;  
 		ret = deflate(&strm, Z_FINISH);
-		debug(LOG_INFO, "STEP 3 %d", ret);
 		switch (ret) {  
 		case Z_NEED_DICT:  
 			ret = Z_DATA_ERROR; /* and fall through */  
@@ -312,17 +309,15 @@ deflate_write(char *source, int len, char **dest, int *wlen, int gzip)
 			deflateEnd(&strm);  
 			return ret;  
 		}  
-		debug(LOG_INFO, "STEP 4 %d", ret);
+
 		have = CHUNK - strm.avail_out;  
 		totalsize += have;  
 		*dest = realloc(*dest, totalsize);  
 		memcpy(*dest + totalsize - have, out, have);
-		debug(LOG_INFO, "STEP 5 %d", have);
 	} while (strm.avail_out == 0);  
 
 	/* clean up and return */  
-	(void)inflateEnd(&strm);
-	debug(LOG_INFO, "STEP 6 %d", have);
+	(void)deflateEnd(&strm);
 	*wlen = totalsize;
 	return ret == Z_STREAM_END ? Z_OK : Z_DATA_ERROR;
 }
