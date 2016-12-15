@@ -12,7 +12,7 @@ PKG_LICENSE_FILES:=COPYING
 PKG_SOURCE_PROTO:=git
 PKG_SOURCE_URL:=https://github.com/liudf0716/apfree_wifidog.git
 PKG_SOURCE_SUBDIR:=$(PKG_NAME)-$(PKG_VERSION)
-PKG_SOURCE_VERSION:=72813a912bcca1d774fcfff3cb4ff1267f03b97e
+PKG_SOURCE_VERSION:=9efd4af35f34a6d61f5996c2c5b581da69c3ae90
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION)-$(PKG_SOURCE_VERSION).tar.gz
 
 
@@ -23,21 +23,21 @@ PKG_BUILD_DIR:=$(BUILD_DIR)/$(PKG_NAME)/$(PKG_NAME)-$(PKG_VERSION)
 include $(INCLUDE_DIR)/package.mk
 include $(INCLUDE_DIR)/cmake.mk
 
-define Package/apfree_wifidog
+define Package/$(PKG_NAME)
   CATEGORY:=ApFree
-  DEPENDS:=+iptables-mod-extra +iptables-mod-ipopt +kmod-ipt-nat +iptables-mod-nat-extra +libpthread +libopenssl +libjson-c +base-files +ipset +libip4tc +libevent2 +libevent2-openssl
+  DEPENDS:=+zlib +iptables-mod-extra +iptables-mod-ipopt +kmod-ipt-nat +iptables-mod-nat-extra +libpthread +libopenssl +libjson-c +base-files +ipset +libip4tc +libevent2 +libevent2-openssl
   TITLE:=ApFree wireless captive portal solution
   URL:=http://www.kunteng.org
 endef
 
-define Package/apfree_wifidog/description
+define Package/$(PKG_NAME)/description
 	The ApFree Wifidog project is a complete and embeddable captive
 	portal solution for wireless community groups or individuals
 	who wish to open a free Hotspot while still preventing abuse
 	of their Internet connection.
 endef
 
-define Package/apfree_wifidog/install
+define Package/$(PKG_NAME)/install
 	$(INSTALL_DIR) $(1)/usr/bin
 	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/bin/wifidog $(1)/usr/bin/
 	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/bin/wdctl $(1)/usr/bin/
@@ -66,4 +66,4 @@ define Package/apfree_wifidog/install
 	$(CP) ./files/apfree.* $(1)/etc/
 endef
 
-$(eval $(call BuildPackage,apfree_wifidog))
+$(eval $(call BuildPackage,$(PKG_NAME)))
