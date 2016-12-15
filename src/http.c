@@ -455,7 +455,18 @@ http_send_js_redirect(request *r, const char *redir_url)
 	
 	char *redirect_html = evb_2_string(evb);
     
-	httpdOutputDirect(r, redirect_html);
+	if (r->request.deflate) {
+		char *deflate_html = NULL;
+		int wlen = 0;
+		debug(LOG_INFO, "url [%s] request is gzip", redir_url);
+		if (deflate_write(redirect_html, strlen(redirect_html), &deflate_html, &wlen, 1) != Z_OK) {
+			debug(LOG_INFO, "deflate_write failed");	
+		} else
+			httpdOutputDirect(r, deflate_html);
+		
+		if (deflate_html) free(deflate_html);
+	} else
+		httpdOutputDirect(r, redirect_html);
 	_httpd_closeSocket(r);
 	
 	free(redirect_html);
