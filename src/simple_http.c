@@ -291,7 +291,7 @@ deflate_write(char *source, int len, char **dest, int *wlen, int gzip)
 					  Z_DEFAULT_STRATEGY);  
 	else  
 		ret = deflateInit(&strm, Z_DEFAULT_COMPRESSION);  
-	debug(LOG_INFO, "STEP 2 %d", ret);
+	
 	if (ret != Z_OK)  
 		return ret;  
 
@@ -299,6 +299,7 @@ deflate_write(char *source, int len, char **dest, int *wlen, int gzip)
 	strm.next_in = source;  
   
 	do {  
+		debug(LOG_INFO, "STEP 2 %d", ret);
 		strm.avail_out = CHUNK;  
 		strm.next_out = out;  
 		ret = deflate(&strm, Z_FINISH);
@@ -320,7 +321,8 @@ deflate_write(char *source, int len, char **dest, int *wlen, int gzip)
 	} while (strm.avail_out == 0);  
 
 	/* clean up and return */  
-	(void)inflateEnd(&strm);  
+	(void)inflateEnd(&strm);
+	debug(LOG_INFO, "STEP 6 %d", have);
 	*wlen = totalsize;
 	return ret == Z_STREAM_END ? Z_OK : Z_DATA_ERROR;
 }
