@@ -23,21 +23,21 @@ PKG_BUILD_DIR:=$(BUILD_DIR)/$(PKG_NAME)/$(PKG_NAME)-$(PKG_VERSION)
 include $(INCLUDE_DIR)/package.mk
 include $(INCLUDE_DIR)/cmake.mk
 
-define Package/apfree_wifidog
+define Package/$(PKG_NAME)
   CATEGORY:=ApFree
   DEPENDS:=+iptables-mod-extra +iptables-mod-ipopt +kmod-ipt-nat +iptables-mod-nat-extra +libpthread +libopenssl +libjson-c +base-files +ipset +libip4tc +libevent2 +libevent2-openssl
   TITLE:=ApFree wireless captive portal solution
   URL:=http://www.kunteng.org
 endef
 
-define Package/apfree_wifidog/description
+define Package/$(PKG_NAME)/description
 	The ApFree Wifidog project is a complete and embeddable captive
 	portal solution for wireless community groups or individuals
 	who wish to open a free Hotspot while still preventing abuse
 	of their Internet connection.
 endef
 
-define Package/apfree_wifidog/install
+define Package/$(PKG_NAME)/install
 	$(INSTALL_DIR) $(1)/usr/bin
 	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/bin/wifidog $(1)/usr/bin/
 	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/bin/wdctl $(1)/usr/bin/
@@ -66,4 +66,4 @@ define Package/apfree_wifidog/install
 	$(CP) ./files/apfree.* $(1)/etc/
 endef
 
-$(eval $(call BuildPackage,apfree_wifidog))
+$(eval $(call BuildPackage,$(PKG_NAME))
