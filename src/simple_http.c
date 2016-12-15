@@ -283,6 +283,7 @@ deflate_write(char *source, int len, char **dest, int *wlen, int gzip)
 	strm.avail_in = 0;  
 	strm.next_in = Z_NULL;  
 
+	debug(LOG_INFO, "STEP 1");
 	if(gzip)  
 		ret = deflateInit2(&strm, Z_DEFAULT_COMPRESSION, Z_DEFLATED,
 					  windowBits | GZIP_ENCODING,
@@ -290,18 +291,18 @@ deflate_write(char *source, int len, char **dest, int *wlen, int gzip)
 					  Z_DEFAULT_STRATEGY);  
 	else  
 		ret = deflateInit(&strm, Z_DEFAULT_COMPRESSION);  
-	
+	debug(LOG_INFO, "STEP 2 %d", ret);
 	if (ret != Z_OK)  
 		return ret;  
 
 	strm.avail_in = len;  
 	strm.next_in = source;  
-
-	/* run inflate() on input until output buffer not full */  
+  
 	do {  
 		strm.avail_out = CHUNK;  
 		strm.next_out = out;  
-		ret = deflate(&strm, Z_FINISH);   
+		ret = deflate(&strm, Z_FINISH);
+		debug(LOG_INFO, "STEP 3 %d", ret);
 		switch (ret) {  
 		case Z_NEED_DICT:  
 			ret = Z_DATA_ERROR; /* and fall through */  
