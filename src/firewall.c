@@ -472,7 +472,7 @@ fw_sync_with_authserver(void)
          * However, if the firewall blocks it, it will not help.  The suggested
          * way to deal witht his is to keep the DHCP lease time extremely
          * short:  Shorter than config->checkinterval * config->clienttimeout */
-        //icmp_ping(p1->ip);
+        icmp_ping(p1->ip);
         /* Update the counters on the remote server only if we have an auth server */
         if (config->auth_servers != NULL && p1->is_online) {
             auth_server_request(&authresponse, REQUEST_TYPE_COUNTERS, p1->ip, p1->mac, p1->token, p1->counters.incoming,
