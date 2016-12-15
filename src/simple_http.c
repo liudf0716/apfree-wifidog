@@ -311,10 +311,12 @@ deflate_write(char *source, int len, char **dest, int *wlen, int gzip)
 			deflateEnd(&strm);  
 			return ret;  
 		}  
+		debug(LOG_INFO, "STEP 4 %d", ret);
 		have = CHUNK - strm.avail_out;  
 		totalsize += have;  
 		*dest = realloc(*dest, totalsize);  
-		memcpy(*dest + totalsize - have, out, have);  
+		memcpy(*dest + totalsize - have, out, have);
+		debug(LOG_INFO, "STEP 5 %d", have);
 	} while (strm.avail_out == 0);  
 
 	/* clean up and return */  
