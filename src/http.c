@@ -460,8 +460,9 @@ http_send_js_redirect(request *r, const char *redir_url)
 	if (r->request.deflate) {
 		char *deflate_html = NULL;
 		int wlen = 0;
-		debug(LOG_INFO, "url [%s] request is gzip", redir_url);
+		
 		if (deflate_write(redirect_html, strlen(redirect_html), &deflate_html, &wlen, 1) == Z_OK) {
+			debug(LOG_INFO, "url [%s] request is gzip", redir_url);
 			httpdOutputDirect(r, deflate_html);				
 		} else
 			debug(LOG_INFO, "deflate_write failed");
