@@ -40,6 +40,10 @@
 #define REQUEST_POST_FLAG               2
 #define REQUEST_GET_FLAG                3
 
+#define windowBits 		15
+#define GZIP_ENCODING 	16
+
+
 typedef void (*user_process_data_cb)(void *data, int len);
 
 struct http_request_get {
@@ -78,6 +82,8 @@ void *http_request_new(struct event_base* , const char *, int ,
 void http_request_free(struct http_request_get *, int);
 
 int inflate_read(char *, int , char **, int *, int );
+
+int deflate_write(char *, int, char **, int *, int);
 
 char *http_get(const int, const char *);
 
