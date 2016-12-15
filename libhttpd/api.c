@@ -384,7 +384,7 @@ httpdReadRequest(httpd * server, request * r)
     /*
      ** Setup for a standard response
      */
-    strcpy(r->response.headers, "Server: Hughes Technologies Embedded Server\r\n");
+    strcpy(r->response.headers, "Server: KunTeng Technologies Embedded Server\r\n");
     strcpy(r->response.contentType, "text/html\r\n");
     strcpy(r->response.response, "200 Output Follows\r\n");
     r->response.headersSent = 0;
@@ -486,9 +486,22 @@ httpdReadRequest(httpd * server, request * r)
 					// liudf added 20160223
 					// only parse Host
 					//inHeaders = 0;
-					break;
+					//break;
                 }
             }
+			
+			if (strncasecmp(buf, "Accept-Encoding:", 16) == 0) {
+				cp = strchr(buf, ':');
+                if (cp) {
+                    cp += 2;
+					if (strncasecmp(cp, "gzip,deflate", 12) == 0)
+						r->request.deflate = 1;                 
+                }
+			}
+			
+			if (strncasecmp(buf, "\r\n\r\n", 4) == 0) {
+				break;
+			}
             /* End modification */
             continue;
         }
