@@ -21,8 +21,9 @@ http://v.qq.com/x/page/f03507zyfvv.html
   
   选择 apfree_wifidog
 
-注意事项：
-##如果要支持https劫持跳转，需要修改openwrt&lede的libevent package，将其版本升级到release-2.1.7-rc版本
+### 注意事项：
+
+如果要支持https劫持跳转，需要修改openwrt&lede的libevent package，将其版本升级到release-2.1.7-rc版本
 
 ## 功能描述
 
@@ -47,13 +48,13 @@ ApFree WiFiDog 完全兼容现有的 wifidog 协议，并支持如下功能：
 
 ## 感谢如下开源项目提供的思路和帮助：
 
-1， https://github.com/wifidog/wifidog-gateway  
+- https://github.com/wifidog/wifidog-gateway  
 
-2， https://github.com/ppelleti/https-example
+- https://github.com/ppelleti/https-example
 
-3， https://github.com/sosopop/uvhttp
+- https://github.com/sosopop/uvhttp
 
-4, http://ezxml.sourceforge.net/
+- http://ezxml.sourceforge.net/
 
 ----
 
