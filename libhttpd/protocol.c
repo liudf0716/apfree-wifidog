@@ -457,7 +457,7 @@ _httpd_sendHeaders(request * r, int contentLength, int modTime)
 	
     if (contentLength > 0) {	
         _httpd_formatTimeString(timeBuf, modTime);
-		snprintf(hdrBuf+strlen(hdrBuf), HTTP_READ_BUF_LEN-strlen(hdrBuf), "Content-Length: %d\r\nLast-Modified: %s\r\n", 
+		snprintf(hdrBuf+strlen(hdrBuf), HTTP_READ_BUF_LEN-strlen(hdrBuf), "Content-Length: %d\r\nLast-Modified: %s\r\n\r\n", 
 			contentLength, timeBuf);
     }
 	_httpd_net_write(r->clientSock, hdrBuf, strlen(hdrBuf));
