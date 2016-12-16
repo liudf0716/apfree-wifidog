@@ -757,12 +757,19 @@ httpdSetCookie(request * r, const char *name, const char *value)
 }
 
 void
+httpdOutputLengthDirect(request *r, const char *msg, int msg_len)
+{
+	r->response.responseLength += msg_len;
+    if (r->response.headersSent == 0)
+        _httpd_sendHeaders(r, msg_len, 0);
+    _httpd_net_write(r->clientSock, msg, msg_len);
+}
+
+void
 httpdOutputDirect(request * r, const char *msg)
 {
-    r->response.responseLength += strlen(msg);
-    if (r->response.headersSent == 0)
-        httpdSendHeaders(r);
-    _httpd_net_write(r->clientSock, msg, strlen(msg));
+	int contentLenth = strlen(msg);
+    httpdOutputLengthDirect(r, msg, contentLength);
 }
 
 void
