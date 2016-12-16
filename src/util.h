@@ -79,5 +79,5 @@ int is_valid_ip(const char *);
 
 int is_valid_mac(const char *);
 
-char *evb_2_string(struct evbuffer *);
+char *evb_2_string(struct evbuffer *, int *);
 #endif                          /* _UTIL_H_ */
