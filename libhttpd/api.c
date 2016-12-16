@@ -768,8 +768,7 @@ httpdOutputLengthDirect(request *r, const char *msg, int msg_len)
 void
 httpdOutputDirect(request * r, const char *msg)
 {
-	int contentLenth = strlen(msg);
-    httpdOutputLengthDirect(r, msg, contentLength);
+    httpdOutputLengthDirect(r, msg, strlen(msg));
 }
 
 void
