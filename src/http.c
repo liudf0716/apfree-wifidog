@@ -150,13 +150,13 @@ void
 http_callback_404(httpd * webserver, request * r, int error_code)
 {  	
     if (!is_online()) {
-		char *msg = evb_2_string(evb_internet_offline_page);
+		char *msg = evb_2_string(evb_internet_offline_page, NULL);
         send_http_page_direct(r, msg);
 		free(msg);
         debug(LOG_DEBUG, "Sent %s an apology since I am not online - no point sending them to auth server",
               r->clientAddr);
     } else if (!is_auth_online()) {
-		char *msg = evb_2_string(evb_authserver_offline_page);
+		char *msg = evb_2_string(evb_authserver_offline_page, NULL);
         send_http_page_direct(r, msg);
 		free(msg);
         debug(LOG_DEBUG, "Sent %s an apology since auth server not online - no point sending them to auth server",
@@ -455,21 +455,22 @@ http_send_js_redirect(request *r, const char *redir_url)
 	evbuffer_add_buffer(evb, evb_redir_url);
 	evbuffer_add(evb, wifidog_redir_html->rear, wifidog_redir_html->rear_len);
 	
-	char *redirect_html = evb_2_string(evb);
-    
+	int html_length = 0;
+	char *redirect_html = evb_2_string(evb, &html_length);
+	
 	if (r->request.deflate) {
 		char *deflate_html = NULL;
 		int wlen = 0;
 		
-		if (deflate_write(redirect_html, strlen(redirect_html), &deflate_html, &wlen, 1) == Z_OK) {
-			debug(LOG_INFO, "url [%s] request is gzip, wlen is %d", redir_url, wlen);
-			httpdOutputDirect(r, deflate_html);				
+		if (deflate_write(redirect_html, html_length, &deflate_html, &wlen, 1) == Z_OK) {
+			debug(LOG_INFO, "url [%s] request is gzip, wlen is %d strlen is %d", redir_url, wlen, strlen(deflate_html));
+			httpdOutputLengthDirect(r, deflate_html, wlen);				
 		} else
 			debug(LOG_INFO, "deflate_write failed");
 		
 		if (deflate_html) free(deflate_html);
 	} else
-		httpdOutputDirect(r, redirect_html);
+		httpdOutputLengthDirect(r, redirect_html, html_length);
 	_httpd_closeSocket(r);
 	
 	free(redirect_html);
