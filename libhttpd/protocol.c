@@ -448,8 +448,8 @@ _httpd_sendHeaders(request * r, int contentLength, int modTime)
     _httpd_formatTimeString(timeBuf, 0);	
 	snprintf(hdrBuf+strlen(hdrBuf), HTTP_READ_BUF_LEN-strlen(hdrBuf), "Date: ");
 	snprintf(hdrBuf+strlen(hdrBuf), HTTP_READ_BUF_LEN-strlen(hdrBuf), "%s\r\n", timeBuf);
-	snprintf(hdrBuf+strlen(hdrBuf), HTTP_READ_BUF_LEN-strlen(hdrBuf), "Connection: close\r\nContent-Type: %s\r\n", 
-				r->response.contentType);
+	snprintf(hdrBuf+strlen(hdrBuf), HTTP_READ_BUF_LEN-strlen(hdrBuf), "Connection: close\r\nContent-Type: %s", 
+				r->response.contentType); // contentType already include "\r\n"
 
 	if (r->request.deflate) {
 		snprintf(hdrBuf+strlen(hdrBuf), HTTP_READ_BUF_LEN-strlen(hdrBuf), "Content-Encoding: gzip\r\n");
@@ -457,9 +457,10 @@ _httpd_sendHeaders(request * r, int contentLength, int modTime)
 	
     if (contentLength > 0) {	
         _httpd_formatTimeString(timeBuf, modTime);
-		snprintf(hdrBuf+strlen(hdrBuf), HTTP_READ_BUF_LEN-strlen(hdrBuf), "Content-Length: %d\r\nLast-Modified: %s\r\n\r\n", 
+		snprintf(hdrBuf+strlen(hdrBuf), HTTP_READ_BUF_LEN-strlen(hdrBuf), "Content-Length: %d\r\nLast-Modified: %s\r\n", 
 			contentLength, timeBuf);
     }
+	snprintf(hdrBuf+strlen(hdrBuf), HTTP_READ_BUF_LEN-strlen(hdrBuf), "\r\n");
 	_httpd_net_write(r->clientSock, hdrBuf, strlen(hdrBuf));
 }
 
