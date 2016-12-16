@@ -494,7 +494,8 @@ httpdReadRequest(httpd * server, request * r)
 				cp = strchr(buf, ':');
                 if (cp) {
                     cp += 2;
-					if (strncasecmp(cp, "gzip,deflate", 12) == 0)
+					// some Accept-Encoding is "gzip,deflate", some is "gzip, deflate"
+					if (strncasecmp(cp, "gzip", 4) == 0) 
 						r->request.deflate = 1;                 
                 }
 			}
