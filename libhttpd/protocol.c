@@ -452,7 +452,7 @@ _httpd_sendHeaders(request * r, int contentLength, int modTime)
 				r->response.contentType);
 
 	if (r->request.deflate) {
-		snprintf(hdrBuf+strlen(hdrBuf), HTTP_READ_BUF_LEN-strlen(hdrBuf), "Content-Encoding: gzip");
+		snprintf(hdrBuf+strlen(hdrBuf), HTTP_READ_BUF_LEN-strlen(hdrBuf), "Content-Encoding: gzip\r\n");
 	}
 	
     if (contentLength > 0) {	
