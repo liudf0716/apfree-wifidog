@@ -29,7 +29,7 @@ Fork and clone the Apfree WiFiDog project:
     git clone https://github.com/KerwinKoo/apfree_wifidog.git 
 	cd apfree_wifidog
 
-Assuming you have a working [LEDE](https://github.com/lede-project/source)/[Openwrt](https://github.com/openwrt/openwrt) setup, taking `LEDE` as an example, and assuming your LEDE root path is `LEDE_ROOT`:
+Assuming you have a working [LEDE](https://github.com/lede-project/source)/[Openwrt](https://github.com/openwrt/openwrt) setup, taking `LEDE` as an example and assuming your LEDE root path is `LEDE_ROOT`:
 
 	cp -r package/apfree_wifidog/ /LEDE_ROOT/package/
 
