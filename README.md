@@ -1,11 +1,11 @@
-# Apfree WiFiDog: Efficient captive protal solution
+## Apfree WiFiDog: Efficient captive protal solution
 
 Apfree-WiFidog is an open source captive protal solution for wireless router which with embeddabled linux([LEDE](https://github.com/lede-project/source)/[Openwrt](https://github.com/openwrt/openwrt)). 
 
 
 **[中文介绍](https://github.com/KerwinKoo/apfree_wifidog/blob/master/README_CH.md)**
 
-# Awesome
+## Awesome
 
 It has some awesome features:
 
@@ -22,7 +22,7 @@ It has some awesome features:
 
 ----
 
-# How To Compile
+## How To Compile
 
 Fork and clone the Apfree WiFiDog project:
 
