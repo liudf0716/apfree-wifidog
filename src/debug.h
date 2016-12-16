@@ -28,7 +28,9 @@
 #ifndef _WIFIDOG_DEBUG_H_
 #define _WIFIDOG_DEBUG_H_
 
-#include <libgen.h>
+#include <string.h>
+
+#define __FILENAME__ (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 
 typedef struct _debug_conf {
     int debuglevel;      /**< @brief Debug information verbosity */
@@ -45,7 +47,7 @@ extern debugconf_t debugconf;
  * @param level Debug level
  * @param format... sprintf like format string
  */
-#define debug(level, format...) _debug(basename(__FILE__), __LINE__, level, format)
+#define debug(level, format...) _debug(__FILENAME__, __LINE__, level, format)
 
 /** @internal */
 void _debug(const char *, int, int, const char *, ...);
