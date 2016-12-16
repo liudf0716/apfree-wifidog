@@ -461,13 +461,15 @@ is_valid_mac(const char *mac)
 	return (i == 12 && (s == 5 || s == 0));
 }
 
+// if olen is not NULL, set it rlen value
 char *evb_2_string(struct evbuffer *evb, int *olen) 
 {
-	*olen = evbuffer_get_length(evb);
-	size_t len = *olen + 1;
-	char *str = (char *)malloc(len);
-	memset(str, 0, len);
-	evbuffer_copyout(evb, str, len);
+	int rlen = evbuffer_get_length(evb);
+	char *str = (char *)malloc(rlen+1);
+	memset(str, 0, rlen+1);
+	evbuffer_copyout(evb, str, rlen);
+	if (olen)
+		*olen = rlen;
 	return str;
 }
 
