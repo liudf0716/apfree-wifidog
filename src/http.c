@@ -196,7 +196,7 @@ http_callback_404(httpd * webserver, request * r, int error_code)
 			UNLOCK_CLIENT_LIST();
         }
 		
-        debug(LOG_DEBUG, "Captured %s requesting [%s] and re-directing them to login page", r->clientAddr, url);
+        debug(LOG_INFO, "Captured %s requesting [%s] and re-directing them to login page", r->clientAddr, url);
 		if(config->js_filter)
 			http_send_js_redirect(r, redir_url);
 		else
@@ -462,7 +462,7 @@ http_send_js_redirect(request *r, const char *redir_url)
 		int wlen = 0;
 		
 		if (deflate_write(redirect_html, strlen(redirect_html), &deflate_html, &wlen, 1) == Z_OK) {
-			debug(LOG_INFO, "url [%s] request is gzip", redir_url);
+			debug(LOG_INFO, "url [%s] request is gzip, wlen is %d", redir_url, wlen);
 			httpdOutputDirect(r, deflate_html);				
 		} else
 			debug(LOG_INFO, "deflate_write failed");
