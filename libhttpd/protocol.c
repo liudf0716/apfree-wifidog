@@ -451,6 +451,10 @@ _httpd_sendHeaders(request * r, int contentLength, int modTime)
 	snprintf(hdrBuf+strlen(hdrBuf), HTTP_READ_BUF_LEN-strlen(hdrBuf), "Connection: close\r\nContent-Type: %s\r\n", 
 				r->response.contentType);
 
+	if (r->request.deflate) {
+		snprintf(hdrBuf+strlen(hdrBuf), HTTP_READ_BUF_LEN-strlen(hdrBuf), "Content-Encoding: gzip");
+	}
+	
     if (contentLength > 0) {	
         _httpd_formatTimeString(timeBuf, modTime);
 		snprintf(hdrBuf+strlen(hdrBuf), HTTP_READ_BUF_LEN-strlen(hdrBuf), "Content-Length: %d\r\nLast-Modified: %s\r\n", 
