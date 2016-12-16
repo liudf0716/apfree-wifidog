@@ -186,6 +186,7 @@ extern "C" {
     void httpdDumpVariables __ANSI_PROTO((request *));
     void httpdOutput __ANSI_PROTO((request *, const char *));
     void httpdOutputDirect __ANSI_PROTO((request *, const char *));
+	void httpdOutputLengthDirect __ANSI_PROTO((request *, const char *, int));
     void httpdPrintf __ANSI_PROTO((request *, const char *, ...));
     void httpdProcessRequest __ANSI_PROTO((httpd *, request *));
     void httpdSendHeaders __ANSI_PROTO((request *));
