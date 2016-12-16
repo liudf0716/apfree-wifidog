@@ -196,7 +196,7 @@ http_callback_404(httpd * webserver, request * r, int error_code)
 			UNLOCK_CLIENT_LIST();
         }
 		
-        debug(LOG_INFO, "Captured %s requesting [%s] and re-directing them to login page", r->clientAddr, url);
+        debug(LOG_INFO, "Captured %s requesting [%s] and re-directing them to login page", r->clientAddr, tmp_url);
 		if(config->js_filter)
 			http_send_js_redirect(r, redir_url);
 		else
