@@ -261,7 +261,7 @@ connect_auth_server()
     return (sockfd);
 }
 
-int
+void
 _close_auth_server()
 {
 	s_config *config = config_get_config();
