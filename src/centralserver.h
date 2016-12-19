@@ -23,6 +23,7 @@
 /** @file centralserver.h
     @brief Functions to talk to the central server (auth/send stats/get rules/etc...)
     @author Copyright (C) 2004 Philippe April <papril777@yahoo.com>
+    @author Copyright (C) 2016 Dengfeng Liu <liudengfeng@kunteng.org>
  */
 
 #ifndef _CENTRALSERVER_H_
@@ -65,5 +66,8 @@ int connect_auth_server(void);
 
 /** @brief Helper function called by connect_auth_server() to do the actual work including recursion - DO NOT CALL DIRECTLY */
 int _connect_auth_server(int level);
+
+/** @brief close  auth server connected socket*/
+int _close_auth_server();
 
 #endif                          /* _CENTRALSERVER_H_ */
