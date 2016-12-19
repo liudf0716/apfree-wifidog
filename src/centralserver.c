@@ -221,6 +221,7 @@ auth_server_request(t_authresponse * authresponse, const char *request_type, con
     res = http_get(sockfd, buf);
 #endif
     if (NULL == res) {
+		_close_auth_server();
         debug(LOG_ERR, "There was a problem talking to the auth server!");
         return (AUTH_ERROR);
     }
@@ -301,6 +302,18 @@ _connect_auth_server(int level)
 		return -1;
 	}
 	
+	auth_server = config->auth_servers;
+	if (auth_server->authserv_fd > 0) {
+		if (is_socket_valid(auth_server->authserv_fd)) {
+			debug(LOG_INFO, "Use keep-alive http connection");
+			return auth_server->authserv_fd;
+		} else {
+			close(auth_server->authserv_fd);
+			auth_server->authserv_fd = -1;
+			return _connect_auth_server(level);
+		}
+	}
+	
     /* XXX level starts out at 0 and gets incremented by every iterations. */
     level++;
 
@@ -319,13 +332,7 @@ _connect_auth_server(int level)
          * at least once and none are accessible
          */
         return (-1);
-    }
-
-	auth_server = config->auth_servers;
-	if (auth_server->authserv_fd > 0) {
-		debug(LOG_INFO, "Use keep-alive http connection");
-		return auth_server->authserv_fd;
-	}
+    }	
 	
     /*
      * Let's resolve the hostname of the top server to an IP address
