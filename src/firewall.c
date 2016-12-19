@@ -435,6 +435,7 @@ update_trusted_mac_list_status(void)
         }
 			
 	}
+	_close_auth_server();
 	
 	clear_dup_trusted_mac_list(tmac_list);
 }
@@ -575,6 +576,8 @@ fw_sync_with_authserver(void)
             UNLOCK_CLIENT_LIST();
         }
     }
-
+	
+	_close_auth_server();
+	
     client_list_destroy(worklist);	
 }
