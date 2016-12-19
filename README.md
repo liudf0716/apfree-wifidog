@@ -44,9 +44,17 @@ Now Apfree WiFiDog package has been installed in LEDE packages environment.
 
 Chose your `Target System` and `ApFree --> apfree_wifidog`. `SAVE` and `EXIT`.
 
-After Doing `make V=s`, Apfree WiFiDog package is in the path `bin/packages/YOUR-TARGET-ARCH/base/apfree_wifidog_VERSION-RELEASE_YOUR-TARGET-ARCH.ipk `. You can using `opkg install ` command to install this `ipk` in your router.
+Do compiling:
+
+```
+make V=s
+```
+
+After Doing `make V=s`, Apfree WiFiDog `ipk` package is packed in path `bin/packages/YOUR-TARGET-ARCH/base/apfree_wifidog_VERSION-RELEASE_YOUR-TARGET-ARCH.ipk `. Push it up into your LEDE-system router, use `opkg install ` command to install this `ipk`.
 
 
 **The CA-Certificate in this project is ONLY for Apfree WiFiDog HTTPS captive testing, CAN NOT be used for business scene**
 
+
+## Usage examples
 
