@@ -114,7 +114,7 @@ logout_client(t_client * client)
 							//>>> liudf added 20160112
 							client->first_login, (client->counters.last_updated - client->first_login),
 							client->name?client->name:"null", client->wired);
-
+		_close_auth_server();
         if (authresponse.authcode == AUTH_ERROR)
             debug(LOG_WARNING, "Auth server error when reporting logout");
         LOCK_CLIENT_LIST();
@@ -175,7 +175,7 @@ authenticate_client(request * r)
      * kept the lock.
      */
     auth_server_request(&auth_response, REQUEST_TYPE_LOGIN, client->ip, client->mac, token, 0, 0, 0, 0, 0, 0, "null", client->wired);
-
+	_close_auth_server(); 
     LOCK_CLIENT_LIST();
 
     /* can't trust the client to still exist after n seconds have passed */
