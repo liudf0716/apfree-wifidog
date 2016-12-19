@@ -2245,7 +2245,12 @@ void
 mark_auth_server_bad(t_auth_serv * bad_server)
 {
     t_auth_serv *tmp;
-
+	
+	if (bad_server->authserv_fd > 0) {
+		close(bad_server->authserv_fd);
+		bad_server->authserv_fd = -1;
+	}
+		
     if (config.auth_servers == bad_server && bad_server->next != NULL) {
         /* Go to the last */
         for (tmp = config.auth_servers; tmp->next != NULL; tmp = tmp->next) ;
