@@ -68,6 +68,6 @@ int connect_auth_server(void);
 int _connect_auth_server(int level);
 
 /** @brief close  auth server connected socket*/
-int _close_auth_server();
+void _close_auth_server();
 
 #endif                          /* _CENTRALSERVER_H_ */
