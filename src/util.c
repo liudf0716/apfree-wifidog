@@ -563,3 +563,24 @@ void evdns_parse_trusted_domain_2_ip(t_domain_trusted *p)
 	evdns_base_free(dnsbase, 0);
     event_base_free(base);
 }
+
+/*
+ * 0, FALSE; 1, TRUE
+ */
+int is_socket_valid(int sockfd)
+{
+	int err = 0;
+	int errlen = sizeof(err);
+	if (getsockopt(sockfd, SOL_SOCKET, SO_ERROR, &err, &errlen) == -1) {
+		debug(LOG_INFO, "getsockopt(SO_ERROR): %s", strerror(errno));
+		return 0;
+	}
+
+	if (err) {
+		debug(LOG_INFO, "getsockopt(SO_ERROR): %s", strerror(errno));
+		return 0;
+	}
+
+	return 1;
+}
+
