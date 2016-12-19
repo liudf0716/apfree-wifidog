@@ -258,6 +258,20 @@ connect_auth_server()
     return (sockfd);
 }
 
+int
+_close_auth_server()
+{
+	s_config *config = config_get_config();
+    t_auth_serv *auth_server = NULL;
+	
+	for (auth_server = config->auth_servers; auth_server; auth_server = auth_server->next) {
+        if (auth_server->authserv_fd > 0) {
+			close(auth_server->authserv_fd);
+			auth_server->authserv_fd = -1;
+		}
+    }
+}
+
 /* Helper function called by connect_auth_server() to do the actual work including recursion
  * DO NOT CALL DIRECTLY
  @param level recursion level indicator must be 0 when not called by _connect_auth_server()
@@ -304,10 +318,15 @@ _connect_auth_server(int level)
         return (-1);
     }
 
+	auth_server = config->auth_servers;
+	if (auth_server->authserv_fd > 0) {
+		debug(LOG_INFO, "Use keep-alive http connection");
+		return auth_server->authserv_fd;
+	}
+	
     /*
      * Let's resolve the hostname of the top server to an IP address
      */
-    auth_server = config->auth_servers;
     hostname = auth_server->authserv_hostname;
     debug(LOG_DEBUG, "Level %d: Resolving auth server [%s]", level, hostname);
     h_addr = wd_gethostbyname(hostname);
@@ -430,6 +449,7 @@ success:
   		arg = fcntl(sockfd, F_GETFL, NULL); 
   		arg &= (~O_NONBLOCK); 
   		fcntl(sockfd, F_SETFL, arg); 
+		auth_server->authserv_fd = socketfd;
 		return sockfd;
     }
 }
