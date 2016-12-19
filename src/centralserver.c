@@ -452,7 +452,7 @@ success:
   		arg = fcntl(sockfd, F_GETFL, NULL); 
   		arg &= (~O_NONBLOCK); 
   		fcntl(sockfd, F_SETFL, arg); 
-		auth_server->authserv_fd = socketfd;
+		auth_server->authserv_fd = sockfd;
 		return sockfd;
     }
 }
