@@ -453,15 +453,11 @@ http_get_ex(const int sockfd, const char *req, int wait)
         }
     } while (!done);
 
-    close(sockfd);
     retval = pstr_to_string(response);
     debug(LOG_DEBUG, "HTTP Response from Server: [%s]", retval);
     return retval;
 
  error:
-    if (sockfd >= 0) {
-        close(sockfd);
-    }
     retval = pstr_to_string(response);
     free(retval);
     return NULL;
