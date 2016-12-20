@@ -70,4 +70,6 @@ int _connect_auth_server(int level);
 /** @brief close  auth server connected socket*/
 void _close_auth_server();
 
+/** @brief thread-safe close auth server connected socket*/
+void close_auth_server();
 #endif                          /* _CENTRALSERVER_H_ */
