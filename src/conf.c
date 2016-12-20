@@ -470,7 +470,9 @@ parse_auth_server(FILE * file, const char *filename, int *linenum)
     new->authserv_ping_script_path_fragment = pingscriptpathfragment;
     new->authserv_auth_script_path_fragment = authscriptpathfragment;
     new->authserv_http_port = http_port;
-    new->authserv_ssl_port = ssl_port;
+    new->authserv_ssl_port 	= ssl_port;
+	new->authserv_fd		= -1;
+	new->authserv_fd_ref	= 0;
 
     /* If it's the first, add to config, else append to last server */
     if (config.auth_servers == NULL) {
