@@ -75,6 +75,7 @@ auth_server_roam_request(const char *mac)
 	snprintf(buf, sizeof(buf),
 		"GET %sroam?gw_id=%s&mac=%s&channel_path=%s HTTP/1.1\r\n"
         "User-Agent: ApFree WiFiDog %s\r\n"
+		"Connection: Keep-Alive\r\n"
         "Host: %s\r\n"
         "\r\n",
         auth_server->authserv_path,
@@ -94,7 +95,7 @@ auth_server_roam_request(const char *mac)
 #ifndef USE_CYASSL
     res = http_get_ex(sockfd, buf, 2);
 #endif
-	_close_auth_server();
+	close_auth_server();
     if (NULL == res) {
         debug(LOG_ERR, "There was a problem talking to the auth server!");		
         return NULL;
