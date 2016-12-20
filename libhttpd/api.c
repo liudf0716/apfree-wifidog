@@ -494,7 +494,8 @@ httpdReadRequest(httpd * server, request * r)
 				cp = strchr(buf, ':');
                 if (cp) {
                     cp += 2;
-					if (strncasecmp(cp, "gzip,deflate", 12) == 0)
+					// some Accept-Encoding is "gzip,deflate", some is "gzip, deflate"
+					if (strncasecmp(cp, "gzip", 4) == 0) 
 						r->request.deflate = 1;                 
                 }
 			}
@@ -756,12 +757,18 @@ httpdSetCookie(request * r, const char *name, const char *value)
 }
 
 void
+httpdOutputLengthDirect(request *r, const char *msg, int msg_len)
+{
+	r->response.responseLength += msg_len;
+    if (r->response.headersSent == 0)
+        _httpd_sendHeaders(r, msg_len, 0);
+    _httpd_net_write(r->clientSock, msg, msg_len);
+}
+
+void
 httpdOutputDirect(request * r, const char *msg)
 {
-    r->response.responseLength += strlen(msg);
-    if (r->response.headersSent == 0)
-        httpdSendHeaders(r);
-    _httpd_net_write(r->clientSock, msg, strlen(msg));
+    httpdOutputLengthDirect(r, msg, strlen(msg));
 }
 
 void

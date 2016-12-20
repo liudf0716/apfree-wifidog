@@ -436,27 +436,42 @@ _httpd_sendHeaders(request * r, int contentLength, int modTime)
 {
     char timeBuf[HTTP_TIME_STRING_LEN] = {0};
 	char hdrBuf[HTTP_READ_BUF_LEN] = {0};
+	int  totalLength = 0, nret;
 
     if (r->response.headersSent)
         return;
 
     r->response.headersSent = 1;
-	snprintf(hdrBuf, HTTP_READ_BUF_LEN, "HTTP/1.1 ");
-	snprintf(hdrBuf+strlen(hdrBuf), HTTP_READ_BUF_LEN-strlen(hdrBuf), "%s", r->response.response);
-	snprintf(hdrBuf+strlen(hdrBuf), HTTP_READ_BUF_LEN-strlen(hdrBuf), "%s", r->response.headers);
+	nret = snprintf(hdrBuf, HTTP_READ_BUF_LEN, "HTTP/1.1 ");
+	totalLength += nret;
+	nret = snprintf(hdrBuf+totalLength, HTTP_READ_BUF_LEN-totalLength, "%s", r->response.response);
+	totalLength += nret;
+	nret = snprintf(hdrBuf+totalLength, HTTP_READ_BUF_LEN-totalLength, "%s", r->response.headers);
 
-    _httpd_formatTimeString(timeBuf, 0);	
-	snprintf(hdrBuf+strlen(hdrBuf), HTTP_READ_BUF_LEN-strlen(hdrBuf), "Date: ");
-	snprintf(hdrBuf+strlen(hdrBuf), HTTP_READ_BUF_LEN-strlen(hdrBuf), "%s\r\n", timeBuf);
-	snprintf(hdrBuf+strlen(hdrBuf), HTTP_READ_BUF_LEN-strlen(hdrBuf), "Connection: close\r\nContent-Type: %s\r\n", 
-				r->response.contentType);
+    _httpd_formatTimeString(timeBuf, 0);
+	totalLength += nret;
+	nret = snprintf(hdrBuf+totalLength, HTTP_READ_BUF_LEN-totalLength, "Date: ");
+	totalLength += nret;
+	nret = snprintf(hdrBuf+totalLength, HTTP_READ_BUF_LEN-totalLength, "%s\r\n", timeBuf);
+	totalLength += nret;
+	nret = snprintf(hdrBuf+totalLength, HTTP_READ_BUF_LEN-totalLength, "Connection: close\r\nContent-Type: %s", 
+				r->response.contentType); // contentType already include "\r\n"
 
+	if (r->request.deflate) {
+		totalLength += nret;
+		nret = snprintf(hdrBuf+totalLength, HTTP_READ_BUF_LEN-totalLength, "Content-Encoding: gzip\r\n");
+	}
+	
     if (contentLength > 0) {	
         _httpd_formatTimeString(timeBuf, modTime);
-		snprintf(hdrBuf+strlen(hdrBuf), HTTP_READ_BUF_LEN-strlen(hdrBuf), "Content-Length: %d\r\nLast-Modified: %s\r\n", 
+		totalLength += nret;
+		nret = snprintf(hdrBuf+totalLength, HTTP_READ_BUF_LEN-totalLength, "Content-Length: %d\r\nLast-Modified: %s\r\n", 
 			contentLength, timeBuf);
     }
-	_httpd_net_write(r->clientSock, hdrBuf, strlen(hdrBuf));
+	totalLength += nret;
+	nret = snprintf(hdrBuf+totalLength, HTTP_READ_BUF_LEN-totalLength, "\r\n");
+	totalLength += nret;
+	_httpd_net_write(r->clientSock, hdrBuf, totalLength);
 }
 
 httpDir *

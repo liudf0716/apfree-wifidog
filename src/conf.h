@@ -132,6 +132,8 @@ typedef struct _auth_serv_t {
 				     listens on */
     int authserv_use_ssl;       /**< @brief Use SSL or not */
     char *last_ip;      /**< @brief Last ip used by authserver */
+	int	authserv_fd;	/** @brief this support keep-alive http connection*/
+	int	authserv_fd_ref; /** @brief is this socket fd being used or not*/
     struct _auth_serv_t *next;
 } t_auth_serv;
 

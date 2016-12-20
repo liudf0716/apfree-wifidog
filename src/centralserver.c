@@ -74,7 +74,8 @@ auth_server_roam_request(const char *mac)
     memset(buf, 0, sizeof(buf));
 	snprintf(buf, sizeof(buf),
 		"GET %sroam?gw_id=%s&mac=%s&channel_path=%s HTTP/1.1\r\n"
-        "User-Agent: WiFiDog %s\r\n"
+        "User-Agent: ApFree WiFiDog %s\r\n"
+		"Connection: Keep-Alive\r\n"
         "Host: %s\r\n"
         "\r\n",
         auth_server->authserv_path,
@@ -94,8 +95,9 @@ auth_server_roam_request(const char *mac)
 #ifndef USE_CYASSL
     res = http_get_ex(sockfd, buf, 2);
 #endif
+	close_auth_server();
     if (NULL == res) {
-        debug(LOG_ERR, "There was a problem talking to the auth server!");
+        debug(LOG_ERR, "There was a problem talking to the auth server!");		
         return NULL;
     }
 
@@ -168,7 +170,8 @@ auth_server_request(t_authresponse * authresponse, const char *request_type, con
     if(config -> deltatraffic) {
            snprintf(buf, (sizeof(buf) - 1),
              "GET %s%sstage=%s&ip=%s&mac=%s&token=%s&incoming=%llu&outgoing=%llu&incomingdelta=%llu&outgoingdelta=%llu&first_login=%lld&online_time=%u&gw_id=%s&channel_path=%s&name=%s&wired=%d HTTP/1.1\r\n"
-             "User-Agent: WiFiDog %s\r\n"
+             "User-Agent: ApFree WiFiDog %s\r\n"
+			 "Connection: Keep-Alive\r\n"
              "Host: %s\r\n"
              "\r\n",
              auth_server->authserv_path,
@@ -189,7 +192,8 @@ auth_server_request(t_authresponse * authresponse, const char *request_type, con
     } else {
             snprintf(buf, (sizeof(buf) - 1),
              "GET %s%sstage=%s&ip=%s&mac=%s&token=%s&incoming=%llu&outgoing=%llu&first_login=%lld&online_time=%u&gw_id=%s&channel_path=%s&name=%s&wired=%d HTTP/1.1\r\n"
-             "User-Agent: WiFiDog %s\r\n"
+             "User-Agent: ApFree WiFiDog %s\r\n"
+			 "Connection: Keep-Alive\r\n"
              "Host: %s\r\n"
              "\r\n",
              auth_server->authserv_path,
@@ -218,6 +222,7 @@ auth_server_request(t_authresponse * authresponse, const char *request_type, con
     res = http_get(sockfd, buf);
 #endif
     if (NULL == res) {
+		_close_auth_server();
         debug(LOG_ERR, "There was a problem talking to the auth server!");
         return (AUTH_ERROR);
     }
@@ -258,6 +263,36 @@ connect_auth_server()
     return (sockfd);
 }
 
+void
+close_auth_server()
+{
+	LOCK_CONFIG();
+	_close_auth_server();
+	UNLOCK_CONFIG();
+}
+
+void
+_close_auth_server()
+{
+	s_config *config = config_get_config();
+    t_auth_serv *auth_server = NULL;
+	
+	for (auth_server = config->auth_servers; auth_server; auth_server = auth_server->next) {
+        if (auth_server->authserv_fd > 0) {
+			auth_server->authserv_fd_ref -= 1;
+			if (auth_server->authserv_fd_ref == 0) {
+				close(auth_server->authserv_fd);
+				auth_server->authserv_fd = -1;
+			} else if (auth_server->authserv_fd_ref < 0) {
+				debug(LOG_ERR, "Impossible, authserv_fd_ref is %d", auth_server->authserv_fd_ref);
+				close(auth_server->authserv_fd);
+				auth_server->authserv_fd = -1;
+				auth_server->authserv_fd_ref = 0;
+			}
+		}
+    }
+}
+
 /* Helper function called by connect_auth_server() to do the actual work including recursion
  * DO NOT CALL DIRECTLY
  @param level recursion level indicator must be 0 when not called by _connect_auth_server()
@@ -284,6 +319,21 @@ _connect_auth_server(int level)
 		return -1;
 	}
 	
+	auth_server = config->auth_servers;
+	if (auth_server->authserv_fd > 0) {
+		if (is_socket_valid(auth_server->authserv_fd)) {
+			debug(LOG_INFO, "Use keep-alive http connection");
+			auth_server->authserv_fd_ref++;
+			return auth_server->authserv_fd;
+		} else {
+			debug(LOG_INFO, "Server has closed this connection, initialize it");
+			close(auth_server->authserv_fd);
+			auth_server->authserv_fd = -1;
+			auth_server->authserv_fd_ref = 0;
+			return _connect_auth_server(level);
+		}
+	}
+	
     /* XXX level starts out at 0 and gets incremented by every iterations. */
     level++;
 
@@ -302,12 +352,12 @@ _connect_auth_server(int level)
          * at least once and none are accessible
          */
         return (-1);
-    }
-
+    }	
+	
     /*
      * Let's resolve the hostname of the top server to an IP address
      */
-    auth_server = config->auth_servers;
+	auth_server = config->auth_servers;
     hostname = auth_server->authserv_hostname;
     debug(LOG_DEBUG, "Level %d: Resolving auth server [%s]", level, hostname);
     h_addr = wd_gethostbyname(hostname);
@@ -430,6 +480,7 @@ success:
   		arg = fcntl(sockfd, F_GETFL, NULL); 
   		arg &= (~O_NONBLOCK); 
   		fcntl(sockfd, F_SETFL, arg); 
+		auth_server->authserv_fd = sockfd;
 		return sockfd;
     }
 }

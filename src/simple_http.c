@@ -296,12 +296,11 @@ deflate_write(char *source, int len, char **dest, int *wlen, int gzip)
 
 	strm.avail_in = len;  
 	strm.next_in = source;  
-
-	/* run inflate() on input until output buffer not full */  
+  
 	do {  
 		strm.avail_out = CHUNK;  
 		strm.next_out = out;  
-		ret = deflate(&strm, Z_FINISH);   
+		ret = deflate(&strm, Z_FINISH);
 		switch (ret) {  
 		case Z_NEED_DICT:  
 			ret = Z_DATA_ERROR; /* and fall through */  
@@ -310,14 +309,15 @@ deflate_write(char *source, int len, char **dest, int *wlen, int gzip)
 			deflateEnd(&strm);  
 			return ret;  
 		}  
+
 		have = CHUNK - strm.avail_out;  
 		totalsize += have;  
 		*dest = realloc(*dest, totalsize);  
-		memcpy(*dest + totalsize - have, out, have);  
+		memcpy(*dest + totalsize - have, out, have);
 	} while (strm.avail_out == 0);  
 
 	/* clean up and return */  
-	(void)inflateEnd(&strm);  
+	(void)deflateEnd(&strm);
 	*wlen = totalsize;
 	return ret == Z_STREAM_END ? Z_OK : Z_DATA_ERROR;
 }
@@ -453,15 +453,11 @@ http_get_ex(const int sockfd, const char *req, int wait)
         }
     } while (!done);
 
-    close(sockfd);
     retval = pstr_to_string(response);
     debug(LOG_DEBUG, "HTTP Response from Server: [%s]", retval);
     return retval;
 
  error:
-    if (sockfd >= 0) {
-        close(sockfd);
-    }
     retval = pstr_to_string(response);
     free(retval);
     return NULL;
