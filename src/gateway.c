@@ -70,7 +70,7 @@
 #include "ping_thread.h"
 #include "httpd_thread.h"
 #include "util.h"
-#include "threadpool.h"
+#include "thread_pool.h"
 #include "ipset.h"
 #include "https_server.h"
 
@@ -165,10 +165,11 @@ init_wifidog_redir_html(void)
 		goto err;
 	}
 	
-	wifidog_redir_html->front 		= evb_2_string(evb_front);
-	wifidog_redir_html->front_len	= evbuffer_get_length(evb_front);
-	wifidog_redir_html->rear		= evb_2_string(evb_rear);
-	wifidog_redir_html->rear_len	= evbuffer_get_length(evb_rear);
+	int len = 0;
+	wifidog_redir_html->front 		= evb_2_string(evb_front, &len);
+	wifidog_redir_html->front_len	= len;
+	wifidog_redir_html->rear		= evb_2_string(evb_rear, &len);
+	wifidog_redir_html->rear_len	= len;
 	
 	if (evb_front) evbuffer_free(evb_front);	
 	if (evb_rear) evbuffer_free(evb_rear);

@@ -17,7 +17,7 @@ set(src_apfreewifidog
     httpd_thread.c 
     simple_http.c 
     pstring.c 
-    threadpool.c 
+    thread_pool.c 
     ipset.c 
     https_server.c 
 	https_common.c 

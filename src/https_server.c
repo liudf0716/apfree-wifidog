@@ -131,8 +131,8 @@ evhttpd_get_full_redir_url(const char *mac, const char *ip, const char *orig_url
 					g_ssid?g_ssid:"null",
 					ip, mac, orig_url);
 	
-
-	char *redir_url = evb_2_string(evb);
+	
+	char *redir_url = evb_2_string(evb, NULL);
 	evbuffer_free(evb);
 	
 	return redir_url;
@@ -141,8 +141,8 @@ evhttpd_get_full_redir_url(const char *mac, const char *ip, const char *orig_url
 void
 evhttpd_gw_reply(struct evhttp_request *req, struct evbuffer *data_buffer) {
 	struct evbuffer *evb = evbuffer_new();
-	int len 	= evbuffer_get_length(data_buffer);
-	char *data	= evb_2_string(data_buffer);
+	int len 	= 0;
+	char *data	= evb_2_string(data_buffer, &len);
 	evbuffer_add(evb, data, len);
 	
 	evhttp_add_header(evhttp_request_get_output_headers(req),

@@ -461,12 +461,15 @@ is_valid_mac(const char *mac)
 	return (i == 12 && (s == 5 || s == 0));
 }
 
-char *evb_2_string(struct evbuffer *evb) 
+// if olen is not NULL, set it rlen value
+char *evb_2_string(struct evbuffer *evb, int *olen) 
 {
-	size_t len = evbuffer_get_length(evb)+1;
-	char *str = (char *)malloc(len);
-	memset(str, 0, len);
-	evbuffer_copyout(evb, str, len);
+	int rlen = evbuffer_get_length(evb);
+	char *str = (char *)malloc(rlen+1);
+	memset(str, 0, rlen+1);
+	evbuffer_copyout(evb, str, rlen);
+	if (olen)
+		*olen = rlen;
 	return str;
 }
 
@@ -560,3 +563,24 @@ void evdns_parse_trusted_domain_2_ip(t_domain_trusted *p)
 	evdns_base_free(dnsbase, 0);
     event_base_free(base);
 }
+
+/*
+ * 0, FALSE; 1, TRUE
+ */
+int is_socket_valid(int sockfd)
+{
+	int err = 0;
+	int errlen = sizeof(err);
+	if (getsockopt(sockfd, SOL_SOCKET, SO_ERROR, &err, &errlen) == -1) {
+		debug(LOG_INFO, "getsockopt(SO_ERROR): %s", strerror(errno));
+		return 0;
+	}
+
+	if (err) {
+		debug(LOG_INFO, "getsockopt(SO_ERROR): %s", strerror(errno));
+		return 0;
+	}
+
+	return 1;
+}
+
