@@ -337,6 +337,7 @@ _connect_auth_server(int level)
     /*
      * Let's resolve the hostname of the top server to an IP address
      */
+	auth_server = config->auth_servers;
     hostname = auth_server->authserv_hostname;
     debug(LOG_DEBUG, "Level %d: Resolving auth server [%s]", level, hostname);
     h_addr = wd_gethostbyname(hostname);
