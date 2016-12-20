@@ -428,7 +428,7 @@ http_get_ex(const int sockfd, const char *req, int wait)
         nfds = select(nfds, &readfds, NULL, NULL, &timeout);
 
         if (nfds > 0) {
-                        /** We don't have to use FD_ISSET() because there
+            /** We don't have to use FD_ISSET() because there
 			 *  was only one fd. */
             memset(readbuf, 0, MAX_BUF);
             numbytes = read(sockfd, readbuf, MAX_BUF - 1);
@@ -436,6 +436,8 @@ http_get_ex(const int sockfd, const char *req, int wait)
                 debug(LOG_ERR, "An error occurred while reading from server: %s", strerror(errno));
                 goto error;
             } else if (numbytes == 0) {
+				debug(LOG_INFO, "Server close connection: %s", strerror(errno));
+				close_auth_server();
                 done = 1;
             } else {
                 readbuf[numbytes] = '\0';
