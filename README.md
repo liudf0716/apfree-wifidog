@@ -95,8 +95,4 @@ config wifidog
 Domains of `www.baidu.com,www.qq.com,www.qq.com.cn,www.weixin.com` is trusted in this default configuration file, and you can modify it to what you want.
 
 
------
-
-
-## Usage examples
 
