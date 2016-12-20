@@ -263,6 +263,14 @@ connect_auth_server()
 }
 
 void
+close_auth_server()
+{
+	LOCK_CONFIG();
+	_close_auth_server();
+	UNLOCK_CONFIG();
+}
+
+void
 _close_auth_server()
 {
 	s_config *config = config_get_config();
@@ -270,8 +278,16 @@ _close_auth_server()
 	
 	for (auth_server = config->auth_servers; auth_server; auth_server = auth_server->next) {
         if (auth_server->authserv_fd > 0) {
-			close(auth_server->authserv_fd);
-			auth_server->authserv_fd = -1;
+			auth_server->authserv_fd_ref -= 1;
+			if (auth_server->authserv_fd_ref == 0) {
+				close(auth_server->authserv_fd);
+				auth_server->authserv_fd = -1;
+			} else if (auth_server->authserv_fd_ref < 0) {
+				debug(LOG_ERR, "Impossible, authserv_fd_ref is %d", auth_server->authserv_fd_ref);
+				close(auth_server->authserv_fd);
+				auth_server->authserv_fd = -1;
+				auth_server->authserv_fd_ref = 0;
+			}
 		}
     }
 }
@@ -306,10 +322,13 @@ _connect_auth_server(int level)
 	if (auth_server->authserv_fd > 0) {
 		if (is_socket_valid(auth_server->authserv_fd)) {
 			debug(LOG_INFO, "Use keep-alive http connection");
+			auth_server->authserv_fd_ref++;
 			return auth_server->authserv_fd;
 		} else {
+			debug(LOG_INFO, "Server has closed this connection, initialize it");
 			close(auth_server->authserv_fd);
 			auth_server->authserv_fd = -1;
+			auth_server->authserv_fd_ref = 0;
 			return _connect_auth_server(level);
 		}
 	}
