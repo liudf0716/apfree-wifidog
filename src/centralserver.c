@@ -455,9 +455,7 @@ _connect_auth_server(int level)
 			
 			res = select(sockfd+1, NULL, &fdset, NULL, &tv);
 			switch(res) {
-			case 1: // data to read
-				
-
+			case 1: // data to read				
 				getsockopt(sockfd, SOL_SOCKET, SO_ERROR, &so_error, &len);
 				if (so_error == 0) {
 					goto success;
@@ -481,6 +479,7 @@ success:
   		arg &= (~O_NONBLOCK); 
   		fcntl(sockfd, F_SETFL, arg); 
 		auth_server->authserv_fd = sockfd;
+		auth_server->authserv_fd_ref++;
 		return sockfd;
     }
 }
