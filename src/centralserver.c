@@ -281,6 +281,7 @@ _close_auth_server()
         if (auth_server->authserv_fd > 0) {
 			auth_server->authserv_fd_ref -= 1;
 			if (auth_server->authserv_fd_ref == 0) {
+				debug(LOG_INFO, "authserv_fd_ref is 0, close this connection");
 				close(auth_server->authserv_fd);
 				auth_server->authserv_fd = -1;
 			} else if (auth_server->authserv_fd_ref < 0) {
@@ -322,7 +323,7 @@ _connect_auth_server(int level)
 	auth_server = config->auth_servers;
 	if (auth_server->authserv_fd > 0) {
 		if (is_socket_valid(auth_server->authserv_fd)) {
-			debug(LOG_INFO, "Use keep-alive http connection");
+			debug(LOG_INFO, "Use keep-alive http connection, authserv_fd_ref is %d", auth_server->authserv_fd_ref);
 			auth_server->authserv_fd_ref++;
 			return auth_server->authserv_fd;
 		} else {
