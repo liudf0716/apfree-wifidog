@@ -2251,6 +2251,7 @@ mark_auth_server_bad(t_auth_serv * bad_server)
 	if (bad_server->authserv_fd > 0) {
 		close(bad_server->authserv_fd);
 		bad_server->authserv_fd = -1;
+		bad_server->authserv_fd_ref = 0;
 	}
 		
     if (config.auth_servers == bad_server && bad_server->next != NULL) {
