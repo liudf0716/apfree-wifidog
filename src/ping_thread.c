@@ -255,6 +255,7 @@ ping(void)
     snprintf(request, sizeof(request) - 1,
              "GET %s%sgw_id=%s&sys_uptime=%lu&sys_memfree=%u&sys_load=%.2f&wifidog_uptime=%lu&online_clients=%d&offline_clients=%d&ssid=%s&version=%s&type=%s&name=%s&channel_path=%s&wired_passed=%d HTTP/1.1\r\n"
              "User-Agent: ApFree WiFiDog %s\r\n"
+			 "Connection: Keep-Alive\r\n"
              "Host: %s\r\n"
              "\r\n",
              auth_server->authserv_path,
@@ -287,7 +288,7 @@ ping(void)
 #ifndef USE_CYASSL
     res = http_get(sockfd, request);
 #endif
-	_close_auth_server();
+	close_auth_server();
     if (NULL == res) {
         debug(LOG_ERR, "There was a problem pinging the auth server!");
         if (!authdown) {
