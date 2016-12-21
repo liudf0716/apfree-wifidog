@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=apfree_wifidog
-PKG_VERSION:=1.12.653
+PKG_VERSION:=1.12.773
 PKG_RELEASE=1
 
 
