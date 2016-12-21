@@ -1284,7 +1284,6 @@ iptables_fw_counters_update(void)
                     p1->counters.incoming = p1->counters.incoming_history + counter;
                     debug(LOG_DEBUG, "%s - Incoming traffic %llu bytes, Updated counter.incoming to %llu bytes", ip, counter, p1->counters.incoming);
                     p1->counters.last_updated = time(NULL);
-					p1->is_online = 1;
                 }
 
             	UNLOCK_CLIENT_LIST();
