@@ -66,6 +66,10 @@ auth_server_roam_request(const char *mac)
 
 
     sockfd = connect_auth_server();
+	if (sockfd <= 0) {
+		debug(LOG_ERR, "There was a problem connecting to the auth server!");		
+        return NULL;
+	}
 
      /**
 	 * TODO: XXX change the PHP so we can harmonize stage as request_type
@@ -161,7 +165,10 @@ auth_server_request(t_authresponse * authresponse, const char *request_type, con
     authresponse->authcode = AUTH_ERROR;
 
     sockfd = connect_auth_server();
-
+	if (sockfd <= 0) {
+		debug(LOG_ERR, "There was a problem connecting to the auth server!");		
+        return AUTH_ERROR;
+	}
         /**
 	 * TODO: XXX change the PHP so we can harmonize stage as request_type
 	 * everywhere.
