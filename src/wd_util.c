@@ -554,7 +554,7 @@ is_device_wired(const char *mac)
  * 1: is online; 0: is unreachable
  */
 int
-is_server_reachable(const char *val)
+is_device_online(const char *val)
 {
 	char cmd[256] = {0};
 	FILE *fd = NULL;
