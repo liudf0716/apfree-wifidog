@@ -1,1 +1,2 @@
-1, add mqtt support
+1, add mqtt support to remote control wifidog
+2, Architecture refactoring (use libevent?)
