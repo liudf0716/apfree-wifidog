@@ -410,7 +410,7 @@ update_trusted_mac_status(t_trusted_mac *tmac)
 	}
 
 	if(tmac->ip != NULL) {
-		tmac->is_online = is_server_reachable(tmac->ip);
+		tmac->is_online = is_device_online(tmac->ip);
 	}
 }
 
@@ -426,17 +426,20 @@ update_trusted_mac_list_status(void)
 		return;
 	}
 	
+	int flag = 0;
 	for(p1 = tmac_list; p1 != NULL; p1 = p1->next) {
 		update_trusted_mac_status(p1);
 		debug(LOG_DEBUG, "update_trusted_mac_list_status: %s %s %d", p1->ip, p1->mac, p1->is_online);
 		if (config->auth_servers != NULL && p1->is_online) {
             auth_server_request(&authresponse, REQUEST_TYPE_COUNTERS, p1->ip, p1->mac, "null", 0,
                                 0, 0, 0, 0, 0, "null", is_device_wired(p1->mac));
+			flag = 1;
         }
 			
 	}
 	
-	close_auth_server();
+	if (flag)
+		close_auth_server();
 	
 	clear_dup_trusted_mac_list(tmac_list);
 }
@@ -467,6 +470,7 @@ fw_sync_with_authserver(void)
     g_online_clients = client_list_dup(&worklist);
     UNLOCK_CLIENT_LIST();
 
+	int flag = 0;
     for (p1 = p2 = worklist; NULL != p1; p1 = p2) {
         p2 = p1->next;
 
@@ -482,6 +486,7 @@ fw_sync_with_authserver(void)
 								// liudf added 20160112
 								p1->first_login, (p1->counters.last_updated - p1->first_login), 
 								p1->name?p1->name:"null", p1->wired);
+			flag = 1;
         }
 
         time_t current_time = time(NULL);
@@ -578,7 +583,8 @@ fw_sync_with_authserver(void)
         }
     }
 	
-	close_auth_server();
+	if (flag)
+		close_auth_server();
 	
     client_list_destroy(worklist);	
 }
