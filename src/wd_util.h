@@ -70,6 +70,6 @@ void trim_newline(char *);
 int is_device_wired(const char *);
 
 /** @brief Is ip online or domain parsable */
-int is_server_reachable(const char *);
+int is_device_online(const char *);
 //<<< liudf added end
 #endif /* _WD_UTIL_H_ */
