@@ -72,4 +72,7 @@ void _close_auth_server();
 
 /** @brief thread-safe close auth server connected socket*/
 void close_auth_server();
+
+/**@brief thread-safe to decrease authserv_fd_ref, not close connection really*/
+void decrease_authserv_fd_ref();
 #endif                          /* _CENTRALSERVER_H_ */
