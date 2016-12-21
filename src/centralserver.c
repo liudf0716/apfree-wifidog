@@ -258,9 +258,7 @@ connect_auth_server()
     int sockfd;
 
     LOCK_CONFIG();
-    sockfd = _connect_auth_server(0);
-	if (sockfd > 0)
-		auth_server->authserv_fd_ref++;
+    sockfd = _connect_auth_server(0);	
     UNLOCK_CONFIG();
 
     if (sockfd == -1) {
@@ -356,6 +354,7 @@ _connect_auth_server(int level)
 	if (auth_server->authserv_fd > 0) {
 		if (is_socket_valid(auth_server->authserv_fd)) {
 			debug(LOG_INFO, "Use keep-alive http connection, authserv_fd_ref is %d", auth_server->authserv_fd_ref);
+			auth_server->authserv_fd_ref++;
 			return auth_server->authserv_fd;
 		} else {
 			debug(LOG_INFO, "Server has closed this connection, initialize it");
@@ -510,7 +509,8 @@ success:
   		arg = fcntl(sockfd, F_GETFL, NULL); 
   		arg &= (~O_NONBLOCK); 
   		fcntl(sockfd, F_SETFL, arg); 
-		auth_server->authserv_fd = sockfd;		
+		auth_server->authserv_fd = sockfd;
+		auth_server->authserv_fd_ref++;
 		return sockfd;
     }
 }
