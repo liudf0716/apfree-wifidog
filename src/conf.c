@@ -69,7 +69,7 @@
 
 
 //>>> liudf added 20160114
-const char	*g_inner_trusted_domains = "szextshort.weixin.qq.com,short.weixin.qq.com,wifi.weixin.qq.com,dns.weixin.qq.com,www.kunteng.org,cloud.kunteng.org,mqtt.kunteng.org,log1.kunteng.org";
+const char	*g_inner_trusted_domains = "www.kunteng.org,cloud.kunteng.org,mqtt.kunteng.org,log1.kunteng.org";
 
 /** @internal
  * Holds the current configuration of the gateway */
