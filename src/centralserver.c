@@ -222,11 +222,12 @@ auth_server_request(t_authresponse * authresponse, const char *request_type, con
     res = http_get(sockfd, buf);
 #endif
     if (NULL == res) {
-		_close_auth_server();
+		close_auth_server();
         debug(LOG_ERR, "There was a problem talking to the auth server!");
         return (AUTH_ERROR);
     }
 
+	decrease_authserv_fd_ref();
     if ((tmp = strstr(res, "Auth: "))) {
         if (sscanf(tmp, "Auth: %d", (int *)&authresponse->authcode) == 1) {
             debug(LOG_INFO, "Auth server returned authentication code %d", authresponse->authcode);
@@ -251,6 +252,8 @@ connect_auth_server()
 
     LOCK_CONFIG();
     sockfd = _connect_auth_server(0);
+	if (sockfd > 0)
+		auth_server->authserv_fd_ref++;
     UNLOCK_CONFIG();
 
     if (sockfd == -1) {
@@ -261,6 +264,32 @@ connect_auth_server()
         mark_auth_online();
     }
     return (sockfd);
+}
+
+// just decrease authserv_fd_ref
+void
+decrease_authserv_fd_ref()
+{
+	s_config *config = config_get_config();
+    t_auth_serv *auth_server = NULL;
+	
+	LOCK_CONFIG();
+
+	for (auth_server = config->auth_servers; auth_server; auth_server = auth_server->next) {
+        if (auth_server->authserv_fd > 0) {
+			auth_server->authserv_fd_ref -= 1;
+			if (auth_server->authserv_fd_ref == 0) {
+				debug(LOG_INFO, "authserv_fd_ref is 0, but not close this connection");
+			} else if (auth_server->authserv_fd_ref < 0) {
+				debug(LOG_ERR, "Impossible, authserv_fd_ref is %d", auth_server->authserv_fd_ref);
+				close(auth_server->authserv_fd);
+				auth_server->authserv_fd = -1;
+				auth_server->authserv_fd_ref = 0;
+			}
+		}
+    }
+	
+	UNLOCK_CONFIG();
 }
 
 void
@@ -324,7 +353,6 @@ _connect_auth_server(int level)
 	if (auth_server->authserv_fd > 0) {
 		if (is_socket_valid(auth_server->authserv_fd)) {
 			debug(LOG_INFO, "Use keep-alive http connection, authserv_fd_ref is %d", auth_server->authserv_fd_ref);
-			auth_server->authserv_fd_ref++;
 			return auth_server->authserv_fd;
 		} else {
 			debug(LOG_INFO, "Server has closed this connection, initialize it");
@@ -479,8 +507,7 @@ success:
   		arg = fcntl(sockfd, F_GETFL, NULL); 
   		arg &= (~O_NONBLOCK); 
   		fcntl(sockfd, F_SETFL, arg); 
-		auth_server->authserv_fd = sockfd;
-		auth_server->authserv_fd_ref++;
+		auth_server->authserv_fd = sockfd;		
 		return sockfd;
     }
 }
