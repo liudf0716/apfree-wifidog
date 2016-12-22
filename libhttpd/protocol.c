@@ -457,10 +457,12 @@ _httpd_sendHeaders(request * r, int contentLength, int modTime)
 	nret = snprintf(hdrBuf+totalLength, HTTP_READ_BUF_LEN-totalLength, "Connection: close\r\nContent-Type: %s", 
 				r->response.contentType); // contentType already include "\r\n"
 
+#ifdef	_DEFLATE_SUPPORT_	
 	if (r->request.deflate) {
 		totalLength += nret;
 		nret = snprintf(hdrBuf+totalLength, HTTP_READ_BUF_LEN-totalLength, "Content-Encoding: gzip\r\n");
 	}
+#endif
 	
     if (contentLength > 0) {	
         _httpd_formatTimeString(timeBuf, modTime);
