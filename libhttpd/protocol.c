@@ -482,13 +482,13 @@ httpd *server;
 char *dir;
 int createFlag;
 {
-    char buffer[HTTP_MAX_URL] = { 0 }, *curDir;
+    char buffer[HTTP_MAX_URL] = { 0 }, *curDir, *saveptr;
     httpDir *curItem, *curChild;
 
     strncpy(buffer, dir, HTTP_MAX_URL);
     buffer[HTTP_MAX_URL - 1] = 0;
     curItem = server->content;
-    curDir = strtok(buffer, "/");
+    curDir = strtok_r(buffer, "/", &saveptr);
     while (curDir) {
         curChild = curItem->children;
         while (curChild) {
@@ -508,7 +508,7 @@ int createFlag;
             }
         }
         curItem = curChild;
-        curDir = strtok(NULL, "/");
+        curDir = strtok_r(NULL, "/", &saveptr);
     }
     return (curItem);
 }
