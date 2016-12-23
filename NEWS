@@ -1,4 +1,4 @@
-ApFree WiFiDog 1.12.787：
+ApFree WiFiDog 1.12.797：
  1，支持https跳转
  2，使用http长连接，优化auth接口的数据传输效率（服务器端支持keep-alive），降低服务器端的压力
  3，优化了域名解析方式，将原来的阻塞方式的域名解析换为非阻塞的方式
