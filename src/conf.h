@@ -134,6 +134,7 @@ typedef struct _auth_serv_t {
     char *last_ip;      /**< @brief Last ip used by authserver */
 	int	authserv_fd;	/** @brief this support keep-alive http connection*/
 	int	authserv_fd_ref; /** @brief is this socket fd being used or not*/
+	int authserv_connect_timeout; /** @brief when connect to auth server, seconds to wait time*/
     struct _auth_serv_t *next;
 } t_auth_serv;
 
