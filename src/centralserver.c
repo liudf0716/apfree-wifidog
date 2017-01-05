@@ -479,7 +479,7 @@ _connect_auth_server(int level)
 			int so_error = 0;
 			int len = sizeof(so_error);
 			
-			tv.tv_sec = 1; 
+			tv.tv_sec = auth_server->authserv_connect_timeout; 
 			tv.tv_usec = 0; 
 			FD_ZERO(&fdset); 
 			FD_SET(sockfd, &fdset);
