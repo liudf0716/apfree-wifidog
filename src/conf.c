@@ -107,6 +107,7 @@ typedef enum {
     oAuthServSSLPort,
     oAuthServHTTPPort,
     oAuthServPath,
+	oAuthServConnectTimeout,
     oAuthServLoginScriptPathFragment,
     oAuthServPortalScriptPathFragment,
     oAuthServMsgScriptPathFragment,
@@ -179,6 +180,7 @@ static const struct {
     "sslport", oAuthServSSLPort}, {
     "httpport", oAuthServHTTPPort}, {
     "path", oAuthServPath}, {
+	"connectTimeout", oAuthServConnectTimeout}, {
     "loginscriptpathfragment", oAuthServLoginScriptPathFragment}, {
     "portalscriptpathfragment", oAuthServPortalScriptPathFragment}, {
     "msgscriptpathfragment", oAuthServMsgScriptPathFragment}, {
@@ -337,6 +339,7 @@ parse_auth_server(FILE * file, const char *filename, int *linenum)
         *msgscriptpathfragment = NULL,
         *pingscriptpathfragment = NULL, *authscriptpathfragment = NULL, line[MAX_BUF], *p1, *p2;
     int http_port, ssl_port, ssl_available, opcode;
+	int connect_timeout;
     t_auth_serv *new, *tmp;
 
     /* Defaults */
@@ -349,6 +352,7 @@ parse_auth_server(FILE * file, const char *filename, int *linenum)
     http_port = DEFAULT_AUTHSERVPORT;
     ssl_port = DEFAULT_AUTHSERVSSLPORT;
     ssl_available = DEFAULT_AUTHSERVSSLAVAILABLE;
+	connect_timeout = 5; // 5 seconds to wait
 
     /* Parsing loop */
     while (memset(line, 0, MAX_BUF) && fgets(line, MAX_BUF - 1, file) && (strchr(line, '}') == NULL)) {
@@ -400,6 +404,9 @@ parse_auth_server(FILE * file, const char *filename, int *linenum)
                 free(path);
                 path = safe_strdup(p2);
                 break;
+			case oAuthServConnectTimeout:
+				connect_timeout = atoi(p2);
+				break;	
             case oAuthServLoginScriptPathFragment:
                 free(loginscriptpathfragment);
                 loginscriptpathfragment = safe_strdup(p2);
@@ -464,6 +471,7 @@ parse_auth_server(FILE * file, const char *filename, int *linenum)
     new->authserv_hostname = host;
     new->authserv_use_ssl = ssl_available;
     new->authserv_path = path;
+	new->authserv_connect_timeout = connect_timeout;
     new->authserv_login_script_path_fragment = loginscriptpathfragment;
     new->authserv_portal_script_path_fragment = portalscriptpathfragment;
     new->authserv_msg_script_path_fragment = msgscriptpathfragment;
