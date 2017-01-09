@@ -36,6 +36,22 @@
 #include <pthread.h>
 #include <sys/socket.h>
 
+#include <unistd.h>
+#include <sys/wait.h>
+#include <sys/types.h>
+#include <sys/time.h>
+#include <netinet/in.h>
+#include <sys/ioctl.h>
+#include <arpa/inet.h>
+
+#include <net/if.h>
+
+#include <fcntl.h>
+#include <net/ethernet.h>
+#include <netinet/ip.h>
+#include <netinet/ip_icmp.h>
+#include <netpacket/packet.h>
+
 #include "common.h"
 #include "gateway.h"
 #include "commandline.h"
