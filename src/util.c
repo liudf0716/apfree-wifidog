@@ -126,7 +126,7 @@ execute(const char *cmd_line, int quiet)
 
    	old_handler = signal(SIGCHLD, SIG_DFL);	
 
-    pid = safe_fork();
+    pid = fork();
     if (pid == 0) {             /* for the child process:         */
         /* We don't want to see any errors if quiet flag is on */
         if (quiet)
