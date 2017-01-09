@@ -52,38 +52,15 @@
 
 #include <string.h>
 #include <netdb.h>
-
 #include <ctype.h>
-
 
 #include "util.h"
 #include "debug.h"
 #include "common.h"
 
 
-#define LOCK_GHBN() do { \
-	debug(LOG_DEBUG, "Locking wd_gethostbyname()"); \
-	pthread_mutex_lock(&ghbn_mutex); \
-	debug(LOG_DEBUG, "wd_gethostbyname() locked"); \
-} while (0)
-
-#define UNLOCK_GHBN() do { \
-	debug(LOG_DEBUG, "Unlocking wd_gethostbyname()"); \
-	pthread_mutex_unlock(&ghbn_mutex); \
-	debug(LOG_DEBUG, "wd_gethostbyname() unlocked"); \
-} while (0)
-
-#ifdef __ANDROID__
-#define WD_SHELL_PATH "/system/bin/sh"
-#else
-#define WD_SHELL_PATH "/bin/sh"
-#endif
-
 /** @brief FD for icmp raw socket */
 static int icmp_fd;
-
-/** @brief Mutex to protect gethostbyname since not reentrant */
-static pthread_mutex_t ghbn_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 static unsigned short rand16(void);
 
