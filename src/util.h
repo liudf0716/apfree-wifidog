@@ -82,4 +82,6 @@ int is_valid_mac(const char *);
 char *evb_2_string(struct evbuffer *, int *);
 
 int is_socket_valid(int );
+
+int wd_connect(int, const struct sockaddr *, socklen_t, int);
 #endif                          /* _UTIL_H_ */
