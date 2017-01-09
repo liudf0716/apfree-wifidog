@@ -463,54 +463,20 @@ _connect_auth_server(int level)
             return (-1);
         }
 
-		// Set non-blocking 
-  		long arg = fcntl(sockfd, F_GETFL, NULL); 
-  		arg |= O_NONBLOCK; 
-  		fcntl(sockfd, F_SETFL, arg); 
-       	
-		int res = connect(sockfd, (struct sockaddr *)&their_addr, sizeof(struct sockaddr)); 
-		if ((res == -1) && (errno != EINPROGRESS)) {
-			goto error;
-		} else if (res == 0) {
-			goto success;
+		int res = wd_connect(sockfd, (struct sockaddr *)&their_addr, sizeof(struct sockaddr), 
+							 auth_server->authserv_connect_timeout);
+		if (res == 0) {
+			// connect successly
+			auth_server->authserv_fd = sockfd;
+			auth_server->authserv_fd_ref++;
+			return sockfd;
 		} else {
-			fd_set fdset; 
-			struct timeval tv; 
-			int so_error = 0;
-			int len = sizeof(so_error);
-			
-			tv.tv_sec = auth_server->authserv_connect_timeout; 
-			tv.tv_usec = 0; 
-			FD_ZERO(&fdset); 
-			FD_SET(sockfd, &fdset);
-			
-			res = select(sockfd+1, NULL, &fdset, NULL, &tv);
-			switch(res) {
-			case 1: // data to read				
-				getsockopt(sockfd, SOL_SOCKET, SO_ERROR, &so_error, &len);
-				if (so_error == 0) {
-					goto success;
-				}
-				break;
-			default: 
-				break;
-			}
-		} 
-
-error:
-		debug(LOG_INFO,
-        	"Level %d: Failed to connect to auth server %s:%d (%d - %s). Marking it as bad and trying next if possible",
-            level, hostname, ntohs(port), errno,  strerror(errno));
-		close(sockfd);
-        mark_auth_server_bad(auth_server);
-		return _connect_auth_server(level); /* Yay recursion! */
-success:	
-		// Set to blocking mode again... 
-  		arg = fcntl(sockfd, F_GETFL, NULL); 
-  		arg &= (~O_NONBLOCK); 
-  		fcntl(sockfd, F_SETFL, arg); 
-		auth_server->authserv_fd = sockfd;
-		auth_server->authserv_fd_ref++;
-		return sockfd;
+			debug(LOG_INFO,
+				"Level %d: Failed to connect to auth server %s:%d (%d - %s). Marking it as bad and trying next if possible",
+				level, hostname, ntohs(port), errno,  strerror(errno));
+			close(sockfd);
+			mark_auth_server_bad(auth_server);
+			return _connect_auth_server(level); /* Yay recursion! */
+		}
     }
 }
