@@ -586,7 +586,7 @@ int is_socket_valid(int sockfd)
 
 // when sockfd is block, set timeout for connect
 int 
-wd_connect(int sockfd, const sruct sockaddr *their_addr, socklen_t addrlen, int timeout)
+wd_connect(int sockfd, const struct sockaddr *their_addr, socklen_t addrlen, int timeout)
 {
 	// Set non-blocking 
 	long arg = fcntl(sockfd, F_GETFL, NULL); 
