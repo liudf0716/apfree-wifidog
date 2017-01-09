@@ -55,6 +55,9 @@ static time_t last_auth_offline_time = 0;
 
 long served_this_session = 0;
 
+static int n_pending_requests = 0;
+static struct event_base *base = NULL;
+
 void
 mark_online()
 {
