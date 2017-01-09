@@ -25,7 +25,7 @@ set(src_apfreewifidog
 	ezxml.c
 )
 
-set(src_wdctl wdctl.c util.c)
+set(src_wdctl wdctl.c util.c debug.c)
 
 set(libs 
 	httpd
