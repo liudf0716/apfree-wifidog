@@ -79,9 +79,6 @@
 #define WD_SHELL_PATH "/bin/sh"
 #endif
 
-static int n_pending_requests = 0;
-static struct event_base *base = NULL;
-
 /** @brief FD for icmp raw socket */
 static int icmp_fd;
 
