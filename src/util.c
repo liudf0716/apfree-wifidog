@@ -55,13 +55,9 @@
 
 #include <ctype.h>
 
-#include "common.h"
-#include "safe.h"
+
 #include "util.h"
 #include "debug.h"
-#include "pstring.h"
-#include "httpd.h"
-#include "wdctl_thread.h"
 
 
 
@@ -93,6 +89,25 @@ static int icmp_fd;
 static pthread_mutex_t ghbn_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 static unsigned short rand16(void);
+
+/** Allocate zero-filled ram or die.
+ * @param size Number of bytes to allocate
+ * @return void * pointer to the zero'd bytes.
+ */
+static void *
+safe_malloc(size_t size)
+{
+    void *retval = NULL;
+    retval = malloc(size);
+    if (!retval) {
+		fw_destroy();
+        debug(LOG_CRIT, "Failed to malloc %d bytes of memory: %s.  Bailing out", size, strerror(errno));
+        exit(1);
+    }
+    memset(retval, 0, size);
+    return (retval);
+}
+
 
 /** Fork a child and execute a shell command, the parent
  * process waits for the child to return and returns the child's exit()
