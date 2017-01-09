@@ -28,6 +28,13 @@
 #ifndef _WD_UTIL_H_
 #define _WD_UTIL_H_
 
+#include <event2/dns.h>
+#include <event2/util.h>
+#include <event2/event.h>
+#include <event2/buffer.h>
+
+#include "conf.h"
+
 /** @brief Client server this session. */
 extern long served_this_session;
 
@@ -71,5 +78,11 @@ int is_device_wired(const char *);
 
 /** @brief Is ip online or domain parsable */
 int is_device_online(const char *);
+
+void evdns_parse_trusted_domain_2_ip(t_domain_trusted *p);
+
+void evdns_add_trusted_domain_ip_cb(int errcode, struct evutil_addrinfo *addr, void *ptr);
+
+char *evb_2_string(struct evbuffer *, int *);
 //<<< liudf added end
 #endif /* _WD_UTIL_H_ */
