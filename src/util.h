@@ -28,7 +28,7 @@
 #ifndef _UTIL_H_
 #define _UTIL_H_
 
-#include <sys/type.h>
+#include <sys/types.h>
 #include <sys/socket.h>
 
 /** @brief Initialize the ICMP socket */
