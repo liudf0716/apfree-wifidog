@@ -42,7 +42,7 @@
 #include "wdctl.h"
 #include "util.h"
 
-static s_config config;
+static wdctl_config config;
 
 static void usage(void);
 static void init_config(void);
