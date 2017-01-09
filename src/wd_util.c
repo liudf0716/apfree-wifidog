@@ -47,6 +47,25 @@
 #include "pstring.h"
 #include "version.h"
 
+#define LOCK_GHBN() do { \
+	debug(LOG_DEBUG, "Locking wd_gethostbyname()"); \
+	pthread_mutex_lock(&ghbn_mutex); \
+	debug(LOG_DEBUG, "wd_gethostbyname() locked"); \
+} while (0)
+
+#define UNLOCK_GHBN() do { \
+	debug(LOG_DEBUG, "Unlocking wd_gethostbyname()"); \
+	pthread_mutex_unlock(&ghbn_mutex); \
+	debug(LOG_DEBUG, "wd_gethostbyname() unlocked"); \
+} while (0)
+
+#ifdef __ANDROID__
+#define WD_SHELL_PATH "/system/bin/sh"
+#else
+#define WD_SHELL_PATH "/bin/sh"
+#endif
+
+
 /* XXX Do these need to be locked ? */
 static time_t last_online_time = 0;
 static time_t last_offline_time = 0;
@@ -54,6 +73,9 @@ static time_t last_auth_online_time = 0;
 static time_t last_auth_offline_time = 0;
 
 long served_this_session = 0;
+
+/** @brief Mutex to protect gethostbyname since not reentrant */
+static pthread_mutex_t ghbn_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 static int n_pending_requests = 0;
 static struct event_base *base = NULL;
