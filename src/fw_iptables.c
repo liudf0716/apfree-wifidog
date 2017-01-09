@@ -764,7 +764,7 @@ iptables_fw_init(void)
      */
 
     /* Create new chains */
-	iptables_do_command("-t nat -N " CHAIN_UNTRUSTED);
+ 	iptables_do_command("-t nat -N " CHAIN_UNTRUSTED);
     iptables_do_command("-t nat -N " CHAIN_OUTGOING);
     iptables_do_command("-t nat -N " CHAIN_TO_ROUTER);
     iptables_do_command("-t nat -N " CHAIN_TO_INTERNET);
@@ -820,9 +820,11 @@ iptables_fw_init(void)
         iptables_do_command("-t nat -A " CHAIN_UNKNOWN " -j " CHAIN_AUTH_IS_DOWN);
         iptables_do_command("-t nat -A " CHAIN_AUTH_IS_DOWN " -m mark --mark 0x%u -j ACCEPT", FW_MARK_AUTH_IS_DOWN);
     }
-	iptables_do_command("-t nat -A " CHAIN_UNKNOWN " -p tcp --dport 443 -j REDIRECT --to-ports %d", gw_https_port);
-    iptables_do_command("-t nat -A " CHAIN_UNKNOWN " -p tcp --dport 80 -j REDIRECT --to-ports %d", gw_port);
-
+	
+	if (config_get_config()->work_mode == 0) {
+		iptables_do_command("-t nat -A " CHAIN_UNKNOWN " -p tcp --dport 443 -j REDIRECT --to-ports %d", gw_https_port);
+    	iptables_do_command("-t nat -A " CHAIN_UNKNOWN " -p tcp --dport 80 -j REDIRECT --to-ports %d", gw_port);
+	} 
     /*
      *
      * Everything in the FILTER table
