@@ -36,6 +36,7 @@
 #include "common.h"
 #include "debug.h"
 #include "pstring.h"
+#include "centralserver.h"
 
 #ifdef USE_CYASSL
 #include <cyassl/ssl.h>
