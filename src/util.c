@@ -584,3 +584,50 @@ int is_socket_valid(int sockfd)
 	return 1;
 }
 
+// when sockfd is block, set timeout for connect
+int 
+wd_connect(int sockfd, const sruct sockaddr *their_addr, socklen_t addrlen, int timeout)
+{
+	// Set non-blocking 
+	long arg = fcntl(sockfd, F_GETFL, NULL); 
+	arg |= O_NONBLOCK; 
+	fcntl(sockfd, F_SETFL, arg); 
+       	
+	int res = connect(sockfd, their_addr, addrlen); 
+	if ((res == -1) && (errno != EINPROGRESS)) {
+		goto error;
+	} else if (res == 0) {
+		goto success;
+	} else {
+		fd_set fdset; 
+		struct timeval tv; 
+		int so_error = 0;
+		int len = sizeof(so_error);
+
+		tv.tv_sec = timeout; 
+		tv.tv_usec = 0; 
+		FD_ZERO(&fdset); 
+		FD_SET(sockfd, &fdset);
+
+		res = select(sockfd+1, NULL, &fdset, NULL, &tv);
+		switch(res) {
+		case 1: // data to read				
+			getsockopt(sockfd, SOL_SOCKET, SO_ERROR, &so_error, &len);
+			if (so_error == 0) {
+				goto success;
+			}
+			break;
+		default: 
+			break;
+		}
+	} 
+
+error:
+	return -1;
+success:	
+	// Set to blocking mode again... 
+	arg = fcntl(sockfd, F_GETFL, NULL); 
+	arg &= (~O_NONBLOCK); 
+	fcntl(sockfd, F_SETFL, arg); 
+	return 0;
+}
