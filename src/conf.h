@@ -283,7 +283,7 @@ typedef struct {
 	short	thread_number;
 	short	queue_size;
 	short	no_auth;
-	short	reserve;
+	short	work_mode; /** when work_mode 1, it will drop all packets default*/
 } s_config;
 
 /** @brief Get the current gateway configuration */
