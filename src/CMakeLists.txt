@@ -39,7 +39,7 @@ set(libs
 	event
 	event_openssl)
 
-ADD_DEFINITIONS(-Os -Wall --std=gnu99 -g3 -Wmissing-declarations)
+ADD_DEFINITIONS(-O2 -Wall --std=gnu99 -Wmissing-declarations)
 
 include_directories(../libhttpd/)
 
