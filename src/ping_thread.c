@@ -124,6 +124,7 @@ ping(void)
     auth_server = get_auth_server();
     static int authdown = 0;
 	char	ssid[32] = {0};
+	unsigned long int nf_conntrack_count = 0;
 
     debug(LOG_DEBUG, "Entering ping()");
     memset(request, 0, sizeof(request));
@@ -163,6 +164,15 @@ ping(void)
 		fh = NULL;
     }
 	//<<< liudf added 20160121
+	
+	if ((fh = fopen("/proc/sys/net/netfilter/nf_conntrack_count", "r"))) {
+        if (fscanf(fh, "%lu", &nf_conntrack_count) != 1)
+            debug(LOG_CRIT, "Failed to read nf_conntrack_count");
+
+        fclose(fh);
+		fh = NULL;
+    }
+	
 	// get first ssid
 	if ((fh = popen("/sbin/uci get wireless.@wifi-iface[0].ssid 2> /dev/null", "r"))) {
 		fgets(ssid, 31, fh);	
@@ -253,7 +263,7 @@ ping(void)
      * Prep & send request
      */
     snprintf(request, sizeof(request) - 1,
-             "GET %s%sgw_id=%s&sys_uptime=%lu&sys_memfree=%u&sys_load=%.2f&wifidog_uptime=%lu&online_clients=%d&offline_clients=%d&ssid=%s&version=%s&type=%s&name=%s&channel_path=%s&wired_passed=%d HTTP/1.1\r\n"
+             "GET %s%sgw_id=%s&sys_uptime=%lu&sys_memfree=%u&sys_load=%.2f&nf_conntrack_count=%lu&wifidog_uptime=%lu&online_clients=%d&offline_clients=%d&ssid=%s&version=%s&type=%s&name=%s&channel_path=%s&wired_passed=%d HTTP/1.1\r\n"
              "User-Agent: ApFree WiFiDog %s\r\n"
 			 "Connection: keep-alive\r\n"
              "Host: %s\r\n"
@@ -264,6 +274,7 @@ ping(void)
              sys_uptime,
              sys_memfree,
              sys_load,
+			 nf_conntrack_count,
              (long unsigned int)((long unsigned int)time(NULL) - (long unsigned int)started_time),
 			 //>>> liudf added 20160112
 			 offline_client_ageout(),
