@@ -29,21 +29,29 @@ http://v.qq.com/x/page/f03507zyfvv.html
 
 ApFree WiFiDog 完全兼容现有的 wifidog 协议，并支持如下功能：
 
-1. 动态添加、删除域名白名单，泛域名白名单
+###1. 动态添加、删除域名白名单，泛域名白名单
+添加域名白名单
+wdctl add_trusted_domains domain1,domain2,domain3....
+删除域名白名单
+wdctl del_trusted_domains domain1,domain2,domain3...
+清空域名白名单
+wdctl clear_trusted_domains
+对应的泛域名命令分别为
+wdctl add_trusted_domains|del_trusted_domains|clear_trusted_domains
+泛域名指如baidu.com, sina.com.cn这类的域名，如添加baidu.com泛域名后，所有的如www.baidu.com， img.baidu.com, b1.b2.baidu.com的域名都会在域名白名单中
+###2. 动态添加、删除mac黑名单
 
-2. 动态添加、删除mac黑名单
+###3. 动态添加、删除mac免认证名单
 
-3. 动态添加、删除mac免认证名单
+###4. 动态添加、删除ip白名单
 
-4. 动态添加、删除ip白名单
+###5. 支持无线漫游免认证(需要服务器端扩展)
 
-5. 支持无线漫游免认证(需要服务器端扩展)
+###6. 支持ios弹窗（无需服务器端支持）
 
-6. 支持ios弹窗（无需服务器端支持）
+###7. 支持线程池模式
 
-7. 支持线程池模式
-
-8. 支持https跳转
+###8. 支持https跳转
 
 
 ## 感谢如下开源项目提供的思路和帮助：
