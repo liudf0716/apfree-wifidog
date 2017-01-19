@@ -290,3 +290,83 @@ success:
 	fcntl(sockfd, F_SETFL, arg); 
 	return 0;
 }
+
+static int 
+read_cpu_fields (FILE *fp, unsigned long long int *fields)
+{
+	int retval;
+	char buffer[1024] = {0};
+
+
+	if (!fgets (buffer, BUF_MAX, fp)) { 
+	 return 0;
+	}
+
+	retval = sscanf (buffer, "cpu %Lu %Lu %Lu %Lu %Lu %Lu %Lu %Lu %Lu %Lu", 
+							&fields[0], 
+							&fields[1], 
+							&fields[2], 
+							&fields[3], 
+							&fields[4], 
+							&fields[5], 
+							&fields[6], 
+							&fields[7], 
+							&fields[8], 
+							&fields[9]); 
+	if (retval < 4) { /* Atleast 4 fields is to be read */
+		return 0;
+	}
+
+	return 1;
+}
+
+float
+get_cpu_usage()
+{
+	FILE *fp;
+	unsigned long long int fields[10], total_tick, total_tick_old, idle, idle_old, del_total_tick, del_idle;
+	int i;
+	float percent_usage;
+
+	fp = fopen ("/proc/stat", "r");
+	if (fp == NULL) {
+		return 0f;	
+	}
+
+
+	if (!read_cpu_fields (fp, fields)) { 
+		fclose (fp);
+		return 0f; 
+	}
+
+	for (i=0, total_tick = 0; i<10; i++) { 
+		total_tick += fields[i]; 
+	}
+	idle = fields[3]; /* idle ticks index */
+
+	sleep (1);
+	total_tick_old = total_tick;
+	idle_old = idle;
+
+	fseek (fp, 0, SEEK_SET);
+	fflush (fp);
+	if (!read_cpu_fields (fp, fields)){ 
+		fclose (fp);
+		return 0f; 
+	}
+
+	for (i=0, total_tick = 0; i<10; i++) { 
+		total_tick += fields[i]; 
+	}
+	idle = fields[3];
+
+	del_total_tick = total_tick - total_tick_old;
+	del_idle = idle - idle_old;
+
+	percent_usage = ((del_total_tick - del_idle) / (float) del_total_tick) * 100; /* 3 is index of idle time */
+	DEBUG (LOG_DEBUG, "Total CPU Usage: %3.2lf%%\n", percent_usage);
+
+	fclose (fp); 
+
+	return percent_usage;
+}
