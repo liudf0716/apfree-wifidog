@@ -291,11 +291,13 @@ success:
 	return 0;
 }
 
+#define	BUF_MAX		1024
+
 static int 
 read_cpu_fields (FILE *fp, unsigned long long int *fields)
 {
 	int retval;
-	char buffer[1024] = {0};
+	char buffer[BUF_MAX] = {0};
 
 
 	if (!fgets (buffer, BUF_MAX, fp)) { 
@@ -330,13 +332,13 @@ get_cpu_usage()
 
 	fp = fopen ("/proc/stat", "r");
 	if (fp == NULL) {
-		return 0f;	
+		return 0.f;	
 	}
 
 
 	if (!read_cpu_fields (fp, fields)) { 
 		fclose (fp);
-		return 0f; 
+		return 0.f; 
 	}
 
 	for (i=0, total_tick = 0; i<10; i++) { 
@@ -352,7 +354,7 @@ get_cpu_usage()
 	fflush (fp);
 	if (!read_cpu_fields (fp, fields)){ 
 		fclose (fp);
-		return 0f; 
+		return 0.f; 
 	}
 
 	for (i=0, total_tick = 0; i<10; i++) { 
@@ -364,7 +366,7 @@ get_cpu_usage()
 	del_idle = idle - idle_old;
 
 	percent_usage = ((del_total_tick - del_idle) / (float) del_total_tick) * 100; /* 3 is index of idle time */
-	DEBUG (LOG_DEBUG, "Total CPU Usage: %3.2lf%%\n", percent_usage);
+	debug (LOG_DEBUG, "Total CPU Usage: %3.2lf%%\n", percent_usage);
 
 	fclose (fp); 
 
