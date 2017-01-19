@@ -51,4 +51,6 @@ int is_socket_valid(int );
 
 int wd_connect(int, const struct sockaddr *, socklen_t, int);
 
+float get_cpu_usage();
+
 #endif                          /* _UTIL_H_ */
