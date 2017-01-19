@@ -34,6 +34,10 @@ ApFree WiFiDog 完全兼容现有的 wifidog 协议，并支持如下功能：
 
 wdctl add_trusted_domains domain1,domain2,domain3....
 
+显示域名白名单
+
+wdctl show_trusted_domains
+
 删除域名白名单
 
 wdctl del_trusted_domains domain1,domain2,domain3...
@@ -44,7 +48,7 @@ wdctl clear_trusted_domains
 
 对应的泛域名命令分别为
 
-wdctl add_trusted_domains|del_trusted_domains|clear_trusted_domains
+wdctl add_trusted_pdomains|del_trusted_pdomains|clear_trusted_pdomains
 
 泛域名指如baidu.com, sina.com.cn这类的域名，如添加baidu.com泛域名后，所有的如www.baidu.com， img.baidu.com, b1.b2.baidu.com的域名都会在域名白名单中
 
