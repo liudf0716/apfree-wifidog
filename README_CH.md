@@ -64,7 +64,17 @@ wdctl clear_untrusted_mac           Clear untrusted mac list
 
 
 ###3. 动态添加、删除mac免认证名单
+添加mac免认证名单
 
+wdctl add_trusted_mac [mac1,mac2...]                        Add trusted mac list
+
+删除mac免认证名单
+
+wdctl del_trusted_mac [mac1,mac2...]                        Del trusted mac list
+
+清空mac免认证名单
+
+wdctl clear_trusted_mac             Clear trusted mac list
 ###4. 动态添加、删除ip白名单
 
 ###5. 支持无线漫游免认证(需要服务器端扩展)
