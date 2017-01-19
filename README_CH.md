@@ -51,30 +51,30 @@ wdctl add_trusted_domains|del_trusted_domains|clear_trusted_domains
 ###2. 动态添加、删除mac黑名单
 添加mac黑名单
 
-wdctl add_untrusted_mac [mac1,mac2...]                    Add untrusted mac list
+wdctl add_untrusted_mac mac1,mac2,mac...                    
 
 删除mac黑名单
 
-wdctl del_untrusted_mac [mac1,mac2...]                   Del untrusted mac list
+wdctl del_untrusted_mac mac1,mac2,mac...                  
 
 清空mac黑名单
 
-wdctl clear_untrusted_mac                               Clear untrusted mac list
+wdctl clear_untrusted_mac                              
 
 
 
 ###3. 动态添加、删除mac免认证名单
 添加mac免认证名单
 
-wdctl add_trusted_mac [mac1,mac2...]                          Add trusted mac list
+wdctl add_trusted_mac mac1,mac2,mac...                          
 
 删除mac免认证名单
 
-wdctl del_trusted_mac [mac1,mac2...]                           Del trusted mac list
+wdctl del_trusted_mac mac1,mac2,mac...                           
 
 清空mac免认证名单
 
-wdctl clear_trusted_mac                     Clear trusted mac list
+wdctl clear_trusted_mac                     
 ###4. 动态添加、删除ip白名单
 
 ###5. 支持无线漫游免认证(需要服务器端扩展)
