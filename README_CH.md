@@ -54,9 +54,11 @@ wdctl add_trusted_domains|del_trusted_domains|clear_trusted_domains
 wdctl add_untrusted_mac [mac1,mac2...]              Add untrusted mac list
 
 删除mac黑名单
+
 wdctl del_untrusted_mac [mac1,mac2...]              Del untrusted mac list
 
 清空mac黑名单
+
 wdctl clear_untrusted_mac           Clear untrusted mac list
 
 
