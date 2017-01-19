@@ -70,7 +70,6 @@ wdctl del_untrusted_mac mac1,mac2,mac3...
 wdctl clear_untrusted_mac                              
 
 
-
 ###3. 动态添加、删除mac免认证名单
 添加mac免认证名单
 
@@ -114,11 +113,13 @@ wifidog_roam   disable
 
 ###6. 支持ios弹窗（无需服务器端支持）
 
+当iphone手机连接路由器，iphone会自动弹出portal页面；
+
 ###7. 支持线程池模式
 
 ###8. 支持https跳转
-
-
+首先手机连接路由器，打开手机浏览器，输入带https的地址（例如：https://www.baidu.com/），
+手机也可以
 ## 感谢如下开源项目提供的思路和帮助：
 
 - https://github.com/wifidog/wifidog-gateway  
