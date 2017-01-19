@@ -49,6 +49,17 @@ wdctl add_trusted_domains|del_trusted_domains|clear_trusted_domains
 泛域名指如baidu.com, sina.com.cn这类的域名，如添加baidu.com泛域名后，所有的如www.baidu.com， img.baidu.com, b1.b2.baidu.com的域名都会在域名白名单中
 
 ###2. 动态添加、删除mac黑名单
+添加mac黑名单
+
+wdctl add_untrusted_mac [mac1,mac2...]              Add untrusted mac list
+
+删除mac黑名单
+wdctl del_untrusted_mac [mac1,mac2...]              Del untrusted mac list
+
+清空mac黑名单
+wdctl clear_untrusted_mac           Clear untrusted mac list
+
+
 
 ###3. 动态添加、删除mac免认证名单
 
