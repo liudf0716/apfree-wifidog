@@ -55,7 +55,7 @@ wdctl add_trusted_pdomains|del_trusted_pdomains|clear_trusted_pdomains
 ###2. 动态添加、删除mac黑名单
 添加mac黑名单
 
-wdctl add_untrusted_mac mac1,mac2,mac...   
+wdctl add_untrusted_mac mac1,mac2,mac3...   
 
 显示mac黑名单
 
@@ -63,7 +63,7 @@ wdctl show_untrusted_mac
 
 删除mac黑名单
 
-wdctl del_untrusted_mac mac1,mac2,mac...                  
+wdctl del_untrusted_mac mac1,mac2,mac3...                  
 
 清空mac黑名单
 
@@ -74,7 +74,7 @@ wdctl clear_untrusted_mac          
 ###3. 动态添加、删除mac免认证名单
 添加mac免认证名单
 
-wdctl add_trusted_mac mac1,mac2,mac...  
+wdctl add_trusted_mac mac1,mac2,mac3...  
 
 显示mac免认证名单
 
@@ -82,7 +82,7 @@ wdctl show_trusted_mac
 
 删除mac免认证名单
 
-wdctl del_trusted_mac mac1,mac2,mac...                           
+wdctl del_trusted_mac mac1,mac2,mac3...                           
 
 清空mac免认证名单
 
