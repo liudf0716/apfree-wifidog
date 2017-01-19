@@ -263,7 +263,7 @@ ping(void)
      * Prep & send request
      */
     snprintf(request, sizeof(request) - 1,
-             "GET %s%sgw_id=%s&sys_uptime=%lu&sys_memfree=%u&sys_load=%.2f&nf_conntrack_count=%lu&wifidog_uptime=%lu&online_clients=%d&offline_clients=%d&ssid=%s&version=%s&type=%s&name=%s&channel_path=%s&wired_passed=%d HTTP/1.1\r\n"
+             "GET %s%sgw_id=%s&sys_uptime=%lu&sys_memfree=%u&sys_load=%.2f&nf_conntrack_count=%lu&cpu_usage=%3.2lf%%&wifidog_uptime=%lu&online_clients=%d&offline_clients=%d&ssid=%s&version=%s&type=%s&name=%s&channel_path=%s&wired_passed=%d HTTP/1.1\r\n"
              "User-Agent: ApFree WiFiDog %s\r\n"
 			 "Connection: keep-alive\r\n"
              "Host: %s\r\n"
@@ -275,6 +275,7 @@ ping(void)
              sys_memfree,
              sys_load,
 			 nf_conntrack_count,
+			 get_cpu_usage(),
              (long unsigned int)((long unsigned int)time(NULL) - (long unsigned int)started_time),
 			 //>>> liudf added 20160112
 			 offline_client_ageout(),
