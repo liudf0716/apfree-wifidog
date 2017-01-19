@@ -92,6 +92,10 @@ wdctl clear_trusted_mac
 
 wdctl add_trusted_iplist ip1,ip2,ip3...
 
+查看ip白名单
+
+ipset list WiFiDog_br-lan_TDomains或者通过wdctl show_trusted_domains
+
 清空ip白名单
 
 wdctl clear_trusted_iplist
