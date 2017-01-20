@@ -120,8 +120,7 @@ ping(void)
     unsigned long int sys_uptime = 0;
     unsigned int sys_memfree = 0;
     float sys_load = 0;
-    t_auth_serv *auth_server = NULL;
-    auth_server = get_auth_server();
+    t_auth_serv *auth_server = get_auth_server();
     static int authdown = 0;
 	char	ssid[32] = {0};
 	unsigned long int nf_conntrack_count = 0;
