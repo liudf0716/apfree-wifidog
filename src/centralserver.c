@@ -217,17 +217,7 @@ auth_server_request(t_authresponse * authresponse, const char *request_type, con
         }
     free(safe_token);
 
-    char *res;
-#ifdef USE_CYASSL
-    if (auth_server->authserv_use_ssl) {
-        res = https_get(sockfd, buf, auth_server->authserv_hostname);
-    } else {
-        res = http_get(sockfd, buf);
-    }
-#endif
-#ifndef USE_CYASSL
-    res = http_get(sockfd, buf);
-#endif
+    char *res = http_get(sockfd, buf);
     if (NULL == res) {
 		close_auth_server();
         debug(LOG_ERR, "There was a problem talking to the auth server!");
