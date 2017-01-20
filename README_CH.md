@@ -137,4 +137,4 @@ wifidog_roam   disable
 ## powered by 坤腾畅联固件研发团队 （ www.kunteng.org ）
 ## 加qq群讨论： 331230369 
 
-## 如果该项目对您有帮助，请点个赞，谢谢！
+## 如果该项目对您有帮助，请随手star，谢谢！
