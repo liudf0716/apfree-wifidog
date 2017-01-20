@@ -89,8 +89,4 @@ char *http_get(const int, const char *);
 
 char *http_get_ex(const int, const char *, int);
 
-#ifdef USE_CYASSL
-char *https_get(const int, const char *, const char *);
-#endif                          /* defined(USE_CYASSL) */
-
 #endif                          /* defined(_SIMPLE_HTTP_H_) */
