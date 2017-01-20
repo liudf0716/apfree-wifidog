@@ -118,8 +118,10 @@ wifidog_roam   disable
 ###7. 支持线程池模式
 
 ###8. 支持https跳转
+
 首先手机连接路由器，打开手机浏览器，输入带https的地址（例如：https://www.baidu.com/），
-手机也可以
+手机也可以弹出protal页面；
+
 ## 感谢如下开源项目提供的思路和帮助：
 
 - https://github.com/wifidog/wifidog-gateway  
