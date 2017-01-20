@@ -289,17 +289,8 @@ ping(void)
 			 //<<< liudf added end
              VERSION, auth_server->authserv_hostname);
 
-    char *res;
-#ifdef USE_CYASSL
-    if (auth_server->authserv_use_ssl) {
-        res = https_get(sockfd, request, auth_server->authserv_hostname);
-    } else {
-        res = http_get(sockfd, request);
-    }
-#endif
-#ifndef USE_CYASSL
-    res = http_get(sockfd, request);
-#endif
+    
+    char *res = http_get(sockfd, request);
 	close_auth_server();
     if (NULL == res) {
         debug(LOG_ERR, "There was a problem pinging the auth server!");
