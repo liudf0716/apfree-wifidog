@@ -88,17 +88,8 @@ auth_server_roam_request(const char *mac)
 		g_channel_path?g_channel_path:"null",
 		VERSION, auth_server->authserv_hostname);
 
-    char *res;
-#ifdef USE_CYASSL
-    if (auth_server->authserv_use_ssl) {
-        res = https_get(sockfd, buf, auth_server->authserv_hostname);
-    } else {
-        res = http_get(sockfd, buf);
-    }
-#endif
-#ifndef USE_CYASSL
-    res = http_get_ex(sockfd, buf, 2);
-#endif
+    char *res = http_get_ex(sockfd, buf, 2);
+
 	close_auth_server();
     if (NULL == res) {
         debug(LOG_ERR, "There was a problem talking to the auth server!");		
@@ -426,22 +417,9 @@ _connect_auth_server(int level)
         /*
          * Connect to it
          */
-        int port = 0;
-#ifdef USE_CYASSL
-        if (auth_server->authserv_use_ssl) {
-            debug(LOG_DEBUG, "Level %d: Connecting to SSL auth server %s:%d", level, hostname,
-                  auth_server->authserv_ssl_port);
-            port = htons(auth_server->authserv_ssl_port);
-        } else {
-            debug(LOG_DEBUG, "Level %d: Connecting to auth server %s:%d", level, hostname,
-                  auth_server->authserv_http_port);
-            port = htons(auth_server->authserv_http_port);
-        }
-#endif
-#ifndef USE_CYASSL
         debug(LOG_DEBUG, "Level %d: Connecting to auth server %s:%d", level, hostname, auth_server->authserv_http_port);
-        port = htons(auth_server->authserv_http_port);
-#endif
+        int port = htons(auth_server->authserv_http_port);
+
         their_addr.sin_port = port;
         their_addr.sin_family = AF_INET;
         their_addr.sin_addr = *h_addr;
