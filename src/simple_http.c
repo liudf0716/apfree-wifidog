@@ -452,3 +452,206 @@ http_get_ex(const int sockfd, const char *req, int wait)
     free(retval);
     return NULL;
 }
+
+static int 
+cert_verify_callback(X509_STORE_CTX *x509_ctx, void *arg)
+{
+	char cert_str[256];
+	const char *host = (const char *) arg;
+	const char *res_str = "X509_verify_cert failed";
+	HostnameValidationResult res = Error;
+
+	/* This is the function that OpenSSL would call if we hadn't called
+	 * SSL_CTX_set_cert_verify_callback().  Therefore, we are "wrapping"
+	 * the default functionality, rather than replacing it. */
+	int ok_so_far = 0;
+
+	X509 *server_cert = NULL;
+
+	if (ignore_cert) {
+		return 1;
+	}
+
+	ok_so_far = X509_verify_cert(x509_ctx);
+
+	server_cert = X509_STORE_CTX_get_current_cert(x509_ctx);
+
+	if (ok_so_far) {
+		res = validate_hostname(host, server_cert);
+
+		switch (res) {
+		case MatchFound:
+			res_str = "MatchFound";
+			break;
+		case MatchNotFound:
+			res_str = "MatchNotFound";
+			break;
+		case NoSANPresent:
+			res_str = "NoSANPresent";
+			break;
+		case MalformedCertificate:
+			res_str = "MalformedCertificate";
+			break;
+		case Error:
+			res_str = "Error";
+			break;
+		default:
+			res_str = "WTF!";
+			break;
+		}
+	}
+
+	X509_NAME_oneline(X509_get_subject_name (server_cert),
+			  cert_str, sizeof (cert_str));
+
+	if (res == MatchFound) {
+		debug(LOG_INFO, "https server '%s' has this certificate, "
+		       "which looks good to me:\n%s\n",
+		       host, cert_str);
+		return 1;
+	} else {
+		debug(LOG_INFO, "Got '%s' for hostname '%s' and certificate:\n%s\n",
+		       res_str, host, cert_str);
+		return 0;
+	}
+}
+
+void
+evhttps_get(const char *uri, int timeout, void (*http_request_done)(struct evhttp_request *req, void *ctx))
+{
+	struct evhttp_uri *http_uri = NULL;
+	t_auth_serv *auth_server = get_auth_server();
+	
+	SSL_CTX *ssl_ctx = NULL;
+	SSL *ssl = NULL;
+	struct bufferevent *bev;
+	struct evhttp_connection *evcon = NULL;
+	struct evhttp_request *req;
+	struct evkeyvalq *output_headers;
+	struct evbuffer *output_buffer;
+	
+	int ret = 0;
+	
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
+	// Initialize OpenSSL
+	SSL_library_init();
+	ERR_load_crypto_strings();
+	SSL_load_error_strings();
+	OpenSSL_add_all_algorithms();
+#endif
+	
+	/* This isn't strictly necessary... OpenSSL performs RAND_poll
+	 * automatically on first use of random number generator. */
+	r = RAND_poll();
+	if (r == 0) {
+		debug(LOG_ERR, "RAND_poll failed");
+		goto error;
+	}
+
+	/* Create a new OpenSSL context */
+	ssl_ctx = SSL_CTX_new(SSLv23_method());
+	if (!ssl_ctx) {
+		debug(LOG_ERR, "SSL_CTX_new failed");
+		goto error;
+	}
+	
+	if (1 != SSL_CTX_load_verify_locations(ssl_ctx, crt, NULL)) {
+		debug(LOG_ERR, "SSL_CTX_load_verify_locations failed");
+		goto error;
+	}
+	
+	SSL_CTX_set_verify(ssl_ctx, SSL_VERIFY_PEER, NULL);
+	
+	SSL_CTX_set_cert_verify_callback(ssl_ctx, cert_verify_callback,
+					  (void *) host);
+	
+	// Create event base
+	base = event_base_new();
+	if (!base) {
+		debug(LOG_ERR, "event_base_new() failed");
+		goto error;
+	}
+	
+	// Create OpenSSL bufferevent and stack evhttp on top of it
+	ssl = SSL_new(ssl_ctx);
+	if (ssl == NULL) {
+		debug(LOG_ERR, "SSL_new() failed");
+		goto error;
+	}
+
+#ifdef SSL_CTRL_SET_TLSEXT_HOSTNAME
+	// Set hostname for SNI extension
+	SSL_set_tlsext_host_name(ssl, auth_server->authserv_hostname);
+#endif
+	
+	bev = bufferevent_openssl_socket_new(base, -1, ssl,
+			BUFFEREVENT_SSL_CONNECTING,
+			BEV_OPT_CLOSE_ON_FREE|BEV_OPT_DEFER_CALLBACKS);
+	if (bev == NULL) {
+		debug(LOG_ERR, "bufferevent_openssl_socket_new() failed\n");
+		goto error;
+	}
+	
+	bufferevent_openssl_set_allow_dirty_shutdown(bev, 1);
+	
+	evcon = evhttp_connection_base_bufferevent_new(base, NULL, bev,
+		auth_server->authserv_hostname, auth_server->authserv_ssl_port);
+	if (evcon == NULL) {
+		debug(LOG_ERR, "evhttp_connection_base_bufferevent_new() failed\n");
+		goto error;
+	}
+	
+	evhttp_connection_set_timeout(evcon, timeout);
+	
+	req = evhttp_request_new(http_request_done, bev);
+	if (req == NULL) {
+		debug(LOG_ERR, "evhttp_request_new() failed\n");
+		goto error;
+	}
+	
+	char user_agent[128] = {0};
+	snprintf(user_agent, 128, "ApFree WiFiDog %s", VERSION);
+	output_headers = evhttp_request_get_output_headers(req);
+	evhttp_add_header(output_headers, "Host", auth_server->authserv_hostname);
+	evhttp_add_header(output_headers, "User-Agent", user_agent);
+	evhttp_add_header(output_headers, "Connection", "keep-alive");
+	
+	r = evhttp_make_request(evcon, req, EVHTTP_REQ_GET, uri);
+	if (r != 0) {
+		debug(LOG_ERR, "evhttp_make_request() failed\n");
+		goto error;
+	}
+
+	event_base_dispatch(base);
+	goto cleanup;
+
+error:
+	ret = 1;
+cleanup:
+	if (evcon)
+		evhttp_connection_free(evcon);
+	if (http_uri)
+		evhttp_uri_free(http_uri);
+	event_base_free(base);
+
+	if (ssl_ctx)
+		SSL_CTX_free(ssl_ctx);
+	if (ssl)
+		SSL_free(ssl);
+	
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
+	EVP_cleanup();
+	ERR_free_strings();
+
+#ifdef EVENT__HAVE_ERR_REMOVE_THREAD_STATE
+	ERR_remove_thread_state(NULL);
+#else
+	ERR_remove_state(0);
+#endif
+	CRYPTO_cleanup_all_ex_data();
+
+	sk_SSL_COMP_free(SSL_COMP_get_compression_methods());
+#endif /*OPENSSL_VERSION_NUMBER < 0x10100000L */
+
+	return ret;
+}
