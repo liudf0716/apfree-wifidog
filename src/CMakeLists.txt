@@ -35,7 +35,8 @@ set(libs
 	m
 	z
 	json-c 
-	ip4tc 
+	ip4tc
+	uci
 	ssl
 	crypto
 	event
