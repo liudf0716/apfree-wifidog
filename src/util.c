@@ -434,10 +434,10 @@ uci_get_value(const char *c_filename, const char *name, char *value, int v_len)
         }  
     }    
       
-    uci_unload(uciCtx, pkg);    
+    uci_unload(uci, pkg);    
       
 cleanup:    
-    uci_free_context(uciCtx);    
-    uciCtx = NULL;
+    uci_free_context(uci);    
+    uci = NULL;
 	return nret;
 }
