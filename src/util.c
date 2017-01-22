@@ -54,6 +54,8 @@
 #include <netdb.h>
 #include <ctype.h>
 
+#include <uci.h>
+
 #include "util.h"
 #include "debug.h"
 #include "common.h"
@@ -385,7 +387,29 @@ s_sleep(unsigned int s, unsigned int u){
 }
 
 int
-uci_get_value(const char *c_file, const char *name, const char *value, char *ret_value)
+uci_get_value(const char *c_filename, const char *name, char *value, int v_len)
 {
+	struct uci_context * uci = uci_alloc_context();  
+    char * pValueData = NULL;  
+    struct uci_package * pkg = NULL;    
+    struct uci_element * e;
+  	int nret	= 0;
 	
+    if (!uci || UCI_OK != uci_load(uci, c_filename, &pkg))    
+        goto cleanup;  
+    
+    uci_foreach_element(&pkg->sections, e) {    
+        struct uci_section *s = uci_to_section(e);    
+        if (NULL != (pValueData = uci_lookup_option_string(uciCtx, s, name))) {  
+            strncpy(value, pValueData, v_len);
+			nret = 1;
+        }  
+    }    
+      
+    uci_unload(uciCtx, pkg);    
+      
+cleanup:    
+    uci_free_context(uciCtx);    
+    uciCtx = NULL;
+	return nret;
 }
