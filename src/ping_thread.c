@@ -107,7 +107,74 @@ thread_ping(void *arg)
     }
 }
 
+char *
+get_ping_request(const struct sys_info *info)
+{
+	t_auth_serv *auth_server = get_auth_server();
+	char *request = NULL;
+	
+	if (!info)
+		return NULL;
+	
+	int nret = safe_asprintf(&request,
+			"GET %s%sgw_id=%s&sys_uptime=%lu&sys_memfree=%u&sys_load=%.2f&nf_conntrack_count=%lu&cpu_usage=%3.2lf%%&wifidog_uptime=%lu&online_clients=%d&offline_clients=%d&ssid=%s&version=%s&type=%s&name=%s&channel_path=%s&wired_passed=%d HTTP/1.1\r\n"
+             "User-Agent: ApFree WiFiDog %s\r\n"
+			 "Connection: keep-alive\r\n"
+             "Host: %s\r\n"
+             "\r\n",
+             auth_server->authserv_path,
+             auth_server->authserv_ping_script_path_fragment,
+             config_get_config()->gw_id,
+             info->sys_uptime,
+             info->sys_memfree,
+             info->sys_load,
+			 info->nf_conntrack_count,
+			 info->cpu_usage,
+             (long unsigned int)((long unsigned int)time(NULL) - (long unsigned int)started_time),
+			 offline_client_ageout(),
+			 g_online_clients,
+			 NULL != g_ssid?g_ssid:"NULL",
+			 NULL != g_version?g_version:"null",
+			 NULL != g_type?g_type:"null",
+			 NULL != g_name?g_name:"null",
+			 NULL != g_channel_path?g_channel_path:"null",
+             config_get_config()->wired_passed,
+             VERSION, auth_server->authserv_hostname);
+	
+	return nret>0?request:NULL;
+}
 
+char *
+get_ping_uri(const struct sys_info *info)
+{
+	t_auth_serv *auth_server = get_auth_server();
+	char *uri = NULL;
+	
+	if (!info)
+		return NULL;
+	
+	int nret = safe_asprintf(&uri, 
+			"%s%sgw_id=%s&sys_uptime=%lu&sys_memfree=%u&sys_load=%.2f&nf_conntrack_count=%lu&cpu_usage=%3.2lf%%&wifidog_uptime=%lu&online_clients=%d&offline_clients=%d&ssid=%s&version=%s&type=%s&name=%s&channel_path=%s&wired_passed=%d",
+			 auth_server->authserv_path,
+             auth_server->authserv_ping_script_path_fragment,
+             config_get_config()->gw_id,
+             info->sys_uptime,
+             info->sys_memfree,
+             info->sys_load,
+			 info->nf_conntrack_count,
+			 info->cpu_usage,
+             (long unsigned int)((long unsigned int)time(NULL) - (long unsigned int)started_time),
+			 offline_client_ageout(),
+			 g_online_clients,
+			 NULL != g_ssid?g_ssid:"NULL",
+			 NULL != g_version?g_version:"null",
+			 NULL != g_type?g_type:"null",
+			 NULL != g_name?g_name:"null",
+			 NULL != g_channel_path?g_channel_path:"null",
+             config_get_config()->wired_passed);
+	
+	return nret>0?uri:NULL;
+}
 
 void
 get_sys_info(struct sys_info *info)
@@ -118,9 +185,8 @@ get_sys_info(struct sys_info *info)
 	if (info == NULL)
 		return;
 	
-	 /*
-     * Populate uptime, memfree and load
-     */
+	info->cpu_usage = get_cpu_usage();
+	
     if ((fh = fopen("/proc/uptime", "r"))) {
         if (fscanf(fh, "%lu", &info->sys_uptime) != 1)
             debug(LOG_CRIT, "Failed to read uptime");
@@ -160,10 +226,7 @@ get_sys_info(struct sys_info *info)
     }
 	
 	// get first ssid
-	if ((fh = popen("/sbin/uci get wireless.@wifi-iface[0].ssid 2> /dev/null", "r"))) {
-		fgets(ssid, 31, fh);	
-		pclose(fh);
-		fh = NULL;
+	if (uci_get_value("wireless", "ssid", ssid, 31)) {
 		trim_newline(ssid);
 		if(strlen(ssid) > 0) {
 			if(g_ssid) 
@@ -173,11 +236,8 @@ get_sys_info(struct sys_info *info)
 	}
 	
 	if(!g_version) {
-		if ((fh = popen("/sbin/uci get firmwareinfo.@version[0].firmware_version 2> /dev/null", "r"))) {
-			char version[32] = {0};
-			fgets(version, 31, fh);
-			pclose(fh);
-			fh = NULL;
+		char version[32] = {0};
+		if (uci_get_value("firmwareinfo", "firmware_version", version, 31)) {			
 			trim_newline(version);
 			if(strlen(version) > 0)
 				g_version = safe_strdup(version);
@@ -208,23 +268,17 @@ get_sys_info(struct sys_info *info)
 		}
 	}
 	
-	{
-		if(!g_channel_path) { 
-			free(g_channel_path);
-			g_channel_path = NULL;
-		}
+	if(!g_channel_path) { 
+		free(g_channel_path);
+		g_channel_path = NULL;
+	}
 
-		if ((fh = popen("/sbin/uci get firmwareinfo.@version[0].channel_path 2> /dev/null", "r"))) {
-			char channel_path[128] = {0};
-			fgets(channel_path, 127, fh);
-			pclose(fh);
-			fh = NULL;
-			trim_newline(channel_path);
-        	debug(LOG_DEBUG, "g_channel_path is %s", g_channel_path);
-			if(strlen(channel_path) > 0)
-				g_channel_path = safe_strdup(channel_path);
-		}
-
+	char channel_path[128] = {0};
+	if (uci_get_value("firmwareinfo", "channel_path", channel_path, 127)) {			
+		trim_newline(channel_path);
+		debug(LOG_DEBUG, "g_channel_path is %s", g_channel_path);
+		if(strlen(channel_path) > 0)
+			g_channel_path = safe_strdup(channel_path);
 	}
 }
 
@@ -234,18 +288,18 @@ get_sys_info(struct sys_info *info)
 static void
 ping(void)
 {
-    char request[MAX_BUF] = {0};
-    FILE *fh;
+    char *request = NULL;
     int sockfd;
-    unsigned long int sys_uptime = 0;
-    unsigned int sys_memfree = 0;
-    float sys_load = 0;
-    t_auth_serv *auth_server = get_auth_server();
+	t_auth_serv *auth_server = get_auth_server();
     static int authdown = 0;
 	
-	unsigned long int nf_conntrack_count = 0;
+	struct sys_info info;
+	memset(&info, 0, sizeof(info));
 
     debug(LOG_DEBUG, "Entering ping()");
+	
+	get_sys_info(&info);
+	
 	/*
      * The ping thread does not really try to see if the auth server is actually
      * working. Merely that there is a web server listening at the port. And that
@@ -266,35 +320,12 @@ ping(void)
     /*
      * Prep & send request
      */
-    snprintf(request, sizeof(request) - 1,
-             "GET %s%sgw_id=%s&sys_uptime=%lu&sys_memfree=%u&sys_load=%.2f&nf_conntrack_count=%lu&cpu_usage=%3.2lf%%&wifidog_uptime=%lu&online_clients=%d&offline_clients=%d&ssid=%s&version=%s&type=%s&name=%s&channel_path=%s&wired_passed=%d HTTP/1.1\r\n"
-             "User-Agent: ApFree WiFiDog %s\r\n"
-			 "Connection: keep-alive\r\n"
-             "Host: %s\r\n"
-             "\r\n",
-             auth_server->authserv_path,
-             auth_server->authserv_ping_script_path_fragment,
-             config_get_config()->gw_id,
-             sys_uptime,
-             sys_memfree,
-             sys_load,
-			 nf_conntrack_count,
-			 get_cpu_usage(),
-             (long unsigned int)((long unsigned int)time(NULL) - (long unsigned int)started_time),
-			 //>>> liudf added 20160112
-			 offline_client_ageout(),
-			 g_online_clients,
-			 ssid,
-			 NULL != g_version?g_version:"null",
-			 NULL != g_type?g_type:"null",
-			 NULL != g_name?g_name:"null",
-			 NULL != g_channel_path?g_channel_path:"null",
-             config_get_config()->wired_passed,
-			 //<<< liudf added end
-             VERSION, auth_server->authserv_hostname);
-
+	request = get_ping_request();
+	if (request == NULL)
+		return; // impossible
     
     char *res = http_get(sockfd, request);
+	free(request);
 	close_auth_server();
     if (NULL == res) {
         debug(LOG_ERR, "There was a problem pinging the auth server!");
