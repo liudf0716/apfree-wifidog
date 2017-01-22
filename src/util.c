@@ -427,9 +427,10 @@ uci_get_value(const char *c_filename, const char *name, char *value, int v_len)
     
     uci_foreach_element(&pkg->sections, e) {    
         struct uci_section *s = uci_to_section(e);    
-        if (NULL != (pValueData = uci_lookup_option_string(uciCtx, s, name))) {  
+        if (NULL != (pValueData = uci_lookup_option_string(uci, s, name))) {  
             strncpy(value, pValueData, v_len);
 			nret = 1;
+			break;
         }  
     }    
       
