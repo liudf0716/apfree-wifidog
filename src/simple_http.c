@@ -544,7 +544,6 @@ evhttps_get(const char *uri, int timeout, void (*http_request_done)(struct evhtt
 	struct evhttp_connection *evcon = NULL;
 	struct evhttp_request *req;
 	struct evkeyvalq *output_headers;
-	struct evbuffer *output_buffer;
 	
 	int ret = 0;
 	
