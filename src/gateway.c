@@ -73,6 +73,7 @@
 #include "thread_pool.h"
 #include "ipset.h"
 #include "https_server.h"
+#include "wd_util.h"
 
 struct evbuffer	*evb_internet_offline_page 		= NULL;
 struct evbuffer *evb_authserver_offline_page	= NULL;

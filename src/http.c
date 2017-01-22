@@ -458,6 +458,7 @@ http_send_js_redirect(request *r, const char *redir_url)
 	int html_length = 0;
 	char *redirect_html = evb_2_string(evb, &html_length);
 	
+#ifdef	_DEFLATE_SUPPORT_
 	if (r->request.deflate) {
 		char *deflate_html = NULL;
 		int wlen = 0;
@@ -469,7 +470,9 @@ http_send_js_redirect(request *r, const char *redir_url)
 		
 		if (deflate_html) free(deflate_html);
 	} else
+#endif
 		httpdOutputLengthDirect(r, redirect_html, html_length);
+	
 	_httpd_closeSocket(r);
 	
 	free(redirect_html);

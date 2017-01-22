@@ -34,6 +34,23 @@
 #include <errno.h>
 #include <string.h>
 #include <pthread.h>
+#include <sys/socket.h>
+
+#include <unistd.h>
+#include <sys/wait.h>
+#include <sys/types.h>
+#include <sys/time.h>
+#include <netinet/in.h>
+#include <sys/ioctl.h>
+#include <arpa/inet.h>
+
+#include <net/if.h>
+
+#include <fcntl.h>
+#include <net/ethernet.h>
+#include <netinet/ip.h>
+#include <netinet/ip_icmp.h>
+#include <netpacket/packet.h>
 
 #include "common.h"
 #include "gateway.h"
@@ -47,6 +64,25 @@
 #include "pstring.h"
 #include "version.h"
 
+#define LOCK_GHBN() do { \
+	debug(LOG_DEBUG, "Locking wd_gethostbyname()"); \
+	pthread_mutex_lock(&ghbn_mutex); \
+	debug(LOG_DEBUG, "wd_gethostbyname() locked"); \
+} while (0)
+
+#define UNLOCK_GHBN() do { \
+	debug(LOG_DEBUG, "Unlocking wd_gethostbyname()"); \
+	pthread_mutex_unlock(&ghbn_mutex); \
+	debug(LOG_DEBUG, "wd_gethostbyname() unlocked"); \
+} while (0)
+
+#ifdef __ANDROID__
+#define WD_SHELL_PATH "/system/bin/sh"
+#else
+#define WD_SHELL_PATH "/bin/sh"
+#endif
+
+
 /* XXX Do these need to be locked ? */
 static time_t last_online_time = 0;
 static time_t last_offline_time = 0;
@@ -54,6 +90,12 @@ static time_t last_auth_online_time = 0;
 static time_t last_auth_offline_time = 0;
 
 long served_this_session = 0;
+
+/** @brief Mutex to protect gethostbyname since not reentrant */
+static pthread_mutex_t ghbn_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+static int n_pending_requests = 0;
+static struct event_base *base = NULL;
 
 void
 mark_online()
@@ -554,7 +596,7 @@ is_device_wired(const char *mac)
  * 1: is online; 0: is unreachable
  */
 int
-is_server_reachable(const char *val)
+is_device_online(const char *val)
 {
 	char cmd[256] = {0};
 	FILE *fd = NULL;
@@ -572,5 +614,317 @@ is_server_reachable(const char *val)
 	}
 
 	return 0;
+}
+
+// if olen is not NULL, set it rlen value
+char *evb_2_string(struct evbuffer *evb, int *olen) 
+{
+	int rlen = evbuffer_get_length(evb);
+	char *str = (char *)malloc(rlen+1);
+	memset(str, 0, rlen+1);
+	evbuffer_copyout(evb, str, rlen);
+	if (olen)
+		*olen = rlen;
+	return str;
+}
+
+void evdns_add_trusted_domain_ip_cb(int errcode, struct evutil_addrinfo *addr, void *ptr)
+{
+	t_domain_trusted *p = ptr;
+    if (!errcode) {
+        struct evutil_addrinfo *ai;
+		char hostname[HTTP_IP_ADDR_LEN];
+        for (ai = addr; ai; ai = ai->ai_next) {           
+            const char *s = NULL;
+			
+			memset(hostname, 0, HTTP_IP_ADDR_LEN);
+            if (ai->ai_family == AF_INET) {
+                struct sockaddr_in *sin = (struct sockaddr_in *)ai->ai_addr;
+                s = evutil_inet_ntop(AF_INET, &sin->sin_addr, hostname, HTTP_IP_ADDR_LEN);
+            } else if (ai->ai_family == AF_INET6) {
+                //do nothing
+            }
+            if (s) {
+				t_ip_trusted *ipt = NULL;
+				debug(LOG_DEBUG, "parse domain (%s) ip (%s)", p->domain, s);
+				if(p->ips_trusted == NULL) {
+					ipt = (t_ip_trusted *)malloc(sizeof(t_ip_trusted));
+					memset(ipt, 0, sizeof(t_ip_trusted));
+					strncpy(ipt->ip, hostname, HTTP_IP_ADDR_LEN); 
+					ipt->next = NULL;
+					p->ips_trusted = ipt;
+				} else {
+					ipt = p->ips_trusted;
+					while(ipt) {
+						if(strcmp(ipt->ip, hostname) == 0)
+							break;
+						ipt = ipt->next;
+					}
+
+					if(ipt == NULL) {
+						ipt = (t_ip_trusted *)malloc(sizeof(t_ip_trusted));
+						memset(ipt, 0, sizeof(t_ip_trusted));
+						strncpy(ipt->ip, hostname, HTTP_IP_ADDR_LEN);
+						ipt->next = p->ips_trusted;
+						p->ips_trusted = ipt; 
+					}
+				}
+			}     
+        }
+        evutil_freeaddrinfo(addr);
+    }
+	
+    if (--n_pending_requests == 0)
+        event_base_loopexit(base, NULL);
+}
+
+void evdns_parse_trusted_domain_2_ip(t_domain_trusted *p)
+{
+	struct evdns_base  *dnsbase 	= NULL;
+	
+	base = event_base_new();
+    if (!base)
+        return;
+	
+    dnsbase = evdns_base_new(base, 1);
+    if (!dnsbase)
+        return;
+	
+	struct evutil_addrinfo hints;
+	
+	LOCK_DOMAIN();
+	
+	while(p && p->domain) {		
+		memset(&hints, 0, sizeof(hints));
+		hints.ai_family = AF_UNSPEC;
+		hints.ai_flags = EVUTIL_AI_CANONNAME;
+
+		hints.ai_socktype = SOCK_STREAM;
+		hints.ai_protocol = IPPROTO_TCP;
+		
+		++n_pending_requests;
+		
+		evdns_getaddrinfo( dnsbase, p->domain, NULL ,
+			  &hints, evdns_add_trusted_domain_ip_cb, p);
+		
+		p = p->next;
+	}
+	
+	if (n_pending_requests)
+		event_base_dispatch(base);
+	
+	UNLOCK_DOMAIN();
+	
+	evdns_base_free(dnsbase, 0);
+    event_base_free(base);
+}
+
+/** Fork a child and execute a shell command, the parent
+ * process waits for the child to return and returns the child's exit()
+ * value.
+ * @return Return code of the command
+ */
+int
+execute(const char *cmd_line, int quiet)
+{
+    int pid, status, rc;
+	sighandler_t old_handler;
+ 
+
+    const char *new_argv[4];
+    new_argv[0] = WD_SHELL_PATH;
+    new_argv[1] = "-c";
+    new_argv[2] = cmd_line;
+    new_argv[3] = NULL;
+
+   	old_handler = signal(SIGCHLD, SIG_DFL);	
+
+    pid = fork();
+    if (pid == 0) {             /* for the child process:         */
+        /* We don't want to see any errors if quiet flag is on */
+        if (quiet)
+            close(2);
+        if (execvp(WD_SHELL_PATH, (char *const *)new_argv) == -1) { /* execute the command  */
+            debug(LOG_ERR, "execvp(): %s", strerror(errno));
+        } else {
+            debug(LOG_ERR, "execvp() failed");
+        }
+        exit(1);
+    }
+
+    /* for the parent:      */
+    debug(LOG_DEBUG, "Waiting for PID %d to exit", pid);
+    rc = waitpid(pid, &status, 0);
+    debug(LOG_DEBUG, "Process PID %d exited", rc);
+ 	
+	signal(SIGCHLD, old_handler);
+   
+    if (-1 == rc) {
+        debug(LOG_ERR, "waitpid() failed (%s)", strerror(errno));
+        return 1; /* waitpid failed. */
+    }
+
+    if (WIFEXITED(status)) {
+        return (WEXITSTATUS(status));
+    } else {
+        /* If we get here, child did not exit cleanly. Will return non-zero exit code to caller*/
+        debug(LOG_DEBUG, "Child may have been killed.");
+        return 1;
+    }
+}
+
+struct in_addr *
+wd_gethostbyname(const char *name)
+{
+    struct hostent *he = NULL;
+    struct in_addr *addr = NULL;
+    struct in_addr *in_addr_temp = NULL;
+
+    /* XXX Calling function is reponsible for free() */
+
+    addr = safe_malloc(sizeof(*addr));
+
+    LOCK_GHBN();
+
+    he = gethostbyname(name);
+
+    if (he == NULL) {
+        free(addr);
+        UNLOCK_GHBN();
+        return NULL;
+    }
+
+    in_addr_temp = (struct in_addr *)he->h_addr_list[0];
+    addr->s_addr = in_addr_temp->s_addr;
+
+    UNLOCK_GHBN();
+
+    return addr;
+}
+
+char *
+get_iface_ip(const char *ifname)
+{
+    struct ifreq if_data;
+    struct in_addr in;
+    char *ip_str;
+    int sockd;
+    u_int32_t ip;
+
+    /* Create a socket */
+    if ((sockd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
+        debug(LOG_ERR, "socket(): %s", strerror(errno));
+        return NULL;
+    }
+
+    /* Get IP of internal interface */
+    strncpy(if_data.ifr_name, ifname, 15);
+    if_data.ifr_name[15] = '\0';
+
+    /* Get the IP address */
+    if (ioctl(sockd, SIOCGIFADDR, &if_data) < 0) {
+        debug(LOG_ERR, "ioctl(): SIOCGIFADDR %s", strerror(errno));
+        close(sockd);
+        return NULL;
+    }
+    memcpy((void *)&ip, (void *)&if_data.ifr_addr.sa_data + 2, 4);
+    in.s_addr = ip;
+	
+    close(sockd);
+	ip_str = safe_malloc(HTTP_IP_ADDR_LEN);
+	if(inet_ntop(AF_INET, &in, ip_str, HTTP_IP_ADDR_LEN))
+    	return ip_str;
+	
+	free(ip_str);	
+	return NULL;
+}
+
+char *
+get_iface_mac(const char *ifname)
+{
+    int r, s;
+    struct ifreq ifr;
+    char *hwaddr, mac[13];
+
+    strncpy(ifr.ifr_name, ifname, 15);
+    ifr.ifr_name[15] = '\0';
+
+    s = socket(AF_INET, SOCK_DGRAM, 0);
+    if (-1 == s) {
+        debug(LOG_ERR, "get_iface_mac socket: %s", strerror(errno));
+        return NULL;
+    }
+
+    r = ioctl(s, SIOCGIFHWADDR, &ifr);
+    if (r == -1) {
+        debug(LOG_ERR, "get_iface_mac ioctl(SIOCGIFHWADDR): %s", strerror(errno));
+        close(s);
+        return NULL;
+    }
+
+    hwaddr = ifr.ifr_hwaddr.sa_data;
+    close(s);
+    snprintf(mac, sizeof(mac), "%02X%02X%02X%02X%02X%02X",
+             hwaddr[0] & 0xFF,
+             hwaddr[1] & 0xFF, hwaddr[2] & 0xFF, hwaddr[3] & 0xFF, hwaddr[4] & 0xFF, hwaddr[5] & 0xFF);
+
+    return safe_strdup(mac);
+}
+
+char *
+get_ext_iface(void)
+{
+    FILE *input;
+    char *device, *gw;
+    int i = 1;
+    int keep_detecting = 1;
+    pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
+    pthread_mutex_t cond_mutex = PTHREAD_MUTEX_INITIALIZER;
+    struct timespec timeout;
+    device = (char *)safe_malloc(16);   /* XXX Why 16? */
+    gw = (char *)safe_malloc(16);
+    debug(LOG_DEBUG, "get_ext_iface(): Autodectecting the external interface from routing table");
+    while (keep_detecting) {
+        input = fopen("/proc/net/route", "r");
+        if (NULL == input) {
+            debug(LOG_ERR, "Could not open /proc/net/route (%s).", strerror(errno));
+            free(gw);
+            free(device);
+            return NULL;
+        }
+        while (!feof(input)) {
+            /* XXX scanf(3) is unsafe, risks overrun */
+            if ((fscanf(input, "%15s %15s %*s %*s %*s %*s %*s %*s %*s %*s %*s\n", device, gw) == 2)
+                && strcmp(gw, "00000000") == 0) {
+                free(gw);
+                debug(LOG_INFO, "get_ext_iface(): Detected %s as the default interface after trying %d", device, i);
+                fclose(input);
+                return device;
+            }
+        }
+        fclose(input);
+        debug(LOG_ERR,
+              "get_ext_iface(): Failed to detect the external interface after try %d (maybe the interface is not up yet?).  Retry limit: %d",
+              i, NUM_EXT_INTERFACE_DETECT_RETRY);
+        /* Sleep for EXT_INTERFACE_DETECT_RETRY_INTERVAL seconds */
+        timeout.tv_sec = time(NULL) + EXT_INTERFACE_DETECT_RETRY_INTERVAL;
+        timeout.tv_nsec = 0;
+        /* Mutex must be locked for pthread_cond_timedwait... */
+        pthread_mutex_lock(&cond_mutex);
+        /* Thread safe "sleep" */
+        pthread_cond_timedwait(&cond, &cond_mutex, &timeout);   /* XXX need to possibly add this thread to termination_handler */
+        /* No longer needs to be locked */
+        pthread_mutex_unlock(&cond_mutex);
+        //for (i=1; i<=NUM_EXT_INTERFACE_DETECT_RETRY; i++) {
+        if (NUM_EXT_INTERFACE_DETECT_RETRY != 0 && i > NUM_EXT_INTERFACE_DETECT_RETRY) {
+            keep_detecting = 0;
+        }
+        i++;
+    }
+    debug(LOG_ERR, "get_ext_iface(): Failed to detect the external interface after %d tries, aborting", i);
+    exit(1);                    /* XXX Should this be termination handler? */
+    free(device);
+    free(gw);
+    return NULL;
 }
 //<<<< liudf added end

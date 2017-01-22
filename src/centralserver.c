@@ -66,6 +66,10 @@ auth_server_roam_request(const char *mac)
 
 
     sockfd = connect_auth_server();
+	if (sockfd <= 0) {
+		debug(LOG_ERR, "There was a problem connecting to the auth server!");		
+        return NULL;
+	}
 
      /**
 	 * TODO: XXX change the PHP so we can harmonize stage as request_type
@@ -75,7 +79,7 @@ auth_server_roam_request(const char *mac)
 	snprintf(buf, sizeof(buf),
 		"GET %sroam?gw_id=%s&mac=%s&channel_path=%s HTTP/1.1\r\n"
         "User-Agent: ApFree WiFiDog %s\r\n"
-		"Connection: Keep-Alive\r\n"
+		"Connection: keep-alive\r\n"
         "Host: %s\r\n"
         "\r\n",
         auth_server->authserv_path,
@@ -84,17 +88,8 @@ auth_server_roam_request(const char *mac)
 		g_channel_path?g_channel_path:"null",
 		VERSION, auth_server->authserv_hostname);
 
-    char *res;
-#ifdef USE_CYASSL
-    if (auth_server->authserv_use_ssl) {
-        res = https_get(sockfd, buf, auth_server->authserv_hostname);
-    } else {
-        res = http_get(sockfd, buf);
-    }
-#endif
-#ifndef USE_CYASSL
-    res = http_get_ex(sockfd, buf, 2);
-#endif
+    char *res = http_get_ex(sockfd, buf, 2);
+
 	close_auth_server();
     if (NULL == res) {
         debug(LOG_ERR, "There was a problem talking to the auth server!");		
@@ -161,7 +156,10 @@ auth_server_request(t_authresponse * authresponse, const char *request_type, con
     authresponse->authcode = AUTH_ERROR;
 
     sockfd = connect_auth_server();
-
+	if (sockfd <= 0) {
+		debug(LOG_ERR, "There was a problem connecting to the auth server!");		
+        return AUTH_ERROR;
+	}
         /**
 	 * TODO: XXX change the PHP so we can harmonize stage as request_type
 	 * everywhere.
@@ -171,7 +169,7 @@ auth_server_request(t_authresponse * authresponse, const char *request_type, con
            snprintf(buf, (sizeof(buf) - 1),
              "GET %s%sstage=%s&ip=%s&mac=%s&token=%s&incoming=%llu&outgoing=%llu&incomingdelta=%llu&outgoingdelta=%llu&first_login=%lld&online_time=%u&gw_id=%s&channel_path=%s&name=%s&wired=%d HTTP/1.1\r\n"
              "User-Agent: ApFree WiFiDog %s\r\n"
-			 "Connection: Keep-Alive\r\n"
+			 "Connection: keep-alive\r\n"
              "Host: %s\r\n"
              "\r\n",
              auth_server->authserv_path,
@@ -193,7 +191,7 @@ auth_server_request(t_authresponse * authresponse, const char *request_type, con
             snprintf(buf, (sizeof(buf) - 1),
              "GET %s%sstage=%s&ip=%s&mac=%s&token=%s&incoming=%llu&outgoing=%llu&first_login=%lld&online_time=%u&gw_id=%s&channel_path=%s&name=%s&wired=%d HTTP/1.1\r\n"
              "User-Agent: ApFree WiFiDog %s\r\n"
-			 "Connection: Keep-Alive\r\n"
+			 "Connection: keep-alive\r\n"
              "Host: %s\r\n"
              "\r\n",
              auth_server->authserv_path,
@@ -210,23 +208,14 @@ auth_server_request(t_authresponse * authresponse, const char *request_type, con
         }
     free(safe_token);
 
-    char *res;
-#ifdef USE_CYASSL
-    if (auth_server->authserv_use_ssl) {
-        res = https_get(sockfd, buf, auth_server->authserv_hostname);
-    } else {
-        res = http_get(sockfd, buf);
-    }
-#endif
-#ifndef USE_CYASSL
-    res = http_get(sockfd, buf);
-#endif
+    char *res = http_get(sockfd, buf);
     if (NULL == res) {
-		_close_auth_server();
+		close_auth_server();
         debug(LOG_ERR, "There was a problem talking to the auth server!");
         return (AUTH_ERROR);
     }
 
+	decrease_authserv_fd_ref();
     if ((tmp = strstr(res, "Auth: "))) {
         if (sscanf(tmp, "Auth: %d", (int *)&authresponse->authcode) == 1) {
             debug(LOG_INFO, "Auth server returned authentication code %d", authresponse->authcode);
@@ -250,7 +239,7 @@ connect_auth_server()
     int sockfd;
 
     LOCK_CONFIG();
-    sockfd = _connect_auth_server(0);
+    sockfd = _connect_auth_server(0);	
     UNLOCK_CONFIG();
 
     if (sockfd == -1) {
@@ -261,6 +250,32 @@ connect_auth_server()
         mark_auth_online();
     }
     return (sockfd);
+}
+
+// just decrease authserv_fd_ref
+void
+decrease_authserv_fd_ref()
+{
+	s_config *config = config_get_config();
+    t_auth_serv *auth_server = NULL;
+	
+	LOCK_CONFIG();
+
+	for (auth_server = config->auth_servers; auth_server; auth_server = auth_server->next) {
+        if (auth_server->authserv_fd > 0) {
+			auth_server->authserv_fd_ref -= 1;
+			if (auth_server->authserv_fd_ref == 0) {
+				debug(LOG_INFO, "authserv_fd_ref is 0, but not close this connection");
+			} else if (auth_server->authserv_fd_ref < 0) {
+				debug(LOG_ERR, "Impossible, authserv_fd_ref is %d", auth_server->authserv_fd_ref);
+				close(auth_server->authserv_fd);
+				auth_server->authserv_fd = -1;
+				auth_server->authserv_fd_ref = 0;
+			}
+		}
+    }
+	
+	UNLOCK_CONFIG();
 }
 
 void
@@ -280,15 +295,12 @@ _close_auth_server()
 	for (auth_server = config->auth_servers; auth_server; auth_server = auth_server->next) {
         if (auth_server->authserv_fd > 0) {
 			auth_server->authserv_fd_ref -= 1;
-			if (auth_server->authserv_fd_ref == 0) {
-				close(auth_server->authserv_fd);
-				auth_server->authserv_fd = -1;
-			} else if (auth_server->authserv_fd_ref < 0) {
-				debug(LOG_ERR, "Impossible, authserv_fd_ref is %d", auth_server->authserv_fd_ref);
+			if (auth_server->authserv_fd_ref <= 0) {
+				debug(LOG_INFO, "authserv_fd_ref is %d, close this connection", auth_server->authserv_fd_ref);
 				close(auth_server->authserv_fd);
 				auth_server->authserv_fd = -1;
 				auth_server->authserv_fd_ref = 0;
-			}
+			} 
 		}
     }
 }
@@ -322,7 +334,7 @@ _connect_auth_server(int level)
 	auth_server = config->auth_servers;
 	if (auth_server->authserv_fd > 0) {
 		if (is_socket_valid(auth_server->authserv_fd)) {
-			debug(LOG_INFO, "Use keep-alive http connection");
+			debug(LOG_INFO, "Use keep-alive http connection, authserv_fd_ref is %d", auth_server->authserv_fd_ref);
 			auth_server->authserv_fd_ref++;
 			return auth_server->authserv_fd;
 		} else {
@@ -405,22 +417,9 @@ _connect_auth_server(int level)
         /*
          * Connect to it
          */
-        int port = 0;
-#ifdef USE_CYASSL
-        if (auth_server->authserv_use_ssl) {
-            debug(LOG_DEBUG, "Level %d: Connecting to SSL auth server %s:%d", level, hostname,
-                  auth_server->authserv_ssl_port);
-            port = htons(auth_server->authserv_ssl_port);
-        } else {
-            debug(LOG_DEBUG, "Level %d: Connecting to auth server %s:%d", level, hostname,
-                  auth_server->authserv_http_port);
-            port = htons(auth_server->authserv_http_port);
-        }
-#endif
-#ifndef USE_CYASSL
         debug(LOG_DEBUG, "Level %d: Connecting to auth server %s:%d", level, hostname, auth_server->authserv_http_port);
-        port = htons(auth_server->authserv_http_port);
-#endif
+        int port = htons(auth_server->authserv_http_port);
+
         their_addr.sin_port = port;
         their_addr.sin_family = AF_INET;
         their_addr.sin_addr = *h_addr;
@@ -432,55 +431,20 @@ _connect_auth_server(int level)
             return (-1);
         }
 
-		// Set non-blocking 
-  		long arg = fcntl(sockfd, F_GETFL, NULL); 
-  		arg |= O_NONBLOCK; 
-  		fcntl(sockfd, F_SETFL, arg); 
-       	
-		int res = connect(sockfd, (struct sockaddr *)&their_addr, sizeof(struct sockaddr)); 
-		if ((res == -1) && (errno != EINPROGRESS)) {
-			goto error;
-		} else if (res == 0) {
-			goto success;
+		int res = wd_connect(sockfd, (struct sockaddr *)&their_addr, sizeof(struct sockaddr), 
+							 auth_server->authserv_connect_timeout);
+		if (res == 0) {
+			// connect successly
+			auth_server->authserv_fd = sockfd;
+			auth_server->authserv_fd_ref++;
+			return sockfd;
 		} else {
-			fd_set fdset; 
-			struct timeval tv; 
-			int so_error = 0;
-			int len = sizeof(so_error);
-			
-			tv.tv_sec = 1; 
-			tv.tv_usec = 0; 
-			FD_ZERO(&fdset); 
-			FD_SET(sockfd, &fdset);
-			
-			res = select(sockfd+1, NULL, &fdset, NULL, &tv);
-			switch(res) {
-			case 1: // data to read
-				
-
-				getsockopt(sockfd, SOL_SOCKET, SO_ERROR, &so_error, &len);
-				if (so_error == 0) {
-					goto success;
-				}
-				break;
-			default: 
-				break;
-			}
-		} 
-
-error:
-		debug(LOG_INFO,
-        	"Level %d: Failed to connect to auth server %s:%d (%d - %s). Marking it as bad and trying next if possible",
-            level, hostname, ntohs(port), errno,  strerror(errno));
-		close(sockfd);
-        mark_auth_server_bad(auth_server);
-		return _connect_auth_server(level); /* Yay recursion! */
-success:	
-		// Set to blocking mode again... 
-  		arg = fcntl(sockfd, F_GETFL, NULL); 
-  		arg &= (~O_NONBLOCK); 
-  		fcntl(sockfd, F_SETFL, arg); 
-		auth_server->authserv_fd = sockfd;
-		return sockfd;
+			debug(LOG_INFO,
+				"Level %d: Failed to connect to auth server %s:%d (%d - %s). Marking it as bad and trying next if possible",
+				level, hostname, ntohs(port), errno,  strerror(errno));
+			close(sockfd);
+			mark_auth_server_bad(auth_server);
+			return _connect_auth_server(level); /* Yay recursion! */
+		}
     }
 }

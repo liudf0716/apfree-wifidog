@@ -22,6 +22,7 @@
 /** @file wdctl.h
     @brief WiFiDog monitoring client
     @author Copyright (C) 2004 Alexandre Carmel-Veilleux <acv@acv.ca>
+    @author Copyright (C) 2016 Dengfeng Liu <liudengfeng@kunteng.org>
 */
 
 #ifndef _WDCTL_H_
@@ -68,5 +69,5 @@ typedef struct {
     char *socket;
     int command;
     char *param;
-} s_config;
+} wdctl_config;
 #endif

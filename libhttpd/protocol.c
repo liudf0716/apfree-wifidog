@@ -457,10 +457,12 @@ _httpd_sendHeaders(request * r, int contentLength, int modTime)
 	nret = snprintf(hdrBuf+totalLength, HTTP_READ_BUF_LEN-totalLength, "Connection: close\r\nContent-Type: %s", 
 				r->response.contentType); // contentType already include "\r\n"
 
+#ifdef	_DEFLATE_SUPPORT_	
 	if (r->request.deflate) {
 		totalLength += nret;
 		nret = snprintf(hdrBuf+totalLength, HTTP_READ_BUF_LEN-totalLength, "Content-Encoding: gzip\r\n");
 	}
+#endif
 	
     if (contentLength > 0) {	
         _httpd_formatTimeString(timeBuf, modTime);
@@ -480,13 +482,13 @@ httpd *server;
 char *dir;
 int createFlag;
 {
-    char buffer[HTTP_MAX_URL] = { 0 }, *curDir;
+    char buffer[HTTP_MAX_URL] = { 0 }, *curDir, *saveptr;
     httpDir *curItem, *curChild;
 
     strncpy(buffer, dir, HTTP_MAX_URL);
     buffer[HTTP_MAX_URL - 1] = 0;
     curItem = server->content;
-    curDir = strtok(buffer, "/");
+    curDir = strtok_r(buffer, "/", &saveptr);
     while (curDir) {
         curChild = curItem->children;
         while (curChild) {
@@ -506,7 +508,7 @@ int createFlag;
             }
         }
         curItem = curChild;
-        curDir = strtok(NULL, "/");
+        curDir = strtok_r(NULL, "/", &saveptr);
     }
     return (curItem);
 }

@@ -22,6 +22,7 @@
 /** @file wdctl.c
     @brief Monitoring and control of wifidog, client part
     @author Copyright (C) 2004 Alexandre Carmel-Veilleux <acv@acv.ca>
+	@author Copyright (C) 2016 Dengfeng Liu <liudengfeng@kunteng.org>
 */
 
 #define _GNU_SOURCE
@@ -39,8 +40,9 @@
 #include <errno.h>
 
 #include "wdctl.h"
+#include "util.h"
 
-static s_config config;
+static wdctl_config config;
 
 static void usage(void);
 static void init_config(void);
@@ -299,7 +301,7 @@ parse_commandline(int argc, char **argv)
 			fprintf(stderr, "wdctl: Error: You must specify mac list\n");
             usage();
             exit(1);
-		}
+ 		}
         config.param = strdup(*(argv + optind + 1));
 
 	} else if (strcmp(*(argv + optind), "show_untrusted_mac") == 0) {
@@ -340,7 +342,7 @@ connect_to_server(const char *sock_name)
     sa_un.sun_family = AF_UNIX;
     strncpy(sa_un.sun_path, sock_name, (sizeof(sa_un.sun_path) - 1));
 
-    if (connect(sock, (struct sockaddr *)&sa_un, strlen(sa_un.sun_path) + sizeof(sa_un.sun_family))) {
+    if (wd_connect(sock, (struct sockaddr *)&sa_un, strlen(sa_un.sun_path) + sizeof(sa_un.sun_family), 2)) {
         fprintf(stdout, "wdctl: wifidog probably not started (Error: %s)\n", strerror(errno));
         exit(1);
     }

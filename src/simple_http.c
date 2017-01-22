@@ -32,25 +32,27 @@
 #include <syslog.h>
 
 #include <zlib.h>
+#include <event2/bufferevent_ssl.h>
+#include <event2/bufferevent.h>
+#include <event2/buffer.h>
+#include <event2/listener.h>
+#include <event2/util.h>
+#include <event2/http.h>
 
+#include <openssl/ssl.h>
+#include <openssl/err.h>
+#include <openssl/rand.h>
+
+#include "openssl_hostname_validation.h"
 #include "common.h"
 #include "debug.h"
 #include "pstring.h"
-
-#ifdef USE_CYASSL
-#include <cyassl/ssl.h>
-#include "conf.h"
-/* For CYASSL_MAX_ERROR_SZ */
-#include <cyassl/ctaocrypt/types.h>
-/* For COMPRESS_E */
-#include <cyassl/ctaocrypt/error-crypt.h>
-#endif
-
+#include "centralserver.h"
 #include "simple_http.h"
+#include "conf.h"
+#include "version.h"
 
-#ifdef USE_CYASSL
-static CYASSL_CTX *get_cyassl_ctx(const char *hostname);
-#endif
+static int ignore_cert = 0;
 
 void http_process_user_data(struct evhttp_request *req, struct http_request_get *http_req_get)
 {
@@ -428,7 +430,7 @@ http_get_ex(const int sockfd, const char *req, int wait)
         nfds = select(nfds, &readfds, NULL, NULL, &timeout);
 
         if (nfds > 0) {
-                        /** We don't have to use FD_ISSET() because there
+            /** We don't have to use FD_ISSET() because there
 			 *  was only one fd. */
             memset(readbuf, 0, MAX_BUF);
             numbytes = read(sockfd, readbuf, MAX_BUF - 1);
@@ -436,6 +438,8 @@ http_get_ex(const int sockfd, const char *req, int wait)
                 debug(LOG_ERR, "An error occurred while reading from server: %s", strerror(errno));
                 goto error;
             } else if (numbytes == 0) {
+				debug(LOG_INFO, "Server close connection: %s", strerror(errno));
+				close_auth_server();
                 done = 1;
             } else {
                 readbuf[numbytes] = '\0';
@@ -463,215 +467,201 @@ http_get_ex(const int sockfd, const char *req, int wait)
     return NULL;
 }
 
-#ifdef USE_CYASSL
-
-static CYASSL_CTX *cyassl_ctx = NULL;
-static pthread_mutex_t cyassl_ctx_mutex = PTHREAD_MUTEX_INITIALIZER;
-
-#define LOCK_CYASSL_CTX() do { \
-	debug(LOG_DEBUG, "Locking CyaSSL Context"); \
-	pthread_mutex_lock(&cyassl_ctx_mutex); \
-	debug(LOG_DEBUG, "CyaSSL Context locked"); \
-} while (0)
-
-#define UNLOCK_CYASSL_CTX() do { \
-	debug(LOG_DEBUG, "Unlocking CyaSSL Context"); \
-	pthread_mutex_unlock(&cyassl_ctx_mutex); \
-	debug(LOG_DEBUG, "CyaSSL Context unlocked"); \
-} while (0)
-
-static CYASSL_CTX *
-get_cyassl_ctx(const char *hostname)
+static int 
+cert_verify_callback(X509_STORE_CTX *x509_ctx, void *arg)
 {
-    int err;
-    CYASSL_CTX *ret;
-    s_config *config = config_get_config();
+	char cert_str[256];
+	const char *host = (const char *) arg;
+	const char *res_str = "X509_verify_cert failed";
+	HostnameValidationResult res = Error;
 
-    LOCK_CYASSL_CTX();
+	/* This is the function that OpenSSL would call if we hadn't called
+	 * SSL_CTX_set_cert_verify_callback().  Therefore, we are "wrapping"
+	 * the default functionality, rather than replacing it. */
+	int ok_so_far = 0;
 
-    if (NULL == cyassl_ctx) {
-        CyaSSL_Init();
-        /* Create the CYASSL_CTX */
-        /* Allow TLSv1.0 up to TLSv1.2 */
-        if ((cyassl_ctx = CyaSSL_CTX_new(CyaTLSv1_client_method())) == NULL) {
-            debug(LOG_ERR, "Could not create CYASSL context.");
-            UNLOCK_CYASSL_CTX();
-            return NULL;
-        }
+	X509 *server_cert = NULL;
 
-        if (config->ssl_cipher_list) {
-            debug(LOG_INFO, "Setting SSL cipher list to [%s]", config->ssl_cipher_list);
-            err = CyaSSL_CTX_set_cipher_list(cyassl_ctx, config->ssl_cipher_list);
-            if (SSL_SUCCESS != err) {
-                debug(LOG_ERR, "Could not load SSL cipher list (error %d)", err);
-                UNLOCK_CYASSL_CTX();
-                return NULL;
-            }
-        }
+	if (ignore_cert) {
+		return 1;
+	}
 
-#ifdef HAVE_SNI
-        if (config->ssl_use_sni) {
-            debug(LOG_INFO, "Setting SSL using SNI for hostname %s",
-                hostname);
-            err = CyaSSL_CTX_UseSNI(cyassl_ctx, CYASSL_SNI_HOST_NAME, hostname,
-                      strlen(hostname));
-            if (SSL_SUCCESS != err) {
-                debug(LOG_ERR, "Could not setup SSL using SNI for hostname %s",
-                    hostname);
-                UNLOCK_CYASSL_CTX();
-                return NULL;
-            }
-        }
+	ok_so_far = X509_verify_cert(x509_ctx);
+
+	server_cert = X509_STORE_CTX_get_current_cert(x509_ctx);
+
+	if (ok_so_far) {
+		res = validate_hostname(host, server_cert);
+
+		switch (res) {
+		case MatchFound:
+			res_str = "MatchFound";
+			break;
+		case MatchNotFound:
+			res_str = "MatchNotFound";
+			break;
+		case NoSANPresent:
+			res_str = "NoSANPresent";
+			break;
+		case MalformedCertificate:
+			res_str = "MalformedCertificate";
+			break;
+		case Error:
+			res_str = "Error";
+			break;
+		default:
+			res_str = "WTF!";
+			break;
+		}
+	}
+
+	X509_NAME_oneline(X509_get_subject_name (server_cert),
+			  cert_str, sizeof (cert_str));
+
+	if (res == MatchFound) {
+		debug(LOG_INFO, "https server '%s' has this certificate, "
+		       "which looks good to me:\n%s\n",
+		       host, cert_str);
+		return 1;
+	} else {
+		debug(LOG_INFO, "Got '%s' for hostname '%s' and certificate:\n%s\n",
+		       res_str, host, cert_str);
+		return 0;
+	}
+}
+
+void
+evhttps_get(const char *uri, int timeout, void (*http_request_done)(struct evhttp_request *req, void *ctx))
+{
+	struct evhttp_uri *http_uri = NULL;
+	t_auth_serv *auth_server = get_auth_server();
+	
+	const char *crt = "/etc/ssl/certs/ca-certificates.crt";
+	
+	SSL_CTX *ssl_ctx = NULL;
+	SSL *ssl = NULL;
+	struct event_base *base;
+	struct bufferevent *bev;
+	struct evhttp_connection *evcon = NULL;
+	struct evhttp_request *req;
+	struct evkeyvalq *output_headers;
+	
+	int ret = 0;
+	
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
+	// Initialize OpenSSL
+	SSL_library_init();
+	ERR_load_crypto_strings();
+	SSL_load_error_strings();
+	OpenSSL_add_all_algorithms();
 #endif
+	
+	/* This isn't strictly necessary... OpenSSL performs RAND_poll
+	 * automatically on first use of random number generator. */
+	if (RAND_poll() == 0) {
+		debug(LOG_ERR, "RAND_poll failed");
+		goto cleanup;
+	}
 
-        if (config->ssl_verify) {
-            /* Use trusted certs */
-            /* Note: CyaSSL requires that the certificates are named by their hash values */
-            debug(LOG_INFO, "Loading SSL certificates from %s", config->ssl_certs);
-            err = CyaSSL_CTX_load_verify_locations(cyassl_ctx, NULL, config->ssl_certs);
-            if (err != SSL_SUCCESS) {
-                debug(LOG_ERR, "Could not load SSL certificates (error %d)", err);
-                if (err == ASN_UNKNOWN_OID_E) {
-                    debug(LOG_ERR, "Error is ASN_UNKNOWN_OID_E - try compiling cyassl/wolfssl with --enable-ecc");
-                } else {
-                    debug(LOG_ERR, "Make sure that SSLCertPath points to the correct path in the config file");
-                    debug(LOG_ERR, "Or disable certificate loading with 'SSLPeerVerification No'.");
-                }
-                UNLOCK_CYASSL_CTX();
-                return NULL;
-            }
-        } else {
-            CyaSSL_CTX_set_verify(cyassl_ctx, SSL_VERIFY_NONE, 0);
-            debug(LOG_INFO, "Disabling SSL certificate verification!");
-        }
-    }
+	/* Create a new OpenSSL context */
+	ssl_ctx = SSL_CTX_new(SSLv23_method());
+	if (!ssl_ctx) {
+		debug(LOG_ERR, "SSL_CTX_new failed");
+		goto cleanup;
+	}
+	
+	if (1 != SSL_CTX_load_verify_locations(ssl_ctx, crt, NULL)) {
+		debug(LOG_ERR, "SSL_CTX_load_verify_locations failed");
+		goto cleanup;
+	}
+	
+	SSL_CTX_set_verify(ssl_ctx, SSL_VERIFY_PEER, NULL);
+	
+	SSL_CTX_set_cert_verify_callback(ssl_ctx, cert_verify_callback,
+					  (void *) auth_server->authserv_hostname);
+	
+	// Create event base
+	base = event_base_new();
+	if (!base) {
+		debug(LOG_ERR, "event_base_new() failed");
+		goto cleanup;
+	}
+	
+	// Create OpenSSL bufferevent and stack evhttp on top of it
+	ssl = SSL_new(ssl_ctx);
+	if (ssl == NULL) {
+		debug(LOG_ERR, "SSL_new() failed");
+		goto cleanup;
+	}
 
-    ret = cyassl_ctx;
-    UNLOCK_CYASSL_CTX();
-    return ret;
+#ifdef SSL_CTRL_SET_TLSEXT_HOSTNAME
+	// Set hostname for SNI extension
+	SSL_set_tlsext_host_name(ssl, auth_server->authserv_hostname);
+#endif
+	
+	bev = bufferevent_openssl_socket_new(base, -1, ssl,
+			BUFFEREVENT_SSL_CONNECTING,
+			BEV_OPT_CLOSE_ON_FREE|BEV_OPT_DEFER_CALLBACKS);
+	if (bev == NULL) {
+		debug(LOG_ERR, "bufferevent_openssl_socket_new() failed\n");
+		goto cleanup;
+	}
+	
+	bufferevent_openssl_set_allow_dirty_shutdown(bev, 1);
+	
+	evcon = evhttp_connection_base_bufferevent_new(base, NULL, bev,
+		auth_server->authserv_hostname, auth_server->authserv_ssl_port);
+	if (evcon == NULL) {
+		debug(LOG_ERR, "evhttp_connection_base_bufferevent_new() failed\n");
+		goto cleanup;
+	}
+	
+	evhttp_connection_set_timeout(evcon, timeout);
+	
+	req = evhttp_request_new(http_request_done, bev);
+	if (req == NULL) {
+		debug(LOG_ERR, "evhttp_request_new() failed\n");
+		goto cleanup;
+	}
+	
+	char user_agent[128] = {0};
+	snprintf(user_agent, 128, "ApFree WiFiDog %s", VERSION);
+	output_headers = evhttp_request_get_output_headers(req);
+	evhttp_add_header(output_headers, "Host", auth_server->authserv_hostname);
+	evhttp_add_header(output_headers, "User-Agent", user_agent);
+	evhttp_add_header(output_headers, "Connection", "keep-alive");
+	
+	ret = evhttp_make_request(evcon, req, EVHTTP_REQ_GET, uri);
+	if (ret != 0) {
+		debug(LOG_ERR, "evhttp_make_request() failed\n");
+		goto cleanup;
+	}
+
+	event_base_dispatch(base);
+
+cleanup:
+	if (evcon)
+		evhttp_connection_free(evcon);
+	if (http_uri)
+		evhttp_uri_free(http_uri);
+	event_base_free(base);
+
+	if (ssl_ctx)
+		SSL_CTX_free(ssl_ctx);
+	if (ssl)
+		SSL_free(ssl);
+	
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
+	EVP_cleanup();
+	ERR_free_strings();
+
+#ifdef EVENT__HAVE_ERR_REMOVE_THREAD_STATE
+	ERR_remove_thread_state(NULL);
+#else
+	ERR_remove_state(0);
+#endif
+	CRYPTO_cleanup_all_ex_data();
+
+	sk_SSL_COMP_free(SSL_COMP_get_compression_methods());
+#endif /*OPENSSL_VERSION_NUMBER < 0x10100000L */
 }
-
-/**
- * Perform an HTTPS request, caller frees both request and response,
- * NULL returned on error.
- * @param sockfd Socket to use, already connected
- * @param req Request to send, fully formatted.
- * @param hostname Hostname to use in https request. Caller frees.
- * @return char Response as a string
- */
-char *
-https_get(const int sockfd, const char *req, const char *hostname)
-{
-    ssize_t numbytes;
-    int done, nfds;
-    fd_set readfds;
-    struct timeval timeout;
-    unsigned long sslerr;
-    char sslerrmsg[CYASSL_MAX_ERROR_SZ];
-    size_t reqlen = strlen(req);
-    char readbuf[MAX_BUF];
-    char *retval;
-    pstr_t *response = pstr_new();
-    CYASSL *ssl = NULL;
-    CYASSL_CTX *ctx = NULL;
-
-    s_config *config;
-    config = config_get_config();
-
-    ctx = get_cyassl_ctx(hostname);
-    if (NULL == ctx) {
-        debug(LOG_ERR, "Could not get CyaSSL Context!");
-        goto error;
-    }
-
-    if (sockfd == -1) {
-        /* Could not connect to server */
-        debug(LOG_ERR, "Could not open socket to server!");
-        goto error;
-    }
-
-    /* Create CYASSL object */
-    if ((ssl = CyaSSL_new(ctx)) == NULL) {
-        debug(LOG_ERR, "Could not create CyaSSL context.");
-        goto error;
-    }
-    if (config->ssl_verify) {
-        // Turn on domain name check
-        // Loading of CA certificates and verification of remote host name
-        // go hand in hand - one is useless without the other.
-        CyaSSL_check_domain_name(ssl, hostname);
-    }
-    CyaSSL_set_fd(ssl, sockfd);
-
-    debug(LOG_DEBUG, "Sending HTTPS request to auth server: [%s]\n", req);
-    numbytes = CyaSSL_send(ssl, req, (int)reqlen, 0);
-    if (numbytes <= 0) {
-        sslerr = (unsigned long)CyaSSL_get_error(ssl, numbytes);
-        CyaSSL_ERR_error_string(sslerr, sslerrmsg);
-        debug(LOG_ERR, "CyaSSL_send failed: %s", sslerrmsg);
-        goto error;
-    } else if ((size_t) numbytes != reqlen) {
-        debug(LOG_ERR, "CyaSSL_send failed: only %d bytes out of %d bytes sent!", numbytes, reqlen);
-        goto error;
-    }
-
-    debug(LOG_DEBUG, "Reading response");
-    done = 0;
-    do {
-        FD_ZERO(&readfds);
-        FD_SET(sockfd, &readfds);
-        timeout.tv_sec = 30;    /* XXX magic... 30 second is as good a timeout as any */
-        timeout.tv_usec = 0;
-        nfds = sockfd + 1;
-
-        nfds = select(nfds, &readfds, NULL, NULL, &timeout);
-
-        if (nfds > 0) {
-                        /** We don't have to use FD_ISSET() because there
-			 *  was only one fd. */
-            memset(readbuf, 0, MAX_BUF);
-            numbytes = CyaSSL_read(ssl, readbuf, MAX_BUF - 1);
-            if (numbytes < 0) {
-                sslerr = (unsigned long)CyaSSL_get_error(ssl, numbytes);
-                CyaSSL_ERR_error_string(sslerr, sslerrmsg);
-                debug(LOG_ERR, "An error occurred while reading from server: %s", sslerrmsg);
-                goto error;
-            } else if (numbytes == 0) {
-                /* CyaSSL_read returns 0 on a clean shutdown or if the peer closed the
-                   connection. We can't distinguish between these cases right now. */
-                done = 1;
-            } else {
-                readbuf[numbytes] = '\0';
-                pstr_cat(response, readbuf);
-                debug(LOG_DEBUG, "Read %d bytes", numbytes);
-            }
-        } else if (nfds == 0) {
-            debug(LOG_ERR, "Timed out reading data via select() from auth server");
-            goto error;
-        } else if (nfds < 0) {
-            debug(LOG_ERR, "Error reading data via select() from auth server: %s", strerror(errno));
-            goto error;
-        }
-    } while (!done);
-
-    close(sockfd);
-
-    CyaSSL_free(ssl);
-
-    retval = pstr_to_string(response);
-    debug(LOG_DEBUG, "HTTPS Response from Server: [%s]", retval);
-    return retval;
-
- error:
-    if (ssl) {
-        CyaSSL_free(ssl);
-    }
-    if (sockfd >= 0) {
-        close(sockfd);
-    }
-    retval = pstr_to_string(response);
-    free(retval);
-    return NULL;
-}
-
-#endif                          /* USE_CYASSL */

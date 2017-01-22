@@ -257,7 +257,7 @@ authenticate_client(request * r)
 		//<<< liudf added end
         served_this_session++;
 		if(type) {
-        	send_http_page(r, "weixin auth", "Weixin auth come here");
+        	send_http_page_direct(r, "<htm><body>weixin auth success!</body><html>");
 		} else {
         	safe_asprintf(&urlFragment, "%sgw_id=%s&channel_path=%s&mac=%s&name=%s", 
 				auth_server->authserv_portal_script_path_fragment, 
@@ -290,7 +290,7 @@ authenticate_client(request * r)
 		client_list_delete(client);	
     	UNLOCK_CLIENT_LIST();
         
-        send_http_page(r, "Internal Error", "We can not validate your request at this time");
+        send_http_page_direct(r, "<htm><body>Internal Error, We can not validate your request at this time</body></html>");
         break;
 
     }
