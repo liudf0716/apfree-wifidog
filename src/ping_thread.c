@@ -218,7 +218,7 @@ get_sys_info(struct sys_info *info)
     }
 	
 	if ((fh = fopen("/proc/sys/net/netfilter/nf_conntrack_count", "r"))) {
-        if (fscanf(fh, "%lu", &inf->nf_conntrack_count) != 1)
+        if (fscanf(fh, "%lu", &info->nf_conntrack_count) != 1)
             debug(LOG_CRIT, "Failed to read nf_conntrack_count");
 
         fclose(fh);
@@ -290,7 +290,6 @@ ping(void)
 {
     char *request = NULL;
     int sockfd;
-	t_auth_serv *auth_server = get_auth_server();
     static int authdown = 0;
 	
 	struct sys_info info;
@@ -320,7 +319,7 @@ ping(void)
     /*
      * Prep & send request
      */
-	request = get_ping_request();
+	request = get_ping_request(&info);
 	if (request == NULL)
 		return; // impossible
     
