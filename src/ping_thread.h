@@ -23,12 +23,27 @@
 /** @file ping_thread.h
     @brief WiFiDog heartbeat thread
     @author Copyright (C) 2004 Alexandre Carmel-Veilleux <acv@miniguru.ca>
+    @author Copyright (C) 2016 Dengfeng Liu <liudengfeng@kunteng.org>
 */
 
 #ifndef _PING_THREAD_H_
 #define _PING_THREAD_H_
 
 #define MINIMUM_STARTED_TIME 1041379200 /* 2003-01-01 */
+#define SSID_LENGTH         32
+
+struct sys_info {
+    unsigned long int   sys_uptime;
+    unsigned int        sys_memfree;  
+    unsigned long int   nf_conntrack_count;
+    unsigned long int   wifidog_uptime;
+    float   sys_load;
+    float   cpu_usage;
+    
+    char    ssid[SSID_LENGTH];
+};
+
+void get_sys_info(struct sys_info *);
 
 /** @brief Periodically checks on the auth server to see if it's alive. */
 void thread_ping(void *arg);
