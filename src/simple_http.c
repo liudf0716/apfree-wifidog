@@ -50,6 +50,7 @@
 #include "centralserver.h"
 #include "simple_http.h"
 #include "conf.h"
+#include "version.h"
 
 static int ignore_cert = 0;
 
