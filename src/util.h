@@ -57,6 +57,6 @@ void s_sleep(unsigned int, unsigned int);
 
 int uci_get_value(const char *, const char *, char *, int);
 
-int uci_set_value(const char *, const char *, const char *);
+int uci_set_value(const char *, const char *, const char *, const char *);
 
 #endif                          /* _UTIL_H_ */
