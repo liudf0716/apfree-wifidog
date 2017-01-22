@@ -387,7 +387,7 @@ s_sleep(unsigned int s, unsigned int u){
 }
 
 int
-uci_set_value(const char *c_filename, const char *seccion, const char *name, const char *value)
+uci_set_value(const char *c_filename, const char *section, const char *name, const char *value)
 {
 	int nret = 0;
 	char uciOption[128] = {0};
@@ -403,9 +403,9 @@ uci_set_value(const char *c_filename, const char *seccion, const char *name, con
 	}   
     ptr.value = value; 
     
-    ret = uci_set(ctx, &ptr);  
-    if (0 == ret){  
-        ret = uci_commit(ctx, &ptr.p, false);  
+    nret = uci_set(ctx, &ptr);  
+    if (0 == nret){  
+        nret = uci_commit(ctx, &ptr.p, false);  
     }  
     uci_unload(ctx, ptr.p);  
     uci_free_context(ctx); 
