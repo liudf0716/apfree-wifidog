@@ -52,6 +52,8 @@
 #include <netinet/ip_icmp.h>
 #include <netpacket/packet.h>
 
+#include <uci.h>
+
 #include "common.h"
 #include "gateway.h"
 #include "commandline.h"
@@ -717,6 +719,62 @@ void evdns_parse_trusted_domain_2_ip(t_domain_trusted *p)
 	
 	evdns_base_free(dnsbase, 0);
     event_base_free(base);
+}
+
+int
+uci_set_value(const char *c_filename, const char *section, const char *name, const char *value)
+{
+	int nret = 0;
+	char uciOption[128] = {0};
+	struct uci_context * ctx = uci_alloc_context(); 
+    struct uci_ptr ptr; 
+	if (NULL == ctx)  
+        return nret;  
+    memset(&ptr, 0, sizeof(ptr));  
+     
+    snprintf(uciOption, sizeof(uciOption), "%s.@%s[0].%s", c_filename, section, name); 
+    if(UCI_OK != uci_lookup_ptr(ctx, &ptr, uciOption, true)) {
+		return nret;
+	}   
+    ptr.value = value; 
+    
+    nret = uci_set(ctx, &ptr);  
+    if (0 == nret){  
+        nret = uci_commit(ctx, &ptr.p, false);  
+    }  
+    uci_unload(ctx, ptr.p);  
+    uci_free_context(ctx); 
+	
+	return nret;
+}
+
+int
+uci_get_value(const char *c_filename, const char *name, char *value, int v_len)
+{
+	struct uci_context * uci = uci_alloc_context();  
+    char * pValueData = NULL;  
+    struct uci_package * pkg = NULL;    
+    struct uci_element * e;
+  	int nret	= 0;
+	
+    if (!uci || UCI_OK != uci_load(uci, c_filename, &pkg))    
+        goto cleanup;  
+    
+    uci_foreach_element(&pkg->sections, e) {    
+        struct uci_section *s = uci_to_section(e);    
+        if (NULL != (pValueData = uci_lookup_option_string(uci, s, name))) {  
+            strncpy(value, pValueData, v_len);
+			nret = 1;
+			break;
+        }  
+    }    
+      
+    uci_unload(uci, pkg);    
+      
+cleanup:    
+    uci_free_context(uci);    
+    uci = NULL;
+	return nret;
 }
 
 /** Fork a child and execute a shell command, the parent
