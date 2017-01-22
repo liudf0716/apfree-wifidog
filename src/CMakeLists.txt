@@ -23,6 +23,7 @@ set(src_apfreewifidog
 	https_common.c 
     wd_util.c 
 	ezxml.c
+	openssl_hostname_validation.c
 )
 
 set(src_wdctl wdctl.c util.c debug.c)
