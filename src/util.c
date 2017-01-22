@@ -380,9 +380,12 @@ s_sleep(unsigned int s, unsigned int u){
 	struct timeval timeout;
 	timeout.tv_sec = s;
 	timeout.tv_usec = u;
-	int ret = 0;
 
-	do{
-		ret = select(0, NULL, NULL, NULL, &timeout);
-	}while((ret == -1)&&(errno == EINTR));
+	select(0, NULL, NULL, NULL, &timeout);
+}
+
+int
+uci_get_value(const char *c_file, const char *name, const char *value, char *ret_value)
+{
+	
 }
