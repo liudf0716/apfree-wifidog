@@ -41,7 +41,9 @@ struct sys_info {
     float   cpu_usage;
 };
 
-void get_sys_info(struct sys_info *);
+void get_sys_info(const struct sys_info *);
+
+char *parse_ping_uri(struct sys_info *);
 
 /** @brief Periodically checks on the auth server to see if it's alive. */
 void thread_ping(void *arg);
