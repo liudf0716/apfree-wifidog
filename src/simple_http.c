@@ -32,7 +32,18 @@
 #include <syslog.h>
 
 #include <zlib.h>
+#include <event2/bufferevent_ssl.h>
+#include <event2/bufferevent.h>
+#include <event2/buffer.h>
+#include <event2/listener.h>
+#include <event2/util.h>
+#include <event2/http.h>
 
+#include <openssl/ssl.h>
+#include <openssl/err.h>
+#include <openssl/rand.h>
+
+#include "openssl_hostname_validation.h"
 #include "common.h"
 #include "debug.h"
 #include "pstring.h"
@@ -524,6 +535,7 @@ evhttps_get(const char *uri, int timeout, void (*http_request_done)(struct evhtt
 	
 	SSL_CTX *ssl_ctx = NULL;
 	SSL *ssl = NULL;
+	struct event_base *base;
 	struct bufferevent *bev;
 	struct evhttp_connection *evcon = NULL;
 	struct evhttp_request *req;
