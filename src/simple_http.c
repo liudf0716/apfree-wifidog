@@ -559,19 +559,19 @@ evhttps_get(const char *uri, int timeout, void (*http_request_done)(struct evhtt
 	 * automatically on first use of random number generator. */
 	if (RAND_poll() == 0) {
 		debug(LOG_ERR, "RAND_poll failed");
-		goto error;
+		goto cleanup;
 	}
 
 	/* Create a new OpenSSL context */
 	ssl_ctx = SSL_CTX_new(SSLv23_method());
 	if (!ssl_ctx) {
 		debug(LOG_ERR, "SSL_CTX_new failed");
-		goto error;
+		goto cleanup;
 	}
 	
 	if (1 != SSL_CTX_load_verify_locations(ssl_ctx, crt, NULL)) {
 		debug(LOG_ERR, "SSL_CTX_load_verify_locations failed");
-		goto error;
+		goto cleanup;
 	}
 	
 	SSL_CTX_set_verify(ssl_ctx, SSL_VERIFY_PEER, NULL);
@@ -583,14 +583,14 @@ evhttps_get(const char *uri, int timeout, void (*http_request_done)(struct evhtt
 	base = event_base_new();
 	if (!base) {
 		debug(LOG_ERR, "event_base_new() failed");
-		goto error;
+		goto cleanup;
 	}
 	
 	// Create OpenSSL bufferevent and stack evhttp on top of it
 	ssl = SSL_new(ssl_ctx);
 	if (ssl == NULL) {
 		debug(LOG_ERR, "SSL_new() failed");
-		goto error;
+		goto cleanup;
 	}
 
 #ifdef SSL_CTRL_SET_TLSEXT_HOSTNAME
@@ -603,7 +603,7 @@ evhttps_get(const char *uri, int timeout, void (*http_request_done)(struct evhtt
 			BEV_OPT_CLOSE_ON_FREE|BEV_OPT_DEFER_CALLBACKS);
 	if (bev == NULL) {
 		debug(LOG_ERR, "bufferevent_openssl_socket_new() failed\n");
-		goto error;
+		goto cleanup;
 	}
 	
 	bufferevent_openssl_set_allow_dirty_shutdown(bev, 1);
@@ -612,7 +612,7 @@ evhttps_get(const char *uri, int timeout, void (*http_request_done)(struct evhtt
 		auth_server->authserv_hostname, auth_server->authserv_ssl_port);
 	if (evcon == NULL) {
 		debug(LOG_ERR, "evhttp_connection_base_bufferevent_new() failed\n");
-		goto error;
+		goto cleanup;
 	}
 	
 	evhttp_connection_set_timeout(evcon, timeout);
@@ -620,7 +620,7 @@ evhttps_get(const char *uri, int timeout, void (*http_request_done)(struct evhtt
 	req = evhttp_request_new(http_request_done, bev);
 	if (req == NULL) {
 		debug(LOG_ERR, "evhttp_request_new() failed\n");
-		goto error;
+		goto cleanup;
 	}
 	
 	char user_agent[128] = {0};
@@ -630,17 +630,14 @@ evhttps_get(const char *uri, int timeout, void (*http_request_done)(struct evhtt
 	evhttp_add_header(output_headers, "User-Agent", user_agent);
 	evhttp_add_header(output_headers, "Connection", "keep-alive");
 	
-	r = evhttp_make_request(evcon, req, EVHTTP_REQ_GET, uri);
-	if (r != 0) {
+	ret = evhttp_make_request(evcon, req, EVHTTP_REQ_GET, uri);
+	if (ret != 0) {
 		debug(LOG_ERR, "evhttp_make_request() failed\n");
-		goto error;
+		goto cleanup;
 	}
 
 	event_base_dispatch(base);
-	goto cleanup;
 
-error:
-	ret = 1;
 cleanup:
 	if (evcon)
 		evhttp_connection_free(evcon);
@@ -666,6 +663,4 @@ cleanup:
 
 	sk_SSL_COMP_free(SSL_COMP_get_compression_methods());
 #endif /*OPENSSL_VERSION_NUMBER < 0x10100000L */
-
-	return ret;
 }
