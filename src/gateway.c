@@ -697,7 +697,7 @@ gw_main(int argc, char **argv)
          */
         while (kill(restart_orig_pid, 0) != -1) {
             debug(LOG_INFO, "Waiting for parent PID %d to die before continuing loading", restart_orig_pid);
-            sleep(1);
+            s_sleep(1, 0);
         }
 
         debug(LOG_INFO, "Parent PID %d seems to be dead. Continuing loading.");
