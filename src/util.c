@@ -387,7 +387,7 @@ s_sleep(unsigned int s, unsigned int u){
 }
 
 int
-uci_set_value(const char *c_filename, const char *seccion, const char *name const char *value)
+uci_set_value(const char *c_filename, const char *seccion, const char *name, const char *value)
 {
 	int nret = 0;
 	char uciOption[128] = {0};
