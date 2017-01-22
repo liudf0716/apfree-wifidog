@@ -108,42 +108,30 @@ thread_ping(void *arg)
 }
 
 
-/** @internal
- * This function does the actual request.
- */
-static void
-ping(void)
+
+void
+get_sys_info(struct sys_info *info)
 {
-    char request[MAX_BUF];
-    FILE *fh;
-    int sockfd;
-    unsigned long int sys_uptime = 0;
-    unsigned int sys_memfree = 0;
-    float sys_load = 0;
-    t_auth_serv *auth_server = get_auth_server();
-    static int authdown = 0;
+	FILE 	*fh = NULL;
 	char	ssid[32] = {0};
-	unsigned long int nf_conntrack_count = 0;
-
-    debug(LOG_DEBUG, "Entering ping()");
-    memset(request, 0, sizeof(request));
-
-    
-
-    /*
+	
+	if (info == NULL)
+		return;
+	
+	 /*
      * Populate uptime, memfree and load
      */
     if ((fh = fopen("/proc/uptime", "r"))) {
-        if (fscanf(fh, "%lu", &sys_uptime) != 1)
+        if (fscanf(fh, "%lu", &info->sys_uptime) != 1)
             debug(LOG_CRIT, "Failed to read uptime");
 
         fclose(fh);
 		fh = NULL;
     }
-
-    if ((fh = fopen("/proc/meminfo", "r"))) {
+	
+	if ((fh = fopen("/proc/meminfo", "r"))) {
         while (!feof(fh)) {
-            if (fscanf(fh, "MemFree: %u", &sys_memfree) == 0) {
+            if (fscanf(fh, "MemFree: %u", &info->sys_memfree) == 0) {
                 /* Not on this line */
                 while (!feof(fh) && fgetc(fh) != '\n') ;
             } else {
@@ -154,18 +142,17 @@ ping(void)
         fclose(fh);
 		fh = NULL;
     }
-
-    if ((fh = fopen("/proc/loadavg", "r"))) {
-        if (fscanf(fh, "%f", &sys_load) != 1)
+	
+	if ((fh = fopen("/proc/loadavg", "r"))) {
+        if (fscanf(fh, "%f", &info->sys_load) != 1)
             debug(LOG_CRIT, "Failed to read loadavg");
 
         fclose(fh);
 		fh = NULL;
     }
-	//<<< liudf added 20160121
 	
 	if ((fh = fopen("/proc/sys/net/netfilter/nf_conntrack_count", "r"))) {
-        if (fscanf(fh, "%lu", &nf_conntrack_count) != 1)
+        if (fscanf(fh, "%lu", &inf->nf_conntrack_count) != 1)
             debug(LOG_CRIT, "Failed to read nf_conntrack_count");
 
         fclose(fh);
@@ -208,7 +195,7 @@ ping(void)
 				g_type = safe_strdup(name);
 		}
 	}
-
+	
 	if(!g_name) {
 		if ((fh = fopen("/var/sysinfo/board_name", "r"))) {
 			char name[32] = {0};
@@ -220,7 +207,7 @@ ping(void)
 				g_name = safe_strdup(name);
 		}
 	}
-
+	
 	{
 		if(!g_channel_path) { 
 			free(g_channel_path);
@@ -239,8 +226,26 @@ ping(void)
 		}
 
 	}
-	//>>>
+}
+
+/** @internal
+ * This function does the actual request.
+ */
+static void
+ping(void)
+{
+    char request[MAX_BUF] = {0};
+    FILE *fh;
+    int sockfd;
+    unsigned long int sys_uptime = 0;
+    unsigned int sys_memfree = 0;
+    float sys_load = 0;
+    t_auth_serv *auth_server = get_auth_server();
+    static int authdown = 0;
 	
+	unsigned long int nf_conntrack_count = 0;
+
+    debug(LOG_DEBUG, "Entering ping()");
 	/*
      * The ping thread does not really try to see if the auth server is actually
      * working. Merely that there is a web server listening at the port. And that
