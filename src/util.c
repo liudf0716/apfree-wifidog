@@ -346,7 +346,7 @@ get_cpu_usage()
 	}
 	idle = fields[3]; /* idle ticks index */
 
-	sleep (1);
+	s_sleep(1, 0);
 	total_tick_old = total_tick;
 	idle_old = idle;
 
@@ -371,4 +371,18 @@ get_cpu_usage()
 	fclose (fp); 
 
 	return percent_usage;
+}
+
+// s_sleep using select timeout method to instead of sleep-func
+// s: second, u: usec 10^6usec = 1s
+void 
+s_sleep(unsigned int s, unsigned int u){
+	struct timeval timeout;
+	timeout.tv_sec = s;
+	timeout.tv_usec = u;
+	int ret = 0;
+
+	do{
+		ret = select(0, NULL, NULL, NULL, &timeout);
+	}while((ret == -1)&&(errno == EINTR));
 }
