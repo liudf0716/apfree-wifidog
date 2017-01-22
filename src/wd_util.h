@@ -91,6 +91,10 @@ void evdns_parse_trusted_domain_2_ip(t_domain_trusted *p);
 void evdns_add_trusted_domain_ip_cb(int errcode, struct evutil_addrinfo *addr, void *ptr);
 
 char *evb_2_string(struct evbuffer *, int *);
+
+int uci_get_value(const char *, const char *, char *, int);
+
+int uci_set_value(const char *, const char *, const char *, const char *);
 //<<< liudf added end
 
 /** @brief Execute a shell command */
