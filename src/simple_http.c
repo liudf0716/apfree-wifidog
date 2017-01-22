@@ -49,7 +49,9 @@
 #include "pstring.h"
 #include "centralserver.h"
 #include "simple_http.h"
+#include "conf.h"
 
+static int ignore_cert = 0;
 
 void http_process_user_data(struct evhttp_request *req, struct http_request_get *http_req_get)
 {
@@ -533,6 +535,8 @@ evhttps_get(const char *uri, int timeout, void (*http_request_done)(struct evhtt
 	struct evhttp_uri *http_uri = NULL;
 	t_auth_serv *auth_server = get_auth_server();
 	
+	const char *crt = "/etc/ssl/certs/ca-certificates.crt";
+	
 	SSL_CTX *ssl_ctx = NULL;
 	SSL *ssl = NULL;
 	struct event_base *base;
@@ -554,8 +558,7 @@ evhttps_get(const char *uri, int timeout, void (*http_request_done)(struct evhtt
 	
 	/* This isn't strictly necessary... OpenSSL performs RAND_poll
 	 * automatically on first use of random number generator. */
-	r = RAND_poll();
-	if (r == 0) {
+	if (RAND_poll() == 0) {
 		debug(LOG_ERR, "RAND_poll failed");
 		goto error;
 	}
@@ -575,7 +578,7 @@ evhttps_get(const char *uri, int timeout, void (*http_request_done)(struct evhtt
 	SSL_CTX_set_verify(ssl_ctx, SSL_VERIFY_PEER, NULL);
 	
 	SSL_CTX_set_cert_verify_callback(ssl_ctx, cert_verify_callback,
-					  (void *) host);
+					  (void *) auth_server->authserv_hostname);
 	
 	// Create event base
 	base = event_base_new();
