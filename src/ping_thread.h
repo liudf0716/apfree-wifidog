@@ -39,8 +39,6 @@ struct sys_info {
     unsigned long int   wifidog_uptime;
     float   sys_load;
     float   cpu_usage;
-    
-    char    ssid[SSID_LENGTH];
 };
 
 void get_sys_info(struct sys_info *);
