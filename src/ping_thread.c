@@ -60,6 +60,7 @@
 #include "httpd_priv.h"
 
 static void ping(void);
+static void evpings(void);
 
 /** Launches a thread that periodically checks in with the wifidog auth server to perform heartbeat function.
 @param arg NULL
@@ -71,6 +72,7 @@ thread_ping(void *arg)
     pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
     pthread_mutex_t cond_mutex = PTHREAD_MUTEX_INITIALIZER;
     struct timespec timeout;
+	t_auth_serv *auth_server = get_auth_server();
 	
 	//>>> liudf added 20160411
 	// move from fw_init to here	
@@ -89,9 +91,15 @@ thread_ping(void *arg)
 	
     while (1) {
         /* Make sure we check the servers at the very begining */
-        debug(LOG_DEBUG, "Running ping()");
-        ping();
-
+        
+		if (auth_server->authserv_use_ssl) {
+       		debug(LOG_DEBUG, "Running evpings()");
+			evpings();
+		} else {
+			debug(LOG_DEBUG, "Running ping()");
+			ping();
+		}
+		
         /* Sleep for config.checkinterval seconds... */
         timeout.tv_sec = time(NULL) + config_get_config()->checkinterval;
         timeout.tv_nsec = 0;
@@ -282,6 +290,60 @@ get_sys_info(struct sys_info *info)
 	}
 }
 
+static void
+process_ping_result(struct evhttp_request *req, void *ctx)
+{
+	static int authdown = 0;
+	if (req == NULL) {
+		if (!authdown) {
+            fw_set_authdown();
+            authdown = 1;
+        }
+		return;
+	}
+	
+	char buffer[MAX_BUF] = {0};
+	int nread = evbuffer_remove(evhttp_request_get_input_buffer(req),
+		    buffer, MAX_BUF-1);
+	if (nread <= 0) {
+        debug(LOG_ERR, "There was a problem pinging the auth server!");
+        if (!authdown) {
+            fw_set_authdown();
+            authdown = 1;
+        }
+    } else if (strstr(buffer, "Pong") == 0) {
+        debug(LOG_WARNING, "Auth server did NOT say Pong!");
+        if (!authdown) {
+            fw_set_authdown();
+            authdown = 1;
+        }
+        free(res);
+    } else {
+        debug(LOG_DEBUG, "Auth Server Says: Pong");
+        if (authdown) {
+            fw_set_authup();
+            authdown = 0;
+        }
+        free(res);
+    }
+}
+
+static void
+evpings(void)
+{
+	struct sys_info info;
+	memset(&info, 0, sizeof(info));
+	
+	debug(LOG_DEBUG, "Entering evping()");	
+	get_sys_info(&info);
+	
+	char *uri = get_ping_uri(&info);
+	if (uri == NULL)
+		return; // impossibe 
+	
+	int timeout = 2; // 2s
+	evhttps_get(uri, timeout, process_ping_result);
+}
 /** @internal
  * This function does the actual request.
  */
