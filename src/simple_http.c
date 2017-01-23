@@ -640,22 +640,22 @@ evhttps_get(const char *uri, int timeout, void (*http_request_done)(struct evhtt
 	event_base_dispatch(base);
 
 cleanup:
-	debug(LOG_DEBUG, "evhttps_get cleanup ");
+	
 	if (evcon)
 		evhttp_connection_free(evcon);
-	debug(LOG_DEBUG, "evhttps_get cleanup 2 ");
 	if (base)
 		 event_base_free(base);
-	debug(LOG_DEBUG, "evhttps_get cleanup 3");
+
 	if (ssl_ctx)
 		SSL_CTX_free(ssl_ctx);
+	debug(LOG_DEBUG, "evhttps_get cleanup ");
 	if (ssl)
 		SSL_free(ssl);
-	
+	debug(LOG_DEBUG, "evhttps_get cleanup 1");
 #if OPENSSL_VERSION_NUMBER < 0x10100000L
 	EVP_cleanup();
 	ERR_free_strings();
-
+	debug(LOG_DEBUG, "evhttps_get cleanup 2");
 #ifdef EVENT__HAVE_ERR_REMOVE_THREAD_STATE
 	ERR_remove_thread_state(NULL);
 #else
@@ -664,5 +664,7 @@ cleanup:
 	CRYPTO_cleanup_all_ex_data();
 
 	sk_SSL_COMP_free(SSL_COMP_get_compression_methods());
+	debug(LOG_DEBUG, "evhttps_get cleanup 3");
 #endif /*OPENSSL_VERSION_NUMBER < 0x10100000L */
+	debug(LOG_DEBUG, "evhttps_get cleanup 4");
 }
