@@ -329,7 +329,6 @@ process_ping_result(struct evhttp_request *req, void *ctx)
             authdown = 0;
         }
     }
-	debug(LOG_DEBUG, "Debug .....");
 	event_base_loopexit(base, NULL);
 }
 
