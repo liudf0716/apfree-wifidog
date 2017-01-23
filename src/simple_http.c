@@ -643,9 +643,10 @@ cleanup:
 	debug(LOG_DEBUG, "evhttps_get cleanup ");
 	if (evcon)
 		evhttp_connection_free(evcon);
+	debug(LOG_DEBUG, "evhttps_get cleanup 2 ");
 	if (base)
 		 event_base_free(base);
-	
+	debug(LOG_DEBUG, "evhttps_get cleanup 3");
 	if (ssl_ctx)
 		SSL_CTX_free(ssl_ctx);
 	if (ssl)
