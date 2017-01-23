@@ -294,13 +294,11 @@ static void
 process_ping_result(struct evhttp_request *req, void *ctx)
 {
 	static int authdown = 0;
-	struct event_base *base = (struct event_base *)ctx;
 	if (req == NULL || req->response_code != 200) {
 		if (!authdown) {
             fw_set_authdown();
             authdown = 1;
         }
-		event_base_loopexit(base, NULL);
 		return;
 	}
 	
@@ -329,7 +327,6 @@ process_ping_result(struct evhttp_request *req, void *ctx)
             authdown = 0;
         }
     }
-	event_base_loopexit(base, NULL);
 }
 
 static void
