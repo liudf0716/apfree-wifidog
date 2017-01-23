@@ -470,7 +470,7 @@ http_get_ex(const int sockfd, const char *req, int wait)
 static int 
 cert_verify_callback(X509_STORE_CTX *x509_ctx, void *arg)
 {
-	char cert_str[256];
+	char cert_str[256] = {0};
 	const char *host = (const char *) arg;
 	const char *res_str = "X509_verify_cert failed";
 	HostnameValidationResult res = Error;
@@ -589,22 +589,18 @@ evhttps_get(const char *uri, int timeout, void (*http_request_done)(struct evhtt
 		goto cleanup;
 	}
 	
-	debug(LOG_DEBUG, "before SSL_new  ");
 	// Create OpenSSL bufferevent and stack evhttp on top of it
 	ssl = SSL_new(ssl_ctx);
 	if (ssl == NULL) {
 		debug(LOG_ERR, "SSL_new() failed");
 		goto cleanup;
 	}
-
-	debug(LOG_DEBUG, "after SSL_new  ");
 	
 #ifdef SSL_CTRL_SET_TLSEXT_HOSTNAME
 	// Set hostname for SNI extension
 	SSL_set_tlsext_host_name(ssl, auth_server->authserv_hostname);
 #endif
-	
-	debug(LOG_DEBUG, "before bufferevent_openssl_socket_new  ");
+
 	bev = bufferevent_openssl_socket_new(base, -1, ssl,
 			BUFFEREVENT_SSL_CONNECTING,
 			BEV_OPT_CLOSE_ON_FREE|BEV_OPT_DEFER_CALLBACKS);
@@ -613,9 +609,8 @@ evhttps_get(const char *uri, int timeout, void (*http_request_done)(struct evhtt
 		goto cleanup;
 	}
 	
-	debug(LOG_DEBUG, "before bufferevent_openssl_set_allow_dirty_shutdown  ");
 	bufferevent_openssl_set_allow_dirty_shutdown(bev, 1);
-	debug(LOG_DEBUG, "before evhttp_connection_base_bufferevent_new  ");
+
 	evcon = evhttp_connection_base_bufferevent_new(base, NULL, bev,
 		auth_server->authserv_hostname, auth_server->authserv_ssl_port);
 	if (evcon == NULL) {
@@ -624,8 +619,8 @@ evhttps_get(const char *uri, int timeout, void (*http_request_done)(struct evhtt
 	}
 	
 	evhttp_connection_set_timeout(evcon, timeout);
-	debug(LOG_DEBUG, "before evhttp_request_new  ");
-	req = evhttp_request_new(http_request_done, base);
+
+	req = evhttp_request_new(http_request_done, bev);
 	if (req == NULL) {
 		debug(LOG_ERR, "evhttp_request_new() failed");
 		goto cleanup;
@@ -638,7 +633,6 @@ evhttps_get(const char *uri, int timeout, void (*http_request_done)(struct evhtt
 	evhttp_add_header(output_headers, "User-Agent", user_agent);
 	evhttp_add_header(output_headers, "Connection", "close");
 	
-	debug(LOG_DEBUG, "before evhttp_make_request  ");
 	ret = evhttp_make_request(evcon, req, EVHTTP_REQ_GET, uri);
 	if (ret != 0) {
 		debug(LOG_ERR, "evhttp_make_request() failed");
@@ -654,7 +648,6 @@ cleanup:
 	if (base)
 		 event_base_free(base);
 	
-	debug(LOG_DEBUG, "evhttps_get cleanup ");
 	//if (ssl)
 	//	SSL_free(ssl);
 	//debug(LOG_DEBUG, "evhttps_get cleanup 1");
@@ -664,7 +657,6 @@ cleanup:
 #if OPENSSL_VERSION_NUMBER < 0x10100000L
 	EVP_cleanup();
 	ERR_free_strings();
-	debug(LOG_DEBUG, "evhttps_get cleanup 2");
 #ifdef EVENT__HAVE_ERR_REMOVE_THREAD_STATE
 	ERR_remove_thread_state(NULL);
 #else
@@ -673,7 +665,5 @@ cleanup:
 	CRYPTO_cleanup_all_ex_data();
 
 	sk_SSL_COMP_free(SSL_COMP_get_compression_methods());
-	debug(LOG_DEBUG, "evhttps_get cleanup 3");
 #endif /*OPENSSL_VERSION_NUMBER < 0x10100000L */
-	debug(LOG_DEBUG, "evhttps_get cleanup 4");
 }
