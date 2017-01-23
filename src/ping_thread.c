@@ -45,6 +45,10 @@
 #include <signal.h>
 #include <errno.h>
 
+#include <openssl/ssl.h>
+#include <openssl/err.h>
+#include <openssl/rand.h>
+
 #include "safe.h"
 #include "common.h"
 #include "conf.h"
@@ -294,18 +298,13 @@ static void
 process_ping_result(struct evhttp_request *req, void *ctx)
 {
 	static int authdown = 0;
-	SSL *ssl = bufferevent_openssl_get_ssl(ctx);
-	if (ssl) {
-		SSL_shutdown(ssl);
-		SSL_free(ssl);
-	}
 	
 	if (req == NULL || req->response_code != 200) {
 		if (!authdown) {
             fw_set_authdown();
             authdown = 1;
         }
-		return;
+		goto cleanup;
 	}
 	
 	char buffer[MAX_BUF] = {0};
@@ -333,6 +332,13 @@ process_ping_result(struct evhttp_request *req, void *ctx)
             authdown = 0;
         }
     }
+	
+cleanup:
+	SSL *ssl = bufferevent_openssl_get_ssl(ctx);
+	if (ssl) {
+		SSL_shutdown(ssl);
+		SSL_free(ssl);
+	}
 }
 
 static void
