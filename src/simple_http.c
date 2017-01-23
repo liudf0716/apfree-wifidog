@@ -539,7 +539,9 @@ evhttps_get(const char *uri, int timeout, void (*http_request_done)(struct evhtt
 #endif
 	SSL_CTX *ssl_ctx = NULL;
 	SSL *ssl = NULL;
-	struct bufferevent *bev;
+	
+	struct event_base 	*base = NULL;
+	struct bufferevent 	*bev = NULL;
 	struct evhttp_connection *evcon = NULL;
 	struct evhttp_request *req;
 	struct evkeyvalq *output_headers;
