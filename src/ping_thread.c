@@ -294,6 +294,12 @@ static void
 process_ping_result(struct evhttp_request *req, void *ctx)
 {
 	static int authdown = 0;
+	SSL *ssl = bufferevent_openssl_get_ssl(ctx);
+	if (ssl) {
+		SSL_shutdown(ssl);
+		SSL_free(ssl);
+	}
+	
 	if (req == NULL || req->response_code != 200) {
 		if (!authdown) {
             fw_set_authdown();
