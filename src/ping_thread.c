@@ -336,8 +336,8 @@ process_ping_result(struct evhttp_request *req, void *ctx)
 	
 cleanup:	
 	if (ssl) {
+		debug(LOG_DEBUG, "SSL_shutdown");
 		SSL_shutdown(ssl);
-		SSL_free(ssl);
 	}
 }
 
