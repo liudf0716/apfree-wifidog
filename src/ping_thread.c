@@ -331,13 +331,14 @@ evpings(void)
 {
 	struct sys_info info;
 	memset(&info, 0, sizeof(info));
-	
-	debug(LOG_DEBUG, "Entering evping()");	
+		
 	get_sys_info(&info);
 	
 	char *uri = get_ping_uri(&info);
 	if (uri == NULL)
 		return; // impossibe 
+	
+	debug(LOG_DEBUG, "ping uri is %s", uri);
 	
 	int timeout = 2; // 2s
 	evhttps_get(uri, timeout, process_ping_result);
