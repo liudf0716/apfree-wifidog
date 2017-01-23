@@ -555,6 +555,8 @@ evhttps_get(const char *uri, int timeout, void (*http_request_done)(struct evhtt
 	OpenSSL_add_all_algorithms();
 #endif
 	
+	debug(LOG_DEBUG, "enter evhttps_get  ");
+	
 	/* This isn't strictly necessary... OpenSSL performs RAND_poll
 	 * automatically on first use of random number generator. */
 	if (RAND_poll() == 0) {
@@ -587,6 +589,7 @@ evhttps_get(const char *uri, int timeout, void (*http_request_done)(struct evhtt
 		goto cleanup;
 	}
 	
+	debug(LOG_DEBUG, "before SSL_new  ");
 	// Create OpenSSL bufferevent and stack evhttp on top of it
 	ssl = SSL_new(ssl_ctx);
 	if (ssl == NULL) {
@@ -594,11 +597,14 @@ evhttps_get(const char *uri, int timeout, void (*http_request_done)(struct evhtt
 		goto cleanup;
 	}
 
+	debug(LOG_DEBUG, "after SSL_new  ");
+	
 #ifdef SSL_CTRL_SET_TLSEXT_HOSTNAME
 	// Set hostname for SNI extension
 	SSL_set_tlsext_host_name(ssl, auth_server->authserv_hostname);
 #endif
 	
+	debug(LOG_DEBUG, "before bufferevent_openssl_socket_new  ");
 	bev = bufferevent_openssl_socket_new(base, -1, ssl,
 			BUFFEREVENT_SSL_CONNECTING,
 			BEV_OPT_CLOSE_ON_FREE|BEV_OPT_DEFER_CALLBACKS);
@@ -607,8 +613,9 @@ evhttps_get(const char *uri, int timeout, void (*http_request_done)(struct evhtt
 		goto cleanup;
 	}
 	
+	debug(LOG_DEBUG, "before bufferevent_openssl_set_allow_dirty_shutdown  ");
 	bufferevent_openssl_set_allow_dirty_shutdown(bev, 1);
-	
+	debug(LOG_DEBUG, "before evhttp_connection_base_bufferevent_new  ");
 	evcon = evhttp_connection_base_bufferevent_new(base, NULL, bev,
 		auth_server->authserv_hostname, auth_server->authserv_ssl_port);
 	if (evcon == NULL) {
@@ -617,7 +624,7 @@ evhttps_get(const char *uri, int timeout, void (*http_request_done)(struct evhtt
 	}
 	
 	evhttp_connection_set_timeout(evcon, timeout);
-	
+	debug(LOG_DEBUG, "before evhttp_request_new  ");
 	req = evhttp_request_new(http_request_done, base);
 	if (req == NULL) {
 		debug(LOG_ERR, "evhttp_request_new() failed");
@@ -631,6 +638,7 @@ evhttps_get(const char *uri, int timeout, void (*http_request_done)(struct evhtt
 	evhttp_add_header(output_headers, "User-Agent", user_agent);
 	evhttp_add_header(output_headers, "Connection", "close");
 	
+	debug(LOG_DEBUG, "before evhttp_make_request  ");
 	ret = evhttp_make_request(evcon, req, EVHTTP_REQ_GET, uri);
 	if (ret != 0) {
 		debug(LOG_ERR, "evhttp_make_request() failed");
