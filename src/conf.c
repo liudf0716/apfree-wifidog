@@ -435,6 +435,8 @@ parse_auth_server(FILE * file, const char *filename, int *linenum)
                 break;
             case oAuthServHTTPPort:
                 http_port = atoi(p2);
+				if (http_port == 443)
+					ssl_available = 1;
                 break;
             case oAuthServSSLAvailable:
                 ssl_available = parse_boolean_value(p2);
