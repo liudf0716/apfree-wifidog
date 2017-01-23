@@ -535,9 +535,9 @@ evhttps_get(const char *uri, int timeout, void (*http_request_done)(struct evhtt
 {
 	struct evhttp_uri *http_uri = NULL;
 	t_auth_serv *auth_server = get_auth_server();
-	
+#ifdef	VERIFY_PEER
 	const char *crt = "/etc/ssl/certs/ca-certificates.crt";
-	
+#endif
 	SSL_CTX *ssl_ctx = NULL;
 	SSL *ssl = NULL;
 	struct event_base *base;
@@ -569,7 +569,8 @@ evhttps_get(const char *uri, int timeout, void (*http_request_done)(struct evhtt
 		debug(LOG_ERR, "SSL_CTX_new failed");
 		goto cleanup;
 	}
-	
+
+#ifdef	VERIFY_PEER
 	if (1 != SSL_CTX_load_verify_locations(ssl_ctx, crt, NULL)) {
 		debug(LOG_ERR, "SSL_CTX_load_verify_locations failed");
 		goto cleanup;
@@ -579,7 +580,7 @@ evhttps_get(const char *uri, int timeout, void (*http_request_done)(struct evhtt
 	
 	SSL_CTX_set_cert_verify_callback(ssl_ctx, cert_verify_callback,
 					  (void *) auth_server->authserv_hostname);
-	
+#endif
 	// Create event base
 	base = event_base_new();
 	if (!base) {
@@ -629,7 +630,7 @@ evhttps_get(const char *uri, int timeout, void (*http_request_done)(struct evhtt
 	output_headers = evhttp_request_get_output_headers(req);
 	evhttp_add_header(output_headers, "Host", auth_server->authserv_hostname);
 	evhttp_add_header(output_headers, "User-Agent", user_agent);
-	evhttp_add_header(output_headers, "Connection", "keep-alive");
+	evhttp_add_header(output_headers, "Connection", "close");
 	
 	ret = evhttp_make_request(evcon, req, EVHTTP_REQ_GET, uri);
 	if (ret != 0) {
