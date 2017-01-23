@@ -299,6 +299,7 @@ process_ping_result(struct evhttp_request *req, void *ctx)
             fw_set_authdown();
             authdown = 1;
         }
+		event_loopexit(NULL);
 		return;
 	}
 	
@@ -327,6 +328,7 @@ process_ping_result(struct evhttp_request *req, void *ctx)
             authdown = 0;
         }
     }
+	event_loopexit(NULL);
 }
 
 static void
