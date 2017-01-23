@@ -539,7 +539,6 @@ evhttps_get(const char *uri, int timeout, void (*http_request_done)(struct evhtt
 #endif
 	SSL_CTX *ssl_ctx = NULL;
 	SSL *ssl = NULL;
-	struct event_base *base = NULL;
 	struct bufferevent *bev;
 	struct evhttp_connection *evcon = NULL;
 	struct evhttp_request *req;
@@ -547,16 +546,7 @@ evhttps_get(const char *uri, int timeout, void (*http_request_done)(struct evhtt
 	
 	int ret = 0;
 	
-#if OPENSSL_VERSION_NUMBER < 0x10100000L
-	// Initialize OpenSSL
-	SSL_library_init();
-	ERR_load_crypto_strings();
-	SSL_load_error_strings();
-	OpenSSL_add_all_algorithms();
-#endif
-	
-	debug(LOG_DEBUG, "enter evhttps_get  ");
-	
+	debug(LOG_DEBUG, "enter evhttps_get  ");	
 	/* This isn't strictly necessary... OpenSSL performs RAND_poll
 	 * automatically on first use of random number generator. */
 	if (RAND_poll() == 0) {
@@ -648,22 +638,9 @@ cleanup:
 	if (base)
 		 event_base_free(base);
 	
-	//if (ssl)
-	//	SSL_free(ssl);
-	//debug(LOG_DEBUG, "evhttps_get cleanup 1");
+	if (ssl)
+		SSL_free(ssl);
+	debug(LOG_DEBUG, "evhttps_get cleanup 1");
 	if (ssl_ctx)
-		SSL_CTX_free(ssl_ctx);
-		
-#if OPENSSL_VERSION_NUMBER < 0x10100000L
-	EVP_cleanup();
-	ERR_free_strings();
-#ifdef EVENT__HAVE_ERR_REMOVE_THREAD_STATE
-	ERR_remove_thread_state(NULL);
-#else
-	ERR_remove_state(0);
-#endif
-	CRYPTO_cleanup_all_ex_data();
-
-	sk_SSL_COMP_free(SSL_COMP_get_compression_methods());
-#endif /*OPENSSL_VERSION_NUMBER < 0x10100000L */
+		SSL_CTX_free(ssl_ctx);		
 }
