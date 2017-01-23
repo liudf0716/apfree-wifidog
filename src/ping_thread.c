@@ -305,6 +305,9 @@ process_ping_result(struct evhttp_request *req, void *ctx)
 	char buffer[MAX_BUF] = {0};
 	int nread = evbuffer_remove(evhttp_request_get_input_buffer(req),
 		    buffer, MAX_BUF-1);
+	if (nread > 0)
+		debug(LOG_DEBUG, "buffer is %s", buffer);
+	
 	if (nread <= 0) {
         debug(LOG_ERR, "There was a problem pinging the auth server!");
         if (!authdown) {
