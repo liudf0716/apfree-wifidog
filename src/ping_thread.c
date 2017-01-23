@@ -317,14 +317,12 @@ process_ping_result(struct evhttp_request *req, void *ctx)
             fw_set_authdown();
             authdown = 1;
         }
-        free(res);
     } else {
         debug(LOG_DEBUG, "Auth Server Says: Pong");
         if (authdown) {
             fw_set_authup();
             authdown = 0;
         }
-        free(res);
     }
 }
 
@@ -343,6 +341,7 @@ evpings(void)
 	
 	int timeout = 2; // 2s
 	evhttps_get(uri, timeout, process_ping_result);
+	free(uri);
 }
 /** @internal
  * This function does the actual request.
