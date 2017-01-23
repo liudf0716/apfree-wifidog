@@ -539,7 +539,7 @@ evhttps_get(const char *uri, int timeout, void (*http_request_done)(struct evhtt
 #endif
 	SSL_CTX *ssl_ctx = NULL;
 	SSL *ssl = NULL;
-	struct event_base *base;
+	struct event_base *base = NULL;
 	struct bufferevent *bev;
 	struct evhttp_connection *evcon = NULL;
 	struct evhttp_request *req;
@@ -618,7 +618,7 @@ evhttps_get(const char *uri, int timeout, void (*http_request_done)(struct evhtt
 	
 	evhttp_connection_set_timeout(evcon, timeout);
 	
-	req = evhttp_request_new(http_request_done, bev);
+	req = evhttp_request_new(http_request_done, base);
 	if (req == NULL) {
 		debug(LOG_ERR, "evhttp_request_new() failed");
 		goto cleanup;
@@ -644,8 +644,8 @@ cleanup:
 	if (evcon)
 		evhttp_connection_free(evcon);
 	if (base)
-		event_base_free(base);
-
+		 event_base_free(base);
+	
 	if (ssl_ctx)
 		SSL_CTX_free(ssl_ctx);
 	if (ssl)
