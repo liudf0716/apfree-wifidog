@@ -645,13 +645,14 @@ cleanup:
 		evhttp_connection_free(evcon);
 	if (base)
 		 event_base_free(base);
-
-	if (ssl_ctx)
-		SSL_CTX_free(ssl_ctx);
+	
 	debug(LOG_DEBUG, "evhttps_get cleanup ");
 	if (ssl)
 		SSL_free(ssl);
 	debug(LOG_DEBUG, "evhttps_get cleanup 1");
+	if (ssl_ctx)
+		SSL_CTX_free(ssl_ctx);
+		
 #if OPENSSL_VERSION_NUMBER < 0x10100000L
 	EVP_cleanup();
 	ERR_free_strings();
