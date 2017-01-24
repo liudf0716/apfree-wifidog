@@ -349,7 +349,7 @@ evpings(void)
 	debug(LOG_DEBUG, "ping uri is %s", uri);
 	
 	int timeout = 2; // 2s
-	evhttps_get(uri, timeout, process_ping_result);
+	evhttps_request(uri, timeout, process_ping_result);
 	free(uri);
 }
 /** @internal
