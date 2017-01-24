@@ -722,6 +722,48 @@ void evdns_parse_trusted_domain_2_ip(t_domain_trusted *p)
 }
 
 int
+uci_del_value(const char *c_filename, const char *section, const char *name)
+{
+	int nret = 0;
+	char uciOption[128] = {0};
+	struct uci_context * ctx = uci_alloc_context(); 
+    struct uci_ptr ptr; 
+	if (NULL == ctx)  
+        return nret;  
+    memset(&ptr, 0, sizeof(ptr));  
+     
+    snprintf(uciOption, sizeof(uciOption), "%s.@%s[0].%s", c_filename, section, name); 
+    if(UCI_OK != uci_lookup_ptr(ctx, &ptr, uciOption, true)) {
+		nret = 0;
+		goto out;
+	} 
+	
+	nret = uci_delete(context, &ptr);
+	if (UCI_OK != nret) {
+		nret = 0;
+		goto out;
+	}
+
+	nret = uci_save(context, ptr.p);
+	if (UCI_OK != nret) {
+		nret = 0;
+		goto out;
+	}
+
+	nret = uci_commit(context, &ptr.p, false);
+	if (UCI_OK != nret) {
+		nret = 0;
+		goto out;
+	}
+	
+	nret = 1;
+out:
+	uci_unload(ctx, ptr.p);  
+    uci_free_context(ctx); 
+	return nret;
+}
+
+int
 uci_set_value(const char *c_filename, const char *section, const char *name, const char *value)
 {
 	int nret = 0;
@@ -734,17 +776,33 @@ uci_set_value(const char *c_filename, const char *section, const char *name, con
      
     snprintf(uciOption, sizeof(uciOption), "%s.@%s[0].%s", c_filename, section, name); 
     if(UCI_OK != uci_lookup_ptr(ctx, &ptr, uciOption, true)) {
-		return nret;
+		nret = 0;
+		goto out;
 	}   
     ptr.value = value; 
     
     nret = uci_set(ctx, &ptr);  
-    if (0 == nret){  
-        nret = uci_commit(ctx, &ptr.p, false);  
-    }  
-    uci_unload(ctx, ptr.p);  
-    uci_free_context(ctx); 
+    if (UCI_OK != nret){  
+        nret = 0;
+		goto out;
+    } 
 	
+	nret = uci_save(context, ptr.p);
+	if (UCI_OK != nret) {
+		nret = 0;
+		goto out;
+	}
+
+	nret = uci_commit(context, &ptr.p, false);
+	if (UCI_OK != nret) {
+		nret = 0;
+		goto out;
+	}
+	
+	nret = 1;
+out:
+	uci_unload(ctx, ptr.p);  
+    uci_free_context(ctx); 
 	return nret;
 }
 
