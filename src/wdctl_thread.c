@@ -894,54 +894,73 @@ wdctl_user_cfg_save(int fd)
 	trusted_pan_domains	= get_serialize_trusted_pan_domains();
 
 	if(trusted_pan_domains) {
-		safe_asprintf(&new_cmd, "uci set wifidog.@wifidog[0].trusted_pan_domains='%s'", trusted_pan_domains);
+		//safe_asprintf(&new_cmd, "uci set wifidog.@wifidog[0].trusted_pan_domains='%s'", trusted_pan_domains);
+		uci_set_value("wifidog", "wifidog", "trusted_pan_domains", trusted_pan_domains);
 	} else {
-		safe_asprintf(&new_cmd, "uci delete wifidog.@wifidog[0].trusted_pan_domains");
+		//safe_asprintf(&new_cmd, "uci delete wifidog.@wifidog[0].trusted_pan_domains");
+		uci_del_value("wifidog", "wifidog", "trusted_pan_domains");
 	}
+#if	0
 	if (new_cmd) {
 		execute(new_cmd, 1);
 		free(new_cmd);
 		new_cmd = NULL;
 	}
-		
+#endif
+	
 	if(trusted_domains) {
-		safe_asprintf(&new_cmd, "uci set wifidog.@wifidog[0].trusted_domains='%s'", trusted_domains);
+		//safe_asprintf(&new_cmd, "uci set wifidog.@wifidog[0].trusted_domains='%s'", trusted_domains);
+		uci_set_value("wifidog", "wifidog", "trusted_domains", trusted_domains);
 	} else {
-		safe_asprintf(&new_cmd, "uci delete wifidog.@wifidog[0].trusted_domains");
+		//safe_asprintf(&new_cmd, "uci delete wifidog.@wifidog[0].trusted_domains");
+		uci_del_value("wifidog", "wifidog", "trusted_domains");
 	}
+#if	0
 	if (new_cmd) {
 		execute(new_cmd, 1);
 		free(new_cmd);
 		new_cmd = NULL;
 	}
+#endif
 	
 	if(trusted_iplist) {
-		safe_asprintf(&new_cmd, "uci set wifidog.@wifidog[0].trusted_iplist='%s'", trusted_iplist);
+		//safe_asprintf(&new_cmd, "uci set wifidog.@wifidog[0].trusted_iplist='%s'", trusted_iplist);
+		uci_set_value("wifidog", "wifidog", "trusted_iplist", trusted_iplist);
 	} else {
-		safe_asprintf(&new_cmd, "uci delete wifidog.@wifidog[0].trusted_iplist");
+		//safe_asprintf(&new_cmd, "uci delete wifidog.@wifidog[0].trusted_iplist");
+		uci_del_value("wifidog", "wifidog", "trusted_iplist");
 	}
+#if	0
 	if (new_cmd) {
 		execute(new_cmd, 1);
 		free(new_cmd);
 		new_cmd = NULL;
 	}	
-
+#endif
+	
 	if(trusted_maclist) {
-		safe_asprintf(&new_cmd, "uci set wifidog.@wifidog[0].trusted_maclist='%s'", trusted_maclist);
+		//safe_asprintf(&new_cmd, "uci set wifidog.@wifidog[0].trusted_maclist='%s'", trusted_maclist);
+		uci_set_value("wifidog", "wifidog", "trusted_maclist", trusted_maclist);
 	} else {
-		safe_asprintf(&new_cmd, "uci delete wifidog.@wifidog[0].trusted_maclist");
+		//safe_asprintf(&new_cmd, "uci delete wifidog.@wifidog[0].trusted_maclist");
+		uci_del_value("wifidog", "wifidog", "trusted_maclist");
 	}
+#if	0
 	if (new_cmd) {
 		execute(new_cmd, 1);
 		free(new_cmd);
 		new_cmd = NULL;
 	}
-
+#endif
+	
 	if(untrusted_maclist) {
-		safe_asprintf(&new_cmd, "uci set wifidog.@wifidog[0].untrusted_maclist='%s'", untrusted_maclist);
+		//safe_asprintf(&new_cmd, "uci set wifidog.@wifidog[0].untrusted_maclist='%s'", untrusted_maclist);
+		uci_set_value("wifidog", "wifidog", "untrusted_maclist", untrusted_maclist);
 	} else {
-		safe_asprintf(&new_cmd, "uci delete wifidog.@wifidog[0].untrusted_maclist");
+		//safe_asprintf(&new_cmd, "uci delete wifidog.@wifidog[0].untrusted_maclist");
+		uci_del_value("wifidog", "wifidog", "untrusted_maclist");
 	}
+#if	0
 	if (new_cmd) {
 		execute(new_cmd, 1);
 		free(new_cmd);
@@ -950,7 +969,8 @@ wdctl_user_cfg_save(int fd)
 
 	snprintf(szcmd, 128, "uci commit wifidog");
 	execute(szcmd, 1);
-
+#endif
+	
     write_to_socket(fd, "Yes", 3);
 }
 
