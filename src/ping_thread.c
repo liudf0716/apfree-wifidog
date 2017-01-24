@@ -299,7 +299,7 @@ process_ping_result(struct evhttp_request *req, void *ctx)
 {
 	static int authdown = 0;
 	
-	if (req == NULL || req->response_code != 200) {
+	if (req == NULL || (req && req->response_code != 200)) {
 		if (!authdown) {
             fw_set_authdown();
             authdown = 1;
