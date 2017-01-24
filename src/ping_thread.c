@@ -298,14 +298,13 @@ static void
 process_ping_result(struct evhttp_request *req, void *ctx)
 {
 	static int authdown = 0;
-	SSL *ssl = bufferevent_openssl_get_ssl(ctx);
 	
 	if (req == NULL || req->response_code != 200) {
 		if (!authdown) {
             fw_set_authdown();
             authdown = 1;
         }
-		goto cleanup;
+		return;
 	}
 	
 	char buffer[MAX_BUF] = {0};
@@ -333,12 +332,6 @@ process_ping_result(struct evhttp_request *req, void *ctx)
             authdown = 0;
         }
     }
-	
-cleanup:	
-	if (ssl) {
-		debug(LOG_DEBUG, "SSL_shutdown");
-		SSL_shutdown(ssl);
-	}
 }
 
 static void
