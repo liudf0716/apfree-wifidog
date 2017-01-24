@@ -89,6 +89,6 @@ char *http_get(const int, const char *);
 
 char *http_get_ex(const int, const char *, int);
 
-void evhttps_get(const char *, int, void (*http_request_done)(struct evhttp_request *, void *));
+void evhttps_request(const char *, int, void (*http_request_done)(struct evhttp_request *, void *));
 
 #endif                          /* defined(_SIMPLE_HTTP_H_) */
