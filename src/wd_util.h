@@ -95,6 +95,8 @@ char *evb_2_string(struct evbuffer *, int *);
 int uci_get_value(const char *, const char *, char *, int);
 
 int uci_set_value(const char *, const char *, const char *, const char *);
+
+int uci_del_value(const char *, const char *, const char *);
 //<<< liudf added end
 
 /** @brief Execute a shell command */
