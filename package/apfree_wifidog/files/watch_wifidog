@@ -1,0 +1,11 @@
+#!/bin/sh
+
+for pid in `pidof wifidog`;
+do
+	thread_num=`cat /proc/$pid/status|grep Threads|cut -d':' -f 2`
+	[ $thread_num = 1 ] && {
+		kill -9 $pid
+		echo "found multi-wifidog, kill it " >>/tmp/watch_wifidog
+	} 
+done
+

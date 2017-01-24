@@ -24,6 +24,7 @@
   @brief Misc utility functions
   @author Copyright (C) 2004 Philippe April <papril777@yahoo.com>
   @author Copyright (C) 2006 Benoit Grégoire <bock@step.polymtl.ca>
+  @author Copyright (C) 2016 Dengfeng Liu <liudengfeng@kunteng.org>
  */
 
 #define _GNU_SOURCE
@@ -51,252 +52,18 @@
 
 #include <string.h>
 #include <netdb.h>
-
 #include <ctype.h>
 
-#include "common.h"
-#include "safe.h"
 #include "util.h"
 #include "debug.h"
-#include "pstring.h"
-#include "httpd.h"
-#include "wdctl_thread.h"
+#include "common.h"
 
-
-#define LOCK_GHBN() do { \
-	debug(LOG_DEBUG, "Locking wd_gethostbyname()"); \
-	pthread_mutex_lock(&ghbn_mutex); \
-	debug(LOG_DEBUG, "wd_gethostbyname() locked"); \
-} while (0)
-
-#define UNLOCK_GHBN() do { \
-	debug(LOG_DEBUG, "Unlocking wd_gethostbyname()"); \
-	pthread_mutex_unlock(&ghbn_mutex); \
-	debug(LOG_DEBUG, "wd_gethostbyname() unlocked"); \
-} while (0)
-
-#ifdef __ANDROID__
-#define WD_SHELL_PATH "/system/bin/sh"
-#else
-#define WD_SHELL_PATH "/bin/sh"
-#endif
 
 /** @brief FD for icmp raw socket */
 static int icmp_fd;
 
-/** @brief Mutex to protect gethostbyname since not reentrant */
-static pthread_mutex_t ghbn_mutex = PTHREAD_MUTEX_INITIALIZER;
-
 static unsigned short rand16(void);
 
-/** Fork a child and execute a shell command, the parent
- * process waits for the child to return and returns the child's exit()
- * value.
- * @return Return code of the command
- */
-int
-execute(const char *cmd_line, int quiet)
-{
-    int pid, status, rc;
-	sighandler_t old_handler;
- 
-
-    const char *new_argv[4];
-    new_argv[0] = WD_SHELL_PATH;
-    new_argv[1] = "-c";
-    new_argv[2] = cmd_line;
-    new_argv[3] = NULL;
-
-   	old_handler = signal(SIGCHLD, SIG_DFL);	
-
-    pid = safe_fork();
-    if (pid == 0) {             /* for the child process:         */
-        /* We don't want to see any errors if quiet flag is on */
-        if (quiet)
-            close(2);
-        if (execvp(WD_SHELL_PATH, (char *const *)new_argv) == -1) { /* execute the command  */
-            debug(LOG_ERR, "execvp(): %s", strerror(errno));
-        } else {
-            debug(LOG_ERR, "execvp() failed");
-        }
-        exit(1);
-    }
-
-    /* for the parent:      */
-    debug(LOG_DEBUG, "Waiting for PID %d to exit", pid);
-    rc = waitpid(pid, &status, 0);
-    debug(LOG_DEBUG, "Process PID %d exited", rc);
- 	
-	signal(SIGCHLD, old_handler);
-   
-    if (-1 == rc) {
-        debug(LOG_ERR, "waitpid() failed (%s)", strerror(errno));
-        return 1; /* waitpid failed. */
-    }
-
-    if (WIFEXITED(status)) {
-        return (WEXITSTATUS(status));
-    } else {
-        /* If we get here, child did not exit cleanly. Will return non-zero exit code to caller*/
-        debug(LOG_DEBUG, "Child may have been killed.");
-        return 1;
-    }
-}
-
-struct in_addr *
-wd_gethostbyname(const char *name)
-{
-    struct hostent *he = NULL;
-    struct in_addr *addr = NULL;
-    struct in_addr *in_addr_temp = NULL;
-
-    /* XXX Calling function is reponsible for free() */
-
-    addr = safe_malloc(sizeof(*addr));
-
-    LOCK_GHBN();
-
-    he = gethostbyname(name);
-
-    if (he == NULL) {
-        free(addr);
-        UNLOCK_GHBN();
-        return NULL;
-    }
-
-    in_addr_temp = (struct in_addr *)he->h_addr_list[0];
-    addr->s_addr = in_addr_temp->s_addr;
-
-    UNLOCK_GHBN();
-
-    return addr;
-}
-
-char *
-get_iface_ip(const char *ifname)
-{
-    struct ifreq if_data;
-    struct in_addr in;
-    char *ip_str;
-    int sockd;
-    u_int32_t ip;
-
-    /* Create a socket */
-    if ((sockd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
-        debug(LOG_ERR, "socket(): %s", strerror(errno));
-        return NULL;
-    }
-
-    /* Get IP of internal interface */
-    strncpy(if_data.ifr_name, ifname, 15);
-    if_data.ifr_name[15] = '\0';
-
-    /* Get the IP address */
-    if (ioctl(sockd, SIOCGIFADDR, &if_data) < 0) {
-        debug(LOG_ERR, "ioctl(): SIOCGIFADDR %s", strerror(errno));
-        close(sockd);
-        return NULL;
-    }
-    memcpy((void *)&ip, (void *)&if_data.ifr_addr.sa_data + 2, 4);
-    in.s_addr = ip;
-	
-    close(sockd);
-	ip_str = safe_malloc(HTTP_IP_ADDR_LEN);
-	if(inet_ntop(AF_INET, &in, ip_str, HTTP_IP_ADDR_LEN))
-    	return ip_str;
-	
-	free(ip_str);	
-	return NULL;
-}
-
-char *
-get_iface_mac(const char *ifname)
-{
-    int r, s;
-    struct ifreq ifr;
-    char *hwaddr, mac[13];
-
-    strncpy(ifr.ifr_name, ifname, 15);
-    ifr.ifr_name[15] = '\0';
-
-    s = socket(AF_INET, SOCK_DGRAM, 0);
-    if (-1 == s) {
-        debug(LOG_ERR, "get_iface_mac socket: %s", strerror(errno));
-        return NULL;
-    }
-
-    r = ioctl(s, SIOCGIFHWADDR, &ifr);
-    if (r == -1) {
-        debug(LOG_ERR, "get_iface_mac ioctl(SIOCGIFHWADDR): %s", strerror(errno));
-        close(s);
-        return NULL;
-    }
-
-    hwaddr = ifr.ifr_hwaddr.sa_data;
-    close(s);
-    snprintf(mac, sizeof(mac), "%02X%02X%02X%02X%02X%02X",
-             hwaddr[0] & 0xFF,
-             hwaddr[1] & 0xFF, hwaddr[2] & 0xFF, hwaddr[3] & 0xFF, hwaddr[4] & 0xFF, hwaddr[5] & 0xFF);
-
-    return safe_strdup(mac);
-}
-
-char *
-get_ext_iface(void)
-{
-    FILE *input;
-    char *device, *gw;
-    int i = 1;
-    int keep_detecting = 1;
-    pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
-    pthread_mutex_t cond_mutex = PTHREAD_MUTEX_INITIALIZER;
-    struct timespec timeout;
-    device = (char *)safe_malloc(16);   /* XXX Why 16? */
-    gw = (char *)safe_malloc(16);
-    debug(LOG_DEBUG, "get_ext_iface(): Autodectecting the external interface from routing table");
-    while (keep_detecting) {
-        input = fopen("/proc/net/route", "r");
-        if (NULL == input) {
-            debug(LOG_ERR, "Could not open /proc/net/route (%s).", strerror(errno));
-            free(gw);
-            free(device);
-            return NULL;
-        }
-        while (!feof(input)) {
-            /* XXX scanf(3) is unsafe, risks overrun */
-            if ((fscanf(input, "%15s %15s %*s %*s %*s %*s %*s %*s %*s %*s %*s\n", device, gw) == 2)
-                && strcmp(gw, "00000000") == 0) {
-                free(gw);
-                debug(LOG_INFO, "get_ext_iface(): Detected %s as the default interface after trying %d", device, i);
-                fclose(input);
-                return device;
-            }
-        }
-        fclose(input);
-        debug(LOG_ERR,
-              "get_ext_iface(): Failed to detect the external interface after try %d (maybe the interface is not up yet?).  Retry limit: %d",
-              i, NUM_EXT_INTERFACE_DETECT_RETRY);
-        /* Sleep for EXT_INTERFACE_DETECT_RETRY_INTERVAL seconds */
-        timeout.tv_sec = time(NULL) + EXT_INTERFACE_DETECT_RETRY_INTERVAL;
-        timeout.tv_nsec = 0;
-        /* Mutex must be locked for pthread_cond_timedwait... */
-        pthread_mutex_lock(&cond_mutex);
-        /* Thread safe "sleep" */
-        pthread_cond_timedwait(&cond, &cond_mutex, &timeout);   /* XXX need to possibly add this thread to termination_handler */
-        /* No longer needs to be locked */
-        pthread_mutex_unlock(&cond_mutex);
-        //for (i=1; i<=NUM_EXT_INTERFACE_DETECT_RETRY; i++) {
-        if (NUM_EXT_INTERFACE_DETECT_RETRY != 0 && i > NUM_EXT_INTERFACE_DETECT_RETRY) {
-            keep_detecting = 0;
-        }
-        i++;
-    }
-    debug(LOG_ERR, "get_ext_iface(): Failed to detect the external interface after %d tries, aborting", i);
-    exit(1);                    /* XXX Should this be termination handler? */
-    free(device);
-    free(gw);
-    return NULL;
-}
 
 /** Initialize the ICMP socket
  * @return A boolean of the success
@@ -454,4 +221,165 @@ is_valid_mac(const char *mac)
 	}
 
 	return (i == 12 && (s == 5 || s == 0));
+}
+
+/*
+ * 0, FALSE; 1, TRUE
+ */
+int is_socket_valid(int sockfd)
+{
+	int err = 0;
+	int errlen = sizeof(err);
+	if (getsockopt(sockfd, SOL_SOCKET, SO_ERROR, &err, &errlen) == -1) {
+		debug(LOG_INFO, "getsockopt(SO_ERROR): %s", strerror(errno));
+		return 0;
+	}
+
+	if (err) {
+		debug(LOG_INFO, "getsockopt(SO_ERROR): %s", strerror(errno));
+		return 0;
+	}
+
+	return 1;
+}
+
+// when sockfd is block, set timeout for connect
+int 
+wd_connect(int sockfd, const struct sockaddr *their_addr, socklen_t addrlen, int timeout)
+{
+	// Set non-blocking 
+	long arg = fcntl(sockfd, F_GETFL, NULL); 
+	arg |= O_NONBLOCK; 
+	fcntl(sockfd, F_SETFL, arg); 
+       	
+	int res = connect(sockfd, their_addr, addrlen); 
+	if ((res == -1) && (errno != EINPROGRESS)) {
+		goto error;
+	} else if (res == 0) {
+		goto success;
+	} else {
+		fd_set fdset; 
+		struct timeval tv; 
+		int so_error = 0;
+		int len = sizeof(so_error);
+
+		tv.tv_sec = timeout; 
+		tv.tv_usec = 0; 
+		FD_ZERO(&fdset); 
+		FD_SET(sockfd, &fdset);
+
+		res = select(sockfd+1, NULL, &fdset, NULL, &tv);
+		switch(res) {
+		case 1: // data to read				
+			getsockopt(sockfd, SOL_SOCKET, SO_ERROR, &so_error, &len);
+			if (so_error == 0) {
+				goto success;
+			}
+			break;
+		default: 
+			break;
+		}
+	} 
+
+error:
+	return -1;
+success:	
+	// Set to blocking mode again... 
+	arg = fcntl(sockfd, F_GETFL, NULL); 
+	arg &= (~O_NONBLOCK); 
+	fcntl(sockfd, F_SETFL, arg); 
+	return 0;
+}
+
+#define	BUF_MAX		1024
+
+static int 
+read_cpu_fields (FILE *fp, unsigned long long int *fields)
+{
+	int retval;
+	char buffer[BUF_MAX] = {0};
+
+
+	if (!fgets (buffer, BUF_MAX, fp)) { 
+	 return 0;
+	}
+
+	retval = sscanf (buffer, "cpu %Lu %Lu %Lu %Lu %Lu %Lu %Lu %Lu %Lu %Lu", 
+							&fields[0], 
+							&fields[1], 
+							&fields[2], 
+							&fields[3], 
+							&fields[4], 
+							&fields[5], 
+							&fields[6], 
+							&fields[7], 
+							&fields[8], 
+							&fields[9]); 
+	if (retval < 4) { /* Atleast 4 fields is to be read */
+		return 0;
+	}
+
+	return 1;
+}
+
+float
+get_cpu_usage()
+{
+	FILE *fp;
+	unsigned long long int fields[10], total_tick, total_tick_old, idle, idle_old, del_total_tick, del_idle;
+	int i;
+	float percent_usage;
+
+	fp = fopen ("/proc/stat", "r");
+	if (fp == NULL) {
+		return 0.f;	
+	}
+
+
+	if (!read_cpu_fields (fp, fields)) { 
+		fclose (fp);
+		return 0.f; 
+	}
+
+	for (i=0, total_tick = 0; i<10; i++) { 
+		total_tick += fields[i]; 
+	}
+	idle = fields[3]; /* idle ticks index */
+
+	s_sleep(1, 0);
+	total_tick_old = total_tick;
+	idle_old = idle;
+
+	fseek (fp, 0, SEEK_SET);
+	fflush (fp);
+	if (!read_cpu_fields (fp, fields)){ 
+		fclose (fp);
+		return 0.f; 
+	}
+
+	for (i=0, total_tick = 0; i<10; i++) { 
+		total_tick += fields[i]; 
+	}
+	idle = fields[3];
+
+	del_total_tick = total_tick - total_tick_old;
+	del_idle = idle - idle_old;
+
+	percent_usage = ((del_total_tick - del_idle) / (float) del_total_tick) * 100; /* 3 is index of idle time */
+	debug (LOG_DEBUG, "Total CPU Usage: %3.2lf%%\n", percent_usage);
+
+	fclose (fp); 
+
+	return percent_usage;
+}
+
+// s_sleep using select timeout method to instead of sleep-func
+// s: second, u: usec 10^6usec = 1s
+void 
+s_sleep(unsigned int s, unsigned int u){
+	struct timeval timeout;
+	timeout.tv_sec = s;
+	timeout.tv_usec = u;
+
+	select(0, NULL, NULL, NULL, &timeout);
 }

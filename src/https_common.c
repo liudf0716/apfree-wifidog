@@ -14,12 +14,7 @@
 #include "debug.h"
 
 void die_most_horribly_from_openssl_error (const char *func) { 
-	fprintf (stderr, "%s failed:\n", func);
-
-	/* This is the OpenSSL function that prints the contents of the
-	* error stack to the specified file handle. */
-	ERR_print_errors_fp (stderr);
-
+	debug (LOG_ERR,  "%s failed:\n", func);
 	exit (EXIT_FAILURE);
 }
 
@@ -50,7 +45,7 @@ void common_setup (void)
 	SSL_load_error_strings ();
 	OpenSSL_add_all_algorithms ();
 
-	debug (LOG_INFO, "Using OpenSSL version \"%s\"\nand libevent version \"%s\"\n",
+	debug (LOG_DEBUG, "Using OpenSSL version \"%s\"\nand libevent version \"%s\"\n",
 		  SSLeay_version (SSLEAY_VERSION),
 		  event_get_version ());
 }

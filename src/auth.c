@@ -23,6 +23,7 @@
 /** @file auth.c
     @brief Authentication handling thread
     @author Copyright (C) 2004 Alexandre Carmel-Veilleux <acv@miniguru.ca>
+	@author Copyright (C) 2016 Dengfeng Liu <liudengfeng@kunteng.org>
 */
 
 #define _GNU_SOURCE
@@ -113,7 +114,7 @@ logout_client(t_client * client)
 							//>>> liudf added 20160112
 							client->first_login, (client->counters.last_updated - client->first_login),
 							client->name?client->name:"null", client->wired);
-
+		close_auth_server();
         if (authresponse.authcode == AUTH_ERROR)
             debug(LOG_WARNING, "Auth server error when reporting logout");
         LOCK_CLIENT_LIST();
@@ -174,12 +175,11 @@ authenticate_client(request * r)
      * kept the lock.
      */
     auth_server_request(&auth_response, REQUEST_TYPE_LOGIN, client->ip, client->mac, token, 0, 0, 0, 0, 0, 0, "null", client->wired);
-
+	close_auth_server(); 
+	
     LOCK_CLIENT_LIST();
-
     /* can't trust the client to still exist after n seconds have passed */
     tmp = client_list_find_by_client(client);
-
     if (NULL == tmp) {
         debug(LOG_ERR, "authenticate_client(): Could not find client node for %s (%s)", client->ip, client->mac);
         UNLOCK_CLIENT_LIST();
@@ -190,7 +190,6 @@ authenticate_client(request * r)
 
     client_list_destroy(client);        /* Free the cloned client */
     client = tmp;
-
     if (strcmp(token, client->token) != 0) {
         /* If token changed, save it. */
         free(client->token);
@@ -202,14 +201,16 @@ authenticate_client(request * r)
     /* Prepare some variables we'll need below */
     config = config_get_config();
     auth_server = get_auth_server();
-
+	
     switch (auth_response.authcode) {
 
     case AUTH_ERROR:
-    	UNLOCK_CLIENT_LIST();
-        /* Error talking to central server */
+		/* Error talking to central server */
         debug(LOG_ERR, "Got ERROR from central server authenticating token %s from %s at %s", client->token, client->ip,
               client->mac);
+		client_list_delete(client);	
+    	UNLOCK_CLIENT_LIST();
+        
         send_http_page(r, "Error!", "Error: We did not get a valid answer from the central server");
         break;
 
@@ -219,6 +220,7 @@ authenticate_client(request * r)
               "Got DENIED from central server authenticating token %s from %s at %s - deleting from firewall and redirecting them to denied message",
               client->token, client->ip, client->mac);
         fw_deny(client);
+		client_list_delete(client);
     	UNLOCK_CLIENT_LIST();
         safe_asprintf(&urlFragment, "%smessage=%s",
                       auth_server->authserv_msg_script_path_fragment, GATEWAY_MESSAGE_DENIED);
@@ -255,7 +257,7 @@ authenticate_client(request * r)
 		//<<< liudf added end
         served_this_session++;
 		if(type) {
-        	send_http_page(r, "weixin auth", "Weixin auth come here");
+        	send_http_page_direct(r, "<htm><body>weixin auth success!</body><html>");
 		} else {
         	safe_asprintf(&urlFragment, "%sgw_id=%s&channel_path=%s&mac=%s&name=%s", 
 				auth_server->authserv_portal_script_path_fragment, 
@@ -269,10 +271,12 @@ authenticate_client(request * r)
         break;
 
     case AUTH_VALIDATION_FAILED:
-    	UNLOCK_CLIENT_LIST();
-        /* Client had X minutes to validate account by email and didn't = too late */
+		/* Client had X minutes to validate account by email and didn't = too late */
         debug(LOG_INFO, "Got VALIDATION_FAILED from central server authenticating token %s from %s at %s "
               "- redirecting them to failed_validation message", client->token, client->ip, client->mac);
+		client_list_delete(client);
+    	UNLOCK_CLIENT_LIST();
+        
         safe_asprintf(&urlFragment, "%smessage=%s",
                       auth_server->authserv_msg_script_path_fragment, GATEWAY_MESSAGE_ACCOUNT_VALIDATION_FAILED);
         http_send_redirect_to_auth(r, urlFragment, "Redirect to failed validation message");
@@ -280,11 +284,13 @@ authenticate_client(request * r)
         break;
 
     default:
-    	UNLOCK_CLIENT_LIST();
-        debug(LOG_WARNING,
+		debug(LOG_WARNING,
               "I don't know what the validation code %d means for token %s from %s at %s - sending error message",
               auth_response.authcode, client->token, client->ip, client->mac);
-        send_http_page(r, "Internal Error", "We can not validate your request at this time");
+		client_list_delete(client);	
+    	UNLOCK_CLIENT_LIST();
+        
+        send_http_page_direct(r, "<htm><body>Internal Error, We can not validate your request at this time</body></html>");
         break;
 
     }

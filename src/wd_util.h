@@ -22,10 +22,25 @@
 /** @file wd_util.h
   @brief Misc utility functions
   @author Copyright (C) 2015 Alexandre Carmel-Veilleux <acv@miniguru.ca>
+  @author Copyright (C) 2016 Dengfeng Liu <liudengfeng@kunteng.org>
 */
 
 #ifndef _WD_UTIL_H_
 #define _WD_UTIL_H_
+
+#include <event2/dns.h>
+#include <event2/util.h>
+#include <event2/event.h>
+#include <event2/buffer.h>
+
+#include "conf.h"
+
+/** How many times should we try detecting the interface with the default route
+ * (in seconds).  If set to 0, it will keep retrying forever */
+#define NUM_EXT_INTERFACE_DETECT_RETRY 0
+/** How often should we try to detect the interface with the default route
+ *  if it isn't up yet (interval in seconds) */
+#define EXT_INTERFACE_DETECT_RETRY_INTERVAL 1
 
 /** @brief Client server this session. */
 extern long served_this_session;
@@ -35,6 +50,8 @@ void mark_online(void);
 
 /** @brief Sets hint that an online action (dns/connect/etc using WAN) failed */
 void mark_offline(void);
+
+void mark_offline_time(void);
 
 /** @brief Returns a guess (true or false) on whether we're online or not based on previous calls to mark_online and mark_offline */
 int is_online(void);
@@ -67,6 +84,33 @@ void trim_newline(char *);
 int is_device_wired(const char *);
 
 /** @brief Is ip online or domain parsable */
-int is_server_reachable(const char *);
+int is_device_online(const char *);
+
+void evdns_parse_trusted_domain_2_ip(t_domain_trusted *p);
+
+void evdns_add_trusted_domain_ip_cb(int errcode, struct evutil_addrinfo *addr, void *ptr);
+
+char *evb_2_string(struct evbuffer *, int *);
+
+int uci_get_value(const char *, const char *, char *, int);
+
+int uci_set_value(const char *, const char *, const char *, const char *);
+
+int uci_del_value(const char *, const char *, const char *);
 //<<< liudf added end
+
+/** @brief Execute a shell command */
+int execute(const char *, int);
+
+/** @brief Thread safe gethostbyname */
+struct in_addr *wd_gethostbyname(const char *);
+
+/** @brief Get IP address of an interface */
+char *get_iface_ip(const char *);
+
+/** @brief Get MAC address of an interface */
+char *get_iface_mac(const char *);
+
+/** @brief Get interface name of default gateway */
+char *get_ext_iface(void);
 #endif /* _WD_UTIL_H_ */

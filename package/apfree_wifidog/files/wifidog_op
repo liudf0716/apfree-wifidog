@@ -1,0 +1,100 @@
+#!/bin/sh
+
+export wifidog_enable_op=0
+export wired_pass_op=0
+export wifidog_no_auth=0
+export wifidog_pass_proxy=0
+
+usage()
+{
+	echo "$0 wifidog|wired_pass|no_auth enable|disable  "
+	echo "$0 pass_proxy enable proxy_port"
+	echo "$0 pass_proxy disable"
+	exit
+}
+
+case "$1" in
+	"wifidog") export wifidog_enable_op=1; shift;;
+	"wired_pass") export wired_pass_op=1; shift;;	
+	"no_auth") export wifidog_no_auth=1; shift;;
+	"pass_proxy") export wifidog_pass_proxy=1; shift;;
+	*)
+		usage
+		;;
+esac
+
+
+[ "$wifidog_enable_op" = 1 ] && {
+	case "$1" in
+		"enable")
+			uci set wifidog.@wifidog[0].enable='1'
+			;;
+		"disable")
+			uci set wifidog.@wifidog[0].enable='0'
+			;;
+		*)
+			usage
+			;;
+	esac
+	
+	uci commit wifidog
+	/etc/init.d/wifidog restart
+}
+
+[ "$wired_pass_op" = 1 ] && {
+	case "$1" in
+		"enable")
+			uci set wifidog.@wifidog[0].wired_passed='1'
+			;;
+		"disable")
+			uci set wifidog.@wifidog[0].wired_passed='0'
+			;;
+		*)
+			usage
+			;;
+	esac
+
+	uci commit wifidog
+	/etc/init.d/wifidog restart
+}
+
+[ "$wifidog_no_auth" = 1 ] && {
+	case "$1" in
+		"enable")
+			uci set wifidog.@wifidog[0].no_auth='1'
+			iptables -t mangle -F WiFiDog_br-lan_Pass
+			iptables -t mangle -I WiFiDog_br-lan_Pass -j  MARK --set-mark 1
+			;;
+		"disable")
+			uci set wifidog.@wifidog[0].no_auth='0'
+			iptables -t mangle -F WiFiDog_br-lan_Pass
+			;;
+		*)
+			usage
+			;;
+	esac
+	uci commit wifidog
+}
+
+[ "$wifidog_pass_proxy" = 1 ] && {
+	case "$1" in
+		"enable")
+			[ -z $2 ] && {
+				usage
+			}
+			uci set wifidog.@wifidog[0].proxy_port=$2
+			iptables -t nat -F WiFiDog_br-lan_Pass
+			iptables -t nat -A WiFiDog_br-lan_Pass -p tcp --dport 80 -m mark --mark 0x1 -j REDIRECT --to-port $2
+			iptables -t nat -A WiFiDog_br-lan_Pass -p tcp --dport 80 -m mark --mark 0x2 -j REDIRECT --to-port $2
+			;;
+		"disable")
+			uci set wifidog.@wifidog[0].proxy_port='0'
+			iptables -t nat -F WiFiDog_br-lan_Pass
+			;;
+		*)
+			usage
+			;;
+	esac
+	uci commit wifidog
+}
+

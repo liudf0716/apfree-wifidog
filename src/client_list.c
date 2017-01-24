@@ -22,6 +22,7 @@
 /** @file client_list.c
   @brief Client List Functions
   @author Copyright (C) 2004 Alexandre Carmel-Veillex <acv@acv.ca>
+  @author Copyright (C) 2016 Dengfeng Liu <liudengfeng@kunteng.org>
  */
 
 #define _GNU_SOURCE
@@ -260,6 +261,7 @@ client_dup(const t_client * src)
     new->ip = safe_strdup(src->ip);
     new->mac = safe_strdup(src->mac);
     new->token = safe_strdup(src->token);
+	new->fw_connection_state = src->fw_connection_state;
     new->counters.incoming = src->counters.incoming;
     new->counters.incoming_history = src->counters.incoming_history;
     new->counters.incoming_delta = src->counters.incoming_delta;

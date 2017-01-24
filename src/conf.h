@@ -23,11 +23,13 @@
 /** @file conf.h
     @brief Config file parsing
     @author Copyright (C) 2004 Philippe April <papril777@yahoo.com>
+    @author Copyright (C) 2016 Dengfeng Liu <liudengfeng@kunteng.org>
 */
 
 #ifndef _CONFIG_H_
 #define _CONFIG_H_
 
+#include "common.h"
 /*@{*/
 /** Defines */
 
@@ -131,6 +133,9 @@ typedef struct _auth_serv_t {
 				     listens on */
     int authserv_use_ssl;       /**< @brief Use SSL or not */
     char *last_ip;      /**< @brief Last ip used by authserver */
+	int	authserv_fd;	/** @brief this support keep-alive http connection*/
+	int	authserv_fd_ref; /** @brief is this socket fd being used or not*/
+	int authserv_connect_timeout; /** @brief when connect to auth server, seconds to wait time*/
     struct _auth_serv_t *next;
 } t_auth_serv;
 
@@ -191,7 +196,7 @@ typedef struct _popular_server_t {
  * trust domains and trust ip
  *
  */
-#define	HTTP_IP_ADDR_LEN	17
+
 typedef struct _ip_trusted_t {
 	char	ip[HTTP_IP_ADDR_LEN];
 	struct _ip_trusted_t *next;
@@ -278,7 +283,7 @@ typedef struct {
 	short	thread_number;
 	short	queue_size;
 	short	no_auth;
-	short	reserve;
+	short	work_mode; /** when work_mode 1, it will drop all packets default*/
 } s_config;
 
 /** @brief Get the current gateway configuration */
@@ -362,8 +367,7 @@ void __clear_trusted_domain_ip(t_ip_trusted *);
 
 
 /** @brief  */
-int __fix_weixin_http_dns_ip(void);
-
+int fix_weixin_http_dns_ip(void);
 
 /** @brief parse roam mac list, for wdctl use*/
 void parse_roam_mac_list(const char *); 

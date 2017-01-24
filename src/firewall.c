@@ -24,6 +24,7 @@
   @brief Firewall update functions
   @author Copyright (C) 2004 Philippe April <papril777@yahoo.com>
   2006 Benoit Grégoire, Technologies Coeus inc. <bock@step.polymtl.ca>
+  @author Copyright (C) 2016 Dengfeng Liu <liudengfeng@kunteng.org>
  */
 
 #define _GNU_SOURCE
@@ -374,14 +375,14 @@ fw_clear_untrusted_maclist()
 void
 fw_set_mac_temporary(const char *mac, int which)
 {
-    debug(LOG_INFO, "Set trusted||untrusted mac temporary");
+    debug(LOG_INFO, "Set trusted||untrusted mac [%s] temporary", mac);
 	iptables_fw_set_mac_temporary(mac, which);
 }
 
 void
 fw_set_trusted_mac(const char *mac)
 {
-    debug(LOG_INFO, "Clear untrusted maclist");
+    debug(LOG_DEBUG, "Clear untrusted maclist");
 	iptables_fw_set_trusted_mac(mac);
 }
 //<<<<< liudf added end
@@ -394,7 +395,7 @@ int
 fw_destroy(void)
 {
     close_icmp_socket();
-    debug(LOG_INFO, "Removing Firewall rules");
+    debug(LOG_DEBUG, "Removing Firewall rules");
     return iptables_fw_destroy();
 }
 
@@ -409,7 +410,7 @@ update_trusted_mac_status(t_trusted_mac *tmac)
 	}
 
 	if(tmac->ip != NULL) {
-		tmac->is_online = is_server_reachable(tmac->ip);
+		tmac->is_online = is_device_online(tmac->ip);
 	}
 }
 
@@ -425,15 +426,20 @@ update_trusted_mac_list_status(void)
 		return;
 	}
 	
+	int flag = 0;
 	for(p1 = tmac_list; p1 != NULL; p1 = p1->next) {
 		update_trusted_mac_status(p1);
-		debug(LOG_INFO, "update_trusted_mac_list_status: %s %s %d", p1->ip, p1->mac, p1->is_online);
+		debug(LOG_DEBUG, "update_trusted_mac_list_status: %s %s %d", p1->ip, p1->mac, p1->is_online);
 		if (config->auth_servers != NULL && p1->is_online) {
             auth_server_request(&authresponse, REQUEST_TYPE_COUNTERS, p1->ip, p1->mac, "null", 0,
                                 0, 0, 0, 0, 0, "null", is_device_wired(p1->mac));
+			flag = 1;
         }
 			
 	}
+	
+	if (flag)
+		close_auth_server();
 	
 	clear_dup_trusted_mac_list(tmac_list);
 }
@@ -464,6 +470,7 @@ fw_sync_with_authserver(void)
     g_online_clients = client_list_dup(&worklist);
     UNLOCK_CLIENT_LIST();
 
+	int flag = 0;
     for (p1 = p2 = worklist; NULL != p1; p1 = p2) {
         p2 = p1->next;
 
@@ -479,16 +486,17 @@ fw_sync_with_authserver(void)
 								// liudf added 20160112
 								p1->first_login, (p1->counters.last_updated - p1->first_login), 
 								p1->name?p1->name:"null", p1->wired);
+			flag = 1;
         }
 
         time_t current_time = time(NULL);
-        debug(LOG_INFO,
+        debug(LOG_DEBUG,
               "Checking client %s for timeout:  Last updated %ld (%ld seconds ago), timeout delay %ld seconds, current time %ld, ",
               p1->ip, p1->counters.last_updated, current_time - p1->counters.last_updated,
               config->checkinterval * config->clienttimeout, current_time);
         if (p1->counters.last_updated + (config->checkinterval * config->clienttimeout) <= current_time) {
             /* Timing out user */
-            debug(LOG_INFO, "%s - Inactive for more than %ld seconds, removing client and denying in firewall",
+            debug(LOG_DEBUG, "%s - Inactive for more than %ld seconds, removing client and denying in firewall",
                   p1->ip, config->checkinterval * config->clienttimeout);
             LOCK_CLIENT_LIST();
             tmp = client_list_find_by_client(p1);
@@ -574,6 +582,9 @@ fw_sync_with_authserver(void)
             UNLOCK_CLIENT_LIST();
         }
     }
-
+	
+	if (flag)
+		close_auth_server();
+	
     client_list_destroy(worklist);	
 }

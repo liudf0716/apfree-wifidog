@@ -24,6 +24,7 @@
   @brief Main loop
   @author Copyright (C) 2004 Philippe April <papril777@yahoo.com>
   @author Copyright (C) 2004 Alexandre Carmel-Veilleux <acv@miniguru.ca>
+  @author Copyright (C) 2016 Dengfeng Liu <liudengfeng@kunteng.org>
  */
 
 #include <stdio.h>
@@ -69,14 +70,10 @@
 #include "ping_thread.h"
 #include "httpd_thread.h"
 #include "util.h"
-#include "threadpool.h"
+#include "thread_pool.h"
 #include "ipset.h"
 #include "https_server.h"
-
-struct redir_file_buffer {
-    struct evbuffer *evb_front;
-    struct evbuffer *evb_rear;
-} ;
+#include "wd_util.h"
 
 struct evbuffer	*evb_internet_offline_page 		= NULL;
 struct evbuffer *evb_authserver_offline_page	= NULL;
@@ -100,7 +97,7 @@ httpd * webserver = NULL;
 static struct evbuffer *
 evhttp_read_file(const char *filename, struct evbuffer *evb)
 {
-	int fd
+	int fd;
 	struct stat stat_info;
 	
 	fd = open(filename, O_RDONLY);
@@ -169,9 +166,14 @@ init_wifidog_redir_html(void)
 		goto err;
 	}
 	
-	wifidog_redir_html->evb_front 	= evb_front;
-	wifidog_redir_html->evb_rear	= evb_rear;
-
+	int len = 0;
+	wifidog_redir_html->front 		= evb_2_string(evb_front, &len);
+	wifidog_redir_html->front_len	= len;
+	wifidog_redir_html->rear		= evb_2_string(evb_rear, &len);
+	wifidog_redir_html->rear_len	= len;
+	
+	if (evb_front) evbuffer_free(evb_front);	
+	if (evb_rear) evbuffer_free(evb_rear);
 	return 1;
 err:
 	if (evb_front) evbuffer_free(evb_front);	
@@ -599,11 +601,11 @@ main_loop(void)
     	    debug(LOG_ERR, "FATAL: Failed to create threadpool - exiting");
 			termination_handler(0);
 		}
-    	debug(LOG_NOTICE, "Create thread pool thread_num %d, queue_size %d", thread_number, queue_size);
+    	debug(LOG_DEBUG, "Create thread pool thread_num %d, queue_size %d", thread_number, queue_size);
 	}	
 	//<<< liudf added end
 
-    debug(LOG_NOTICE, "Waiting for connections");
+    debug(LOG_DEBUG, "Waiting for connections");
     while (1) {
 
         r = httpdGetConnection(webserver, NULL);
@@ -648,8 +650,6 @@ main_loop(void)
             *params = webserver;
             *(params + 1) = r;
 			
-			// liudf modified 20160224
-            //result = pthread_create(&tid, NULL, (void *)thread_httpd, (void *)params);
 			result = create_thread(&tid, (void*)thread_httpd, (void *)params);
             if (result != 0) {
                 debug(LOG_ERR, "FATAL: Failed to create a new thread (httpd) - exiting");
@@ -697,7 +697,7 @@ gw_main(int argc, char **argv)
          */
         while (kill(restart_orig_pid, 0) != -1) {
             debug(LOG_INFO, "Waiting for parent PID %d to die before continuing loading", restart_orig_pid);
-            sleep(1);
+            s_sleep(1, 0);
         }
 
         debug(LOG_INFO, "Parent PID %d seems to be dead. Continuing loading.");

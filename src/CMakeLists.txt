@@ -17,27 +17,32 @@ set(src_apfreewifidog
     httpd_thread.c 
     simple_http.c 
     pstring.c 
-    threadpool.c 
+    thread_pool.c 
     ipset.c 
     https_server.c 
 	https_common.c 
     wd_util.c 
+	ezxml.c
+	openssl_hostname_validation.c
+	hostcheck.c
 )
 
-set(src_wdctl wdctl.c)
+set(src_wdctl wdctl.c util.c debug.c)
 
 set(libs 
 	httpd
 	pthread 
-	m 
+	m
+	z
 	json-c 
-	ip4tc 
+	ip4tc
+	uci
 	ssl
 	crypto
 	event
 	event_openssl)
 
-ADD_DEFINITIONS(-Os -Wall --std=gnu99 -g3 -Wmissing-declarations)
+ADD_DEFINITIONS(-O2 -Wall --std=gnu99 -Wmissing-declarations)
 
 include_directories(../libhttpd/)
 

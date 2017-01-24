@@ -1,3 +1,29 @@
+/* vim: set et sw=4 ts=4 sts=4 : */
+/********************************************************************\
+ * This program is free software; you can redistribute it and/or    *
+ * modify it under the terms of the GNU General Public License as   *
+ * published by the Free Software Foundation; either version 2 of   *
+ * the License, or (at your option) any later version.              *
+ *                                                                  *
+ * This program is distributed in the hope that it will be useful,  *
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of   *
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the    *
+ * GNU General Public License for more details.                     *
+ *                                                                  *
+ * You should have received a copy of the GNU General Public License*
+ * along with this program; if not, contact:                        *
+ *                                                                  *
+ * Free Software Foundation           Voice:  +1-617-542-5942       *
+ * 59 Temple Place - Suite 330        Fax:    +1-617-542-2652       *
+ * Boston, MA  02111-1307,  USA       gnu@gnu.org                   *
+ *                                                                  *
+ \********************************************************************/
+
+/* $Id$ */
+/** @file https_server.c
+  @brief 
+  @author Copyright (C) 2016 Dengfeng Liu <liudengfeng@kunteng.org>
+  */
 
 #include "https_common.h"
 
@@ -29,9 +55,12 @@
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 
+#include <sys/time.h>
+
 #include <event2/bufferevent.h>
 #include <event2/bufferevent_ssl.h>
 #include <event2/event.h>
+#include <event2/event_struct.h>
 #include <event2/http.h>
 #include <event2/buffer.h>
 #include <event2/util.h>
@@ -54,16 +83,31 @@
 
 #include <syslog.h>
 
+#include "https_server.h"
 #include "debug.h"
 #include "conf.h"
 #include "gateway.h"
+#include "wd_util.h"
+#include "util.h"
+#include "firewall.h"
 
-enum reply_type {
-	INTERNET_OFFLINE,
-	AUTHSERVER_OFFLINE
-};
+static struct event_base *base		= NULL;
+static struct evdns_base *dnsbase 	= NULL;
 
-struct evbuffer *
+// !!!remember to free the return url
+char *
+evhttp_get_request_url(struct evhttp_request *req) {
+	char url[256] = {0}; // only get 256 char from request url
+	
+	snprintf(url, 256, "https://%s%s",
+		evhttp_request_get_host(req),
+		evhttp_request_get_uri(req));
+	
+	return evhttp_encode_uri(url);
+}
+
+// !!!remember to free the return redir_url
+char *
 evhttpd_get_full_redir_url(const char *mac, const char *ip, const char *orig_url) {
 	struct evbuffer *evb = evbuffer_new();
 	s_config *config = config_get_config();
@@ -87,68 +131,72 @@ evhttpd_get_full_redir_url(const char *mac, const char *ip, const char *orig_url
 					g_ssid?g_ssid:"null",
 					ip, mac, orig_url);
 	
-	return evb;
+	
+	char *redir_url = evb_2_string(evb, NULL);
+	evbuffer_free(evb);
+	
+	return redir_url;
 }
 
 void
-evhttpd_gw_reply(struct evhttp_request *req, enum reply_type type) {
-	struct evbuffer *evb = NULL;
-	switch (type) {
-	case INTERNET_OFFLINE:
-		evb = evb_internet_offline_page;
-	case AUTHSERVER_OFFLINE:
-		evb = evb_authserver_offline_page;
-	}
+evhttpd_gw_reply(struct evhttp_request *req, struct evbuffer *data_buffer) {
+	struct evbuffer *evb = evbuffer_new();
+	int len 	= 0;
+	char *data	= evb_2_string(data_buffer, &len);
+	evbuffer_add(evb, data, len);
 	
 	evhttp_add_header(evhttp_request_get_output_headers(req),
 		    "Content-Type", "text/html");
 	evhttp_send_reply (req, 200, "OK", evb); 	
+	evbuffer_free(evb);
 }
 
-/* This callback gets invoked when we get any http request that doesn't match
- * any other callback.  Like any evhttp server callback, it has a simple job:
- * it must eventually call evhttp_send_error() or evhttp_send_reply().
- */
-static void
-process_https_cb (struct evhttp_request *req, void *arg) { 
-	struct evbuffer *evb = NULL;
-  	const char *uri = evhttp_request_get_uri (req);
-	s_config *config = config_get_config();  	
+void
+evhttp_gw_reply_js_redirect(struct evhttp_request *req, const char *peer_addr) {
+	char *mac = (char *)arp_get(peer_addr);
+	char *req_url = evhttp_get_request_url (req); 
+	char *redir_url = evhttpd_get_full_redir_url(mac!=NULL?mac:"ff:ff:ff:ff:ff:ff", peer_addr, req_url);
+	struct evbuffer *evb = evbuffer_new();
+	struct evbuffer *evb_redir_url = evbuffer_new();
 	
+	debug (LOG_INFO, "Got a GET request for <%s> from <%s>\n", req_url, peer_addr);
+	
+		
+	evbuffer_add(evb, wifidog_redir_html->front, wifidog_redir_html->front_len);
+	evbuffer_add_printf(evb_redir_url, WIFIDOG_REDIR_HTML_CONTENT, redir_url);
+	evbuffer_add_buffer(evb, evb_redir_url);
+	evbuffer_add(evb, wifidog_redir_html->rear, wifidog_redir_html->rear_len);
+	
+	evhttp_add_header(evhttp_request_get_output_headers(req),
+		    "Content-Type", "text/html");
+	evhttp_send_reply (req, 200, "OK", evb); 
+	
+	free(mac);
+	free(req_url);
+	free(redir_url);
+	evbuffer_free(evb);
+	evbuffer_free(evb_redir_url);
+}
+
+static void
+process_https_cb (struct evhttp_request *req, void *arg) {  			
 	/* Determine peer */
 	char *peer_addr;
 	ev_uint16_t peer_port;
 	struct evhttp_connection *con = evhttp_request_get_connection (req);
 	evhttp_connection_get_peer (con, &peer_addr, &peer_port);
 	
-	debug (LOG_INFO, "Got a GET request for <%s> from <%s>:<%d>\n", uri, peer_addr, peer_port);
-	
 	if (!is_online()) {    
-        debug(LOG_INFO, "Sent %s an apology since I am not online - no point sending them to auth server",
+        debug(LOG_DEBUG, "Sent %s an apology since I am not online - no point sending them to auth server",
               peer_addr);
-		return evhttpd_gw_reply(req, INTERNET_OFFLINE);
+		evhttpd_gw_reply(req, evb_internet_offline_page);
     } else if (!is_auth_online()) {  
-        debug(LOG_INFO, "Sent %s an apology since auth server not online - no point sending them to auth server",
+        debug(LOG_DEBUG, "Sent %s an apology since auth server not online - no point sending them to auth server",
               peer_addr);
-		return evhttpd_gw_reply(req, AUTHSERVER_OFFLINE);
-    }
-	
-	char *mac = arp_get(peer_addr);
-	struct evbuffer *redir_url = evhttpd_get_full_redir_url(mac?=mac:"ff:ff:ff:ff:ff:ff", peer_addr, url);
-
-	evb = evbuffer_new ();		
-	evhttp_add_header(evhttp_request_get_output_headers(req),
-		    "Content-Type", "text/html");
-	evbuffer_add_buffer(evb, wifidog_redir_html->evb_front);
-	
-	evbuffer_add_printf(evb, WIFIDOG_REDIR_HTML_CONTENT, redir_url);
-	
-	evbuffer_add_buffer(evb, wifidog_redir_html->evb_rear);
-	evhttp_send_reply (req, 200, "OK", evb);
-		
-	if (evb)
-		evbuffer_free (evb);
-	free(peer_addr);
+		evhttpd_gw_reply(req, evb_authserver_offline_page);
+    } else {
+		evhttp_gw_reply_js_redirect(req, peer_addr);
+	}
 }
 
 /**
@@ -171,10 +219,6 @@ static struct bufferevent* bevcb (struct event_base *base, void *arg) {
 static void server_setup_certs (SSL_CTX *ctx,
                                 const char *certificate_chain,
                                 const char *private_key) { 
-	info_report ("Loading certificate chain from '%s'\n"
-               "and private key from '%s'\n",
-               certificate_chain, private_key);
-
   	if (1 != SSL_CTX_use_certificate_chain_file (ctx, certificate_chain))
     	die_most_horribly_from_openssl_error ("SSL_CTX_use_certificate_chain_file");
 
@@ -185,21 +229,66 @@ static void server_setup_certs (SSL_CTX *ctx,
     	die_most_horribly_from_openssl_error ("SSL_CTX_check_private_key");
 }
 
-static int serve_some_http (char *gw_ip,  t_https_server *https_server) { 
-	struct event_base *base;
+static void check_internet_available_cb(int errcode, struct evutil_addrinfo *addr, void *ptr) {
+	if (errcode) { 
+		debug (LOG_DEBUG, "dns query error : %s", evutil_gai_strerror(errcode));
+	} else {
+		if (addr) {
+			// popular server dns resolve success
+			debug (LOG_DEBUG, "Internet is available, mark online !\n");
+			mark_online();
+			evutil_freeaddrinfo(addr);
+		}
+	}
+}
+
+static void check_internet_available() {
+	t_popular_server *popular_server = NULL;
+	s_config *config = config_get_config();
+	
+	mark_offline_time();
+	
+	struct evutil_addrinfo hints;
+	for (popular_server = config->popular_servers; popular_server; popular_server = popular_server->next) {
+		memset(&hints, 0, sizeof(hints));
+        hints.ai_family = AF_UNSPEC;
+        hints.ai_flags = EVUTIL_AI_CANONNAME;
+
+        hints.ai_socktype = SOCK_STREAM;
+        hints.ai_protocol = IPPROTO_TCP;
+		
+		evdns_getaddrinfo( dnsbase, popular_server->hostname, NULL ,
+              &hints, check_internet_available_cb, NULL);
+	}
+}
+
+static void schedule_work_cb(evutil_socket_t fd, short event, void *arg) {
+	struct event *timeout = (struct event *)arg;
+	struct timeval tv;
+
+	check_internet_available();
+	
+	evutil_timerclear(&tv);
+	tv.tv_sec = config_get_config()->checkinterval;
+	event_add(timeout, &tv);
+}
+
+static int serve_some_http (char *gw_ip,  t_https_server *https_server) { 	
   	struct evhttp *http;
   	struct evhttp_bound_socket *handle;
-
+	struct event timeout;
+	struct timeval tv;
+	
   	base = event_base_new ();
   	if (! base) { 
-		fprintf (stderr, "Couldn't create an event_base: exiting\n");
+		debug (LOG_ERR, "Couldn't create an event_base: exiting\n");
       	return 1;
     }
-
+	
   	/* Create a new evhttp object to handle requests. */
   	http = evhttp_new (base);
   	if (! http) { 
-		fprintf (stderr, "couldn't create evhttp. Exiting.\n");
+		debug (LOG_ERR, "couldn't create evhttp. Exiting.\n");
       	return 1;
     }
  
@@ -234,8 +323,29 @@ static int serve_some_http (char *gw_ip,  t_https_server *https_server) {
 		return 1;
     }
     
+	// check whether internet available or not
+	dnsbase = evdns_base_new(base, 0);
+	if ( 0 != evdns_base_resolv_conf_parse(dnsbase, DNS_OPTION_NAMESERVERS, "/tmp/resolv.conf.auto") ) {
+		debug (LOG_ERR, "evdns_base_resolv_conf_parse failed \n");
+		evdns_base_free(dnsbase, 0);
+		dnsbase = evdns_base_new(base, 1);
+	}
+	
+	check_internet_available();
+	
+	event_assign(&timeout, base, -1, EV_PERSIST, schedule_work_cb, (void*) &timeout);
+	evutil_timerclear(&tv);
+	tv.tv_sec = config_get_config()->checkinterval;
+    event_add(&timeout, &tv);
+
+	
     event_base_dispatch (base);
 
+	event_del(&timeout);
+	event_base_free(base);
+	evdns_base_free(dnsbase, 0);
+	close(handle);
+	
   	/* not reached; runs forever */
   	return 0;
 }

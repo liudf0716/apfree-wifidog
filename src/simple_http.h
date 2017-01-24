@@ -22,12 +22,73 @@
 #ifndef _SIMPLE_HTTP_H_
 #define _SIMPLE_HTTP_H_
 
+#include <event2/event.h>
+#include <event2/buffer.h>
+#include <event2/http.h>
+#include <event2/http_struct.h>
+#include <event2/keyvalq_struct.h>
+
+#define CHUNK   16384  
+
+// (default)
+#define HTTP_CONTENT_TYPE_URL_ENCODED   "application/x-www-form-urlencoded"   
+// (use for files: picture, mp3, tar-file etc.)                                        
+#define HTTP_CONTENT_TYPE_FORM_DATA     "multipart/form-data"                 
+// (use for plain text)
+#define HTTP_CONTENT_TYPE_TEXT_PLAIN    "text/plain"
+
+#define REQUEST_POST_FLAG               2
+#define REQUEST_GET_FLAG                3
+
+#define windowBits 		15
+#define GZIP_ENCODING 	16
+
+
+typedef void (*user_process_data_cb)(void *data, int len);
+
+struct http_request_get {
+	user_process_data_cb	user_cb;
+    struct evhttp_uri *uri;
+    struct event_base *base;
+    struct evhttp_connection *cn;
+    struct evhttp_request *req;
+};
+
+struct http_request_post {
+	user_process_data_cb	user_cb;
+    struct evhttp_uri *uri;
+    struct event_base *base;
+    struct evhttp_connection *cn;
+    struct evhttp_request *req;
+    char *content_type;
+    char *post_data;	
+};
+
+void http_process_user_data(struct evhttp_request *, struct http_request_get *);
+
+void http_request_post_cb(struct evhttp_request *, void *);
+
+void http_request_get_cb(struct evhttp_request *, void *);
+
+int start_url_request(struct http_request_get *, int);
+
+void start_http_request(const char *, int , 
+						const char *, const char* , 
+						user_process_data_cb);
+
+void *http_request_new(struct event_base* , const char *, int , 
+                       const char *, const char* );
+
+void http_request_free(struct http_request_get *, int);
+
+int inflate_read(char *, int , char **, int *, int );
+
+int deflate_write(char *, int, char **, int *, int);
+
 char *http_get(const int, const char *);
 
 char *http_get_ex(const int, const char *, int);
 
-#ifdef USE_CYASSL
-char *https_get(const int, const char *, const char *);
-#endif                          /* defined(USE_CYASSL) */
+void evhttps_request(const char *, int, void (*http_request_done)(struct evhttp_request *, void *));
 
 #endif                          /* defined(_SIMPLE_HTTP_H_) */

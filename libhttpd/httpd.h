@@ -96,7 +96,7 @@ extern "C" {
 */
 
     typedef struct {
-        int method, contentLength, authLength, version;
+        int method, contentLength, authLength, version, deflate;
         char path[HTTP_MAX_URL], query[HTTP_MAX_URL], host[HTTP_MAX_URL],       /* acv@acv.ca/wifidog: Added decoding
                                                                                    of host: header if present. */
          ifModified[HTTP_MAX_URL];
@@ -185,6 +185,8 @@ extern "C" {
     void httpdFreeVariables __ANSI_PROTO((request *));
     void httpdDumpVariables __ANSI_PROTO((request *));
     void httpdOutput __ANSI_PROTO((request *, const char *));
+    void httpdOutputDirect __ANSI_PROTO((request *, const char *));
+	void httpdOutputLengthDirect __ANSI_PROTO((request *, const char *, int));
     void httpdPrintf __ANSI_PROTO((request *, const char *, ...));
     void httpdProcessRequest __ANSI_PROTO((httpd *, request *));
     void httpdSendHeaders __ANSI_PROTO((request *));

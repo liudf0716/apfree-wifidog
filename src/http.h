@@ -45,12 +45,13 @@ void http_callback_disconnect(httpd *, request *);
 /** @brief Sends a HTML page to web browser */
 void send_http_page(request *, const char *, const char* );
 
+void send_http_page_direct(request *, char *);
+
 /** @brief Sends a redirect to the web browser */
 void http_send_redirect(request *, const char *, const char *);
 /** @brief Convenience function to redirect the web browser to the authe server */
 void http_send_redirect_to_auth(request *, const char *, const char *);
 //>>> liudf added 20160104
-void http_send_js_redirect_ex(request *, const char *);
 void http_send_js_redirect(request *, const char *); 
 void http_send_apple_redirect(request *, const char *);
 void http_relay_wisper(request *);
