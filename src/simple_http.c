@@ -640,8 +640,6 @@ cleanup:
 	if (base)
 		 event_base_free(base);
 	
-	if (ssl)
-		SSL_free(ssl);
 	debug(LOG_DEBUG, "evhttps_get cleanup 1");
 	if (ssl_ctx)
 		SSL_CTX_free(ssl_ctx);		
