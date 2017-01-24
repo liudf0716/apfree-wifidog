@@ -738,19 +738,19 @@ uci_del_value(const char *c_filename, const char *section, const char *name)
 		goto out;
 	} 
 	
-	nret = uci_delete(context, &ptr);
+	nret = uci_delete(ctx, &ptr);
 	if (UCI_OK != nret) {
 		nret = 0;
 		goto out;
 	}
 
-	nret = uci_save(context, ptr.p);
+	nret = uci_save(ctx, ptr.p);
 	if (UCI_OK != nret) {
 		nret = 0;
 		goto out;
 	}
 
-	nret = uci_commit(context, &ptr.p, false);
+	nret = uci_commit(ctx, &ptr.p, false);
 	if (UCI_OK != nret) {
 		nret = 0;
 		goto out;
@@ -787,13 +787,13 @@ uci_set_value(const char *c_filename, const char *section, const char *name, con
 		goto out;
     } 
 	
-	nret = uci_save(context, ptr.p);
+	nret = uci_save(ctx, ptr.p);
 	if (UCI_OK != nret) {
 		nret = 0;
 		goto out;
 	}
 
-	nret = uci_commit(context, &ptr.p, false);
+	nret = uci_commit(ctx, &ptr.p, false);
 	if (UCI_OK != nret) {
 		nret = 0;
 		goto out;
