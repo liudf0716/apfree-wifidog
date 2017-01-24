@@ -531,7 +531,7 @@ cert_verify_callback(X509_STORE_CTX *x509_ctx, void *arg)
 }
 
 void
-evhttps_get(const char *uri, int timeout, void (*http_request_done)(struct evhttp_request *req, void *ctx))
+evhttps_request(const char *uri, int timeout, void (*http_request_done)(struct evhttp_request *req, void *ctx))
 {
 	t_auth_serv *auth_server = get_auth_server();
 #ifdef	VERIFY_PEER
@@ -639,8 +639,7 @@ cleanup:
 		evhttp_connection_free(evcon);
 	if (base)
 		 event_base_free(base);
-	
-	debug(LOG_DEBUG, "evhttps_get cleanup 1");
+
 	if (ssl_ctx)
 		SSL_CTX_free(ssl_ctx);		
 }
