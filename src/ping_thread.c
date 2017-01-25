@@ -368,8 +368,6 @@ ping(void)
 	
 	struct sys_info info;
 	memset(&info, 0, sizeof(info));
-
-    debug(LOG_DEBUG, "Entering ping()");
 	
 	get_sys_info(&info);
 	
