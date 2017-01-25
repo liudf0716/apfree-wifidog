@@ -106,7 +106,7 @@ apfree wifidog使用github托管其源代码，贡献代码使用github的PR(Pul
 
 4. 在**dev**修改并将修改push到你的fork上
 
-5. 创建从你的fork的**dev**分支到主项目的**dev**分支的[Pull Request] -  [在此](https://github.com/vnpy/vnpy)点击**Compare & pull request**
+5. 创建从你的fork的**dev**分支到主项目的**dev**分支的[Pull Request] -  [在此](https://github.com/liudf0716/apfree_wifidog)点击**Compare & pull request**
 
 6. 等待review, 需要继续改进，或者被Merge!
 
