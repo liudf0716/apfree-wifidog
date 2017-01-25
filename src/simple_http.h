@@ -72,7 +72,7 @@ struct http_request_post {
 struct evhttps_request_context {
     struct evhttp_base  *base;
     SSL_CTX     *ssl_ctx;
-}
+};
 
 void http_process_user_data(struct evhttp_request *, struct http_request_get *);
 
