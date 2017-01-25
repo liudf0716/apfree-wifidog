@@ -39,12 +39,12 @@
 #include <event2/util.h>
 #include <event2/http.h>
 
-#include "openssl_hostname_validation.h"
 #include "common.h"
 #include "debug.h"
 #include "pstring.h"
 #include "centralserver.h"
 #include "simple_http.h"
+#include "openssl_hostname_validation.h"
 #include "conf.h"
 #include "version.h"
 
