@@ -610,7 +610,7 @@ evhttp_set_request_header(struct evhttp_request *req)
 }
 
 void
-evhttps_request(struct evhttps_reqest_context *context, const char *uri, int timeout, request_done_cb)
+evhttps_request(struct evhttps_reqest_context *context, const char *uri, int timeout, request_done_cb process_request_done)
 {
 	t_auth_serv *auth_server = get_auth_server();
 #ifdef	VERIFY_PEER
@@ -658,7 +658,7 @@ evhttps_request(struct evhttps_reqest_context *context, const char *uri, int tim
 	
 	evhttp_connection_set_timeout(evcon, timeout);
 
-	req = evhttp_request_new(user_process_data_cb, bev);
+	req = evhttp_request_new(process_request_done, bev);
 	if (req == NULL) {
 		debug(LOG_ERR, "evhttp_request_new() failed");
 		goto cleanup;
