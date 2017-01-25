@@ -39,10 +39,6 @@
 #include <event2/util.h>
 #include <event2/http.h>
 
-#include <openssl/ssl.h>
-#include <openssl/err.h>
-#include <openssl/rand.h>
-
 #include "openssl_hostname_validation.h"
 #include "common.h"
 #include "debug.h"
@@ -530,25 +526,17 @@ cert_verify_callback(X509_STORE_CTX *x509_ctx, void *arg)
 	}
 }
 
-void
-evhttps_request(const char *uri, int timeout, user_process_data_cb)
+struct evhttps_reqest_context *
+evhttps_context_init(void)
 {
-	t_auth_serv *auth_server = get_auth_server();
-#ifdef	VERIFY_PEER
-	const char *crt = "/etc/ssl/certs/ca-certificates.crt";
-#endif
+	struct evhttps_request_context *context = NULL;
 	SSL_CTX *ssl_ctx = NULL;
-	SSL *ssl = NULL;
-	
 	struct event_base 	*base = NULL;
-	struct bufferevent 	*bev = NULL;
-	struct evhttp_connection *evcon = NULL;
-	struct evhttp_request *req;
-	struct evkeyvalq *output_headers;
-	
-	int ret = 0;
-	
-	debug(LOG_DEBUG, "enter evhttps_get  ");	
+
+	context = (struct evhttps_request_context *) malloc(sizeof(struct evhttps_request_context));
+	if (context == NULL)
+		goto cleanup;
+
 	/* This isn't strictly necessary... OpenSSL performs RAND_poll
 	 * automatically on first use of random number generator. */
 	if (RAND_poll() == 0) {
@@ -557,7 +545,7 @@ evhttps_request(const char *uri, int timeout, user_process_data_cb)
 	}
 
 	/* Create a new OpenSSL context */
-	ssl_ctx = SSL_CTX_new(SSLv23_method());
+	context->ssl_ctx = SSL_CTX_new(SSLv23_method());
 	if (!ssl_ctx) {
 		debug(LOG_ERR, "SSL_CTX_new failed");
 		goto cleanup;
@@ -580,6 +568,64 @@ evhttps_request(const char *uri, int timeout, user_process_data_cb)
 		debug(LOG_ERR, "event_base_new() failed");
 		goto cleanup;
 	}
+
+	context->base 		= base;
+	context->ssl_ctx 	= ssl_ctx;
+	return context;
+
+cleanup:
+	if (context)
+		free(context);
+
+	if (ssl_ctx)
+		SSL_CTX_free(ssl_ctx);	
+
+	if (base)
+		 event_base_free(base);
+
+	return NULL;
+}
+
+void evhttps_context_exit(struct evhttps_request_context *context)
+{
+	if (!context)
+		return;
+
+	if (context->base)
+		event_base_free(context->base);
+
+	if (context->ssl_ctx)
+		SSL_CTX_free(context->ssl_ctx);
+}
+
+void 
+evhttp_set_request_header(struct evhttp_request *req)
+{
+	char user_agent[128] = {0};
+	snprintf(user_agent, 128, "ApFree WiFiDog %s", VERSION);
+	struct evkeyvalq *output_headers = evhttp_request_get_output_headers(req);
+	evhttp_add_header(output_headers, "Host", get_auth_server()->authserv_hostname);
+	evhttp_add_header(output_headers, "User-Agent", user_agent);
+	evhttp_add_header(output_headers, "Connection", "keep-alive");
+}
+
+void
+evhttps_request(struct evhttps_reqest_context *context, const char *uri, int timeout, user_process_data_cb)
+{
+	t_auth_serv *auth_server = get_auth_server();
+#ifdef	VERIFY_PEER
+	const char *crt = "/etc/ssl/certs/ca-certificates.crt";
+#endif
+	SSL_CTX *ssl_ctx = context->ssl_ctx;
+	SSL *ssl = NULL;
+	
+	struct event_base 	*base = context->base;
+	struct bufferevent 	*bev = NULL;
+	struct evhttp_connection *evcon = NULL;
+	struct evhttp_request *req;
+	
+	int ret = 0;
+		
 	
 	// Create OpenSSL bufferevent and stack evhttp on top of it
 	ssl = SSL_new(ssl_ctx);
@@ -618,12 +664,7 @@ evhttps_request(const char *uri, int timeout, user_process_data_cb)
 		goto cleanup;
 	}
 	
-	char user_agent[128] = {0};
-	snprintf(user_agent, 128, "ApFree WiFiDog %s", VERSION);
-	output_headers = evhttp_request_get_output_headers(req);
-	evhttp_add_header(output_headers, "Host", auth_server->authserv_hostname);
-	evhttp_add_header(output_headers, "User-Agent", user_agent);
-	evhttp_add_header(output_headers, "Connection", "close");
+	evhttp_set_request_header(req);
 	
 	ret = evhttp_make_request(evcon, req, EVHTTP_REQ_GET, uri);
 	if (ret != 0) {
@@ -637,9 +678,4 @@ cleanup:
 	
 	if (evcon)
 		evhttp_connection_free(evcon);
-	if (base)
-		 event_base_free(base);
-
-	if (ssl_ctx)
-		SSL_CTX_free(ssl_ctx);		
 }

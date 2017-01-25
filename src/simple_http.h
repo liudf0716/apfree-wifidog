@@ -22,6 +22,10 @@
 #ifndef _SIMPLE_HTTP_H_
 #define _SIMPLE_HTTP_H_
 
+#include <openssl/ssl.h>
+#include <openssl/err.h>
+#include <openssl/rand.h>
+
 #include <event2/event.h>
 #include <event2/buffer.h>
 #include <event2/http.h>
@@ -64,6 +68,11 @@ struct http_request_post {
     char *post_data;	
 };
 
+struct evhttps_request_context {
+    struct evhttp_base  *base;
+    SSL_CTX     *ssl_ctx;
+}
+
 void http_process_user_data(struct evhttp_request *, struct http_request_get *);
 
 void http_request_post_cb(struct evhttp_request *, void *);
@@ -89,6 +98,12 @@ char *http_get(const int, const char *);
 
 char *http_get_ex(const int, const char *, int);
 
-void evhttps_request(const char *, int, user_process_data_cb);
+struct evhttps_reqest_context * evhttps_context_init(void);
+
+void evhttps_context_exit(struct evhttps_request_context *);
+
+void evhttps_request(struct evhttps_request_context*, const char *, int, user_process_data_cb);
+
+void evhttp_set_request_header(struct evhttp_request *);
 
 #endif                          /* defined(_SIMPLE_HTTP_H_) */

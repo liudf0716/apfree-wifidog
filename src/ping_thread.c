@@ -64,7 +64,7 @@
 #include "httpd_priv.h"
 
 static void ping(void);
-static void evpings(void);
+static void evpings(struct evhttps_request_context *context);
 
 /** Launches a thread that periodically checks in with the wifidog auth server to perform heartbeat function.
 @param arg NULL
@@ -77,6 +77,7 @@ thread_ping(void *arg)
     pthread_mutex_t cond_mutex = PTHREAD_MUTEX_INITIALIZER;
     struct timespec timeout;
 	t_auth_serv *auth_server = get_auth_server();
+	evhttps_request_context *context = NULL;
 	
 	//>>> liudf added 20160411
 	// move from fw_init to here	
@@ -93,12 +94,20 @@ thread_ping(void *arg)
 	fw_set_trusted_maclist();
 	fw_set_untrusted_maclist();
 	
+	if (auth_server->authserv_use_ssl) {
+		context = evhttps_context_init();
+		if (!context) {
+			debug(LOG_ERR, "evhttps_context_init failed, process exit()");
+			exit(0);
+		}
+	}
+
     while (1) {
         /* Make sure we check the servers at the very begining */
         
 		if (auth_server->authserv_use_ssl) {
        		debug(LOG_DEBUG, "Running evpings()");
-			evpings();
+			evpings(context);
 		} else {
 			debug(LOG_DEBUG, "Running ping()");
 			ping();
@@ -117,6 +126,10 @@ thread_ping(void *arg)
         /* No longer needs to be locked */
         pthread_mutex_unlock(&cond_mutex);
     }
+
+    if (auth_server->authserv_use_ssl) {
+		evhttps_context_exit(context);
+	}
 }
 
 char *
@@ -339,7 +352,7 @@ process_ping_result(struct evhttp_request *req, void *ctx)
 }
 
 static void
-evpings(void)
+evpings(struct evhttps_request_context *context)
 {
 	struct sys_info info;
 	memset(&info, 0, sizeof(info));
@@ -353,7 +366,7 @@ evpings(void)
 	debug(LOG_DEBUG, "ping uri is %s", uri);
 	
 	int timeout = 2; // 2s
-	evhttps_request(uri, timeout, process_ping_result);
+	evhttps_request(context, uri, timeout, process_ping_result);
 	free(uri);
 }
 /** @internal
