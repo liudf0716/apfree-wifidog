@@ -526,7 +526,7 @@ cert_verify_callback(X509_STORE_CTX *x509_ctx, void *arg)
 	}
 }
 
-struct evhttps_reqest_context *
+struct evhttps_request_context *
 evhttps_context_init(void)
 {
 	struct evhttps_request_context *context = NULL;
@@ -586,7 +586,8 @@ cleanup:
 	return NULL;
 }
 
-void evhttps_context_exit(struct evhttps_request_context *context)
+void 
+evhttps_context_exit(struct evhttps_request_context *context)
 {
 	if (!context)
 		return;
@@ -610,7 +611,7 @@ evhttp_set_request_header(struct evhttp_request *req)
 }
 
 void
-evhttps_request(struct evhttps_reqest_context *context, const char *uri, int timeout, request_done_cb process_request_done)
+evhttps_request(struct evhttps_request_context *context, const char *uri, int timeout, request_done_cb process_request_done)
 {
 	t_auth_serv *auth_server = get_auth_server();
 #ifdef	VERIFY_PEER
