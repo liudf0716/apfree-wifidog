@@ -531,7 +531,7 @@ cert_verify_callback(X509_STORE_CTX *x509_ctx, void *arg)
 }
 
 void
-evhttps_request(const char *uri, int timeout, void (*http_request_done)(struct evhttp_request *req, void *ctx))
+evhttps_request(const char *uri, int timeout, user_process_data_cb)
 {
 	t_auth_serv *auth_server = get_auth_server();
 #ifdef	VERIFY_PEER
@@ -612,7 +612,7 @@ evhttps_request(const char *uri, int timeout, void (*http_request_done)(struct e
 	
 	evhttp_connection_set_timeout(evcon, timeout);
 
-	req = evhttp_request_new(http_request_done, bev);
+	req = evhttp_request_new(user_process_data_cb, bev);
 	if (req == NULL) {
 		debug(LOG_ERR, "evhttp_request_new() failed");
 		goto cleanup;
