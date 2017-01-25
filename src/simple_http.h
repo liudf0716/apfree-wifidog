@@ -70,7 +70,7 @@ struct http_request_post {
 };
 
 struct evhttps_request_context {
-    struct evhttp_base  *base;
+    struct event_base  *base;
     SSL_CTX     *ssl_ctx;
 };
 

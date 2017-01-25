@@ -610,7 +610,7 @@ evhttp_set_request_header(struct evhttp_request *req)
 }
 
 void
-evhttps_request(struct evhttps_reqest_context *context, const char *uri, int timeout, user_process_data_cb)
+evhttps_request(struct evhttps_reqest_context *context, const char *uri, int timeout, request_done_cb)
 {
 	t_auth_serv *auth_server = get_auth_server();
 #ifdef	VERIFY_PEER
