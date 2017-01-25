@@ -99,7 +99,7 @@ char *http_get(const int, const char *);
 
 char *http_get_ex(const int, const char *, int);
 
-struct evhttps_reqest_context * evhttps_context_init(void);
+struct evhttps_request_context * evhttps_context_init(void);
 
 void evhttps_context_exit(struct evhttps_request_context *);
 
