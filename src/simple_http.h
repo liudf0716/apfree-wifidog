@@ -48,7 +48,8 @@
 #define GZIP_ENCODING 	16
 
 
-typedef void (*user_process_data_cb)(struct evhttp_request *, void *);
+typedef void (*user_process_data_cb)(void *, int);
+typedef void (*request_done_cb)(struct evhttp_request *, void *);
 
 struct http_request_get {
 	user_process_data_cb	user_cb;
@@ -102,7 +103,7 @@ struct evhttps_reqest_context * evhttps_context_init(void);
 
 void evhttps_context_exit(struct evhttps_request_context *);
 
-void evhttps_request(struct evhttps_request_context*, const char *, int, user_process_data_cb);
+void evhttps_request(struct evhttps_request_context*, const char *, int, request_done_cb);
 
 void evhttp_set_request_header(struct evhttp_request *);
 
