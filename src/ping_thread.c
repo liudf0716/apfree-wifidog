@@ -77,7 +77,7 @@ thread_ping(void *arg)
     pthread_mutex_t cond_mutex = PTHREAD_MUTEX_INITIALIZER;
     struct timespec timeout;
 	t_auth_serv *auth_server = get_auth_server();
-	evhttps_request_context *context = NULL;
+	struct evhttps_request_context *context = NULL;
 	
 	//>>> liudf added 20160411
 	// move from fw_init to here	
