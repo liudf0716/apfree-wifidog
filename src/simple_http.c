@@ -545,7 +545,7 @@ evhttps_context_init(void)
 	}
 
 	/* Create a new OpenSSL context */
-	context->ssl_ctx = SSL_CTX_new(SSLv23_method());
+	ssl_ctx = SSL_CTX_new(SSLv23_method());
 	if (!ssl_ctx) {
 		debug(LOG_ERR, "SSL_CTX_new failed");
 		goto cleanup;
