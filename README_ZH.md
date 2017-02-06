@@ -126,7 +126,7 @@ wifidog_roam   disable
 
 apfree wifidog使用github托管其源代码，贡献代码使用github的PR(Pull Request)的流程，十分的强大与便利:
 
-1. [创建 Issue](https://github.com/liudf0716/apfree_wifidog/issues/new) - 对于较大的改动(如新功能，大型重构等)最好先开issue讨论一下，较小的improvement(如文档改进，bugfix等)直接发PR即可
+####1. [创建 Issue](https://github.com/liudf0716/apfree_wifidog/issues/new) - 对于较大的改动(如新功能，大型重构等)最好先开issue讨论一下，较小的improvement(如文档改进，bugfix等)直接发PR即可
 
 2. Fork [apfree_wifidog](https://github.com/liudf0716/apfree_wifidog) - 点击右上角**Fork**按钮
 
