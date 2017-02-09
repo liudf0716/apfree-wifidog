@@ -59,6 +59,7 @@
 #include "client_list.h"
 #include "commandline.h"
 #include "wd_util.h"
+#include "simple_http.h"
 
 static int _fw_deny_raw(const char *, const char *, const int);
 
@@ -445,7 +446,7 @@ update_trusted_mac_list_status(void)
 }
 
 static void
-fw_client_operation(int operaion, t_client *p1)
+fw_client_operation(int operation, t_client *p1)
 {
     switch(operation) {
     case 1:
@@ -524,7 +525,7 @@ fw_client_process_from_authserver_response(t_authresponse *authresponse, t_clien
             break;
 
         default:
-            debug(LOG_ERR, "I do not know about authentication code %d", authresponse.authcode);
+            debug(LOG_ERR, "I do not know about authentication code %d", authresponse->authcode);
             break;
         }
     }
@@ -536,7 +537,7 @@ fw_client_process_from_authserver_response(t_authresponse *authresponse, t_clien
 void
 evhttps_fw_sync_with_authserver(struct evhttps_request_context *context)
 {
-    t_client *p1, *p2, *worklist, *tmp;
+    t_client *p1, *p2, *worklist;
     s_config *config = config_get_config();
 
     if (-1 == iptables_fw_counters_update()) {

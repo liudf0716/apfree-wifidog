@@ -32,6 +32,7 @@
 #include <json-c/json.h>
 
 #include "auth.h"
+#include "simple_http.h"
 
 /** @brief Ask the central server to login a client */
 #define REQUEST_TYPE_LOGIN     "login"
