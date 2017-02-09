@@ -286,7 +286,7 @@ static void check_auth_server_available_cb(int errcode, struct evutil_addrinfo *
 		            	auth_server->authserv_hostname, ip);
 		            if (auth_server->last_ip)
 		                free(auth_server->last_ip);
-		            auth_server->last_ip = safe_dup(ip);
+		            auth_server->last_ip = safe_strdup(ip);
 
 		            /* Update firewall rules */
 		            fw_clear_authservers();
