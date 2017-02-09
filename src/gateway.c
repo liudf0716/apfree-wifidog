@@ -488,6 +488,8 @@ main_loop(void)
 		exit(1);
 	}
 	 
+    common_setup ();              /* Initialize OpenSSL */
+
     /* Set the time when wifidog started */
     if (!started_time) {
         debug(LOG_INFO, "Setting started_time");
@@ -592,7 +594,7 @@ main_loop(void)
         termination_handler(0);
     }
     pthread_detach(tid_fw_counter);
-    
+
 	//>>> liudf added 20160301
 	if(pool_mode) {
 		int thread_number = config->thread_number;

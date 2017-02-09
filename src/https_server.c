@@ -352,6 +352,5 @@ static int serve_some_http (char *gw_ip,  t_https_server *https_server) {
 
 void thread_https_server(void *args) {
 	s_config *config = config_get_config();
-	common_setup ();              /* Initialize OpenSSL */
    	serve_some_http (config->gw_address, config->https_server);
 }
