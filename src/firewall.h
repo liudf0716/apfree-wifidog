@@ -29,6 +29,7 @@
 #define _FIREWALL_H_
 
 #include "client_list.h"
+#include "auth.h"
 
 /** Used by fw_iptables.c */
 typedef enum _t_fw_marks {
