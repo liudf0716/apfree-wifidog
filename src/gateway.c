@@ -567,14 +567,6 @@ main_loop(void)
 	}
 	pthread_detach(tid_https_server);
 	
-	
-    /* Start clean up thread */
-    result = pthread_create(&tid_fw_counter, NULL, (void *)thread_client_timeout_check, NULL);
-    if (result != 0) {
-        debug(LOG_ERR, "FATAL: Failed to create a new thread (fw_counter) - exiting");
-        termination_handler(0);
-    }
-    pthread_detach(tid_fw_counter);
 
     /* Start control thread */
     result = pthread_create(&tid_wdctl, NULL, (void *)thread_wdctl, (void *)safe_strdup(config->wdctl_sock));
@@ -592,6 +584,15 @@ main_loop(void)
     }
     pthread_detach(tid_ping);
 	
+
+    /* Start clean up thread */
+    result = pthread_create(&tid_fw_counter, NULL, (void *)thread_client_timeout_check, NULL);
+    if (result != 0) {
+        debug(LOG_ERR, "FATAL: Failed to create a new thread (fw_counter) - exiting");
+        termination_handler(0);
+    }
+    pthread_detach(tid_fw_counter);
+    
 	//>>> liudf added 20160301
 	if(pool_mode) {
 		int thread_number = config->thread_number;
