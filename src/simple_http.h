@@ -72,6 +72,7 @@ struct http_request_post {
 struct evhttps_request_context {
     struct event_base  *base;
     SSL_CTX     *ssl_ctx;
+    void        *data;
 };
 
 void http_process_user_data(struct evhttp_request *, struct http_request_get *);
@@ -103,7 +104,7 @@ struct evhttps_request_context * evhttps_context_init(void);
 
 void evhttps_context_exit(struct evhttps_request_context *);
 
-void evhttps_request(struct evhttps_request_context *, const char *, int, request_done_cb);
+void evhttps_request(struct evhttps_request_context *, const char *, int, request_done_cb, void *);
 
 void evhttp_set_request_header(struct evhttp_request *);
 

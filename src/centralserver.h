@@ -49,14 +49,19 @@
 /** @brief Sent after the user performed a manual log-out on the gateway  */
 #define GATEWAY_MESSAGE_ACCOUNT_LOGGED_OUT     "logged-out"
 
+typedef enum {
+    online_client,
+    trusted_client
+} client_type_t;
+
 json_object *auth_server_roam_request(const char *mac);
 
 /** @brief Initiates a transaction with the auth server */
 t_authcode auth_server_request(t_authresponse * authresponse,
-                               const char *request_type,
-                               const char *ip,
-                               const char *mac,
-                               const char *token, unsigned long long int incoming, unsigned long long int outgoing, 
+                 const char *request_type,
+                 const char *ip,
+                 const char *mac,
+                 const char *token, unsigned long long int incoming, unsigned long long int outgoing, 
 							   unsigned long long int incoming_delta, unsigned long long int outgoing_delta,
 							   //>>> liudf added 20160112
 							   time_t first_login, unsigned int online_time, char *name, int wired);
@@ -75,4 +80,9 @@ void close_auth_server();
 
 /**@brief thread-safe to decrease authserv_fd_ref, not close connection really*/
 void decrease_authserv_fd_ref();
+
+char *get_auth_uri(const char *, client_type_t , void *);
+
+void process_auth_server_response(struct evhttp_request *, void *);
+
 #endif                          /* _CENTRALSERVER_H_ */

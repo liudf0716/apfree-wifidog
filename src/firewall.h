@@ -115,5 +115,8 @@ void fw_set_mac_temporary(const char *, int);
 void fw_set_trusted_mac(const char *);
 
 void update_trusted_mac_list_status(void);
+
+void fw_client_process_from_authserver_response(t_authresponse *, t_client *p1);
+
 //<<<< liudf added end
 #endif                          /* _FIREWALL_H_ */

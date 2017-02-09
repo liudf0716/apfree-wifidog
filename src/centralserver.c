@@ -1,4 +1,4 @@
-/* vim: set sw=4 ts=4 sts=4 et : */
+ /* vim: set sw=4 ts=4 sts=4 et : */
 /********************************************************************\
  * This program is free software; you can redistribute it and/or    *
  * modify it under the terms of the GNU General Public License as   *
@@ -128,6 +128,81 @@ auth_server_roam_request(const char *mac)
     return NULL;
 }
 
+char * 
+get_auth_uri(const char *request_type, client_type_t type, void *data)
+{
+    char *ip    = NULL;
+    char *mac   = NULL;
+    char *name  = NULL;
+    char *safe_token    = NULL;
+    unsigned long long int incoming = outgoing = incoming_delta = outgoing_delta = 0;
+    time_t first_login;
+    unsigned int online_time = 0;
+    int wired = 0;
+
+    switch(type) {
+    case online_client:
+        t_client *o_client = (t_client *)data;
+        ip  = o_client->ip;
+        mac = o_client->mac;
+        safe_token = httpdUrlEncode(o_client->token);
+        if (o_client->name)
+            name = o_client->name;
+        first_login = o_client->first_login;
+        incoming = o_client->counters.incoming;
+        outgoing = o_client->counters.outgoing;
+        incoming_delta  = o_client->counters.incoming_delta;
+        outgoing_delta  = o_client->counters.outgoing_delta;
+    case trusted_client:
+        t_trusted_mac *t_mac = (t_trusted_mac *)data;
+        ip  = t_mac->ip;
+        mac = t_mac->mac;
+        wired = is_device_wired(mac);
+    default:
+        return NULL;
+    }
+
+    s_config *config = config_get_config();
+    t_auth_serv *auth_server = get_auth_server();
+    char *uri = NULL;
+    int nret = 0;
+    if (config->deltatraffic) {
+        nret = safe_asprintf(&uri, 
+             "%s%sstage=%s&ip=%s&mac=%s&token=%s&incoming=%llu&outgoing=%llu&incomingdelta=%llu&outgoingdelta=%llu&first_login=%lld&online_time=%u&gw_id=%s&channel_path=%s&name=%s&wired=%d",
+             auth_server->authserv_path,
+             auth_server->authserv_auth_script_path_fragment,
+             request_type,
+             ip, mac, safe_token, 
+             incoming, 
+             outgoing, 
+             incoming_delta, 
+             outgoing_delta,
+             (long long)first_login,
+             online_time,
+             config->gw_id,
+             g_channel_path?g_channel_path:"null", 
+             name?name:"null");
+    } else {
+        nret = safe_asprintf(&uri, 
+             "%s%sstage=%s&ip=%s&mac=%s&token=%s&incoming=%llu&outgoing=%llu&first_login=%lld&online_time=%u&gw_id=%s&channel_path=%s&name=%s&wired=%d",
+             auth_server->authserv_path,
+             auth_server->authserv_auth_script_path_fragment,
+             request_type,
+             ip, mac, safe_token, 
+             incoming, 
+             outgoing, 
+             (long long)first_login,
+             online_time,
+             config->gw_id,
+             g_channel_path?g_channel_path:"null", 
+             name?name:"null");
+    }
+
+    if (safe_token) free(safe_token);
+
+    return nret>0?uri:NULL;
+}
+
 /** Initiates a transaction with the auth server, either to authenticate or to
  * update the traffic counters at the server
 @param authresponse Returns the information given by the central server 
@@ -149,8 +224,7 @@ auth_server_request(t_authresponse * authresponse, const char *request_type, con
     char buf[MAX_BUF] = {0};
     char *tmp;
     char *safe_token;
-    t_auth_serv *auth_server = NULL;
-    auth_server = get_auth_server();
+    t_auth_serv *auth_server = get_auth_server();
 
     /* Blanket default is error. */
     authresponse->authcode = AUTH_ERROR;
@@ -446,5 +520,84 @@ _connect_auth_server(int level)
 			mark_auth_server_bad(auth_server);
 			return _connect_auth_server(level); /* Yay recursion! */
 		}
+    }
+}
+
+void
+process_auth_server_response(struct evhttp_request *req, void *ctx)
+{
+    static int authdown = 0;
+    
+    if (req == NULL || (req && req->response_code != 200)) {
+        if (!authdown) {
+            mark_auth_offline();
+            fw_set_authdown();
+            authdown = 1;
+        }
+        return;
+    }
+
+    char buffer[MAX_BUF] = {0};
+    char *tmp = NULL;
+    t_authresponse authresponse;
+    int nread = evbuffer_remove(evhttp_request_get_input_buffer(req),
+            buffer, MAX_BUF-1);
+    if (nread > 0)
+        debug(LOG_DEBUG, "process_auth_server_response buffer is %s", buffer);
+    
+    if (nread <= 0) {
+        debug(LOG_ERR, "There was a problem getting response from the auth server!");
+        if (!authdown) {
+            mark_auth_offline();
+            fw_set_authdown();
+            authdown = 1;
+        }
+        return;
+    } else if ((tmp = strstr(buffer, "Auth: "))) {
+        if (sscanf(tmp, "Auth: %d", (int *)&authresponse->authcode) == 1) {
+            debug(LOG_INFO, "Auth server returned authentication code %d", authresponse->authcode);
+        } else {
+            debug(LOG_WARNING, "Auth server did not return expected authentication code");
+            return;
+        }
+    }
+
+    t_client    *p1 = (t_client *)(((struct evhttps_request_context *)ctx)->data);
+    if (!p1) {
+       if (authresponse.authcode == AUTH_ERROR)
+            debug(LOG_WARNING, "Auth server error when reporting logout");
+        return;
+    }
+
+    t_client *tmp_c = NULL;
+    time_t current_time = time(NULL);
+    
+    debug(LOG_DEBUG,
+          "Checking client %s for timeout:  Last updated %ld (%ld seconds ago), timeout delay %ld seconds, current time %ld, ",
+          p1->ip, p1->counters.last_updated, current_time - p1->counters.last_updated,
+          config->checkinterval * config->clienttimeout, current_time);
+    if (p1->counters.last_updated + (config->checkinterval * config->clienttimeout) <= current_time) {
+        /* Timing out user */
+        debug(LOG_DEBUG, "%s - Inactive for more than %ld seconds, removing client and denying in firewall",
+              p1->ip, config->checkinterval * config->clienttimeout);
+        LOCK_CLIENT_LIST();
+        tmp_c = client_list_find_by_client(p1);
+        if (NULL != tmp_c) {
+            evhttps_logout_client(ctx, tmp_c);
+        } else {
+            debug(LOG_NOTICE, "Client was already removed. Not logging out.");
+        }
+        UNLOCK_CLIENT_LIST();
+    }else {
+        /*
+         * This handles any change in
+         * the status this allows us
+         * to change the status of a
+         * user while he's connected
+         *
+         * Only run if we have an auth server
+         * configured!
+         */
+        fw_client_process_from_authserver_response(&authresponse, p1);
     }
 }

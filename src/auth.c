@@ -62,6 +62,16 @@ thread_client_timeout_check(const void *arg)
     pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
     pthread_mutex_t cond_mutex = PTHREAD_MUTEX_INITIALIZER;
     struct timespec timeout;
+    t_auth_serv *auth_server = get_auth_server();
+    struct evhttps_request_context *context = NULL;
+
+    if (auth_server->authserv_use_ssl) {
+        context = evhttps_context_init();
+        if (!context) {
+            debug(LOG_ERR, "evhttps_context_init failed, process exit()");
+            exit(0);
+        }
+    }
 
     while (1) {
         /* Sleep for config.checkinterval seconds... */
@@ -79,11 +89,37 @@ thread_client_timeout_check(const void *arg)
 
         debug(LOG_DEBUG, "Running fw_counter()");
 
-        fw_sync_with_authserver();
-		
-		// liudf added 20160321
-		// report online trusted mac	
-		update_trusted_mac_list_status();
+        if (auth_server->authserv_use_ssl) {
+            evhttps_fw_sync_with_authserver(context);
+        } else {
+            fw_sync_with_authserver();
+        
+            // liudf added 20160321
+            // report online trusted mac    
+            update_trusted_mac_list_status();
+        }  
+    }
+
+    if (auth_server->authserv_use_ssl) {
+        evhttps_context_exit(context);
+    }
+}
+
+void
+evhttps_logout_client(void *ctx, t_client *client)
+{
+    struct evhttps_request_context *context = (struct evhttps_request_context *)ctx;
+    const s_config *config = config_get_config();
+
+    fw_deny(client);
+    client_list_remove(client);
+
+    if (config->auth_servers != NULL) {
+        char *uri = get_auth_uri(REQUEST_TYPE_LOGOUT, online_client, client);
+        if (uri) {
+            evhttps_request(context, uri, 2, process_auth_server_response, NULL);
+            free(uri);
+        }
     }
 }
 

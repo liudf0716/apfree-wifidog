@@ -325,10 +325,10 @@ process_ping_result(struct evhttp_request *req, void *ctx)
 	int nread = evbuffer_remove(evhttp_request_get_input_buffer(req),
 		    buffer, MAX_BUF-1);
 	if (nread > 0)
-		debug(LOG_DEBUG, "buffer is %s", buffer);
+		debug(LOG_DEBUG, "process_ping_result buffer is %s", buffer);
 	
 	if (nread <= 0) {
-        debug(LOG_ERR, "There was a problem pinging the auth server!");
+        debug(LOG_ERR, "There was a problem getting response from the auth server!");
         if (!authdown) {
 			mark_auth_offline();
             fw_set_authdown();
@@ -366,7 +366,7 @@ evpings(struct evhttps_request_context *context)
 	debug(LOG_DEBUG, "ping uri is %s", uri);
 	
 	int timeout = 2; // 2s
-	evhttps_request(context, uri, timeout, process_ping_result);
+	evhttps_request(context, uri, timeout, process_ping_result, NULL);
 	free(uri);
 }
 /** @internal
@@ -434,3 +434,4 @@ ping(void)
     }
     return;
 }
+

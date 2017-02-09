@@ -444,6 +444,139 @@ update_trusted_mac_list_status(void)
 	clear_dup_trusted_mac_list(tmac_list);
 }
 
+static void
+fw_client_operation(int operaion, t_client *p1)
+{
+    switch(operation) {
+    case 1:
+        fw_deny(p1);
+        debug(LOG_DEBUG, "fw_client_operation deny");
+        break;
+    case 2:
+        fw_allow(p1, FW_MARK_KNOWN);
+        debug(LOG_DEBUG, "fw_client_operation allow");
+        break;
+    }
+}
+
+void
+fw_client_process_from_authserver_response(t_authresponse *authresponse, t_client *p1)
+{
+    int operation = 0; // 0: no operation; 1: deny; 2: allow;
+    t_client *tmp_c;
+    s_config *config = config_get_config();
+
+    LOCK_CLIENT_LIST();
+    tmp_c = client_list_find_by_client(p1);
+    if (NULL == tmp_c) {
+        UNLOCK_CLIENT_LIST();
+        debug(LOG_NOTICE, "Client was already removed. Skipping auth processing");
+        return;       /* Next client please */
+    }
+
+    if (config->auth_servers != NULL && tmp_c->is_online) {
+        switch (authresponse->authcode) {
+        case AUTH_DENIED:
+            debug(LOG_NOTICE, "%s - Denied. Removing client and firewall rules", tmp_c->ip);
+            client_list_delete(tmp_c);
+            operation = 1;
+            break;
+
+        case AUTH_VALIDATION_FAILED:
+            debug(LOG_NOTICE, "%s - Validation timeout, now denied. Removing client and firewall rules",
+                  tmp_c->ip);
+            client_list_delete(tmp_c);
+            operation = 1;
+            break;
+
+        case AUTH_ALLOWED:
+            if (tmp_c->fw_connection_state != FW_MARK_KNOWN) {
+                debug(LOG_INFO, "%s - Access has changed to allowed, refreshing firewall and clearing counters",
+                      tmp_c->ip);
+
+                if (tmp_c->fw_connection_state != FW_MARK_PROBATION) {
+                    tmp_c->counters.incoming_delta =
+                     tmp_c->counters.outgoing_delta =
+                     tmp_c->counters.incoming =
+                     tmp_c->counters.outgoing = 0;
+                } else {
+                    //We don't want to clear counters if the user was in validation, it probably already transmitted data..
+                    debug(LOG_INFO,
+                          "%s - Skipped clearing counters after all, the user was previously in validation",
+                          tmp_c->ip);
+                }
+                
+                operation = 2;
+            }
+            break;
+
+        case AUTH_VALIDATION:
+            /*
+             * Do nothing, user
+             * is in validation
+             * period
+             */
+            debug(LOG_INFO, "%s - User in validation period", tmp_c->ip);
+            break;
+
+        case AUTH_ERROR:
+            debug(LOG_WARNING, "Error communicating with auth server - leaving %s as-is for now", tmp_c->ip);
+            break;
+
+        default:
+            debug(LOG_ERR, "I do not know about authentication code %d", authresponse.authcode);
+            break;
+        }
+    }
+    UNLOCK_CLIENT_LIST();
+
+    fw_client_operation(operation, p1);
+}
+
+void
+evhttps_fw_sync_with_authserver(struct evhttps_request_context *context)
+{
+    t_client *p1, *p2, *worklist, *tmp;
+    s_config *config = config_get_config();
+
+    if (-1 == iptables_fw_counters_update()) {
+        debug(LOG_ERR, "Could not get counters from firewall!");
+        return;
+    }
+
+    LOCK_CLIENT_LIST();
+
+    /* XXX Ideally, from a thread safety PoV, this function should build a list of client pointers,
+     * iterate over the list and have an explicit "client still valid" check while list is locked.
+     * That way clients can disappear during the cycle with no risk of trashing the heap or getting
+     * a SIGSEGV.
+     */
+    g_online_clients = client_list_dup(&worklist);
+    UNLOCK_CLIENT_LIST();
+
+    for (p1 = p2 = worklist; NULL != p1; p1 = p2) {
+        p2 = p1->next;      
+
+        /* Ping the client, if he responds it'll keep activity on the link.
+         * However, if the firewall blocks it, it will not help.  The suggested
+         * way to deal witht his is to keep the DHCP lease time extremely
+         * short:  Shorter than config->checkinterval * config->clienttimeout */
+        icmp_ping(p1->ip);
+        /* Update the counters on the remote server only if we have an auth server */
+        if (config->auth_servers != NULL && p1->is_online) {
+            char *uri = get_auth_uri(REQUEST_TYPE_COUNTERS, online_client, p1);
+            if (uri) {
+                evhttps_request(context, uri, 2, process_auth_server_response, p1);
+                free(uri);
+            }
+        }
+
+         
+    }
+    
+    client_list_destroy(worklist);
+}
+
 /**Probably a misnomer, this function actually refreshes the entire client list's traffic counter, re-authenticates every client with the central server and update's the central servers traffic counters and notifies it if a client has logged-out.
  * @todo Make this function smaller and use sub-fonctions
  */
@@ -516,71 +649,10 @@ fw_sync_with_authserver(void)
              * Only run if we have an auth server
              * configured!
              */
-            LOCK_CLIENT_LIST();
-            tmp = client_list_find_by_client(p1);
-            if (NULL == tmp) {
-                UNLOCK_CLIENT_LIST();
-                debug(LOG_NOTICE, "Client was already removed. Skipping auth processing");
-                continue;       /* Next client please */
-            }
-
-            if (config->auth_servers != NULL && tmp->is_online) {
-                switch (authresponse.authcode) {
-                case AUTH_DENIED:
-                    debug(LOG_NOTICE, "%s - Denied. Removing client and firewall rules", tmp->ip);
-                    fw_deny(tmp);
-                    client_list_delete(tmp);
-                    break;
-
-                case AUTH_VALIDATION_FAILED:
-                    debug(LOG_NOTICE, "%s - Validation timeout, now denied. Removing client and firewall rules",
-                          tmp->ip);
-                    fw_deny(tmp);
-                    client_list_delete(tmp);
-                    break;
-
-                case AUTH_ALLOWED:
-                    if (tmp->fw_connection_state != FW_MARK_KNOWN) {
-                        debug(LOG_INFO, "%s - Access has changed to allowed, refreshing firewall and clearing counters",
-                              tmp->ip);
-                        //WHY did we deny, then allow!?!? benoitg 2007-06-21
-                        //fw_deny(tmp->ip, tmp->mac, tmp->fw_connection_state); /* XXX this was possibly to avoid dupes. */
-
-                        if (tmp->fw_connection_state != FW_MARK_PROBATION) {
-                            tmp->counters.incoming_delta =
-                             tmp->counters.outgoing_delta =
-                             tmp->counters.incoming =
-                             tmp->counters.outgoing = 0;
-                        } else {
-                            //We don't want to clear counters if the user was in validation, it probably already transmitted data..
-                            debug(LOG_INFO,
-                                  "%s - Skipped clearing counters after all, the user was previously in validation",
-                                  tmp->ip);
-                        }
-                        fw_allow(tmp, FW_MARK_KNOWN);
-                    }
-                    break;
-
-                case AUTH_VALIDATION:
-                    /*
-                     * Do nothing, user
-                     * is in validation
-                     * period
-                     */
-                    debug(LOG_INFO, "%s - User in validation period", tmp->ip);
-                    break;
-
-                case AUTH_ERROR:
-                    debug(LOG_WARNING, "Error communicating with auth server - leaving %s as-is for now", tmp->ip);
-                    break;
-
-                default:
-                    debug(LOG_ERR, "I do not know about authentication code %d", authresponse.authcode);
-                    break;
-                }
-            }
-            UNLOCK_CLIENT_LIST();
+            fw_client_process_from_authserver_response(&authresponse, p1);
         }
+
+        
     }
 	
 	if (flag)

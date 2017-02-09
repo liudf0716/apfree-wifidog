@@ -159,6 +159,8 @@ void reset_client_list();
 
 int add_online_client(const char *);
 
+char *get_online_client_uri(t_client *);
+
 #define LOCK_OFFLINE_CLIENT_LIST() do { \
 	debug(LOG_DEBUG, "Locking offline client list"); \
 	pthread_mutex_lock(&offline_client_list_mutex); \
