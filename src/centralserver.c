@@ -135,13 +135,14 @@ get_auth_uri(const char *request_type, client_type_t type, void *data)
     char *mac   = NULL;
     char *name  = NULL;
     char *safe_token    = NULL;
-    unsigned long long int incoming = outgoing = incoming_delta = outgoing_delta = 0;
+    unsigned long long int incoming = 0,  outgoing = 0, incoming_delta = 0, outgoing_delta = 0;
     time_t first_login;
     unsigned int online_time = 0;
     int wired = 0;
 
     switch(type) {
     case online_client:
+    {
         t_client *o_client = (t_client *)data;
         ip  = o_client->ip;
         mac = o_client->mac;
@@ -153,11 +154,18 @@ get_auth_uri(const char *request_type, client_type_t type, void *data)
         outgoing = o_client->counters.outgoing;
         incoming_delta  = o_client->counters.incoming_delta;
         outgoing_delta  = o_client->counters.outgoing_delta;
+        break;
+    }
+        
     case trusted_client:
+    {
         t_trusted_mac *t_mac = (t_trusted_mac *)data;
         ip  = t_mac->ip;
         mac = t_mac->mac;
         wired = is_device_wired(mac);
+        break;
+    }
+
     default:
         return NULL;
     }
@@ -181,7 +189,7 @@ get_auth_uri(const char *request_type, client_type_t type, void *data)
              online_time,
              config->gw_id,
              g_channel_path?g_channel_path:"null", 
-             name?name:"null");
+             name?name:"null", wired);
     } else {
         nret = safe_asprintf(&uri, 
              "%s%sstage=%s&ip=%s&mac=%s&token=%s&incoming=%llu&outgoing=%llu&first_login=%lld&online_time=%u&gw_id=%s&channel_path=%s&name=%s&wired=%d",
@@ -195,7 +203,7 @@ get_auth_uri(const char *request_type, client_type_t type, void *data)
              online_time,
              config->gw_id,
              g_channel_path?g_channel_path:"null", 
-             name?name:"null");
+             name?name:"null", wired);
     }
 
     if (safe_token) free(safe_token);
@@ -554,8 +562,8 @@ process_auth_server_response(struct evhttp_request *req, void *ctx)
         }
         return;
     } else if ((tmp = strstr(buffer, "Auth: "))) {
-        if (sscanf(tmp, "Auth: %d", (int *)&authresponse->authcode) == 1) {
-            debug(LOG_INFO, "Auth server returned authentication code %d", authresponse->authcode);
+        if (sscanf(tmp, "Auth: %d", (int *)&authresponse.authcode) == 1) {
+            debug(LOG_INFO, "Auth server returned authentication code %d", authresponse.authcode);
         } else {
             debug(LOG_WARNING, "Auth server did not return expected authentication code");
             return;
@@ -571,6 +579,7 @@ process_auth_server_response(struct evhttp_request *req, void *ctx)
 
     t_client *tmp_c = NULL;
     time_t current_time = time(NULL);
+    s_config *config = config_get_config();
     
     debug(LOG_DEBUG,
           "Checking client %s for timeout:  Last updated %ld (%ld seconds ago), timeout delay %ld seconds, current time %ld, ",
