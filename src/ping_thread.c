@@ -313,8 +313,8 @@ process_ping_result(struct evhttp_request *req, void *ctx)
 	static int authdown = 0;
 	
 	if (req == NULL || (req && req->response_code != 200)) {
-		if (!authdown) {
-			mark_auth_offline();
+		mark_auth_offline();
+		if (!authdown) {		
             fw_set_authdown();
             authdown = 1;
         }
@@ -328,23 +328,23 @@ process_ping_result(struct evhttp_request *req, void *ctx)
 		debug(LOG_DEBUG, "process_ping_result buffer is %s", buffer);
 	
 	if (nread <= 0) {
+		mark_auth_offline();
         debug(LOG_ERR, "There was a problem getting response from the auth server!");
-        if (!authdown) {
-			mark_auth_offline();
+        if (!authdown) {			
             fw_set_authdown();
             authdown = 1;
         }
     } else if (strstr(buffer, "Pong") == 0) {
+		mark_auth_offline();
         debug(LOG_WARNING, "Auth server did NOT say Pong!");
         if (!authdown) {
-			mark_auth_offline();
             fw_set_authdown();
             authdown = 1;
         }
     } else {
+    	mark_auth_online();
         debug(LOG_DEBUG, "Auth Server Says: Pong");
         if (authdown) {
-			mark_auth_online();
             fw_set_authup();
             authdown = 0;
         }

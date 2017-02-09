@@ -262,11 +262,18 @@ static void check_internet_available() {
 	}
 }
 
+static void check_auth_server_available()
+{
+	
+}
+
 static void schedule_work_cb(evutil_socket_t fd, short event, void *arg) {
 	struct event *timeout = (struct event *)arg;
 	struct timeval tv;
 
 	check_internet_available();
+
+	check_auth_server_available();
 	
 	evutil_timerclear(&tv);
 	tv.tv_sec = config_get_config()->checkinterval;

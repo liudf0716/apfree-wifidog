@@ -533,15 +533,9 @@ _connect_auth_server(int level)
 
 void
 process_auth_server_response(struct evhttp_request *req, void *ctx)
-{
-    static int authdown = 0;
-    
+{ 
     if (req == NULL || (req && req->response_code != 200)) {
-        if (!authdown) {
-            mark_auth_offline();
-            fw_set_authdown();
-            authdown = 1;
-        }
+        mark_auth_offline();
         return;
     }
 
@@ -555,13 +549,10 @@ process_auth_server_response(struct evhttp_request *req, void *ctx)
     
     if (nread <= 0) {
         debug(LOG_ERR, "There was a problem getting response from the auth server!");
-        if (!authdown) {
-            mark_auth_offline();
-            fw_set_authdown();
-            authdown = 1;
-        }
+        mark_auth_offline();
         return;
     } else if ((tmp = strstr(buffer, "Auth: "))) {
+        mark_auth_online();
         if (sscanf(tmp, "Auth: %d", (int *)&authresponse.authcode) == 1) {
             debug(LOG_INFO, "Auth server returned authentication code %d", authresponse.authcode);
         } else {
@@ -580,7 +571,7 @@ process_auth_server_response(struct evhttp_request *req, void *ctx)
     t_client *tmp_c = NULL;
     time_t current_time = time(NULL);
     s_config *config = config_get_config();
-    
+
     debug(LOG_DEBUG,
           "Checking client %s for timeout:  Last updated %ld (%ld seconds ago), timeout delay %ld seconds, current time %ld, ",
           p1->ip, p1->counters.last_updated, current_time - p1->counters.last_updated,
