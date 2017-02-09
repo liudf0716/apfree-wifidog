@@ -262,9 +262,55 @@ static void check_internet_available() {
 	}
 }
 
-static void check_auth_server_available()
-{
-	
+static void check_auth_server_available_cb(int errcode, struct evutil_addrinfo *addr, void *ptr) {
+	t_auth_serv *auth_server = (t_auth_serv *)ptr;
+	if (errcode) { 
+		debug (LOG_DEBUG, "dns query error : %s", evutil_gai_strerror(errcode));
+		mark_auth_offline();
+		mark_auth_server_bad(auth_server);
+	} else {
+		int i = 0;
+		for (; addr = addr->ai_next; i++) {
+			char ip[128] = {0};
+			if (addr->ai_family == PF_INET) {
+				struct sockaddr_in *sin = (struct sockaddr_in*)addr->ai_addr;
+            	evutil_inet_ntop(AF_INET, &sin->sin_addr, ip,
+                	sizeof(ip)-1);
+
+            	if (!auth_server->last_ip || strcmp(auth_server->last_ip, ip) != 0) {
+		            /*
+		             * But the IP address is different from the last one we knew
+		             * Update it
+		             */
+		            debug(LOG_INFO, "Updating last_ip IP of server [%s] to [%s]", 
+		            	auth_server->authserv_hostname, ip);
+		            if (auth_server->last_ip)
+		                free(auth_server->last_ip);
+		            auth_server->last_ip = safe_dup(ip);
+
+		            /* Update firewall rules */
+		            fw_clear_authservers();
+		            fw_set_authservers();
+		        } 
+			}
+		}
+	}
+}
+
+static void check_auth_server_available() {
+	s_config *config = config_get_config();
+    t_auth_serv *auth_server = config->auth_servers;
+    struct evutil_addrinfo hints;
+    memset(&hints, 0, sizeof(hints));
+
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_flags = EVUTIL_AI_CANONNAME;
+
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_protocol = IPPROTO_TCP;
+
+    evdns_getaddrinfo( dnsbase, auth_server->authserv_hostname, NULL ,
+              &hints, check_auth_server_available_cb, auth_server);
 }
 
 static void schedule_work_cb(evutil_socket_t fd, short event, void *arg) {
