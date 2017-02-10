@@ -137,7 +137,7 @@ get_auth_uri(const char *request_type, client_type_t type, void *data)
     char *name  = NULL;
     char *safe_token    = NULL;
     unsigned long long int incoming = 0,  outgoing = 0, incoming_delta = 0, outgoing_delta = 0;
-    time_t first_login;
+    time_t first_login = 0;
     unsigned int online_time = 0;
     int wired = 0;
 

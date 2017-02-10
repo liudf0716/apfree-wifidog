@@ -185,6 +185,9 @@ authenticate_client(request * r)
         return;
     }
 
+    s_config    *config = config_get_config();
+    t_auth_serv *auth_server = get_auth_server();
+
     if (auth_server->authserv_use_ssl) {
         struct evhttps_request_context *context = evhttps_context_init();
         if (!context) {
@@ -197,7 +200,7 @@ authenticate_client(request * r)
             memset(&authresponse_client, 0, sizeof(authresponse_client));
             authresponse_client.type    = request_type_login;
             authresponse_client.client  = client;
-            auth_response_client.req    = r;
+            authresponse_client.req     = r;
             evhttps_request(context, uri, 2, process_auth_server_response, &authresponse_client);
             free(uri);
         }
@@ -205,7 +208,6 @@ authenticate_client(request * r)
         evhttps_context_exit(context);
 end:
         client_list_destroy(client);
-        free(token);
         return;
     }
 
@@ -230,8 +232,7 @@ end:
 	close_auth_server(); 
 	
     /* Prepare some variables we'll need below */
-    s_config    *config = config_get_config();
-    t_auth_serv *auth_server = get_auth_server();
+    
     
     LOCK_CLIENT_LIST();
     /* can't trust the client to still exist after n seconds have passed */
@@ -302,11 +303,14 @@ end:
 		//>>> liudf added 20160112
 		client->first_login = time(NULL);
 		client->is_online = 1;
-		LOCK_OFFLINE_CLIENT_LIST();
-		o_client = offline_client_list_find_by_mac(client->mac);	
-		if(o_client)
-			offline_client_list_delete(o_client);
-		UNLOCK_OFFLINE_CLIENT_LIST();
+        {
+            LOCK_OFFLINE_CLIENT_LIST();
+            t_offline_client *o_client = offline_client_list_find_by_mac(client->mac);    
+            if(o_client)
+                offline_client_list_delete(o_client);
+            UNLOCK_OFFLINE_CLIENT_LIST();
+        }
+		
 		//<<< liudf added end
         served_this_session++;
 		if(httpdGetVariableByName(r, "type")) {
