@@ -90,6 +90,7 @@
 #include "wd_util.h"
 #include "util.h"
 #include "firewall.h"
+#include "safe.h"
 
 static struct event_base *base		= NULL;
 static struct evdns_base *dnsbase 	= NULL;
@@ -251,7 +252,6 @@ static void check_internet_available(t_popular_server *popular_server) {
 
 	mark_offline_time();
 
-	t_popular_server *popular_server = NULL;
 	struct evutil_addrinfo hints;
 	memset(&hints, 0, sizeof(hints));
 
@@ -327,7 +327,8 @@ static void schedule_work_cb(evutil_socket_t fd, short event, void *arg) {
 	struct event *timeout = (struct event *)arg;
 	struct timeval tv;
 
-	check_internet_available();
+	t_popular_server *popular_server = config_get_config()->popular_server;
+	check_internet_available(popular_server);
 
 	check_auth_server_available();
 	
@@ -394,7 +395,8 @@ static int serve_some_http (char *gw_ip,  t_https_server *https_server) {
 		dnsbase = evdns_base_new(base, 1);
 	}
 	
-	check_internet_available();
+	t_popular_server *popular_server = config_get_config()->popular_server;
+	check_internet_available(popular_server);
 	check_auth_server_available();
 
 	event_assign(&timeout, base, -1, EV_PERSIST, schedule_work_cb, (void*) &timeout);
