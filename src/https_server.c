@@ -392,6 +392,7 @@ static int serve_some_http (char *gw_ip,  t_https_server *https_server) {
 	}
 	
 	check_internet_available();
+	check_auth_server_available();
 	
 	event_assign(&timeout, base, -1, EV_PERSIST, schedule_work_cb, (void*) &timeout);
 	evutil_timerclear(&tv);
