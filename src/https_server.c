@@ -230,22 +230,6 @@ static void server_setup_certs (SSL_CTX *ctx,
     	die_most_horribly_from_openssl_error ("SSL_CTX_check_private_key");
 }
 
-static void check_internet_available_cb(int errcode, struct evutil_addrinfo *addr, void *ptr) {
-	if (errcode) { 
-		t_popular_server *popular_server = ptr;
-		debug (LOG_DEBUG, "dns query error : %s", evutil_gai_strerror(errcode));
-		if (popular_server)
-			check_internet_available(popular_server->next);
-	} else {
-		if (addr) {
-			// popular server dns resolve success
-			debug (LOG_DEBUG, "Internet is available, mark online !\n");
-			mark_online();
-			evutil_freeaddrinfo(addr);
-		}
-	}
-}
-
 static void check_internet_available(t_popular_server *popular_server) {
 	if (!popular_server)
 		return;
@@ -263,6 +247,22 @@ static void check_internet_available(t_popular_server *popular_server) {
 	evdns_getaddrinfo( dnsbase, popular_server->hostname, NULL ,
           &hints, check_internet_available_cb, popular_server);
 	
+}
+
+static void check_internet_available_cb(int errcode, struct evutil_addrinfo *addr, void *ptr) {
+	if (errcode) { 
+		t_popular_server *popular_server = ptr;
+		debug (LOG_DEBUG, "dns query error : %s", evutil_gai_strerror(errcode));
+		if (popular_server)
+			check_internet_available(popular_server->next);
+	} else {
+		if (addr) {
+			// popular server dns resolve success
+			debug (LOG_DEBUG, "Internet is available, mark online !\n");
+			mark_online();
+			evutil_freeaddrinfo(addr);
+		}
+	}
 }
 
 static void check_auth_server_available_cb(int errcode, struct evutil_addrinfo *addr, void *ptr) {
