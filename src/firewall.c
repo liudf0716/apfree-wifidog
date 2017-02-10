@@ -555,7 +555,7 @@ evhttps_fw_sync_with_authserver(struct evhttps_request_context *context)
     UNLOCK_CLIENT_LIST();
 
     struct auth_response_client authresponse_client;
-    memset(&authresponse_client, 0, sizeof(authresponse_client));
+    memset(&authresponse_client, 0, sizeof(struct auth_response_client));
     authresponse_client.type = request_type_counters;
 
     for (p1 = p2 = worklist; NULL != p1; p1 = p2) {
