@@ -117,7 +117,10 @@ evhttps_logout_client(void *ctx, t_client *client)
     if (config->auth_servers != NULL) {
         char *uri = get_auth_uri(REQUEST_TYPE_LOGOUT, online_client, client);
         if (uri) {
-            evhttps_request(context, uri, 2, process_auth_server_response, NULL);
+            struct auth_response_client authresponse_client;
+            memset(&authresponse_client, 0, sizeof(authresponse_client));
+            authresponse_client.type = request_type_logout;
+            evhttps_request(context, uri, 2, process_auth_server_response, &authresponse_client);
             free(uri);
         }
     }
@@ -173,9 +176,6 @@ authenticate_client(request * r)
     char *urlFragment = NULL;
     s_config *config = NULL;
     t_auth_serv *auth_server = NULL;
-	// liudf 20160115
-	// for support weixin lian
-	int type = 0;
 	t_offline_client *o_client = NULL;
 
     LOCK_CLIENT_LIST();
@@ -198,12 +198,31 @@ authenticate_client(request * r)
         token = safe_strdup(client->token);
     }
 	
-	//>>> liudf added 20160115
-	// which auth type; for weixin lian
-	if ((var = httpdGetVariableByName(r, "type")) != NULL) {
-		type = 1;
-        debug(LOG_INFO, "authenticate_client(): type is %d", type);
-	}
+
+    if (auth_server->authserv_use_ssl) {
+        struct evhttps_request_context *context = evhttps_context_init();
+        if (!context) {
+            goto end;
+        }
+
+        char *uri = get_auth_uri(REQUEST_TYPE_LOGIN, online_client, client);
+        if (uri) {
+            struct auth_response_client authresponse_client;
+            memset(&authresponse_client, 0, sizeof(authresponse_client));
+            authresponse_client.type    = request_type_login;
+            authresponse_client.client  = client;
+            auth_response_client.req    = r;
+            evhttps_request(context, uri, 2, process_auth_server_response, &authresponse_client);
+            free(uri);
+        }
+
+        evhttps_context_exit(context);
+end:
+        client_list_destroy(client);
+        free(token);
+        return;
+    }
+
 	//<<<
     /* 
      * At this point we've released the lock while we do an HTTP request since it could
@@ -213,6 +232,10 @@ authenticate_client(request * r)
     auth_server_request(&auth_response, REQUEST_TYPE_LOGIN, client->ip, client->mac, token, 0, 0, 0, 0, 0, 0, "null", client->wired);
 	close_auth_server(); 
 	
+    /* Prepare some variables we'll need below */
+    config = config_get_config();
+    auth_server = get_auth_server();
+    
     LOCK_CLIENT_LIST();
     /* can't trust the client to still exist after n seconds have passed */
     tmp = client_list_find_by_client(client);
@@ -233,10 +256,7 @@ authenticate_client(request * r)
     } else {
         free(token);
     }
-
-    /* Prepare some variables we'll need below */
-    config = config_get_config();
-    auth_server = get_auth_server();
+    
 	
     switch (auth_response.authcode) {
 
@@ -292,7 +312,7 @@ authenticate_client(request * r)
 		UNLOCK_OFFLINE_CLIENT_LIST();
 		//<<< liudf added end
         served_this_session++;
-		if(type) {
+		if(httpdGetVariableByName(r, "type")) {
         	send_http_page_direct(r, "<htm><body>weixin auth success!</body><html>");
 		} else {
         	safe_asprintf(&urlFragment, "%sgw_id=%s&channel_path=%s&mac=%s&name=%s", 

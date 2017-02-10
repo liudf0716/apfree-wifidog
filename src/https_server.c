@@ -231,7 +231,10 @@ static void server_setup_certs (SSL_CTX *ctx,
 
 static void check_internet_available_cb(int errcode, struct evutil_addrinfo *addr, void *ptr) {
 	if (errcode) { 
+		t_popular_server *popular_server = ptr;
 		debug (LOG_DEBUG, "dns query error : %s", evutil_gai_strerror(errcode));
+		if (popular_server)
+			check_internet_available(popular_server->next);
 	} else {
 		if (addr) {
 			// popular server dns resolve success
@@ -242,37 +245,38 @@ static void check_internet_available_cb(int errcode, struct evutil_addrinfo *add
 	}
 }
 
-static void check_internet_available() {
-	t_popular_server *popular_server = NULL;
-	s_config *config = config_get_config();
-	
-	mark_offline_time();
-	
-	struct evutil_addrinfo hints;
-	for (popular_server = config->popular_servers; popular_server; popular_server = popular_server->next) {
-		memset(&hints, 0, sizeof(hints));
-        hints.ai_family = AF_UNSPEC;
-        hints.ai_flags = EVUTIL_AI_CANONNAME;
+static void check_internet_available(t_popular_server *popular_server) {
+	if (!popular_server)
+		return;
 
-        hints.ai_socktype = SOCK_STREAM;
-        hints.ai_protocol = IPPROTO_TCP;
-		
-		evdns_getaddrinfo( dnsbase, popular_server->hostname, NULL ,
-              &hints, check_internet_available_cb, NULL);
-	}
+	mark_offline_time();
+
+	t_popular_server *popular_server = NULL;
+	struct evutil_addrinfo hints;
+	memset(&hints, 0, sizeof(hints));
+
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_flags = EVUTIL_AI_CANONNAME;
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_protocol = IPPROTO_TCP;
+	
+	evdns_getaddrinfo( dnsbase, popular_server->hostname, NULL ,
+          &hints, check_internet_available_cb, popular_server);
+	
 }
 
 static void check_auth_server_available_cb(int errcode, struct evutil_addrinfo *addr, void *ptr) {
 	t_auth_serv *auth_server = (t_auth_serv *)ptr;
-	debug (LOG_DEBUG, "check_auth_server_available_cb come here");
 	if (errcode) { 
 		debug (LOG_INFO, "dns query error : %s", evutil_gai_strerror(errcode));
 		mark_auth_offline();
 		mark_auth_server_bad(auth_server);
 	} else {
 		int i = 0;
-		if (addr && addr->ai_canonname)
-			debug (LOG_DEBUG, "check_auth_server_available_cb success : %s", addr->ai_canonname);
+		if (!addr) {
+			debug (LOG_INFO, "impossible, addr is NULL!");
+			return;
+		}
 		for (;addr; addr = addr->ai_next, i++) {
 			char ip[128] = {0};
 			if (addr->ai_family == PF_INET) {
@@ -315,7 +319,6 @@ static void check_auth_server_available() {
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_protocol = IPPROTO_TCP;
 
-    debug(LOG_DEBUG, "check_auth_server_available : host name is %s", auth_server->authserv_hostname);
     evdns_getaddrinfo( dnsbase, auth_server->authserv_hostname, NULL ,
               &hints, check_auth_server_available_cb, auth_server);
 }
@@ -393,7 +396,7 @@ static int serve_some_http (char *gw_ip,  t_https_server *https_server) {
 	
 	check_internet_available();
 	check_auth_server_available();
-	
+
 	event_assign(&timeout, base, -1, EV_PERSIST, schedule_work_cb, (void*) &timeout);
 	evutil_timerclear(&tv);
 	tv.tv_sec = config_get_config()->checkinterval;

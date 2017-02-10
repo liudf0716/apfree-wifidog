@@ -308,7 +308,7 @@ get_sys_info(struct sys_info *info)
 }
 
 static void
-process_ping_result(struct evhttp_request *req, void *ctx)
+process_ping_response(struct evhttp_request *req, void *ctx)
 {
 	static int authdown = 0;
 	
@@ -366,7 +366,7 @@ evpings(struct evhttps_request_context *context)
 	debug(LOG_DEBUG, "ping uri is %s", uri);
 	
 	int timeout = 2; // 2s
-	evhttps_request(context, uri, timeout, process_ping_result, NULL);
+	evhttps_request(context, uri, timeout, process_ping_response, NULL);
 	free(uri);
 }
 /** @internal

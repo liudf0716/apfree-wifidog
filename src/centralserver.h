@@ -55,6 +55,18 @@ typedef enum {
     trusted_client
 } client_type_t;
 
+typedef enum {
+    request_type_login,
+    request_type_logout,
+    request_type_counters
+} request_type_t;
+
+struct {
+    request_type_t type;
+    t_client       *client;
+    request        *req;
+}auth_response_client;
+
 json_object *auth_server_roam_request(const char *mac);
 
 /** @brief Initiates a transaction with the auth server */

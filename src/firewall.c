@@ -554,6 +554,10 @@ evhttps_fw_sync_with_authserver(struct evhttps_request_context *context)
     g_online_clients = client_list_dup(&worklist);
     UNLOCK_CLIENT_LIST();
 
+    struct auth_response_client authresponse_client;
+    memset(&authresponse_client, 0, sizeof(authresponse_client));
+    authresponse_client.type = request_type_counters;
+
     for (p1 = p2 = worklist; NULL != p1; p1 = p2) {
         p2 = p1->next;      
 
@@ -562,11 +566,13 @@ evhttps_fw_sync_with_authserver(struct evhttps_request_context *context)
          * way to deal witht his is to keep the DHCP lease time extremely
          * short:  Shorter than config->checkinterval * config->clienttimeout */
         icmp_ping(p1->ip);
+        
         /* Update the counters on the remote server only if we have an auth server */
         if (config->auth_servers != NULL && p1->is_online) {
             char *uri = get_auth_uri(REQUEST_TYPE_COUNTERS, online_client, p1);
             if (uri) {
-                evhttps_request(context, uri, 2, process_auth_server_response, p1);
+                authresponse_client.client = p1;
+                evhttps_request(context, uri, 2, process_auth_server_response, &authresponse_client);
                 free(uri);
             }
         }

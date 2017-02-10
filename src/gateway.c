@@ -646,7 +646,7 @@ main_loop(void)
              *
              * We should create another thread
              */
-            debug(LOG_INFO, "Received connection from %s, spawning worker thread", r->clientAddr);
+            debug(LOG_DEBUG, "Received connection from %s, spawning worker thread", r->clientAddr);
             /* The void**'s are a simulation of the normal C
              * function calling sequence. */
             params = safe_malloc(2 * sizeof(void *));
