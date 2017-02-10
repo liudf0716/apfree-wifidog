@@ -648,7 +648,7 @@ reply_login_response(t_authresponse *authresponse, struct evhttps_request_contex
     s_config    *config = config_get_config();
     t_auth_serv *auth_server = get_auth_server();
 
-    switch (auth_response->authcode) {
+    switch (authresponse->authcode) {
 
     case AUTH_ERROR:
         /* Error talking to central server */
