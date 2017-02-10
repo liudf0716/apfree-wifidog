@@ -264,6 +264,7 @@ static void check_internet_available() {
 
 static void check_auth_server_available_cb(int errcode, struct evutil_addrinfo *addr, void *ptr) {
 	t_auth_serv *auth_server = (t_auth_serv *)ptr;
+	debug (LOG_DEBUG, "check_auth_server_available_cb come here");
 	if (errcode) { 
 		debug (LOG_INFO, "dns query error : %s", evutil_gai_strerror(errcode));
 		mark_auth_offline();
@@ -272,7 +273,7 @@ static void check_auth_server_available_cb(int errcode, struct evutil_addrinfo *
 		int i = 0;
 		if (addr && addr->ai_canonname)
 			debug (LOG_DEBUG, "check_auth_server_available_cb success : %s", addr->ai_canonname);
-		for (addr; addr = addr->ai_next; i++) {
+		for (;addr; addr = addr->ai_next, i++) {
 			char ip[128] = {0};
 			if (addr->ai_family == PF_INET) {
 				struct sockaddr_in *sin = (struct sockaddr_in*)addr->ai_addr;
@@ -293,6 +294,8 @@ static void check_auth_server_available_cb(int errcode, struct evutil_addrinfo *
 		            /* Update firewall rules */
 		            fw_clear_authservers();
 		            fw_set_authservers();
+
+		            evutil_freeaddrinfo(addr);
 		            break;
 		        } 
 			}
