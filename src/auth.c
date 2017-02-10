@@ -172,12 +172,9 @@ authenticate_client(request * r)
     t_client *client, *tmp;
     t_authresponse auth_response; 
     char *urlFragment = NULL;
-    s_config *config = NULL;
 
     LOCK_CLIENT_LIST();
-
     client = client_dup(client_list_find_by_ip(r->clientAddr));
-
     UNLOCK_CLIENT_LIST();
 
     if (client == NULL) {
