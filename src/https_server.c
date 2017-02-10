@@ -95,6 +95,8 @@
 static struct event_base *base		= NULL;
 static struct evdns_base *dnsbase 	= NULL;
 
+static void check_internet_available_cb(int errcode, struct evutil_addrinfo *addr, void *ptr);
+
 // !!!remember to free the return url
 char *
 evhttp_get_request_url(struct evhttp_request *req) {
