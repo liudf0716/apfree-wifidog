@@ -61,11 +61,11 @@ typedef enum {
     request_type_counters
 } request_type_t;
 
-struct {
+struct auth_response_client {
     request_type_t type;
     t_client       *client;
     request        *req;
-}auth_response_client;
+};
 
 json_object *auth_server_roam_request(const char *mac);
 
