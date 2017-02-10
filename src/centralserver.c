@@ -53,6 +53,7 @@
 #include "version.h"
 #include "debug.h"
 #include "simple_http.h"
+#include "http.h"
 
 json_object *
 auth_server_roam_request(const char *mac)
@@ -609,10 +610,19 @@ reply_login_response(t_authresponse *authresponse, struct evhttps_request_contex
     t_client            *tmp        = NULL;
     t_offline_client    *o_client   = NULL;
     request     *r = authresponse_client->req;
-    char        *urlFragment = NULL;
+    char    *urlFragment = NULL;
+    char    *token = NULL;
+    httpVar *var = NULL;
+    
 
-    s_config    *config = config_get_config();
-    t_auth_serv *auth_server = get_auth_server();
+    /* Users could try to log in(so there is a valid token in
+     * request) even after they have logged in, try to deal with
+     * this */
+    if ((var = httpdGetVariableByName(r, "token")) != NULL) {
+        token = safe_strdup(var->value);
+    } else {
+        token = safe_strdup(client->token);
+    }
 
     LOCK_CLIENT_LIST();
     /* can't trust the client to still exist after n seconds have passed */
@@ -634,6 +644,9 @@ reply_login_response(t_authresponse *authresponse, struct evhttps_request_contex
     } else {
         free(token);
     }
+
+    s_config    *config = config_get_config();
+    t_auth_serv *auth_server = get_auth_server();
 
     switch (auth_response->authcode) {
 
@@ -754,8 +767,7 @@ process_auth_server_response(struct evhttp_request *req, void *ctx) {
         return; // impossible here
 
     t_authresponse authresponse;
-    if (parse_auth_server_response(&authresponse, req) == 0)
-        retrun;
-
-    reply_auth_server_response(authresponse, ctx);
+    if (parse_auth_server_response(&authresponse, req)) {
+        reply_auth_server_response(&authresponse, ctx);
+    } 
 }

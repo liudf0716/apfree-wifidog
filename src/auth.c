@@ -170,13 +170,9 @@ void
 authenticate_client(request * r)
 {
     t_client *client, *tmp;
-    t_authresponse auth_response;
-    char *token = NULL;
-    httpVar *var = NULL;
+    t_authresponse auth_response; 
     char *urlFragment = NULL;
     s_config *config = NULL;
-    t_auth_serv *auth_server = NULL;
-	t_offline_client *o_client = NULL;
 
     LOCK_CLIENT_LIST();
 
@@ -188,16 +184,6 @@ authenticate_client(request * r)
         debug(LOG_ERR, "authenticate_client(): Could not find client for %s", r->clientAddr);
         return;
     }
-
-    /* Users could try to log in(so there is a valid token in
-     * request) even after they have logged in, try to deal with
-     * this */
-    if ((var = httpdGetVariableByName(r, "token")) != NULL) {
-        token = safe_strdup(var->value);
-    } else {
-        token = safe_strdup(client->token);
-    }
-	
 
     if (auth_server->authserv_use_ssl) {
         struct evhttps_request_context *context = evhttps_context_init();
@@ -223,6 +209,17 @@ end:
         return;
     }
 
+    char *token = NULL;
+    httpVar *var = NULL;
+    /* Users could try to log in(so there is a valid token in
+     * request) even after they have logged in, try to deal with
+     * this */
+    if ((var = httpdGetVariableByName(r, "token")) != NULL) {
+        token = safe_strdup(var->value);
+    } else {
+        token = safe_strdup(client->token);
+    }
+
 	//<<<
     /* 
      * At this point we've released the lock while we do an HTTP request since it could
@@ -233,8 +230,8 @@ end:
 	close_auth_server(); 
 	
     /* Prepare some variables we'll need below */
-    config = config_get_config();
-    auth_server = get_auth_server();
+    s_config    *config = config_get_config();
+    t_auth_serv *auth_server = get_auth_server();
     
     LOCK_CLIENT_LIST();
     /* can't trust the client to still exist after n seconds have passed */
