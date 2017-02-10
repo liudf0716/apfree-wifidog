@@ -327,7 +327,7 @@ static void schedule_work_cb(evutil_socket_t fd, short event, void *arg) {
 	struct event *timeout = (struct event *)arg;
 	struct timeval tv;
 
-	t_popular_server *popular_server = config_get_config()->popular_server;
+	t_popular_server *popular_server = config_get_config()->popular_servers;
 	check_internet_available(popular_server);
 
 	check_auth_server_available();
@@ -395,7 +395,7 @@ static int serve_some_http (char *gw_ip,  t_https_server *https_server) {
 		dnsbase = evdns_base_new(base, 1);
 	}
 	
-	t_popular_server *popular_server = config_get_config()->popular_server;
+	t_popular_server *popular_server = config_get_config()->popular_servers;
 	check_internet_available(popular_server);
 	check_auth_server_available();
 
