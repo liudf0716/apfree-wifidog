@@ -734,7 +734,7 @@ reply_login_response(t_authresponse *authresponse, struct evhttps_request_contex
     default:
         debug(LOG_WARNING,
               "I don't know what the validation code %d means for token %s from %s at %s - sending error message",
-              auth_response.authcode, client->token, client->ip, client->mac);
+              authresponse->authcode, client->token, client->ip, client->mac);
         client_list_delete(client); 
         
         send_http_page_direct(r, "<htm><body>Internal Error, We can not validate your request at this time</body></html>");
