@@ -689,11 +689,11 @@ reply_login_response(t_authresponse *authresponse, struct evhttps_request_contex
         break;
 
     case AUTH_VALIDATION:
+        UNLOCK_CLIENT_LIST();
         /* They just got validated for X minutes to check their email */
         debug(LOG_INFO, "Got VALIDATION from central server authenticating token %s from %s at %s"
               "- adding to firewall and redirecting them to activate message", client->token, client->ip, client->mac);
-        fw_allow(client, FW_MARK_PROBATION);
-        UNLOCK_CLIENT_LIST();
+        fw_allow(client, FW_MARK_PROBATION);    
 
         safe_asprintf(&urlFragment, "%smessage=%s",
                       auth_server->authserv_msg_script_path_fragment, GATEWAY_MESSAGE_ACTIVATE_ACCOUNT);
@@ -702,15 +702,16 @@ reply_login_response(t_authresponse *authresponse, struct evhttps_request_contex
         break;
 
     case AUTH_ALLOWED:
+        UNLOCK_CLIENT_LIST();
         /* Logged in successfully as a regular account */
         debug(LOG_INFO, "Got ALLOWED from central server authenticating token %s from %s at %s - "
               "adding to firewall and redirecting them to portal", client->token, client->ip, client->mac);
         fw_allow(client, FW_MARK_KNOWN);
-        UNLOCK_CLIENT_LIST();
-
+        
         //>>> liudf added 20160112
         client->first_login = time(NULL);
         client->is_online = 1;
+        
         LOCK_OFFLINE_CLIENT_LIST();
         o_client = offline_client_list_find_by_mac(client->mac);    
         if(o_client)
@@ -729,7 +730,6 @@ reply_login_response(t_authresponse *authresponse, struct evhttps_request_contex
                 client->name?client->name:"null");
             http_send_redirect_to_auth(r, urlFragment, "Redirect to portal");
             free(urlFragment);
-            debug(LOG_INFO, "debug here =========================");
         }
         break;
 
@@ -738,6 +738,7 @@ reply_login_response(t_authresponse *authresponse, struct evhttps_request_contex
         debug(LOG_INFO, "Got VALIDATION_FAILED from central server authenticating token %s from %s at %s "
               "- redirecting them to failed_validation message", client->token, client->ip, client->mac);
         client_list_delete(client);
+        UNLOCK_CLIENT_LIST();
         
         safe_asprintf(&urlFragment, "%smessage=%s",
                       auth_server->authserv_msg_script_path_fragment, GATEWAY_MESSAGE_ACCOUNT_VALIDATION_FAILED);
@@ -750,7 +751,8 @@ reply_login_response(t_authresponse *authresponse, struct evhttps_request_contex
               "I don't know what the validation code %d means for token %s from %s at %s - sending error message",
               authresponse->authcode, client->token, client->ip, client->mac);
         client_list_delete(client); 
-        
+        UNLOCK_CLIENT_LIST();
+
         send_http_page_direct(r, "<htm><body>Internal Error, We can not validate your request at this time</body></html>");
         break;
 

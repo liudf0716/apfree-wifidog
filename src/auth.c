@@ -188,7 +188,8 @@ authenticate_client(request * r)
     if (auth_server->authserv_use_ssl) {
         struct evhttps_request_context *context = evhttps_context_init();
         if (!context) {
-            goto end;
+            client_list_destroy(client);
+            return;
         }
 
         char *uri = get_auth_uri(REQUEST_TYPE_LOGIN, online_client, client);
@@ -203,8 +204,6 @@ authenticate_client(request * r)
         }
 
         evhttps_context_exit(context);
-end:
-        client_list_destroy(client);
         return;
     }
 
@@ -292,11 +291,12 @@ end:
         break;
 
     case AUTH_ALLOWED:
+        UNLOCK_CLIENT_LIST();
         /* Logged in successfully as a regular account */
         debug(LOG_INFO, "Got ALLOWED from central server authenticating token %s from %s at %s - "
               "adding to firewall and redirecting them to portal", client->token, client->ip, client->mac);
         fw_allow(client, FW_MARK_KNOWN);
-    	UNLOCK_CLIENT_LIST();
+    	
 		//>>> liudf added 20160112
 		client->first_login = time(NULL);
 		client->is_online = 1;
