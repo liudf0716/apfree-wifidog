@@ -537,12 +537,25 @@ parse_auth_server_response(t_authresponse *authresponse, struct evhttp_request *
     if (!authresponse)
         return 0;
 
+    char buffer[MAX_BUF] = {0};
+    
     if (req == NULL || (req && req->response_code != 200)) {
         mark_auth_offline();
+        if (req == NULL)
+            debug(LOG_WARNING, "req is NULL, it seems request timeout");
+        else {
+            char buffer[MAX_BUF] = {0};
+
+            int nread = evbuffer_remove(evhttp_request_get_input_buffer(req),
+                    buffer, MAX_BUF-1);
+            if (nread > 0)
+                debug(LOG_WARNING, "response_code [%d] buffer is %s", 
+                    req->response_code, buffer);
+        }
         return 0;
     }
 
-    char buffer[MAX_BUF] = {0};
+    
     char *tmp = NULL;
 
     int nread = evbuffer_remove(evhttp_request_get_input_buffer(req),
