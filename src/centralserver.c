@@ -538,7 +538,7 @@ parse_auth_server_response(t_authresponse *authresponse, struct evhttp_request *
         return 0;
 
     char buffer[MAX_BUF] = {0};
-    
+
     if (req == NULL || (req && req->response_code != 200)) {
         mark_auth_offline();
         if (req == NULL)
@@ -561,7 +561,7 @@ parse_auth_server_response(t_authresponse *authresponse, struct evhttp_request *
     int nread = evbuffer_remove(evhttp_request_get_input_buffer(req),
             buffer, MAX_BUF-1);
     if (nread > 0)
-        debug(LOG_DEBUG, "process_auth_server_response buffer is %s", buffer);
+        debug(LOG_DEBUG, "parse_auth_server_response buffer is %s", buffer);
     
     if (nread <= 0) {
         debug(LOG_ERR, "There was a problem getting response from the auth server!");
@@ -729,6 +729,7 @@ reply_login_response(t_authresponse *authresponse, struct evhttps_request_contex
                 client->name?client->name:"null");
             http_send_redirect_to_auth(r, urlFragment, "Redirect to portal");
             free(urlFragment);
+            debug(LOG_INFO, "debug here =========================");
         }
         break;
 
