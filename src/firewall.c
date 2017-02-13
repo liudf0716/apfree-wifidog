@@ -415,6 +415,37 @@ update_trusted_mac_status(t_trusted_mac *tmac)
 }
 
 void
+evhttps_update_trusted_mac_list_status(struct evhttps_request_context *context)
+{
+    t_trusted_mac *p1 = NULL, *tmac_list = NULL;
+    s_config *config = config_get_config();
+
+    if(trusted_mac_list_dup(&tmac_list) == 0) {
+        debug(LOG_DEBUG, "update_trusted_mac_list_status: list is empty");
+        return;
+    }
+    
+    struct auth_response_client authresponse_client;
+    memset(&authresponse_client, 0, sizeof(struct auth_response_client));
+    authresponse_client.type = request_type_counters;
+
+    for(p1 = tmac_list; p1 != NULL; p1 = p1->next) {
+        update_trusted_mac_status(p1);
+        debug(LOG_DEBUG, "update_trusted_mac_list_status: %s %s %d", p1->ip, p1->mac, p1->is_online);
+        if (config->auth_servers != NULL && p1->is_online) {
+            char *uri = get_auth_uri(REQUEST_TYPE_COUNTERS, trusted_client, p1);
+            if (uri) {
+                evhttps_request(context, uri, 2, process_auth_server_response, &authresponse_client);
+                free(uri);
+            }
+        }
+            
+    }
+    
+    clear_dup_trusted_mac_list(tmac_list);
+}
+
+void
 update_trusted_mac_list_status(void)
 {
     t_authresponse authresponse;
@@ -566,7 +597,7 @@ evhttps_fw_sync_with_authserver(struct evhttps_request_context *context)
          * way to deal witht his is to keep the DHCP lease time extremely
          * short:  Shorter than config->checkinterval * config->clienttimeout */
         icmp_ping(p1->ip);
-        
+
         /* Update the counters on the remote server only if we have an auth server */
         if (config->auth_servers != NULL && p1->is_online) {
             char *uri = get_auth_uri(REQUEST_TYPE_COUNTERS, online_client, p1);

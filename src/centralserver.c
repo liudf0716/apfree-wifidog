@@ -585,6 +585,11 @@ reply_counter_response(t_authresponse *authresponse, struct evhttps_request_cont
     time_t current_time = time(NULL);
     s_config *config = config_get_config();
 
+    if (p1 == NULL) {
+        debug(LOG_DEBUG, "client is null: maybe it's trusted mac client");
+        return;
+    }
+
     debug(LOG_DEBUG,
           "Checking client %s for timeout:  Last updated %ld (%ld seconds ago), timeout delay %ld seconds, current time %ld, ",
           p1->ip, p1->counters.last_updated, current_time - p1->counters.last_updated,
@@ -711,7 +716,7 @@ reply_login_response(t_authresponse *authresponse, struct evhttps_request_contex
         //>>> liudf added 20160112
         client->first_login = time(NULL);
         client->is_online = 1;
-        
+
         LOCK_OFFLINE_CLIENT_LIST();
         o_client = offline_client_list_find_by_mac(client->mac);    
         if(o_client)

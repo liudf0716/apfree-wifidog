@@ -91,11 +91,9 @@ thread_client_timeout_check(const void *arg)
 
         if (auth_server->authserv_use_ssl) {
             evhttps_fw_sync_with_authserver(context);
+            evhttps_update_trusted_mac_list_status(context);
         } else {
-            fw_sync_with_authserver();
-        
-            // liudf added 20160321
-            // report online trusted mac    
+            fw_sync_with_authserver(); 
             update_trusted_mac_list_status();
         }  
     }
