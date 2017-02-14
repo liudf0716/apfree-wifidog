@@ -148,7 +148,7 @@ typedef enum {
 	oNoAuth,
 	oGatewayHttpsPort,
 	oWorkMode,
-    oUpdateDomainsInterval,
+    oUpdateDomainInterval,
 	// <<< liudf added end
 } OpCodes;
 
@@ -213,7 +213,7 @@ static const struct {
 	"noAuth", oNoAuth}, {
 	"gatewayHttpsPort", oGatewayHttpsPort}, {
 	"workMode", oWorkMode}, {
-    "updateDomainsInterval", oUpdateDomainsInterval}, {
+    "updateDomainInterval", oUpdateDomainInterval}, {
 	// <<<< liudf added end
 NULL, oBadOption},};
 
@@ -947,7 +947,7 @@ config_read(const char *filename)
 				case oWorkMode:
 					sscanf(p1, "%hu", &config.work_mode);
 					break;
-                case oUpdateDomainsInterval:
+                case oUpdateDomainInterval:
                     sscanf(p1, "%d", &config.update_domain_interval);
                     break;
 				// <<< liudf added end
