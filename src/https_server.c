@@ -328,12 +328,25 @@ static void check_auth_server_available() {
 static void schedule_work_cb(evutil_socket_t fd, short event, void *arg) {
 	struct event *timeout = (struct event *)arg;
 	struct timeval tv;
+	static int update_domain_interval = 1;
 
 	t_popular_server *popular_server = config_get_config()->popular_servers;
 	check_internet_available(popular_server);
 
 	check_auth_server_available();
 	
+	// if config->update_domain_interval not 0
+	if (update_domain_interval == config_get_config()->update_domain_interval) {
+		parse_user_trusted_domain_list();
+		parse_inner_trusted_domain_list();
+
+		fw_refresh_user_domains_trusted();
+		fw_refresh_inner_domains_trusted();
+
+		update_domain_interval = 1;
+	} else
+		update_domain_interval++;
+
 	evutil_timerclear(&tv);
 	tv.tv_sec = config_get_config()->checkinterval;
 	event_add(timeout, &tv);

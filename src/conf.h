@@ -284,6 +284,7 @@ typedef struct {
 	short	queue_size;
 	short	no_auth;
 	short	work_mode; /** when work_mode 1, it will drop all packets default*/
+	int 	update_domain_interval; /** 0, no need update; otherwise update every update_domain_interval*checkinterval seconds*/
 } s_config;
 
 /** @brief Get the current gateway configuration */

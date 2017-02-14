@@ -148,6 +148,7 @@ typedef enum {
 	oNoAuth,
 	oGatewayHttpsPort,
 	oWorkMode,
+    oUpdateDomainsInterval,
 	// <<< liudf added end
 } OpCodes;
 
@@ -212,6 +213,7 @@ static const struct {
 	"noAuth", oNoAuth}, {
 	"gatewayHttpsPort", oGatewayHttpsPort}, {
 	"workMode", oWorkMode}, {
+    "updateDomainsInterval", oUpdateDomainsInterval}, {
 	// <<<< liudf added end
 NULL, oBadOption},};
 
@@ -282,6 +284,7 @@ config_init(void)
 	config.parse_checked	= 1; // before parse domain's ip; fping check it
 	config.no_auth 			= 0; // 
 	config.work_mode		= 0;
+    config.update_domain_interval  = 0;
 	
 	t_https_server *https_server	= (t_https_server *)malloc(sizeof(t_https_server));
 	memset(https_server, 0, sizeof(t_https_server));
@@ -944,6 +947,9 @@ config_read(const char *filename)
 				case oWorkMode:
 					sscanf(p1, "%hu", &config.work_mode);
 					break;
+                case oUpdateDomainsInterval:
+                    sscanf(p1, "%d", &config.update_domain_interval);
+                    break;
 				// <<< liudf added end
                 case oBadOption:
                     /* FALL THROUGH */
