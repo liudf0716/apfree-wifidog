@@ -230,7 +230,7 @@ static void ezxml_open_tag(ezxml_root_t root, char *name, char **attr)
 }
 
 // called when parser finds character content between open and closing tag
-void ezxml_char_content(ezxml_root_t root, char *s, size_t len, char t)
+static void ezxml_char_content(ezxml_root_t root, char *s, size_t len, char t)
 {
     ezxml_t xml = root->cur;
     char *m = s;
@@ -254,7 +254,7 @@ void ezxml_char_content(ezxml_root_t root, char *s, size_t len, char t)
 }
 
 // called when parser finds closing tag
-ezxml_t ezxml_close_tag(ezxml_root_t root, char *name, char *s)
+static ezxml_t ezxml_close_tag(ezxml_root_t root, char *name, char *s)
 {
     if (! root->cur || ! root->cur->name || strcmp(name, root->cur->name))
         return ezxml_err(root, s, "unexpected closing tag </%s>", name);
@@ -265,7 +265,7 @@ ezxml_t ezxml_close_tag(ezxml_root_t root, char *name, char *s)
 
 // checks for circular entity references, returns non-zero if no circular
 // references are found, zero otherwise
-int ezxml_ent_ok(char *name, char *s, char **ent)
+static int ezxml_ent_ok(char *name, char *s, char **ent)
 {
     int i;
 
