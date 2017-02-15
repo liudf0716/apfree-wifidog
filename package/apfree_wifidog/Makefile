@@ -6,7 +6,7 @@ PKG_RELEASE=1
 
 
 PKG_LICENSE:=GPL-2.0
-PKG_MAINTAINER:=Liu Dengfeng <liudengfeng@kunteng.org>
+PKG_MAINTAINER:=Dengfeng Liu<liudengfeng@kunteng.org>
 PKG_LICENSE_FILES:=COPYING
 
 PKG_SOURCE_PROTO:=git
