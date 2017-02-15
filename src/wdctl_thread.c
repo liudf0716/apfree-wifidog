@@ -881,12 +881,9 @@ wdctl_user_cfg_save(int fd)
 			   *trusted_domains = NULL,
 			   *trusted_pan_domains = NULL,
 			   *trusted_iplist = NULL;
-	char	szcmd[128] = {0};
-	char	*new_cmd = NULL;
 	
 	iptables_fw_save_online_clients();
 	
-
 	trusted_maclist 	= get_serialize_maclist(TRUSTED_MAC);
 	untrusted_maclist 	= get_serialize_maclist(UNTRUSTED_MAC);
 	trusted_domains		= get_serialize_trusted_domains();
