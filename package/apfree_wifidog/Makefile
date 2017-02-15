@@ -25,7 +25,9 @@ include $(INCLUDE_DIR)/cmake.mk
 
 define Package/$(PKG_NAME)
   CATEGORY:=ApFree
-  DEPENDS:=+zlib +iptables-mod-extra +iptables-mod-ipopt +kmod-ipt-nat +iptables-mod-nat-extra +libpthread +libopenssl +libjson-c +base-files +ipset +libip4tc +libevent2 +libevent2-openssl
+  DEPENDS:=+zlib +iptables-mod-extra +iptables-mod-ipopt +kmod-ipt-nat \
+	     +iptables-mod-nat-extra +libpthread +libopenssl +libjson-c \
+			 +ipset +libip4tc +libevent2 +libevent2-openssl +fping
   TITLE:=ApFree wireless captive portal solution
   URL:=http://www.kunteng.org
 endef
