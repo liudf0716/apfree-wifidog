@@ -45,9 +45,6 @@ define Package/$(PKG_NAME)/install
 	$(CP) $(PKG_INSTALL_DIR)/usr/lib/libhttpd.so* $(1)/usr/lib/
 	$(INSTALL_DIR) $(1)/usr/sbin
 	$(INSTALL_BIN) ./files/wdping $(1)/usr/sbin/
-	$(INSTALL_BIN) ./files/wifidog_op $(1)/usr/sbin/
-	$(INSTALL_BIN) ./files/verify_wifidog $(1)/usr/sbin/
-	$(INSTALL_BIN) ./files/watch_wifidog $(1)/usr/sbin/
 	$(INSTALL_DIR) $(1)/etc
 	$(INSTALL_DATA) $(PKG_BUILD_DIR)/wifidog-msg.html $(1)/etc/
 	$(INSTALL_DATA) $(PKG_BUILD_DIR)/wifidog-redir.html $(1)/etc/
@@ -59,10 +56,6 @@ define Package/$(PKG_NAME)/install
 	$(INSTALL_BIN) ./files/wifidog.init $(1)/etc/init.d/wifidog
 	$(INSTALL_DIR) $(1)/etc/config
 	$(CP) ./files/wifidog.conf $(1)/etc/config/wifidog
-	$(INSTALL_DIR) $(1)/etc/uci-defaults
-	$(INSTALL_BIN) ./files/08_add-wifidog-conf-gatewayid $(1)/etc/uci-defaults/
-	$(INSTALL_DIR) $(1)/etc/market
-	$(INSTALL_DIR) $(1)/etc/market/$(PKG_NAME)
 	$(CP) ./files/apfree.* $(1)/etc/
 endef
 
