@@ -29,6 +29,8 @@
 #define _FIREWALL_H_
 
 #include "client_list.h"
+#include "auth.h"
+#include "simple_http.h"
 
 /** Used by fw_iptables.c */
 typedef enum _t_fw_marks {
@@ -115,5 +117,11 @@ void fw_set_mac_temporary(const char *, int);
 void fw_set_trusted_mac(const char *);
 
 void update_trusted_mac_list_status(void);
+
+void fw_client_process_from_authserver_response(t_authresponse *, t_client *p1);
+
+void evhttps_fw_sync_with_authserver(struct evhttps_request_context *);
+
+void evhttps_update_trusted_mac_list_status(struct evhttps_request_context *);
 //<<<< liudf added end
 #endif                          /* _FIREWALL_H_ */

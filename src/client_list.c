@@ -650,3 +650,11 @@ add_online_client(const char *info)
 	json_object_put(client_info);
 	return 0;	
 }
+
+char *
+get_online_client_uri(t_client *client)
+{
+    char *client_uri = NULL;
+
+    safe_asprintf(&client_uri, "");
+}

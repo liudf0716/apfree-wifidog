@@ -6,7 +6,7 @@ PKG_RELEASE=1
 
 
 PKG_LICENSE:=GPL-2.0
-PKG_MAINTAINER:=Liu Dengfeng <liudengfeng@kunteng.org>
+PKG_MAINTAINER:=Dengfeng Liu<liudengfeng@kunteng.org>
 PKG_LICENSE_FILES:=COPYING
 
 PKG_SOURCE_PROTO:=git
@@ -25,7 +25,9 @@ include $(INCLUDE_DIR)/cmake.mk
 
 define Package/$(PKG_NAME)
   CATEGORY:=ApFree
-  DEPENDS:=+zlib +iptables-mod-extra +iptables-mod-ipopt +kmod-ipt-nat +iptables-mod-nat-extra +libpthread +libopenssl +libjson-c +base-files +ipset +libip4tc +libevent2 +libevent2-openssl
+  DEPENDS:=+zlib +iptables-mod-extra +iptables-mod-ipopt +kmod-ipt-nat \
+	     +iptables-mod-nat-extra +libpthread +libopenssl +libjson-c \
+			 +ipset +libip4tc +libevent2 +libevent2-openssl +fping
   TITLE:=ApFree wireless captive portal solution
   URL:=http://www.kunteng.org
 endef
@@ -45,9 +47,6 @@ define Package/$(PKG_NAME)/install
 	$(CP) $(PKG_INSTALL_DIR)/usr/lib/libhttpd.so* $(1)/usr/lib/
 	$(INSTALL_DIR) $(1)/usr/sbin
 	$(INSTALL_BIN) ./files/wdping $(1)/usr/sbin/
-	$(INSTALL_BIN) ./files/wifidog_op $(1)/usr/sbin/
-	$(INSTALL_BIN) ./files/verify_wifidog $(1)/usr/sbin/
-	$(INSTALL_BIN) ./files/watch_wifidog $(1)/usr/sbin/
 	$(INSTALL_DIR) $(1)/etc
 	$(INSTALL_DATA) $(PKG_BUILD_DIR)/wifidog-msg.html $(1)/etc/
 	$(INSTALL_DATA) $(PKG_BUILD_DIR)/wifidog-redir.html $(1)/etc/
@@ -59,10 +58,6 @@ define Package/$(PKG_NAME)/install
 	$(INSTALL_BIN) ./files/wifidog.init $(1)/etc/init.d/wifidog
 	$(INSTALL_DIR) $(1)/etc/config
 	$(CP) ./files/wifidog.conf $(1)/etc/config/wifidog
-	$(INSTALL_DIR) $(1)/etc/uci-defaults
-	$(INSTALL_BIN) ./files/08_add-wifidog-conf-gatewayid $(1)/etc/uci-defaults/
-	$(INSTALL_DIR) $(1)/etc/market
-	$(INSTALL_DIR) $(1)/etc/market/$(PKG_NAME)
 	$(CP) ./files/apfree.* $(1)/etc/
 endef
 

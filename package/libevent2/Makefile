@@ -8,15 +8,15 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=libevent2
-PKG_VERSION:=2.1.7
+PKG_VERSION:=2.1.8
 PKG_RELEASE:=1
 
 PKG_SOURCE_PROTO:=git
 PKG_SOURCE_URL=https://github.com/libevent/libevent.git
-PKG_SOURCE_VERSION:=release-2.1.7-rc
+PKG_SOURCE_VERSION:=release-2.1.8-stable
 PKG_SOURCE_SUBDIR:=$(PKG_NAME)-$(PKG_VERSION)
-PKG_SOURCE:=libevent-$(PKG_VERSION)-rc.tar.gz
-PKG_MAINTAINER:=Jo-Philipp Wich <jow@openwrt.org>
+PKG_SOURCE:=libevent-$(PKG_VERSION)-stable.tar.gz
+PKG_MAINTAINER:=Dengfeng Liu <liudengfeng@kunteng.org>
 PKG_LICENSE:=BSD-3-Clause
 
 PKG_FIXUP:=autoreconf
@@ -24,7 +24,6 @@ PKG_INSTALL:=1
 PKG_BUILD_PARALLEL:=1
 
 include $(INCLUDE_DIR)/package.mk
-#include $(INCLUDE_DIR)/cmake.mk
 
 define Package/libevent2/Default
   SECTION:=libs

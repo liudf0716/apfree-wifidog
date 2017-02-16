@@ -62,6 +62,16 @@ thread_client_timeout_check(const void *arg)
     pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
     pthread_mutex_t cond_mutex = PTHREAD_MUTEX_INITIALIZER;
     struct timespec timeout;
+    t_auth_serv *auth_server = get_auth_server();
+    struct evhttps_request_context *context = NULL;
+
+    if (auth_server->authserv_use_ssl) {
+        context = evhttps_context_init();
+        if (!context) {
+            debug(LOG_ERR, "evhttps_context_init failed, process exit()");
+            exit(0);
+        }
+    }
 
     while (1) {
         /* Sleep for config.checkinterval seconds... */
@@ -79,11 +89,38 @@ thread_client_timeout_check(const void *arg)
 
         debug(LOG_DEBUG, "Running fw_counter()");
 
-        fw_sync_with_authserver();
-		
-		// liudf added 20160321
-		// report online trusted mac	
-		update_trusted_mac_list_status();
+        if (auth_server->authserv_use_ssl) {
+            evhttps_fw_sync_with_authserver(context);
+            evhttps_update_trusted_mac_list_status(context);
+        } else {
+            fw_sync_with_authserver(); 
+            update_trusted_mac_list_status();
+        }  
+    }
+
+    if (auth_server->authserv_use_ssl) {
+        evhttps_context_exit(context);
+    }
+}
+
+void
+evhttps_logout_client(void *ctx, t_client *client)
+{
+    struct evhttps_request_context *context = (struct evhttps_request_context *)ctx;
+    const s_config *config = config_get_config();
+
+    fw_deny(client);
+    client_list_remove(client);
+
+    if (config->auth_servers != NULL) {
+        char *uri = get_auth_uri(REQUEST_TYPE_LOGOUT, online_client, client);
+        if (uri) {
+            struct auth_response_client authresponse_client;
+            memset(&authresponse_client, 0, sizeof(authresponse_client));
+            authresponse_client.type = request_type_logout;
+            evhttps_request(context, uri, 2, process_auth_server_response, &authresponse_client);
+            free(uri);
+        }
     }
 }
 
@@ -131,21 +168,11 @@ void
 authenticate_client(request * r)
 {
     t_client *client, *tmp;
-    t_authresponse auth_response;
-    char *token = NULL;
-    httpVar *var = NULL;
+    t_authresponse auth_response; 
     char *urlFragment = NULL;
-    s_config *config = NULL;
-    t_auth_serv *auth_server = NULL;
-	// liudf 20160115
-	// for support weixin lian
-	int type = 0;
-	t_offline_client *o_client = NULL;
 
     LOCK_CLIENT_LIST();
-
     client = client_dup(client_list_find_by_ip(r->clientAddr));
-
     UNLOCK_CLIENT_LIST();
 
     if (client == NULL) {
@@ -153,6 +180,33 @@ authenticate_client(request * r)
         return;
     }
 
+    s_config    *config = config_get_config();
+    t_auth_serv *auth_server = get_auth_server();
+
+    if (auth_server->authserv_use_ssl) {
+        struct evhttps_request_context *context = evhttps_context_init();
+        if (!context) {
+            client_list_destroy(client);
+            return;
+        }
+
+        char *uri = get_auth_uri(REQUEST_TYPE_LOGIN, online_client, client);
+        if (uri) {
+            struct auth_response_client authresponse_client;
+            memset(&authresponse_client, 0, sizeof(authresponse_client));
+            authresponse_client.type    = request_type_login;
+            authresponse_client.client  = client;
+            authresponse_client.req     = r;
+            evhttps_request(context, uri, 2, process_auth_server_response, &authresponse_client);
+            free(uri);
+        }
+
+        evhttps_context_exit(context);
+        return;
+    }
+
+    char *token = NULL;
+    httpVar *var = NULL;
     /* Users could try to log in(so there is a valid token in
      * request) even after they have logged in, try to deal with
      * this */
@@ -161,13 +215,7 @@ authenticate_client(request * r)
     } else {
         token = safe_strdup(client->token);
     }
-	
-	//>>> liudf added 20160115
-	// which auth type; for weixin lian
-	if ((var = httpdGetVariableByName(r, "type")) != NULL) {
-		type = 1;
-        debug(LOG_INFO, "authenticate_client(): type is %d", type);
-	}
+
 	//<<<
     /* 
      * At this point we've released the lock while we do an HTTP request since it could
@@ -177,6 +225,9 @@ authenticate_client(request * r)
     auth_server_request(&auth_response, REQUEST_TYPE_LOGIN, client->ip, client->mac, token, 0, 0, 0, 0, 0, 0, "null", client->wired);
 	close_auth_server(); 
 	
+    /* Prepare some variables we'll need below */
+    
+    
     LOCK_CLIENT_LIST();
     /* can't trust the client to still exist after n seconds have passed */
     tmp = client_list_find_by_client(client);
@@ -197,10 +248,7 @@ authenticate_client(request * r)
     } else {
         free(token);
     }
-
-    /* Prepare some variables we'll need below */
-    config = config_get_config();
-    auth_server = get_auth_server();
+    
 	
     switch (auth_response.authcode) {
 
@@ -241,22 +289,26 @@ authenticate_client(request * r)
         break;
 
     case AUTH_ALLOWED:
+        UNLOCK_CLIENT_LIST();
         /* Logged in successfully as a regular account */
         debug(LOG_INFO, "Got ALLOWED from central server authenticating token %s from %s at %s - "
               "adding to firewall and redirecting them to portal", client->token, client->ip, client->mac);
         fw_allow(client, FW_MARK_KNOWN);
-    	UNLOCK_CLIENT_LIST();
+    	
 		//>>> liudf added 20160112
 		client->first_login = time(NULL);
 		client->is_online = 1;
-		LOCK_OFFLINE_CLIENT_LIST();
-		o_client = offline_client_list_find_by_mac(client->mac);	
-		if(o_client)
-			offline_client_list_delete(o_client);
-		UNLOCK_OFFLINE_CLIENT_LIST();
+        {
+            LOCK_OFFLINE_CLIENT_LIST();
+            t_offline_client *o_client = offline_client_list_find_by_mac(client->mac);    
+            if(o_client)
+                offline_client_list_delete(o_client);
+            UNLOCK_OFFLINE_CLIENT_LIST();
+        }
+		
 		//<<< liudf added end
         served_this_session++;
-		if(type) {
+		if(httpdGetVariableByName(r, "type")) {
         	send_http_page_direct(r, "<htm><body>weixin auth success!</body><html>");
 		} else {
         	safe_asprintf(&urlFragment, "%sgw_id=%s&channel_path=%s&mac=%s&name=%s", 

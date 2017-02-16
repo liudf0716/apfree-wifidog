@@ -121,7 +121,9 @@ add_mac_to_ipset(const char *name, const char *mac, int timeout)
 	memcpy(ipset_name, name, strlen(name));
     iptables_insert_gateway_id(&ipset_name);
 
-	return add_to_ipset(ipset_name, mac, timeout);
+	int nret = add_to_ipset(ipset_name, mac, timeout);
+	free(ipset_name);
+	return nret;
 }
 
 /** @internal
@@ -137,7 +139,9 @@ add_ip_to_ipset(const char *name, const char *ip, int remove)
 	memcpy(ipset_name, name, strlen(name));
     iptables_insert_gateway_id(&ipset_name);
 
-	return add_to_ipset(ipset_name, ip, remove);
+	int nret = add_to_ipset(ipset_name, ip, remove);
+	free(ipset_name);
+	return nret;
 }
 
 /** @internal
@@ -153,7 +157,9 @@ iptables_flush_ipset(const char *name)
 	memcpy(ipset_name, name, strlen(name));
     iptables_insert_gateway_id(&ipset_name);
 
-	return flush_ipset(ipset_name);
+	int nret = flush_ipset(ipset_name);
+	free(ipset_name);
+	return nret;
 }
 
 /** @internal
