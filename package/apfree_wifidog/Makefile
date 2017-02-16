@@ -12,9 +12,9 @@ PKG_LICENSE_FILES:=COPYING
 PKG_SOURCE_PROTO:=git
 PKG_SOURCE_URL:=https://github.com/liudf0716/apfree_wifidog.git
 PKG_SOURCE_SUBDIR:=$(PKG_NAME)-$(PKG_VERSION)
-PKG_SOURCE_VERSION:=7e30967f1f5c9e5fb6ec76d2044016a65da7e167
+PKG_SOURCE_VERSION:=$(PKG_VERSION)
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION)-$(PKG_SOURCE_VERSION).tar.gz
-
+PKG_MIRROR_HASH:=40293b58d4be4ade84dc826a4a01c30a8ba97198c8040b0062fa8db0f8379987
 
 PKG_FIXUP:=autoreconf
 PKG_INSTALL:=1
@@ -24,11 +24,12 @@ include $(INCLUDE_DIR)/package.mk
 include $(INCLUDE_DIR)/cmake.mk
 
 define Package/$(PKG_NAME)
-  CATEGORY:=ApFree
-  DEPENDS:=+zlib +iptables-mod-extra +iptables-mod-ipopt +kmod-ipt-nat \
-	     +iptables-mod-nat-extra +libpthread +libopenssl +libjson-c \
-			 +ipset +libip4tc +libevent2 +libevent2-openssl +fping
-  TITLE:=ApFree wireless captive portal solution
+  SUBMENU:=Captive Portals
+  SECTION:=net
+  CATEGORY:=Network
+  DEPENDS:=+zlib +iptables-mod-extra +iptables-mod-ipopt +kmod-ipt-nat +iptables-mod-nat-extra \
+           +libpthread +libopenssl +libjson-c +ipset +libip4tc +libevent2 +libevent2-openssl +fping
+  TITLE:=Apfree's wireless captive portal solution
   URL:=http://www.kunteng.org
 endef
 
@@ -37,6 +38,7 @@ define Package/$(PKG_NAME)/description
 	portal solution for wireless community groups or individuals
 	who wish to open a free Hotspot while still preventing abuse
 	of their Internet connection.
+    It's enhanced wifidog
 endef
 
 define Package/$(PKG_NAME)/install
