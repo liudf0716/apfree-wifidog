@@ -66,6 +66,7 @@
 #include "simple_http.h"
 #include "ezxml.h"
 #include "util.h"
+#include "wd_util.h"
 
 
 //>>> liudf added 20160114
@@ -1894,7 +1895,7 @@ static void parse_weixin_http_dns_ip_cb(char *xml_buffer, int buffer_size)
 	return ;
 }
 
-int
+void
 fix_weixin_http_dns_ip (void)
 {
 	const char *url_weixin_dns = "http://dns.weixin.qq.com/cgi-bin/micromsg-bin/newgetdns";
