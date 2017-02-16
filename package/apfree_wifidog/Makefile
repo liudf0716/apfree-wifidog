@@ -6,15 +6,15 @@ PKG_RELEASE=1
 
 
 PKG_LICENSE:=GPL-2.0
-PKG_MAINTAINER:=Liu Dengfeng <liudengfeng@kunteng.org>
+PKG_MAINTAINER:=Dengfeng Liu<liudengfeng@kunteng.org>
 PKG_LICENSE_FILES:=COPYING
 
 PKG_SOURCE_PROTO:=git
 PKG_SOURCE_URL:=https://github.com/liudf0716/apfree_wifidog.git
 PKG_SOURCE_SUBDIR:=$(PKG_NAME)-$(PKG_VERSION)
-PKG_SOURCE_VERSION:=7e30967f1f5c9e5fb6ec76d2044016a65da7e167
+PKG_SOURCE_VERSION:=$(PKG_VERSION)
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION)-$(PKG_SOURCE_VERSION).tar.gz
-
+PKG_MIRROR_HASH:=40293b58d4be4ade84dc826a4a01c30a8ba97198c8040b0062fa8db0f8379987
 
 PKG_FIXUP:=autoreconf
 PKG_INSTALL:=1
@@ -24,9 +24,12 @@ include $(INCLUDE_DIR)/package.mk
 include $(INCLUDE_DIR)/cmake.mk
 
 define Package/$(PKG_NAME)
-  CATEGORY:=ApFree
-  DEPENDS:=+zlib +iptables-mod-extra +iptables-mod-ipopt +kmod-ipt-nat +iptables-mod-nat-extra +libpthread +libopenssl +libjson-c +base-files +ipset +libip4tc +libevent2 +libevent2-openssl
-  TITLE:=ApFree wireless captive portal solution
+  SUBMENU:=Captive Portals
+  SECTION:=net
+  CATEGORY:=Network
+  DEPENDS:=+zlib +iptables-mod-extra +iptables-mod-ipopt +kmod-ipt-nat +iptables-mod-nat-extra \
+           +libpthread +libopenssl +libjson-c +ipset +libip4tc +libevent2 +libevent2-openssl +fping
+  TITLE:=Apfree's wireless captive portal solution
   URL:=http://www.kunteng.org
 endef
 
@@ -35,6 +38,7 @@ define Package/$(PKG_NAME)/description
 	portal solution for wireless community groups or individuals
 	who wish to open a free Hotspot while still preventing abuse
 	of their Internet connection.
+    It's enhanced wifidog
 endef
 
 define Package/$(PKG_NAME)/install
@@ -45,9 +49,6 @@ define Package/$(PKG_NAME)/install
 	$(CP) $(PKG_INSTALL_DIR)/usr/lib/libhttpd.so* $(1)/usr/lib/
 	$(INSTALL_DIR) $(1)/usr/sbin
 	$(INSTALL_BIN) ./files/wdping $(1)/usr/sbin/
-	$(INSTALL_BIN) ./files/wifidog_op $(1)/usr/sbin/
-	$(INSTALL_BIN) ./files/verify_wifidog $(1)/usr/sbin/
-	$(INSTALL_BIN) ./files/watch_wifidog $(1)/usr/sbin/
 	$(INSTALL_DIR) $(1)/etc
 	$(INSTALL_DATA) $(PKG_BUILD_DIR)/wifidog-msg.html $(1)/etc/
 	$(INSTALL_DATA) $(PKG_BUILD_DIR)/wifidog-redir.html $(1)/etc/
@@ -59,10 +60,6 @@ define Package/$(PKG_NAME)/install
 	$(INSTALL_BIN) ./files/wifidog.init $(1)/etc/init.d/wifidog
 	$(INSTALL_DIR) $(1)/etc/config
 	$(CP) ./files/wifidog.conf $(1)/etc/config/wifidog
-	$(INSTALL_DIR) $(1)/etc/uci-defaults
-	$(INSTALL_BIN) ./files/08_add-wifidog-conf-gatewayid $(1)/etc/uci-defaults/
-	$(INSTALL_DIR) $(1)/etc/market
-	$(INSTALL_DIR) $(1)/etc/market/$(PKG_NAME)
 	$(CP) ./files/apfree.* $(1)/etc/
 endef
 
