@@ -135,13 +135,13 @@ http_403_callback(struct evhttp_request *req, void *arg) {
 		goto err;	
 
 	const char *extension = get_content_extension(decoded_path);
-	if (extension == NULL || strncmp(extension, "htm", 3) == 0 )
+	if (extension == NULL || strncmp(extension, "htm", 3) == 0 ) {
 		len = strlen("403.html")+strlen(docroot)+2;
 		if (!(whole_path = malloc(len))) {
 			goto err;
 		}
 		evutil_snprintf(whole_path, len, "%s/403.html", docroot);
-	else {
+	} else {	
 		len = strlen(decoded_path)+strlen(docroot)+2;
 		if (!(whole_path = malloc(len))) {
 			goto err;
