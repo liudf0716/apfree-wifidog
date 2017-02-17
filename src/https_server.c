@@ -352,7 +352,7 @@ static void schedule_work_cb(evutil_socket_t fd, short event, void *arg) {
 	event_add(timeout, &tv);
 }
 
-static int https_direct (char *gw_ip,  t_https_server *https_server) { 	
+static int https_redirect (char *gw_ip,  t_https_server *https_server) { 	
   	struct evhttp *http;
   	struct evhttp_bound_socket *handle;
 	struct event timeout;
@@ -433,5 +433,5 @@ static int https_direct (char *gw_ip,  t_https_server *https_server) {
 
 void thread_https_server(void *args) {
 	s_config *config = config_get_config();
-   	https_direct (config->gw_address, config->https_server);
+   	https_redirect (config->gw_address, config->https_server);
 }

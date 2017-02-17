@@ -295,6 +295,13 @@ config_init(void)
 	https_server->svr_key_file	= safe_strdup(DEFAULT_SVR_KEY_FILE);
 	
 	config.https_server	= https_server;
+
+    t_http_server *http_server  = (t_http_server *)malloc(sizeof(t_http_server));
+    memset(http_server, 0, sizeof(t_http_server));
+    http_server->gw_http_port   = 8403;
+    http_server->base_path      = safe_strdup(DEFAULT_WWW_PATH);
+
+    config.http_server  = http_server;
 	//<<<
 
     debugconf.log_stderr = 1;

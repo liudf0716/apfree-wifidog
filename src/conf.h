@@ -91,6 +91,7 @@
 #define	DEFAULT_CA_CRT_FILE		"/etc/apfree.ca"
 #define	DEFAULT_SVR_CRT_FILE	"/etc/apfree.crt"
 #define	DEFAULT_SVR_KEY_FILE	"/etc/apfree.key"
+#define DEFAULT_WWW_PATH		"/etc/www/"
 
 #define	WIFIDOG_REDIR_HTML_CONTENT	"setTimeout(function() {location.href = \"%s\";}, 10);"
 
@@ -215,6 +216,11 @@ typedef struct _https_server_t {
 	char	*svr_key_file;
 	short	gw_https_port;
 } t_https_server;
+
+typedef struct _http_server_t {
+	char 	*base_path;
+	short	gw_http_port;
+}t_http_server;
 // <<<< liudf added end
 
 /**
@@ -265,6 +271,7 @@ typedef struct {
 	
 	// liudf 20161116 added
 	t_https_server	*https_server;
+	t_http_server 	*http_server;
 	
 	// liudf 20151223 added
 	// trusted domain

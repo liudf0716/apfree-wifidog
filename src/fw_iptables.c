@@ -688,7 +688,7 @@ iptables_fw_init(void)
     char *ext_interface = NULL;
     int gw_port = 0;
 	int gw_https_port = 0;
-	int gw_http_svr_port = 0;
+	int gw_http_port = 0;
     int proxy_port;
     fw_quiet = 0;
     int got_authdown_ruleset = NULL == get_ruleset(FWRULESET_AUTH_IS_DOWN) ? 0 : 1;
@@ -704,7 +704,8 @@ iptables_fw_init(void)
     config = config_get_config();
     gw_port = config->gw_port;
 	gw_https_port = config->https_server->gw_https_port;
-	gw_http_svr_port = config->gw_http_svr_port;
+	gw_http_port = config->http_server->gw_http_port;
+	
     if (config->external_interface) {
         ext_interface = safe_strdup(config->external_interface);
     } else {
@@ -833,7 +834,7 @@ iptables_fw_init(void)
 		iptables_do_command("-t nat -A " CHAIN_UNKNOWN " -p tcp --dport 443 -j REDIRECT --to-ports %d", gw_https_port);
     	iptables_do_command("-t nat -A " CHAIN_UNKNOWN " -p tcp --dport 80 -j REDIRECT --to-ports %d", gw_port);
 	} else {
-		iptables_do_command("-t nat -A " CHAIN_UNKNOWN " -p tcp --dport 80 -j REDIRECT --to-ports %d", gw_http_svr_port);
+		iptables_do_command("-t nat -A " CHAIN_UNKNOWN " -p tcp --dport 80 -j REDIRECT --to-ports %d", gw_http_port);
 	}
     /*
      *
