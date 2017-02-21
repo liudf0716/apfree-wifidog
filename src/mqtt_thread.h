@@ -1,3 +1,4 @@
+/* vim: set et sw=4 ts=4 sts=4 : */
 /********************************************************************\
  * This program is free software; you can redistribute it and/or    *
  * modify it under the terms of the GNU General Public License as   *
@@ -16,23 +17,17 @@
  * 59 Temple Place - Suite 330        Fax:    +1-617-542-2652       *
  * Boston, MA  02111-1307,  USA       gnu@gnu.org                   *
  *                                                                  *
-\********************************************************************/
+ \********************************************************************/
 
 /* $Id$ */
-/** @file wdctl_thread.h
-    @brief WiFiDog monitoring thread
-    @author Copyright (C) 2004 Alexandre Carmel-Veilleux <acv@acv.ca>
-    @author Copyright (C) 2016 Dengfeng Liu <liudengfeng@kunteng.org>
-*/
+/** @file mqtt_thread.h
+  @brief 
+  @author Copyright (C) 2016 Dengfeng Liu <liudengfeng@kunteng.org>
+  
+  */
+#ifndef	_MQTT_THREAD_H_
+#define	_MQTT_THREAD_H_
 
-#ifndef _WDCTL_THREAD_H_
-#define _WDCTL_THREAD_H_
-
-#define DEFAULT_WDCTL_SOCK	"/tmp/wdctl.sock"
-
-/** @brief Listen for WiFiDog control messages on a unix domain socket */
-void thread_wdctl(void *arg);
-
-void close_wdctl_socket();
+void thread_mqtt(void *arg);
 
 #endif

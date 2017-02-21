@@ -90,6 +90,7 @@ static pthread_t tid_ping 			= 0;
 static pthread_t tid_wdctl		 	= 0;
 static pthread_t tid_https_server	= 0;
 static pthread_t tid_http_server    = 0;
+static pthread_t tid_mqtt_server    = 0;
 static threadpool_t *pool 			= NULL; 
 
 time_t started_time = 0;
@@ -416,6 +417,10 @@ termination_handler(int s)
         debug(LOG_INFO, "Explicitly killing the http_server thread");
         pthread_kill(tid_http_server, SIGKILL);
     }
+    if (tid_mqtt_server && self != tid_mqtt_server) {
+        debug(LOG_INFO, "Explicitly killing the mqtt_server thread");
+        pthread_kill(tid_mqtt_server, SIGKILL);
+    }
 	if(pool != NULL) {
 		threadpool_destroy(pool, 0);
 	}
@@ -477,24 +482,14 @@ init_signals(void)
     }
 }
 
-/**@internal
- * Main execution loop 
- */
 static void
-main_loop(void)
+wifidog_init()
 {
-    int result;
-    pthread_t tid;
-    s_config *config = config_get_config();
-    request *r;
-    void **params;
-	int pool_mode = config->pool_mode;
-
-	if(ipset_init() == 0) {
- 		debug(LOG_ERR, "failed to create IPset control socket: %s");
-		exit(1);
-	}
-	 
+    if(ipset_init() == 0) {
+        debug(LOG_ERR, "failed to create IPset control socket: %s");
+        exit(1);
+    }
+     
     common_setup ();              /* Initialize OpenSSL */
 
     /* Set the time when wifidog started */
@@ -505,6 +500,136 @@ main_loop(void)
         debug(LOG_WARNING, "Detected possible clock skew - re-setting started_time");
         started_time = time(NULL);
     }
+
+    // liudf added 20161124
+    // read wifidog msg file to memory
+    init_wifidog_msg_html();    
+    if (!init_wifidog_redir_html()) {
+        debug(LOG_ERR, "init_wifidog_redir_html failed, exiting...");
+        exit(1);
+    }
+}
+
+static void
+refresh_fw()
+{
+    /* Reset the firewall (if WiFiDog crashed) */
+    fw_destroy();
+    /* Then initialize it */
+    if (!fw_init()) {
+        debug(LOG_ERR, "FATAL: Failed to initialize firewall");
+        exit(1);
+    }
+}
+
+static void
+init_web_server(s_config *config)
+{
+    /* Initializes the web server */
+    debug(LOG_NOTICE, "Creating web server on %s:%d", config->gw_address, config->gw_port);
+    if ((webserver = httpdCreate(config->gw_address, config->gw_port)) == NULL) {
+        debug(LOG_ERR, "Could not create web server: %s", strerror(errno));
+        exit(1);
+    }
+    register_fd_cleanup_on_fork(webserver->serverSock);
+
+    debug(LOG_DEBUG, "Assigning callbacks to web server");
+    httpdAddCContent(webserver, "/", "wifidog", 0, NULL, http_callback_wifidog);
+    httpdAddCContent(webserver, "/wifidog", "", 0, NULL, http_callback_wifidog);
+    httpdAddCContent(webserver, "/wifidog", "about", 0, NULL, http_callback_about);
+    httpdAddCContent(webserver, "/wifidog", "status", 0, NULL, http_callback_status);
+    httpdAddCContent(webserver, "/wifidog", "auth", 0, NULL, http_callback_auth);
+    httpdAddCContent(webserver, "/wifidog", "disconnect", 0, NULL, http_callback_disconnect);
+    
+    // liudf added 20160421
+    // added temporary pass api
+    httpdAddCContent(webserver, "/wifidog", "temporary_pass", 0, NULL, http_callback_temporary_pass);
+    
+    httpdSetErrorFunction(webserver, 404, http_callback_404);
+}
+
+static void
+create_wifidog_thread(s_config *config)
+{
+    int result;
+    pthread_t tid;
+
+    // add https redirect server    
+    result = pthread_create(&tid_https_server, NULL, (void *)thread_https_server, NULL);
+    if (result != 0) {
+        debug(LOG_ERR, "FATAL: Failed to create a new thread (https_server) - exiting");
+        termination_handler(0);
+    }
+    pthread_detach(tid_https_server);
+    
+
+    if (config->work_mode) {
+        // start http server thread
+        result = pthread_create(&tid_http_server, NULL, (void *)thread_http_server, NULL);
+        if (result != 0) {
+            debug(LOG_ERR, "FATAL: Failed to create a new thread (http_server) - exiting");
+            termination_handler(0);
+        }
+        pthread_detach(tid_http_server);
+    }
+
+    /* Start control thread */
+    result = pthread_create(&tid_wdctl, NULL, (void *)thread_wdctl, (void *)safe_strdup(config->wdctl_sock));
+    if (result != 0) {
+        debug(LOG_ERR, "FATAL: Failed to create a new thread (wdctl) - exiting");
+        termination_handler(0);
+    }
+    pthread_detach(tid_wdctl);
+
+    /* Start heartbeat thread */
+    result = pthread_create(&tid_ping, NULL, (void *)thread_ping, NULL);
+    if (result != 0) {
+        debug(LOG_ERR, "FATAL: Failed to create a new thread (ping) - exiting");
+        termination_handler(0);
+    }
+    pthread_detach(tid_ping);
+    
+
+    /* Start client clean up thread */
+    result = pthread_create(&tid_fw_counter, NULL, (void *)thread_client_timeout_check, NULL);
+    if (result != 0) {
+        debug(LOG_ERR, "FATAL: Failed to create a new thread (fw_counter) - exiting");
+        termination_handler(0);
+    }
+    pthread_detach(tid_fw_counter);
+
+    if(config->pool_mode) {
+        int thread_number = config->thread_number;
+        int queue_size = config->queue_size;
+        // start thread pool
+        pool = threadpool_create(thread_number, queue_size, 0);
+        if(pool == NULL) {
+            debug(LOG_ERR, "FATAL: Failed to create threadpool - exiting");
+            termination_handler(0);
+        }
+        debug(LOG_DEBUG, "Create thread pool thread_num %d, queue_size %d", thread_number, queue_size);
+    }   
+
+    // start mqtt subscript thread
+    result = pthread_create(&tid_mqtt_server, NULL, (void *)thread_mqtt, config);
+    if (result != 0) {
+        debug(LOG_ERR, "FATAL: Failed to create a new thread (thread_mqtt) - exiting");
+        termination_handler(0);
+    }
+    pthread_detach(tid_mqtt_server);
+}
+
+/**@internal
+ * Main execution loop 
+ */
+static void
+main_loop(void)
+{
+    s_config *config = config_get_config();
+    request *r;
+    void **params;
+	
+    wifidog_init();
 
 	/* save the pid file if needed */
     if ((!config) && (!config->pidfile))
@@ -529,100 +654,9 @@ main_loop(void)
         }
     }
 	
-	// liudf added 20161124
-	// read wifidog msg file to memory
-	init_wifidog_msg_html();	
-	if (!init_wifidog_redir_html()) {
-		debug(LOG_ERR, "init_wifidog_redir_html failed, exiting...");
-		exit(1);
-	}
-	
-    /* Initializes the web server */
-    debug(LOG_NOTICE, "Creating web server on %s:%d", config->gw_address, config->gw_port);
-    if ((webserver = httpdCreate(config->gw_address, config->gw_port)) == NULL) {
-        debug(LOG_ERR, "Could not create web server: %s", strerror(errno));
-        exit(1);
-    }
-    register_fd_cleanup_on_fork(webserver->serverSock);
-
-    debug(LOG_DEBUG, "Assigning callbacks to web server");
-    httpdAddCContent(webserver, "/", "wifidog", 0, NULL, http_callback_wifidog);
-    httpdAddCContent(webserver, "/wifidog", "", 0, NULL, http_callback_wifidog);
-    httpdAddCContent(webserver, "/wifidog", "about", 0, NULL, http_callback_about);
-    httpdAddCContent(webserver, "/wifidog", "status", 0, NULL, http_callback_status);
-    httpdAddCContent(webserver, "/wifidog", "auth", 0, NULL, http_callback_auth);
-    httpdAddCContent(webserver, "/wifidog", "disconnect", 0, NULL, http_callback_disconnect);
-	
-	// liudf added 20160421
-	// added temporary pass api
-	httpdAddCContent(webserver, "/wifidog", "temporary_pass", 0, NULL, http_callback_temporary_pass);
-	
-    httpdSetErrorFunction(webserver, 404, http_callback_404);
-
-    /* Reset the firewall (if WiFiDog crashed) */
-    fw_destroy();
-    /* Then initialize it */
-    if (!fw_init()) {
-        debug(LOG_ERR, "FATAL: Failed to initialize firewall");
-        exit(1);
-    }
-	
-	// liudf added 20161110
-	// add https redirect server 	
-	result = pthread_create(&tid_https_server, NULL, (void *)thread_https_server, NULL);
-	if (result != 0) {
-		debug(LOG_ERR, "FATAL: Failed to create a new thread (https_server) - exiting");
-		termination_handler(0);
-	}
-	pthread_detach(tid_https_server);
-	
-
-    if (config->work_mode) {
-        result = pthread_create(&tid_http_server, NULL, (void *)thread_http_server, NULL);
-        if (result != 0) {
-            debug(LOG_ERR, "FATAL: Failed to create a new thread (http_server) - exiting");
-            termination_handler(0);
-        }
-        pthread_detach(tid_http_server);
-    }
-
-    /* Start control thread */
-    result = pthread_create(&tid_wdctl, NULL, (void *)thread_wdctl, (void *)safe_strdup(config->wdctl_sock));
-    if (result != 0) {
-        debug(LOG_ERR, "FATAL: Failed to create a new thread (wdctl) - exiting");
-        termination_handler(0);
-    }
-    pthread_detach(tid_wdctl);
-
-    /* Start heartbeat thread */
-    result = pthread_create(&tid_ping, NULL, (void *)thread_ping, NULL);
-    if (result != 0) {
-        debug(LOG_ERR, "FATAL: Failed to create a new thread (ping) - exiting");
-        termination_handler(0);
-    }
-    pthread_detach(tid_ping);
-	
-
-    /* Start clean up thread */
-    result = pthread_create(&tid_fw_counter, NULL, (void *)thread_client_timeout_check, NULL);
-    if (result != 0) {
-        debug(LOG_ERR, "FATAL: Failed to create a new thread (fw_counter) - exiting");
-        termination_handler(0);
-    }
-    pthread_detach(tid_fw_counter);
-
-	//>>> liudf added 20160301
-	if(pool_mode) {
-		int thread_number = config->thread_number;
-		int queue_size = config->queue_size;
-		pool = threadpool_create(thread_number, queue_size, 0);
-		if(pool == NULL) {
-    	    debug(LOG_ERR, "FATAL: Failed to create threadpool - exiting");
-			termination_handler(0);
-		}
-    	debug(LOG_DEBUG, "Create thread pool thread_num %d, queue_size %d", thread_number, queue_size);
-	}	
-	//<<< liudf added end
+    init_web_server(config);
+    refresh_fw();
+	create_wifidog_thread(config);
 
     debug(LOG_DEBUG, "Waiting for connections");
     while (1) {
@@ -644,7 +678,7 @@ main_loop(void)
              */
             debug(LOG_ERR, "FATAL: httpdGetConnection returned unexpected value %d, exiting.", webserver->lastError);
             termination_handler(0);
-		} else if (r != NULL && pool_mode) {
+		} else if (r != NULL && config->pool_mode) {
             debug(LOG_DEBUG, "Received connection from %s, add to work queue", r->clientAddr);
 			params = safe_malloc(2 * sizeof(void *));
             *params = webserver;

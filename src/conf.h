@@ -93,6 +93,9 @@
 #define	DEFAULT_SVR_KEY_FILE	"/etc/apfree.key"
 #define DEFAULT_WWW_PATH		"/etc/www/"
 
+#define DEFAULT_MQTT_SERVER		"wifidog.kunteng.org"
+#define DEFAULT_MQTT_TOPIC		""
+
 #define	WIFIDOG_REDIR_HTML_CONTENT	"setTimeout(function() {location.href = \"%s\";}, 10);"
 
 
@@ -221,6 +224,19 @@ typedef struct _http_server_t {
 	char 	*base_path;
 	short	gw_http_port;
 }t_http_server;
+
+typedef	struct _mqtt_topic_t {
+	t_mqtt_topic *next;
+	char 	*topic;
+}t_mqtt_topic;
+
+typedef struct _mqtt_server_t {
+	char 	*hostname;
+	short	port;
+	char 	*cafile;
+	
+	t_mqtt_topic 	*topics;
+}t_mqtt_server;
 // <<<< liudf added end
 
 /**
@@ -273,6 +289,7 @@ typedef struct {
 	t_https_server	*https_server;
 	t_http_server 	*http_server;
 	
+	t_mqtt_server	*mqtt_server;
 	// liudf 20151223 added
 	// trusted domain
 	t_domain_trusted *pan_domains_trusted; /** pan-domain trusted list*/
