@@ -226,7 +226,7 @@ typedef struct _http_server_t {
 }t_http_server;
 
 typedef	struct _mqtt_topic_t {
-	t_mqtt_topic *next;
+	struct _mqtt_topic_t *next;
 	char 	*topic;
 }t_mqtt_topic;
 
@@ -234,7 +234,7 @@ typedef struct _mqtt_server_t {
 	char 	*hostname;
 	short	port;
 	char 	*cafile;
-	
+
 	t_mqtt_topic 	*topics;
 }t_mqtt_server;
 // <<<< liudf added end
