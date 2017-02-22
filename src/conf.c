@@ -308,6 +308,8 @@ config_init(void)
     mqtt_server->hostname   = safe_strdup(DEFAULT_MQTT_SERVER);
     mqtt_server->port       = 8883;
     mqtt_server->cafile    = safe_strdup(DEFAULT_CA_CRT_FILE);
+
+    config.mqtt_server  = mqtt_server;
 	//<<<
 
     debugconf.log_stderr = 1;
