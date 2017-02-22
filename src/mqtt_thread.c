@@ -31,6 +31,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <syslog.h>
 
 #include <mosquitto.h>
 
@@ -62,7 +63,7 @@ mqtt_message_callback(struct mosquitto *mosq, void *obj, const struct mosquitto_
 
 void thread_mqtt(void *arg)
 {
-	s_config *config = args;
+	s_config *config = arg;
 	int major = 0, minor = 0, revision = 0;
 	struct mosquitto *mosq = NULL;
 	char *host 	= config->mqtt_server->hostname;
@@ -78,7 +79,7 @@ void thread_mqtt(void *arg)
     mosquitto_lib_init();
 
      /* Create a new mosquitto client instance */
-    mosq = mosquitto_new(NULL, clean_session, config);
+    mosq = mosquitto_new(NULL, true, config);
     if( mosq == NULL ) {
         switch(errno){
             case ENOMEM:
@@ -89,14 +90,14 @@ void thread_mqtt(void *arg)
                 break;
         }
         mosquitto_lib_cleanup();
-        return EXIT_FAILURE;
+        return ;
     }
    	
    	if (mosquitto_tls_set(mosq, cafile, NULL, NULL, NULL, NULL)) {
    		debug(LOG_INFO, "Error : Problem setting TLS option");
     	mosquitto_destroy(mosq);
     	mosquitto_lib_cleanup();
-        return EXIT_FAILURE;
+        return ;
    	}
 
    	// Attention! this setting is not secure, but can simplify our deploy
@@ -104,7 +105,7 @@ void thread_mqtt(void *arg)
     	debug(LOG_INFO, "Error : Problem setting TLS insecure option");
     	mosquitto_destroy(mosq);
     	mosquitto_lib_cleanup();
-        return EXIT_FAILURE;
+        return ;
     }
 
     mosquitto_connect_callback_set(mosq, mqtt_connect_callback);
@@ -120,7 +121,7 @@ void thread_mqtt(void *arg)
 
         mosquitto_destroy(mosq);
      	mosquitto_lib_cleanup();
-        return EXIT_FAILURE;
+        return ;
     }
 
     retval = mosquitto_loop_forever(mosq, -1, 1);
