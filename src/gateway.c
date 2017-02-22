@@ -75,6 +75,7 @@
 #include "https_server.h"
 #include "https_common.h"
 #include "http_server.h"
+#include "mqtt_server.h"
 #include "wd_util.h"
 
 struct evbuffer	*evb_internet_offline_page 		= NULL;
@@ -208,7 +209,7 @@ append_x_restartargv(void)
  * @brief During gateway restart, connects to the parent process via the internal socket
  * Downloads from it the active client list
  */
-void
+static void
 get_clients_from_parent(void)
 {
     int sock;
@@ -552,7 +553,6 @@ static void
 create_wifidog_thread(s_config *config)
 {
     int result;
-    pthread_t tid;
 
     // add https redirect server    
     result = pthread_create(&tid_https_server, NULL, (void *)thread_https_server, NULL);
@@ -684,13 +684,14 @@ main_loop(void)
             *params = webserver;
             *(params + 1) = r;
 			
-			result = threadpool_add(pool, (void *)thread_httpd, (void *)params, 1);
+			int result = threadpool_add(pool, (void *)thread_httpd, (void *)params, 1);
             if(result != 0) {
             	free(params);
             	httpdEndRequest(r);
             	debug(LOG_ERR, "threadpool_add failed, result is %d", result);
             }
         } else if (r != NULL) {
+            pthread_t tid;
             /*
              * We got a connection
              *
