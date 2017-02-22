@@ -75,7 +75,7 @@
 #include "https_server.h"
 #include "https_common.h"
 #include "http_server.h"
-#include "mqtt_server.h"
+#include "mqtt_thread.h"
 #include "wd_util.h"
 
 struct evbuffer	*evb_internet_offline_page 		= NULL;
