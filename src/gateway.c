@@ -704,7 +704,7 @@ main_loop(void)
             *params = webserver;
             *(params + 1) = r;
 			
-			result = create_thread(&tid, (void*)thread_httpd, (void *)params);
+			int result = create_thread(&tid, (void*)thread_httpd, (void *)params);
             if (result != 0) {
                 debug(LOG_ERR, "FATAL: Failed to create a new thread (httpd) - exiting");
                 termination_handler(0);
