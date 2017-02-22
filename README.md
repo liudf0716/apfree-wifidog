@@ -42,7 +42,7 @@ Now Apfree WiFiDog package has been installed in LEDE packages environment.
     cd /LEDE_ROOT/
 	make menuconfig
 
-Chose your `Target System` and `ApFree --> apfree_wifidog`. `SAVE` and `EXIT`.
+Chose your `Target System` and `Network -->Captive Portals --> apfree_wifidog`. `SAVE` and `EXIT`.
 
 Do compiling:
 
