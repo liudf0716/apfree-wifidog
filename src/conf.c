@@ -303,11 +303,11 @@ config_init(void)
 
     config.http_server  = http_server;
 
-    t_mqtt_server *mqtt_server = (t_mqtt_server)malloc(sizeof(sizeof(t_mqtt_server)));
+    t_mqtt_server *mqtt_server = (t_mqtt_server *)malloc(sizeof(sizeof(t_mqtt_server)));
     memset(mqtt_server, 0, sizeof(t_mqtt_server));
     mqtt_server->hostname   = safe_strdup(DEFAULT_MQTT_SERVER);
     mqtt_server->port       = 8883;
-    mqtt_server->ca_file    = safe_strdup(DEFAULT_CA_CRT_FILE);
+    mqtt_server->cafile    = safe_strdup(DEFAULT_CA_CRT_FILE);
 	//<<<
 
     debugconf.log_stderr = 1;
