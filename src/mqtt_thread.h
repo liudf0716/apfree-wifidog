@@ -88,7 +88,7 @@ struct wifidog_mqtt_clear_type {
 
 struct wifidog_mqtt_show_type {
 	char	*type;
-	void	(*process_mqtt_show_type)(void);
+	char 	*(*process_mqtt_show_type)(void);
 } mqtt_show_type[] = {
 	{"domain", show_trusted_domains},
 	{"pdomains", show_trusted_pdomains},
