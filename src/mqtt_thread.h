@@ -39,8 +39,8 @@ void get_status_op(void *mosq, const char *type, const char *value, const int re
 void reboot_device_op(void *mosq, const char *type, const char *value, const int req_id, const s_config *config);
 
 struct wifidog_mqtt_op {
-	char	*operation,
-	void	(*process_mqtt_op)(void *mosq, int type, const char *value, const int req_id, const s_config *config)
+	char	*operation;
+	void	(*process_mqtt_op)(void *, int , const char *, const int , const s_config *);
 } mqtt_op[] = {
 	{"set_trusted", set_trusted_op},
 	{"del_trusted", del_trusted_op},
@@ -53,8 +53,8 @@ struct wifidog_mqtt_op {
 };
 
 struct wifidog_mqtt_add_type {
-	char 	*type,
-	void	(*process_mqtt_set_type)(const char *args)
+	char 	*type;
+	void	(*process_mqtt_set_type)(const char *args);
 } mqtt_set_type[] = {
 	{"domain", add_trusted_domains},
 	{"pdomain", add_trusted_pdomains},
@@ -64,8 +64,8 @@ struct wifidog_mqtt_add_type {
 };
 
 struct wifidog_mqtt_del_type {
-	char 	*type,
-	void	(*process_mqtt_del_type)(const char *args)
+	char 	*type;
+	void	(*process_mqtt_del_type)(const char *args);
 } mqtt_del_type[] = {
 	{"domain", del_trusted_domains},
 	{"pdomain", del_trusted_pdomains},
@@ -75,8 +75,8 @@ struct wifidog_mqtt_del_type {
 };
 
 struct wifidog_mqtt_clear_type {
-	char	*type,
-	void	(*process_mqtt_clear_type)(void)
+	char	*type;
+	void	(*process_mqtt_clear_type)(void);
 } mqtt_clear_type[] = {
 	{"domain", clear_trusted_domains},
 	{"pdomain", clear_trusted_pdomains},
@@ -86,8 +86,8 @@ struct wifidog_mqtt_clear_type {
 };
 
 struct wifidog_mqtt_show_type {
-	char	*type,
-	void	(*process_mqtt_show_type)(void)
+	char	*type;
+	void	(*process_mqtt_show_type)(void);
 } mqtt_show_type[] = {
 	{"domain", show_trusted_domains},
 	{"pdomains", show_trusted_pdomains},
