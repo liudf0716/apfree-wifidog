@@ -146,7 +146,7 @@ get_status_op(void *mosq, const char *type, const char *value, const int req_id,
 }
 
 void 
-reboot_device_op(void *mosq, const char *type, const char *value, const int req_id, s_config *config)
+reboot_device_op(void *mosq, const char *type, const char *value, const int req_id, const s_config *config)
 {
 	system("reboot");
 }
@@ -160,7 +160,7 @@ process_mqtt_reqeust(struct mosquitto *mosq, const unsigned int req_id, const ch
 		return;
 	}
 
-	char *op = json_object_get_string(json_object_object_get(json_request, "op"));
+	const char *op = json_object_get_string(json_object_object_get(json_request, "op"));
 	if (!op) {
 		debug(LOG_INFO, "No op item get");
 		return;
@@ -169,8 +169,8 @@ process_mqtt_reqeust(struct mosquitto *mosq, const unsigned int req_id, const ch
 	int i = 0;
 	for (; mqtt_op[i].operation != NULL; i++) {
 		if (strcmp(op, mqtt_op[i].operation) == 0 && mqtt_op[i].process_mqtt_op) {
-			char *type = json_object_get_string(json_object_object_get(json_request, "type"));
-			char *value = json_object_get_string(json_object_object_get(json_request, "value"));
+			const char *type = json_object_get_string(json_object_object_get(json_request, "type"));
+			const char *value = json_object_get_string(json_object_object_get(json_request, "value"));
 			mqtt_op[i].process_mqtt_op(mosq, type, value, req_id, config);
 			break;
 		}
