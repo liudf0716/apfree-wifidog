@@ -40,15 +40,28 @@
 #include "debug.h"
 
 static void
-mqtt_connect_callback(struct mosquitto *mosq, void *obj, int rc)
+mqtt_response(struct mosquitto *mosq, const unsigned int req_id, const char *response_data, s_config *config)
 {
-	s_config 		*config = obj;
-	t_mqtt_server	*mqtt_server = config->mqtt_server;
-	t_mqtt_topic	*topics = mqtt_server->topics;
+	char *topic = NULL;
+	safe_asprintf(&topic, "wifidog/%s/response/%d", config->gw_id, req_id);
+	mosquitto_publish(mosq, NULL, topic, strlen(response_data), mqtt_response, 0, false);
+	free(topic);
+}
 
-	for (; topics != NULL; topics = topics->next) {
-		mosquitto_subscribe(mosq, NULL, topics->topic, 0);
-	}
+static void
+process_mqtt_reqeust(struct mosquitto *mosq, const unsigned int req_id, const char *data, s_config *config)
+{
+	
+}
+
+static unsigned int
+get_topic_req_id(const char *topic)
+{
+	char *pos = rindex(topic, '/');
+	if (!pos || strlen(pos++) < 2)
+		return 0;
+
+	return (int)strtol(pos, NULL, 10);
 }
 
 static void 
@@ -58,7 +71,21 @@ mqtt_message_callback(struct mosquitto *mosq, void *obj, const struct mosquitto_
 
 	if (message->payloadlen) {
 		debug(LOG_DEBUG, "topic is %s, data is %s", message->topic, message->payload);
+		unsigned int req_id = get_topic_req_id(message->topic);
+		if (req_id)
+			process_mqtt_reqeust(mosq, req_id, message->payload, config);
 	}
+}
+
+static void
+mqtt_connect_callback(struct mosquitto *mosq, void *obj, int rc)
+{
+	s_config 		*config = obj;
+
+	char *default_topic = NULL;
+	safe_asprintf(&default_topic, "wifidog/%s/request/+", config->gw_id);
+	mosquitto_subscribe(mosq, NULL, default_topic, 0); // qos is 0
+	free(default_topic);
 }
 
 void thread_mqtt(void *arg)
@@ -79,7 +106,7 @@ void thread_mqtt(void *arg)
     mosquitto_lib_init();
 
      /* Create a new mosquitto client instance */
-    mosq = mosquitto_new(NULL, true, config);
+    mosq = mosquitto_new(config->gw_id, true, config);
     if( mosq == NULL ) {
         switch(errno){
             case ENOMEM:
