@@ -52,7 +52,6 @@ send_mqtt_response(struct mosquitto *mosq, const unsigned int req_id, int res_id
 	free(res_data);
 }
 
-static void
 void 
 set_trusted_op(void *mosq, const char *type, const char *value, const int req_id, const s_config *config)
 {
@@ -168,10 +167,10 @@ process_mqtt_reqeust(struct mosquitto *mosq, const unsigned int req_id, const ch
 
 	int i = 0;
 	for (; mqtt_op[i].operation != NULL; i++) {
-		if (strcmp(op, mqtt_op[i].op) == 0 && mqtt_op[i].process_mqtt_reqeust) {
+		if (strcmp(op, mqtt_op[i].operation) == 0 && mqtt_op[i].process_mqtt_op) {
 			char *type = json_object_get_string(json_object_object_get(json_request, "type"));
 			char *value = json_object_get_string(json_object_object_get(json_request, "value"));
-			mqtt_op[i].process_mqtt_reqeust(mosq, type, value, req_id, config);
+			mqtt_op[i].process_mqtt_op(mosq, type, value, req_id, config);
 			break;
 		}
 	}
