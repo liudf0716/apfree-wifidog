@@ -698,7 +698,7 @@ wdctl_reparse_trusted_domains(int fd)
 
 void clear_trusted_domains()
 {
-    clear_trusted_domains();
+    clear_trusted_domains_();
 
     fw_refresh_user_domains_trusted();
 }

@@ -1955,7 +1955,7 @@ __clear_trusted_domains(void)
 }
 
 void
-clear_trusted_domains(void)
+clear_trusted_domains_(void)
 {
 	LOCK_DOMAIN();
 	__clear_trusted_domains();
