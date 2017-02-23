@@ -34,6 +34,7 @@
 #include <syslog.h>
 
 #include <mosquitto.h>
+#include <json-c/json.h>
 
 #include "mqtt_thread.h"
 #include "wdctl_thread.h"
@@ -153,7 +154,6 @@ static void
 process_mqtt_reqeust(struct mosquitto *mosq, const unsigned int req_id, const char *data, s_config *config)
 {
 	json_object *json_request = json_tokener_parse(data);
-	char	*op = NULL;
 	if (!json_request) {
 		debug(LOG_INFO, "user request is not valid");
 		return;

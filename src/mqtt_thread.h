@@ -29,6 +29,7 @@
 #define	_MQTT_THREAD_H_
 
 #include "wdctl_thread.h"
+#include "conf.h"
 
 void set_trusted_op(void *mosq, const char *type, const char *value, const int req_id, const s_config *config);
 void del_trusted_op(void *mosq, const char *type, const char *value, const int req_id, const s_config *config);
@@ -40,7 +41,7 @@ void reboot_device_op(void *mosq, const char *type, const char *value, const int
 
 struct wifidog_mqtt_op {
 	char	*operation;
-	void	(*process_mqtt_op)(void *, int , const char *, const int , const s_config *);
+	void	(*process_mqtt_op)(void *, const char *, const char *, const int , const s_config *);
 } mqtt_op[] = {
 	{"set_trusted", set_trusted_op},
 	{"del_trusted", del_trusted_op},
