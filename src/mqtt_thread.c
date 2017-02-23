@@ -40,6 +40,7 @@
 #include "wdctl_thread.h"
 #include "conf.h"
 #include "debug.h"
+#include "safe.h"
 
 static void
 send_mqtt_response(struct mosquitto *mosq, const unsigned int req_id, int res_id, const char *msg, const s_config *config)
@@ -48,7 +49,7 @@ send_mqtt_response(struct mosquitto *mosq, const unsigned int req_id, int res_id
 	char *res_data = NULL;
 	safe_asprintf(&topic, "wifidog/%s/response/%d", config->gw_id, req_id);
 	safe_asprintf(&res_data, "{response:\"%d\",msg:\"%s\"}", res_id, msg==NULL?"null":msg);
-	mosquitto_publish(mosq, NULL, topic, strlen(response_data), mqtt_response, 0, false);
+	mosquitto_publish(mosq, NULL, topic, strlen(res_data), res_data, 0, false);
 	free(topic);
 	free(res_data);
 }
