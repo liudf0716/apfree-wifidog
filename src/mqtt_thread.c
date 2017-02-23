@@ -36,22 +36,145 @@
 #include <mosquitto.h>
 
 #include "mqtt_thread.h"
+#include "wdctl_thread.h"
 #include "conf.h"
 #include "debug.h"
 
 static void
-mqtt_response(struct mosquitto *mosq, const unsigned int req_id, const char *response_data, s_config *config)
+send_mqtt_response(struct mosquitto *mosq, const unsigned int req_id, int res_id, const char *msg, const s_config *config)
 {
 	char *topic = NULL;
+	char *res_data = NULL;
 	safe_asprintf(&topic, "wifidog/%s/response/%d", config->gw_id, req_id);
+	safe_asprintf(&res_data, "{response:\"%d\",msg:\"%s\"}", res_id, msg==NULL?"null":msg);
 	mosquitto_publish(mosq, NULL, topic, strlen(response_data), mqtt_response, 0, false);
 	free(topic);
+	free(res_data);
+}
+
+static void
+void 
+set_trusted_op(void *mosq, const char *type, const char *value, const int req_id, const s_config *config)
+{
+	if (!type || !value) {
+		debug(LOG_INFO, "set trusted operation, type or value is NULL");	
+		send_mqtt_response(mosq, req_id, 400, "type or value is NULL", config);
+		return;
+	}
+
+	for(int i = 0; mqtt_set_type[i].type != NULL; i++) {
+		if (strcmp(mqtt_set_type[i].type, type) == 0) {
+			debug(LOG_DEBUG, "set trusted operation, type is %s value is %s", type, value);
+			mqtt_set_type[i].process_mqtt_set_type(value);
+			send_mqtt_response(mosq, req_id, 200, "Ok", config);
+			break;
+		}	
+	}
+}
+
+void 
+del_trusted_op(void *mosq, const char *type, const char *value, const int req_id, const s_config *config)
+{
+	if (!type || !value) {
+		debug(LOG_INFO, "del trusted operation, type or value is NULL");	
+		send_mqtt_response(mosq, req_id, 400, "type or value is NULL", config);
+		return;
+	}
+
+	for(int i = 0; mqtt_del_type[i].type != NULL; i++) {
+		if (strcmp(mqtt_del_type[i].type, type) == 0) {
+			debug(LOG_DEBUG, "del trusted operation, type is %s value is %s", type, value);
+			mqtt_del_type[i].process_mqtt_del_type(value);
+			send_mqtt_response(mosq, req_id, 200, "Ok", config);
+			break;
+		}	
+	}
+}
+
+void 
+clear_trusted_op(void *mosq, const char *type, const char *value, const int req_id, const s_config *config)
+{
+	if (!type) {
+		debug(LOG_INFO, "clear trusted operaion, type is NULL");
+		send_mqtt_response(mosq, req_id, 400, "type is NULL", config);
+		return;
+	}
+
+	for(int i = 0; mqtt_clear_type[i].type != NULL; i++) {
+		if (strcmp(mqtt_clear_type[i].type, type) == 0) {
+			debug(LOG_DEBUG, "clear trusted operation, type is %s", type);
+			mqtt_clear_type[i].process_mqtt_clear_type();
+			send_mqtt_response(mosq, req_id, 200, "Ok", config);
+			break;
+		}	
+	}
+}
+
+void 
+show_trusted_op(void *mosq, const char *type, const char *value, const int req_id, const s_config *config)
+{
+	if (!type) {
+		debug(LOG_INFO, "show trusted operaion, type is NULL");
+		send_mqtt_response(mosq, req_id, 400, "type is NULL", config);
+		return;
+	}
+
+	for(int i = 0; mqtt_show_type[i].type != NULL; i++) {
+		if (strcmp(mqtt_show_type[i].type, type) == 0) {
+			debug(LOG_DEBUG, "show trusted operation, type is %s", type);
+			char *msg = mqtt_show_type[i].process_mqtt_show_type();
+			send_mqtt_response(mosq, req_id, 200, msg, config);
+			if (msg)
+				free(msg);
+			break;
+		}	
+	}
+}
+
+void 
+save_rule_op(void *mosq, const char *type, const char *value, const int req_id, const s_config *config)
+{
+	user_cfg_save();
+	send_mqtt_response(mosq, req_id, 200, "Ok", config);
+}
+
+void 
+get_status_op(void *mosq, const char *type, const char *value, const int req_id, const s_config *config)
+{
+
+}
+
+void 
+reboot_device_op(void *mosq, const char *type, const char *value, const int req_id, s_config *config)
+{
+	system("reboot");
 }
 
 static void
 process_mqtt_reqeust(struct mosquitto *mosq, const unsigned int req_id, const char *data, s_config *config)
 {
-	
+	json_object *json_request = json_tokener_parse(data);
+	char	*op = NULL;
+	if (!json_request) {
+		debug(LOG_INFO, "user request is not valid");
+		return;
+	}
+
+	char *op = json_object_get_string(json_object_object_get(json_request, "op"));
+	if (!op) {
+		debug(LOG_INFO, "No op item get");
+		return;
+	}
+
+	int i = 0;
+	for (; mqtt_op[i].operation != NULL; i++) {
+		if (strcmp(op, mqtt_op[i].op) == 0 && mqtt_op[i].process_mqtt_reqeust) {
+			char *type = json_object_get_string(json_object_object_get(json_request, "type"));
+			char *value = json_object_get_string(json_object_object_get(json_request, "value"));
+			mqtt_op[i].process_mqtt_reqeust(mosq, type, value, req_id, config);
+			break;
+		}
+	}
 }
 
 static unsigned int
@@ -72,8 +195,11 @@ mqtt_message_callback(struct mosquitto *mosq, void *obj, const struct mosquitto_
 	if (message->payloadlen) {
 		debug(LOG_DEBUG, "topic is %s, data is %s", message->topic, message->payload);
 		unsigned int req_id = get_topic_req_id(message->topic);
-		if (req_id)
+		if (req_id) {
 			process_mqtt_reqeust(mosq, req_id, message->payload, config);
+		}
+		else 
+			debug(LOG_INFO, "error: can not get req_id");
 	}
 }
 
