@@ -1295,7 +1295,7 @@ parse_mac_list_action(const char *ptr, mac_choice_t which, int action)
     while ((possiblemac = strsep(&ptrcopy, ","))) {
         /* check for valid format */
 		if (is_valid_mac(possiblemac)) {
-			debug(LOG_DEBUG, "add|remove [%d] mac [%s]", possiblemac);
+			debug(LOG_DEBUG, "add|remove mac [%s]", possiblemac);
 			if(action)
 				add_mac(possiblemac, which);
 			else
