@@ -244,11 +244,11 @@ mqtt_get_status_text()
     minutes = (unsigned int)uptime / 60;
     uptime -= minutes * 60;
     seconds = (unsigned int)uptime;
-    char uptime[128] = {0};
-    snprintf(uptime, 128, "%dD %dH %dM %dS", days, hours, minutes, seconds);
+    char wifidog_uptime[128] = {0};
+    snprintf(wifidog_uptime, 128, "%dD %dH %dM %dS", days, hours, minutes, seconds);
 
     json_object_object_add(jstatus, "wifidog_version", json_object_new_string(VERSION));
-    json_object_object_add(jstatus, "wifidog_uptime", json_object_new_string(uptime));
+    json_object_object_add(jstatus, "wifidog_uptime", json_object_new_string(wifidog_uptime));
     json_object_object_add(jstatus, "auth_server", json_object_new_int(is_auth_online()));
     
     t_client *sublist = NULL, *current = NULL;
