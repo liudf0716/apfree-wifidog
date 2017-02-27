@@ -564,7 +564,7 @@ wdctl_clear_trusted_pan_domains(int fd)
 
 char *show_trusted_pdomains()
 {
-    return NULL;
+    return mqtt_get_trusted_pan_domains_text();
 }
 
 // todo
@@ -717,7 +717,7 @@ wdctl_clear_trusted_domains(int fd)
 
 char *show_trusted_domains(void)
 {
-    return get_trusted_domains_text();
+    return mqtt_get_trusted_domains_text();
 }
 
 static void
@@ -842,7 +842,7 @@ wdctl_add_trusted_maclist(int fd, const char *args)
 
 char *show_trusted_maclist()
 {
-    return get_trusted_maclist_text();
+    return mqtt_get_serialize_maclist(TRUSTED_MAC);
 }
 
 static void

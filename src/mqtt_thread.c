@@ -107,6 +107,7 @@ send_mqtt_response(struct mosquitto *mosq, const unsigned int req_id, int res_id
 	char *res_data = NULL;
 	safe_asprintf(&topic, "wifidog/%s/response/%d", config->gw_id, req_id);
 	safe_asprintf(&res_data, "{response:\"%d\",msg:\"%s\"}", res_id, msg==NULL?"null":msg);
+	debug(LOG_DEBUG, "send mqtt response: topic is %s msg is %s", topic, res_data);
 	mosquitto_publish(mosq, NULL, topic, strlen(res_data), res_data, 0, false);
 	free(topic);
 	free(res_data);
@@ -200,7 +201,10 @@ save_rule_op(void *mosq, const char *type, const char *value, const int req_id, 
 void 
 get_status_op(void *mosq, const char *type, const char *value, const int req_id, const s_config *config)
 {
-
+	char *status = mqtt_get_status_text();
+	send_mqtt_response(mosq, req_id, 200, status, config);
+	if (status)
+		free(status);
 }
 
 void 

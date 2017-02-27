@@ -72,11 +72,15 @@ char *get_status_text(void);
 char *get_serialize_maclist(int);
 char *get_serialize_trusted_domains(void);
 char *get_serialize_iplist(void);
+char *mqtt_get_trusted_domains_text(void);
 char *get_trusted_domains_text(void);
 char *get_untrusted_maclist_text(void);
 char *get_trusted_maclist_text(void);
 char *get_roam_maclist_text(void);
 char *get_serialize_trusted_pan_domains(void);
+char *mqtt_get_trusted_pan_domains_text(void);
+
+char *mqtt_get_status_text(void);
 
 void trim_newline(char *);
 
