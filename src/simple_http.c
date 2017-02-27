@@ -143,7 +143,7 @@ void http_request_get_cb(struct evhttp_request *req, void *arg)
         default:   
             break;
     }
-out:
+
 	 event_base_loopbreak(http_req_get->base);
 }
 

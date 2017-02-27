@@ -66,6 +66,7 @@
 #include "simple_http.h"
 #include "ezxml.h"
 #include "util.h"
+#include "wd_util.h"
 
 
 //>>> liudf added 20160114
@@ -294,6 +295,22 @@ config_init(void)
 	https_server->svr_key_file	= safe_strdup(DEFAULT_SVR_KEY_FILE);
 	
 	config.https_server	= https_server;
+
+    t_http_server *http_server  = (t_http_server *)malloc(sizeof(t_http_server));
+    memset(http_server, 0, sizeof(t_http_server));
+    http_server->gw_http_port   = 8403;
+    http_server->base_path      = safe_strdup(DEFAULT_WWW_PATH);
+
+    config.http_server  = http_server;
+
+    t_mqtt_server *mqtt_server = (t_mqtt_server *)malloc(sizeof(sizeof(t_mqtt_server)));
+    memset(mqtt_server, 0, sizeof(t_mqtt_server));
+    mqtt_server->hostname   = safe_strdup(DEFAULT_MQTT_SERVER);
+    mqtt_server->port       = 8883;
+    mqtt_server->cafile     = safe_strdup(DEFAULT_CA_CRT_FILE);
+    mqtt_server->crtfile    = NULL;
+    mqtt_server->keyfile    = NULL;
+    config.mqtt_server  = mqtt_server;
 	//<<<
 
     debugconf.log_stderr = 1;
@@ -1278,7 +1295,7 @@ parse_mac_list_action(const char *ptr, mac_choice_t which, int action)
     while ((possiblemac = strsep(&ptrcopy, ","))) {
         /* check for valid format */
 		if (is_valid_mac(possiblemac)) {
-			debug(LOG_DEBUG, "add|remove [%d] mac [%s]", possiblemac);
+			debug(LOG_DEBUG, "add|remove mac [%s]", possiblemac);
 			if(action)
 				add_mac(possiblemac, which);
 			else
@@ -1894,7 +1911,7 @@ static void parse_weixin_http_dns_ip_cb(char *xml_buffer, int buffer_size)
 	return ;
 }
 
-int
+void
 fix_weixin_http_dns_ip (void)
 {
 	const char *url_weixin_dns = "http://dns.weixin.qq.com/cgi-bin/micromsg-bin/newgetdns";
@@ -1938,7 +1955,7 @@ __clear_trusted_domains(void)
 }
 
 void
-clear_trusted_domains(void)
+clear_trusted_domains_(void)
 {
 	LOCK_DOMAIN();
 	__clear_trusted_domains();

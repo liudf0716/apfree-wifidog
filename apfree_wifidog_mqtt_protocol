@@ -1,0 +1,55 @@
+apfree wifidog mqtt protocol is used to remotely control wifidog, including
+1, set trusted domain&pdomain&mac&ip
+2, delete trusted domain&pdomain&mac&ip
+3, clear trusted domain&pdomain&mac&ip
+4, show trusted domain&pdomain&mac&ip
+5, save all above user defining rules
+6, status of router
+7, reboot router
+
+apfree wifidog will subscribe a topic : wifidog/gw_id/request/+
+for example, it should only receive such topic:
+wifidog/61ACC80118B6/request/10
+in this topic, 10 is request id
+when apfree wifidog receive such topic, it get its payload and process this request.
+after finishing it, apfree wifidog publish a message to broker, which telling the result of this request.
+its publish topic format is : wifidog/61ACC80118B6/response/10
+
+apfree wifidog mqtt protocol details:
+request:
+1, set trusted domain&pdomain&mac&ip
+{"op":"set_trusted", "type":"domain|pdomain|mac|ip","value":"param_list","time":"yyyymmddhhmmss"}
+2, delete trusted domain&pdomain&mac&ip
+{"op":"del_trusted","type":"domain|pdomain|mac|ip","value":"param_list","time":"yyyymmddhhmmss"}
+3, clear trusted domain&pdomain&mac&ip
+{"op":"clear_trusted","type":"domain|pdomain|mac|ip","time":"yyyymmddhhmmss"}
+4, show trusted domain&pdomain&mac&ip
+{"op":"show_trusted","type":"domain|pdomain|mac|ip","time":"yyyymmddhhmmss"}
+5, save all above user defining rules
+{"op":"save_rules","time":"yyyymmddhhmmss"}
+6, get status of router
+{"op":"get_status","time":"yyyymmddhhmmss"}
+7, reboot device
+{"op":"reboot_device","time":"yyyymmddhhmmss"}
+
+response:
+if these request has response, its format:
+{"response":"response_code","msg":"return message"}
+response_code list
+200		Ok
+404		the request is not support
+403		the request is forbidden
+400		the request is bad
+500		when execute the request, encounter internal error
+
+for example, set pdomain baidu.com taobao.com qq.com for device 61ACC80118B6
+topic
+wifidog/61ACC80118B6/request/110
+message
+{"op":"set_trusted","type":"pdomain","value":"baidu.com,taobao.com,qq.com","time":"20170223113520"}
+
+its ok response should be
+topic
+wifidog/61ACC80118B6/response/110
+message
+{"response":"200","msg":"ok"}

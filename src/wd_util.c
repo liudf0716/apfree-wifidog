@@ -54,10 +54,13 @@
 
 #include <uci.h>
 
+#include <json-c/json.h>
+
 #include "common.h"
 #include "gateway.h"
 #include "commandline.h"
 #include "client_list.h"
+#include "ping_thread.h"
 #include "conf.h"
 #include "safe.h"
 #include "util.h"
@@ -212,9 +215,88 @@ is_auth_online()
     }
 }
 
-        /*
-         * @return A string containing human-readable status text. MUST BE free()d by caller
-         */
+char *
+mqtt_get_status_text()
+{
+	time_t uptime = 0;
+    unsigned int days = 0, hours = 0, minutes = 0, seconds = 0;
+	struct json_object *jstatus = json_object_new_object();
+	struct sys_info info;
+	memset(&info, 0, sizeof(info));
+		
+	get_sys_info(&info);
+
+	json_object_object_add(jstatus, "sys_uptime", json_object_new_int(info.sys_uptime));
+	json_object_object_add(jstatus, "sys_memfree", json_object_new_int(info.sys_memfree));
+	json_object_object_add(jstatus, "nf_conntrack_count", json_object_new_int(info.nf_conntrack_count));
+	json_object_object_add(jstatus, "cpu_usage", json_object_new_double(info.cpu_usage));
+	json_object_object_add(jstatus, "sys_load", json_object_new_double(info.sys_load));
+	json_object_object_add(jstatus, "boad_type", 
+		json_object_new_string(g_type?g_type:"null"));
+	json_object_object_add(jstatus, "boad_name", 
+		json_object_new_string(g_name?g_name:"null"));
+
+	uptime = time(NULL) - started_time;
+    days = (unsigned int)uptime / (24 * 60 * 60);
+    uptime -= days * (24 * 60 * 60);
+    hours = (unsigned int)uptime / (60 * 60);
+    uptime -= hours * (60 * 60);
+    minutes = (unsigned int)uptime / 60;
+    uptime -= minutes * 60;
+    seconds = (unsigned int)uptime;
+    char wifidog_uptime[128] = {0};
+    snprintf(wifidog_uptime, 128, "%dD %dH %dM %dS", days, hours, minutes, seconds);
+
+    json_object_object_add(jstatus, "wifidog_version", json_object_new_string(VERSION));
+    json_object_object_add(jstatus, "wifidog_uptime", json_object_new_string(wifidog_uptime));
+    json_object_object_add(jstatus, "auth_server", json_object_new_int(is_auth_online()));
+    
+    t_client *sublist = NULL, *current = NULL;
+
+    LOCK_CLIENT_LIST();
+    int count = client_list_dup(&sublist);
+    UNLOCK_CLIENT_LIST();
+    json_object_object_add(jstatus, "online_client_count", json_object_new_int(count));
+
+    current = sublist;
+
+	int active_count = 0;
+	struct json_object *jclients = NULL;
+    while (current != NULL) {
+    	if (!jclients)
+    		jclients = json_object_new_array();
+    	struct json_object *jclient = json_object_new_object();
+    	json_object_object_add(jclient, "status", json_object_new_int(current->is_online));
+    	json_object_object_add(jclient, "ip", json_object_new_string(current->ip));
+    	json_object_object_add(jclient, "mac", json_object_new_string(current->mac));
+    	json_object_object_add(jclient, "token", json_object_new_string(current->token));
+    	json_object_object_add(jclient, "name", 
+    		json_object_new_string(current->name != NULL?current->name:"null"));
+    	json_object_object_add(jclient, "first_login", json_object_new_int64(current->first_login));
+    	json_object_object_add(jclient, "downloaded", 
+    		json_object_new_int64(current->counters.incoming));
+    	json_object_object_add(jclient, "uploaded",
+    		json_object_new_int64(current->counters.outgoing));
+
+       json_object_array_add(jclients, jclient);
+
+		if(current->is_online)
+			active_count++;
+        current = current->next;
+    }
+    client_list_destroy(sublist);
+    if (jclients)
+    	json_object_object_add(jstatus, "clients", jclients);
+
+    json_object_object_add(jstatus, "active_client_count", json_object_new_int(active_count));
+    char *retStr = safe_strdup(json_object_to_json_string(jstatus));
+    json_object_put(jstatus);
+    return retStr;
+}
+
+/*
+ * @return A string containing human-readable status text. MUST BE free()d by caller
+ */
 char *
 get_status_text()
 {
@@ -264,7 +346,7 @@ get_status_text()
     pstr_append_sprintf(pstr, "%d clients " "connected.\n", count);
 
     count = 1;
-	active_count = 1;
+	active_count = 0;
     while (current != NULL) {
         pstr_append_sprintf(pstr, "\nClient %d status [%d]\n", count, current->is_online);
         pstr_append_sprintf(pstr, "  IP: %s MAC: %s\n", current->ip, current->mac);
@@ -427,12 +509,80 @@ get_serialize_trusted_pan_domains()
 
 	UNLOCK_DOMAIN();	
     
-	return pstr_to_string(pstr);
+	return line?pstr_to_string(pstr):NULL;
 
 }
 
 char *
-get_trusted_domains_text()
+mqtt_get_trusted_pan_domains_text()
+{
+	s_config *config;
+	t_domain_trusted *domain_trusted = NULL;
+
+    config = config_get_config();
+    if (config->pan_domains_trusted == NULL)
+    	return NULL;
+
+    pstr_t *pstr = pstr_new();
+    int first = 1;
+	LOCK_DOMAIN();
+	
+	for (domain_trusted = config->pan_domains_trusted; domain_trusted != NULL; domain_trusted = domain_trusted->next) {
+        if (first) {
+        	pstr_append_sprintf(pstr, "%s", domain_trusted->domain);
+        	first = 0;
+        } else 
+        	pstr_append_sprintf(pstr, ",%s", domain_trusted->domain);
+	}
+	
+	UNLOCK_DOMAIN();
+
+	return first?NULL:pstr_to_string(pstr);
+}
+
+char *
+mqtt_get_trusted_domains_text()
+{
+    s_config *config;
+	t_domain_trusted *domain_trusted = NULL;
+	t_ip_trusted	*ip_trusted = NULL;
+
+    config = config_get_config();
+    if (config->domains_trusted == NULL)
+    	return NULL;
+
+    struct json_object *jarray = json_object_new_array();
+	LOCK_DOMAIN();
+	
+	for (domain_trusted = config->domains_trusted; domain_trusted != NULL; domain_trusted = domain_trusted->next) {
+        pstr_t *pstr = pstr_new();
+        int first = 1;
+        struct json_object *jobj = json_object_new_object();
+		for(ip_trusted = domain_trusted->ips_trusted; ip_trusted != NULL; ip_trusted = ip_trusted->next) {
+        	if (first) {
+        		pstr_append_sprintf(pstr, "%s", ip_trusted->ip);
+        		first = 0;
+        	} else
+        		pstr_append_sprintf(pstr, ",%s", ip_trusted->ip);
+		}
+		char *iplist = pstr_to_string(pstr);
+		json_object_object_add(jobj, domain_trusted->domain, 
+			json_object_new_string(first?"NULL":iplist));
+		json_object_array_add(jarray, jobj);
+		if (iplist)
+			free(iplist);
+	}
+	
+	UNLOCK_DOMAIN();
+
+	char *retStr = safe_strdup(json_object_to_json_string(jarray));
+    json_object_put(jarray);
+
+	return retStr;
+}
+
+char *
+get_trusted_domains_text(void)
 {
 	pstr_t *pstr = pstr_new();
     s_config *config;
@@ -455,6 +605,12 @@ get_trusted_domains_text()
 	UNLOCK_DOMAIN();
     
 	return pstr_to_string(pstr);
+}
+
+char *
+mqtt_get_serialize_maclist(int which)
+{
+	return get_serialize_maclist(which);
 }
 
 char *
@@ -497,7 +653,7 @@ get_serialize_maclist(int which)
 	
 	UNLOCK_CONFIG();
     
-	return pstr_to_string(pstr);
+	return line?pstr_to_string(pstr):NULL;
 
 }
 
