@@ -30,7 +30,7 @@ request:
 6, get status of router
 {"op":"get_status","time":"yyyymmddhhmmss"}
 7, reboot device
-{"op":"reboot_device","time":"yyyymmddhhmmss"}
+{"op":"reboot","time":"yyyymmddhhmmss"}
 
 response:
 if these request has response, its format:
