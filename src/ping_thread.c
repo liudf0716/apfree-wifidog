@@ -83,7 +83,7 @@ thread_ping(void *arg)
 	// move from fw_init to here	
 	fw_set_pan_domains_trusted();
 
-	fix_weixin_http_dns_ip();
+	//fix_weixin_http_dns_ip();
 
 	parse_inner_trusted_domain_list();
 	fw_set_inner_domains_trusted();
