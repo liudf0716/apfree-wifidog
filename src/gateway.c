@@ -732,7 +732,6 @@ gw_main(int argc, char **argv)
 {
 
     s_config *config = config_get_config();
-	printf("hello world\n");
     config_init();
 
     parse_commandline(argc, argv);
