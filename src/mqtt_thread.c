@@ -25,6 +25,7 @@
   @author Copyright (C) 2016 Dengfeng Liu <liudengfeng@kunteng.org>
   
   */
+#ifdef	_MQTT_SUPPORT_
 
 #include <errno.h>
 #include <stdio.h>
@@ -345,3 +346,6 @@ void thread_mqtt(void *arg)
     mosquitto_destroy(mosq);
     mosquitto_lib_cleanup();
 }
+
+#else
+#endif
