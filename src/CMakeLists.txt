@@ -42,8 +42,11 @@ set(libs
 	ssl
 	crypto
 	event
-	event_openssl
-    mosquitto)
+	event_openssl)
+
+if (_MQTT_SUPPORT_)
+	list(APPEND libs mosquitto)
+endif()
 
 ADD_DEFINITIONS(-O2 -Wall --std=gnu99 -Wmissing-declarations)
 
