@@ -46,7 +46,6 @@ Do not use directly, use the debug macro */
 void
 _debug(const char *filename, int line, int level, const char *format, ...)
 {
-#if 0
     char buf[28];
     va_list vlist;
     time_t ts;
@@ -85,8 +84,4 @@ _debug(const char *filename, int line, int level, const char *format, ...)
         
         sigprocmask(SIG_UNBLOCK, &block_chld, NULL);
     }
-#else
-    static int index = 0;
-    printf("debug here %d\n", index++);
-#endif
 }
