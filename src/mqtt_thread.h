@@ -28,6 +28,8 @@
 #ifndef	_MQTT_THREAD_H_
 #define	_MQTT_THREAD_H_
 
+#ifdef  _MQTT_SUPPORT_
+
 #include "wdctl_thread.h"
 #include "conf.h"
 
@@ -40,5 +42,7 @@ void get_status_op(void *mosq, const char *type, const char *value, const int re
 void reboot_device_op(void *mosq, const char *type, const char *value, const int req_id, const s_config *config);
 
 void thread_mqtt(void *arg);
+#else
+#endif
 
 #endif
