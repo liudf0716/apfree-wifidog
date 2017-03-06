@@ -25,7 +25,6 @@
   @author Copyright (C) 2016 Dengfeng Liu <liudengfeng@kunteng.org>
   
   */
-#ifdef	_MQTT_SUPPORT_
 
 #include <errno.h>
 #include <stdio.h>
@@ -43,6 +42,8 @@
 #include "debug.h"
 #include "safe.h"
 #include "wd_util.h"
+
+#ifdef	_MQTT_SUPPORT_
 
 static struct wifidog_mqtt_op {
 	char	*operation;
