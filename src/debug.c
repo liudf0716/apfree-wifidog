@@ -35,8 +35,8 @@
 #include "debug.h"
 
 debugconf_t debugconf = {
-    .debuglevel = LOG_ERR,
-    .log_stderr = 0,
+    .debuglevel = LOG_INFO,
+    .log_stderr = 1,
     .log_syslog = 0,
     .syslog_facility = 0
 };
@@ -53,7 +53,6 @@ _debug(const char *filename, int line, int level, const char *format, ...)
 
     time(&ts);
     
-    printf("debug here \n");
     if (debugconf.debuglevel >= level) {
         sigemptyset(&block_chld);
         sigaddset(&block_chld, SIGCHLD);
