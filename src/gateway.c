@@ -490,9 +490,13 @@ wifidog_init()
         debug(LOG_ERR, "failed to create IPset control socket: %s");
         exit(1);
     }
-     
+    
+	debug(LOG_DEBUG, "after ipset_init");
+	
     common_setup ();              /* Initialize OpenSSL */
-
+	
+	debug(LOG_DEBUG, "after common_setup");
+	
     /* Set the time when wifidog started */
     if (!started_time) {
         debug(LOG_INFO, "Setting started_time");
