@@ -52,7 +52,8 @@ _debug(const char *filename, int line, int level, const char *format, ...)
     sigset_t block_chld;
 
     time(&ts);
-
+    
+    printf("debug here \n");
     if (debugconf.debuglevel >= level) {
         sigemptyset(&block_chld);
         sigaddset(&block_chld, SIGCHLD);
