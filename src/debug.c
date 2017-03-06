@@ -64,7 +64,8 @@ _debug(const char *filename, int line, int level, const char *format, ...)
             va_start(vlist, format);
             vfprintf(stderr, format, vlist);
             va_end(vlist);
-            fputc('\n', stderr);         
+            fputc('\n', stderr); 
+            fflush(stderr);
         } else if (debugconf.log_stderr) {
             fprintf(stderr, "[%d][%.24s][%u](%s:%d) ", level, ctime_r(&ts, buf), getpid(),
                 filename, line);
@@ -72,6 +73,7 @@ _debug(const char *filename, int line, int level, const char *format, ...)
             vfprintf(stderr, format, vlist);
             va_end(vlist);
             fputc('\n', stderr);
+            fflush(stderr);
         }
 
         if (debugconf.log_syslog) {
