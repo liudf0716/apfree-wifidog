@@ -29,6 +29,8 @@
 #ifndef _CONFIG_H_
 #define _CONFIG_H_
 
+#include <pthread.h>
+
 #include "common.h"
 /*@{*/
 /** Defines */
