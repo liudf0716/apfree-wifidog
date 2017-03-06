@@ -41,6 +41,7 @@
 #include "conf.h"
 #include "debug.h"
 #include "safe.h"
+#include "wd_util.h"
 
 static struct wifidog_mqtt_op {
 	char	*operation;
