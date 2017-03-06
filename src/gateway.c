@@ -614,6 +614,7 @@ create_wifidog_thread(s_config *config)
         debug(LOG_DEBUG, "Create thread pool thread_num %d, queue_size %d", thread_number, queue_size);
     }   
 
+#ifdef	_MQTT_SUPPORT_
     // start mqtt subscript thread
     result = pthread_create(&tid_mqtt_server, NULL, (void *)thread_mqtt, config);
     if (result != 0) {
@@ -621,6 +622,7 @@ create_wifidog_thread(s_config *config)
         termination_handler(0);
     }
     pthread_detach(tid_mqtt_server);
+#endif
 }
 
 /**@internal
