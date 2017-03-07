@@ -1,19 +1,14 @@
-os:
-  - linux
 language: c
+
 compiler:
-  - clang
   - gcc
-addons:
-  apt:
-    packages:
-    - libjson0-dev
-    - libevent2
-    - libevent2-openssl
-    - libmosquitto
-    - libuci
-    - libip4tc
-    - libopenssl
-    - libpthread
-install: cmake .
-script: make && make test
+
+install: 
+  - sudo -E apt-add-repository -y ppa:linuxjedi/ppa
+  - sudo apt-get update || true
+  - sudo apt-get install build-essential
+  - sudo apt-get install  libjson0-dev libevent-dev
+
+script:
+  - cmake .
+  - make
