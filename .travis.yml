@@ -4,5 +4,16 @@ language: c
 compiler:
   - clang
   - gcc
+addons:
+  apt:
+    packages:
+    - libjson-c
+    - libevent2
+    - libevent2-openssl
+    - libmosquitto
+    - libuci
+    - libip4tc
+    - libopenssl
+    - libpthread
 install: cmake .
 script: make && make test
