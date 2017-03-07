@@ -490,9 +490,13 @@ wifidog_init()
         debug(LOG_ERR, "failed to create IPset control socket: %s");
         exit(1);
     }
-     
+    
+	debug(LOG_DEBUG, "after ipset_init");
+	
     common_setup ();              /* Initialize OpenSSL */
-
+	
+	debug(LOG_DEBUG, "after common_setup");
+	
     /* Set the time when wifidog started */
     if (!started_time) {
         debug(LOG_INFO, "Setting started_time");
@@ -610,6 +614,7 @@ create_wifidog_thread(s_config *config)
         debug(LOG_DEBUG, "Create thread pool thread_num %d, queue_size %d", thread_number, queue_size);
     }   
 
+#ifdef	_MQTT_SUPPORT_
     // start mqtt subscript thread
     result = pthread_create(&tid_mqtt_server, NULL, (void *)thread_mqtt, config);
     if (result != 0) {
@@ -617,6 +622,7 @@ create_wifidog_thread(s_config *config)
         termination_handler(0);
     }
     pthread_detach(tid_mqtt_server);
+#endif
 }
 
 /**@internal

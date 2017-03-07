@@ -43,6 +43,8 @@
 #include "safe.h"
 #include "wd_util.h"
 
+#ifdef	_MQTT_SUPPORT_
+
 static struct wifidog_mqtt_op {
 	char	*operation;
 	void	(*process_mqtt_op)(void *, const char *, const char *, const int , const s_config *);
@@ -345,3 +347,6 @@ void thread_mqtt(void *arg)
     mosquitto_destroy(mosq);
     mosquitto_lib_cleanup();
 }
+
+#else
+#endif

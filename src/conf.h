@@ -96,7 +96,6 @@
 #define DEFAULT_WWW_PATH		"/etc/www/"
 
 #define DEFAULT_MQTT_SERVER		"wifidog.kunteng.org"
-#define DEFAULT_MQTT_TOPIC		""
 
 #define	WIFIDOG_REDIR_HTML_CONTENT	"setTimeout(function() {location.href = \"%s\";}, 10);"
 

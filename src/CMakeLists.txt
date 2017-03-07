@@ -43,7 +43,7 @@ set(libs
 	crypto
 	event
 	event_openssl
-    mosquitto)
+	mosquitto)
 
 ADD_DEFINITIONS(-O2 -Wall --std=gnu99 -Wmissing-declarations)
 
