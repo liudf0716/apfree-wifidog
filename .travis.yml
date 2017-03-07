@@ -7,7 +7,7 @@ compiler:
 addons:
   apt:
     packages:
-    - libjson-c
+    - libjson0-dev
     - libevent2
     - libevent2-openssl
     - libmosquitto
