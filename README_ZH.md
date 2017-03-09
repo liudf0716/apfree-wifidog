@@ -13,13 +13,8 @@ ApFree WiFiDog 在完全兼容原版WiFiDog的基础上，在功能、性能和�
 http://v.qq.com/x/page/f03507zyfvv.html
 
 ## 编译说明
-1，将package中的apfree_wifidog目录拷贝到openwrt&lede的package目录
-
-2，make menuconfig
-
-  进入 ApFree
-  
-  选择 apfree_wifidog
+请参考 @Echowxsy 编写的文档，在此表示感谢！
+https://github.com/liudf0716/apfree_wifidog/wiki/%E5%9F%BA%E4%BA%8ELEDE%E7%BC%96%E8%AF%91Apfree_wifidog
 
 ### 注意事项：
 
