@@ -847,6 +847,7 @@ void evdns_parse_trusted_domain_2_ip(t_domain_trusted *p)
     dnsbase = evdns_base_new(base, 1);
     if (!dnsbase)
         return;
+	evdns_base_set_option(dnsbase, "timeout", "0.2");
 	
 	struct evutil_addrinfo hints;
 	
