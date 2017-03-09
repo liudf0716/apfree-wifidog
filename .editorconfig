@@ -1,0 +1,18 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = LF
+[*.[ch]]
+indent_style = space
+indent_size = 4
+max_line_length = 80
+[README.md]
+max_line_length = 80
+[CMakeLists.txt]
+indent_style = space
+indent_size = 4
+max_line_length = 80
+[*.sh]
+indent_style = space
+indent_size = 2
