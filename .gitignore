@@ -8,3 +8,5 @@ cachr
 cmake_install.cmake
 
 *.cbp
+.*.swo
+.*.swp
