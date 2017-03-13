@@ -132,6 +132,17 @@ thread_ping(void *arg)
 	}
 }
 
+static long
+check_and_get_wifidog_uptime(long sys_uptime)
+{
+    long wifidog_uptime = time(NULL) - started_time;
+    if (wifidog_uptime > sys_uptime) {
+        started_time = time(NULL);
+        return 0;
+    }
+    return wifidog_uptime;
+}
+
 char *
 get_ping_request(const struct sys_info *info)
 {
@@ -155,7 +166,7 @@ get_ping_request(const struct sys_info *info)
              info->sys_load,
 			 info->nf_conntrack_count,
 			 info->cpu_usage,
-             (long unsigned int)((long unsigned int)time(NULL) - (long unsigned int)started_time),
+             check_and_get_wifidog_uptime(info->sys_uptime),
 			 offline_client_ageout(),
 			 g_online_clients,
 			 NULL != g_ssid?g_ssid:"NULL",
