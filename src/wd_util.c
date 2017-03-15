@@ -840,18 +840,25 @@ void evdns_parse_trusted_domain_2_ip(t_domain_trusted *p)
 {
 	struct evdns_base  *dnsbase 	= NULL;
 	
+    LOCK_DOMAIN();
+    
 	base = event_base_new();
-    if (!base)
-        return;
+    if (!base) {
+        UNLOCK_DOMAIN();
+        return;    
+    }
 	
     dnsbase = evdns_base_new(base, 1);
-    if (!dnsbase)
+    if (!dnsbase) {
+        event_base_free(base);
+        UNLOCK_DOMAIN();
         return;
+    }
 	evdns_base_set_option(dnsbase, "timeout", "0.2");
 	
 	struct evutil_addrinfo hints;
 	
-	LOCK_DOMAIN();
+	
 	
 	while(p && p->domain) {		
 		memset(&hints, 0, sizeof(hints));
