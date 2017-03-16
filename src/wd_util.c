@@ -874,7 +874,7 @@ void evdns_parse_trusted_domain_2_ip(t_domain_trusted *p)
 	evdns_base_set_option(dnsbase, "timeout", "0.2");
 	
 	struct evutil_addrinfo hints;
-
+	n_pending_requests = 0;
 	while(p && p->domain) {		
 		memset(&hints, 0, sizeof(hints));
 		hints.ai_family = AF_UNSPEC;
@@ -883,6 +883,8 @@ void evdns_parse_trusted_domain_2_ip(t_domain_trusted *p)
 		hints.ai_protocol = IPPROTO_TCP;
 		
 		n_pending_requests++;
+		
+		debug(LOG_INFO, "parse domain %s , error: %s", p->domain, n_pending_requests);
 		
 		struct evdns_cb_param *param = malloc(sizeof(struct evdns_cb_param));
 		memset(param, 0, sizeof(struct evdns_cb_param));
