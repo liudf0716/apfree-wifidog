@@ -884,7 +884,7 @@ void evdns_parse_trusted_domain_2_ip(t_domain_trusted *p)
 		
 		n_pending_requests++;
 		
-		debug(LOG_INFO, "parse domain %s , error: %s", p->domain, n_pending_requests);
+		debug(LOG_INFO, "parse domain %s , n_pending_requests: %d", p->domain, n_pending_requests);
 		
 		struct evdns_cb_param *param = malloc(sizeof(struct evdns_cb_param));
 		memset(param, 0, sizeof(struct evdns_cb_param));
