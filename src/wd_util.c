@@ -100,7 +100,7 @@ long served_this_session = 0;
 static pthread_mutex_t ghbn_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 static int n_pending_requests = 0;
-static struct event_base *base = NULL;
+//static struct event_base *base = NULL;
 
 void
 mark_online()
@@ -828,17 +828,25 @@ void evdns_add_trusted_domain_ip_cb(int errcode, struct evutil_addrinfo *addr, v
 					}
 				}
 			}     
-        }
-        evutil_freeaddrinfo(addr);
-    }
+        }   
+    } else {
+		debug(LOG_INFO, "parse domain %s , error: %s", p->domain, evutil_gai_strerror(errcode));
+	}
 	
-    if (--n_pending_requests == 0)
+	if (addr)
+		evutil_freeaddrinfo(addr);
+    if (--n_pending_requests == 0) {
+	//if (p->next == NULL)
+		debug(LOG_INFO, "parse domain end, end event_loop");
         event_base_loopexit(base, NULL);
+		
+	}
 }
 
 void evdns_parse_trusted_domain_2_ip(t_domain_trusted *p)
 {
-	struct evdns_base  *dnsbase 	= NULL;
+	struct event_base	*base		= NULL;
+	struct evdns_base  	*dnsbase 	= NULL;
 	
     LOCK_DOMAIN();
     
@@ -857,8 +865,6 @@ void evdns_parse_trusted_domain_2_ip(t_domain_trusted *p)
 	evdns_base_set_option(dnsbase, "timeout", "0.2");
 	
 	struct evutil_addrinfo hints;
-	
-	
 	
 	while(p && p->domain) {		
 		memset(&hints, 0, sizeof(hints));
