@@ -732,11 +732,141 @@ trim_newline(char *line)
 		line[strlen(line)-1] = '\0';
 }
 
+static FILE *fpopen(const char *dir, const char *name)
+{
+    char path[SYSFS_PATH_MAX];
+
+    snprintf(path, SYSFS_PATH_MAX, "%s/%s", dir, name);
+    return fopen(path, "r");
+}
+
+
+/* Fetch an integer attribute out of sysfs. */
+static int fetch_int(const char *dev, const char *name)
+{
+    FILE *f = fpopen(dev, name);
+    int value = -1;
+
+    if (!f)
+        return 0;
+
+    fscanf(f, "%i", &value);
+    fclose(f);
+    return value;
+}
+
+static int
+br_get_port_no(const char *port)
+{
+	DIR *d;
+    char path[SYSFS_PATH_MAX];
+
+    snprintf(path, SYSFS_PATH_MAX, SYSFS_CLASS_NET "%s/brport", port);
+    d = opendir(path);
+    if (!d)
+		return -1;
+	
+	return fetch_int(path, "port_no");
+}
+
+/*
+ * 1: wired; 0: not wired
+ */
+static int
+is_br_port_no_wired(const char *brname, int port_no)
+{
+	int i, count;
+    struct dirent **namelist;
+    char path[SYSFS_PATH_MAX] = {0};
+    int nret = 0;
+	
+    snprintf(path, SYSFS_PATH_MAX, SYSFS_CLASS_NET "%s/brif", brname);
+    count = scandir(path, &namelist, 0, alphasort);
+    if (count < 0)
+		return nret;
+	
+	for (i = 0; i < count; i++) {
+        if (namelist[i]->d_name[0] == '.'
+            && (namelist[i]->d_name[1] == '\0'
+            || (namelist[i]->d_name[1] == '.'
+                && namelist[i]->d_name[2] == '\0')))
+            continue;
+
+        if (!memcmp(namelist[i]->d_name, "eth", 3) && 
+			port_no == br_get_port_no(namelist[i]->d_name)) {
+			nret = 1;
+			break;
+		}
+    }
+    for (i = 0; i < count; i++)
+        free(namelist[i]);
+    free(namelist);
+	
+	return nret;
+}
+
+/*
+ * -1: error; >0: sucess
+ */
+static int
+get_device_br_port_no(const char *mac, const char *bridge)
+{
+#define	CHUNK	16
+	FILE *f;
+    int i, n;
+    struct fdb_entry fe[CHUNK];
+    char path[SYSFS_PATH_MAX] = {0};
+	memset(fe, 0, CHUNK*sizeof(struct fdb_entry));
+    
+    /* open /sys/class/net/brXXX/brforward */
+    snprintf(path, SYSFS_PATH_MAX, SYSFS_CLASS_NET "%s/brforward", bridge);
+    f = fopen(path, "r");
+    if (f) {
+        fseek(f, offset*sizeof(struct fdb_entry), SEEK_SET);
+        n = fread(fe, sizeof(struct fdb_entry), CHUNK, f);
+		int port_no = -1;
+		for (i = 0; i < n; i++) {
+			unsigned char mac_addr[6] = {0};
+			int index = 0;
+			sscanf(mac, "%02X:%02X:%02X:%02X:%02X:%02X", 
+				  mac_addr[index++], mac_addr[index++], mac_addr[index++], 
+				  mac_addr[index++], mac_addr[index++], mac_addr[index++]);
+			if (memcmp(mac_addr, fe[i].mac_addr, 6) == ) {
+				port_no = fe[i].port_no;
+				break;
+			}
+		}
+        fclose(f);
+		return port_no;
+    }
+	return -1;
+}
+
 /*
  * 1: wired; 0: wireless
  */
-int
-is_device_wired(const char *mac)
+static int
+_is_device_wired(const char *mac, const char *bridge)
+{
+	int port_no = 0;
+	if ((port_no = get_device_br_port_no(mac, bridge)) < 0) {
+		return 0;
+	} 
+	
+	return is_br_port_no_wired(bridge, port_no);
+}
+
+static int
+is_device_wired(const char *mac){
+	return _is_device_wired(mac, "br-lan");
+}
+
+/*
+ * 1: wired; 0: wireless
+ * deprecated
+ */
+static int
+is_device_wired_(const char *mac)
 {
 	FILE *fd = NULL;
 	char szcmd[128] = {0}; 
