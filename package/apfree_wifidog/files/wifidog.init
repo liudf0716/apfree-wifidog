@@ -186,7 +186,7 @@ init_config() {
 	
 	[ ! -f $CONFIGFILE ] && {
 		echo "no wifidog.conf, exit....."
-		/usr/bin/wdctl stop
+		stop
 		exit
 	}
 }
