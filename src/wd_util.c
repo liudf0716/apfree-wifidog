@@ -103,8 +103,8 @@ struct evdns_cb_param {
 	struct event_base	*base;
 	void	*data;
 };
-static int n_pending_requests = 0;
-//static struct event_base *base = NULL;
+
+static volatile int n_pending_requests = 0;
 
 void
 mark_online()
