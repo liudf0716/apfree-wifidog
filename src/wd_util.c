@@ -843,7 +843,8 @@ void evdns_add_trusted_domain_ip_cb(int errcode, struct evutil_addrinfo *addr, v
 	
 	if (addr)
 		evutil_freeaddrinfo(addr);
-	
+    
+	debug(LOG_INFO, "n_pending_requests is [%d]", n_pending_requests);
     if (--n_pending_requests <= 0) {
 		debug(LOG_INFO, "parse domain end, end event_loop [%d]", n_pending_requests);
         event_base_loopexit(base, NULL);
