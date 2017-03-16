@@ -844,8 +844,7 @@ void evdns_add_trusted_domain_ip_cb(int errcode, struct evutil_addrinfo *addr, v
 	if (addr)
 		evutil_freeaddrinfo(addr);
     
-	debug(LOG_INFO, "n_pending_requests is [%d]", n_pending_requests);
-    if (--n_pending_requests <= 0) {
+    if (--n_pending_requests <= 0 && n_started_requests ==  0) {
 		debug(LOG_INFO, "parse domain end, end event_loop [%d]", n_pending_requests);
         event_base_loopexit(base, NULL);
 		n_pending_requests = 0;
@@ -875,6 +874,7 @@ void evdns_parse_trusted_domain_2_ip(t_domain_trusted *p)
 	
 	struct evutil_addrinfo hints;
 	n_pending_requests = 0;
+	n_started_requests = 0;
 	while(p && p->domain) {		
 		memset(&hints, 0, sizeof(hints));
 		hints.ai_family = AF_UNSPEC;
@@ -883,8 +883,7 @@ void evdns_parse_trusted_domain_2_ip(t_domain_trusted *p)
 		hints.ai_protocol = IPPROTO_TCP;
 		
 		n_pending_requests++;
-		
-		debug(LOG_INFO, "parse domain %s , n_pending_requests: %d", p->domain, n_pending_requests);
+		n_started_requests = 1;
 		
 		struct evdns_cb_param *param = malloc(sizeof(struct evdns_cb_param));
 		memset(param, 0, sizeof(struct evdns_cb_param));
@@ -896,8 +895,10 @@ void evdns_parse_trusted_domain_2_ip(t_domain_trusted *p)
 		p = p->next;
 	}
 	
-	if (n_pending_requests)
+	if (n_started_requests) {
 		event_base_dispatch(base);
+		n_started_requests = 0;
+	}
 	
 	UNLOCK_DOMAIN();
 	
