@@ -577,14 +577,6 @@ create_wifidog_thread(s_config *config)
         pthread_detach(tid_http_server);
     }
 
-    /* Start control thread */
-    result = pthread_create(&tid_wdctl, NULL, (void *)thread_wdctl, (void *)safe_strdup(config->wdctl_sock));
-    if (result != 0) {
-        debug(LOG_ERR, "FATAL: Failed to create a new thread (wdctl) - exiting");
-        termination_handler(0);
-    }
-    pthread_detach(tid_wdctl);
-
     /* Start heartbeat thread */
     result = pthread_create(&tid_ping, NULL, (void *)thread_ping, NULL);
     if (result != 0) {
@@ -623,6 +615,14 @@ create_wifidog_thread(s_config *config)
     }
     pthread_detach(tid_mqtt_server);
 #endif
+	
+	 /* Start control thread */
+    result = pthread_create(&tid_wdctl, NULL, (void *)thread_wdctl, (void *)safe_strdup(config->wdctl_sock));
+    if (result != 0) {
+        debug(LOG_ERR, "FATAL: Failed to create a new thread (wdctl) - exiting");
+        termination_handler(0);
+    }
+    pthread_detach(tid_wdctl);
 }
 
 /**@internal

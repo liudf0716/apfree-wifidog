@@ -872,7 +872,7 @@ void evdns_parse_trusted_domain_2_ip(t_domain_trusted *p)
         return;
     }
 	evdns_base_set_option(dnsbase, "timeout", "0.2");
-    // thanks the following article
+    // thanks to the following article
     // http://www.wuqiong.info/archives/13/
     evdns_base_set_option(dnsbase, "randomize-case:", "0");//TurnOff DNS-0x20 encoding
     evdns_base_nameserver_ip_add(dnsbase, "180.76.76.76");//BaiduDNS
