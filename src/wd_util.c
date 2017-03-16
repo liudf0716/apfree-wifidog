@@ -872,6 +872,13 @@ void evdns_parse_trusted_domain_2_ip(t_domain_trusted *p)
         return;
     }
 	evdns_base_set_option(dnsbase, "timeout", "0.2");
+    // thanks the following article
+    // http://www.wuqiong.info/archives/13/
+    evdns_base_set_option(dnsbase, "randomize-case:", "0");//TurnOff DNS-0x20 encoding
+    evdns_base_nameserver_ip_add(dnsbase, "180.76.76.76");//BaiduDNS
+    evdns_base_nameserver_ip_add(dnsbase, "223.5.5.5");//AliDNS
+    evdns_base_nameserver_ip_add(dnsbase, "223.6.6.6");//AliDNS
+    evdns_base_nameserver_ip_add(dnsbase, "114.114.114.114");//114DNS
 	
 	struct evutil_addrinfo hints;
 	n_pending_requests = 0;
@@ -884,7 +891,7 @@ void evdns_parse_trusted_domain_2_ip(t_domain_trusted *p)
 		hints.ai_protocol = IPPROTO_TCP;
 		
 		n_pending_requests++;
-		n_started_requests = 1;
+		n_started_requests = 1; // in case some invalid domain parse
 		
 		struct evdns_cb_param *param = malloc(sizeof(struct evdns_cb_param));
 		memset(param, 0, sizeof(struct evdns_cb_param));
@@ -897,7 +904,7 @@ void evdns_parse_trusted_domain_2_ip(t_domain_trusted *p)
 	}
 	
 	if (n_started_requests) {
-        n_started_requests = 0;
+        n_started_requests = 0; 
 		event_base_dispatch(base);	
 	}
 	
