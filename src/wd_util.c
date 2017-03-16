@@ -99,8 +99,13 @@ long served_this_session = 0;
 /** @brief Mutex to protect gethostbyname since not reentrant */
 static pthread_mutex_t ghbn_mutex = PTHREAD_MUTEX_INITIALIZER;
 
+struct evdns_cb_param {
+	struct event_base	*base;
+	void	*data;
+};
+
 static int n_pending_requests = 0;
-static struct event_base *base = NULL;
+static int n_started_requests = 0;
 
 void
 mark_online()
@@ -788,7 +793,11 @@ char *evb_2_string(struct evbuffer *evb, int *olen)
 
 void evdns_add_trusted_domain_ip_cb(int errcode, struct evutil_addrinfo *addr, void *ptr)
 {
-	t_domain_trusted *p = ptr;
+	struct evdns_cb_param *param = ptr;
+	t_domain_trusted *p = param->data;
+	struct event_base	*base = param->base;
+	free(param);
+	
     if (!errcode) {
         struct evutil_addrinfo *ai;
 		char hostname[HTTP_IP_ADDR_LEN];
@@ -828,49 +837,76 @@ void evdns_add_trusted_domain_ip_cb(int errcode, struct evutil_addrinfo *addr, v
 					}
 				}
 			}     
-        }
-        evutil_freeaddrinfo(addr);
-    }
+        }   
+    } else {
+		debug(LOG_INFO, "parse domain %s , error: %s", p->domain, evutil_gai_strerror(errcode));
+	}
 	
-    if (--n_pending_requests == 0)
+	if (addr)
+		evutil_freeaddrinfo(addr);
+    
+    if (--n_pending_requests <= 0 && n_started_requests ==  0) {
+		debug(LOG_INFO, "parse domain end, end event_loop [%d]", n_pending_requests);
         event_base_loopexit(base, NULL);
+		n_pending_requests = 0;
+	}
 }
 
 void evdns_parse_trusted_domain_2_ip(t_domain_trusted *p)
 {
-	struct evdns_base  *dnsbase 	= NULL;
+	struct event_base	*base		= NULL;
+	struct evdns_base  	*dnsbase 	= NULL;
 	
+    LOCK_DOMAIN();
+    
 	base = event_base_new();
-    if (!base)
-        return;
+    if (!base) {
+        UNLOCK_DOMAIN();
+        return;    
+    }
 	
     dnsbase = evdns_base_new(base, 1);
-    if (!dnsbase)
+    if (!dnsbase) {
+        event_base_free(base);
+        UNLOCK_DOMAIN();
         return;
+    }
 	evdns_base_set_option(dnsbase, "timeout", "0.2");
+    // thanks the following article
+    // http://www.wuqiong.info/archives/13/
+    evdns_base_set_option(dnsbase, "randomize-case:", "0");//TurnOff DNS-0x20 encoding
+    evdns_base_nameserver_ip_add(dnsbase, "180.76.76.76");//BaiduDNS
+    evdns_base_nameserver_ip_add(dnsbase, "223.5.5.5");//AliDNS
+    evdns_base_nameserver_ip_add(dnsbase, "223.6.6.6");//AliDNS
+    evdns_base_nameserver_ip_add(dnsbase, "114.114.114.114");//114DNS
 	
 	struct evutil_addrinfo hints;
-	
-	LOCK_DOMAIN();
-	
+	n_pending_requests = 0;
+	n_started_requests = 0;
 	while(p && p->domain) {		
 		memset(&hints, 0, sizeof(hints));
 		hints.ai_family = AF_UNSPEC;
 		hints.ai_flags = EVUTIL_AI_CANONNAME;
-
 		hints.ai_socktype = SOCK_STREAM;
 		hints.ai_protocol = IPPROTO_TCP;
 		
-		++n_pending_requests;
+		n_pending_requests++;
+		n_started_requests = 1; // in case some invalid domain parse
 		
+		struct evdns_cb_param *param = malloc(sizeof(struct evdns_cb_param));
+		memset(param, 0, sizeof(struct evdns_cb_param));
+		param->base = base;
+		param->data = p;
 		evdns_getaddrinfo( dnsbase, p->domain, NULL ,
-			  &hints, evdns_add_trusted_domain_ip_cb, p);
+			  &hints, evdns_add_trusted_domain_ip_cb, param);
 		
 		p = p->next;
 	}
 	
-	if (n_pending_requests)
-		event_base_dispatch(base);
+	if (n_started_requests) {
+        n_started_requests = 0; 
+		event_base_dispatch(base);	
+	}
 	
 	UNLOCK_DOMAIN();
 	

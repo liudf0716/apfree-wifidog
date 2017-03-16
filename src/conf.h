@@ -452,15 +452,15 @@ char	*g_channel_path;
 char	*g_ssid;
 
 #define	LOCK_DOMAIN() do { \
-	debug(LOG_DEBUG, "Locking domain"); \
+	debug(LOG_INFO, "Locking domain"); \
 	pthread_mutex_lock(&domains_mutex);	\
-	debug(LOG_DEBUG, "Domains locked"); \
+	debug(LOG_INFO, "Domains locked"); \
 } while (0)
 
 #define UNLOCK_DOMAIN() do { \
-	debug(LOG_DEBUG, "Unlocking domain"); \
+	debug(LOG_INFO, "Unlocking domain"); \
 	pthread_mutex_unlock(&domains_mutex);	\
-	debug(LOG_DEBUG, "Domain unlocked"); \
+	debug(LOG_INFO, "Domain unlocked"); \
 } while (0)
 // <<< liudf added end
 
