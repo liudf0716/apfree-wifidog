@@ -897,8 +897,8 @@ void evdns_parse_trusted_domain_2_ip(t_domain_trusted *p)
 	}
 	
 	if (n_started_requests) {
-		event_base_dispatch(base);
-		n_started_requests = 0;
+        n_started_requests = 0;
+		event_base_dispatch(base);	
 	}
 	
 	UNLOCK_DOMAIN();
