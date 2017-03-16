@@ -99,6 +99,10 @@ long served_this_session = 0;
 /** @brief Mutex to protect gethostbyname since not reentrant */
 static pthread_mutex_t ghbn_mutex = PTHREAD_MUTEX_INITIALIZER;
 
+struct evdns_cb_param {
+	struct event_base	*base;
+	void	*data;
+};
 static int n_pending_requests = 0;
 //static struct event_base *base = NULL;
 
@@ -788,7 +792,11 @@ char *evb_2_string(struct evbuffer *evb, int *olen)
 
 void evdns_add_trusted_domain_ip_cb(int errcode, struct evutil_addrinfo *addr, void *ptr)
 {
-	t_domain_trusted *p = ptr;
+	struct evdns_cb_param *param = ptr;
+	t_domain_trusted *p = param->data;
+	event_base	*base = param->base;
+	free(param);
+	
     if (!errcode) {
         struct evutil_addrinfo *ai;
 		char hostname[HTTP_IP_ADDR_LEN];
@@ -835,11 +843,11 @@ void evdns_add_trusted_domain_ip_cb(int errcode, struct evutil_addrinfo *addr, v
 	
 	if (addr)
 		evutil_freeaddrinfo(addr);
-    if (--n_pending_requests == 0) {
-	//if (p->next == NULL)
-		debug(LOG_INFO, "parse domain end, end event_loop");
+	
+    if (--n_pending_requests <= 0) {
+		debug(LOG_INFO, "parse domain end, end event_loop [%d]", n_pending_requests);
         event_base_loopexit(base, NULL);
-		
+		n_pending_requests = 0;
 	}
 }
 
@@ -865,19 +873,22 @@ void evdns_parse_trusted_domain_2_ip(t_domain_trusted *p)
 	evdns_base_set_option(dnsbase, "timeout", "0.2");
 	
 	struct evutil_addrinfo hints;
-	
+	int index = 0;
 	while(p && p->domain) {		
 		memset(&hints, 0, sizeof(hints));
 		hints.ai_family = AF_UNSPEC;
 		hints.ai_flags = EVUTIL_AI_CANONNAME;
-
 		hints.ai_socktype = SOCK_STREAM;
 		hints.ai_protocol = IPPROTO_TCP;
 		
-		++n_pending_requests;
+		n_pending_requests++;
 		
+		struct evdns_cb_param *param = malloc(sizeof(struct evdns_cb_param));
+		memset(param, 0, sizeof(struct evdns_cb_param));
+		param->base = base;
+		param->data = p;
 		evdns_getaddrinfo( dnsbase, p->domain, NULL ,
-			  &hints, evdns_add_trusted_domain_ip_cb, p);
+			  &hints, evdns_add_trusted_domain_ip_cb, param);
 		
 		p = p->next;
 	}
