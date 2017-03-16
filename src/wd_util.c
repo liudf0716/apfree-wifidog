@@ -794,7 +794,7 @@ void evdns_add_trusted_domain_ip_cb(int errcode, struct evutil_addrinfo *addr, v
 {
 	struct evdns_cb_param *param = ptr;
 	t_domain_trusted *p = param->data;
-	event_base	*base = param->base;
+	struct event_base	*base = param->base;
 	free(param);
 	
     if (!errcode) {
@@ -873,7 +873,7 @@ void evdns_parse_trusted_domain_2_ip(t_domain_trusted *p)
 	evdns_base_set_option(dnsbase, "timeout", "0.2");
 	
 	struct evutil_addrinfo hints;
-	int index = 0;
+
 	while(p && p->domain) {		
 		memset(&hints, 0, sizeof(hints));
 		hints.ai_family = AF_UNSPEC;
