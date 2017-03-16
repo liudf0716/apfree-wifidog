@@ -104,7 +104,8 @@ struct evdns_cb_param {
 	void	*data;
 };
 
-static volatile int n_pending_requests = 0;
+static int n_pending_requests = 0;
+static int n_started_requests = 0;
 
 void
 mark_online()
