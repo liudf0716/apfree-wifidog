@@ -821,10 +821,9 @@ get_device_br_port_no(const char *mac, const char *bridge)
 	memset(fe, 0, CHUNK*sizeof(struct fdb_entry));
     
     unsigned char mac_addr[7] = {0};
-	int index = 0;
 	sscanf(mac, "%02X:%02X:%02X:%02X:%02X:%02X", 
-			  mac_addr[index++], mac_addr[index++], mac_addr[index++], 
-			  mac_addr[index++], mac_addr[index++], mac_addr[index++]);
+			  mac_addr[0], mac_addr[1], mac_addr[2], 
+			  mac_addr[3], mac_addr[4], mac_addr[5]);
 
     /* open /sys/class/net/brXXX/brforward */
     snprintf(path, SYSFS_PATH_MAX, SYSFS_CLASS_NET "%s/brforward", bridge);
@@ -833,13 +832,11 @@ get_device_br_port_no(const char *mac, const char *bridge)
         n = fread(fe, sizeof(struct fdb_entry), CHUNK, f);
 		int port_no = -1;
 		for (i = 0; i < n; i++) {
-			index = 0;
-			int index2 = 0;
-			debug(LOG_INFO, "%02X:%02X:%02X:%02X:%02X:%02X == %02X:%02X:%02X:%02X:%02X:%02X",
-				mac_addr[index++], mac_addr[index++], mac_addr[index++], 
-			  	mac_addr[index++], mac_addr[index++], mac_addr[index++],
-			  	fe[i].mac_addr[index2++], fe[i].mac_addr[index2++], fe[i].mac_addr[index2++], 
-			  	fe[i].mac_addr[index2++], fe[i].mac_addr[index2++], fe[i].mac_addr[index2++]);	
+			debug(LOG_INFO, "[%d] %02X:%02X:%02X:%02X:%02X:%02X == %02X:%02X:%02X:%02X:%02X:%02X", i,
+				mac_addr[0], mac_addr[1], mac_addr[2], 
+			  	mac_addr[3], mac_addr[4], mac_addr[5],
+			  	fe[i].mac_addr[0], fe[i].mac_addr[1], fe[i].mac_addr[2], 
+			  	fe[i].mac_addr[3], fe[i].mac_addr[4], fe[i].mac_addr[5]);	
 			if (!memcmp(mac_addr, fe[i].mac_addr, 6)) {
 				port_no = fe[i].port_no;
 				break;
