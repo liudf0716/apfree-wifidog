@@ -45,8 +45,6 @@
 #include <arpa/inet.h>
 #include <net/if.h>
 #include <net/if_arp.h>
-
-
 #include <fcntl.h>
 #include <net/ethernet.h>
 #include <netinet/ip.h>
@@ -54,8 +52,9 @@
 #include <netpacket/packet.h>
 
 #include <uci.h>
-
 #include <json-c/json.h>
+
+#include <dirent.h>
 
 #include "common.h"
 #include "gateway.h"
