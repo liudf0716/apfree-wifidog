@@ -838,8 +838,8 @@ get_device_br_port_no(const char *mac, const char *bridge)
 			debug(LOG_INFO, "%02X:%02X:%02X:%02X:%02X:%02X == %02X:%02X:%02X:%02X:%02X:%02X",
 				mac_addr[index++], mac_addr[index++], mac_addr[index++], 
 			  	mac_addr[index++], mac_addr[index++], mac_addr[index++],
-			  	fe[i].mac_addr[index++], fe[i].mac_addr[index++], fe[i].mac_addr[index++], 
-			  	fe[i].mac_addr[index++], fe[i].mac_addr[index++], fe[i].mac_addr[index++]);	
+			  	fe[i].mac_addr[index2++], fe[i].mac_addr[index2++], fe[i].mac_addr[index2++], 
+			  	fe[i].mac_addr[index2++], fe[i].mac_addr[index2++], fe[i].mac_addr[index2++]);	
 			if (!memcmp(mac_addr, fe[i].mac_addr, 6)) {
 				port_no = fe[i].port_no;
 				break;
@@ -872,8 +872,10 @@ is_device_wired_intern(const char *mac, const char *bridge)
  */
 int
 br_is_device_wired(const char *mac){
-	if (is_valid_mac(mac))
+	if (is_valid_mac(mac)) {
+		debug(LOG_INFO,"mac %s check is wired", mac);
 		return is_device_wired_intern(mac, config_get_config()->gw_interface);
+	}
 
 	return 0;
 }

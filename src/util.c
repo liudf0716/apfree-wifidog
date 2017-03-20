@@ -208,6 +208,9 @@ is_valid_mac(const char *mac)
 	int i = 0;
 	int s = 0;
 
+	if (!mac || strlen(mac) != 17)
+		return 0;
+
 	while (*mac) {
 		if (isxdigit(*mac)) {
 			i++;
