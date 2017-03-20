@@ -832,7 +832,14 @@ get_device_br_port_no(const char *mac, const char *bridge)
     if (f) {
         n = fread(fe, sizeof(struct fdb_entry), CHUNK, f);
 		int port_no = -1;
-		for (i = 0; i < n; i++) {	
+		for (i = 0; i < n; i++) {
+			index = 0;
+			int index2 = 0;
+			debug(LOG_INFO, "%02X:%02X:%02X:%02X:%02X:%02X == %02X:%02X:%02X:%02X:%02X:%02X",
+				mac_addr[index++], mac_addr[index++], mac_addr[index++], 
+			  	mac_addr[index++], mac_addr[index++], mac_addr[index++],
+			  	fe[i].mac_addr[index++], fe[i].mac_addr[index++], fe[i].mac_addr[index++], 
+			  	fe[i].mac_addr[index++], fe[i].mac_addr[index++], fe[i].mac_addr[index++]);	
 			if (!memcmp(mac_addr, fe[i].mac_addr, 6)) {
 				port_no = fe[i].port_no;
 				break;
