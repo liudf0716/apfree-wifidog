@@ -169,7 +169,7 @@ http_callback_404(httpd * webserver, request * r, int error_code)
         char  mac[18] = {0};
         int nret = br_arp_get_mac(r->clientAddr, mac);  
 		if (nret == 0) {
-            stncpy(mac, "ff:ff:ff:ff:ff:ff", 17);
+            strncpy(mac, "ff:ff:ff:ff:ff:ff", 17);
         }
 		
 		snprintf(tmp_url, (sizeof(tmp_url) - 1), "http://%s%s%s%s",
