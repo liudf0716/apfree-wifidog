@@ -43,8 +43,9 @@
 #include <netinet/in.h>
 #include <sys/ioctl.h>
 #include <arpa/inet.h>
-
 #include <net/if.h>
+#include <net/if_arp.h>
+
 
 #include <fcntl.h>
 #include <net/ethernet.h>
@@ -831,7 +832,7 @@ get_device_br_port_no(const char *mac, const char *bridge)
 			sscanf(mac, "%02X:%02X:%02X:%02X:%02X:%02X", 
 				  mac_addr[index++], mac_addr[index++], mac_addr[index++], 
 				  mac_addr[index++], mac_addr[index++], mac_addr[index++]);
-			if (memcmp(mac_addr, fe[i].mac_addr, 6) == ) {
+			if (!memcmp(mac_addr, fe[i].mac_addr, 6)) {
 				port_no = fe[i].port_no;
 				break;
 			}

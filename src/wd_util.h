@@ -35,6 +35,20 @@
 
 #include "conf.h"
 
+/*  arp_flags and at_flags field values */
+#define ATF_INUSE   0x01    /* entry in use */
+#define ATF_COM     0x02    /* completed entry (enaddr valid) */
+#define ATF_PERM    0x04    /* permanent entry */
+#define ATF_PUBL    0x08    /* publish entry (respond for other host) */
+#define ATF_USETRAILERS 0x10    /* has requested trailers */
+#define ATF_PROXY   0x20    /* Do PROXY arp */
+
+#define MAC_LENGTH  18
+#define IP_LENGTH   16
+
+#define LOOKUP_URL_LENGTH	256
+#define VENDOR_LENGTH		128
+
 /** How many times should we try detecting the interface with the default route
  * (in seconds).  If set to 0, it will keep retrying forever */
 #define NUM_EXT_INTERFACE_DETECT_RETRY 0
