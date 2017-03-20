@@ -845,28 +845,34 @@ get_device_br_port_no(const char *mac, const char *bridge)
 /*
  * 1: wired; 0: wireless
  */
-static int
-_is_device_wired(const char *mac, const char *bridge)
+int
+is_device_wired_intern(const char *mac, const char *bridge)
 {
 	int port_no = 0;
-	if ((port_no = get_device_br_port_no(mac, bridge)) < 0) {
-		return 0;
+	if ((port_no = get_device_br_port_no(mac, bridge)) > 0) {	
+		return is_br_port_no_wired(bridge, port_no);
 	} 
 	
-	return is_br_port_no_wired(bridge, port_no);
+	return 0;
 }
 
-static int
-is_device_wired(const char *mac){
-	return _is_device_wired(mac, "br-lan");
+/*
+ * 1: wired; 0: wireless
+ */
+int
+br_is_device_wired(const char *mac){
+	if (!is_valid_mac(mac))
+		return is_device_wired_intern(mac, config_get_config()->gw_interface);
+
+	return 0;
 }
 
 /*
  * 1: wired; 0: wireless
  * deprecated
  */
-static int
-is_device_wired_(const char *mac)
+int
+is_device_wired(const char *mac)
 {
 	FILE *fd = NULL;
 	char szcmd[128] = {0}; 
@@ -1366,4 +1372,48 @@ get_ext_iface(void)
     free(gw);
     return NULL;
 }
+
+int 
+arp_get_mac(const char *dev_name, const char *i_ip, char *o_mac) {
+	int s;
+    struct arpreq arpreq;
+    struct sockaddr_in *sin;
+	
+	if (!dev_name || !i_ip || !o_mac)
+		return 0;
+	
+	s = socket(AF_INET, SOCK_DGRAM, 0);
+	if (s <= 0) {
+		return 0;
+	}
+	
+	memset(&arpreq, 0, sizeof(arpreq));
+
+    sin = (struct sockaddr_in *) &arpreq.arp_pa;
+    sin->sin_family = AF_INET;
+    sin->sin_addr.s_addr = inet_addr(i_ip);
+
+	strcpy(arpreq.arp_dev, dev_name);
+	if (ioctl(s, SIOCGARP, &arpreq) < 0) {
+		return 0;
+	}
+	
+	if (arpreq.arp_flags & ATF_COM) {
+        unsigned char *eap = (unsigned char *) &arpreq.arp_ha.sa_data[0];
+        snprintf(o_mac, MAC_LENGTH, "%02X:%02X:%02X:%02X:%02X:%02X",
+                eap[0], eap[1], eap[2], eap[3], eap[4], eap[5]);
+        return 1;
+    } 
+	
+	return 0;
+}
+
+int
+br_arp_get_mac(const char *i_ip, char *o_mac)
+{
+	s_config *config = config_get_config();
+
+	return arp_get_mac(config->gw_interface, i_ip, o_mac);
+}
+
 //<<<< liudf added end

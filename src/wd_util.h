@@ -99,6 +99,8 @@ void trim_newline(char *);
 
 /** @brief Is mac source is wired or not */
 int is_device_wired(const char *);
+int is_device_wired_intern(const char *mac, const char *bridge);
+int br_is_device_wired(const char *); // no popen impl
 
 /** @brief Is ip online or domain parsable */
 int is_device_online(const char *);
@@ -130,4 +132,8 @@ char *get_iface_mac(const char *);
 
 /** @brief Get interface name of default gateway */
 char *get_ext_iface(void);
+
+/** 1: success; 0: error*/
+int arp_get_mac(const char *dev_name, const char *i_ip, char *o_mac);
+int br_arp_get_mac(const char *i_ip, char *o_mac);
 #endif /* _WD_UTIL_H_ */
