@@ -782,8 +782,10 @@ is_br_port_no_wired(const char *brname, int port_no)
 	
     snprintf(path, SYSFS_PATH_MAX, SYSFS_CLASS_NET "%s/brif", brname);
     count = scandir(path, &namelist, 0, alphasort);
-    if (count < 0)
+    if (count < 0) {
+    	debug(LOG_ERR, "cant scandir %s", path);
 		return nret;
+    }
 	
 	for (i = 0; i < count; i++) {
         if (namelist[i]->d_name[0] == '.'
@@ -811,25 +813,26 @@ is_br_port_no_wired(const char *brname, int port_no)
 static int
 get_device_br_port_no(const char *mac, const char *bridge)
 {
-#define	CHUNK	16
+#define	CHUNK	128
 	FILE *f;
     int i, n;
     struct fdb_entry fe[CHUNK];
     char path[SYSFS_PATH_MAX] = {0};
 	memset(fe, 0, CHUNK*sizeof(struct fdb_entry));
     
+    unsigned char mac_addr[6] = {0};
+	int index = 0;
+	sscanf(mac, "%02X:%02X:%02X:%02X:%02X:%02X", 
+			  mac_addr[index++], mac_addr[index++], mac_addr[index++], 
+			  mac_addr[index++], mac_addr[index++], mac_addr[index++]);
+
     /* open /sys/class/net/brXXX/brforward */
     snprintf(path, SYSFS_PATH_MAX, SYSFS_CLASS_NET "%s/brforward", bridge);
     f = fopen(path, "r");
     if (f) {
         n = fread(fe, sizeof(struct fdb_entry), CHUNK, f);
 		int port_no = -1;
-		for (i = 0; i < n; i++) {
-			unsigned char mac_addr[6] = {0};
-			int index = 0;
-			sscanf(mac, "%02X:%02X:%02X:%02X:%02X:%02X", 
-				  mac_addr[index++], mac_addr[index++], mac_addr[index++], 
-				  mac_addr[index++], mac_addr[index++], mac_addr[index++]);
+		for (i = 0; i < n; i++) {	
 			if (!memcmp(mac_addr, fe[i].mac_addr, 6)) {
 				port_no = fe[i].port_no;
 				break;
@@ -848,10 +851,12 @@ int
 is_device_wired_intern(const char *mac, const char *bridge)
 {
 	int port_no = 0;
-	if ((port_no = get_device_br_port_no(mac, bridge)) > 0) {	
+	if ((port_no = get_device_br_port_no(mac, bridge)) > 0) {
+		debug(LOG_INFO, "mac %s port_no is %d", mac, port_no);	
 		return is_br_port_no_wired(bridge, port_no);
 	} 
-	
+
+	debug(LOG_INFO, "can not find mac %s port_no", mac);
 	return 0;
 }
 

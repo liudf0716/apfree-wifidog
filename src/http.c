@@ -195,12 +195,14 @@ http_callback_404(httpd * webserver, request * r, int error_code)
 				clt->ip = safe_strdup(r->clientAddr);
 				fw_allow(clt, FW_MARK_KNOWN);
 				UNLOCK_CLIENT_LIST();
+                debug(LOG_INFO, "client has login, replace it with new ip");
 				http_send_redirect(r, tmp_url, "device has login");
             	goto end_process;
 			}
 			UNLOCK_CLIENT_LIST();
 
             if (config->wired_passed && br_is_device_wired(mac)) {
+                debug(LOG_INFO, "wired_passed: add %s to trusted mac", mac);
                 add_trusted_maclist(mac);
                 http_send_redirect(r, tmp_url, "device was wired");
             }
