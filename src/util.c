@@ -201,6 +201,7 @@ is_valid_ip(const char *ip)
     return result != 0;
 }
 
+// true: 1; false: 0
 int 
 is_valid_mac(const char *mac)
 {

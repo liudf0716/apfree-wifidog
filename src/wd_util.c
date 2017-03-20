@@ -820,7 +820,7 @@ get_device_br_port_no(const char *mac, const char *bridge)
     char path[SYSFS_PATH_MAX] = {0};
 	memset(fe, 0, CHUNK*sizeof(struct fdb_entry));
     
-    unsigned char mac_addr[6] = {0};
+    unsigned char mac_addr[7] = {0};
 	int index = 0;
 	sscanf(mac, "%02X:%02X:%02X:%02X:%02X:%02X", 
 			  mac_addr[index++], mac_addr[index++], mac_addr[index++], 
@@ -872,7 +872,7 @@ is_device_wired_intern(const char *mac, const char *bridge)
  */
 int
 br_is_device_wired(const char *mac){
-	if (!is_valid_mac(mac))
+	if (is_valid_mac(mac))
 		return is_device_wired_intern(mac, config_get_config()->gw_interface);
 
 	return 0;
