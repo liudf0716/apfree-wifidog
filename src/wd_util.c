@@ -822,7 +822,6 @@ get_device_br_port_no(const char *mac, const char *bridge)
     snprintf(path, SYSFS_PATH_MAX, SYSFS_CLASS_NET "%s/brforward", bridge);
     f = fopen(path, "r");
     if (f) {
-        fseek(f, offset*sizeof(struct fdb_entry), SEEK_SET);
         n = fread(fe, sizeof(struct fdb_entry), CHUNK, f);
 		int port_no = -1;
 		for (i = 0; i < n; i++) {
