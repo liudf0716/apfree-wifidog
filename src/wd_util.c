@@ -819,11 +819,16 @@ get_device_br_port_no(const char *mac, const char *bridge)
     char path[SYSFS_PATH_MAX] = {0};
 	memset(fe, 0, CHUNK*sizeof(struct fdb_entry));
     
-    uint8_t mac_addr[7] = {0};
-	int nret = sscanf(mac, "%x:%x:%x:%x:%x:%x", 
-			  &mac_addr[0], &mac_addr[1], &mac_addr[2], 
-			  &mac_addr[3], &mac_addr[4], &mac_addr[5]);
-	if (nret != 6) {
+	uint8_t mac_addr[6];
+	int values[6];
+	int i;
+
+	if( 6 == sscanf( mac, "%x:%x:%x:%x:%x:%x%c",
+	    			&values[0], &values[1], &values[2],
+	    			&values[3], &values[4], &values[5] )) {
+	    for( i = 0; i < 6; ++i )
+	        mac_addr[i] = (uint8_t) values[i];
+	} else{
 		debug(LOG_INFO, "mac %s to byte array failed", mac);
 		return -1;
 	}
@@ -834,7 +839,6 @@ get_device_br_port_no(const char *mac, const char *bridge)
     if (f) {
         int n = fread(fe, sizeof(struct fdb_entry), CHUNK, f);
 		int port_no = -1;
-		int i;
 		debug(LOG_INFO, "[%d] %02X:%02X:%02X:%02X:%02X:%02X", n, 
 				mac_addr[0], mac_addr[1], mac_addr[2], 
 			  	mac_addr[3], mac_addr[4], mac_addr[5]);
