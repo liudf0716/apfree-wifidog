@@ -820,8 +820,8 @@ int br_read_fdb(const char *bridge, struct fdb_entry *fdbs,
     snprintf(path, SYSFS_PATH_MAX, SYSFS_CLASS_NET "%s/brforward", bridge);
     f = fopen(path, "r");
     if (f) {
-        fseek(f, offset*sizeof(struct __fdb_entry), SEEK_SET);
-        n = fread(fe, sizeof(struct __fdb_entry), num, f);
+        fseek(f, offset*sizeof(struct fdb_entry), SEEK_SET);
+        n = fread(fe, sizeof(struct fdb_entry), num, f);
         fclose(f);
     } 
 
@@ -846,6 +846,7 @@ mac_str_2_byte(const char *mac, uint8_t *mac_addr)
 {
 	int values[6];
 	int i;
+	// Added %c at the end of the format string to reject excess characters in the input
 	if( 6 == sscanf( mac, "%x:%x:%x:%x:%x:%x%c",
 	    			&values[0], &values[1], &values[2],
 	    			&values[3], &values[4], &values[5] )) {
@@ -868,7 +869,7 @@ get_device_br_port_no(const char *mac, const char *bridge)
 	uint8_t mac_addr[6];
 	
 	if (mac_str_2_byte(mac, mac_addr))
-		retrun -1;
+		return -1;
 
     struct fdb_entry *fdb = NULL;
     int offset = 0;	
