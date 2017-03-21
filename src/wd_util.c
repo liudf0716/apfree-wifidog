@@ -849,7 +849,7 @@ get_device_br_port_no(const char *mac, const char *bridge)
 #define	CHUNK	16
 	uint8_t mac_addr[6];
 	int values[6];
-	int i;
+	int i, n;
 
 	if( 6 == sscanf( mac, "%x:%x:%x:%x:%x:%x%c",
 	    			&values[0], &values[1], &values[2],
@@ -861,7 +861,9 @@ get_device_br_port_no(const char *mac, const char *bridge)
 		return -1;
 	}
 
-	int port_no = -1;	
+	int port_no = -1;
+    struct fdb_entry *fdb = NULL;
+    int offset = 0;	
 	for (;;) {
 		fdb = calloc(fdb, CHUNK * sizeof(struct fdb_entry));
         if (!fdb) {          
