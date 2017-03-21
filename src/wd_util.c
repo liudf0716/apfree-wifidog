@@ -868,19 +868,19 @@ get_device_br_port_no(const char *mac, const char *bridge)
 	uint8_t mac_addr[6];
 	
 	if (mac_str_2_byte(mac, mac_addr))
-		retrun;
+		retrun -1;
 
     struct fdb_entry *fdb = NULL;
     int offset = 0;	
-    int port_no = 0;
+    int port_no = -1;
 	for (;;) {
-		fdb = malloc(fdb, CHUNK * sizeof(struct fdb_entry));
+		fdb = malloc(CHUNK * sizeof(struct fdb_entry));
         if (!fdb) {          
             break;
         }
         memset(fdb, 0, CHUNK*sizeof(struct fdb_entry));
 
-        port_no = 0;
+        port_no = -1;
         int n = br_read_fdb(bridge, fdb, offset, CHUNK, mac_addr, &port_no);
         if (port_no > 0) {
             break;
