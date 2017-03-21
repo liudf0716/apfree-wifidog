@@ -814,11 +814,7 @@ static int
 get_device_br_port_no(const char *mac, const char *bridge)
 {
 #define	CHUNK	128
-	FILE *f = NULL;
-    struct fdb_entry fe[CHUNK];
-    char path[SYSFS_PATH_MAX] = {0};
-	memset(fe, 0, CHUNK*sizeof(struct fdb_entry));
-    
+	struct fdb_entry fe[CHUNK];
 	uint8_t mac_addr[6];
 	int values[6];
 	int i;
@@ -833,6 +829,14 @@ get_device_br_port_no(const char *mac, const char *bridge)
 		return -1;
 	}
 
+    
+	
+
+#if 0
+	FILE *f = NULL;
+    
+    char path[SYSFS_PATH_MAX] = {0};
+	memset(fe, 0, CHUNK*sizeof(struct fdb_entry));
     /* open /sys/class/net/brXXX/brforward */
     snprintf(path, SYSFS_PATH_MAX, SYSFS_CLASS_NET "%s/brforward", bridge);
     f = fopen(path, "r");
@@ -856,7 +860,44 @@ get_device_br_port_no(const char *mac, const char *bridge)
         fclose(f);
 		return port_no;
     }
-	return -1;
+    return -1;
+#else
+	unsigned long args[4] = { BRCTL_GET_FDB_ENTRIES,
+                      (unsigned long) fe,
+                      CHUNK, 0};
+    struct ifreq ifr;
+    int retries = 0;
+
+    strncpy(ifr.ifr_name, bridge, IFNAMSIZ);
+    ifr.ifr_data = (char *) args;
+
+retry:
+    int n = ioctl(br_socket_fd, SIOCDEVPRIVATE, &ifr);
+
+    /* table can change during ioctl processing */
+    if (n < 0 && errno == EAGAIN && ++retries < 10) {
+        sleep(0);
+        goto retry;
+    }
+
+    int port_no = -1;
+	debug(LOG_INFO, "[%d] %02X:%02X:%02X:%02X:%02X:%02X", n, 
+			mac_addr[0], mac_addr[1], mac_addr[2], 
+		  	mac_addr[3], mac_addr[4], mac_addr[5]);
+	for (i = 0; i < n; i++) {
+		debug(LOG_INFO, "[%d] %02X:%02X:%02X:%02X:%02X:%02X == %02X:%02X:%02X:%02X:%02X:%02X", i,
+			mac_addr[0], mac_addr[1], mac_addr[2], 
+		  	mac_addr[3], mac_addr[4], mac_addr[5],
+		  	fe[i].mac_addr[0], fe[i].mac_addr[1], fe[i].mac_addr[2], 
+		  	fe[i].mac_addr[3], fe[i].mac_addr[4], fe[i].mac_addr[5]);	
+		if (!memcmp(mac_addr, fe[i].mac_addr, 6)) {
+			port_no = fe[i].port_no;
+			break;
+		}
+	}
+	
+	return port_no;
+#endif
 }
 
 /*
