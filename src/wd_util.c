@@ -831,7 +831,7 @@ get_device_br_port_no(const char *mac, const char *bridge)
         int n = fread(fe, sizeof(struct fdb_entry), CHUNK, f);
 		int port_no = -1;
 		int i;
-		debug(LOG_INFO, "[%d] %02X:%02X:%02X:%02X:%02X:%02X", n
+		debug(LOG_INFO, "[%d] %02X:%02X:%02X:%02X:%02X:%02X", n, 
 				mac_addr[0], mac_addr[1], mac_addr[2], 
 			  	mac_addr[3], mac_addr[4], mac_addr[5]);
 		for (i = 0; i < n; i++) {
