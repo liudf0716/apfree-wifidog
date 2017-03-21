@@ -814,26 +814,27 @@ static int
 get_device_br_port_no(const char *mac, const char *bridge)
 {
 #define	CHUNK	128
-	FILE *f;
-    int i, n;
+	FILE *f = NULL;
     struct fdb_entry fe[CHUNK];
     char path[SYSFS_PATH_MAX] = {0};
 	memset(fe, 0, CHUNK*sizeof(struct fdb_entry));
     
     unsigned char mac_addr[7] = {0};
+    debug(LOG_INFO, "1===============");
 	sscanf(mac, "%02X:%02X:%02X:%02X:%02X:%02X", 
 			  mac_addr[0], mac_addr[1], mac_addr[2], 
 			  mac_addr[3], mac_addr[4], mac_addr[5]);
-
+	debug(LOG_INFO, "2===============");
     /* open /sys/class/net/brXXX/brforward */
     snprintf(path, SYSFS_PATH_MAX, SYSFS_CLASS_NET "%s/brforward", bridge);
+    debug(LOG_INFO, "3===============");
     f = fopen(path, "r");
     if (f) {
-        n = fread(fe, sizeof(struct fdb_entry), CHUNK, f);
+        int n = fread(fe, sizeof(struct fdb_entry), CHUNK, f);
 		int port_no = -1;
-		debug(LOG_INFO, "n is %d, i is %d", n, i);
+		int i;
+		debug(LOG_INFO, "n is %d", n);
 		for (i = 0; i < n; i++) {
-
 			debug(LOG_INFO, "[%d] %02X:%02X:%02X:%02X:%02X:%02X == %02X:%02X:%02X:%02X:%02X:%02X", i,
 				mac_addr[0], mac_addr[1], mac_addr[2], 
 			  	mac_addr[3], mac_addr[4], mac_addr[5],
@@ -847,6 +848,7 @@ get_device_br_port_no(const char *mac, const char *bridge)
         fclose(f);
 		return port_no;
     }
+    debug(LOG_INFO, "4===============");
 	return -1;
 }
 
@@ -1053,7 +1055,8 @@ void evdns_parse_trusted_domain_2_ip(t_domain_trusted *p)
 	}
 	
 	if (n_started_requests) {
-        n_started_requests = 0; 
+        n_started_requests = 0;
+        debug(LOG_INFO, "parse domain end, end event_loop [%d]", n_pending_requests); 
 		event_base_dispatch(base);	
 	}
 	
