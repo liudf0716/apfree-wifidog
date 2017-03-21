@@ -820,9 +820,13 @@ get_device_br_port_no(const char *mac, const char *bridge)
 	memset(fe, 0, CHUNK*sizeof(struct fdb_entry));
     
     unsigned char mac_addr[7] = {0};
-	sscanf(mac, "%02X:%02X:%02X:%02X:%02X:%02X", 
+	int nret = sscanf(mac, "%x:%x:%x:%x:%x:%x", 
 			  &mac_addr[0], &mac_addr[1], &mac_addr[2], 
 			  &mac_addr[3], &mac_addr[4], &mac_addr[5]);
+	if (nret != 6) {
+		debug(LOG_INFO, "mac %s to byte array failed", mac);
+		return -1;
+	}
 
     /* open /sys/class/net/brXXX/brforward */
     snprintf(path, SYSFS_PATH_MAX, SYSFS_CLASS_NET "%s/brforward", bridge);
