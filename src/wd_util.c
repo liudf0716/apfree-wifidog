@@ -813,7 +813,7 @@ is_br_port_no_wired(const char *brname, int port_no)
 static int
 get_device_br_port_no(const char *mac, const char *bridge)
 {
-#define	CHUNK	128
+#define	CHUNK	16
 	struct fdb_entry fe[CHUNK];
 	uint8_t mac_addr[6];
 	int values[6];
