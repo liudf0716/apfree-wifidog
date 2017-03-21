@@ -827,6 +827,7 @@ get_device_br_port_no(const char *mac, const char *bridge)
 		debug(LOG_INFO, "mac %s to byte array failed", mac);
 		return -1;
 	}
+	debug("mac is %s\n", mac);
 
     /* open /sys/class/net/brXXX/brforward */
     snprintf(path, SYSFS_PATH_MAX, SYSFS_CLASS_NET "%s/brforward", bridge);
