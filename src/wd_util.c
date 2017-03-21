@@ -807,6 +807,39 @@ is_br_port_no_wired(const char *brname, int port_no)
 	return nret;
 }
 
+static inline void __copy_fdb(struct fdb_entry *ent,
+                  const struct __fdb_entry *f)
+{
+    memcpy(ent->mac_addr, f->mac_addr, 6);
+    ent->port_no = f->port_no;
+    ent->is_local = f->is_local;
+    __jiffies_to_tv(&ent->ageing_timer_value, f->ageing_timer_value);
+}
+
+int br_read_fdb(const char *bridge, struct fdb_entry *fdbs,
+        unsigned long offset, int num)
+{
+    FILE *f;
+    int i, n = 0;
+    struct __fdb_entry fe[num];
+    char path[SYSFS_PATH_MAX];
+
+    /* open /sys/class/net/brXXX/brforward */
+    snprintf(path, SYSFS_PATH_MAX, SYSFS_CLASS_NET "%s/brforward", bridge);
+    f = fopen(path, "r");
+    if (f) {
+        fseek(f, offset*sizeof(struct __fdb_entry), SEEK_SET);
+        n = fread(fe, sizeof(struct __fdb_entry), num, f);
+        fclose(f);
+    } 
+
+    for (i = 0; i < n; i++)
+        __copy_fdb(fdbs+i, fe+i);
+
+    return n;
+}
+
+
 /*
  * -1: error; >0: sucess
  */
@@ -814,7 +847,6 @@ static int
 get_device_br_port_no(const char *mac, const char *bridge)
 {
 #define	CHUNK	16
-	struct fdb_entry fe[CHUNK];
 	uint8_t mac_addr[6];
 	int values[6];
 	int i;
@@ -829,34 +861,41 @@ get_device_br_port_no(const char *mac, const char *bridge)
 		return -1;
 	}
 
-	FILE *f = NULL;   
-    char path[SYSFS_PATH_MAX] = {0};
-	memset(fe, 0, CHUNK*sizeof(struct fdb_entry));
-    /* open /sys/class/net/brXXX/brforward */
-    snprintf(path, SYSFS_PATH_MAX, SYSFS_CLASS_NET "%s/brforward", bridge);
-    f = fopen(path, "r");
-    if (f) {
-    	fseek(f, 0, SEEK_SET);
-        int n = fread(fe, sizeof(struct fdb_entry), CHUNK, f);
-		int port_no = -1;
-		debug(LOG_INFO, "[%d] %02X:%02X:%02X:%02X:%02X:%02X", n, 
-				mac_addr[0], mac_addr[1], mac_addr[2], 
-			  	mac_addr[3], mac_addr[4], mac_addr[5]);
-		for (i = 0; i < n; i++) {
-			debug(LOG_INFO, "[%d] %02X:%02X:%02X:%02X:%02X:%02X == %02X:%02X:%02X:%02X:%02X:%02X", i,
-				mac_addr[0], mac_addr[1], mac_addr[2], 
-			  	mac_addr[3], mac_addr[4], mac_addr[5],
-			  	fe[i].mac_addr[0], fe[i].mac_addr[1], fe[i].mac_addr[2], 
-			  	fe[i].mac_addr[3], fe[i].mac_addr[4], fe[i].mac_addr[5]);	
-			if (!memcmp(mac_addr, fe[i].mac_addr, 6)) {
-				port_no = fe[i].port_no;
-				break;
+	int port_no = -1;	
+	for (;;) {
+		fdb = calloc(fdb, CHUNK * sizeof(struct fdb_entry));
+        if (!fdb) {          
+            break;
+        }
+          
+        n = br_read_fdb(brname, fdb, offset, CHUNK);
+        if (n == 0)
+            break;
+
+        if (n < 0) {       
+           	break;
+        }
+
+        offset += n;
+
+        for (i = 0; i < n; i++) {
+        	const struct fdb_entry *f = fdb + i;
+        	debug(LOG_INFO, "[%d] %02X:%02X:%02X:%02X:%02X:%02X == %02X:%02X:%02X:%02X:%02X:%02X", i,
+					mac_addr[0], mac_addr[1], mac_addr[2], 
+				  	mac_addr[3], mac_addr[4], mac_addr[5],
+				  	f->mac_addr[0], f->mac_addr[1], f->mac_addr[2], 
+				  	f->mac_addr[3], f->mac_addr[4], f->mac_addr[5]);
+			if (!memcmp(mac_addr, f->mac_addr, 6)) {
+				port_no = f->port_no;
 			}
-		}
-        fclose(f);
-		return port_no;
-    }
-    return -1;
+        }
+        free(fdb);
+	}
+
+	if (fdb) 
+		free(fdb);
+
+	return port_no;
 }
 
 /*
