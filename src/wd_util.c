@@ -807,21 +807,13 @@ is_br_port_no_wired(const char *brname, int port_no)
 	return nret;
 }
 
-static inline void __copy_fdb(struct fdb_entry *ent,
-                  const struct __fdb_entry *f)
-{
-    memcpy(ent->mac_addr, f->mac_addr, 6);
-    ent->port_no = f->port_no;
-    ent->is_local = f->is_local;
-    __jiffies_to_tv(&ent->ageing_timer_value, f->ageing_timer_value);
-}
-
+// if -1; not find mac; else find mac's port_no
 int br_read_fdb(const char *bridge, struct fdb_entry *fdbs,
-        unsigned long offset, int num)
+        unsigned long offset, int num, const uint8_t *mac, int *port_no)
 {
     FILE *f;
     int i, n = 0;
-    struct __fdb_entry fe[num];
+    struct fdb_entry fe[num];
     char path[SYSFS_PATH_MAX];
 
     /* open /sys/class/net/brXXX/brforward */
@@ -833,12 +825,38 @@ int br_read_fdb(const char *bridge, struct fdb_entry *fdbs,
         fclose(f);
     } 
 
-    for (i = 0; i < n; i++)
-        __copy_fdb(fdbs+i, fe+i);
+    for (i = 0; i < n; i++) {
+    	const struct fdb_entry *f = &fe[i];
+    	debug(LOG_INFO, "[%d] %02X:%02X:%02X:%02X:%02X:%02X == %02X:%02X:%02X:%02X:%02X:%02X", i,
+				mac_addr[0], mac_addr[1], mac_addr[2], 
+			  	mac_addr[3], mac_addr[4], mac_addr[5],
+			  	f->mac_addr[0], f->mac_addr[1], f->mac_addr[2], 
+			  	f->mac_addr[3], f->mac_addr[4], f->mac_addr[5]);
+		if (!memcmp(mac_addr, f->mac_addr, 6)) {
+			*port_no = f->port_no;
+			return -1;
+		}
+    }
 
     return n;
 }
 
+static int
+mac_str_2_byte(const char *mac, uint8_t *mac_addr)
+{
+	int values[6];
+	int i;
+	if( 6 == sscanf( mac, "%x:%x:%x:%x:%x:%x%c",
+	    			&values[0], &values[1], &values[2],
+	    			&values[3], &values[4], &values[5] )) {
+	    for( i = 0; i < 6; ++i )
+	        mac_addr[i] = (uint8_t) values[i];
+	    return 0;
+	} else{
+		debug(LOG_INFO, "mac %s to byte array failed", mac);
+		return 1;
+	}
+}
 
 /*
  * -1: error; >0: sucess
@@ -848,49 +866,32 @@ get_device_br_port_no(const char *mac, const char *bridge)
 {
 #define	CHUNK	16
 	uint8_t mac_addr[6];
-	int values[6];
-	int i, n;
+	
+	if (mac_str_2_byte(mac, mac_addr))
+		retrun;
 
-	if( 6 == sscanf( mac, "%x:%x:%x:%x:%x:%x%c",
-	    			&values[0], &values[1], &values[2],
-	    			&values[3], &values[4], &values[5] )) {
-	    for( i = 0; i < 6; ++i )
-	        mac_addr[i] = (uint8_t) values[i];
-	} else{
-		debug(LOG_INFO, "mac %s to byte array failed", mac);
-		return -1;
-	}
-
-	int port_no = -1;
     struct fdb_entry *fdb = NULL;
     int offset = 0;	
+    int port_no = 0;
 	for (;;) {
-		fdb = calloc(fdb, CHUNK * sizeof(struct fdb_entry));
+		fdb = malloc(fdb, CHUNK * sizeof(struct fdb_entry));
         if (!fdb) {          
             break;
         }
-          
-        n = br_read_fdb(brname, fdb, offset, CHUNK);
-        if (n == 0)
-            break;
+        memset(fdb, 0, CHUNK*sizeof(struct fdb_entry));
 
-        if (n < 0) {       
+        port_no = 0;
+        int n = br_read_fdb(bridge, fdb, offset, CHUNK, mac_addr, &port_no);
+        if (port_no > 0) {
+            break;
+        }
+
+        if (n <= 0) {       
            	break;
         }
 
         offset += n;
 
-        for (i = 0; i < n; i++) {
-        	const struct fdb_entry *f = fdb + i;
-        	debug(LOG_INFO, "[%d] %02X:%02X:%02X:%02X:%02X:%02X == %02X:%02X:%02X:%02X:%02X:%02X", i,
-					mac_addr[0], mac_addr[1], mac_addr[2], 
-				  	mac_addr[3], mac_addr[4], mac_addr[5],
-				  	f->mac_addr[0], f->mac_addr[1], f->mac_addr[2], 
-				  	f->mac_addr[3], f->mac_addr[4], f->mac_addr[5]);
-			if (!memcmp(mac_addr, f->mac_addr, 6)) {
-				port_no = f->port_no;
-			}
-        }
         free(fdb);
 	}
 
