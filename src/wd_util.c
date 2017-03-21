@@ -808,7 +808,8 @@ is_br_port_no_wired(const char *brname, int port_no)
 }
 
 // if -1; not find mac; else find mac's port_no
-int br_read_fdb(const char *bridge, struct fdb_entry *fdbs,
+static int 
+br_read_fdb(const char *bridge, struct fdb_entry *fdbs,
         unsigned long offset, int num, const uint8_t *mac, int *port_no)
 {
     FILE *f;
