@@ -828,10 +828,7 @@ br_read_fdb(const char *bridge,
     } 
 
     for (i = 0; i < n; i++) {
-    	struct fdb_entry fdb;
-    	memcpy(fdb.mac_addr, fe[i].mac_addr, 6);
-    	fdb.port_no = fe[i].port_no;
-    	const struct fdb_entry *f = &fdb;
+    	const struct fdb_entry *f = &fe[i];
     	debug(LOG_INFO, "[%d] %02X:%02X:%02X:%02X:%02X:%02X == %02X:%02X:%02X:%02X:%02X:%02X", i,
 				mac_addr[0], mac_addr[1], mac_addr[2], 
 			  	mac_addr[3], mac_addr[4], mac_addr[5],
@@ -851,22 +848,17 @@ mac_str_2_byte(const char *mac, uint8_t *mac_addr)
 {
 	int values[6];
 	int i;
-	debug(LOG_INFO, "mac_str_2_byte %s", mac);
-#if 	0
 	// Added %c at the end of the format string to reject excess characters in the input
 	if( 6 == sscanf( mac, "%x:%x:%x:%x:%x:%x%c",
 	    			&values[0], &values[1], &values[2],
 	    			&values[3], &values[4], &values[5] )) {
-	    for( i = 0; i < 6; ++i )
-	        mac_addr[i] = (uint8_t) values[i];
+	    //for( i = 0; i < 6; ++i )
+	    //    mac_addr[i] = (uint8_t) values[i];
 	    return 0;
 	} else{
 		debug(LOG_INFO, "mac %s to byte array failed", mac);
 		return 1;
 	}
-#else
-	return 0;
-#endif
 }
 
 /*
@@ -876,7 +868,7 @@ static int
 get_device_br_port_no(const char *mac, const char *bridge)
 {
 #define	CHUNK	128
-	uint8_t mac_addr[6];
+	uint8_t mac_addr[6] = {0};
 	
 	if (mac_str_2_byte(mac, mac_addr))
 		return -1;
