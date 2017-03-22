@@ -59,6 +59,10 @@
 #define SYSFS_CLASS_NET "/sys/class/net/"
 #define SYSFS_PATH_MAX  256
 
+struct fdb_entry {
+	u_int8_t mac_addr[6];
+    u_int16_t port_no;
+};
 
 /** @brief Client server this session. */
 extern long served_this_session;

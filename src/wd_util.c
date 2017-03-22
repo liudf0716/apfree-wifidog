@@ -828,7 +828,10 @@ br_read_fdb(const char *bridge,
     } 
 
     for (i = 0; i < n; i++) {
-    	const struct __fdb_entry *f = &fe[i];
+    	struct fdb_entry fdb;
+    	memcpy(fdb.mac_addr, fe[i].mac_addr, 6);
+    	fdb.port_no = fe[i].port_no;
+    	const struct fdb_entry *f = &fdb;
     	debug(LOG_INFO, "[%d] %02X:%02X:%02X:%02X:%02X:%02X == %02X:%02X:%02X:%02X:%02X:%02X", i,
 				mac_addr[0], mac_addr[1], mac_addr[2], 
 			  	mac_addr[3], mac_addr[4], mac_addr[5],
@@ -1096,7 +1099,7 @@ void evdns_parse_trusted_domain_2_ip(t_domain_trusted *p)
 	
 	if (n_started_requests) {
         n_started_requests = 0;
-        debug(LOG_INFO, "parse domain end, end event_loop [%d]", n_pending_requests); 
+        debug(LOG_INFO, "parse domain end, begin event_loop [%d]", n_pending_requests); 
 		event_base_dispatch(base);	
 	}
 	
@@ -1451,9 +1454,10 @@ arp_get_mac(const char *dev_name, const char *i_ip, char *o_mac) {
 
 	strcpy(arpreq.arp_dev, dev_name);
 	if (ioctl(s, SIOCGARP, &arpreq) < 0) {
+		close(s);
 		return 0;
 	}
-	
+	close(s);
 	if (arpreq.arp_flags & ATF_COM) {
         unsigned char *eap = (unsigned char *) &arpreq.arp_ha.sa_data[0];
         snprintf(o_mac, MAC_LENGTH, "%02X:%02X:%02X:%02X:%02X:%02X",
