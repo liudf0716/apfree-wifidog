@@ -735,9 +735,10 @@ trim_newline(char *line)
 
 static FILE *fpopen(const char *dir, const char *name)
 {
-    char path[SYSFS_PATH_MAX];
+    char path[SYSFS_PATH_MAX] = {0};
 
     snprintf(path, SYSFS_PATH_MAX, "%s/%s", dir, name);
+    debug(LOG_INFO, "path is %s", path);
     return fopen(path, "r");
 }
 
@@ -768,6 +769,38 @@ br_get_port_no(const char *port)
 		return -1;
 	
 	return fetch_int(path, "port_no");
+}
+
+static int 
+get_portno(const char *brname, const char *ifname)
+{
+#define MAX_PORTS	1024
+    int i;
+    int ifindex = if_nametoindex(ifname);
+    int ifindices[MAX_PORTS];
+    unsigned long args[4] = { BRCTL_GET_PORT_LIST,
+                  (unsigned long)ifindices, MAX_PORTS, 0 };
+    struct ifreq ifr;
+
+    if (ifindex <= 0)
+        goto error;
+
+    memset(ifindices, 0, sizeof(ifindices));
+    strncpy(ifr.ifr_name, brname, IFNAMSIZ);
+    ifr.ifr_data = (char *) &args;
+
+    if (ioctl(br_socket_fd, SIOCDEVPRIVATE, &ifr) < 0) {
+        goto error;
+    }
+
+    for (i = 0; i < MAX_PORTS; i++) {
+        if (ifindices[i] == ifindex)
+            return i;
+    }
+
+    debug(LOG_INFO, "%s is not a in bridge %s\n", ifname, brname);
+ error:
+    return -1;
 }
 
 /*
