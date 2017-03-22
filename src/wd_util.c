@@ -853,7 +853,7 @@ mac_str_2_byte(const char *mac, uint8_t *mac_addr)
 	    			&values[0], &values[1], &values[2],
 	    			&values[3], &values[4], &values[5] )) {
 	    for( i = 0; i < 6; ++i )
-	        mac_addr[i] = *(uint8_t *) values[i];
+	        mac_addr[i] = *(uint8_t *) &values[i];
 	    return 0;
 	} else{
 		debug(LOG_INFO, "mac %s to byte array failed", mac);
