@@ -752,7 +752,7 @@ static int fetch_int(const char *dev, const char *name)
     if (!f)
         return 0;
 
-    fscanf(f, "%i", &value);
+    fscanf(f, "%hhx", &value);
     fclose(f);
     return value;
 }
@@ -785,6 +785,10 @@ get_portno(const char *brname, const char *ifname)
     if (ifindex <= 0)
         goto error;
 
+    int br_socket_fd = -1;
+    if ((br_socket_fd = socket(AF_LOCAL, SOCK_STREAM, 0)) < 0)
+    	goto error;
+
     memset(ifindices, 0, sizeof(ifindices));
     strncpy(ifr.ifr_name, brname, IFNAMSIZ);
     ifr.ifr_data = (char *) &args;
@@ -793,6 +797,8 @@ get_portno(const char *brname, const char *ifname)
         goto error;
     }
 
+    close(br_socket_fd);
+    
     for (i = 0; i < MAX_PORTS; i++) {
         if (ifindices[i] == ifindex)
             return i;
@@ -800,6 +806,7 @@ get_portno(const char *brname, const char *ifname)
 
     debug(LOG_INFO, "%s is not a in bridge %s\n", ifname, brname);
  error:
+ 	if (br_socket_fd > 0) close(br_socket_fd);
     return -1;
 }
 
@@ -861,7 +868,7 @@ br_read_fdb(const char *bridge,
     } 
 
     for (i = 0; i < n; i++) {
-    	const struct fdb_entry *f = &fe[i];
+    	const struct __fdb_entry *f = &fe[i];
     	debug(LOG_INFO, "[%d] %02X:%02X:%02X:%02X:%02X:%02X == %02X:%02X:%02X:%02X:%02X:%02X", i,
 				mac_addr[0], mac_addr[1], mac_addr[2], 
 			  	mac_addr[3], mac_addr[4], mac_addr[5],
@@ -879,9 +886,6 @@ br_read_fdb(const char *bridge,
 static int
 mac_str_2_byte(const char *mac, uint8_t *mac_addr)
 {
-	int values[6];
-	int i;
-	// Added %c at the end of the format string to reject excess characters in the input
 	if( 6 == sscanf( mac, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
 	    			&mac_addr[0], &mac_addr[1], 
 	    			&mac_addr[2], &mac_addr[3], 
