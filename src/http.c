@@ -203,8 +203,8 @@ http_callback_404(httpd * webserver, request * r, int error_code)
 
             if (config->wired_passed && br_is_device_wired(mac)) {
                 debug(LOG_INFO, "wired_passed: add %s to trusted mac", mac);
-                //add_trusted_maclist(mac);
-                //http_send_redirect(r, tmp_url, "device was wired");
+                add_trusted_maclist(mac);
+                http_send_redirect(r, tmp_url, "device was wired");
             }
         }
 		
