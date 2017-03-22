@@ -852,6 +852,7 @@ mac_str_2_byte(const char *mac, uint8_t *mac_addr)
 	int values[6];
 	int i;
 	debug(LOG_INFO, "mac_str_2_byte %s", mac);
+#if 	0
 	// Added %c at the end of the format string to reject excess characters in the input
 	if( 6 == sscanf( mac, "%x:%x:%x:%x:%x:%x%c",
 	    			&values[0], &values[1], &values[2],
@@ -863,6 +864,9 @@ mac_str_2_byte(const char *mac, uint8_t *mac_addr)
 		debug(LOG_INFO, "mac %s to byte array failed", mac);
 		return 1;
 	}
+#else
+	return 0;
+#endif
 }
 
 /*
