@@ -870,7 +870,7 @@ br_read_fdb(const char *bridge,
 
     for (i = 0; i < n; i++) {
     	const struct __fdb_entry *f = &fe[i];
-    	debug(LOG_INFO, "[%d] %02X:%02X:%02X:%02X:%02X:%02X == %02X:%02X:%02X:%02X:%02X:%02X", i,
+    	debug(LOG_DEBUG, "[%d] %02X:%02X:%02X:%02X:%02X:%02X == %02X:%02X:%02X:%02X:%02X:%02X", i,
 				mac_addr[0], mac_addr[1], mac_addr[2], 
 			  	mac_addr[3], mac_addr[4], mac_addr[5],
 			  	f->mac_addr[0], f->mac_addr[1], f->mac_addr[2], 
@@ -944,8 +944,7 @@ int
 is_device_wired_intern(const char *mac, const char *bridge)
 {
 	int port_no = 0;
-	if ((port_no = get_device_br_port_no(mac, bridge)) > 0) {
-		debug(LOG_INFO, "mac %s port_no is %d", mac, port_no);	
+	if ((port_no = get_device_br_port_no(mac, bridge)) > 0) {	
 		return is_br_port_no_wired(bridge, port_no);
 	} 
 
@@ -960,7 +959,7 @@ int
 br_is_device_wired(const char *mac){
 	if (is_valid_mac(mac)) {
 		char *bridge = config_get_config()->gw_interface;
-		debug(LOG_INFO,"mac %s check in bridge %s is wired", mac, bridge);
+		debug(LOG_DEBUG,"mac %s check in bridge %s is wired", mac, bridge);
 		return is_device_wired_intern(mac, bridge);
 	}
 
