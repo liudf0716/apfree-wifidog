@@ -837,7 +837,7 @@ is_br_port_no_wired(const char *brname, int port_no)
             continue;
 
         if (!memcmp(namelist[i]->d_name, "eth", 3) && 
-			port_no == br_get_port_no(namelist[i]->d_name)) {
+			port_no == get_portno(brname, namelist[i]->d_name)) {
 			nret = 1;
 			break;
 		}
