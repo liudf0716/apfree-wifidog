@@ -2064,16 +2064,19 @@ is_roaming(const char *mac)
 	return p==NULL?0:1;
 }
 
+// 0: not; 1 is
 int
 is_trusted_mac(const char *mac)
 {
 	t_trusted_mac *p = NULL;
 
+    LOCK_CONFIG();
     for (p = config.trustedmaclist; p != NULL; p = p->next) {
     	if(strcmp(mac, p->mac) == 0)
 			break;
 	}
-	
+	UNLOCK_CONFIG();
+
 	return p==NULL?0:1;
 
 }
@@ -2083,11 +2086,13 @@ is_untrusted_mac(const char *mac)
 {
 	t_trusted_mac *p = NULL;
 
+    LOCK_CONFIG();
     for (p = config.mac_blacklist; p != NULL; p = p->next) {
     	if(strcmp(mac, p->mac) == 0)
 			break;
 	}
-	
+	UNLOCK_CONFIG();
+
 	return p==NULL?0:1;
 
 }
