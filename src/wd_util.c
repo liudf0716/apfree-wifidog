@@ -752,7 +752,7 @@ static int fetch_id(const char *dev, const char *name)
     if (!f)
         return 0;
 
-    fscanf(f, "%hhx", &value);
+    fscanf(f, "0x%d", &value);
     fclose(f);
     debug(LOG_INFO, "fetch_id %d", value);
     return value;
