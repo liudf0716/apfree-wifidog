@@ -898,6 +898,14 @@ mac_str_2_byte(const char *mac, uint8_t *mac_addr)
 	}
 }
 
+static int
+mac_byte_2_str(const uint8_t *mac_addr, char *mac)
+{
+	return snprintf(mac, 18, "%x:%x:%x:%x:%x:%x",
+		mac_addr[0], mac_addr[1], mac_addr[2],
+		mac_addr[3], mac_addr[4], mac_addr[5]);
+}
+
 /*
  * -1: error; >0: sucess
  */
