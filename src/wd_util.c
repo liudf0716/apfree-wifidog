@@ -55,6 +55,7 @@
 #include <json-c/json.h>
 
 #include <dirent.h>
+#include <linux/if_bridge.h>
 
 #include "common.h"
 #include "gateway.h"
@@ -809,25 +810,25 @@ is_br_port_no_wired(const char *brname, int port_no)
 
 // if -1; not find mac; else find mac's port_no
 static int 
-br_read_fdb(const char *bridge, struct fdb_entry *fdbs,
+br_read_fdb(const char *bridge, 
         unsigned long offset, int num, const uint8_t *mac_addr, int *port_no)
 {
     FILE *f;
     int i, n = 0;
-    struct fdb_entry fe[num];
-    char path[SYSFS_PATH_MAX];
+    struct __fdb_entry fe[num];
+    char path[SYSFS_PATH_MAX] = {0};
 
     /* open /sys/class/net/brXXX/brforward */
     snprintf(path, SYSFS_PATH_MAX, SYSFS_CLASS_NET "%s/brforward", bridge);
     f = fopen(path, "r");
     if (f) {
-        fseek(f, offset*sizeof(struct fdb_entry), SEEK_SET);
-        n = fread(fe, sizeof(struct fdb_entry), num, f);
+        fseek(f, offset*sizeof(struct __fdb_entry), SEEK_SET);
+        n = fread(fe, sizeof(struct __fdb_entry), num, f);
         fclose(f);
     } 
 
     for (i = 0; i < n; i++) {
-    	const struct fdb_entry *f = &fe[i];
+    	const struct __fdb_entry *f = &fe[i];
     	debug(LOG_INFO, "[%d] %02X:%02X:%02X:%02X:%02X:%02X == %02X:%02X:%02X:%02X:%02X:%02X", i,
 				mac_addr[0], mac_addr[1], mac_addr[2], 
 			  	mac_addr[3], mac_addr[4], mac_addr[5],
@@ -866,24 +867,17 @@ mac_str_2_byte(const char *mac, uint8_t *mac_addr)
 static int
 get_device_br_port_no(const char *mac, const char *bridge)
 {
-#define	CHUNK	16
+#define	CHUNK	128
 	uint8_t mac_addr[6];
 	
 	if (mac_str_2_byte(mac, mac_addr))
 		return -1;
 
-    struct fdb_entry *fdb = NULL;
     int offset = 0;	
     int port_no = -1;
 	for (;;) {
-		fdb = malloc(CHUNK * sizeof(struct fdb_entry));
-        if (!fdb) {          
-            break;
-        }
-        memset(fdb, 0, CHUNK*sizeof(struct fdb_entry));
-
         port_no = -1;
-        int n = br_read_fdb(bridge, fdb, offset, CHUNK, mac_addr, &port_no);
+        int n = br_read_fdb(bridge, offset, CHUNK, mac_addr, &port_no);
         if (port_no > 0) {
             break;
         }
@@ -893,12 +887,7 @@ get_device_br_port_no(const char *mac, const char *bridge)
         }
 
         offset += n;
-
-        free(fdb);
 	}
-
-	if (fdb) 
-		free(fdb);
 
 	return port_no;
 }
