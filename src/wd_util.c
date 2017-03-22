@@ -849,10 +849,10 @@ mac_str_2_byte(const char *mac, uint8_t *mac_addr)
 	int values[6];
 	int i;
 	// Added %c at the end of the format string to reject excess characters in the input
-	if( 6 == sscanf( mac, "%x:%x:%x:%x:%x:%x%c",
-	    			(unsigned int *)&mac_addr[0], (unsigned int *)&mac_addr[1], 
-	    			(unsigned int *)&mac_addr[2], (unsigned int *)&mac_addr[3], 
-	    			(unsigned int *)&mac_addr[4], (unsigned int *)&mac_addr[5] )) {
+	if( 6 == sscanf( mac, "%h2x:%h2x:%h2x:%h2x:%h2x:%h2x%c",
+	    			&mac_addr[0], &mac_addr[1], 
+	    			&mac_addr[2], &mac_addr[3], 
+	    			&mac_addr[4], &mac_addr[5] )) {
 	    return 0;
 	} else{
 		debug(LOG_INFO, "mac %s to byte array failed", mac);
