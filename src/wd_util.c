@@ -744,7 +744,7 @@ static FILE *fpopen(const char *dir, const char *name)
 
 
 /* Fetch an integer attribute out of sysfs. */
-static int fetch_int(const char *dev, const char *name)
+static int fetch_id(const char *dev, const char *name)
 {
     FILE *f = fpopen(dev, name);
     int value = -1;
@@ -754,6 +754,7 @@ static int fetch_int(const char *dev, const char *name)
 
     fscanf(f, "%hhx", &value);
     fclose(f);
+    debug(LOG_INFO, "fetch_id %d", value);
     return value;
 }
 
@@ -768,7 +769,7 @@ br_get_port_no(const char *port)
     if (!d)
 		return -1;
 	
-	return fetch_int(path, "port_no");
+	return fetch_id(path, "port_no");
 }
 
 static int 
