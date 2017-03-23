@@ -20,7 +20,10 @@ If you want to contribute to [apfree wifidog](https://github.com/liudf0716/apfre
     ```
     You can name it however you want.
 
-4. Make your changes.
+4. Make your changes
+
+    git commit --signoff  
+    git push -f
 
 5. Don't forget to add yourself in `contributors.md`.
 
