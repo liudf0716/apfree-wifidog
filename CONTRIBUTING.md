@@ -22,12 +22,16 @@ If you want to contribute to [apfree wifidog](https://github.com/liudf0716/apfre
 
 4. Make your changes
 
-    git commit --signoff  
-    git push -f
-
 5. Don't forget to add yourself in `contributors.md`.
 
 6. Commit and push your changes, then make a pull request from Github.
+
+    git commit --signoff  
+    git push -f
+    
+7. Awaiting review, if accepted, merged!
+
+
 
 **IMPORTANT**
 
