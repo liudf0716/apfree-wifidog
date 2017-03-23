@@ -24,6 +24,8 @@ It has some awesome features:
 
 ## How To Compile
 
+**[基于LEDE编译Apfree_wifidog](https://github.com/liudf0716/apfree_wifidog/wiki/%E5%9F%BA%E4%BA%8ELEDE%E7%BC%96%E8%AF%91Apfree_wifidog)**
+
 Fork and clone the Apfree WiFiDog project:
 
     git clone https://github.com/liudf0716/apfree_wifidog
