@@ -452,9 +452,9 @@ char	*g_channel_path;
 char	*g_ssid;
 
 #define	LOCK_DOMAIN() do { \
-	debug(LOG_DEBUG, "Locking domain"); \
+	debug(LOG_INFO, "Locking domain"); \
 	pthread_mutex_lock(&domains_mutex);	\
-	debug(LOG_DEBUG, "Domains locked"); \
+	debug(LOG_INFO, "Domains locked"); \
 } while (0)
 
 #define UNLOCK_DOMAIN() do { \

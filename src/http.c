@@ -202,7 +202,7 @@ http_callback_404(httpd * webserver, request * r, int error_code)
 			UNLOCK_CLIENT_LIST();
 
             if (config->wired_passed && br_is_device_wired(mac)) {
-                debug(LOG_INFO, "wired_passed: add %s to trusted mac", mac);
+                debug(LOG_DEBUG, "wired_passed: add %s to trusted mac", mac);
                 if (!is_trusted_mac(mac))
                     add_trusted_maclist(mac);
                 http_send_redirect(r, tmp_url, "device was wired");
@@ -210,7 +210,7 @@ http_callback_404(httpd * webserver, request * r, int error_code)
             }
         }
 		
-        debug(LOG_INFO, "Captured %s requesting [%s] and re-directing them to login page", r->clientAddr, tmp_url);
+        debug(LOG_DEBUG, "Captured %s requesting [%s] and re-directing them to login page", r->clientAddr, tmp_url);
 		if(config->js_filter)
 			http_send_js_redirect(r, redir_url);
 		else

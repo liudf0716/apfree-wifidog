@@ -379,7 +379,7 @@ _close_auth_server()
         if (auth_server->authserv_fd > 0) {
 			auth_server->authserv_fd_ref -= 1;
 			if (auth_server->authserv_fd_ref <= 0) {
-				debug(LOG_INFO, "authserv_fd_ref is %d, close this connection", auth_server->authserv_fd_ref);
+				debug(LOG_DEBUG, "authserv_fd_ref is %d, close this connection", auth_server->authserv_fd_ref);
 				close(auth_server->authserv_fd);
 				auth_server->authserv_fd = -1;
 				auth_server->authserv_fd_ref = 0;
