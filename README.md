@@ -49,10 +49,10 @@ Chose your `Target System` and `Network -->Captive Portals --> apfree_wifidog`. 
 Do compiling:
 
 ```
-make V=s
+make package/apfree_wifidog/compile V=s
 ```
 
-After Doing `make V=s`, Apfree WiFiDog `ipk` package is packed in path `bin/packages/YOUR-TARGET-ARCH/base/apfree_wifidog_VERSION-RELEASE_YOUR-TARGET-ARCH.ipk `. Push it up into your LEDE-system router, use `opkg install ` command to install this `ipk`.
+After Doing `make package/apfree_wifidog/compile V=s`, Apfree WiFiDog `ipk` package is packed in path `bin/packages/YOUR-TARGET-ARCH/base/apfree_wifidog_VERSION-RELEASE_YOUR-TARGET-ARCH.ipk `. Push it up into your LEDE-system router, use `opkg install ` command to install this `ipk`.
 
 
 **The CA-Certificate in this project is ONLY for Apfree WiFiDog HTTPS captive testing, CAN NOT be used for business scene**
