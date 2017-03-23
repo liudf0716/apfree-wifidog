@@ -5,7 +5,7 @@ Apfree-WiFidog is an open source captive protal solution for wireless router whi
 
 **[中文介绍](https://github.com/liudf0716/apfree_wifidog/blob/master/README_ZH.md)**
 
-## Awesome
+## Features different between original wifidog and us
 
 It has some awesome features:
 
