@@ -18,7 +18,7 @@ https://github.com/liudf0716/apfree_wifidog/wiki/%E5%9F%BA%E4%BA%8ELEDE%E7%BC%96
 
 ### 注意事项：
 
-如果要支持https劫持跳转，需要修改openwrt&lede的libevent package，将其版本升级到release-2.1.7-rc版本，最好采用apfree_wifidog项目中的package里面对应项目的替换原openwrt&lede的项目
+如果要支持https劫持跳转，需要修改openwrt&lede的libevent package，将其版本升级到release-2.1.8-stable版本，最好采用apfree_wifidog项目中的package里面对应项目的替换原openwrt&lede的项目
 
 ## 功能描述
 
