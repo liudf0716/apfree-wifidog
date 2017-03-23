@@ -96,18 +96,11 @@ Domains of `www.baidu.com,www.qq.com,www.qq.com.cn,www.weixin.com` is trusted in
 
 ### How To Contribute
 
+Feel free to create issues or pull-requests if you have any problems.
 
-1. [create Issue](https://github.com/liudf0716/apfree_wifidog/issues/new) - There are still a variety of things that need to be fixed or implemented.
+**Please read [CONTRIBUTING.md](https://github.com/liudf0716/apfree_wifidog/blob/master/CONTRIBUTING.md) before pushing any changes.**
 
-2. Fork [apfree_wifidog](https://github.com/liudf0716/apfree_wifidog) 
 
-3. Clone your own fork: ```git clone https://github.com/$userid/apfree_wifidog.git```
-
-4. modify your code and push to your fork project
-
-5. Pull Request from your fork project to our master project  -  [here](https://github.com/liudf0716/apfree_wifidog) click**Compare & pull request**
-
-6. awaiting review, if accepted, Merge!
 
 ---
 
