@@ -96,7 +96,7 @@ config wifidog
 
 Domains of `www.baidu.com,www.qq.com,www.qq.com.cn,www.weixin.com` is trusted in this default configuration file, and you can modify it to what you want.
 
-### Auth server project
+### Apfree wifidog Auth server project
 
 **Please read [AUTHSERVER.md](https://github.com/liudf0716/apfree_wifidog/blob/master/AUTHSERVER.md)**
 
