@@ -687,11 +687,11 @@ add_online_client(const char *info)
 	}
 
 OUT:
-    if(!is_error(roam_client)){
+    if(!is_error(roam_client) && roam_client_need_free){
         json_object_put(roam_client);
     }
 
-    if (!is_error(client_info) && roam_client_need_free) {
+    if (!is_error(client_info)) {
         json_object_put(client_info);
     }
 	return ret;	
