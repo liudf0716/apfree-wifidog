@@ -116,7 +116,7 @@ auth_server_roam_request(const char *mac)
 		is_roam = json_object_get_string(roam_jo);
 		if(is_roam && strcmp(is_roam, "yes") == 0) {
 			json_object *client = NULL;
-            if( ! json_object_object_get(roam_info, "client", &client)) {
+            if( ! json_object_object_get_ex(roam_info, "client", &client)) {
                 free(res);
                 return NULL;
             }
