@@ -1,0 +1,38 @@
+{
+    "configurations": [
+        {
+            "name": "Mac",
+            "includePath": [
+                "/usr/include",
+                "/usr/local/include"
+            ],
+            "browse": {
+                "limitSymbolsToIncludedHeaders": true,
+                "databaseFilename": ""
+            }
+        },
+        {
+            "name": "Linux",
+            "includePath": [
+                "/usr/include",
+                "/usr/local/include",
+				"/home/gukq/git/openwrt-cc-ssd/lede-trunk/build_dir/target-arm_cortex-a15+neon-vfpv4_musl-1.1.16_eabi/mosquitto-1.4.4/lib/",
+				"/home/gukq/git/openwrt-cc-ssd/lede-trunk/build_dir/target-arm_cortex-a15+neon-vfpv4_musl-1.1.15_eabi/json-c-0.12.1/ipkg-install/usr/include/"
+            ],
+            "browse": {
+                "limitSymbolsToIncludedHeaders": true,
+                "databaseFilename": ""
+            }
+        },
+        {
+            "name": "Win32",
+            "includePath": [
+                "C:/Program Files (x86)/Microsoft Visual Studio 14.0/VC/include/*"
+            ],
+            "browse": {
+                "limitSymbolsToIncludedHeaders": true,
+                "databaseFilename": ""
+            }
+        }
+    ]
+}
