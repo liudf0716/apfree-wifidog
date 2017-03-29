@@ -593,6 +593,13 @@ reset_client_list()
     }
 }
 
+/*
+ * Function: add_online_client
+ * Returns:
+ *   0 - success
+ *   1 - ?
+ *   -1 - ? 
+ */
 int 
 add_online_client(const char *info)
 {
@@ -607,31 +614,65 @@ add_online_client(const char *info)
 		return -1;
 	
 	client_info = json_tokener_parse(info);
-	if(client_info == NULL || json_object_get_type(client_info) != json_type_object)	
-		return 1;
-	
-	mac 	= json_object_get_string(json_object_object_get(client_info, "mac"));
-	ip		= json_object_get_string(json_object_object_get(client_info, "ip"));
-	name	= json_object_get_string(json_object_object_get(client_info, "name"));
-	roam_client	= json_object_object_get(client_info, "client");
-	if(mac && is_valid_mac(mac) && ip && is_valid_ip(ip) && !is_trusted_mac(mac) && !is_untrusted_mac(mac) && 
-	  (roam_client != NULL || (roam_client = auth_server_roam_request(mac)) != NULL)) {
-		LOCK_CLIENT_LIST();
+	if(is_error(client_info) || json_object_get_type(client_info) != json_type_object){
+        goto OUT;
+    }
 
+    int ret = 1;
+	json_object *mac_jo = NULL;
+    json_object *ip_jo = NULL;
+    json_object *name_jo = NULL;
+    if (!json_object_object_get_ex(client_info, "mac", &mac_jo)) {
+        goto OUT;
+    }
+    if (!json_object_object_get_ex(client_info, "ip", &ip_jo)) {
+        goto OUT;
+    }
+    if (!json_object_object_get_ex(client_info, "name", &name_jo)) {
+        goto OUT;
+    }
+
+    int roam_client_need_free = json_object_object_get_ex(client_info, "client", &roam_client)?0:1;
+
+	mac 	= json_object_get_string(mac_jo);
+	ip		= json_object_get_string(ip_jo);
+	name	= json_object_get_string(name_jo);
+
+	if(is_valid_mac(mac) &&  
+        is_valid_ip(ip) && 
+        !is_trusted_mac(mac) &&
+        !is_untrusted_mac(mac) && 
+        (roam_client != NULL || (roam_client = auth_server_roam_request(mac)) != NULL)) {
+
+		LOCK_CLIENT_LIST();
 		old_client = client_list_find_by_mac(mac);
 		if(old_client == NULL) {
-			char *token = json_object_get_string(json_object_object_get(roam_client, "token"));
-			char *first_login = json_object_get_string(json_object_object_get(roam_client, "first_login"));
+            json_object *token_jo = NULL;
+            if (!json_object_object_get_ex(roam_client, "token", &token_jo)) {
+                UNLOCK_CLIENT_LIST();
+                goto OUT;
+            }
+			char *token = json_object_get_string(token_jo);
+
+            json_object *first_login_jo = NULL;
+            if (!json_object_object_get_ex(roam_client, "first_login", &first_login_jo)) {
+                UNLOCK_CLIENT_LIST();
+                goto OUT;
+            }
+			char *first_login = json_object_get_string(first_login_jo);
+
 			if(token != NULL) {
 				t_client *client = client_list_add(ip, mac, token);
 				client->wired = 0;
-				if (name)
+				if (name) {
 					client->name = safe_strdup(name);
+                }
 
-				if (first_login) 
+				if (first_login) {
 					client->first_login = (time_t)atol(first_login);
-				else
+                } else {
 					client->first_login = time(NULL);
+                }
 				fw_allow(client, FW_MARK_KNOWN);
 			}
 		} else if (strcmp(old_client->ip, ip) != 0) { // has login; but ip changed
@@ -642,13 +683,18 @@ add_online_client(const char *info)
 		}
 
 		UNLOCK_CLIENT_LIST();
-
-		if(roam_client != NULL)
-			json_object_put(roam_client);
+        ret = 0;
 	}
 
-	json_object_put(client_info);
-	return 0;	
+OUT:
+    if(!is_error(roam_client) && roam_client_need_free){
+        json_object_put(roam_client);
+    }
+
+    if (!is_error(client_info)) {
+        json_object_put(client_info);
+    }
+	return ret;	
 }
 
 char *
