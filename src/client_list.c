@@ -632,9 +632,7 @@ add_online_client(const char *info)
         goto OUT;
     }
 
-    if (!json_object_object_get_ex(client_info, "client", &roam_client)) {
-        goto OUT;
-    }
+    int roam_client_need_free = json_object_object_get_ex(client_info, "client", &roam_client)?0:1;
 
 	mac 	= json_object_get_string(mac_jo);
 	ip		= json_object_get_string(ip_jo);
@@ -685,15 +683,15 @@ add_online_client(const char *info)
 		}
 
 		UNLOCK_CLIENT_LIST();
+        ret = 0;
 	}
-    ret = 0;
 
 OUT:
     if(!is_error(roam_client)){
         json_object_put(roam_client);
     }
 
-    if (!is_error(client_info)) {
+    if (!is_error(client_info) && roam_client_need_free) {
         json_object_put(client_info);
     }
 	return ret;	
