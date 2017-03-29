@@ -196,6 +196,9 @@ save_pid_file(const char *pf)
 int
 is_valid_ip(const char *ip)
 {
+	if (!ip) {
+		return 0;
+	}
 	struct sockaddr_in sa;
     int result = inet_pton(AF_INET, ip, &(sa.sin_addr));
     return result != 0;
