@@ -1,10 +1,10 @@
 # About ApFree WiFiDog
-ApFree WiFiDog 在完全兼容原版WiFiDog的基础上，在功能、性能和稳定性方面做了大量工作、改进及优化，目前在坤腾固件中广泛使用，使用ApFree WiFidog的在线路由器数量达到1万多台且还在继续增长。
+ApFree WiFiDog 在完全兼容原版WiFiDog的基础上，在功能、性能和稳定性方面做了大量工作、改进及优化，目前在坤腾固件中广泛使用，使用ApFree WiFidog的在线路由器数量达到2万多台且还在继续增长。
 
 由于ApFree WiFiDog完全兼容原有的WiFiDog协议，在将原有WiFiDog迁移到ApFree WiFiDog可以做到无缝切换
 
 ## ApFree WiFiDog的优势
-### 1，稳定， 大规模在商业场景下应用，稳定性得到实际场景下的检验
+### 1，稳定， 大规模在商业场景下应用，稳定性得到实际场景下的检验，支持主流认证：包括微信连，短信等认证方式
 ### 2，持续更新维护，由坤腾固件研发测试团队维护，保障其功能持续迭代，紧跟用户场景的需求
 ### 3，性能优异 用time curl 命令测试， http的响应时间是0.05s左右, https的响应时间是0.2s左右，用户真实的体验是秒开
 
@@ -13,17 +13,12 @@ ApFree WiFiDog 在完全兼容原版WiFiDog的基础上，在功能、性能和�
 http://v.qq.com/x/page/f03507zyfvv.html
 
 ## 编译说明
-1，将package中的apfree_wifidog目录拷贝到openwrt&lede的package目录
-
-2，make menuconfig
-
-  进入 ApFree
-  
-  选择 apfree_wifidog
+请参考 @Echowxsy 编写的文档，在此表示感谢！
+https://github.com/liudf0716/apfree_wifidog/wiki/%E5%9F%BA%E4%BA%8ELEDE%E7%BC%96%E8%AF%91Apfree_wifidog
 
 ### 注意事项：
 
-如果要支持https劫持跳转，需要修改openwrt&lede的libevent package，将其版本升级到release-2.1.7-rc版本，最好采用apfree_wifidog项目中的package里面对应项目的替换原openwrt&lede的项目
+如果要支持https劫持跳转，需要修改openwrt&lede的libevent package，将其版本升级到release-2.1.8-stable版本，最好采用apfree_wifidog项目中的package里面对应项目的替换原openwrt&lede的项目
 
 ## 功能描述
 
@@ -121,6 +116,24 @@ wifidog_roam   disable
 
 首先手机连接路由器，打开手机浏览器，输入带https的地址（例如：https://www.baidu.com/），
 手机也可以弹出protal页面；
+
+## How To Contribute
+
+apfree wifidog使用github托管其源代码，贡献代码使用github的PR(Pull Request)的流程，十分的强大与便利:
+
+###1. [创建 Issue](https://github.com/liudf0716/apfree_wifidog/issues/new) - 对于较大的改动(如新功能，大型重构等)最好先开issue讨论一下，较小的improvement(如文档改进，bugfix等)直接发PR即可
+
+###2. Fork [apfree_wifidog](https://github.com/liudf0716/apfree_wifidog) - 点击右上角**Fork**按钮
+
+###3. Clone你自己的fork: ```git clone https://github.com/$userid/apfree_wifidog.git```
+
+###4. 在**dev**修改并将修改push到你的fork上
+
+###5. 创建从你的fork的**dev**分支到主项目的**dev**分支的[Pull Request] -  [在此](https://github.com/liudf0716/apfree_wifidog)点击**Compare & pull request**
+
+###6. 等待review, 需要继续改进，或者被Merge!
+
+---
 
 ## 感谢如下开源项目提供的思路和帮助：
 

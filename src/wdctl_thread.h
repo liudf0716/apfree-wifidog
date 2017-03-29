@@ -22,6 +22,7 @@
 /** @file wdctl_thread.h
     @brief WiFiDog monitoring thread
     @author Copyright (C) 2004 Alexandre Carmel-Veilleux <acv@acv.ca>
+    @author Copyright (C) 2016 Dengfeng Liu <liudengfeng@kunteng.org>
 */
 
 #ifndef _WDCTL_THREAD_H_
@@ -33,5 +34,32 @@
 void thread_wdctl(void *arg);
 
 void close_wdctl_socket();
+
+void user_cfg_save(void);
+
+void clear_untrusted_maclist(void);
+void add_untrusted_maclist(const char *args);
+void del_untrusted_maclist(const char *args);
+
+char *show_trusted_maclist(void);
+void clear_trusted_maclist(void);
+void add_trusted_maclist(const char *args);
+void del_trusted_maclist(const char *args);
+
+char *show_trusted_domains(void);
+void clear_trusted_domains(void);
+void add_trusted_domains(const char *args);
+void del_trusted_domains(const char *args);
+
+char *show_trusted_iplist(void);
+void clear_trusted_iplist(void);
+void del_trusted_iplist(const char *args);
+void add_trusted_iplist(const char *args);
+
+char *show_trusted_pdomains(void);
+void clear_trusted_pdomains(void);
+void add_trusted_pdomains(const char *args);
+void del_trusted_pdomains(const char *args);
+
 
 #endif

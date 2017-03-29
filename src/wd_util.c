@@ -43,19 +43,25 @@
 #include <netinet/in.h>
 #include <sys/ioctl.h>
 #include <arpa/inet.h>
-
 #include <net/if.h>
-
+#include <net/if_arp.h>
 #include <fcntl.h>
 #include <net/ethernet.h>
 #include <netinet/ip.h>
 #include <netinet/ip_icmp.h>
 #include <netpacket/packet.h>
 
+#include <uci.h>
+#include <json-c/json.h>
+
+#include <dirent.h>
+#include <linux/if_bridge.h>
+
 #include "common.h"
 #include "gateway.h"
 #include "commandline.h"
 #include "client_list.h"
+#include "ping_thread.h"
 #include "conf.h"
 #include "safe.h"
 #include "util.h"
@@ -94,8 +100,13 @@ long served_this_session = 0;
 /** @brief Mutex to protect gethostbyname since not reentrant */
 static pthread_mutex_t ghbn_mutex = PTHREAD_MUTEX_INITIALIZER;
 
+struct evdns_cb_param {
+	struct event_base	*base;
+	void	*data;
+};
+
 static int n_pending_requests = 0;
-static struct event_base *base = NULL;
+static int n_started_requests = 0;
 
 void
 mark_online()
@@ -210,9 +221,88 @@ is_auth_online()
     }
 }
 
-        /*
-         * @return A string containing human-readable status text. MUST BE free()d by caller
-         */
+char *
+mqtt_get_status_text()
+{
+	time_t uptime = 0;
+    unsigned int days = 0, hours = 0, minutes = 0, seconds = 0;
+	struct json_object *jstatus = json_object_new_object();
+	struct sys_info info;
+	memset(&info, 0, sizeof(info));
+		
+	get_sys_info(&info);
+
+	json_object_object_add(jstatus, "sys_uptime", json_object_new_int(info.sys_uptime));
+	json_object_object_add(jstatus, "sys_memfree", json_object_new_int(info.sys_memfree));
+	json_object_object_add(jstatus, "nf_conntrack_count", json_object_new_int(info.nf_conntrack_count));
+	json_object_object_add(jstatus, "cpu_usage", json_object_new_double(info.cpu_usage));
+	json_object_object_add(jstatus, "sys_load", json_object_new_double(info.sys_load));
+	json_object_object_add(jstatus, "boad_type", 
+		json_object_new_string(g_type?g_type:"null"));
+	json_object_object_add(jstatus, "boad_name", 
+		json_object_new_string(g_name?g_name:"null"));
+
+	uptime = time(NULL) - started_time;
+    days = (unsigned int)uptime / (24 * 60 * 60);
+    uptime -= days * (24 * 60 * 60);
+    hours = (unsigned int)uptime / (60 * 60);
+    uptime -= hours * (60 * 60);
+    minutes = (unsigned int)uptime / 60;
+    uptime -= minutes * 60;
+    seconds = (unsigned int)uptime;
+    char wifidog_uptime[128] = {0};
+    snprintf(wifidog_uptime, 128, "%dD %dH %dM %dS", days, hours, minutes, seconds);
+
+    json_object_object_add(jstatus, "wifidog_version", json_object_new_string(VERSION));
+    json_object_object_add(jstatus, "wifidog_uptime", json_object_new_string(wifidog_uptime));
+    json_object_object_add(jstatus, "auth_server", json_object_new_int(is_auth_online()));
+    
+    t_client *sublist = NULL, *current = NULL;
+
+    LOCK_CLIENT_LIST();
+    int count = client_list_dup(&sublist);
+    UNLOCK_CLIENT_LIST();
+    json_object_object_add(jstatus, "online_client_count", json_object_new_int(count));
+
+    current = sublist;
+
+	int active_count = 0;
+	struct json_object *jclients = NULL;
+    while (current != NULL) {
+    	if (!jclients)
+    		jclients = json_object_new_array();
+    	struct json_object *jclient = json_object_new_object();
+    	json_object_object_add(jclient, "status", json_object_new_int(current->is_online));
+    	json_object_object_add(jclient, "ip", json_object_new_string(current->ip));
+    	json_object_object_add(jclient, "mac", json_object_new_string(current->mac));
+    	json_object_object_add(jclient, "token", json_object_new_string(current->token));
+    	json_object_object_add(jclient, "name", 
+    		json_object_new_string(current->name != NULL?current->name:"null"));
+    	json_object_object_add(jclient, "first_login", json_object_new_int64(current->first_login));
+    	json_object_object_add(jclient, "downloaded", 
+    		json_object_new_int64(current->counters.incoming));
+    	json_object_object_add(jclient, "uploaded",
+    		json_object_new_int64(current->counters.outgoing));
+
+       json_object_array_add(jclients, jclient);
+
+		if(current->is_online)
+			active_count++;
+        current = current->next;
+    }
+    client_list_destroy(sublist);
+    if (jclients)
+    	json_object_object_add(jstatus, "clients", jclients);
+
+    json_object_object_add(jstatus, "active_client_count", json_object_new_int(active_count));
+    char *retStr = safe_strdup(json_object_to_json_string(jstatus));
+    json_object_put(jstatus);
+    return retStr;
+}
+
+/*
+ * @return A string containing human-readable status text. MUST BE free()d by caller
+ */
 char *
 get_status_text()
 {
@@ -262,7 +352,7 @@ get_status_text()
     pstr_append_sprintf(pstr, "%d clients " "connected.\n", count);
 
     count = 1;
-	active_count = 1;
+	active_count = 0;
     while (current != NULL) {
         pstr_append_sprintf(pstr, "\nClient %d status [%d]\n", count, current->is_online);
         pstr_append_sprintf(pstr, "  IP: %s MAC: %s\n", current->ip, current->mac);
@@ -425,12 +515,80 @@ get_serialize_trusted_pan_domains()
 
 	UNLOCK_DOMAIN();	
     
-	return pstr_to_string(pstr);
+	return line?pstr_to_string(pstr):NULL;
 
 }
 
 char *
-get_trusted_domains_text()
+mqtt_get_trusted_pan_domains_text()
+{
+	s_config *config;
+	t_domain_trusted *domain_trusted = NULL;
+
+    config = config_get_config();
+    if (config->pan_domains_trusted == NULL)
+    	return NULL;
+
+    pstr_t *pstr = pstr_new();
+    int first = 1;
+	LOCK_DOMAIN();
+	
+	for (domain_trusted = config->pan_domains_trusted; domain_trusted != NULL; domain_trusted = domain_trusted->next) {
+        if (first) {
+        	pstr_append_sprintf(pstr, "%s", domain_trusted->domain);
+        	first = 0;
+        } else 
+        	pstr_append_sprintf(pstr, ",%s", domain_trusted->domain);
+	}
+	
+	UNLOCK_DOMAIN();
+
+	return first?NULL:pstr_to_string(pstr);
+}
+
+char *
+mqtt_get_trusted_domains_text()
+{
+    s_config *config;
+	t_domain_trusted *domain_trusted = NULL;
+	t_ip_trusted	*ip_trusted = NULL;
+
+    config = config_get_config();
+    if (config->domains_trusted == NULL)
+    	return NULL;
+
+    struct json_object *jarray = json_object_new_array();
+	LOCK_DOMAIN();
+	
+	for (domain_trusted = config->domains_trusted; domain_trusted != NULL; domain_trusted = domain_trusted->next) {
+        pstr_t *pstr = pstr_new();
+        int first = 1;
+        struct json_object *jobj = json_object_new_object();
+		for(ip_trusted = domain_trusted->ips_trusted; ip_trusted != NULL; ip_trusted = ip_trusted->next) {
+        	if (first) {
+        		pstr_append_sprintf(pstr, "%s", ip_trusted->ip);
+        		first = 0;
+        	} else
+        		pstr_append_sprintf(pstr, ",%s", ip_trusted->ip);
+		}
+		char *iplist = pstr_to_string(pstr);
+		json_object_object_add(jobj, domain_trusted->domain, 
+			json_object_new_string(first?"NULL":iplist));
+		json_object_array_add(jarray, jobj);
+		if (iplist)
+			free(iplist);
+	}
+	
+	UNLOCK_DOMAIN();
+
+	char *retStr = safe_strdup(json_object_to_json_string(jarray));
+    json_object_put(jarray);
+
+	return retStr;
+}
+
+char *
+get_trusted_domains_text(void)
 {
 	pstr_t *pstr = pstr_new();
     s_config *config;
@@ -453,6 +611,12 @@ get_trusted_domains_text()
 	UNLOCK_DOMAIN();
     
 	return pstr_to_string(pstr);
+}
+
+char *
+mqtt_get_serialize_maclist(int which)
+{
+	return get_serialize_maclist(which);
 }
 
 char *
@@ -495,7 +659,7 @@ get_serialize_maclist(int which)
 	
 	UNLOCK_CONFIG();
     
-	return pstr_to_string(pstr);
+	return line?pstr_to_string(pstr):NULL;
 
 }
 
@@ -569,8 +733,242 @@ trim_newline(char *line)
 		line[strlen(line)-1] = '\0';
 }
 
+static FILE *fpopen(const char *dir, const char *name)
+{
+    char path[SYSFS_PATH_MAX] = {0};
+
+    snprintf(path, SYSFS_PATH_MAX, "%s/%s", dir, name);
+    debug(LOG_INFO, "path is %s", path);
+    return fopen(path, "r");
+}
+
+
+/* Fetch an integer attribute out of sysfs. */
+static int fetch_id(const char *dev, const char *name)
+{
+    FILE *f = fpopen(dev, name);
+    int value = -1;
+
+    if (!f)
+        return 0;
+
+    fscanf(f, "0x%d", &value);
+    fclose(f);
+    debug(LOG_INFO, "fetch_id %d", value);
+    return value;
+}
+
+static int
+br_get_port_no(const char *port)
+{
+	DIR *d;
+    char path[SYSFS_PATH_MAX];
+
+    snprintf(path, SYSFS_PATH_MAX, SYSFS_CLASS_NET "%s/brport", port);
+    d = opendir(path);
+    if (!d)
+		return -1;
+	
+	return fetch_id(path, "port_no");
+}
+
+static int 
+get_portno(const char *brname, const char *ifname)
+{
+#define MAX_PORTS	1024
+    int i;
+    int ifindex = if_nametoindex(ifname);
+    int ifindices[MAX_PORTS];
+    unsigned long args[4] = { BRCTL_GET_PORT_LIST,
+                  (unsigned long)ifindices, MAX_PORTS, 0 };
+    struct ifreq ifr;
+
+    if (ifindex <= 0)
+        goto error;
+
+    int br_socket_fd = -1;
+    if ((br_socket_fd = socket(AF_LOCAL, SOCK_STREAM, 0)) < 0)
+    	goto error;
+
+    memset(ifindices, 0, sizeof(ifindices));
+    strncpy(ifr.ifr_name, brname, IFNAMSIZ);
+    ifr.ifr_data = (char *) &args;
+
+    if (ioctl(br_socket_fd, SIOCDEVPRIVATE, &ifr) < 0) {
+        goto error;
+    }
+
+    close(br_socket_fd);
+    
+    for (i = 0; i < MAX_PORTS; i++) {
+        if (ifindices[i] == ifindex)
+            return i;
+    }
+
+    debug(LOG_INFO, "%s is not a in bridge %s\n", ifname, brname);
+ error:
+ 	if (br_socket_fd > 0) close(br_socket_fd);
+    return -1;
+}
+
+/*
+ * 1: wired; 0: not wired
+ */
+static int
+is_br_port_no_wired(const char *brname, int port_no)
+{
+	int i, count;
+    struct dirent **namelist;
+    char path[SYSFS_PATH_MAX] = {0};
+    int nret = 0;
+	
+    snprintf(path, SYSFS_PATH_MAX, SYSFS_CLASS_NET "%s/brif", brname);
+    count = scandir(path, &namelist, 0, alphasort);
+    if (count < 0) {
+    	debug(LOG_ERR, "cant scandir %s", path);
+		return nret;
+    }
+	
+	for (i = 0; i < count; i++) {
+        if (namelist[i]->d_name[0] == '.'
+            && (namelist[i]->d_name[1] == '\0'
+            || (namelist[i]->d_name[1] == '.'
+                && namelist[i]->d_name[2] == '\0')))
+            continue;
+
+        if (!memcmp(namelist[i]->d_name, "eth", 3) && 
+			port_no == get_portno(brname, namelist[i]->d_name)) {
+			nret = 1;
+			break;
+		}
+    }
+    for (i = 0; i < count; i++)
+        free(namelist[i]);
+    free(namelist);
+	
+	return nret;
+}
+
+// if -1; not find mac; else find mac's port_no
+static int 
+br_read_fdb(const char *bridge, 
+        unsigned long offset, int num, const uint8_t *mac_addr, int *port_no)
+{
+    FILE *f;
+    int i, n = 0;
+    struct __fdb_entry fe[num];
+    char path[SYSFS_PATH_MAX] = {0};
+
+    /* open /sys/class/net/brXXX/brforward */
+    snprintf(path, SYSFS_PATH_MAX, SYSFS_CLASS_NET "%s/brforward", bridge);
+    f = fopen(path, "r");
+    if (f) {
+        fseek(f, offset*sizeof(struct __fdb_entry), SEEK_SET);
+        n = fread(fe, sizeof(struct __fdb_entry), num, f);
+        fclose(f);
+    } 
+
+    for (i = 0; i < n; i++) {
+    	const struct __fdb_entry *f = &fe[i];
+    	debug(LOG_DEBUG, "[%d] %02X:%02X:%02X:%02X:%02X:%02X == %02X:%02X:%02X:%02X:%02X:%02X", i,
+				mac_addr[0], mac_addr[1], mac_addr[2], 
+			  	mac_addr[3], mac_addr[4], mac_addr[5],
+			  	f->mac_addr[0], f->mac_addr[1], f->mac_addr[2], 
+			  	f->mac_addr[3], f->mac_addr[4], f->mac_addr[5]);
+		if (!memcmp(mac_addr, f->mac_addr, 6)) {
+			*port_no = f->port_no;
+			return -1;
+		}
+    }
+
+    return n;
+}
+
+static int
+mac_str_2_byte(const char *mac, uint8_t *mac_addr)
+{
+	if( 6 == sscanf( mac, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
+	    			&mac_addr[0], &mac_addr[1], 
+	    			&mac_addr[2], &mac_addr[3], 
+	    			&mac_addr[4], &mac_addr[5] )) {
+	    return 0;
+	} else{
+		debug(LOG_INFO, "mac %s to byte array failed", mac);
+		return 1;
+	}
+}
+
+static int
+mac_byte_2_str(const uint8_t *mac_addr, char *mac)
+{
+	return snprintf(mac, 18, "%x:%x:%x:%x:%x:%x",
+		mac_addr[0], mac_addr[1], mac_addr[2],
+		mac_addr[3], mac_addr[4], mac_addr[5]);
+}
+
+/*
+ * -1: error; >0: sucess
+ */
+static int
+get_device_br_port_no(const char *mac, const char *bridge)
+{
+#define	CHUNK	128
+	uint8_t mac_addr[6] = {0};
+	
+	if (mac_str_2_byte(mac, mac_addr))
+		return -1;
+
+    int offset = 0;	
+    int port_no = -1;
+	for (;;) {
+        port_no = -1;
+        int n = br_read_fdb(bridge, offset, CHUNK, mac_addr, &port_no);
+        if (port_no > 0) {
+            break;
+        }
+
+        if (n <= 0) {       
+           	break;
+        }
+
+        offset += n;
+	}
+
+	return port_no;
+}
+
 /*
  * 1: wired; 0: wireless
+ */
+int
+is_device_wired_intern(const char *mac, const char *bridge)
+{
+	int port_no = 0;
+	if ((port_no = get_device_br_port_no(mac, bridge)) > 0) {	
+		return is_br_port_no_wired(bridge, port_no);
+	} 
+
+	debug(LOG_INFO, "can not find mac %s port_no", mac);
+	return 0;
+}
+
+/*
+ * 1: wired; 0: wireless
+ */
+int
+br_is_device_wired(const char *mac){
+	if (is_valid_mac(mac)) {
+		char *bridge = config_get_config()->gw_interface;
+		debug(LOG_DEBUG,"mac %s check in bridge %s is wired", mac, bridge);
+		return is_device_wired_intern(mac, bridge);
+	}
+
+	return 0;
+}
+
+/*
+ * 1: wired; 0: wireless
+ * deprecated
  */
 int
 is_device_wired(const char *mac)
@@ -630,7 +1028,11 @@ char *evb_2_string(struct evbuffer *evb, int *olen)
 
 void evdns_add_trusted_domain_ip_cb(int errcode, struct evutil_addrinfo *addr, void *ptr)
 {
-	t_domain_trusted *p = ptr;
+	struct evdns_cb_param *param = ptr;
+	t_domain_trusted *p = param->data;
+	struct event_base	*base = param->base;
+	free(param);
+	
     if (!errcode) {
         struct evutil_addrinfo *ai;
 		char hostname[HTTP_IP_ADDR_LEN];
@@ -670,53 +1072,196 @@ void evdns_add_trusted_domain_ip_cb(int errcode, struct evutil_addrinfo *addr, v
 					}
 				}
 			}     
-        }
-        evutil_freeaddrinfo(addr);
-    }
+        }   
+    } else {
+		debug(LOG_INFO, "parse domain %s , error: %s", p->domain, evutil_gai_strerror(errcode));
+	}
 	
-    if (--n_pending_requests == 0)
+	if (addr)
+		evutil_freeaddrinfo(addr);
+    
+    if (--n_pending_requests <= 0 && n_started_requests ==  0) {
+		debug(LOG_INFO, "parse domain end, end event_loop [%d]", n_pending_requests);
         event_base_loopexit(base, NULL);
+		n_pending_requests = 0;
+	}
 }
 
 void evdns_parse_trusted_domain_2_ip(t_domain_trusted *p)
 {
-	struct evdns_base  *dnsbase 	= NULL;
+	struct event_base	*base		= NULL;
+	struct evdns_base  	*dnsbase 	= NULL;
 	
+    LOCK_DOMAIN();
+    
 	base = event_base_new();
-    if (!base)
-        return;
+    if (!base) {
+        UNLOCK_DOMAIN();
+        return;    
+    }
 	
     dnsbase = evdns_base_new(base, 1);
-    if (!dnsbase)
+    if (!dnsbase) {
+        event_base_free(base);
+        UNLOCK_DOMAIN();
         return;
+    }
+	evdns_base_set_option(dnsbase, "timeout", "0.2");
+    // thanks to the following article
+    // http://www.wuqiong.info/archives/13/
+    evdns_base_set_option(dnsbase, "randomize-case:", "0");//TurnOff DNS-0x20 encoding
+    evdns_base_nameserver_ip_add(dnsbase, "180.76.76.76");//BaiduDNS
+    evdns_base_nameserver_ip_add(dnsbase, "223.5.5.5");//AliDNS
+    evdns_base_nameserver_ip_add(dnsbase, "223.6.6.6");//AliDNS
+    evdns_base_nameserver_ip_add(dnsbase, "114.114.114.114");//114DNS
 	
 	struct evutil_addrinfo hints;
-	
-	LOCK_DOMAIN();
-	
+	n_pending_requests = 0;
+	n_started_requests = 0;
 	while(p && p->domain) {		
 		memset(&hints, 0, sizeof(hints));
 		hints.ai_family = AF_UNSPEC;
 		hints.ai_flags = EVUTIL_AI_CANONNAME;
-
 		hints.ai_socktype = SOCK_STREAM;
 		hints.ai_protocol = IPPROTO_TCP;
 		
-		++n_pending_requests;
+		n_pending_requests++;
+		n_started_requests = 1; // in case some invalid domain parse
 		
+		struct evdns_cb_param *param = malloc(sizeof(struct evdns_cb_param));
+		memset(param, 0, sizeof(struct evdns_cb_param));
+		param->base = base;
+		param->data = p;
 		evdns_getaddrinfo( dnsbase, p->domain, NULL ,
-			  &hints, evdns_add_trusted_domain_ip_cb, p);
+			  &hints, evdns_add_trusted_domain_ip_cb, param);
 		
 		p = p->next;
 	}
 	
-	if (n_pending_requests)
-		event_base_dispatch(base);
+	if (n_started_requests && n_pending_requests > 0) {
+        n_started_requests = 0;
+        debug(LOG_INFO, "parse domain end, begin event_loop [%d]", n_pending_requests); 
+		event_base_dispatch(base);	
+	}
 	
 	UNLOCK_DOMAIN();
 	
 	evdns_base_free(dnsbase, 0);
     event_base_free(base);
+}
+
+int
+uci_del_value(const char *c_filename, const char *section, const char *name)
+{
+	int nret = 0;
+	char uciOption[128] = {0};
+	struct uci_context * ctx = uci_alloc_context(); 
+    struct uci_ptr ptr; 
+	if (NULL == ctx)  
+        return nret;  
+    memset(&ptr, 0, sizeof(ptr));  
+     
+    snprintf(uciOption, sizeof(uciOption), "%s.@%s[0].%s", c_filename, section, name); 
+    if(UCI_OK != uci_lookup_ptr(ctx, &ptr, uciOption, true)) {
+		nret = 0;
+		goto out;
+	} 
+	
+	nret = uci_delete(ctx, &ptr);
+	if (UCI_OK != nret) {
+		nret = 0;
+		goto out;
+	}
+
+	nret = uci_save(ctx, ptr.p);
+	if (UCI_OK != nret) {
+		nret = 0;
+		goto out;
+	}
+
+	nret = uci_commit(ctx, &ptr.p, false);
+	if (UCI_OK != nret) {
+		nret = 0;
+		goto out;
+	}
+	
+	nret = 1;
+out:
+	uci_unload(ctx, ptr.p);  
+    uci_free_context(ctx); 
+	return nret;
+}
+
+int
+uci_set_value(const char *c_filename, const char *section, const char *name, const char *value)
+{
+	int nret = 0;
+	char uciOption[128] = {0};
+	struct uci_context * ctx = uci_alloc_context(); 
+    struct uci_ptr ptr; 
+	if (NULL == ctx)  
+        return nret;  
+    memset(&ptr, 0, sizeof(ptr));  
+     
+    snprintf(uciOption, sizeof(uciOption), "%s.@%s[0].%s", c_filename, section, name); 
+    if(UCI_OK != uci_lookup_ptr(ctx, &ptr, uciOption, true)) {
+		nret = 0;
+		goto out;
+	}   
+    ptr.value = value; 
+    
+    nret = uci_set(ctx, &ptr);  
+    if (UCI_OK != nret){  
+        nret = 0;
+		goto out;
+    } 
+	
+	nret = uci_save(ctx, ptr.p);
+	if (UCI_OK != nret) {
+		nret = 0;
+		goto out;
+	}
+
+	nret = uci_commit(ctx, &ptr.p, false);
+	if (UCI_OK != nret) {
+		nret = 0;
+		goto out;
+	}
+	
+	nret = 1;
+out:
+	uci_unload(ctx, ptr.p);  
+    uci_free_context(ctx); 
+	return nret;
+}
+
+int
+uci_get_value(const char *c_filename, const char *name, char *value, int v_len)
+{
+	struct uci_context * uci = uci_alloc_context();  
+    char * pValueData = NULL;  
+    struct uci_package * pkg = NULL;    
+    struct uci_element * e;
+  	int nret	= 0;
+	
+    if (!uci || UCI_OK != uci_load(uci, c_filename, &pkg))    
+        goto cleanup;  
+    
+    uci_foreach_element(&pkg->sections, e) {    
+        struct uci_section *s = uci_to_section(e);    
+        if (NULL != (pValueData = uci_lookup_option_string(uci, s, name))) {  
+            strncpy(value, pValueData, v_len);
+			nret = 1;
+			break;
+        }  
+    }    
+      
+    uci_unload(uci, pkg);    
+      
+cleanup:    
+    uci_free_context(uci);    
+    uci = NULL;
+	return nret;
 }
 
 /** Fork a child and execute a shell command, the parent
@@ -927,4 +1472,49 @@ get_ext_iface(void)
     free(gw);
     return NULL;
 }
+
+int 
+arp_get_mac(const char *dev_name, const char *i_ip, char *o_mac) {
+	int s;
+    struct arpreq arpreq;
+    struct sockaddr_in *sin;
+	
+	if (!dev_name || !i_ip || !o_mac)
+		return 0;
+	
+	s = socket(AF_INET, SOCK_DGRAM, 0);
+	if (s <= 0) {
+		return 0;
+	}
+	
+	memset(&arpreq, 0, sizeof(arpreq));
+
+    sin = (struct sockaddr_in *) &arpreq.arp_pa;
+    sin->sin_family = AF_INET;
+    sin->sin_addr.s_addr = inet_addr(i_ip);
+
+	strcpy(arpreq.arp_dev, dev_name);
+	if (ioctl(s, SIOCGARP, &arpreq) < 0) {
+		close(s);
+		return 0;
+	}
+	close(s);
+	if (arpreq.arp_flags & ATF_COM) {
+        unsigned char *eap = (unsigned char *) &arpreq.arp_ha.sa_data[0];
+        snprintf(o_mac, MAC_LENGTH, "%02x:%02x:%02x:%02x:%02x:%02x",
+                eap[0], eap[1], eap[2], eap[3], eap[4], eap[5]);
+        return 1;
+    } 
+	
+	return 0;
+}
+
+int
+br_arp_get_mac(const char *i_ip, char *o_mac)
+{
+	s_config *config = config_get_config();
+
+	return arp_get_mac(config->gw_interface, i_ip, o_mac);
+}
+
 //<<<< liudf added end

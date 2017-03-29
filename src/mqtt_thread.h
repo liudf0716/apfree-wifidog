@@ -1,4 +1,4 @@
-/* vim: set sw=4 ts=4 sts=4 et : */
+/* vim: set et sw=4 ts=4 sts=4 : */
 /********************************************************************\
  * This program is free software; you can redistribute it and/or    *
  * modify it under the terms of the GNU General Public License as   *
@@ -17,37 +17,33 @@
  * 59 Temple Place - Suite 330        Fax:    +1-617-542-2652       *
  * Boston, MA  02111-1307,  USA       gnu@gnu.org                   *
  *                                                                  *
-\********************************************************************/
+ \********************************************************************/
 
 /* $Id$ */
-/** @file ping_thread.h
-    @brief WiFiDog heartbeat thread
-    @author Copyright (C) 2004 Alexandre Carmel-Veilleux <acv@miniguru.ca>
-    @author Copyright (C) 2016 Dengfeng Liu <liudengfeng@kunteng.org>
-*/
+/** @file mqtt_thread.h
+  @brief 
+  @author Copyright (C) 2016 Dengfeng Liu <liudengfeng@kunteng.org>
+  
+  */
+#ifndef	_MQTT_THREAD_H_
+#define	_MQTT_THREAD_H_
 
-#ifndef _PING_THREAD_H_
-#define _PING_THREAD_H_
+#define _MQTT_SUPPORT_
+#ifdef  _MQTT_SUPPORT_
 
-#define MINIMUM_STARTED_TIME 1041379200 /* 2003-01-01 */
-#define SSID_LENGTH         32
+#include "wdctl_thread.h"
+#include "conf.h"
 
-struct sys_info {
-    unsigned long int   sys_uptime;
-    unsigned int        sys_memfree;  
-    unsigned long int   nf_conntrack_count;
-    unsigned long int   wifidog_uptime;
-    float   sys_load;
-    float   cpu_usage;
-};
+void set_trusted_op(void *mosq, const char *type, const char *value, const int req_id, const s_config *config);
+void del_trusted_op(void *mosq, const char *type, const char *value, const int req_id, const s_config *config);
+void clear_trusted_op(void *mosq, const char *type, const char *value, const int req_id, const s_config *config);
+void show_trusted_op(void *mosq, const char *type, const char *value, const int req_id, const s_config *config);
+void save_rule_op(void *mosq, const char *type, const char *value, const int req_id, const s_config *config);
+void get_status_op(void *mosq, const char *type, const char *value, const int req_id, const s_config *config);
+void reboot_device_op(void *mosq, const char *type, const char *value, const int req_id, const s_config *config);
 
-void get_sys_info(struct sys_info *);
-
-char *get_ping_uri(const struct sys_info *);
-
-char *get_ping_request(const struct sys_info *);
-
-/** @brief Periodically checks on the auth server to see if it's alive. */
-void thread_ping(void *arg);
+void thread_mqtt(void *arg);
+#else
+#endif
 
 #endif

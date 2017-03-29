@@ -3,9 +3,9 @@
 Apfree-WiFidog is an open source captive protal solution for wireless router which with embeddabled linux([LEDE](https://github.com/lede-project/source)/[Openwrt](https://github.com/openwrt/openwrt)). 
 
 
-**[中文介绍](https://github.com/liudf0716/apfree_wifidog/blob/master/README_CH.md)**
+**[中文介绍](https://github.com/liudf0716/apfree_wifidog/blob/master/README_ZH.md)**
 
-## Awesome
+## Features different between original wifidog and us
 
 It has some awesome features:
 
@@ -24,10 +24,12 @@ It has some awesome features:
 
 ## How To Compile
 
+**[基于LEDE编译Apfree_wifidog](https://github.com/liudf0716/apfree_wifidog/wiki/%E5%9F%BA%E4%BA%8ELEDE%E7%BC%96%E8%AF%91Apfree_wifidog)**
+
 Fork and clone the Apfree WiFiDog project:
 
-    git clone https://github.com/KerwinKoo/apfree_wifidog.git 
-	cd apfree_wifidog
+    git clone https://github.com/liudf0716/apfree_wifidog
+    cd apfree_wifidog
 
 Assuming you have a working [LEDE](https://github.com/lede-project/source)/[Openwrt](https://github.com/openwrt/openwrt) setup, taking `LEDE` as an example and assuming your LEDE root path is `LEDE_ROOT`:
 
@@ -42,15 +44,15 @@ Now Apfree WiFiDog package has been installed in LEDE packages environment.
     cd /LEDE_ROOT/
 	make menuconfig
 
-Chose your `Target System` and `ApFree --> apfree_wifidog`. `SAVE` and `EXIT`.
+Chose your `Target System` and `Network -->Captive Portals --> apfree_wifidog`. `SAVE` and `EXIT`.
 
 Do compiling:
 
 ```
-make V=s
+make package/apfree_wifidog/compile V=s
 ```
 
-After Doing `make V=s`, Apfree WiFiDog `ipk` package is packed in path `bin/packages/YOUR-TARGET-ARCH/base/apfree_wifidog_VERSION-RELEASE_YOUR-TARGET-ARCH.ipk `. Push it up into your LEDE-system router, use `opkg install ` command to install this `ipk`.
+After Doing `make package/apfree_wifidog/compile V=s`, Apfree WiFiDog `ipk` package is packed in path `bin/packages/YOUR-TARGET-ARCH/base/apfree_wifidog_VERSION-RELEASE_YOUR-TARGET-ARCH.ipk `. Push it up into your LEDE-system router, use `opkg install ` command to install this `ipk`.
 
 
 **The CA-Certificate in this project is ONLY for Apfree WiFiDog HTTPS captive testing, CAN NOT be used for business scene**
@@ -94,21 +96,17 @@ config wifidog
 
 Domains of `www.baidu.com,www.qq.com,www.qq.com.cn,www.weixin.com` is trusted in this default configuration file, and you can modify it to what you want.
 
+### Apfree wifidog Auth server project
+
+**Please read [AUTHSERVER.md](https://github.com/liudf0716/apfree_wifidog/blob/master/AUTHSERVER.md)**
+
 ### How To Contribute
 
-apfree wifidog使用github托管其源代码，贡献代码使用github的PR(Pull Request)的流程，十分的强大与便利:
+Feel free to create issues or pull-requests if you have any problems.
 
-1. [创建 Issue](https://github.com/liudf0716/apfree_wifidog/issues/new) - 对于较大的改动(如新功能，大型重构等)最好先开issue讨论一下，较小的improvement(如文档改进，bugfix等)直接发PR即可
+**Please read [CONTRIBUTING.md](https://github.com/liudf0716/apfree_wifidog/blob/master/CONTRIBUTING.md) before pushing any changes.**
 
-2. Fork [apfree_wifidog](https://github.com/liudf0716/apfree_wifidog) - 点击右上角**Fork**按钮
 
-3. Clone你自己的fork: ```git clone https://github.com/$userid/apfree_wifidog.git```
-
-4. 在**dev**修改并将修改push到你的fork上
-
-5. 创建从你的fork的**dev**分支到主项目的**dev**分支的[Pull Request] -  [在此](https://github.com/vnpy/vnpy)点击**Compare & pull request**
-
-6. 等待review, 需要继续改进，或者被Merge!
 
 ---
 

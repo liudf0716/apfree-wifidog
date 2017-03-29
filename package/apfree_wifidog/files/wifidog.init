@@ -13,6 +13,10 @@ service_trigger() {
 	 procd_add_reload_trigger	"wifidog"	
 }
 
+echo_firewall_rule() {
+	echo -e "\tFirewallRule $1"
+}
+
 prepare_wifidog_conf() {
 	local cfg=$1	
 	local enable
@@ -21,6 +25,12 @@ prepare_wifidog_conf() {
 	local auth_server_hostname
 	local auth_server_http_port
 	local auth_server_path
+	local auth_server_path_login
+	local auth_server_path_portal
+	local auth_server_path_msg
+	local auth_server_path_ping
+	local auth_server_path_auth
+	local delta_traffic
 	local check_interval
 	local client_timeout
 	local httpd_max_conn
@@ -51,6 +61,12 @@ prepare_wifidog_conf() {
 	config_get auth_server_hostname "$cfg" "auth_server_hostname" 
 	config_get auth_server_port "$cfg" "auth_server_port" "80"
 	config_get auth_server_path "$cfg" 	"auth_server_path" "/wifidog/"	
+	config_get auth_server_path_login "$cfg" 	"auth_server_path_login"
+	config_get auth_server_path_portal "$cfg" 	"auth_server_path_portal"
+	config_get auth_server_path_msg "$cfg" 	"auth_server_path_msg"
+	config_get auth_server_path_ping "$cfg" 	"auth_server_path_ping"
+	config_get auth_server_path_auth "$cfg" 	"auth_server_path_auth"
+	config_get delta_traffic	"$cfg"	"delta_traffic"
 	config_get check_interval	"$cfg"	"check_interval"	"60"
 	config_get js_filter		"$cfg"	"js_filter"			1
 	config_get client_timeout	"$cfg"	"client_timeout"	"5"
@@ -67,24 +83,44 @@ prepare_wifidog_conf() {
 	config_get proxy_port	"$cfg"	"proxy_port"	
 	config_get no_auth	"$cfg"	"no_auth"	
 
+	local set_auth_server_path_login=`[  -n "$auth_server_path_login" ] && echo "LoginScriptPathFragment $auth_server_path_login"`
+	local set_auth_server_path_portal=`[  -n "$auth_server_path_portal" ] && echo "PortalScriptPathFragment $auth_server_path_portal"`
+	local set_auth_server_path_msg=`[  -n "$auth_server_path_msg" ] && echo "MsgScriptPathFragment $auth_server_path_msg"`
+	local set_auth_server_path_ping=`[  -n "$auth_server_path_ping" ] && echo "PingScriptPathFragment $auth_server_path_ping"`
+	local set_auth_server_path_auth=`[  -n "$auth_server_path_auth" ] && echo "AuthScriptPathFragment $auth_server_path_auth"` 
+	local set_delta_traffic=`[  -n "$delta_traffic" ] && echo "DeltaTraffic $delta_traffic"` 
 	local set_trusted_maclist=`[  -n "$trusted_maclist" ] && echo "TrustedMACList $trusted_maclist"` 
 	local set_untrusted_maclist=`[  -n "$untrusted_maclist" ] && echo "UntrustedMACList $untrusted_maclist"` 
 	local set_trusted_domains=`[ -n "$trusted_domains" ] && echo "TrustedDomains	$trusted_domains"`
 	local set_trusted_iplist=`[ -n "$trusted_iplist" ] && echo "TrustedIpList	$trusted_iplist"`
 	local set_trusted_pan_domains=`[ -n "$trusted_pan_domains" ] && echo "TrustedPanDomains"	$trusted_pan_domains`
 	local set_proxy_port=`[ -n "$proxy_port" ] && echo "Proxyport"	$proxy_port`
-	local set_no_auth=`[ -n "$no_auth"  ] && echo "NoAuth"  $no_auth`	
+	local set_no_auth=`[ -n "$no_auth"  ] && echo "NoAuth"  $no_auth`
+	local set_firewall_rule_global=`config_list_foreach "$cfg" "firewall_rule_global" echo_firewall_rule`
+	local set_firewall_rule_validating_users=`config_list_foreach "$cfg" "firewall_rule_validating_users" echo_firewall_rule`
+	local set_firewall_rule_known_users=`config_list_foreach "$cfg" "firewall_rule_known_users" echo_firewall_rule`
+	local set_firewall_rule_auth_is_down=`config_list_foreach "$cfg" "firewall_rule_auth_is_down" echo_firewall_rule`
+	local set_firewall_rule_unknown_users=`config_list_foreach "$cfg" "firewall_rule_unknown_users" echo_firewall_rule`
+	local set_firewall_rule_locked_users=`config_list_foreach "$cfg" "firewall_rule_locked_users" echo_firewall_rule`
 
 	cat > $CONFIGFILE <<EOF
 GatewayID $gateway_id
 GatewayInterface $gateway_interface
+
 Externalinterface $external_interface
 
 AuthServer {
-    Hostname $auth_server_hostname
-    HTTPPort $auth_server_port
-    Path $auth_server_path
+	Hostname $auth_server_hostname
+	HTTPPort $auth_server_port
+	Path $auth_server_path
+	$set_auth_server_path_login
+	$set_auth_server_path_portal
+	$set_auth_server_path_msg
+	$set_auth_server_path_ping
+	$set_auth_server_path_auth
 }
+
+$set_delta_traffic
 
 CheckInterval $check_interval
 ClientTimeout $client_timeout
@@ -111,23 +147,35 @@ $set_proxy_port
 
 $set_no_auth
 
+FirewallRuleSet global {
+$set_firewall_rule_global
+}
+
 FirewallRuleSet validating-users {
-    FirewallRule allow to 0.0.0.0/0
+$set_firewall_rule_validating_users
+	FirewallRule allow to 0.0.0.0/0
 }
 
 FirewallRuleSet known-users {
-    FirewallRule allow to 0.0.0.0/0
+$set_firewall_rule_known_users
+	FirewallRule allow to 0.0.0.0/0
+}
+
+FirewallRuleSet auth-is-down {
+$set_firewall_rule_auth_is_down
 }
 
 FirewallRuleSet unknown-users {
-    FirewallRule allow udp port 53
-    FirewallRule allow tcp port 53
-    FirewallRule allow udp port 67
-    FirewallRule allow tcp port 67
+$set_firewall_rule_unknown_users
+	FirewallRule allow udp port 53
+	FirewallRule allow tcp port 53
+	FirewallRule allow udp port 67
+	FirewallRule allow tcp port 67
 }
 
 FirewallRuleSet locked-users {
-    FirewallRule block to 0.0.0.0/0
+$set_firewall_rule_locked_users
+	FirewallRule block to 0.0.0.0/0
 }
 EOF
 }
@@ -138,6 +186,7 @@ init_config() {
 	
 	[ ! -f $CONFIGFILE ] && {
 		echo "no wifidog.conf, exit....."
+		stop
 		exit
 	}
 }

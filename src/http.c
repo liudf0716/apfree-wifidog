@@ -60,6 +60,7 @@
 #include "gateway.h"
 #include "https_server.h"
 #include "simple_http.h"
+#include "wdctl_thread.h"
 #include "version.h"
 
 #define APPLE_REDIRECT_MSG  "<!DOCTYPE html>"	\
@@ -164,15 +165,19 @@ http_callback_404(httpd * webserver, request * r, int error_code)
     } else {
 		/* Re-direct them to auth server */
 		const s_config *config = config_get_config();
-		char tmp_url[MAX_BUF] = {0};  
-		char *mac = arp_get(r->clientAddr);
+		char tmp_url[MAX_BUF] = {0};
+        char  mac[18] = {0};
+        int nret = br_arp_get_mac(r->clientAddr, mac);  
+		if (nret == 0) {
+            strncpy(mac, "ff:ff:ff:ff:ff:ff", 17);
+        }
 		
 		snprintf(tmp_url, (sizeof(tmp_url) - 1), "http://%s%s%s%s",
              r->request.host, r->request.path, r->request.query[0] ? "?" : "", r->request.query);
 		
     	char *url = httpdUrlEncode(tmp_url);	
-		char *redir_url = evhttpd_get_full_redir_url(mac!=NULL?mac:"ff:ff:ff:ff:ff:ff", r->clientAddr, url);
-        if (mac) {                 
+		char *redir_url = evhttpd_get_full_redir_url(mac, r->clientAddr, url);
+        if (nret) {  // if get mac success              
 			t_client *clt = NULL;
             debug(LOG_DEBUG, "Got client MAC address for ip %s: %s", r->clientAddr, mac);	
 			
@@ -190,13 +195,22 @@ http_callback_404(httpd * webserver, request * r, int error_code)
 				clt->ip = safe_strdup(r->clientAddr);
 				fw_allow(clt, FW_MARK_KNOWN);
 				UNLOCK_CLIENT_LIST();
+                debug(LOG_INFO, "client has login, replace it with new ip");
 				http_send_redirect(r, tmp_url, "device has login");
             	goto end_process;
 			}
 			UNLOCK_CLIENT_LIST();
+
+            if (config->wired_passed && br_is_device_wired(mac)) {
+                debug(LOG_DEBUG, "wired_passed: add %s to trusted mac", mac);
+                if (!is_trusted_mac(mac))
+                    add_trusted_maclist(mac);
+                http_send_redirect(r, tmp_url, "device was wired");
+                goto end_process;
+            }
         }
 		
-        debug(LOG_INFO, "Captured %s requesting [%s] and re-directing them to login page", r->clientAddr, tmp_url);
+        debug(LOG_DEBUG, "Captured %s requesting [%s] and re-directing them to login page", r->clientAddr, tmp_url);
 		if(config->js_filter)
 			http_send_js_redirect(r, redir_url);
 		else
@@ -204,7 +218,6 @@ http_callback_404(httpd * webserver, request * r, int error_code)
 		
 end_process:
 		if (redir_url) free(redir_url);
-		if (mac) free(mac);
 		if (url) free(url);
     }
 }

@@ -39,16 +39,12 @@
 #include <event2/util.h>
 #include <event2/http.h>
 
-#include <openssl/ssl.h>
-#include <openssl/err.h>
-#include <openssl/rand.h>
-
-#include "openssl_hostname_validation.h"
 #include "common.h"
 #include "debug.h"
 #include "pstring.h"
 #include "centralserver.h"
 #include "simple_http.h"
+#include "openssl_hostname_validation.h"
 #include "conf.h"
 #include "version.h"
 
@@ -147,7 +143,7 @@ void http_request_get_cb(struct evhttp_request *req, void *arg)
         default:   
             break;
     }
-out:
+
 	 event_base_loopbreak(http_req_get->base);
 }
 
@@ -470,7 +466,7 @@ http_get_ex(const int sockfd, const char *req, int wait)
 static int 
 cert_verify_callback(X509_STORE_CTX *x509_ctx, void *arg)
 {
-	char cert_str[256];
+	char cert_str[256] = {0};
 	const char *host = (const char *) arg;
 	const char *res_str = "X509_verify_cert failed";
 	HostnameValidationResult res = Error;
@@ -530,32 +526,17 @@ cert_verify_callback(X509_STORE_CTX *x509_ctx, void *arg)
 	}
 }
 
-void
-evhttps_get(const char *uri, int timeout, void (*http_request_done)(struct evhttp_request *req, void *ctx))
+struct evhttps_request_context *
+evhttps_context_init(void)
 {
-	struct evhttp_uri *http_uri = NULL;
-	t_auth_serv *auth_server = get_auth_server();
-	
-	const char *crt = "/etc/ssl/certs/ca-certificates.crt";
-	
+	struct evhttps_request_context *context = NULL;
 	SSL_CTX *ssl_ctx = NULL;
-	SSL *ssl = NULL;
-	struct event_base *base;
-	struct bufferevent *bev;
-	struct evhttp_connection *evcon = NULL;
-	struct evhttp_request *req;
-	struct evkeyvalq *output_headers;
-	
-	int ret = 0;
-	
-#if OPENSSL_VERSION_NUMBER < 0x10100000L
-	// Initialize OpenSSL
-	SSL_library_init();
-	ERR_load_crypto_strings();
-	SSL_load_error_strings();
-	OpenSSL_add_all_algorithms();
-#endif
-	
+	struct event_base 	*base = NULL;
+
+	context = (struct evhttps_request_context *) malloc(sizeof(struct evhttps_request_context));
+	if (context == NULL)
+		goto cleanup;
+
 	/* This isn't strictly necessary... OpenSSL performs RAND_poll
 	 * automatically on first use of random number generator. */
 	if (RAND_poll() == 0) {
@@ -569,7 +550,8 @@ evhttps_get(const char *uri, int timeout, void (*http_request_done)(struct evhtt
 		debug(LOG_ERR, "SSL_CTX_new failed");
 		goto cleanup;
 	}
-	
+
+#ifdef	VERIFY_PEER
 	if (1 != SSL_CTX_load_verify_locations(ssl_ctx, crt, NULL)) {
 		debug(LOG_ERR, "SSL_CTX_load_verify_locations failed");
 		goto cleanup;
@@ -579,13 +561,72 @@ evhttps_get(const char *uri, int timeout, void (*http_request_done)(struct evhtt
 	
 	SSL_CTX_set_cert_verify_callback(ssl_ctx, cert_verify_callback,
 					  (void *) auth_server->authserv_hostname);
-	
+#endif
 	// Create event base
 	base = event_base_new();
 	if (!base) {
 		debug(LOG_ERR, "event_base_new() failed");
 		goto cleanup;
 	}
+
+	context->base 		= base;
+	context->ssl_ctx 	= ssl_ctx;
+	return context;
+
+cleanup:
+	if (context)
+		free(context);
+
+	if (ssl_ctx)
+		SSL_CTX_free(ssl_ctx);	
+
+	if (base)
+		 event_base_free(base);
+
+	return NULL;
+}
+
+void 
+evhttps_context_exit(struct evhttps_request_context *context)
+{
+	if (!context)
+		return;
+
+	if (context->base)
+		event_base_free(context->base);
+
+	if (context->ssl_ctx)
+		SSL_CTX_free(context->ssl_ctx);
+}
+
+void 
+evhttp_set_request_header(struct evhttp_request *req)
+{
+	char user_agent[128] = {0};
+	snprintf(user_agent, 128, "ApFree WiFiDog %s", VERSION);
+	struct evkeyvalq *output_headers = evhttp_request_get_output_headers(req);
+	evhttp_add_header(output_headers, "Host", get_auth_server()->authserv_hostname);
+	evhttp_add_header(output_headers, "User-Agent", user_agent);
+	evhttp_add_header(output_headers, "Connection", "keep-alive");
+}
+
+void
+evhttps_request(struct evhttps_request_context *context, const char *uri, int timeout, request_done_cb process_request_done, void *data)
+{
+	t_auth_serv *auth_server = get_auth_server();
+#ifdef	VERIFY_PEER
+	const char *crt = "/etc/ssl/certs/ca-certificates.crt";
+#endif
+	SSL_CTX *ssl_ctx = context->ssl_ctx;
+	SSL *ssl = NULL;
+	
+	struct event_base 	*base = context->base;
+	struct bufferevent 	*bev = NULL;
+	struct evhttp_connection *evcon = NULL;
+	struct evhttp_request *req;
+	
+	int ret = 0;
+		
 	
 	// Create OpenSSL bufferevent and stack evhttp on top of it
 	ssl = SSL_new(ssl_ctx);
@@ -593,47 +634,42 @@ evhttps_get(const char *uri, int timeout, void (*http_request_done)(struct evhtt
 		debug(LOG_ERR, "SSL_new() failed");
 		goto cleanup;
 	}
-
+	
 #ifdef SSL_CTRL_SET_TLSEXT_HOSTNAME
 	// Set hostname for SNI extension
 	SSL_set_tlsext_host_name(ssl, auth_server->authserv_hostname);
 #endif
-	
+
 	bev = bufferevent_openssl_socket_new(base, -1, ssl,
 			BUFFEREVENT_SSL_CONNECTING,
 			BEV_OPT_CLOSE_ON_FREE|BEV_OPT_DEFER_CALLBACKS);
 	if (bev == NULL) {
-		debug(LOG_ERR, "bufferevent_openssl_socket_new() failed\n");
+		debug(LOG_ERR, "bufferevent_openssl_socket_new() failed");
 		goto cleanup;
 	}
 	
 	bufferevent_openssl_set_allow_dirty_shutdown(bev, 1);
-	
+
 	evcon = evhttp_connection_base_bufferevent_new(base, NULL, bev,
 		auth_server->authserv_hostname, auth_server->authserv_ssl_port);
 	if (evcon == NULL) {
-		debug(LOG_ERR, "evhttp_connection_base_bufferevent_new() failed\n");
+		debug(LOG_ERR, "evhttp_connection_base_bufferevent_new() failed");
 		goto cleanup;
 	}
 	
 	evhttp_connection_set_timeout(evcon, timeout);
-	
-	req = evhttp_request_new(http_request_done, bev);
+	context->data = data;
+	req = evhttp_request_new(process_request_done, context);
 	if (req == NULL) {
-		debug(LOG_ERR, "evhttp_request_new() failed\n");
+		debug(LOG_ERR, "evhttp_request_new() failed");
 		goto cleanup;
 	}
 	
-	char user_agent[128] = {0};
-	snprintf(user_agent, 128, "ApFree WiFiDog %s", VERSION);
-	output_headers = evhttp_request_get_output_headers(req);
-	evhttp_add_header(output_headers, "Host", auth_server->authserv_hostname);
-	evhttp_add_header(output_headers, "User-Agent", user_agent);
-	evhttp_add_header(output_headers, "Connection", "keep-alive");
+	evhttp_set_request_header(req);
 	
 	ret = evhttp_make_request(evcon, req, EVHTTP_REQ_GET, uri);
 	if (ret != 0) {
-		debug(LOG_ERR, "evhttp_make_request() failed\n");
+		debug(LOG_ERR, "evhttp_make_request() failed");
 		goto cleanup;
 	}
 
@@ -642,26 +678,4 @@ evhttps_get(const char *uri, int timeout, void (*http_request_done)(struct evhtt
 cleanup:
 	if (evcon)
 		evhttp_connection_free(evcon);
-	if (http_uri)
-		evhttp_uri_free(http_uri);
-	event_base_free(base);
-
-	if (ssl_ctx)
-		SSL_CTX_free(ssl_ctx);
-	if (ssl)
-		SSL_free(ssl);
-	
-#if OPENSSL_VERSION_NUMBER < 0x10100000L
-	EVP_cleanup();
-	ERR_free_strings();
-
-#ifdef EVENT__HAVE_ERR_REMOVE_THREAD_STATE
-	ERR_remove_thread_state(NULL);
-#else
-	ERR_remove_state(0);
-#endif
-	CRYPTO_cleanup_all_ex_data();
-
-	sk_SSL_COMP_free(SSL_COMP_get_compression_methods());
-#endif /*OPENSSL_VERSION_NUMBER < 0x10100000L */
 }

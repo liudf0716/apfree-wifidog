@@ -25,6 +25,8 @@ set(src_apfreewifidog
 	ezxml.c
 	openssl_hostname_validation.c
 	hostcheck.c
+    http_server.c
+    mqtt_thread.c
 )
 
 set(src_wdctl wdctl.c util.c debug.c)
@@ -35,11 +37,13 @@ set(libs
 	m
 	z
 	json-c 
-	ip4tc 
+	ip4tc
+	uci
 	ssl
 	crypto
 	event
-	event_openssl)
+	event_openssl
+	mosquitto)
 
 ADD_DEFINITIONS(-O2 -Wall --std=gnu99 -Wmissing-declarations)
 

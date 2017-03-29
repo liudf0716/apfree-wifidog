@@ -1,4 +1,4 @@
-/* vim: set sw=4 ts=4 sts=4 et : */
+ /* vim: set sw=4 ts=4 sts=4 et : */
 /********************************************************************\
  * This program is free software; you can redistribute it and/or    *
  * modify it under the terms of the GNU General Public License as   *
@@ -53,6 +53,7 @@
 #include "version.h"
 #include "debug.h"
 #include "simple_http.h"
+#include "http.h"
 
 json_object *
 auth_server_roam_request(const char *mac)
@@ -128,6 +129,89 @@ auth_server_roam_request(const char *mac)
     return NULL;
 }
 
+char * 
+get_auth_uri(const char *request_type, client_type_t type, void *data)
+{
+    char *ip    = NULL;
+    char *mac   = NULL;
+    char *name  = NULL;
+    char *safe_token    = NULL;
+    unsigned long long int incoming = 0,  outgoing = 0, incoming_delta = 0, outgoing_delta = 0;
+    time_t first_login = 0;
+    unsigned int online_time = 0;
+    int wired = 0;
+
+    switch(type) {
+    case online_client:
+    {
+        t_client *o_client = (t_client *)data;
+        ip  = o_client->ip;
+        mac = o_client->mac;
+        safe_token = httpdUrlEncode(o_client->token);
+        if (o_client->name)
+            name = o_client->name;
+        first_login = o_client->first_login;
+        incoming = o_client->counters.incoming;
+        outgoing = o_client->counters.outgoing;
+        incoming_delta  = o_client->counters.incoming_delta;
+        outgoing_delta  = o_client->counters.outgoing_delta;
+        break;
+    }
+        
+    case trusted_client:
+    {
+        t_trusted_mac *t_mac = (t_trusted_mac *)data;
+        ip  = t_mac->ip;
+        mac = t_mac->mac;
+        wired = is_device_wired(mac);
+        break;
+    }
+
+    default:
+        return NULL;
+    }
+
+    s_config *config = config_get_config();
+    t_auth_serv *auth_server = get_auth_server();
+    char *uri = NULL;
+    int nret = 0;
+    if (config->deltatraffic) {
+        nret = safe_asprintf(&uri, 
+             "%s%sstage=%s&ip=%s&mac=%s&token=%s&incoming=%llu&outgoing=%llu&incomingdelta=%llu&outgoingdelta=%llu&first_login=%lld&online_time=%u&gw_id=%s&channel_path=%s&name=%s&wired=%d",
+             auth_server->authserv_path,
+             auth_server->authserv_auth_script_path_fragment,
+             request_type,
+             ip, mac, safe_token, 
+             incoming, 
+             outgoing, 
+             incoming_delta, 
+             outgoing_delta,
+             (long long)first_login,
+             online_time,
+             config->gw_id,
+             g_channel_path?g_channel_path:"null", 
+             name?name:"null", wired);
+    } else {
+        nret = safe_asprintf(&uri, 
+             "%s%sstage=%s&ip=%s&mac=%s&token=%s&incoming=%llu&outgoing=%llu&first_login=%lld&online_time=%u&gw_id=%s&channel_path=%s&name=%s&wired=%d",
+             auth_server->authserv_path,
+             auth_server->authserv_auth_script_path_fragment,
+             request_type,
+             ip, mac, safe_token, 
+             incoming, 
+             outgoing, 
+             (long long)first_login,
+             online_time,
+             config->gw_id,
+             g_channel_path?g_channel_path:"null", 
+             name?name:"null", wired);
+    }
+
+    if (safe_token) free(safe_token);
+
+    return nret>0?uri:NULL;
+}
+
 /** Initiates a transaction with the auth server, either to authenticate or to
  * update the traffic counters at the server
 @param authresponse Returns the information given by the central server 
@@ -149,8 +233,7 @@ auth_server_request(t_authresponse * authresponse, const char *request_type, con
     char buf[MAX_BUF] = {0};
     char *tmp;
     char *safe_token;
-    t_auth_serv *auth_server = NULL;
-    auth_server = get_auth_server();
+    t_auth_serv *auth_server = get_auth_server();
 
     /* Blanket default is error. */
     authresponse->authcode = AUTH_ERROR;
@@ -296,7 +379,7 @@ _close_auth_server()
         if (auth_server->authserv_fd > 0) {
 			auth_server->authserv_fd_ref -= 1;
 			if (auth_server->authserv_fd_ref <= 0) {
-				debug(LOG_INFO, "authserv_fd_ref is %d, close this connection", auth_server->authserv_fd_ref);
+				debug(LOG_DEBUG, "authserv_fd_ref is %d, close this connection", auth_server->authserv_fd_ref);
 				close(auth_server->authserv_fd);
 				auth_server->authserv_fd = -1;
 				auth_server->authserv_fd_ref = 0;
@@ -310,8 +393,7 @@ _close_auth_server()
  @param level recursion level indicator must be 0 when not called by _connect_auth_server()
  */
 int
-_connect_auth_server(int level)
-{
+_connect_auth_server(int level) {
     s_config *config = config_get_config();
     t_auth_serv *auth_server = NULL;
     struct in_addr *h_addr;
@@ -447,4 +529,266 @@ _connect_auth_server(int level)
 			return _connect_auth_server(level); /* Yay recursion! */
 		}
     }
+}
+
+// 0, failure; 1, success
+static int
+parse_auth_server_response(t_authresponse *authresponse, struct evhttp_request *req) {
+    if (!authresponse)
+        return 0;
+
+    char buffer[MAX_BUF] = {0};
+
+    if (req == NULL || (req && req->response_code != 200)) {
+        mark_auth_offline();
+        if (req == NULL)
+            debug(LOG_WARNING, "req is NULL, it seems request timeout");
+        else {
+            char buffer[MAX_BUF] = {0};
+
+            int nread = evbuffer_remove(evhttp_request_get_input_buffer(req),
+                    buffer, MAX_BUF-1);
+            if (nread > 0)
+                debug(LOG_WARNING, "response_code [%d] buffer is %s", 
+                    req->response_code, buffer);
+        }
+        return 0;
+    }
+
+    
+    char *tmp = NULL;
+
+    int nread = evbuffer_remove(evhttp_request_get_input_buffer(req),
+            buffer, MAX_BUF-1);
+    if (nread > 0)
+        debug(LOG_DEBUG, "parse_auth_server_response buffer is %s", buffer);
+    
+    if (nread <= 0) {
+        debug(LOG_ERR, "There was a problem getting response from the auth server!");
+        mark_auth_offline();
+    } else if ((tmp = strstr(buffer, "Auth: "))) {
+        mark_auth_online();
+        if (sscanf(tmp, "Auth: %d", (int *)&authresponse->authcode) == 1) {
+            debug(LOG_INFO, "Auth server returned authentication code %d", authresponse->authcode);
+            return 1;
+        }
+    }
+    debug(LOG_WARNING, "Auth server did not return expected authentication code");
+    return 0;
+}
+
+static void
+reply_counter_response(t_authresponse *authresponse, struct evhttps_request_context * context) {
+    struct auth_response_client *authresponse_client = context->data;
+    t_client    *p1 = authresponse_client->client;
+    t_client *tmp_c = NULL;
+    time_t current_time = time(NULL);
+    s_config *config = config_get_config();
+
+    if (p1 == NULL) {
+        debug(LOG_DEBUG, "client is null: maybe it's trusted mac client");
+        return;
+    }
+
+    debug(LOG_DEBUG,
+          "Checking client %s for timeout:  Last updated %ld (%ld seconds ago), timeout delay %ld seconds, current time %ld, ",
+          p1->ip, p1->counters.last_updated, current_time - p1->counters.last_updated,
+          config->checkinterval * config->clienttimeout, current_time);
+
+    if (p1->counters.last_updated + (config->checkinterval * config->clienttimeout) <= current_time) {
+        /* Timing out user */
+        debug(LOG_DEBUG, "%s - Inactive for more than %ld seconds, removing client and denying in firewall",
+              p1->ip, config->checkinterval * config->clienttimeout);
+        LOCK_CLIENT_LIST();
+        tmp_c = client_list_find_by_client(p1);
+        if (NULL != tmp_c) {
+            evhttps_logout_client(context, tmp_c);
+        } else {
+            debug(LOG_NOTICE, "Client was already removed. Not logging out.");
+        }
+        UNLOCK_CLIENT_LIST();
+    }else {
+        /*
+         * This handles any change in
+         * the status this allows us
+         * to change the status of a
+         * user while he's connected
+         *
+         * Only run if we have an auth server
+         * configured!
+         */
+        fw_client_process_from_authserver_response(authresponse, p1);
+    }
+}
+
+static void
+reply_login_response(t_authresponse *authresponse, struct evhttps_request_context *context) {
+    struct auth_response_client *authresponse_client = context->data;
+    t_client            *client     = authresponse_client->client;
+    t_client            *tmp        = NULL;
+    t_offline_client    *o_client   = NULL;
+    request     *r = authresponse_client->req;
+    char    *urlFragment = NULL;
+    char    *token = NULL;
+    httpVar *var = NULL;
+    
+
+    /* Users could try to log in(so there is a valid token in
+     * request) even after they have logged in, try to deal with
+     * this */
+    if ((var = httpdGetVariableByName(r, "token")) != NULL) {
+        token = safe_strdup(var->value);
+    } else {
+        token = safe_strdup(client->token);
+    }
+
+    LOCK_CLIENT_LIST();
+    /* can't trust the client to still exist after n seconds have passed */
+    tmp = client_list_find_by_client(client);
+    if (NULL == tmp) {
+        debug(LOG_ERR, "authenticate_client(): Could not find client node for %s (%s)", client->ip, client->mac);
+        UNLOCK_CLIENT_LIST();
+        client_list_destroy(client);    /* Free the cloned client */
+        free(token);
+        return;
+    }
+
+    client_list_destroy(client);        /* Free the cloned client */
+    client = tmp;
+    if (strcmp(token, client->token) != 0) {
+        /* If token changed, save it. */
+        free(client->token);
+        client->token = token;
+    } else {
+        free(token);
+    }
+
+    s_config    *config = config_get_config();
+    t_auth_serv *auth_server = get_auth_server();
+
+    switch (authresponse->authcode) {
+
+    case AUTH_ERROR:
+        /* Error talking to central server */
+        debug(LOG_ERR, "Got ERROR from central server authenticating token %s from %s at %s", client->token, client->ip,
+              client->mac);
+        client_list_delete(client); 
+        UNLOCK_CLIENT_LIST();
+
+        send_http_page(r, "Error!", "Error: We did not get a valid answer from the central server");
+        break;
+
+    case AUTH_DENIED:
+        /* Central server said invalid token */
+        debug(LOG_INFO,
+              "Got DENIED from central server authenticating token %s from %s at %s - deleting from firewall and redirecting them to denied message",
+              client->token, client->ip, client->mac);
+        fw_deny(client);
+        client_list_delete(client);
+        UNLOCK_CLIENT_LIST();
+
+        safe_asprintf(&urlFragment, "%smessage=%s",
+                      auth_server->authserv_msg_script_path_fragment, GATEWAY_MESSAGE_DENIED);
+        http_send_redirect_to_auth(r, urlFragment, "Redirect to denied message");
+        free(urlFragment);
+        break;
+
+    case AUTH_VALIDATION:
+        UNLOCK_CLIENT_LIST();
+        /* They just got validated for X minutes to check their email */
+        debug(LOG_INFO, "Got VALIDATION from central server authenticating token %s from %s at %s"
+              "- adding to firewall and redirecting them to activate message", client->token, client->ip, client->mac);
+        fw_allow(client, FW_MARK_PROBATION);    
+
+        safe_asprintf(&urlFragment, "%smessage=%s",
+                      auth_server->authserv_msg_script_path_fragment, GATEWAY_MESSAGE_ACTIVATE_ACCOUNT);
+        http_send_redirect_to_auth(r, urlFragment, "Redirect to activate message");
+        free(urlFragment);
+        break;
+
+    case AUTH_ALLOWED:
+        UNLOCK_CLIENT_LIST();
+        /* Logged in successfully as a regular account */
+        debug(LOG_INFO, "Got ALLOWED from central server authenticating token %s from %s at %s - "
+              "adding to firewall and redirecting them to portal", client->token, client->ip, client->mac);
+        fw_allow(client, FW_MARK_KNOWN);
+        
+        //>>> liudf added 20160112
+        client->first_login = time(NULL);
+        client->is_online = 1;
+
+        LOCK_OFFLINE_CLIENT_LIST();
+        o_client = offline_client_list_find_by_mac(client->mac);    
+        if(o_client)
+            offline_client_list_delete(o_client);
+        UNLOCK_OFFLINE_CLIENT_LIST();
+        //<<< liudf added end
+        served_this_session++;
+        if(httpdGetVariableByName(r, "type")) {
+            send_http_page_direct(r, "<htm><body>weixin auth success!</body><html>");
+        } else {
+            safe_asprintf(&urlFragment, "%sgw_id=%s&channel_path=%s&mac=%s&name=%s", 
+                auth_server->authserv_portal_script_path_fragment, 
+                config->gw_id,
+                g_channel_path?g_channel_path:"null",
+                client->mac?client->mac:"null",
+                client->name?client->name:"null");
+            http_send_redirect_to_auth(r, urlFragment, "Redirect to portal");
+            free(urlFragment);
+        }
+        break;
+
+    case AUTH_VALIDATION_FAILED:
+        /* Client had X minutes to validate account by email and didn't = too late */
+        debug(LOG_INFO, "Got VALIDATION_FAILED from central server authenticating token %s from %s at %s "
+              "- redirecting them to failed_validation message", client->token, client->ip, client->mac);
+        client_list_delete(client);
+        UNLOCK_CLIENT_LIST();
+        
+        safe_asprintf(&urlFragment, "%smessage=%s",
+                      auth_server->authserv_msg_script_path_fragment, GATEWAY_MESSAGE_ACCOUNT_VALIDATION_FAILED);
+        http_send_redirect_to_auth(r, urlFragment, "Redirect to failed validation message");
+        free(urlFragment);
+        break;
+
+    default:
+        debug(LOG_WARNING,
+              "I don't know what the validation code %d means for token %s from %s at %s - sending error message",
+              authresponse->authcode, client->token, client->ip, client->mac);
+        client_list_delete(client); 
+        UNLOCK_CLIENT_LIST();
+
+        send_http_page_direct(r, "<htm><body>Internal Error, We can not validate your request at this time</body></html>");
+        break;
+
+    }
+}
+
+static void
+reply_auth_server_response(t_authresponse *authresponse, struct evhttps_request_context *context) {
+    struct auth_response_client *authresponse_client = context->data;
+    switch(authresponse_client->type)
+    {
+    case request_type_login:
+        reply_login_response(authresponse, context);
+        break;
+    case request_type_logout:
+        if (authresponse->authcode == AUTH_ERROR)
+            debug(LOG_WARNING, "Auth server error when reporting logout");
+        break;
+    case request_type_counters:
+        reply_counter_response(authresponse, context);
+        break;
+    }
+}
+
+void
+process_auth_server_response(struct evhttp_request *req, void *ctx) { 
+    if (ctx == NULL)
+        return; // impossible here
+
+    t_authresponse authresponse;
+    if (parse_auth_server_response(&authresponse, req)) {
+        reply_auth_server_response(&authresponse, ctx);
+    } 
 }

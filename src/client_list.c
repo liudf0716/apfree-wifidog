@@ -607,7 +607,7 @@ add_online_client(const char *info)
 		return -1;
 	
 	client_info = json_tokener_parse(info);
-	if(client_info == NULL)	
+	if(client_info == NULL || json_object_get_type(client_info) != json_type_object)	
 		return 1;
 	
 	mac 	= json_object_get_string(json_object_object_get(client_info, "mac"));
@@ -649,4 +649,12 @@ add_online_client(const char *info)
 
 	json_object_put(client_info);
 	return 0;	
+}
+
+char *
+get_online_client_uri(t_client *client)
+{
+    char *client_uri = NULL;
+
+    safe_asprintf(&client_uri, "");
 }

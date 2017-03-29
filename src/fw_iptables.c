@@ -121,7 +121,9 @@ add_mac_to_ipset(const char *name, const char *mac, int timeout)
 	memcpy(ipset_name, name, strlen(name));
     iptables_insert_gateway_id(&ipset_name);
 
-	return add_to_ipset(ipset_name, mac, timeout);
+	int nret = add_to_ipset(ipset_name, mac, timeout);
+	free(ipset_name);
+	return nret;
 }
 
 /** @internal
@@ -137,7 +139,9 @@ add_ip_to_ipset(const char *name, const char *ip, int remove)
 	memcpy(ipset_name, name, strlen(name));
     iptables_insert_gateway_id(&ipset_name);
 
-	return add_to_ipset(ipset_name, ip, remove);
+	int nret = add_to_ipset(ipset_name, ip, remove);
+	free(ipset_name);
+	return nret;
 }
 
 /** @internal
@@ -153,7 +157,9 @@ iptables_flush_ipset(const char *name)
 	memcpy(ipset_name, name, strlen(name));
     iptables_insert_gateway_id(&ipset_name);
 
-	return flush_ipset(ipset_name);
+	int nret = flush_ipset(ipset_name);
+	free(ipset_name);
+	return nret;
 }
 
 /** @internal
@@ -682,6 +688,7 @@ iptables_fw_init(void)
     char *ext_interface = NULL;
     int gw_port = 0;
 	int gw_https_port = 0;
+	int gw_http_port = 0;
     int proxy_port;
     fw_quiet = 0;
     int got_authdown_ruleset = NULL == get_ruleset(FWRULESET_AUTH_IS_DOWN) ? 0 : 1;
@@ -697,6 +704,8 @@ iptables_fw_init(void)
     config = config_get_config();
     gw_port = config->gw_port;
 	gw_https_port = config->https_server->gw_https_port;
+	gw_http_port = config->http_server->gw_http_port;
+	
     if (config->external_interface) {
         ext_interface = safe_strdup(config->external_interface);
     } else {
@@ -824,7 +833,9 @@ iptables_fw_init(void)
 	if (config_get_config()->work_mode == 0) {
 		iptables_do_command("-t nat -A " CHAIN_UNKNOWN " -p tcp --dport 443 -j REDIRECT --to-ports %d", gw_https_port);
     	iptables_do_command("-t nat -A " CHAIN_UNKNOWN " -p tcp --dport 80 -j REDIRECT --to-ports %d", gw_port);
-	} 
+	} else {
+		iptables_do_command("-t nat -A " CHAIN_UNKNOWN " -p tcp --dport 80 -j REDIRECT --to-ports %d", gw_http_port);
+	}
     /*
      *
      * Everything in the FILTER table

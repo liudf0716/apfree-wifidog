@@ -29,6 +29,8 @@
 #ifndef _CONFIG_H_
 #define _CONFIG_H_
 
+#include <pthread.h>
+
 #include "common.h"
 /*@{*/
 /** Defines */
@@ -91,6 +93,9 @@
 #define	DEFAULT_CA_CRT_FILE		"/etc/apfree.ca"
 #define	DEFAULT_SVR_CRT_FILE	"/etc/apfree.crt"
 #define	DEFAULT_SVR_KEY_FILE	"/etc/apfree.key"
+#define DEFAULT_WWW_PATH		"/etc/www/"
+
+#define DEFAULT_MQTT_SERVER		"wifidog.kunteng.org"
 
 #define	WIFIDOG_REDIR_HTML_CONTENT	"setTimeout(function() {location.href = \"%s\";}, 10);"
 
@@ -215,6 +220,19 @@ typedef struct _https_server_t {
 	char	*svr_key_file;
 	short	gw_https_port;
 } t_https_server;
+
+typedef struct _http_server_t {
+	char 	*base_path;
+	short	gw_http_port;
+}t_http_server;
+
+typedef struct _mqtt_server_t {
+	char 	*hostname;
+	short	port;
+	char 	*cafile;
+	char 	*crtfile;
+	char 	*keyfile;
+}t_mqtt_server;
 // <<<< liudf added end
 
 /**
@@ -265,7 +283,9 @@ typedef struct {
 	
 	// liudf 20161116 added
 	t_https_server	*https_server;
+	t_http_server 	*http_server;
 	
+	t_mqtt_server	*mqtt_server;
 	// liudf 20151223 added
 	// trusted domain
 	t_domain_trusted *pan_domains_trusted; /** pan-domain trusted list*/
@@ -284,6 +304,7 @@ typedef struct {
 	short	queue_size;
 	short	no_auth;
 	short	work_mode; /** when work_mode 1, it will drop all packets default*/
+	int 	update_domain_interval; /** 0, no need update; otherwise update every update_domain_interval*checkinterval seconds*/
 } s_config;
 
 /** @brief Get the current gateway configuration */
@@ -356,7 +377,7 @@ void parse_inner_trusted_domain_list();
 /** @brief add domain ip pair to inner or user trusted domain list */
 void add_domain_ip_pair(const char *, trusted_domain_t);
 /** @brief  Clear domains_trusted of config safely */
-void clear_trusted_domains(void); 
+void clear_trusted_domains_(void); 
 
 void clear_trusted_pan_domains(void);
 
@@ -367,7 +388,7 @@ void __clear_trusted_domain_ip(t_ip_trusted *);
 
 
 /** @brief  */
-int fix_weixin_http_dns_ip(void);
+void fix_weixin_http_dns_ip(void);
 
 /** @brief parse roam mac list, for wdctl use*/
 void parse_roam_mac_list(const char *); 
@@ -431,9 +452,9 @@ char	*g_channel_path;
 char	*g_ssid;
 
 #define	LOCK_DOMAIN() do { \
-	debug(LOG_DEBUG, "Locking domain"); \
+	debug(LOG_INFO, "Locking domain"); \
 	pthread_mutex_lock(&domains_mutex);	\
-	debug(LOG_DEBUG, "Domains locked"); \
+	debug(LOG_INFO, "Domains locked"); \
 } while (0)
 
 #define UNLOCK_DOMAIN() do { \

@@ -90,9 +90,12 @@
 #include "wd_util.h"
 #include "util.h"
 #include "firewall.h"
+#include "safe.h"
 
 static struct event_base *base		= NULL;
 static struct evdns_base *dnsbase 	= NULL;
+
+static void check_internet_available_cb(int errcode, struct evutil_addrinfo *addr, void *ptr);
 
 // !!!remember to free the return url
 char *
@@ -229,9 +232,31 @@ static void server_setup_certs (SSL_CTX *ctx,
     	die_most_horribly_from_openssl_error ("SSL_CTX_check_private_key");
 }
 
+static void check_internet_available(t_popular_server *popular_server) {
+	if (!popular_server)
+		return;
+
+	mark_offline_time();
+
+	struct evutil_addrinfo hints;
+	memset(&hints, 0, sizeof(hints));
+
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_flags = EVUTIL_AI_CANONNAME;
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_protocol = IPPROTO_TCP;
+	
+	evdns_getaddrinfo( dnsbase, popular_server->hostname, NULL ,
+          &hints, check_internet_available_cb, popular_server);
+	
+}
+
 static void check_internet_available_cb(int errcode, struct evutil_addrinfo *addr, void *ptr) {
 	if (errcode) { 
+		t_popular_server *popular_server = ptr;
 		debug (LOG_DEBUG, "dns query error : %s", evutil_gai_strerror(errcode));
+		if (popular_server)
+			check_internet_available(popular_server->next);
 	} else {
 		if (addr) {
 			// popular server dns resolve success
@@ -242,38 +267,92 @@ static void check_internet_available_cb(int errcode, struct evutil_addrinfo *add
 	}
 }
 
-static void check_internet_available() {
-	t_popular_server *popular_server = NULL;
-	s_config *config = config_get_config();
-	
-	mark_offline_time();
-	
-	struct evutil_addrinfo hints;
-	for (popular_server = config->popular_servers; popular_server; popular_server = popular_server->next) {
-		memset(&hints, 0, sizeof(hints));
-        hints.ai_family = AF_UNSPEC;
-        hints.ai_flags = EVUTIL_AI_CANONNAME;
+static void check_auth_server_available_cb(int errcode, struct evutil_addrinfo *addr, void *ptr) {
+	t_auth_serv *auth_server = (t_auth_serv *)ptr;
+	if (errcode) { 
+		debug (LOG_INFO, "dns query error : %s", evutil_gai_strerror(errcode));
+		mark_auth_offline();
+		mark_auth_server_bad(auth_server);
+	} else {
+		int i = 0;
+		if (!addr) {
+			debug (LOG_INFO, "impossible, addr is NULL!");
+			return;
+		}
+		for (;addr; addr = addr->ai_next, i++) {
+			char ip[128] = {0};
+			if (addr->ai_family == PF_INET) {
+				struct sockaddr_in *sin = (struct sockaddr_in*)addr->ai_addr;
+            	evutil_inet_ntop(AF_INET, &sin->sin_addr, ip,
+                	sizeof(ip)-1);
 
-        hints.ai_socktype = SOCK_STREAM;
-        hints.ai_protocol = IPPROTO_TCP;
-		
-		evdns_getaddrinfo( dnsbase, popular_server->hostname, NULL ,
-              &hints, check_internet_available_cb, NULL);
+            	if (!auth_server->last_ip || strcmp(auth_server->last_ip, ip) != 0) {
+		            /*
+		             * But the IP address is different from the last one we knew
+		             * Update it
+		             */
+		            debug(LOG_INFO, "Updating last_ip IP of server [%s] to [%s]", 
+		            	auth_server->authserv_hostname, ip);
+		            if (auth_server->last_ip)
+		                free(auth_server->last_ip);
+		            auth_server->last_ip = safe_strdup(ip);
+
+		            /* Update firewall rules */
+		            fw_clear_authservers();
+		            fw_set_authservers();
+
+		            evutil_freeaddrinfo(addr);
+		            break;
+		        } 
+			}
+		}
 	}
+}
+
+static void check_auth_server_available() {
+	s_config *config = config_get_config();
+    t_auth_serv *auth_server = config->auth_servers;
+    struct evutil_addrinfo hints;
+    memset(&hints, 0, sizeof(hints));
+
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_flags = EVUTIL_AI_CANONNAME;
+
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_protocol = IPPROTO_TCP;
+
+    evdns_getaddrinfo( dnsbase, auth_server->authserv_hostname, NULL ,
+              &hints, check_auth_server_available_cb, auth_server);
 }
 
 static void schedule_work_cb(evutil_socket_t fd, short event, void *arg) {
 	struct event *timeout = (struct event *)arg;
 	struct timeval tv;
+	static int update_domain_interval = 1;
 
-	check_internet_available();
+	t_popular_server *popular_server = config_get_config()->popular_servers;
+	check_internet_available(popular_server);
+
+	check_auth_server_available();
 	
+	// if config->update_domain_interval not 0
+	if (update_domain_interval == config_get_config()->update_domain_interval) {
+		parse_user_trusted_domain_list();
+		parse_inner_trusted_domain_list();
+
+		fw_refresh_user_domains_trusted();
+		fw_refresh_inner_domains_trusted();
+
+		update_domain_interval = 1;
+	} else
+		update_domain_interval++;
+
 	evutil_timerclear(&tv);
 	tv.tv_sec = config_get_config()->checkinterval;
 	event_add(timeout, &tv);
 }
 
-static int serve_some_http (char *gw_ip,  t_https_server *https_server) { 	
+static int https_redirect (char *gw_ip,  t_https_server *https_server) { 	
   	struct evhttp *http;
   	struct evhttp_bound_socket *handle;
 	struct event timeout;
@@ -330,9 +409,12 @@ static int serve_some_http (char *gw_ip,  t_https_server *https_server) {
 		evdns_base_free(dnsbase, 0);
 		dnsbase = evdns_base_new(base, 1);
 	}
+	evdns_base_set_option(dnsbase, "timeout", "0.2");
 	
-	check_internet_available();
-	
+	t_popular_server *popular_server = config_get_config()->popular_servers;
+	check_internet_available(popular_server);
+	check_auth_server_available();
+
 	event_assign(&timeout, base, -1, EV_PERSIST, schedule_work_cb, (void*) &timeout);
 	evutil_timerclear(&tv);
 	tv.tv_sec = config_get_config()->checkinterval;
@@ -352,6 +434,5 @@ static int serve_some_http (char *gw_ip,  t_https_server *https_server) {
 
 void thread_https_server(void *args) {
 	s_config *config = config_get_config();
-	common_setup ();              /* Initialize OpenSSL */
-   	serve_some_http (config->gw_address, config->https_server);
+   	https_redirect (config->gw_address, config->https_server);
 }

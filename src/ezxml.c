@@ -90,7 +90,7 @@ const char *ezxml_attr(ezxml_t xml, const char *attr)
 }
 
 // same as ezxml_get but takes an already initialized va_list
-ezxml_t ezxml_vget(ezxml_t xml, va_list ap)
+static ezxml_t ezxml_vget(ezxml_t xml, va_list ap)
 {
     char *name = va_arg(ap, char *);
     int idx = -1;
@@ -133,7 +133,7 @@ const char **ezxml_pi(ezxml_t xml, const char *target)
 }
 
 // set an error string and return root
-ezxml_t ezxml_err(ezxml_root_t root, char *s, const char *err, ...)
+static ezxml_t ezxml_err(ezxml_root_t root, char *s, const char *err, ...)
 {
     va_list ap;
     int line = 1;
@@ -155,7 +155,7 @@ ezxml_t ezxml_err(ezxml_root_t root, char *s, const char *err, ...)
 // for cdata sections, ' ' for attribute normalization, or '*' for non-cdata
 // attribute normalization. Returns s, or if the decoded string is longer than
 // s, returns a malloced string that must be freed.
-char *ezxml_decode(char *s, char **ent, char t)
+static char *ezxml_decode(char *s, char **ent, char t)
 {
     char *e, *r = s, *m = s;
     long b, c, d, l;
@@ -218,7 +218,7 @@ char *ezxml_decode(char *s, char **ent, char t)
 }
 
 // called when parser finds start of new tag
-void ezxml_open_tag(ezxml_root_t root, char *name, char **attr)
+static void ezxml_open_tag(ezxml_root_t root, char *name, char **attr)
 {
     ezxml_t xml = root->cur;
     
@@ -230,7 +230,7 @@ void ezxml_open_tag(ezxml_root_t root, char *name, char **attr)
 }
 
 // called when parser finds character content between open and closing tag
-void ezxml_char_content(ezxml_root_t root, char *s, size_t len, char t)
+static void ezxml_char_content(ezxml_root_t root, char *s, size_t len, char t)
 {
     ezxml_t xml = root->cur;
     char *m = s;
@@ -254,7 +254,7 @@ void ezxml_char_content(ezxml_root_t root, char *s, size_t len, char t)
 }
 
 // called when parser finds closing tag
-ezxml_t ezxml_close_tag(ezxml_root_t root, char *name, char *s)
+static ezxml_t ezxml_close_tag(ezxml_root_t root, char *name, char *s)
 {
     if (! root->cur || ! root->cur->name || strcmp(name, root->cur->name))
         return ezxml_err(root, s, "unexpected closing tag </%s>", name);
@@ -265,7 +265,7 @@ ezxml_t ezxml_close_tag(ezxml_root_t root, char *name, char *s)
 
 // checks for circular entity references, returns non-zero if no circular
 // references are found, zero otherwise
-int ezxml_ent_ok(char *name, char *s, char **ent)
+static int ezxml_ent_ok(char *name, char *s, char **ent)
 {
     int i;
 
@@ -279,7 +279,7 @@ int ezxml_ent_ok(char *name, char *s, char **ent)
 }
 
 // called when the parser finds a processing instruction
-void ezxml_proc_inst(ezxml_root_t root, char *s, size_t len)
+static void ezxml_proc_inst(ezxml_root_t root, char *s, size_t len)
 {
     int i = 0, j = 1;
     char *target = s;
@@ -316,7 +316,7 @@ void ezxml_proc_inst(ezxml_root_t root, char *s, size_t len)
 }
 
 // called when the parser finds an internal doctype subset
-short ezxml_internal_dtd(ezxml_root_t root, char *s, size_t len)
+static short ezxml_internal_dtd(ezxml_root_t root, char *s, size_t len)
 {
     char q, *c, *t, *n = NULL, *v, **ent, **pe;
     int i, j;
@@ -419,7 +419,7 @@ short ezxml_internal_dtd(ezxml_root_t root, char *s, size_t len)
 
 // Converts a UTF-16 string to UTF-8. Returns a new string that must be freed
 // or NULL if no conversion was needed.
-char *ezxml_str2utf8(char **s, size_t *len)
+static char *ezxml_str2utf8(char **s, size_t *len)
 {
     char *u;
     size_t l = 0, sl, max = *len;
@@ -451,7 +451,7 @@ char *ezxml_str2utf8(char **s, size_t *len)
 }
 
 // frees a tag attribute list
-void ezxml_free_attr(char **attr) {
+static void ezxml_free_attr(char **attr) {
     int i = 0;
     char *m;
     
@@ -669,7 +669,7 @@ ezxml_t ezxml_parse_file(const char *file)
 
 // Encodes ampersand sequences appending the results to *dst, reallocating *dst
 // if length excedes max. a is non-zero for attribute encoding. Returns *dst
-char *ezxml_ampencode(const char *s, size_t len, char **dst, size_t *dlen,
+static char *ezxml_ampencode(const char *s, size_t len, char **dst, size_t *dlen,
                       size_t *max, short a)
 {
     const char *e;
@@ -695,7 +695,7 @@ char *ezxml_ampencode(const char *s, size_t len, char **dst, size_t *dlen,
 // Recursively converts each tag to xml appending it to *s. Reallocates *s if
 // its length excedes max. start is the location of the previous tag in the
 // parent tag's character content. Returns *s.
-char *ezxml_toxml_r(ezxml_t xml, char **s, size_t *len, size_t *max,
+static char *ezxml_toxml_r(ezxml_t xml, char **s, size_t *len, size_t *max,
                     size_t start, char ***attr)
 {
     int i, j;

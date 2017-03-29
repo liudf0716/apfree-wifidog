@@ -22,6 +22,10 @@
 #ifndef _SIMPLE_HTTP_H_
 #define _SIMPLE_HTTP_H_
 
+#include <openssl/ssl.h>
+#include <openssl/err.h>
+#include <openssl/rand.h>
+
 #include <event2/event.h>
 #include <event2/buffer.h>
 #include <event2/http.h>
@@ -44,7 +48,8 @@
 #define GZIP_ENCODING 	16
 
 
-typedef void (*user_process_data_cb)(void *data, int len);
+typedef void (*user_process_data_cb)(void *, int);
+typedef void (*request_done_cb)(struct evhttp_request *, void *);
 
 struct http_request_get {
 	user_process_data_cb	user_cb;
@@ -62,6 +67,12 @@ struct http_request_post {
     struct evhttp_request *req;
     char *content_type;
     char *post_data;	
+};
+
+struct evhttps_request_context {
+    struct event_base  *base;
+    SSL_CTX     *ssl_ctx;
+    void        *data;
 };
 
 void http_process_user_data(struct evhttp_request *, struct http_request_get *);
@@ -89,6 +100,12 @@ char *http_get(const int, const char *);
 
 char *http_get_ex(const int, const char *, int);
 
-void evhttps_get(const char *, int, void (*http_request_done)(struct evhttp_request *, void *));
+struct evhttps_request_context * evhttps_context_init(void);
+
+void evhttps_context_exit(struct evhttps_request_context *);
+
+void evhttps_request(struct evhttps_request_context *, const char *, int, request_done_cb, void *);
+
+void evhttp_set_request_header(struct evhttp_request *);
 
 #endif                          /* defined(_SIMPLE_HTTP_H_) */

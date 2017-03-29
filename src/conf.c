@@ -66,6 +66,7 @@
 #include "simple_http.h"
 #include "ezxml.h"
 #include "util.h"
+#include "wd_util.h"
 
 
 //>>> liudf added 20160114
@@ -148,6 +149,7 @@ typedef enum {
 	oNoAuth,
 	oGatewayHttpsPort,
 	oWorkMode,
+    oUpdateDomainInterval,
 	// <<< liudf added end
 } OpCodes;
 
@@ -212,6 +214,7 @@ static const struct {
 	"noAuth", oNoAuth}, {
 	"gatewayHttpsPort", oGatewayHttpsPort}, {
 	"workMode", oWorkMode}, {
+    "updateDomainInterval", oUpdateDomainInterval}, {
 	// <<<< liudf added end
 NULL, oBadOption},};
 
@@ -282,6 +285,7 @@ config_init(void)
 	config.parse_checked	= 1; // before parse domain's ip; fping check it
 	config.no_auth 			= 0; // 
 	config.work_mode		= 0;
+    config.update_domain_interval  = 0;
 	
 	t_https_server *https_server	= (t_https_server *)malloc(sizeof(t_https_server));
 	memset(https_server, 0, sizeof(t_https_server));
@@ -291,6 +295,22 @@ config_init(void)
 	https_server->svr_key_file	= safe_strdup(DEFAULT_SVR_KEY_FILE);
 	
 	config.https_server	= https_server;
+
+    t_http_server *http_server  = (t_http_server *)malloc(sizeof(t_http_server));
+    memset(http_server, 0, sizeof(t_http_server));
+    http_server->gw_http_port   = 8403;
+    http_server->base_path      = safe_strdup(DEFAULT_WWW_PATH);
+
+    config.http_server  = http_server;
+
+    t_mqtt_server *mqtt_server = (t_mqtt_server *)malloc(sizeof(t_mqtt_server));
+    memset(mqtt_server, 0, sizeof(t_mqtt_server));
+    mqtt_server->hostname   = safe_strdup(DEFAULT_MQTT_SERVER);
+    mqtt_server->port       = 8883;
+    mqtt_server->cafile     = safe_strdup(DEFAULT_CA_CRT_FILE);
+    mqtt_server->crtfile    = NULL;
+    mqtt_server->keyfile    = NULL;
+    config.mqtt_server  = mqtt_server;
 	//<<<
 
     debugconf.log_stderr = 1;
@@ -435,6 +455,8 @@ parse_auth_server(FILE * file, const char *filename, int *linenum)
                 break;
             case oAuthServHTTPPort:
                 http_port = atoi(p2);
+				if (http_port == 443)
+					ssl_available = 1;
                 break;
             case oAuthServSSLAvailable:
                 ssl_available = parse_boolean_value(p2);
@@ -942,6 +964,9 @@ config_read(const char *filename)
 				case oWorkMode:
 					sscanf(p1, "%hu", &config.work_mode);
 					break;
+                case oUpdateDomainInterval:
+                    sscanf(p1, "%d", &config.update_domain_interval);
+                    break;
 				// <<< liudf added end
                 case oBadOption:
                     /* FALL THROUGH */
@@ -1270,7 +1295,7 @@ parse_mac_list_action(const char *ptr, mac_choice_t which, int action)
     while ((possiblemac = strsep(&ptrcopy, ","))) {
         /* check for valid format */
 		if (is_valid_mac(possiblemac)) {
-			debug(LOG_DEBUG, "add|remove [%d] mac [%s]", possiblemac);
+			debug(LOG_DEBUG, "add|remove mac [%s]", possiblemac);
 			if(action)
 				add_mac(possiblemac, which);
 			else
@@ -1886,7 +1911,7 @@ static void parse_weixin_http_dns_ip_cb(char *xml_buffer, int buffer_size)
 	return ;
 }
 
-int
+void
 fix_weixin_http_dns_ip (void)
 {
 	const char *url_weixin_dns = "http://dns.weixin.qq.com/cgi-bin/micromsg-bin/newgetdns";
@@ -1930,7 +1955,7 @@ __clear_trusted_domains(void)
 }
 
 void
-clear_trusted_domains(void)
+clear_trusted_domains_(void)
 {
 	LOCK_DOMAIN();
 	__clear_trusted_domains();
@@ -2039,16 +2064,19 @@ is_roaming(const char *mac)
 	return p==NULL?0:1;
 }
 
+// 0: not; 1 is
 int
 is_trusted_mac(const char *mac)
 {
 	t_trusted_mac *p = NULL;
 
+    LOCK_CONFIG();
     for (p = config.trustedmaclist; p != NULL; p = p->next) {
     	if(strcmp(mac, p->mac) == 0)
 			break;
 	}
-	
+	UNLOCK_CONFIG();
+
 	return p==NULL?0:1;
 
 }
@@ -2058,11 +2086,13 @@ is_untrusted_mac(const char *mac)
 {
 	t_trusted_mac *p = NULL;
 
+    LOCK_CONFIG();
     for (p = config.mac_blacklist; p != NULL; p = p->next) {
     	if(strcmp(mac, p->mac) == 0)
 			break;
 	}
-	
+	UNLOCK_CONFIG();
+
 	return p==NULL?0:1;
 
 }

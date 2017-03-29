@@ -201,11 +201,15 @@ is_valid_ip(const char *ip)
     return result != 0;
 }
 
+// true: 1; false: 0
 int 
 is_valid_mac(const char *mac)
 {
 	int i = 0;
 	int s = 0;
+
+	if (!mac || strlen(mac) != 17)
+		return 0;
 
 	while (*mac) {
 		if (isxdigit(*mac)) {
@@ -380,9 +384,6 @@ s_sleep(unsigned int s, unsigned int u){
 	struct timeval timeout;
 	timeout.tv_sec = s;
 	timeout.tv_usec = u;
-	int ret = 0;
 
-	do{
-		ret = select(0, NULL, NULL, NULL, &timeout);
-	}while((ret == -1)&&(errno == EINTR));
+	select(0, NULL, NULL, NULL, &timeout);
 }
