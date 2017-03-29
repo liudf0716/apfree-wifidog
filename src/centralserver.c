@@ -111,6 +111,9 @@ auth_server_roam_request(const char *mac)
         json_object *roam_jo = NULL;
         if ( ! json_object_object_get_ex(roam_info, "roam", &roam_jo)) {
             free(res);
+            if ( ! is_error(roam_info)) {
+                json_object_put(roam_info);
+            }
             return NULL;
         }
 		is_roam = json_object_get_string(roam_jo);
@@ -118,17 +121,18 @@ auth_server_roam_request(const char *mac)
 			json_object *client = NULL;
             if( ! json_object_object_get_ex(roam_info, "client", &client)) {
                 free(res);
-                return NULL;
-            }
-			if( ! is_error(client)) {
-				json_object *client_dup = json_tokener_parse(json_object_to_json_string(client));
-        		debug(LOG_INFO, "roam client is %s!", json_object_to_json_string(client));
-				free(res);
                 if ( ! is_error(roam_info)) {
                     json_object_put(roam_info);
                 }
-				return client_dup;
-			}
+                return NULL;
+            }
+            json_object *client_dup = json_tokener_parse(json_object_to_json_string(client));
+            debug(LOG_INFO, "roam client is %s!", json_object_to_json_string(client));
+            free(res);
+            if ( ! is_error(roam_info)) {
+                json_object_put(roam_info);
+            }
+            return client_dup;
 		}
 
 		free(res);

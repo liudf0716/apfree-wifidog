@@ -615,24 +615,25 @@ add_online_client(const char *info)
 	
 	client_info = json_tokener_parse(info);
 	if(is_error(client_info) || json_object_get_type(client_info) != json_type_object){
-        return 1;
+        goto OUT;
     }
 
+    int ret = 1;
 	json_object *mac_jo = NULL;
     json_object *ip_jo = NULL;
     json_object *name_jo = NULL;
     if (!json_object_object_get_ex(client_info, "mac", &mac_jo)) {
-        return 1;
+        goto OUT;
     }
     if (!json_object_object_get_ex(client_info, "ip", &ip_jo)) {
-        return 1;
+        goto OUT;
     }
     if (!json_object_object_get_ex(client_info, "name", &name_jo)) {
-        return 1;
+        goto OUT;
     }
 
     if (!json_object_object_get_ex(client_info, "client", &roam_client)) {
-        return 1;
+        goto OUT;
     }
 
 	mac 	= json_object_get_string(mac_jo);
@@ -685,7 +686,9 @@ add_online_client(const char *info)
 
 		UNLOCK_CLIENT_LIST();
 	}
+    ret = 0;
 
+OUT:
     if(!is_error(roam_client)){
         json_object_put(roam_client);
     }
@@ -693,7 +696,7 @@ add_online_client(const char *info)
     if (!is_error(client_info)) {
         json_object_put(client_info);
     }
-	return 0;	
+	return ret;	
 }
 
 char *
