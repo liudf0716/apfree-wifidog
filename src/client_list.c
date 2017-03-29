@@ -597,8 +597,7 @@ reset_client_list()
  * Function: add_online_client
  * Returns:
  *   0 - success
- *   1 - ?
- *   -1 - ? 
+ *   1 - failed
  */
 int 
 add_online_client(const char *info)
@@ -611,11 +610,11 @@ add_online_client(const char *info)
 	t_client *old_client = NULL;	
 
 	if(info == NULL)
-		return -1;
+		return 1;
 	
 	client_info = json_tokener_parse(info);
 	if(is_error(client_info) || json_object_get_type(client_info) != json_type_object){
-        goto OUT;
+        return 1;
     }
 
     int ret = 1;
@@ -690,10 +689,7 @@ OUT:
     if(!is_error(roam_client) && roam_client_need_free){
         json_object_put(roam_client);
     }
-
-    if (!is_error(client_info)) {
-        json_object_put(client_info);
-    }
+    json_object_put(client_info);
 	return ret;	
 }
 
