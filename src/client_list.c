@@ -652,14 +652,14 @@ add_online_client(const char *info)
             json_object *token_jo = NULL;
             if (!json_object_object_get_ex(roam_client, "token", &token_jo)) {
                 UNLOCK_CLIENT_LIST();
-                return 1;
+                goto OUT;
             }
 			char *token = json_object_get_string(token_jo);
 
             json_object *first_login_jo = NULL;
             if (!json_object_object_get_ex(roam_client, "first_login", &first_login_jo)) {
                 UNLOCK_CLIENT_LIST();
-                return 1;
+                goto OUT;
             }
 			char *first_login = json_object_get_string(first_login_jo);
 
