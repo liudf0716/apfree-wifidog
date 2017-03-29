@@ -98,7 +98,6 @@ auth_server_roam_request(const char *mac)
     }
 
     if ((tmp = strstr(res, "{\"")) && (end = strrchr(res, '}'))) {
-		char *is_roam = NULL;
 		*(end+1) = '\0';
 		debug(LOG_DEBUG, "tmp is [%s]", tmp);
 		json_object *roam_info = json_tokener_parse(tmp);
@@ -107,21 +106,31 @@ auth_server_roam_request(const char *mac)
 			free(res);
 			return NULL;
 		}
-	
-		is_roam = json_object_get_string(json_object_object_get(roam_info, "roam"));
+        
+        char *is_roam = NULL;
+        json_object *roam_jo = NULL;
+        if ( ! json_object_object_get_ex(roam_info, "roam", &roam_jo)) {
+            free(res);
+            json_object_put(roam_info);
+            return NULL;
+        }
+		is_roam = json_object_get_string(roam_jo);
 		if(is_roam && strcmp(is_roam, "yes") == 0) {
-			json_object *client = json_object_object_get(roam_info, "client");
-			if(client != NULL) {
-				json_object *client_dup = json_tokener_parse(json_object_to_json_string(client));
-        		debug(LOG_INFO, "roam client is %s!", json_object_to_json_string(client));
-				free(res);
-				json_object_put(roam_info);
-				return client_dup;
-			}
+			json_object *client = NULL;
+            if( ! json_object_object_get_ex(roam_info, "client", &client)) {
+                free(res);
+                json_object_put(roam_info);
+                return NULL;
+            }
+            json_object *client_dup = json_tokener_parse(json_object_to_json_string(client));
+            debug(LOG_INFO, "roam client is %s!", json_object_to_json_string(client));
+            free(res);
+            json_object_put(roam_info);
+            return client_dup;
 		}
 
 		free(res);
-		json_object_put(roam_info);
+        json_object_put(roam_info);
 		return NULL;
     }
 
