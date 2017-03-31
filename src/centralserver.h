@@ -23,6 +23,7 @@
 /** @file centralserver.h
     @brief Functions to talk to the central server (auth/send stats/get rules/etc...)
     @author Copyright (C) 2004 Philippe April <papril777@yahoo.com>
+    @author Copyright (C) 2016 Dengfeng Liu <liudengfeng@kunteng.org>
  */
 
 #ifndef _CENTRALSERVER_H_
@@ -31,6 +32,7 @@
 #include <json-c/json.h>
 
 #include "auth.h"
+#include "simple_http.h"
 
 /** @brief Ask the central server to login a client */
 #define REQUEST_TYPE_LOGIN     "login"
@@ -48,14 +50,31 @@
 /** @brief Sent after the user performed a manual log-out on the gateway  */
 #define GATEWAY_MESSAGE_ACCOUNT_LOGGED_OUT     "logged-out"
 
+typedef enum {
+    online_client,
+    trusted_client
+} client_type_t;
+
+typedef enum {
+    request_type_login,
+    request_type_logout,
+    request_type_counters
+} request_type_t;
+
+struct auth_response_client {
+    request_type_t type;
+    t_client       *client;
+    request        *req;
+};
+
 json_object *auth_server_roam_request(const char *mac);
 
 /** @brief Initiates a transaction with the auth server */
 t_authcode auth_server_request(t_authresponse * authresponse,
-                               const char *request_type,
-                               const char *ip,
-                               const char *mac,
-                               const char *token, unsigned long long int incoming, unsigned long long int outgoing, 
+                 const char *request_type,
+                 const char *ip,
+                 const char *mac,
+                 const char *token, unsigned long long int incoming, unsigned long long int outgoing, 
 							   unsigned long long int incoming_delta, unsigned long long int outgoing_delta,
 							   //>>> liudf added 20160112
 							   time_t first_login, unsigned int online_time, char *name, int wired);
@@ -65,5 +84,18 @@ int connect_auth_server(void);
 
 /** @brief Helper function called by connect_auth_server() to do the actual work including recursion - DO NOT CALL DIRECTLY */
 int _connect_auth_server(int level);
+
+/** @brief close  auth server connected socket*/
+void _close_auth_server();
+
+/** @brief thread-safe close auth server connected socket*/
+void close_auth_server();
+
+/**@brief thread-safe to decrease authserv_fd_ref, not close connection really*/
+void decrease_authserv_fd_ref();
+
+char *get_auth_uri(const char *, client_type_t , void *);
+
+void process_auth_server_response(struct evhttp_request *, void *);
 
 #endif                          /* _CENTRALSERVER_H_ */

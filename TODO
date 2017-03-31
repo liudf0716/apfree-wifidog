@@ -1,0 +1,4 @@
+1, add mqtt support to remote control wifidog
+2, architecture refactoring (use libevent?)
+3, decrease fork related use
+4, integrated apfree qos to provide client traffic data

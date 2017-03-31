@@ -23,6 +23,7 @@
 /** @file fw_iptables.h
     @brief Firewall iptables functions
     @author Copyright (C) 2004 Philippe April <papril777@yahoo.com>
+    @author Copyright (C) 2016 Dengfeng Liu <liudengfeng@kunteng.org>
 */
 
 #ifndef _FW_IPTABLES_H_
@@ -130,5 +131,11 @@ void iptables_fw_clear_untrusted_maclist(void);
 void iptables_fw_save_online_clients(void);
 
 void iptables_fw_set_mac_temporary(const char *, int);
+
+void update_trusted_mac_status(t_trusted_mac *tmac);
+
+void __get_client_name(t_client *client);
+
+int add_mac_to_ipset(const char *name, const char *mac, int timeout);
 //<<< liudf added end
 #endif                          /* _IPTABLES_H_ */

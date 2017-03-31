@@ -24,6 +24,7 @@
   @file fw_iptables.c
   @brief Firewall iptables functions
   @author Copyright (C) 2004 Philippe April <papril777@yahoo.com>
+  @author Copyright (C) 2016 Dengfeng Liu <liudengfeng@kunteng.org>
  */
 
 #define _GNU_SOURCE
@@ -109,9 +110,7 @@ iptables_insert_gateway_id(char **input)
     *input = buffer;
 }
 
-/** @internal
- * */
-static int
+int
 add_mac_to_ipset(const char *name, const char *mac, int timeout)
 {
 	char *ipset_name =  NULL;
@@ -122,7 +121,9 @@ add_mac_to_ipset(const char *name, const char *mac, int timeout)
 	memcpy(ipset_name, name, strlen(name));
     iptables_insert_gateway_id(&ipset_name);
 
-	return add_to_ipset(ipset_name, mac, timeout);
+	int nret = add_to_ipset(ipset_name, mac, timeout);
+	free(ipset_name);
+	return nret;
 }
 
 /** @internal
@@ -138,7 +139,9 @@ add_ip_to_ipset(const char *name, const char *ip, int remove)
 	memcpy(ipset_name, name, strlen(name));
     iptables_insert_gateway_id(&ipset_name);
 
-	return add_to_ipset(ipset_name, ip, remove);
+	int nret = add_to_ipset(ipset_name, ip, remove);
+	free(ipset_name);
+	return nret;
 }
 
 /** @internal
@@ -154,7 +157,9 @@ iptables_flush_ipset(const char *name)
 	memcpy(ipset_name, name, strlen(name));
     iptables_insert_gateway_id(&ipset_name);
 
-	return flush_ipset(ipset_name);
+	int nret = flush_ipset(ipset_name);
+	free(ipset_name);
+	return nret;
 }
 
 /** @internal
@@ -242,7 +247,7 @@ iptables_do_command(const char *format, ...)
 	if(fw_quiet == 2) {
     	debug(LOG_DEBUG, "fill file command: %s", cmd);
 		free(cmd);
-		return;
+		return 0;
 	}
 
     debug(LOG_DEBUG, "Executing command: %s", cmd);
@@ -568,7 +573,6 @@ iptables_fw_set_mac_temporary(const char *mac, int which)
 static void
 f_fw_init_close()
 {
-    debug(LOG_INFO, "f_fw_init_close ==================");
 	if(f_fw_init) {
 		fclose(f_fw_init);
 		chmod(fw_init_script, S_IXOTH|S_IXUSR|S_IXGRP);
@@ -582,7 +586,6 @@ f_fw_init_open()
 	if(f_fw_init)
 		return;
 	
-    debug(LOG_INFO, "f_fw_init_open ==================");
 	f_fw_init = fopen(fw_init_script, "w"); 
 	if(f_fw_init) {
 		fprintf(f_fw_init, "#!/bin/sh\n");
@@ -593,18 +596,15 @@ static void
 f_fw_script_write(const char *cmd)
 {
 	if(f_fw_init){ 
-		fprintf(f_fw_init, cmd);
-		fprintf(f_fw_init, "\n");
+		fprintf(f_fw_init, "%s\n", cmd);
 	}
 
 	if(f_fw_destroy) {
-		fprintf(f_fw_destroy, cmd);
-		fprintf(f_fw_destroy, "\n");
+		fprintf(f_fw_destroy, "%s\n", cmd);
 	}
 
 	if(f_fw_allow) {
-		fprintf(f_fw_allow, cmd);
-		fprintf(f_fw_allow, "\n");
+		fprintf(f_fw_allow, "%s\n", cmd);
 	}
 }
 
@@ -687,6 +687,8 @@ iptables_fw_init(void)
     const s_config *config;
     char *ext_interface = NULL;
     int gw_port = 0;
+	int gw_https_port = 0;
+	int gw_http_port = 0;
     int proxy_port;
     fw_quiet = 0;
     int got_authdown_ruleset = NULL == get_ruleset(FWRULESET_AUTH_IS_DOWN) ? 0 : 1;
@@ -701,6 +703,9 @@ iptables_fw_init(void)
 	
     config = config_get_config();
     gw_port = config->gw_port;
+	gw_https_port = config->https_server->gw_https_port;
+	gw_http_port = config->http_server->gw_http_port;
+	
     if (config->external_interface) {
         ext_interface = safe_strdup(config->external_interface);
     } else {
@@ -768,7 +773,7 @@ iptables_fw_init(void)
      */
 
     /* Create new chains */
-	iptables_do_command("-t nat -N " CHAIN_UNTRUSTED);
+ 	iptables_do_command("-t nat -N " CHAIN_UNTRUSTED);
     iptables_do_command("-t nat -N " CHAIN_OUTGOING);
     iptables_do_command("-t nat -N " CHAIN_TO_ROUTER);
     iptables_do_command("-t nat -N " CHAIN_TO_INTERNET);
@@ -824,8 +829,13 @@ iptables_fw_init(void)
         iptables_do_command("-t nat -A " CHAIN_UNKNOWN " -j " CHAIN_AUTH_IS_DOWN);
         iptables_do_command("-t nat -A " CHAIN_AUTH_IS_DOWN " -m mark --mark 0x%u -j ACCEPT", FW_MARK_AUTH_IS_DOWN);
     }
-    iptables_do_command("-t nat -A " CHAIN_UNKNOWN " -p tcp --dport 80 -j REDIRECT --to-ports %d", gw_port);
-
+	
+	if (config_get_config()->work_mode == 0) {
+		iptables_do_command("-t nat -A " CHAIN_UNKNOWN " -p tcp --dport 443 -j REDIRECT --to-ports %d", gw_https_port);
+    	iptables_do_command("-t nat -A " CHAIN_UNKNOWN " -p tcp --dport 80 -j REDIRECT --to-ports %d", gw_port);
+	} else {
+		iptables_do_command("-t nat -A " CHAIN_UNKNOWN " -p tcp --dport 80 -j REDIRECT --to-ports %d", gw_http_port);
+	}
     /*
      *
      * Everything in the FILTER table
@@ -1287,7 +1297,6 @@ iptables_fw_counters_update(void)
                     p1->counters.incoming = p1->counters.incoming_history + counter;
                     debug(LOG_DEBUG, "%s - Incoming traffic %llu bytes, Updated counter.incoming to %llu bytes", ip, counter, p1->counters.incoming);
                     p1->counters.last_updated = time(NULL);
-					p1->is_online = 1;
                 }
 
             	UNLOCK_CLIENT_LIST();

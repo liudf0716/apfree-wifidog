@@ -23,6 +23,7 @@
 /** @file client_list.h
     @brief Client List functions
     @author Copyright (C) 2004 Alexandre Carmel-Veilleux <acv@acv.ca>
+	@author Copyright (C) 2016 Dengfeng Liu <liudengfeng@kunteng.org>
 */
 
 #ifndef _CLIENT_LIST_H_
@@ -157,6 +158,8 @@ int offline_client_ageout();
 void reset_client_list();
 
 int add_online_client(const char *);
+
+char *get_online_client_uri(t_client *);
 
 #define LOCK_OFFLINE_CLIENT_LIST() do { \
 	debug(LOG_DEBUG, "Locking offline client list"); \

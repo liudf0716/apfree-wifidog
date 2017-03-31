@@ -39,15 +39,11 @@
 #include <netdb.h>
 #endif
 
-#include "config.h"
 #include "httpd.h"
 #include "httpd_priv.h"
 
-#ifdef HAVE_STDARG_H
 #include <stdarg.h>
-#else
-#include <varargs.h>
-#endif
+
 
 char *
 httpdUrlEncode(str)
@@ -339,14 +335,27 @@ struct timeval *timeout;
         return (NULL);
     }
     memset((void *)r, 0, sizeof(request));
-    /* Get on with it */
+    
+    r->clientSock = accept(server->serverSock, NULL, NULL);
+	if (r->clientSock < 0) {
+		server->lastError = -1;
+		free(r);
+		return NULL;
+	}
+	
+	/* Get on with it */
     bzero(&addr, sizeof(addr));
     addrLen = sizeof(addr);
-    r->clientSock = accept(server->serverSock, (struct sockaddr *)&addr, &addrLen);
+	if (getpeername(r->clientSock, (struct sockaddr *)&addr, &addrLen)) {
+		server->lastError = -1;
+		free(r);
+		return NULL;
+	} 
+		
 	if(inet_ntop(AF_INET, &addr.sin_addr, r->clientAddr, HTTP_IP_ADDR_LEN)) {
         r->clientAddr[HTTP_IP_ADDR_LEN - 1] = 0;
-    } else
-        *r->clientAddr = 0;
+    } 
+	
     r->readBufRemain = 0;
     r->readBufPtr = NULL;
 
@@ -375,7 +384,7 @@ httpdReadRequest(httpd * server, request * r)
     /*
      ** Setup for a standard response
      */
-    strcpy(r->response.headers, "Server: Hughes Technologies Embedded Server\r\n");
+    strcpy(r->response.headers, "Server: KunTeng Technologies Embedded Server\r\n");
     strcpy(r->response.contentType, "text/html\r\n");
     strcpy(r->response.response, "200 Output Follows\r\n");
     r->response.headersSent = 0;
@@ -477,9 +486,23 @@ httpdReadRequest(httpd * server, request * r)
 					// liudf added 20160223
 					// only parse Host
 					//inHeaders = 0;
-					break;
+					//break;
                 }
             }
+			
+			if (strncasecmp(buf, "Accept-Encoding:", 16) == 0) {
+				cp = strchr(buf, ':');
+                if (cp) {
+                    cp += 2;
+					// some Accept-Encoding is "gzip,deflate", some is "gzip, deflate"
+					if (strncasecmp(cp, "gzip", 4) == 0) 
+						r->request.deflate = 1;                 
+                }
+			}
+			
+			if (strncasecmp(buf, "\r\n\r\n", 4) == 0) {
+				break;
+			}
             /* End modification */
             continue;
         }
@@ -734,6 +757,21 @@ httpdSetCookie(request * r, const char *name, const char *value)
 }
 
 void
+httpdOutputLengthDirect(request *r, const char *msg, int msg_len)
+{
+	r->response.responseLength += msg_len;
+    if (r->response.headersSent == 0)
+        _httpd_sendHeaders(r, msg_len, 0);
+    _httpd_net_write(r->clientSock, msg, msg_len);
+}
+
+void
+httpdOutputDirect(request * r, const char *msg)
+{
+    httpdOutputLengthDirect(r, msg, strlen(msg));
+}
+
+void
 httpdOutput(request * r, const char *msg)
 {
     const char *src;
@@ -782,28 +820,14 @@ httpdOutput(request * r, const char *msg)
     _httpd_net_write(r->clientSock, buf, strlen(buf));
 }
 
-#ifdef HAVE_STDARG_H
 void
 httpdPrintf(request * r, const char *fmt, ...)
 {
-#else
-void
-httpdPrintf(va_alist)
-va_dcl
-{
-    request *r;;
-    const char *fmt;
-#endif
     va_list args;
     char buf[HTTP_MAX_LEN];
-
-#ifdef HAVE_STDARG_H
+	
     va_start(args, fmt);
-#else
-    va_start(args);
-    r = (request *) va_arg(args, request *);
-    fmt = (char *)va_arg(args, char *);
-#endif
+
     if (r->response.headersSent == 0)
         httpdSendHeaders(r);
     vsnprintf(buf, HTTP_MAX_LEN, fmt, args);

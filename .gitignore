@@ -1,0 +1,14 @@
+.idea
+.vscode
+cmake-build-debug/
+
+CMakeCache.txt
+CMakeFiles/
+cachr
+cmake_install.cmake
+
+*.cbp
+.*.swo
+.*.swp
+
+/settings.json

@@ -23,11 +23,15 @@
 /** @file conf.h
     @brief Config file parsing
     @author Copyright (C) 2004 Philippe April <papril777@yahoo.com>
+    @author Copyright (C) 2016 Dengfeng Liu <liudengfeng@kunteng.org>
 */
 
 #ifndef _CONFIG_H_
 #define _CONFIG_H_
 
+#include <pthread.h>
+
+#include "common.h"
 /*@{*/
 /** Defines */
 
@@ -36,10 +40,14 @@
 #define DEFAULT_CONFIGFILE "/etc/wifidog.conf"
 #define DEFAULT_HTMLMSGFILE "/etc/wifidog-msg.html"
 #define DEFAULT_REDIRECTFILE "/etc/wifidog-redir.html"
+#define	DEFAULT_INTERNET_OFFLINE_FILE	"/etc/internet-offline.html"
+#define	DEFAULT_AUTHSERVER_OFFLINE_FILE	"/etc/authserver-offline.html"
 #else
 #define DEFAULT_CONFIGFILE SYSCONFDIR"/wifidog.conf"
 #define DEFAULT_HTMLMSGFILE SYSCONFDIR"/wifidog-msg.html"
 #define DEFAULT_REDIRECTFILE SYSCONFDIR"/wifidog-redir.html"
+#define	DEFAULT_INTERNET_OFFLINE_FILE	SYSCONFDIR"/etc/internet-offline.html"
+#define	DEFAULT_AUTHSERVER_OFFLINE_FILE	SYSCONFDIR"/etc/authserver-offline.html"
 #endif
 #define DEFAULT_DAEMON 1
 #define DEFAULT_DEBUGLEVEL LOG_INFO
@@ -82,6 +90,15 @@
 #define FWRULESET_LOCKED_USERS "locked-users"
 /*@}*/
 
+#define	DEFAULT_CA_CRT_FILE		"/etc/apfree.ca"
+#define	DEFAULT_SVR_CRT_FILE	"/etc/apfree.crt"
+#define	DEFAULT_SVR_KEY_FILE	"/etc/apfree.key"
+#define DEFAULT_WWW_PATH		"/etc/www/"
+
+#define DEFAULT_MQTT_SERVER		"wifidog.kunteng.org"
+
+#define	WIFIDOG_REDIR_HTML_CONTENT	"setTimeout(function() {location.href = \"%s\";}, 10);"
+
 
 typedef enum trusted_domain_t_ {
 	USER_TRUSTED_DOMAIN,
@@ -121,6 +138,9 @@ typedef struct _auth_serv_t {
 				     listens on */
     int authserv_use_ssl;       /**< @brief Use SSL or not */
     char *last_ip;      /**< @brief Last ip used by authserver */
+	int	authserv_fd;	/** @brief this support keep-alive http connection*/
+	int	authserv_fd_ref; /** @brief is this socket fd being used or not*/
+	int authserv_connect_timeout; /** @brief when connect to auth server, seconds to wait time*/
     struct _auth_serv_t *next;
 } t_auth_serv;
 
@@ -181,7 +201,7 @@ typedef struct _popular_server_t {
  * trust domains and trust ip
  *
  */
-#define	HTTP_IP_ADDR_LEN	17
+
 typedef struct _ip_trusted_t {
 	char	ip[HTTP_IP_ADDR_LEN];
 	struct _ip_trusted_t *next;
@@ -194,6 +214,25 @@ typedef struct _domain_trusted_t {
 	struct _domain_trusted_t *next;
 } t_domain_trusted;
 
+typedef struct _https_server_t {
+	char	*ca_crt_file;
+	char	*svr_crt_file;
+	char	*svr_key_file;
+	short	gw_https_port;
+} t_https_server;
+
+typedef struct _http_server_t {
+	char 	*base_path;
+	short	gw_http_port;
+}t_http_server;
+
+typedef struct _mqtt_server_t {
+	char 	*hostname;
+	short	port;
+	char 	*cafile;
+	char 	*crtfile;
+	char 	*keyfile;
+}t_mqtt_server;
 // <<<< liudf added end
 
 /**
@@ -242,6 +281,11 @@ typedef struct {
         like /proc/net/arp */
     t_popular_server *popular_servers; /**< @brief list of popular servers */
 	
+	// liudf 20161116 added
+	t_https_server	*https_server;
+	t_http_server 	*http_server;
+	
+	t_mqtt_server	*mqtt_server;
 	// liudf 20151223 added
 	// trusted domain
 	t_domain_trusted *pan_domains_trusted; /** pan-domain trusted list*/
@@ -250,6 +294,8 @@ typedef struct {
 	t_trusted_mac	*roam_maclist; /** roam mac list*/
 	t_untrusted_mac	*mac_blacklist; /** blacklist mac*/
 	char 	*htmlredirfile;
+	char	*internet_offline_file;
+	char	*authserver_offline_file;
 	short	wired_passed;
 	short	parse_checked; 
 	short	js_filter; /** boolean, whether to enable javascript filter url request*/
@@ -257,7 +303,8 @@ typedef struct {
 	short	thread_number;
 	short	queue_size;
 	short	no_auth;
-	short	reseve;
+	short	work_mode; /** when work_mode 1, it will drop all packets default*/
+	int 	update_domain_interval; /** 0, no need update; otherwise update every update_domain_interval*checkinterval seconds*/
 } s_config;
 
 /** @brief Get the current gateway configuration */
@@ -330,7 +377,7 @@ void parse_inner_trusted_domain_list();
 /** @brief add domain ip pair to inner or user trusted domain list */
 void add_domain_ip_pair(const char *, trusted_domain_t);
 /** @brief  Clear domains_trusted of config safely */
-void clear_trusted_domains(void); 
+void clear_trusted_domains_(void); 
 
 void clear_trusted_pan_domains(void);
 
@@ -341,8 +388,7 @@ void __clear_trusted_domain_ip(t_ip_trusted *);
 
 
 /** @brief  */
-int __fix_weixin_http_dns_ip(void);
-
+void fix_weixin_http_dns_ip(void);
 
 /** @brief parse roam mac list, for wdctl use*/
 void parse_roam_mac_list(const char *); 
@@ -406,9 +452,9 @@ char	*g_channel_path;
 char	*g_ssid;
 
 #define	LOCK_DOMAIN() do { \
-	debug(LOG_DEBUG, "Locking domain"); \
+	debug(LOG_INFO, "Locking domain"); \
 	pthread_mutex_lock(&domains_mutex);	\
-	debug(LOG_DEBUG, "Domains locked"); \
+	debug(LOG_INFO, "Domains locked"); \
 } while (0)
 
 #define UNLOCK_DOMAIN() do { \

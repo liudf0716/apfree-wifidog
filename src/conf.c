@@ -24,6 +24,7 @@
   @brief Config file parsing
   @author Copyright (C) 2004 Philippe April <papril777@yahoo.com>
   @author Copyright (C) 2007 Benoit Grégoire, Technologies Coeus inc.
+  @author Copyright (C) 2016 Dengfeng Liu <liudengfeng@kunteng.org>
  */
 
 #define _GNU_SOURCE
@@ -49,6 +50,12 @@
 #include <arpa/nameser.h>
 #include <resolv.h>
 
+#include <event2/dns.h>
+#include <event2/util.h>
+#include <event2/event.h>
+
+#include <sys/socket.h>
+
 #include "common.h"
 #include "safe.h"
 #include "debug.h"
@@ -56,12 +63,14 @@
 #include "http.h"
 #include "auth.h"
 #include "firewall.h"
-#include "config.h"
-
+#include "simple_http.h"
+#include "ezxml.h"
 #include "util.h"
+#include "wd_util.h"
+
 
 //>>> liudf added 20160114
-const char	*g_inner_trusted_domains = "szextshort.weixin.qq.com,short.weixin.qq.com,wifi.weixin.qq.com,dns.weixin.qq.com,www.kunteng.org,cloud.kunteng.org,mqtt.kunteng.org,log1.kunteng.org";
+const char	*g_inner_trusted_domains = "www.kunteng.org,cloud.kunteng.org,mqtt.kunteng.org,log1.kunteng.org";
 
 /** @internal
  * Holds the current configuration of the gateway */
@@ -99,6 +108,7 @@ typedef enum {
     oAuthServSSLPort,
     oAuthServHTTPPort,
     oAuthServPath,
+	oAuthServConnectTimeout,
     oAuthServLoginScriptPathFragment,
     oAuthServPortalScriptPathFragment,
     oAuthServMsgScriptPathFragment,
@@ -137,6 +147,9 @@ typedef enum {
 	oParseChecked,
 	oTrustedIpList,
 	oNoAuth,
+	oGatewayHttpsPort,
+	oWorkMode,
+    oUpdateDomainInterval,
 	// <<< liudf added end
 } OpCodes;
 
@@ -170,6 +183,7 @@ static const struct {
     "sslport", oAuthServSSLPort}, {
     "httpport", oAuthServHTTPPort}, {
     "path", oAuthServPath}, {
+	"connectTimeout", oAuthServConnectTimeout}, {
     "loginscriptpathfragment", oAuthServLoginScriptPathFragment}, {
     "portalscriptpathfragment", oAuthServPortalScriptPathFragment}, {
     "msgscriptpathfragment", oAuthServMsgScriptPathFragment}, {
@@ -198,6 +212,9 @@ static const struct {
 	"parseChecked", oParseChecked}, {
 	"trustedIpList", oTrustedIpList}, {
 	"noAuth", oNoAuth}, {
+	"gatewayHttpsPort", oGatewayHttpsPort}, {
+	"workMode", oWorkMode}, {
+    "updateDomainInterval", oUpdateDomainInterval}, {
 	// <<<< liudf added end
 NULL, oBadOption},};
 
@@ -257,7 +274,9 @@ config_init(void)
     config.arp_table_path = safe_strdup(DEFAULT_ARPTABLE);
     config.ssl_use_sni = DEFAULT_AUTHSERVSSLSNI;
 	//>>> liudf 20160104 added
-	config.htmlredirfile 	= safe_strdup(DEFAULT_REDIRECTFILE);
+	config.htmlredirfile 			= safe_strdup(DEFAULT_REDIRECTFILE);
+	config.internet_offline_file	= safe_strdup(DEFAULT_INTERNET_OFFLINE_FILE);
+	config.authserver_offline_file	= safe_strdup(DEFAULT_AUTHSERVER_OFFLINE_FILE);
 	config.js_filter 		= 1; // default enable it
 	config.pool_mode		= 1;
 	config.thread_number 	= 10; // only valid when poolMode == 1
@@ -265,6 +284,33 @@ config_init(void)
 	config.wired_passed		= 1; // default wired device no need login
 	config.parse_checked	= 1; // before parse domain's ip; fping check it
 	config.no_auth 			= 0; // 
+	config.work_mode		= 0;
+    config.update_domain_interval  = 0;
+	
+	t_https_server *https_server	= (t_https_server *)malloc(sizeof(t_https_server));
+	memset(https_server, 0, sizeof(t_https_server));
+	https_server->gw_https_port	= 8443;
+	https_server->ca_crt_file	= safe_strdup(DEFAULT_CA_CRT_FILE);
+	https_server->svr_crt_file	= safe_strdup(DEFAULT_SVR_CRT_FILE);
+	https_server->svr_key_file	= safe_strdup(DEFAULT_SVR_KEY_FILE);
+	
+	config.https_server	= https_server;
+
+    t_http_server *http_server  = (t_http_server *)malloc(sizeof(t_http_server));
+    memset(http_server, 0, sizeof(t_http_server));
+    http_server->gw_http_port   = 8403;
+    http_server->base_path      = safe_strdup(DEFAULT_WWW_PATH);
+
+    config.http_server  = http_server;
+
+    t_mqtt_server *mqtt_server = (t_mqtt_server *)malloc(sizeof(t_mqtt_server));
+    memset(mqtt_server, 0, sizeof(t_mqtt_server));
+    mqtt_server->hostname   = safe_strdup(DEFAULT_MQTT_SERVER);
+    mqtt_server->port       = 8883;
+    mqtt_server->cafile     = safe_strdup(DEFAULT_CA_CRT_FILE);
+    mqtt_server->crtfile    = NULL;
+    mqtt_server->keyfile    = NULL;
+    config.mqtt_server  = mqtt_server;
 	//<<<
 
     debugconf.log_stderr = 1;
@@ -316,6 +362,7 @@ parse_auth_server(FILE * file, const char *filename, int *linenum)
         *msgscriptpathfragment = NULL,
         *pingscriptpathfragment = NULL, *authscriptpathfragment = NULL, line[MAX_BUF], *p1, *p2;
     int http_port, ssl_port, ssl_available, opcode;
+	int connect_timeout;
     t_auth_serv *new, *tmp;
 
     /* Defaults */
@@ -328,6 +375,7 @@ parse_auth_server(FILE * file, const char *filename, int *linenum)
     http_port = DEFAULT_AUTHSERVPORT;
     ssl_port = DEFAULT_AUTHSERVSSLPORT;
     ssl_available = DEFAULT_AUTHSERVSSLAVAILABLE;
+	connect_timeout = 5; // 5 seconds to wait
 
     /* Parsing loop */
     while (memset(line, 0, MAX_BUF) && fgets(line, MAX_BUF - 1, file) && (strchr(line, '}') == NULL)) {
@@ -379,6 +427,9 @@ parse_auth_server(FILE * file, const char *filename, int *linenum)
                 free(path);
                 path = safe_strdup(p2);
                 break;
+			case oAuthServConnectTimeout:
+				connect_timeout = atoi(p2);
+				break;	
             case oAuthServLoginScriptPathFragment:
                 free(loginscriptpathfragment);
                 loginscriptpathfragment = safe_strdup(p2);
@@ -404,6 +455,8 @@ parse_auth_server(FILE * file, const char *filename, int *linenum)
                 break;
             case oAuthServHTTPPort:
                 http_port = atoi(p2);
+				if (http_port == 443)
+					ssl_available = 1;
                 break;
             case oAuthServSSLAvailable:
                 ssl_available = parse_boolean_value(p2);
@@ -443,13 +496,16 @@ parse_auth_server(FILE * file, const char *filename, int *linenum)
     new->authserv_hostname = host;
     new->authserv_use_ssl = ssl_available;
     new->authserv_path = path;
+	new->authserv_connect_timeout = connect_timeout;
     new->authserv_login_script_path_fragment = loginscriptpathfragment;
     new->authserv_portal_script_path_fragment = portalscriptpathfragment;
     new->authserv_msg_script_path_fragment = msgscriptpathfragment;
     new->authserv_ping_script_path_fragment = pingscriptpathfragment;
     new->authserv_auth_script_path_fragment = authscriptpathfragment;
     new->authserv_http_port = http_port;
-    new->authserv_ssl_port = ssl_port;
+    new->authserv_ssl_port 	= ssl_port;
+	new->authserv_fd		= -1;
+	new->authserv_fd_ref	= 0;
 
     /* If it's the first, add to config, else append to last server */
     if (config.auth_servers == NULL) {
@@ -902,6 +958,15 @@ config_read(const char *filename)
 				case oNoAuth:
 					config.no_auth = parse_boolean_value(p1);	
 					break;
+				case oGatewayHttpsPort:
+					sscanf(p1, "%hu", &config.https_server->gw_https_port);
+					break;
+				case oWorkMode:
+					sscanf(p1, "%hu", &config.work_mode);
+					break;
+                case oUpdateDomainInterval:
+                    sscanf(p1, "%d", &config.update_domain_interval);
+                    break;
 				// <<< liudf added end
                 case oBadOption:
                     /* FALL THROUGH */
@@ -955,7 +1020,7 @@ parse_boolean_value(char *line)
 
 /**
  * Parse possiblemac to see if it is valid MAC address format */
-int
+static int
 check_mac_format(const char *possiblemac)
 {
     char hex2[3];
@@ -1230,7 +1295,7 @@ parse_mac_list_action(const char *ptr, mac_choice_t which, int action)
     while ((possiblemac = strsep(&ptrcopy, ","))) {
         /* check for valid format */
 		if (is_valid_mac(possiblemac)) {
-			debug(LOG_DEBUG, "add|remove [%d] mac [%s]", possiblemac);
+			debug(LOG_DEBUG, "add|remove mac [%s]", possiblemac);
 			if(action)
 				add_mac(possiblemac, which);
 			else
@@ -1242,7 +1307,7 @@ parse_mac_list_action(const char *ptr, mac_choice_t which, int action)
     free(pt);
 }
 
-void
+static void
 parse_remove_mac_list(const char *ptr, mac_choice_t which)
 {
 	parse_mac_list_action(ptr, which, 0);;
@@ -1564,6 +1629,8 @@ parse_domain_string_common_action(const char *ptr, trusted_domain_t which, int a
     ptrcopy = safe_strdup(ptr);
 	pt = ptrcopy;
 
+	LOCK_DOMAIN();
+	
     while ((hostname = strsep(&ptrcopy, ","))) {  /* hostname does *not* need allocation. strsep
                                                      provides a pointer in ptrcopy. */
         /* Skip leading spaces. */
@@ -1583,11 +1650,18 @@ parse_domain_string_common_action(const char *ptr, trusted_domain_t which, int a
         }
         debug(LOG_DEBUG, "Adding&Delete [%d] trust domain [%s] to&from list", action, hostname);
 		if(action) // 1: add
-        	add_domain_common(hostname, which);
-		else // 0: del
-			del_domain_common(hostname, which);
+        	__add_domain_common(hostname, which);
+		else {// 0: del
+			t_domain_trusted *p = __del_domain_common(hostname, which);
+			if(p) {
+				__clear_trusted_domain_ip(p->ips_trusted);
+				free(p->domain);
+				free(p);
+			}
+		}
     }
-
+	
+	UNLOCK_DOMAIN();
     free(pt);
 }
 
@@ -1734,15 +1808,7 @@ parse_common_trusted_domain_list(trusted_domain_t which)
 	else
 		return;
 
-	LOCK_DOMAIN();
-
-	while(p && p->domain) {
-        debug(LOG_DEBUG, "parse domain (%s)", p->domain);
-		parse_trusted_domain_2_ip(p);
-		p = p->next;
-	}
-
-	UNLOCK_DOMAIN();
+	evdns_parse_trusted_domain_2_ip(p);
 }
 
 void parse_user_trusted_domain_list()
@@ -1773,7 +1839,8 @@ void add_trusted_ip_list(const char *ptr)
     /* strsep modifies original, so let's make a copy */
     ptrcopy = safe_strdup(ptr);
 	pt = ptrcopy;
-
+	
+	LOCK_DOMAIN();
     while ((ip = strsep(&ptrcopy, ","))) {  /* ip does *not* need allocation. strsep
                                                      provides a pointer in ptrcopy. */
         /* Skip leading spaces. */
@@ -1794,60 +1861,61 @@ void add_trusted_ip_list(const char *ptr)
 		
 		if(is_valid_ip(ip) == 0) // not valid ip address
 			continue;
-        debug(LOG_DEBUG, "Adding trust ip [%s] to list", ip);
-
-		LOCK_DOMAIN();
+		
+        debug(LOG_DEBUG, "Adding trust ip [%s] to list", ip);		
 		__add_ip_2_domain(p, ip);
-		UNLOCK_DOMAIN();
+		
     }
-
+	UNLOCK_DOMAIN();
+	
     free(pt);
 
 }
 
-int 
-__fix_weixin_http_dns_ip(void)
+static void parse_weixin_http_dns_ip_cb(char *xml_buffer, int buffer_size)
 {
-	const char *get_weixin_ip_cmd = "curl --compressed http://dns.weixin.qq.com/cgi-bin/micromsg-bin/newgetdns 2>/dev/null";
-	const char *short_weixin_begin="<domain name=\"short.weixin.qq.com";
-    FILE *file = NULL;
-
-    if((file = popen(get_weixin_ip_cmd, "r")) != NULL) {
-    	char buf[512];
-        char *ip = NULL, *p = NULL;
-        int flag = 0;
-
-        while(memset(buf, 0, 512) && fgets(buf, 512, file)) {
-        	if(!flag&&strncmp(buf, short_weixin_begin, strlen(short_weixin_begin)) == 0) {
-            	flag = 1;
-            }
-            if(flag&&strncmp(buf, "</domain>", 9) == 0) {
-            	flag = 0;
-                break;
-            }
-            if(flag&&strncmp(buf, "<ip>", 4) == 0) {
-				t_domain_trusted	*dt = NULL;
-            	p = rindex(buf, '<');
-                *p='\0';
-				ip = buf+4;
-				
-				LOCK_DOMAIN();
-				
-				dt = __add_inner_trusted_domain("short.weixin.qq.com");
-				if (dt) {
-        			debug(LOG_INFO, "Add short.weixin.qq.com ip %s\n", ip);
-					__add_ip_2_domain(dt, ip);
-					UNLOCK_DOMAIN();
-					return 1; // parse weixin dns success
-				}
-
-				UNLOCK_DOMAIN();
-            }
-       	}
-    	pclose(file);
+	if (!xml_buffer) 
+		debug(LOG_INFO, "xml_buffer is NULL\n");
+	
+	ezxml_t xml_dns = ezxml_parse_str(xml_buffer, buffer_size);
+	ezxml_t domain_list, domain, ip;
+	
+	if (!xml_dns) {
+		debug(LOG_INFO, "ezxml_parse_str failed ");
+		return;
 	}
 	
-	return 0; // parse weixin dns failed
+	LOCK_DOMAIN();
+	
+	t_domain_trusted *dt = __add_inner_trusted_domain("short.weixin.qq.com");
+	
+	for (domain_list = ezxml_child(xml_dns, "domainlist"); domain_list; domain_list = domain_list->next) {
+		for (domain = ezxml_child(domain_list, "domain"); domain; domain = domain->next) {
+			char *name = ezxml_attr(domain, "name");
+			if (name && strcmp(name, "short.weixin.qq.com") == 0) {
+				for (ip = ezxml_child(domain, "ip"); ip; ip = ip->next) {
+					char *addr = ip->txt;			
+					if (dt) {
+						debug(LOG_DEBUG, "Add short.weixin.qq.com ip %s\n", addr);
+						__add_ip_2_domain(dt, addr);
+					}
+				}
+			}
+		}
+	}
+	
+	UNLOCK_DOMAIN();
+	
+	ezxml_free(xml_dns);
+	
+	return ;
+}
+
+void
+fix_weixin_http_dns_ip (void)
+{
+	const char *url_weixin_dns = "http://dns.weixin.qq.com/cgi-bin/micromsg-bin/newgetdns";
+	start_http_request(url_weixin_dns, REQUEST_GET_FLAG, NULL, NULL, parse_weixin_http_dns_ip_cb);
 }
 
 // clear domain's ip collection
@@ -1887,7 +1955,7 @@ __clear_trusted_domains(void)
 }
 
 void
-clear_trusted_domains(void)
+clear_trusted_domains_(void)
 {
 	LOCK_DOMAIN();
 	__clear_trusted_domains();
@@ -1996,16 +2064,19 @@ is_roaming(const char *mac)
 	return p==NULL?0:1;
 }
 
+// 0: not; 1 is
 int
 is_trusted_mac(const char *mac)
 {
 	t_trusted_mac *p = NULL;
 
+    LOCK_CONFIG();
     for (p = config.trustedmaclist; p != NULL; p = p->next) {
     	if(strcmp(mac, p->mac) == 0)
 			break;
 	}
-	
+	UNLOCK_CONFIG();
+
 	return p==NULL?0:1;
 
 }
@@ -2015,11 +2086,13 @@ is_untrusted_mac(const char *mac)
 {
 	t_trusted_mac *p = NULL;
 
+    LOCK_CONFIG();
     for (p = config.mac_blacklist; p != NULL; p = p->next) {
     	if(strcmp(mac, p->mac) == 0)
 			break;
 	}
-	
+	UNLOCK_CONFIG();
+
 	return p==NULL?0:1;
 
 }
@@ -2083,7 +2156,7 @@ clear_untrusted_mac_list()
 }
 
 // set all trusted mac to offline
-void
+static void
 __reset_trusted_mac_list()
 {
 	t_trusted_mac *p;
@@ -2100,7 +2173,7 @@ reset_trusted_mac_list()
 	UNLOCK_CONFIG();
 }
 
-t_trusted_mac *
+static t_trusted_mac *
 trusted_mac_dup(t_trusted_mac *src)
 {
 	t_trusted_mac *new = NULL;
@@ -2116,7 +2189,7 @@ trusted_mac_dup(t_trusted_mac *src)
 	return new;
 }
 
-int
+static int
 __trusted_mac_list_dup(t_trusted_mac ** dest)
 {
 	t_trusted_mac *new, *cur, *top, *prev;
@@ -2180,11 +2253,10 @@ config_validate(void)
 static void
 validate_popular_servers(void)
 {
-    if (config.popular_servers == NULL) {
-        debug(LOG_WARNING, "PopularServers not set in config file, this will become fatal in a future version.");
+    if (config.popular_servers == NULL) {  
+		add_popular_server("www.qq.com");
         add_popular_server("www.kunteng.org");
-        add_popular_server("www.baidu.com");
-        add_popular_server("www.qq.com");
+        add_popular_server("www.baidu.com");        
     }
 }
 
@@ -2219,7 +2291,13 @@ void
 mark_auth_server_bad(t_auth_serv * bad_server)
 {
     t_auth_serv *tmp;
-
+	
+	if (bad_server->authserv_fd > 0) {
+		close(bad_server->authserv_fd);
+		bad_server->authserv_fd = -1;
+		bad_server->authserv_fd_ref = 0;
+	}
+		
     if (config.auth_servers == bad_server && bad_server->next != NULL) {
         /* Go to the last */
         for (tmp = config.auth_servers; tmp->next != NULL; tmp = tmp->next) ;

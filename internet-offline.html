@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>连接错误</title>
+    <meta http-equiv="pragma" content="no-cache" />
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+
+    <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no"/>
+    <meta http-equiv="X-UA-COMPATIBLE" content="IE=edge,chrome=1"/>
+    <!--[if lt IE 9]
+        <script src="https://oss.maxcdn.com/libs/html5shiv/3.7.0/html5shiv.js"></script>
+        <script src="https://oss.maxcdn.com/libs/respond.js/1.3.0/respond.min.js"></script>
+    <![endif]>-->
+    <style class="cp-pen-styles">
+        body{
+            /*color: #f54f59;*/
+            /*background-color:#585656;*/
+            /*color:#0abcdf;*/
+            background-color:#1f2228;
+            color:#fff;
+            font-family: Helvetica, Arial, sans-serif;
+            font-size: 1.8rem;
+            font-weight: 300;
+            /*background: -webkit-linear-gradient(#fff, #ccc);*/
+            /*background: linear-gradient(#fff, #ccc);*/
+            height:100%;
+            overflow: hidden;
+        }
+        .hder{
+            font-family: "Microsoft YaHei";
+            font-weight:normal;
+            color:#77839b;
+            /*background: linear-gradient(#444, #222);*/
+            padding:10px 0;
+            text-align:center;
+            margin:0;
+            font-size:18px;
+        }
+        .center{
+            text-align: center;
+            margin-top:320px;
+        }
+
+        .circle{
+            position:absolute;
+            border:0.3rem solid #FFF;
+            width:80px;
+            height:80px;
+            border-radius:50px ;
+            margin:1.4rem auto;
+        }
+        .circle span{
+            width:100%;
+            height:100%;
+            line-height: 78px;
+            font-size:60px;
+        }
+        .header{
+            width:100%;
+            font-size: 2rem;
+            font-weight: 700;
+            margin:10px auto;
+            /*text-shadow:0 3px 0px #404853, 0 4px 0px #333333;*/
+        }
+        .wrap {
+            top: 160px;
+            margin-left: -70px;
+            position: absolute;
+            width: 100%;
+        }
+        .red{left: 70px;}
+        .ball,.shadow {
+            border-radius:100%;
+            left: 0;
+            margin: auto;
+            position: absolute;
+            right: 0;
+            top: 0;
+        }
+        .ball {
+            -webkit-animation: ball 600ms cubic-bezier(0.165, 0.840, 0.440, 1.000) infinite alternate;
+            animation: ball 600ms cubic-bezier(0.165, 0.840, 0.440, 1.000) infinite alternate;
+            height: 80px;
+            width: 80px;
+            text-align: center;
+            line-height: 80px;
+            font-size: 50px;
+            color:#f8dddd;
+        }
+        /*#e55   #b00*/
+        .red .ball{
+            background: -webkit-gradient(linear, left top, left bottom, from(#0abcdf), to(#2573fe));
+            background: -webkit-linear-gradient(#0abcdf, #2573fe);
+            background: linear-gradient(#0abcdf, #2573fe);
+        }
+        .shadow {
+            -webkit-animation: shadow 600ms cubic-bezier(0.165, 0.840, 0.440, 1.000) infinite alternate;
+            animation: shadow 600ms cubic-bezier(0.165, 0.840, 0.440, 1.000) infinite alternate;
+            background: #000;
+            bottom: -160px;
+            height: 25px;
+            width: 75px;
+        }
+        .red .ball,.red .shadow { -webkit-animation-delay: -200ms; animation-delay: -200ms; }
+        @-webkit-keyframes ball {
+            0% {
+                -webkit-transform: translateY( 0 );
+                transform: translateY( 0 );
+            }
+            100% {
+                -webkit-transform: translateY( -80px );
+                transform: translateY( -80px );
+            }
+        }
+        @keyframes ball {
+            0% {
+                -webkit-transform: translateY( 0 );
+                transform: translateY( 0 );
+            }
+            100% {
+                -webkit-transform: translateY( -80px );
+                transform: translateY( -80px );
+            }
+        }
+        @-webkit-keyframes shadow {
+            0% {
+                opacity: 0.2;
+                -webkit-transform: scale( 0.75 );
+                transform: scale( 0.75 );
+            }
+            100% {
+                opacity: 0.05;
+                -webkit-transform: scale( 1 );
+                transform: scale( 1 );
+            }
+        }
+        @keyframes shadow {
+            0% {
+                opacity: 0.2;
+                -webkit-transform: scale( 0.75 );
+                transform: scale( 0.75 );
+            }
+            100% {
+                opacity: 0.05;
+                -webkit-transform: scale( 1 );
+                transform: scale( 1 );
+            }
+        }
+
+    </style>
+    <style type="text/css">
+        .span_cont{
+            position:relative;
+            top:-34px;
+            left:-20px;
+            width:60px;
+            height:60px;
+            font-size:14px;
+            margin:40px;
+            transform:rotate(-90deg); -ms-transform:rotate(-90deg); 	/* IE 9 */-moz-transform:rotate(-90deg); 	/* Firefox */-webkit-transform:rotate(-90deg); /* Safari 和 Chrome */-o-transform:rotate(-90deg);
+            font-weight: bold;
+        }
+        span{height:40px; width:40px; display:block; position:relative;}
+        .demoSpan1{position:relative;}
+        .demoSpan1:before{content:''; height:8px; width:8px;border-radius: 4px; display:block; background:#fff; position:absolute; top:17px; left:11px;}
+        .demoSpan2{position:absolute; top:0; left:0;}
+        .demoSpan2:before{content:''; height:40px; width:40px; display:block; border:4px solid transparent; border-right:4px solid #fff; border-radius:40px;-webkit-border-radius:40px;-moz-border-radius:40px; position:absolute; top:-3px; left:-6px; }
+        .demoSpan2:after{content:''; height:30px; width:30px; display:block; border:4px solid transparent; border-right:4px solid #fff; border-radius:20px;-webkit-border-radius:20px;-moz-border-radius:20px; position:absolute; top:2px; left:-4px; }
+
+        .demoSpan3{position:absolute; top:0; left:0;}
+        .demoSpan3:before{content:''; height:20px; width:20px; display:block; border:4px solid transparent; border-right:4px solid #fff; border-radius:20px;-webkit-border-radius:20px;-moz-border-radius:20px; position:absolute; top:7px; left:-1px; }
+        .demoSpan4{
+            transform:rotate(45deg); -ms-transform:rotate(45deg);-moz-transform:rotate(45deg);-webkit-transform:rotate(45deg);-o-transform:rotate(45deg);
+        }
+        .demoSpan4:before{content:''; height:4px; width:16px; display:block; background:#333; position:absolute; top:36px; left:15px;}
+        .demoSpan4:after{content:''; height:16px; width:4px; display:block; background:#333; position:absolute; top:30px; left:21px;}
+    </style>
+</head>
+<body>
+
+<div class="wrap red">
+    <div class="shadow"></div>
+    <div class="ball">
+        <div class="span_cont">
+            <span class="demoSpan1">
+                <span class="demoSpan2">
+                    <span class="demoSpan3">
+                        <span class="demoSpan4"></span>
+                    </span>
+                </span>
+            </span>
+        </div>
+    </div>
+</div>
+
+    <section class="center">
+        <article>
+            <h1 class="header">
+                网络不在线
+            </h1>
+            <hr style="width:200px;margin:30px auto 10px;border-bottom:1px solid #3e4042;"/>
+            <h5 class="hder">坤腾畅联</h5>
+        </article>
+    </section>
+</body>
+</html>
