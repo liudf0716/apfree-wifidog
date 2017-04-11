@@ -47,6 +47,10 @@ Requests: 9237 susceed, 1550 failed.
 100 clients, running 600 sec ：并发数100 运行600秒。<br />
 每秒钟响应请求数=Speed=1078 pages/min，每秒钟传输数据量=30788 bytes/sec。<br />
 Requests: 9237 susceed, 1550 failed：9237个请求成功，1550个失败。
+### 测试结果 ### 
+！[image](https://github.com/heartache1987/images/raw/master/psb.png)
+### 测试结果分析 ###
+上图是并发数为100 运行6个小时后的结果，很明显测试wifidog已经死掉。
 ## Apfree_wifidog的测试结果与分析 ##
 ### 测试结果 ###
 Webbench - Simple Web Benchmark 1.5<br />
@@ -84,4 +88,7 @@ Requests: 14795 susceed, 48 failed：14795个请求成功，48个失败。
 6691个请求成功，830个失败，成功率87.60%。<br />
 在100个并发数的情况下每秒响应的http请求为1078，<br />
 9237个请求成功，1550个失败，成功率83.22%。<br />
-对比以上两组数据可以看出，apfree_wifidog处理http请求的能力远远大于原版wifidog。
+对比以上两组数据可以看出，apfree_wifidog处理http请求的能力远远大于原版wifidog。<br />
+原版wifidog在并发数为100的情况下运行6小时后死掉，<br />
+apfree_wifidog在同样的情况下运行三天后依然正常运行，<br />
+由此可以看出apfree_wifidog的稳定性远远强于原版wifidog。
