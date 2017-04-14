@@ -67,7 +67,7 @@ typedef enum fw_access_t_ {
 int iptables_fw_init(void);
 
 /** @brief Initializes the authservers table */
-void iptables_fw_set_authservers(void);
+void iptables_fw_set_authservers(void *handle);
 
 /** @brief Clears the authservers table */
 void iptables_fw_clear_authservers(void);
@@ -76,7 +76,7 @@ void iptables_fw_clear_authservers(void);
 int iptables_fw_destroy(void);
 
 /** @brief Helper function for iptables_fw_destroy */
-int iptables_fw_destroy_mention(const char *table, const char *chain, const char *mention);
+int iptables_fw_destroy_mention(const char *table, const char *chain, const char *mention, void *handle);
 
 /** @brief Define the access of a specific client */
 int iptables_fw_access(fw_access_t type, const char *ip, const char *mac, int tag);
