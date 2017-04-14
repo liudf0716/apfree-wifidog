@@ -269,7 +269,7 @@ void
 fw_set_authservers(void)
 {
     debug(LOG_INFO, "Setting the authservers list");
-    iptables_fw_set_authservers();
+    iptables_fw_set_authservers(NULL);
 }
 
 //>>>>> liudf added 20151224

@@ -1,32 +1,33 @@
 set(src_apfreewifidog
 	main.c
-    commandline.c 
+	commandline.c 
 	conf.c 
 	debug.c 
-    fw_iptables.c 
-    firewall.c 
-    gateway.c 
-    centralserver.c 
-    http.c 
-    auth.c 
-    client_list.c 
-    util.c 
-    wdctl_thread.c 
-    ping_thread.c 
-    safe.c 
-    httpd_thread.c 
-    simple_http.c 
-    pstring.c 
-    thread_pool.c 
-    ipset.c 
-    https_server.c 
+	fw3_iptc.c 
+	fw_iptables.c 
+	firewall.c 
+	gateway.c 
+	centralserver.c 
+	http.c 
+	auth.c 
+	client_list.c 
+	util.c 
+	wdctl_thread.c 
+	ping_thread.c 
+	safe.c 
+	httpd_thread.c 
+	simple_http.c 
+	pstring.c 
+	thread_pool.c 
+	ipset.c 
+	https_server.c 
 	https_common.c 
-    wd_util.c 
+	wd_util.c 
 	ezxml.c
 	openssl_hostname_validation.c
 	hostcheck.c
-    http_server.c
-    mqtt_thread.c
+	http_server.c
+	mqtt_thread.c
 )
 
 set(src_wdctl wdctl.c util.c debug.c)
@@ -45,6 +46,12 @@ set(libs
 	event_openssl
 	mosquitto)
 
+set(fw3_libs
+	dl
+	iptext
+	iptext4
+	xtables)
+
 ADD_DEFINITIONS(-O2 -Wall --std=gnu99 -Wmissing-declarations)
 
 include_directories(../libhttpd/)
@@ -52,10 +59,9 @@ include_directories(../libhttpd/)
 
 add_executable(wdctl ${src_wdctl})
 add_executable(wifidog ${src_apfreewifidog})
-target_link_libraries(wifidog ${libs})
+target_link_libraries(wifidog ${libs} ${fw3_libs})
 
 install(TARGETS wifidog wdctl
-        RUNTIME DESTINATION bin
+		RUNTIME DESTINATION bin
 )
 
-    
