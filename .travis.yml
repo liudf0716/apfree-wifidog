@@ -1,13 +1,18 @@
+dist: trusty
+sudo: false
 language: c
 
 compiler:
   - gcc
 
-install: 
-  - sudo -E apt-add-repository -y ppa:linuxjedi/ppa
-  - sudo apt-get update || true
-  - sudo apt-get install build-essential
-  - sudo apt-get install libjson-c-dev libevent-dev
+addons:
+  apt:
+    sources:
+    - sourceline: 'ppa:linuxjedi/ppa'
+    packages:
+    - build-essential
+    - libjson-c-dev
+    - libevent-dev
 
 script:
   - cmake .
