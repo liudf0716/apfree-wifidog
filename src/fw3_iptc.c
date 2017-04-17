@@ -42,7 +42,6 @@
 #include <sys/utsname.h>
 
 #include <xtables.h>
-#include <libubox/list.h>
 
 #include "fw3_iptc.h"
 #include "debug.h"
