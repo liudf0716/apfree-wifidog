@@ -200,6 +200,8 @@ process_https_cb (struct evhttp_request *req, void *arg) {
     } else {
 		evhttp_gw_reply_js_redirect(req, peer_addr);
 	}
+	/*free the evhttp_request (con)*/
+	evhttp_connection_free(con);
 }
 
 /**
