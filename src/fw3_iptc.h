@@ -31,7 +31,6 @@
 
 #include <stdbool.h>
 #include <libiptc/libiptc.h>
-#include <iptables.h>
 
 #include <netdb.h>
 #include <arpa/inet.h>
