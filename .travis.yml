@@ -13,7 +13,7 @@ addons:
     - build-essential
     - libjson-c-dev
     - libevent-dev
-    - libip4tc-dev
+    - libiptables-dev
 
 script:
   - cmake .
