@@ -197,7 +197,7 @@ offline_client_list_add(const char *ip, const char *mac)
 	curclient->last_login 	= time(NULL);
 	curclient->first_login 	= time(NULL);
 	curclient->client_type 	= 0;
-	curclient->hit_counts 	= 1;
+	curclient->hit_counts 	= 0;
 	curclient->temp_passed 	= 0;
 
 	offline_client_list_insert_client(curclient);
