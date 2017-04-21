@@ -42,6 +42,7 @@
 #include "debug.h"
 #include "safe.h"
 #include "wd_util.h"
+#include "centralserver.h"
 
 #ifdef	_MQTT_SUPPORT_
 
@@ -220,30 +221,27 @@ reboot_device_op(void *mosq, const char *type, const char *value, const int req_
 void
 reset_device_op(void *mosq, const char *type, const char *value, const int req_id, const s_config *config)
 {
-	t_client *p;
-	debug(LOG_INFO, "value is %s and type is %s received from mqtt",value,type);
-
-	 LOCK_CLIENT_LIST();
-	if(strcmp(type,"ip") == 0)
-	{
+	t_client *p = NULL;
+	
+	debug(LOG_DEBUG, "value is %s and type is %s received from mqtt",value,type);
+ 
+	if(strcmp(type,"ip") == 0) {
+		LOCK_CLIENT_LIST();
 		p = client_list_find_by_ip(value);
 	}
-	else if(strcmp(type,"mac") == 0)
-	{
+	else if(strcmp(type,"mac") == 0) {
+		LOCK_CLIENT_LIST();
 		p = client_list_find_by_mac(value);
-	}
-	else
-	{
-		p = NULL;
-		UNLOCK_CLIENT_LIST();
-		debug(LOG_INFO,"kick client don't support this type,only support mac or ip!");
-	}
+	}else {
+		return;
+	}	
 
-	if(p != NULL)
-	{
+	if (p != NULL)  {
 		logout_client(p);
 		UNLOCK_CLIENT_LIST();
 		send_mqtt_response(mosq, req_id, 200, "Ok", config);
+	} else {
+		UNLOCK_CLIENT_LIST();
 	}
 }
 
