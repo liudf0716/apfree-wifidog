@@ -56,6 +56,7 @@ static struct wifidog_mqtt_op {
 	{"save_rule", save_rule_op},
 	{"get_status", get_status_op},
 	{"reboot", reboot_device_op},
+	{"reset", reset_device_op},
 	{NULL, NULL}
 };
 
@@ -214,6 +215,36 @@ void
 reboot_device_op(void *mosq, const char *type, const char *value, const int req_id, const s_config *config)
 {
 	system("reboot");
+}
+
+void
+reset_device_op(void *mosq, const char *type, const char *value, const int req_id, const s_config *config)
+{
+	t_client *p;
+	debug(LOG_INFO, "value is %s and type is %s received from mqtt",value,type);
+
+	 LOCK_CLIENT_LIST();
+	if(strcmp(type,"ip") == 0)
+	{
+		p = client_list_find_by_ip(value);
+	}
+	else if(strcmp(type,"mac") == 0)
+	{
+		p = client_list_find_by_mac(value);
+	}
+	else
+	{
+		p = NULL;
+		UNLOCK_CLIENT_LIST();
+		debug(LOG_INFO,"kick client don't support this type,only support mac or ip!");
+	}
+
+	if(p != NULL)
+	{
+		logout_client(p);
+		UNLOCK_CLIENT_LIST();
+		send_mqtt_response(mosq, req_id, 200, "Ok", config);
+	}
 }
 
 static void
