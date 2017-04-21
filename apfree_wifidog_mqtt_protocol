@@ -6,6 +6,7 @@ apfree wifidog mqtt protocol is used to remotely control wifidog, including
 5, save all above user defining rules
 6, status of router
 7, reboot router
+8, reset trusted client(kick the online client) 
 
 apfree wifidog will subscribe a topic : wifidog/gw_id/request/+
 for example, it should only receive such topic:
@@ -31,6 +32,8 @@ request:
 {"op":"get_status","time":"yyyymmddhhmmss"}
 7, reboot device
 {"op":"reboot","time":"yyyymmddhhmmss"}
+8, reset trusted client
+{"op":"reset","type":"ip|mac","value":"client_ip|client_mac","time":"yyyymmddhhmmss"}
 
 response:
 if these request has response, its format:
