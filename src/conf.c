@@ -1973,7 +1973,7 @@ t_domain_trusted * del_domain_ip_common(const char *domain, trusted_domain_t whi
 {
 	t_domain_trusted *p = NULL;
 	LOCK_DOMAIN();
-	p = __del_domain_common(domain, which);
+	p = __del_ip_domain_common(domain, which);
 	UNLOCK_DOMAIN();
 
 	return p;
