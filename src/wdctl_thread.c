@@ -602,7 +602,7 @@ wdctl_add_trusted_iplist(int fd, const char *arg)
 
 void del_trusted_iplist(const char *arg)
 {
-    add_trusted_ip_list(arg);
+    del_trusted_ip_list(arg);
     fw_refresh_user_domains_trusted();  
 }
 
