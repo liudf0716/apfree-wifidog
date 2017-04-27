@@ -92,3 +92,18 @@ Requests: 14795 susceed, 48 failed：14795个请求成功，48个失败。
 原版wifidog在并发数为100的情况下运行6小时后死掉，<br />
 apfree_wifidog在同样的情况下运行三天后依然正常运行，<br />
 由此可以看出apfree_wifidog的稳定性远远强于原版wifidog。
+
+# 补充说明 #
+以上测试数据是在无线干扰较大的情况下的测试数据，下面补充一条apfree_wifidog在有线情况下的数据：<br />
+Webbench - Simple Web Benchmark 1.5<br />
+Copyright (c) Radim Kolar 1997-2004, GPL Open Source Software.<br />
+
+Benchmarking: GET http://www.taobao.com/<br />
+100 clients, running 600 sec.<br />
+
+Speed=1504 pages/min, 18475 bytes/sec.<br />
+Requests: 15043 susceed, 0 failed.
+
+100 clients, running 600 sec ：并发数100 运行600秒。<br />
+每秒钟响应请求数=Speed=1504 pages/min，每秒钟传输数据量=18475 bytes/sec。<br />
+Requests: 15043 susceed, 0 failed：15043个请求成功，0个失败。成功率100%。
