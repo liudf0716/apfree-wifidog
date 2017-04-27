@@ -10,15 +10,35 @@ EXTRA_COMMANDS="status"
 EXTRA_HELP="        status Print the status of the service"
 
 service_trigger() {
-	 procd_add_reload_trigger	"wifidog"	
+	 procd_add_reload_trigger	"wifidog"
 }
 
 echo_firewall_rule() {
-	echo -e "\tFirewallRule $1"
+	echo "    FirewallRule $1"
+}
+
+prepare_mqtt_conf() {
+	local cfg=$1
+	local serveraddr
+	local serverport
+
+	config_get serveraddr "$cfg" "serveraddr"
+	config_get serverport "$cfg" "serverport"
+	[ -z "$serveraddr" -o -z "$serverport" ] && return 1
+
+	cat <<-EOF >>$CONFIGFILE
+ 
+		MQTT {
+		    ServerAddr $serveraddr
+		    ServerPort $serverport
+		}
+EOF
+
+	sed -i -e '/^$/d' $CONFIGFILE
 }
 
 prepare_wifidog_conf() {
-	local cfg=$1	
+	local cfg=$1
 	local enable
 	local gateway_id
 	local gateway_interface
@@ -47,20 +67,20 @@ prepare_wifidog_conf() {
 	local proxy_port
 	local no_auth
 
-	[ -f $CONFIGFILE ] && rm $CONFIGFILE	
+	[ -f $CONFIGFILE ] && rm $CONFIGFILE
 
 	config_get enable "$cfg" "enable" 1
 	[ $enable = "1" ] || return
-	
+
 	local default_gateway_id=`ifconfig br-lan|grep HWaddr|awk '{print $5}'|sed s/://g`
-	
-	local external_interface=`uci show network.wan.ifname|cut -d'=' -f 2|sed -e "s/'//g"`		
+
+	local external_interface=`uci show network.wan.ifname|cut -d'=' -f 2|sed -e "s/'//g"`
 
 	config_get gateway_id "$cfg" "gateway_id" $default_gateway_id
 	config_get gateway_interface "$cfg" "gateway_interface" "br-lan"
 	config_get auth_server_hostname "$cfg" "auth_server_hostname" 
 	config_get auth_server_port "$cfg" "auth_server_port" "80"
-	config_get auth_server_path "$cfg" 	"auth_server_path" "/wifidog/"	
+	config_get auth_server_path "$cfg" 	"auth_server_path" "/wifidog/"
 	config_get auth_server_path_login "$cfg" 	"auth_server_path_login"
 	config_get auth_server_path_portal "$cfg" 	"auth_server_path_portal"
 	config_get auth_server_path_msg "$cfg" 	"auth_server_path_msg"
@@ -71,26 +91,26 @@ prepare_wifidog_conf() {
 	config_get js_filter		"$cfg"	"js_filter"			1
 	config_get client_timeout	"$cfg"	"client_timeout"	"5"
 	config_get httpd_max_conn	"$cfg"	"httpd_max_conn"	"200"
-	config_get trusted_domains 	"$cfg"	"trusted_domains"	
+	config_get trusted_domains 	"$cfg"	"trusted_domains"
 	config_get trusted_maclist		"$cfg"	"trusted_maclist"
-	config_get untrusted_maclist 	"$cfg"	"untrusted_maclist"	
+	config_get untrusted_maclist 	"$cfg"	"untrusted_maclist"
 	config_get pool_mode		"$cfg"	"pool_mode"			0
 	config_get thread_number	"$cfg"	"thread_number"		20
 	config_get queue_size		"$cfg"	"queue_size"		200
 	config_get wired_passed		"$cfg"	"wired_passed"		1
-	config_get trusted_iplist	"$cfg"	"trusted_iplist"	
+	config_get trusted_iplist	"$cfg"	"trusted_iplist"
 	config_get trusted_pan_domains	"$cfg"	"trusted_pan_domains"
-	config_get proxy_port	"$cfg"	"proxy_port"	
-	config_get no_auth	"$cfg"	"no_auth"	
+	config_get proxy_port	"$cfg"	"proxy_port"
+	config_get no_auth	"$cfg"	"no_auth"
 
-	local set_auth_server_path_login=`[  -n "$auth_server_path_login" ] && echo "LoginScriptPathFragment $auth_server_path_login"`
-	local set_auth_server_path_portal=`[  -n "$auth_server_path_portal" ] && echo "PortalScriptPathFragment $auth_server_path_portal"`
-	local set_auth_server_path_msg=`[  -n "$auth_server_path_msg" ] && echo "MsgScriptPathFragment $auth_server_path_msg"`
-	local set_auth_server_path_ping=`[  -n "$auth_server_path_ping" ] && echo "PingScriptPathFragment $auth_server_path_ping"`
-	local set_auth_server_path_auth=`[  -n "$auth_server_path_auth" ] && echo "AuthScriptPathFragment $auth_server_path_auth"` 
-	local set_delta_traffic=`[  -n "$delta_traffic" ] && echo "DeltaTraffic $delta_traffic"` 
-	local set_trusted_maclist=`[  -n "$trusted_maclist" ] && echo "TrustedMACList $trusted_maclist"` 
-	local set_untrusted_maclist=`[  -n "$untrusted_maclist" ] && echo "UntrustedMACList $untrusted_maclist"` 
+	local set_auth_server_path_login=`[ -n "$auth_server_path_login" ] && echo "    LoginScriptPathFragment $auth_server_path_login"`
+	local set_auth_server_path_portal=`[ -n "$auth_server_path_portal" ] && echo "    PortalScriptPathFragment $auth_server_path_portal"`
+	local set_auth_server_path_msg=`[ -n "$auth_server_path_msg" ] && echo "    MsgScriptPathFragment $auth_server_path_msg"`
+	local set_auth_server_path_ping=`[ -n "$auth_server_path_ping" ] && echo "    PingScriptPathFragment $auth_server_path_ping"`
+	local set_auth_server_path_auth=`[ -n "$auth_server_path_auth" ] && echo "    AuthScriptPathFragment $auth_server_path_auth"` 
+	local set_delta_traffic=`[ -n "$delta_traffic" ] && echo "DeltaTraffic $delta_traffic"` 
+	local set_trusted_maclist=`[ -n "$trusted_maclist" ] && echo "TrustedMACList $trusted_maclist"` 
+	local set_untrusted_maclist=`[ -n "$untrusted_maclist" ] && echo "UntrustedMACList $untrusted_maclist"` 
 	local set_trusted_domains=`[ -n "$trusted_domains" ] && echo "TrustedDomains	$trusted_domains"`
 	local set_trusted_iplist=`[ -n "$trusted_iplist" ] && echo "TrustedIpList	$trusted_iplist"`
 	local set_trusted_pan_domains=`[ -n "$trusted_pan_domains" ] && echo "TrustedPanDomains"	$trusted_pan_domains`
@@ -103,104 +123,104 @@ prepare_wifidog_conf() {
 	local set_firewall_rule_unknown_users=`config_list_foreach "$cfg" "firewall_rule_unknown_users" echo_firewall_rule`
 	local set_firewall_rule_locked_users=`config_list_foreach "$cfg" "firewall_rule_locked_users" echo_firewall_rule`
 
-	cat > $CONFIGFILE <<EOF
-GatewayID $gateway_id
-GatewayInterface $gateway_interface
+	cat <<-EOF >$CONFIGFILE
+		GatewayID $gateway_id
+		GatewayInterface $gateway_interface
+		Externalinterface $external_interface
+ 
+		AuthServer {
+		    Hostname $auth_server_hostname
+		    HTTPPort $auth_server_port
+		    Path $auth_server_path
+			$set_auth_server_path_login
+			$set_auth_server_path_portal
+			$set_auth_server_path_msg
+			$set_auth_server_path_ping
+			$set_auth_server_path_auth
+		}
+ 
+		$set_delta_traffic
+		CheckInterval $check_interval
+		ClientTimeout $client_timeout
+		JsFilter	$js_filter
+		WiredPassed	$wired_passed
 
-Externalinterface $external_interface
+		HTTPDMaxConn $httpd_max_conn
 
-AuthServer {
-	Hostname $auth_server_hostname
-	HTTPPort $auth_server_port
-	Path $auth_server_path
-	$set_auth_server_path_login
-	$set_auth_server_path_portal
-	$set_auth_server_path_msg
-	$set_auth_server_path_ping
-	$set_auth_server_path_auth
-}
+		PoolMode	$pool_mode
+		ThreadNumber	$thread_number
+		QueueSize	$queue_size
 
-$set_delta_traffic
+		$set_trusted_domains
 
-CheckInterval $check_interval
-ClientTimeout $client_timeout
-JsFilter	$js_filter
-WiredPassed	$wired_passed
+		$set_untrusted_maclist
 
-HTTPDMaxConn $httpd_max_conn
+		$set_trusted_maclist
 
-PoolMode	$pool_mode
-ThreadNumber	$thread_number
-QueueSize	$queue_size
-	
-$set_trusted_domains
+		$set_trusted_iplist
 
-$set_untrusted_maclist
+		$set_trusted_pan_domains
 
-$set_trusted_maclist
+		$set_proxy_port
 
-$set_trusted_iplist
-
-$set_trusted_pan_domains
-
-$set_proxy_port
-
-$set_no_auth
-
-FirewallRuleSet global {
-$set_firewall_rule_global
-}
-
-FirewallRuleSet validating-users {
-$set_firewall_rule_validating_users
-	FirewallRule allow to 0.0.0.0/0
-}
-
-FirewallRuleSet known-users {
-$set_firewall_rule_known_users
-	FirewallRule allow to 0.0.0.0/0
-}
-
-FirewallRuleSet auth-is-down {
-$set_firewall_rule_auth_is_down
-}
-
-FirewallRuleSet unknown-users {
-$set_firewall_rule_unknown_users
-	FirewallRule allow udp port 53
-	FirewallRule allow tcp port 53
-	FirewallRule allow udp port 67
-	FirewallRule allow tcp port 67
-}
-
-FirewallRuleSet locked-users {
-$set_firewall_rule_locked_users
-	FirewallRule block to 0.0.0.0/0
-}
+		$set_no_auth
+ 
+		FirewallRuleSet global {
+			$set_firewall_rule_global
+		}
+ 
+		FirewallRuleSet validating-users {
+			$set_firewall_rule_validating_users
+		    FirewallRule allow to 0.0.0.0/0
+		}
+ 
+		FirewallRuleSet known-users {
+			$set_firewall_rule_known_users
+		    FirewallRule allow to 0.0.0.0/0
+		}
+ 
+		FirewallRuleSet auth-is-down {
+			$set_firewall_rule_auth_is_down
+		}
+ 
+		FirewallRuleSet unknown-users {
+			$set_firewall_rule_unknown_users
+		    FirewallRule allow udp port 53
+		    FirewallRule allow tcp port 53
+		    FirewallRule allow udp port 67
+		    FirewallRule allow tcp port 67
+		}
+ 
+		FirewallRuleSet locked-users {
+			$set_firewall_rule_locked_users
+		    FirewallRule block to 0.0.0.0/0
+		}
 EOF
 }
 
 init_config() {
 	config_load wifidog
 	config_foreach prepare_wifidog_conf wifidog
-	
+
 	[ ! -f $CONFIGFILE ] && {
 		echo "no wifidog.conf, exit....."
 		stop
 		exit
 	}
+
+	config_foreach prepare_mqtt_conf mqtt
 }
 
 start_service() {
-	init_config	
-	
+	init_config
+
 	procd_open_instance
-    # -s: log to syslog
-    # -f: run in foreground
-    procd_set_param command $PROG -c $CONFIGFILE -f -d 0
-    procd_set_param respawn # respawn automatically if something died
+	# -s: log to syslog
+	# -f: run in foreground
+	procd_set_param command $PROG -c $CONFIGFILE -f -d 0
+	procd_set_param respawn # respawn automatically if something died
 	procd_set_param file	$CONFIGFILE
-    procd_close_instance
+	procd_close_instance
 }
 
 reload_service() {
@@ -209,5 +229,5 @@ reload_service() {
 }
 
 status() {
-    /usr/bin/wdctl status
+	/usr/bin/wdctl status
 }
