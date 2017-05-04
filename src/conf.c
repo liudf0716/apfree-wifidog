@@ -1980,6 +1980,9 @@ t_domain_trusted * del_domain_ip_common(const char *domain, trusted_domain_t whi
 }
 void del_trusted_ip_list(const char *ptr)
 {
+	char *ptrcopy = NULL, *pt = NULL;
+	char *ip = NULL;
+	char *tmp = NULL;
 	t_domain_trusted *p = NULL;
 
 	debug(LOG_DEBUG, "Parsing string [%s] for trust domains", ptr);
@@ -1992,7 +1995,36 @@ void del_trusted_ip_list(const char *ptr)
 		debug(LOG_ERR, "Impossible: del iplist domain failed");
 	return;
 	}
-	__del_ip_2_domain(p, ptr);
+
+	ptrcopy = safe_strdup(ptr);
+	pt = ptrcopy;
+	
+	LOCK_DOMAIN();
+	while ((ip = strsep(&ptrcopy, ","))) {  /* ip does *not* need allocation. strsep
+													 provides a pointer in ptrcopy. */
+		/* Skip leading spaces. */
+		while (*ip != '\0' && isblank(*ip)) {
+			ip++;
+		}
+		if (*ip == '\0') {  /* Equivalent to strcmp(ip, "") == 0 */
+			continue;
+		}
+		/* Remove any trailing blanks. */
+		tmp = ip;
+		while (*tmp != '\0' && !isblank(*tmp)) {
+			tmp++;
+		}
+		if (*tmp != '\0' && isblank(*tmp)) {
+			*tmp = '\0';
+		}
+
+		if(is_valid_ip(ip) == 0) // not valid ip address
+			continue;
+
+		debug(LOG_DEBUG, "Deling trust ip [%s] from list", ip);
+		__del_ip_2_domain(p, ip);
+	}
+	UNLOCK_DOMAIN();
 }
 
 
