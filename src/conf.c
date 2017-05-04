@@ -2025,6 +2025,8 @@ void del_trusted_ip_list(const char *ptr)
 		__del_ip_2_domain(p, ip);
 	}
 	UNLOCK_DOMAIN();
+
+    free(pt);
 }
 
 
