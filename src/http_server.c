@@ -196,7 +196,7 @@ done:
 static void serve_403_http(const char *address, const t_http_server *http_server) {
 	struct event_base *base;
 	struct evhttp *http;
-	struct evhttp_bound_socket *handle;
+	struct evhttp_bound_socket *handle = NULL;
 
 	base = event_base_new();
 	if (!base) {

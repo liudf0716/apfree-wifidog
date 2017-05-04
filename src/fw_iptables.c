@@ -887,7 +887,7 @@ iptables_fw_init(void)
 	/* Insert at the beginning */
 	iptables_do_append_command(handle, "-t filter -I FORWARD -i %s -j " CHAIN_TO_INTERNET, config->gw_interface);
 
-	iptables_do_append_command(handle, "-t filter -A " CHAIN_TO_INTERNET " -m state --state INVALID -j DROP");
+	iptables_do_append_command(handle, "-t filter -A " CHAIN_TO_INTERNET " -m conntrack --ctstate INVALID -j DROP");
 
 	/* TCPMSS rule for PPPoE */
 	iptables_do_append_command(handle, "-t filter -A " CHAIN_TO_INTERNET

@@ -106,6 +106,10 @@ Domains of `www.baidu.com,www.qq.com,www.qq.com.cn,www.weixin.com` is trusted in
 
 2, [apfree_wifidog性能测试报告](https://github.com/liudf0716/apfree_wifidog/blob/master/apfree%20wifidog%E7%BA%BF%E7%A8%8B%E6%B1%A0%E4%B8%8D%E5%90%8C%E9%85%8D%E7%BD%AE%E6%80%A7%E8%83%BD%E6%B5%8B%E8%AF%95%E6%8A%A5%E5%91%8A.md)
 
+3, [线程池和非线程池性能差别](https://github.com/liudf0716/apfree_wifidog/blob/master/%E7%BA%BF%E7%A8%8B%E6%B1%A0%E5%92%8C%E9%9D%9E%E7%BA%BF%E7%A8%8B%E6%B1%A0%E6%80%A7%E8%83%BD%E5%B7%AE%E5%88%AB.md)
+
+4, [阈值调整测试技巧报告](https://github.com/liudf0716/apfree_wifidog/blob/master/%E9%98%88%E5%80%BC%E8%B0%83%E6%95%B4%E6%B5%8B%E8%AF%95%E6%8A%80%E5%B7%A7%E6%8A%A5%E5%91%8A.md)
+
 ### How To Contribute
 
 Feel free to create issues or pull-requests if you have any problems.
