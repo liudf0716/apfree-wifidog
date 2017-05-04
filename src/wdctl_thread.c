@@ -576,7 +576,7 @@ wdctl_show_trusted_pan_domains(int fd)
 
 char *show_trusted_iplist()
 {
-    return NULL;
+    return mqtt_get_trusted_iplist_text();
 }
 
 void add_trusted_iplist(const char *arg)

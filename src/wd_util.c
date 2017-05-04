@@ -588,6 +588,48 @@ mqtt_get_trusted_domains_text()
 }
 
 char *
+mqtt_get_trusted_iplist_text()
+{
+	s_config *config;
+	t_domain_trusted *domain_trusted = NULL;
+	t_ip_trusted	*ip_trusted = NULL;
+
+	config = config_get_config();
+	if (config->domains_trusted == NULL)
+		return NULL;
+
+	struct json_object *jarray = json_object_new_array();
+	domain_trusted = config->domains_trusted;
+	pstr_t *pstr = pstr_new();
+	int first = 1;
+	
+	LOCK_DOMAIN();
+	struct json_object *jobj = json_object_new_object();
+	for(ip_trusted = domain_trusted->ips_trusted; ip_trusted != NULL; ip_trusted = ip_trusted->next) {
+		if (first) {
+			pstr_append_sprintf(pstr, "%s", ip_trusted->ip);
+			first = 0;
+		} else {
+			pstr_append_sprintf(pstr, ",%s", ip_trusted->ip);
+		}
+	}
+
+	char *iplist = pstr_to_string(pstr);
+	json_object_object_add(jobj, domain_trusted->domain, 
+		json_object_new_string(first?"NULL":iplist));
+	json_object_array_add(jarray, jobj);
+	if (iplist)
+		free(iplist);
+
+	UNLOCK_DOMAIN();
+
+	char *retStr = safe_strdup(json_object_to_json_string(jarray));
+	json_object_put(jarray);
+
+	return retStr;
+}
+
+char *
 get_trusted_domains_text(void)
 {
 	pstr_t *pstr = pstr_new();
