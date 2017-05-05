@@ -58,6 +58,7 @@ static struct wifidog_mqtt_op {
 	{"get_status", get_status_op},
 	{"reboot", reboot_device_op},
 	{"reset", reset_device_op},
+	{"set_auth_serv",set_auth_server_op},
 	{NULL, NULL}
 };
 
@@ -243,6 +244,34 @@ reset_device_op(void *mosq, const char *type, const char *value, const int req_i
 	} else {
 		UNLOCK_CLIENT_LIST();
 	}
+}
+
+void
+set_auth_server_op(void *mosq, const char *type, const char *value, const int req_id, const s_config *config)
+{
+	debug(LOG_DEBUG, "value is %s\n", value);
+	json_object *json_request = json_tokener_parse(value);
+	if (!json_request) {
+		debug(LOG_INFO, "user request is not valid");
+		return;
+	}
+
+	char * host_name = json_object_get_string(json_object_object_get(json_request, "hostname"));
+	char * http_port = json_object_get_string(json_object_object_get(json_request, "port"));
+	char * path = json_object_get_string(json_object_object_get(json_request, "path"));
+
+	debug(LOG_DEBUG, "hostname is %s, port is %s, path is %s", host_name, http_port,path);
+	
+	LOCK_CONFIG();
+	if(NULL != host_name)
+		config->auth_servers->authserv_hostname = host_name;
+	if(NULL != http_port)
+		config->auth_servers->authserv_http_port = atoi(http_port);
+	if(NULL != path)
+		config->auth_servers->authserv_path = path;
+	UNLOCK_CONFIG();
+	
+	send_mqtt_response(mosq, req_id, 200, "Ok", config);
 }
 
 static void

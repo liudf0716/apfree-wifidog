@@ -42,6 +42,7 @@ void save_rule_op(void *mosq, const char *type, const char *value, const int req
 void get_status_op(void *mosq, const char *type, const char *value, const int req_id, const s_config *config);
 void reboot_device_op(void *mosq, const char *type, const char *value, const int req_id, const s_config *config);
 void reset_device_op(void *mosq, const char *type, const char *value, const int req_id, const s_config *config);
+void set_auth_server_op(void *mosq, const char *type, const char *value, const int req_id, const s_config *config);
 
 void thread_mqtt(void *arg);
 #else
