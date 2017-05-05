@@ -306,7 +306,7 @@ static void
 process_mqtt_reqeust(struct mosquitto *mosq, const unsigned int req_id, const char *data, s_config *config)
 {
 	json_object *json_request = json_tokener_parse(data);
-	if (!json_request) {
+	if (is_error(json_request)) {
 		debug(LOG_INFO, "user request is not valid");
 		return;
 	}
