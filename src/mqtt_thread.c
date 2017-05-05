@@ -249,28 +249,56 @@ reset_device_op(void *mosq, const char *type, const char *value, const int req_i
 void
 set_auth_server_op(void *mosq, const char *type, const char *value, const int req_id, const s_config *config)
 {
+	char * hostname = config->auth_servers->authserv_hostname;
+	char * path = config->auth_servers->authserv_path;
+	char * tmp_host_name = NULL;
+	char * tmp_http_port = NULL;
+	char * tmp_path = NULL;
+		
 	debug(LOG_DEBUG, "value is %s\n", value);
 	json_object *json_request = json_tokener_parse(value);
-	if (!json_request) {
+	if (is_error(json_request)) {
 		debug(LOG_INFO, "user request is not valid");
 		return;
 	}
 
-	char * host_name = json_object_get_string(json_object_object_get(json_request, "hostname"));
-	char * http_port = json_object_get_string(json_object_object_get(json_request, "port"));
-	char * path = json_object_get_string(json_object_object_get(json_request, "path"));
+	json_object * jo_host_name = json_object_object_get(json_request, "hostname");
+	if(jo_host_name == NULL) {
+		debug(LOG_DEBUG, "parse host_name is null");
+	} else {
+		tmp_host_name = json_object_get_string(jo_host_name);
+	}
 
-	debug(LOG_DEBUG, "hostname is %s, port is %s, path is %s", host_name, http_port,path);
-	
+	json_object * jo_http_port = json_object_object_get(json_request, "port");
+	if(jo_http_port == NULL) {
+		debug(LOG_DEBUG, "parse http_port is null");
+	} else {
+		tmp_http_port = json_object_get_string(jo_http_port);
+	}
+
+	json_object * jo_path = json_object_object_get(json_request, "path");
+	if(jo_path == NULL) {
+		debug(LOG_DEBUG, "parse auth server path is null");
+	} else {
+		tmp_path = json_object_get_string(jo_path);
+	}
+
+	debug(LOG_DEBUG, "tmp_host_name is %s, tmp_http_port is %s, tmp_path is %s", tmp_host_name, tmp_http_port,tmp_path);
+
 	LOCK_CONFIG();
-	if(NULL != host_name)
-		config->auth_servers->authserv_hostname = host_name;
-	if(NULL != http_port)
-		config->auth_servers->authserv_http_port = atoi(http_port);
-	if(NULL != path)
-		config->auth_servers->authserv_path = path;
+	if((tmp_host_name != NULL) && (strcmp(hostname,tmp_host_name) != 0)) {
+		free(hostname);
+		config->auth_servers->authserv_hostname = safe_strdup(tmp_host_name);
+	}
+	if((tmp_path != NULL) && (strcmp(path,tmp_host_name) != 0)) {
+		free(path);
+		config->auth_servers->authserv_path = safe_strdup(tmp_path);
+	}
+	if(NULL != tmp_http_port)
+		config->auth_servers->authserv_http_port = atoi(tmp_http_port);
 	UNLOCK_CONFIG();
 	
+	json_object_put(json_request);
 	send_mqtt_response(mosq, req_id, 200, "Ok", config);
 }
 
@@ -298,6 +326,8 @@ process_mqtt_reqeust(struct mosquitto *mosq, const unsigned int req_id, const ch
 			break;
 		}
 	}
+
+	json_object_put(json_request);
 }
 
 static unsigned int
