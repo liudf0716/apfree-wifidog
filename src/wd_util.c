@@ -1148,7 +1148,7 @@ void evdns_parse_trusted_domain_2_ip(t_domain_trusted *p)
         UNLOCK_DOMAIN();
         return;
     }
-	evdns_base_set_option(dnsbase, "timeout", "0.2");
+	evdns_base_set_option(dnsbase, "timeout", config_get_config()->dns_timeout);
     // thanks to the following article
     // http://www.wuqiong.info/archives/13/
     evdns_base_set_option(dnsbase, "randomize-case:", "0");//TurnOff DNS-0x20 encoding
