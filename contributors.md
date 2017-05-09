@@ -9,3 +9,7 @@ Thank you to all contributors:
 [caizhibang](https://github.com/caizhibang)
 
 [zenghi](https://github.com/zenghi)
+
+[jianhuizhao](https://github.com/809205580)
+
+[wangyin2016](https://github.com/wangyin2016)
