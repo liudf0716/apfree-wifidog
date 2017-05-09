@@ -411,7 +411,8 @@ static int https_redirect (char *gw_ip,  t_https_server *https_server) {
 		evdns_base_free(dnsbase, 0);
 		dnsbase = evdns_base_new(base, 1);
 	}
-	evdns_base_set_option(dnsbase, "timeout", "0.2");
+	evdns_base_set_option(dnsbase, "timeout", config_get_config()->dns_timeout);
+	evdns_base_set_option(dnsbase, "randomize-case:", "0");//TurnOff DNS-0x20 encoding
 	
 	t_popular_server *popular_server = config_get_config()->popular_servers;
 	check_internet_available(popular_server);

@@ -155,6 +155,7 @@ typedef enum {
 	oMQTT,
 	oMQTTServer,
 	oMQTTServerPort,
+	oDNSTimeout,
 } OpCodes;
 
 /** @internal
@@ -224,7 +225,8 @@ static const struct {
 	"mqtt", oMQTT}, {
 	"serveraddr", oMQTTServer}, {
 	"serverport", oMQTTServerPort}, {
-NULL, oBadOption},};
+	"dnstimeout",oDNSTimeout},{
+    NULL, oBadOption},};
 
 static void config_notnull(const void *, const char *);
 static int parse_boolean_value(char *);
@@ -295,6 +297,7 @@ config_init(void)
 	config.no_auth 			= 0; //
 	config.work_mode		= 0;
 	config.update_domain_interval  = 0;
+	config.dns_timeout         =   "0.2";  //default dns parsing timeout  is 0.2s
 
 	t_https_server *https_server	= (t_https_server *)malloc(sizeof(t_https_server));
 	memset(https_server, 0, sizeof(t_https_server));
@@ -1057,6 +1060,9 @@ config_read(const char *filename)
 					break;
 				case oUpdateDomainInterval:
 					sscanf(p1, "%d", &config.update_domain_interval);
+					break;
+				case oDNSTimeout:
+					config.dns_timeout = safe_strdup(p1);
 					break;
 				// <<< liudf added end
 				case oBadOption:
