@@ -390,3 +390,25 @@ s_sleep(unsigned int s, unsigned int u){
 
 	select(0, NULL, NULL, NULL, &timeout);
 }
+
+void gettimestr(time_t ts,char *str_text,int len)
+{
+    struct tm *my_tm;
+    my_tm = localtime(&ts);
+    snprintf(str_text, len, "%d-%02d-%02d %02d:%02d:%02d",1900 + my_tm->tm_year, 1 + my_tm->tm_mon, my_tm->tm_mday,my_tm->tm_hour, my_tm->tm_min, my_tm->tm_sec);
+}
+
+void trim(char* s, char c)
+{
+    char *t=s;
+    while (*s == c){
+		s++;
+	}
+    while (*s && *s != c){
+		*t=*s;
+		s++;
+		t++;
+	}
+	*t=0;
+}
+
