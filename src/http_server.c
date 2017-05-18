@@ -142,11 +142,11 @@ http_403_callback(struct evhttp_request *req, void *arg) {
 		}
 		evutil_snprintf(whole_path, len, "%s/403.html", docroot);
 	} else {	
-		len = strlen(decoded_path)+strlen(docroot)+2;
+		len = strlen("img/limited.jpg")+strlen(docroot)+2;
 		if (!(whole_path = malloc(len))) {
 			goto err;
 		}
-		evutil_snprintf(whole_path, len, "%s/%s", docroot, decoded_path);
+		evutil_snprintf(whole_path, len, "%s%s", docroot, "img/limited.jpg");
 	}
 
 	if (stat(whole_path, &st)<0) {
