@@ -141,18 +141,18 @@ http_403_callback(struct evhttp_request *req, void *arg) {
 		goto err;	
 
 	const char *extension = get_content_extension(decoded_path);
-	if (extension == NULL || strstr(extension, "htm") != NULL || strcasecmp(extension,"asp") == 0 || strcasecmp(extension,"jsp") == 0 || strcasecmp(extension,"php") == 0 ) {
-		len = strlen("403.html")+strlen(docroot)+2;
-		if (!(whole_path = malloc(len))) {
-			goto err;
-		}
-		evutil_snprintf(whole_path, len, "%s403.html", docroot);
-	} else {	
+	if ((extension != NULL) && (strncmp(extension,"jpg",3) == 0)) {
 		len = strlen("img/limited.jpg")+strlen(docroot)+2;
 		if (!(whole_path = malloc(len))) {
 			goto err;
 		}
 		evutil_snprintf(whole_path, len, "%s%s", docroot, "img/limited.jpg");
+	} else {	
+		len = strlen("403.html")+strlen(docroot)+2;
+		if (!(whole_path = malloc(len))) {
+			goto err;
+		}
+		evutil_snprintf(whole_path, len, "%s403.html", docroot);
 	}
 
 	if (stat(whole_path, &st)<0) {
