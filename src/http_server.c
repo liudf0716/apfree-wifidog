@@ -63,6 +63,11 @@ static const struct table_entry {
 	{ "html", "text/html" },
 	{ "htm", "text/html" },
 	{ "shtml", "text/html" },
+	{ "xhtml", "text/html" },
+	{ "dhtml", "text/html" },
+	{ "jsp", "text/html" },
+	{ "asp", "text/html" },
+	{ "php", "text/html" },
 	{ "css", "text/css" },
 	{ "js", "application/javascript"},
 	{ "gif", "image/gif" },
@@ -136,7 +141,7 @@ http_403_callback(struct evhttp_request *req, void *arg) {
 		goto err;	
 
 	const char *extension = get_content_extension(decoded_path);
-	if (extension == NULL || strstr(extension, "htm") != NULL ) {
+	if (extension == NULL || strstr(extension, "htm") != NULL || strcasecmp(extension,"asp") == 0 || strcasecmp(extension,"jsp") == 0 || strcasecmp(extension,"php") == 0 ) {
 		len = strlen("403.html")+strlen(docroot)+2;
 		if (!(whole_path = malloc(len))) {
 			goto err;
