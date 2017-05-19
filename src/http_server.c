@@ -141,7 +141,7 @@ http_403_callback(struct evhttp_request *req, void *arg) {
 		goto err;	
 
 	const char *extension = get_content_extension(decoded_path);
-	if (strncmp(extension, "jpg",3) == 0) {
+	if ((extension != NULL) && (strncmp(extension,"jpg",3) == 0)) {
 		len = strlen("img/limited.jpg")+strlen(docroot)+2;
 		if (!(whole_path = malloc(len))) {
 			goto err;
