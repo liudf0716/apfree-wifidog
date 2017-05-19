@@ -35,6 +35,6 @@ If you want to contribute to [apfree wifidog](https://github.com/liudf0716/apfre
 
 **IMPORTANT**
 
-Please, don't forget to update your fork. While you made your changes, the content of the `master` branch can change because other pull requests were merged and it can create conflicts. This is why you have to rebase on `master` every time before pushing your changes and check that your branch doesn't have any conflicts with `master`.
+Please, **don't forget to update your fork**. While you made your changes, the content of the `master` branch can change because other pull requests were merged and it can create conflicts. This is why you have to rebase on `master` every time before pushing your changes and check that your branch doesn't have any conflicts with `master`.
 
 Thank you.
