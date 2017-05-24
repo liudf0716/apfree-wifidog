@@ -598,23 +598,30 @@ mqtt_get_trusted_iplist_text()
 	if (config->domains_trusted == NULL)
 		return NULL;
 
-	struct json_object *jarray = json_object_new_array();
 	domain_trusted = config->domains_trusted;
-	pstr_t *pstr = pstr_new();
 	int first = 1;
 	
 	LOCK_DOMAIN();
-	struct json_object *jobj = json_object_new_object();
-	for(ip_trusted = domain_trusted->ips_trusted; ip_trusted != NULL; ip_trusted = ip_trusted->next) {
-		if (first) {
-			pstr_append_sprintf(pstr, "%s", ip_trusted->ip);
-			first = 0;
-		} else {
-			pstr_append_sprintf(pstr, ",%s", ip_trusted->ip);
-		}
+	for (; (domain_trusted != NULL)&& (strcmp(domain_trusted->domain,"iplist") != 0); domain_trusted = domain_trusted->next) ;
+
+	if(domain_trusted == NULL) {
+		UNLOCK_DOMAIN();
+		return NULL;
 	}
 
+	pstr_t *pstr = pstr_new();
+	for(ip_trusted = domain_trusted->ips_trusted; ip_trusted != NULL; ip_trusted = ip_trusted->next) {
+		if (first) {
+			  pstr_append_sprintf(pstr, "%s", ip_trusted->ip);
+			  first = 0;
+		 } else {
+			  pstr_append_sprintf(pstr, ",%s", ip_trusted->ip);
+		 }
+	 }
+
 	char *iplist = pstr_to_string(pstr);
+	struct json_object *jobj = json_object_new_object();
+	struct json_object *jarray = json_object_new_array();
 	json_object_object_add(jobj, domain_trusted->domain, 
 		json_object_new_string(first?"NULL":iplist));
 	json_object_array_add(jarray, jobj);
