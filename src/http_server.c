@@ -61,7 +61,13 @@ static const struct table_entry {
 	const char *content_type;
 } content_type_table[] = {
 	{ "html", "text/html" },
-	{ "htm", "text/htm" },
+	{ "htm", "text/html" },
+	{ "shtml", "text/html" },
+	{ "xhtml", "text/html" },
+	{ "dhtml", "text/html" },
+	{ "jsp", "text/html" },
+	{ "asp", "text/html" },
+	{ "php", "text/html" },
 	{ "css", "text/css" },
 	{ "js", "application/javascript"},
 	{ "gif", "image/gif" },
@@ -135,18 +141,18 @@ http_403_callback(struct evhttp_request *req, void *arg) {
 		goto err;	
 
 	const char *extension = get_content_extension(decoded_path);
-	if (extension == NULL || strncmp(extension, "htm", 3) == 0 ) {
+	if ((extension != NULL) && (strncmp(extension,"jpg",3) == 0)) {
+		len = strlen("img/limited.jpg")+strlen(docroot)+2;
+		if (!(whole_path = malloc(len))) {
+			goto err;
+		}
+		evutil_snprintf(whole_path, len, "%s%s", docroot, "img/limited.jpg");
+	} else {	
 		len = strlen("403.html")+strlen(docroot)+2;
 		if (!(whole_path = malloc(len))) {
 			goto err;
 		}
-		evutil_snprintf(whole_path, len, "%s/403.html", docroot);
-	} else {	
-		len = strlen(decoded_path)+strlen(docroot)+2;
-		if (!(whole_path = malloc(len))) {
-			goto err;
-		}
-		evutil_snprintf(whole_path, len, "%s/%s", docroot, decoded_path);
+		evutil_snprintf(whole_path, len, "%s403.html", docroot);
 	}
 
 	if (stat(whole_path, &st)<0) {

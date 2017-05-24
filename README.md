@@ -1,3 +1,25 @@
+![ApFreeWiFiDog](https://github.com/liudf0716/apfree_wifidog/blob/master/logo.png)
+
+
+[![license][1]][2]
+[![PRs Welcome][3]][4]
+[![Issue Welcome][5]][6]
+[![Release Version][7]][8]
+[![OpenWRT][11]][12]
+
+
+[1]: https://img.shields.io/badge/license-GPLV3-brightgreen.svg?style=plastic
+[2]: https://github.com/liudf0716/apfree_wifidog/blob/master/COPYING
+[3]: https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=plastic
+[4]: https://github.com/liudf0716/apfree_wifidog/pulls
+[5]: https://img.shields.io/badge/Issues-welcome-brightgreen.svg?style=plastic
+[6]: https://github.com/liudf0716/apfree_wifidog/issues/new
+[7]: https://img.shields.io/badge/release-2.05.1326-red.svg?style=plastic
+[8]: https://github.com/liudf0716/apfree_wifidog/releases
+[11]: https://img.shields.io/badge/Platform-%20OpenWRT%7C%20LEDE%20-brightgreen.svg?style=plastic
+[12]: https://github.com/KunTengRom/LEDE
+
+
 ## Apfree WiFiDog: Efficient captive portal solution
 
 Apfree-WiFidog is an open source captive protal solution for wireless router which with embeddabled linux([LEDE](https://github.com/lede-project/source)/[Openwrt](https://github.com/openwrt/openwrt)). 

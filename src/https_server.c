@@ -418,7 +418,7 @@ static int https_redirect (char *gw_ip,  t_https_server *https_server) {
 	check_internet_available(popular_server);
 	check_auth_server_available();
 
-	event_assign(&timeout, base, -1, EV_PERSIST, schedule_work_cb, (void*) &timeout);
+	event_assign(&timeout, base, -1, 0, schedule_work_cb, (void*) &timeout);
 	evutil_timerclear(&tv);
 	tv.tv_sec = config_get_config()->checkinterval;
     event_add(&timeout, &tv);
