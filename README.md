@@ -19,7 +19,7 @@
 [8]: https://github.com/liudf0716/apfree_wifidog/releases
 [11]: https://img.shields.io/badge/Platform-%20OpenWRT%7C%20LEDE%20-brightgreen.svg?style=plastic
 [12]: https://github.com/KunTengRom/LEDE
-[13]: https://img.shields.io/badge/KunTeng-Inside-blue.svg
+[13]: https://img.shields.io/badge/KunTeng-Inside-blue.svg?style=plastic
 [14]: http://rom.kunteng.org
 
 
