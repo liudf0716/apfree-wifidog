@@ -369,7 +369,7 @@ get_cpu_usage()
 	}
 	idle = fields[3];
 
-	del_total_tick = total_tick - total_tick_old;
+	del_total_tick = total_tick - total_tick_old ? ：1;
 	del_idle = idle - idle_old;
 
 	percent_usage = ((del_total_tick - del_idle) / (float) del_total_tick) * 100; /* 3 is index of idle time */
