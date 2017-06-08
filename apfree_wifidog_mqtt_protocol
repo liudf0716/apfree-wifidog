@@ -57,4 +57,4 @@ its ok response should be
 topic
 wifidog/61ACC80118B6/response/110
 message
-{"response":"200","msg":"ok"}
+{"response":"200","op":"set_trusted","msg":"ok"}
