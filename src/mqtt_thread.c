@@ -100,7 +100,7 @@ static struct wifidog_mqtt_show_type {
 	char 	*(*process_mqtt_show_type)(void);
 } mqtt_show_type[] = {
 	{"domain", show_trusted_domains},
-	{"pdomains", show_trusted_pdomains},
+	{"pdomain", show_trusted_pdomains},
 	{"ip", show_trusted_iplist},
 	{"mac", show_trusted_maclist},
 	{NULL, NULL}
