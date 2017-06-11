@@ -949,12 +949,17 @@ fw3_ipt_close(struct fw3_ipt_handle *h)
 		{
 			h->libc--;
 			dlclose(h->libv[h->libc]);
+            h->libv[h->libc] = NULL;
 		}
 
 		free(h->libv);
+        h->libv = NULL;
 	}
+    iptc_free(h->handle);
+    h->handle = NULL;
 
 	free(h);
+    h = NULL;
 }
 
 int
