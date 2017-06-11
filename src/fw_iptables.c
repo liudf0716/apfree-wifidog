@@ -237,8 +237,8 @@ static int
 iptables_do_append_command(void *handle, const char *format, ...)
 {
 	va_list vlist;
-	char *fmt_cmd;
-	char *cmd;
+	char *fmt_cmd = NULL;
+	char *cmd = NULL;
 	int rc;
 
 	va_start(vlist, format);
@@ -268,7 +268,10 @@ iptables_do_append_command(void *handle, const char *format, ...)
 			debug(LOG_DEBUG, "iptables command failed(%d): %s", rc, cmd);
 	}
 
+    free(fmt_cmd);
+    fmt_cmd = NULL;
 	free(cmd);
+    cmd = NULL;
 
 	return rc;
 }
