@@ -301,17 +301,17 @@ success:
 #define	BUF_MAX		1024
 
 static int 
-read_cpu_fields (FILE *fp, unsigned long long int *fields)
+read_cpu_fields (FILE *fp, unsigned long *fields)
 {
 	int retval;
 	char buffer[BUF_MAX] = {0};
-
+	unsigned long total_tick = 0;
 
 	if (!fgets (buffer, BUF_MAX, fp)) { 
-	 return 0;
+	 	return 0;
 	}
 
-	retval = sscanf (buffer, "cpu %Lu %Lu %Lu %Lu %Lu %Lu %Lu %Lu %Lu %Lu", 
+	retval = sscanf (buffer, "%*s %lu %lu %lu %lu %lu %lu %lu %lu %lu %lu", 
 							&fields[0], 
 							&fields[1], 
 							&fields[2], 
@@ -325,15 +325,18 @@ read_cpu_fields (FILE *fp, unsigned long long int *fields)
 	if (retval < 4) { /* Atleast 4 fields is to be read */
 		return 0;
 	}
-
-	return 1;
+	
+	int i = 0;
+	for(i = 0; i < 10; i++)
+		total_tick += fields[i];
+	return total_tick?1:0;
 }
 
 float
 get_cpu_usage()
 {
 	FILE *fp;
-	unsigned long long int fields[10], total_tick, total_tick_old, idle, idle_old, del_total_tick, del_idle;
+	unsigned long fields[10], total_tick, total_tick_old, idle, idle_old, del_total_tick, del_idle;
 	int i;
 	float percent_usage;
 
