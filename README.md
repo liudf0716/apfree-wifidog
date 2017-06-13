@@ -22,7 +22,6 @@
 [13]: https://img.shields.io/badge/KunTeng-Inside-blue.svg?style=plastic
 [14]: http://rom.kunteng.org
 
-
 ## Apfree WiFiDog: Efficient captive portal solution
 
 Apfree-WiFidog is an open source captive protal solution for wireless router which with embeddabled linux([LEDE](https://github.com/lede-project/source)/[Openwrt](https://github.com/openwrt/openwrt)). 
