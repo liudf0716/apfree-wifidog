@@ -329,7 +329,7 @@ read_cpu_fields (FILE *fp, unsigned long *fields)
 	int i = 0;
 	for(i = 0; i < 10; i++)
 		total_tick += fields[i];
-	return total_tick?1:0;
+	return total_tick?1:0; // in case of total_tick  is zero, as some platform reporting, I dont know why.
 }
 
 float
