@@ -148,6 +148,6 @@ apfree wifidog使用github托管其源代码，贡献代码使用github的PR(Pul
 ----
 
 ## powered by 坤腾畅联固件研发团队 （ www.kunteng.org ）
-## 加qq群讨论： 535204592 
+## 加qq群讨论： [331230369](https://jq.qq.com/?_wv=1027&k=4ADDSev)
 
 ## 如果该项目对您有帮助，请随手star，谢谢！

@@ -25,7 +25,7 @@ request:
 3, clear trusted domain&pdomain&mac&ip
 {"op":"clear_trusted","type":"domain|pdomain|mac|ip","time":"yyyymmddhhmmss"}
 4, show trusted domain&pdomain&mac&ip
-{"op":"show_trusted","type":"domain|pdomains|mac|ip","time":"yyyymmddhhmmss"}
+{"op":"show_trusted","type":"domain|pdomain|mac|ip","time":"yyyymmddhhmmss"}
 5, save all above user defining rules
 {"op":"save_rule","time":"yyyymmddhhmmss"}
 6, get status of router
@@ -57,4 +57,4 @@ its ok response should be
 topic
 wifidog/61ACC80118B6/response/110
 message
-{"response":"200","msg":"ok"}
+{"response":"200","op":"set_trusted","type":"pdomain","msg":"ok"}

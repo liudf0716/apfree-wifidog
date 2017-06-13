@@ -100,7 +100,7 @@ static struct wifidog_mqtt_show_type {
 	char 	*(*process_mqtt_show_type)(void);
 } mqtt_show_type[] = {
 	{"domain", show_trusted_domains},
-	{"pdomains", show_trusted_pdomains},
+	{"pdomain", show_trusted_pdomains},
 	{"ip", show_trusted_iplist},
 	{"mac", show_trusted_maclist},
 	{NULL, NULL}
@@ -112,7 +112,7 @@ send_mqtt_response(struct mosquitto *mosq, const unsigned int req_id, int res_id
 	char *topic = NULL;
 	char *res_data = NULL;
 	safe_asprintf(&topic, "wifidog/%s/response/%d", config->gw_id, req_id);
-	safe_asprintf(&res_data, "{response:\"%d\",msg:\"%s\"}", res_id, msg==NULL?"null":msg);
+	safe_asprintf(&res_data, "{\"response\":\"%d\",\"msg\":\"%s\"}", res_id, msg==NULL?"null":msg);
 	debug(LOG_DEBUG, "send mqtt response: topic is %s msg is %s", topic, res_data);
 	mosquitto_publish(mosq, NULL, topic, strlen(res_data), res_data, 0, false);
 	free(topic);
