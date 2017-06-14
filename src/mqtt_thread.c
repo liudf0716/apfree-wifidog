@@ -289,13 +289,17 @@ set_auth_server_op(void *mosq, const char *type, const char *value, const int re
 	if((tmp_host_name != NULL) && (strcmp(hostname,tmp_host_name) != 0)) {
 		free(hostname);
 		config->auth_servers->authserv_hostname = safe_strdup(tmp_host_name);
+        uci_set_value("wifidog", "wifidog", "auth_server_hostname", config->auth_servers->authserv_hostname);
 	}
 	if((tmp_path != NULL) && (strcmp(path,tmp_host_name) != 0)) {
 		free(path);
 		config->auth_servers->authserv_path = safe_strdup(tmp_path);
+        uci_set_value("wifidog", "wifidog", "auth_server_path", config->auth_servers->authserv_path);
 	}
-	if(NULL != tmp_http_port)
+	if(NULL != tmp_http_port) {
 		config->auth_servers->authserv_http_port = atoi(tmp_http_port);
+        uci_set_value("wifidog", "wifidog", "auth_server_port", tmp_http_port);
+    }
 	UNLOCK_CONFIG();
 	
 	json_object_put(json_request);
