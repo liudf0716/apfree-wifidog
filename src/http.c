@@ -182,9 +182,10 @@ http_callback_404(httpd * webserver, request * r, int error_code)
             debug(LOG_DEBUG, "Got client MAC address for ip %s: %s", r->clientAddr, mac);	
 			
 			//>>> liudf 20160106 added
-			if(_special_process(r, mac, redir_url)) {
-            	goto end_process;
-			}
+			if(config->bypass_apple_cna != 0)
+				if(_special_process(r, mac, redir_url)) {
+					goto end_process;
+				}
 			
 			// if device has login; but after long time reconnected router, its ip changed
 			LOCK_CLIENT_LIST();
