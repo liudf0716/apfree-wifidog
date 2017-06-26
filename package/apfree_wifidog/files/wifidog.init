@@ -66,6 +66,7 @@ prepare_wifidog_conf() {
 	local trusted_pan_domains
 	local proxy_port
 	local no_auth
+	local apple_cna
 
 	[ -f $CONFIGFILE ] && rm $CONFIGFILE
 
@@ -102,6 +103,7 @@ prepare_wifidog_conf() {
 	config_get trusted_pan_domains	"$cfg"	"trusted_pan_domains"
 	config_get proxy_port	"$cfg"	"proxy_port"
 	config_get no_auth	"$cfg"	"no_auth"
+	config_get apple_cna	"$cfg"	"bypass_apple_cna"
 
 	local set_auth_server_path_login=`[ -n "$auth_server_path_login" ] && echo "    LoginScriptPathFragment $auth_server_path_login"`
 	local set_auth_server_path_portal=`[ -n "$auth_server_path_portal" ] && echo "    PortalScriptPathFragment $auth_server_path_portal"`
@@ -122,6 +124,7 @@ prepare_wifidog_conf() {
 	local set_firewall_rule_auth_is_down=`config_list_foreach "$cfg" "firewall_rule_auth_is_down" echo_firewall_rule`
 	local set_firewall_rule_unknown_users=`config_list_foreach "$cfg" "firewall_rule_unknown_users" echo_firewall_rule`
 	local set_firewall_rule_locked_users=`config_list_foreach "$cfg" "firewall_rule_locked_users" echo_firewall_rule`
+	local set_apple_cna=`[ -n "$apple_cna"  ] && echo "BypassAppleCNA"  $apple_cna`
 
 	cat <<-EOF >$CONFIGFILE
 		GatewayID $gateway_id
@@ -164,6 +167,8 @@ prepare_wifidog_conf() {
 		$set_proxy_port
 
 		$set_no_auth
+
+		$set_apple_cna
  
 		FirewallRuleSet global {
 			$set_firewall_rule_global

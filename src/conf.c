@@ -151,6 +151,7 @@ typedef enum {
 	oWorkMode,
 	oUpdateDomainInterval,
 	// <<< liudf added end
+	oAppleCNA,
 
 	oMQTT,
 	oMQTTServer,
@@ -221,6 +222,7 @@ static const struct {
 	"workMode", oWorkMode}, {
 	"updateDomainInterval", oUpdateDomainInterval}, {
 	// <<<< liudf added end
+	"bypassAppleCNA", oAppleCNA}, {
 
 	"mqtt", oMQTT}, {
 	"serveraddr", oMQTTServer}, {
@@ -298,6 +300,7 @@ config_init(void)
 	config.work_mode		= 0;
 	config.update_domain_interval  = 0;
 	config.dns_timeout         =   "0.2";  //default dns parsing timeout  is 0.2s
+	config.bypass_apple_cna = 1; // default enable it
 
 	t_https_server *https_server	= (t_https_server *)malloc(sizeof(t_https_server));
 	memset(https_server, 0, sizeof(t_https_server));
@@ -1065,6 +1068,9 @@ config_read(const char *filename)
 					config.dns_timeout = safe_strdup(p1);
 					break;
 				// <<< liudf added end
+				case oAppleCNA:
+					config.bypass_apple_cna = parse_boolean_value(p1);
+					break;
 				case oBadOption:
 					/* FALL THROUGH */
 				default:
