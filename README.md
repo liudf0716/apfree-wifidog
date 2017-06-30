@@ -141,7 +141,7 @@ Feel free to create issues or pull-requests if you have any problems.
 **Please read [CONTRIBUTING.md](https://github.com/liudf0716/apfree_wifidog/blob/master/CONTRIBUTING.md) before pushing any changes.**
 
 
-
+### apfree wifidog qq group： [331230369](https://jq.qq.com/?_wv=1027&k=4ADDSev)
 ---
 
 
