@@ -15,3 +15,5 @@ Thank you to all contributors:
 [wangyin2016](https://github.com/wangyin2016)
 
 [LiuQiQuan](https://github.com/tea4go)
+
+[GuYingChun](https://github.com/RuiChen1113)
