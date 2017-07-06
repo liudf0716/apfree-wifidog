@@ -681,7 +681,7 @@ iptables_fw_save_online_clients()
 	f_fw_allow_open();
 
 	while (current != NULL) {
-		iptables_do_command_save("-t mangle -A " CHAIN_OUTGOING " -s %s -m mac --mac-source %s -j MARK --set-mark %d", 
+		iptables_do_command_save("-t mangle -A " CHAIN_OUTGOING " -s %s -m mac --mac-source %s -j MARK --set-mark 0x%x0000/0xff0000", 
 					current->ip, current->mac, FW_MARK_KNOWN);
 		iptables_do_command_save("-t mangle -A " CHAIN_INCOMING " -d %s -j ACCEPT", current->ip);
 
@@ -767,18 +767,18 @@ iptables_fw_init(void)
 
 	if( config->no_auth != 0 ) {
 		debug(LOG_DEBUG, "No auth set");
-		iptables_do_append_command(handle, "-t mangle -A " CHAIN_TO_PASS " -j MARK --set-mark %d", FW_MARK_KNOWN);
+		iptables_do_append_command(handle, "-t mangle -A " CHAIN_TO_PASS " -j MARK --set-mark 0x%x0000/0xff0000", FW_MARK_KNOWN);
 	}
 
 	iptables_do_append_command(handle, "-t mangle -I PREROUTING 1 -i %s -j " CHAIN_ROAM, config->gw_interface);
-	iptables_do_append_command(handle, "-t mangle -A " CHAIN_ROAM " -m set --match-set " CHAIN_ROAM " src -j MARK --set-mark %d", FW_MARK_KNOWN);
+	iptables_do_append_command(handle, "-t mangle -A " CHAIN_ROAM " -m set --match-set " CHAIN_ROAM " src -j MARK --set-mark 0x%x0000/0xff0000", FW_MARK_KNOWN);
 
 	if (got_authdown_ruleset)
 		iptables_do_append_command(handle, "-t mangle -I PREROUTING 1 -i %s -j " CHAIN_AUTH_IS_DOWN, config->gw_interface);
 
 	iptables_do_append_command(handle, "-t mangle -I POSTROUTING 1 -o %s -j " CHAIN_INCOMING, config->gw_interface);
 	//>>> liudf added&modified 20160113
-	iptables_do_append_command(handle, "-t mangle -A " CHAIN_TRUSTED " -m set --match-set " CHAIN_TRUSTED " src -j MARK --set-mark %d", FW_MARK_KNOWN);
+	iptables_do_append_command(handle, "-t mangle -A " CHAIN_TRUSTED " -m set --match-set " CHAIN_TRUSTED " src -j MARK --set-mark 0x%x0000/0xff0000", FW_MARK_KNOWN);
 	//<<< liudf added end
 
 	fw3_ipt_commit(handle);
@@ -828,15 +828,15 @@ iptables_fw_init(void)
 		debug(LOG_DEBUG, "Proxy port set, setting proxy rule");
 
 		iptables_do_append_command(handle, "-t nat -A " CHAIN_TO_PASS
-							" -p tcp --dport 80 -m mark --mark 0x%u -j REDIRECT --to-port %u", FW_MARK_KNOWN,
+							" -p tcp --dport 80 -m mark --mark 0x%x0000/0xff0000 -j REDIRECT --to-port %u", FW_MARK_KNOWN,
 							proxy_port);
 		iptables_do_append_command(handle, "-t nat -A " CHAIN_TO_PASS
-							" -p tcp --dport 80 -m mark --mark 0x%u -j REDIRECT --to-port %u", FW_MARK_PROBATION,
+							" -p tcp --dport 80 -m mark --mark 0x%x0000/0xff0000 -j REDIRECT --to-port %u", FW_MARK_PROBATION,
 							proxy_port);
 	}
 
-	iptables_do_append_command(handle, "-t nat -A " CHAIN_TO_INTERNET " -m mark --mark 0x%u -j ACCEPT", FW_MARK_KNOWN);
-	iptables_do_append_command(handle, "-t nat -A " CHAIN_TO_INTERNET " -m mark --mark 0x%u -j ACCEPT", FW_MARK_PROBATION);
+	iptables_do_append_command(handle, "-t nat -A " CHAIN_TO_INTERNET " -m mark --mark 0x%x0000/0xff0000 -j ACCEPT", FW_MARK_KNOWN);
+	iptables_do_append_command(handle, "-t nat -A " CHAIN_TO_INTERNET " -m mark --mark 0x%x0000/0xff0000 -j ACCEPT", FW_MARK_PROBATION);
 	iptables_do_append_command(handle, "-t nat -A " CHAIN_TO_INTERNET " -j " CHAIN_UNKNOWN);
 
 	iptables_do_append_command(handle, "-t nat -A " CHAIN_UNKNOWN " -j " CHAIN_AUTHSERVERS);
@@ -852,7 +852,7 @@ iptables_fw_init(void)
 
 	if (got_authdown_ruleset) {
 		iptables_do_append_command(handle, "-t nat -A " CHAIN_UNKNOWN " -j " CHAIN_AUTH_IS_DOWN);
-		iptables_do_append_command(handle, "-t nat -A " CHAIN_AUTH_IS_DOWN " -m mark --mark 0x%u -j ACCEPT", FW_MARK_AUTH_IS_DOWN);
+		iptables_do_append_command(handle, "-t nat -A " CHAIN_AUTH_IS_DOWN " -m mark --mark 0x%x0000/0xff0000 -j ACCEPT", FW_MARK_AUTH_IS_DOWN);
 	}
 
 	if (config_get_config()->work_mode == 0) {
@@ -897,7 +897,7 @@ iptables_fw_init(void)
 						" -o %s -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu", ext_interface);
 
 	// liudf added 20151224
-	iptables_do_append_command(handle, "-t filter -A " CHAIN_TO_INTERNET " -m mark --mark 0x%u -j " CHAIN_LOCKED, FW_MARK_LOCKED);
+	iptables_do_append_command(handle, "-t filter -A " CHAIN_TO_INTERNET " -m mark --mark 0x%x0000/0xff0000 -j " CHAIN_LOCKED, FW_MARK_LOCKED);
 	iptables_load_ruleset("filter", FWRULESET_LOCKED_USERS, CHAIN_LOCKED, handle);
 
 	iptables_do_append_command(handle, "-t filter -A " CHAIN_TO_INTERNET " -j " CHAIN_AUTHSERVERS);
@@ -912,14 +912,14 @@ iptables_fw_init(void)
 	iptables_do_append_command(handle, "-t filter -A " CHAIN_TO_INTERNET " -j " CHAIN_GLOBAL);
 	iptables_load_ruleset("filter", FWRULESET_GLOBAL, CHAIN_GLOBAL, handle);
 
-	iptables_do_append_command(handle, "-t filter -A " CHAIN_TO_INTERNET " -m mark --mark 0x%u -j " CHAIN_VALIDATE, FW_MARK_PROBATION);
+	iptables_do_append_command(handle, "-t filter -A " CHAIN_TO_INTERNET " -m mark --mark 0x%x0000/0xff0000 -j " CHAIN_VALIDATE, FW_MARK_PROBATION);
 	iptables_load_ruleset("filter", FWRULESET_VALIDATING_USERS, CHAIN_VALIDATE, handle);
 
-	iptables_do_append_command(handle, "-t filter -A " CHAIN_TO_INTERNET " -m mark --mark 0x%u -j " CHAIN_KNOWN, FW_MARK_KNOWN);
+	iptables_do_append_command(handle, "-t filter -A " CHAIN_TO_INTERNET " -m mark --mark 0x%x0000/0xff0000 -j " CHAIN_KNOWN, FW_MARK_KNOWN);
 	iptables_load_ruleset("filter", FWRULESET_KNOWN_USERS, CHAIN_KNOWN, handle);
 
 	if (got_authdown_ruleset) {
-		iptables_do_append_command(handle, "-t filter -A " CHAIN_TO_INTERNET " -m mark --mark 0x%u -j " CHAIN_AUTH_IS_DOWN,
+		iptables_do_append_command(handle, "-t filter -A " CHAIN_TO_INTERNET " -m mark --mark 0x%x0000/0xff0000 -j " CHAIN_AUTH_IS_DOWN,
 							FW_MARK_AUTH_IS_DOWN);
 		iptables_load_ruleset("filter", FWRULESET_AUTH_IS_DOWN, CHAIN_AUTH_IS_DOWN, handle);
 	}
@@ -1140,13 +1140,13 @@ iptables_fw_access(fw_access_t type, const char *ip, const char *mac, int tag)
 
 	switch (type) {
 	case FW_ACCESS_ALLOW:
-		iptables_do_command("-t mangle -A " CHAIN_OUTGOING " -s %s -m mac --mac-source %s -j MARK --set-mark %d", ip,
+		iptables_do_command("-t mangle -A " CHAIN_OUTGOING " -s %s -m mac --mac-source %s -j MARK --set-mark 0x%x0000/0xff0000", ip,
 							mac, tag);
 		rc = iptables_do_command("-t mangle -A " CHAIN_INCOMING " -d %s -j ACCEPT", ip);
 		break;
 	case FW_ACCESS_DENY:
 		/* XXX Add looping to really clear? */
-		iptables_do_command("-t mangle -D " CHAIN_OUTGOING " -s %s -m mac --mac-source %s -j MARK --set-mark %d", ip,
+		iptables_do_command("-t mangle -D " CHAIN_OUTGOING " -s %s -m mac --mac-source %s -j MARK --set-mark 0x%x0000/0xff0000", ip,
 							mac, tag);
 		rc = iptables_do_command("-t mangle -D " CHAIN_INCOMING " -d %s -j ACCEPT", ip);
 		break;
@@ -1188,7 +1188,7 @@ iptables_fw_auth_unreachable(int tag)
 {
 	int got_authdown_ruleset = NULL == get_ruleset(FWRULESET_AUTH_IS_DOWN) ? 0 : 1;
 	if (got_authdown_ruleset)
-		return iptables_do_command("-t mangle -A " CHAIN_AUTH_IS_DOWN " -j MARK --set-mark 0x%u", tag);
+		return iptables_do_command("-t mangle -A " CHAIN_AUTH_IS_DOWN " -j MARK --set-mark 0x%x0000/0xff0000", tag);
 	else
 		return 1;
 }
