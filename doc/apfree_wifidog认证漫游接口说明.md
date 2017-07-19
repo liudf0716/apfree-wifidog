@@ -13,6 +13,7 @@ GET http://authserv_hostname:port/authserv_path/roam?gw_id=gwid&mac=macaddress&c
 {"roam":"no"}
 如果该设备允许漫游，返回结果如下：
 {"roam":"yes","client":{"token":"token_value","first_login":"first_login_value"}}
+其中token_value为设备第一次通过认证后，服务器端给其分配的token值， first_login为设备第一次通过认证后，其当时的时间戳
 
 #### 注意，要记得通过auth接口将该设备从原来的路由器上替下线
 
