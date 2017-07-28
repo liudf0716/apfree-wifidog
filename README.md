@@ -114,13 +114,15 @@ config wifidog
         option pool_mode '1'
         option thread_number '5'
         option queue_size '20'
-        option wired_passed '0'
+        option wired_passed '1'
         option trusted_domains 'www.baidu.com,www.qq.com,www.qq.com.cn,www.weixin.com'
 ```
 
+wired_passed means whether lan access devices need to auth or not, value 1 means no need to auth 
+
 Domains of `www.baidu.com,www.qq.com,www.qq.com.cn,www.weixin.com` is trusted in this default configuration file, and you can modify it to what you want.
 
-### Apfree wifidog Auth server project
+### Apfree wifidog Auth server open source project
 
 **Please read [AUTHSERVER.md](https://github.com/liudf0716/apfree_wifidog/blob/master/AUTHSERVER.md)**
 
