@@ -1268,7 +1268,7 @@ main(int argc, char **argv)
 	case WDCTL_ADD_TRUSTED_MACLIST:
 		wdctl_add_trusted_maclist();
 		break;
-
+			
 	case WDCTL_DEL_TRUSTED_MACLIST:
 		wdctl_del_trusted_maclist();
 		break;
@@ -1281,6 +1281,22 @@ main(int argc, char **argv)
 		wdctl_clear_trusted_maclist();
 		break;
 
+	case WDCTL_ADD_TRUSTED_LOCAL_MACLIST:
+		wdctl_add_trusted_local_maclist();
+		break;
+		
+	case WDCTL_DEL_TRUSTED_LOCAL_MACLIST:
+		wdctl_del_trusted_local_maclist();
+		break;
+
+	case WDCTL_SHOW_TRUSTED_LOCAL_MACLIST:
+		wdctl_show_trusted_local_maclist();
+		break;
+
+	case WDCTL_CLEAR_TRUSTED_LOCAL_MACLIST:
+		wdctl_clear_trusted_local_maclist();
+		break;
+			
 	case WDCTL_ADD_UNTRUSTED_MACLIST:
 		wdctl_add_untrusted_maclist();
 		break;
