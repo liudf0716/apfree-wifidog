@@ -71,6 +71,10 @@ static void wdctl_add_trusted_maclist(void);
 static void wdctl_del_trusted_maclist(void);
 static void wdctl_show_trusted_maclist(void);
 static void wdctl_clear_trusted_maclist(void);
+static void wdctl_add_local_trusted_maclist(void);
+static void wdctl_del_local_trusted_maclist(void);
+static void wdctl_show_local_trusted_maclist(void);
+static void wdctl_clear_local_trusted_maclist(void);
 static void wdctl_add_untrusted_maclist(void);
 static void wdctl_del_untrusted_maclist(void);
 static void wdctl_show_untrusted_maclist(void);
@@ -118,6 +122,10 @@ usage(void)
     fprintf(stdout, "  del_trusted_mac [mac1,mac2...]			Del trusted mac list\n");
     fprintf(stdout, "  clear_trusted_mac		Clear trusted mac list\n");
     fprintf(stdout, "  show_trusted_mac			Show trusted mac list\n");
+	fprintf(stdout, "  add_trusted_local_mac [mac1,mac2...]			Add trusted local mac list\n");
+    fprintf(stdout, "  del_trusted_local_mac [mac1,mac2...]			Del trusted local mac list\n");
+    fprintf(stdout, "  clear_trusted_local_mac			Clear trusted local mac list\n");
+    fprintf(stdout, "  show_trusted_local_mac			Show trusted local mac list\n");
     fprintf(stdout, "  add_untrusted_mac [mac1,mac2...]		Add untrusted mac list\n");
     fprintf(stdout, "  del_untrusted_mac [mac1,mac2...]		Del untrusted mac list\n");
 	fprintf(stdout, "  clear_untrusted_mac		Clear untrusted mac list\n");
@@ -285,6 +293,28 @@ parse_commandline(int argc, char **argv)
 		config.command = WDCTL_SHOW_TRUSTED_MACLIST;
 	} else if (strcmp(*(argv + optind), "clear_trusted_mac") == 0) {
 		config.command = WDCTL_CLEAR_TRUSTED_MACLIST;
+	} else if (strcmp(*(argv + optind), "add_trusted_local_mac") == 0) {
+		config.command = WDCTL_ADD_TRUSTED_LOCAL_MACLIST;
+		if ((argc - (optind + 1)) <= 0) {
+			fprintf(stderr, "wdctl: Error: You must specify mac list\n");
+            usage();
+            exit(1);
+		}
+        config.param = strdup(*(argv + optind + 1));
+	
+	} else if (strcmp(*(argv + optind), "del_trusted_local_mac") == 0) {
+		config.command = WDCTL_DEL_TRUSTED_LOCAL_MACLIST;
+		if ((argc - (optind + 1)) <= 0) {
+			fprintf(stderr, "wdctl: Error: You must specify mac list\n");
+            usage();
+            exit(1);
+		}
+        config.param = strdup(*(argv + optind + 1));
+
+	} else if (strcmp(*(argv + optind), "show_trusted_local_mac") == 0) {
+		config.command = WDCTL_SHOW_TRUSTED_LOCAL_MACLIST;
+	} else if (strcmp(*(argv + optind), "clear_trusted_local_mac") == 0) {
+		config.command = WDCTL_CLEAR_TRUSTED_LOCAL_MACLIST;
 	
 	} else if (strcmp(*(argv + optind), "add_untrusted_mac") == 0) {
 		config.command = WDCTL_ADD_UNTRUSTED_MACLIST;
@@ -450,6 +480,18 @@ wdctl_command(int command)
 	case WDCTL_SHOW_TRUSTED_PAN_DOMAINS:
 		action = "show_trusted_pdomains";
 		break;
+	case WDCTL_ADD_TRUSTED_LOCAL_MACLIST:
+		action = "add_trusted_local_mac";
+		break;
+	case WDCTL_DEL_TRUSTED_LOCAL_MACLIST:
+		action = "del_trusted_local_mac";
+		break;
+	case WDCTL_CLEAR_TRUSTED_LOCAL_MACLIST:
+		action = "clear_trusted_local_mac";
+		break;
+	case WDCTL_SHOW_TRUSTED_LOCAL_MACLIST:
+		action = "show_trusted_local_mac";
+		break;
 	}
 
 	if(action)
@@ -460,6 +502,30 @@ static void
 wdctl_add_trusted_iplist(void)
 {
 	wdctl_command(WDCTL_ADD_TRUSTED_IPLIST);
+}
+
+static void
+wdctl_add_trusted_local_maclist(void)
+{
+	wdctl_command(WDCTL_ADD_TRUSTED_LOCAL_MACLIST);
+}
+
+static void
+wdctl_del_trusted_local_maclist(void)
+{
+	wdctl_command(WDCTL_DEL_TRUSTED_LOCAL_MACLIST);
+}
+
+static void
+wdctl_clear_trusted_local_maclist(void)
+{
+	wdctl_command(WDCTL_CLEAR_TRUSTED_LOCAL_MACLIST);
+}
+
+static void
+wdctl_show_trusted_local_maclist(void)
+{
+	wdctl_command(WDCTL_SHOW_TRUSTED_LOCAL_MACLIST);
 }
 
 static void
