@@ -109,6 +109,7 @@ typedef enum trusted_domain_t_ {
 typedef enum mac_choice_t_ {
 	TRUSTED_MAC,
 	UNTRUSTED_MAC,
+	TRUSTED_LOCAL_MAC,
 	ROAM_MAC
 } mac_choice_t;
 //<<< liudf added end
@@ -292,6 +293,7 @@ typedef struct {
 	t_domain_trusted *domains_trusted; /** domains list, seperate with comma*/
 	t_domain_trusted *inner_domains_trusted; /** inner domains list, user cannot configure*/
 	t_trusted_mac	*roam_maclist; /** roam mac list*/
+	t_trusted_mac	*trusted_local_maclist; /** trusted local mac list*/
 	t_untrusted_mac	*mac_blacklist; /** blacklist mac*/
 	char 	*htmlredirfile;
 	char	*internet_offline_file;
