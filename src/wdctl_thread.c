@@ -85,6 +85,10 @@ static void wdctl_add_trusted_maclist(int, const char *);
 static void wdctl_del_trusted_maclist(int, const char *);
 static void wdctl_show_trusted_maclist(int);
 static void wdctl_clear_trusted_maclist(int);
+static void wdctl_add_trusted_local_maclist(int, const char *);
+static void wdctl_del_trusted_local_maclist(int, const char *);
+static void wdctl_show_trusted_local_maclist(int);
+static void wdctl_clear_trusted_local_maclist(int);
 static void wdctl_add_untrusted_maclist(int, const char *);
 static void wdctl_del_untrusted_maclist(int, const char *);
 static void wdctl_show_untrusted_maclist(int);
@@ -300,11 +304,23 @@ thread_wdctl_handler(void *arg)
 	} else if (strncmp(request, "del_trusted_mac", strlen("del_trusted_mac")) == 0) {
 		wdctl_del_trusted_maclist(fd, (request + strlen("del_trusted_mac") + 1));	
 
-	} else if (strncmp(request, "show_trusted_mac", strlen("show_trusted_maclist")) == 0) {
+	} else if (strncmp(request, "show_trusted_mac", strlen("show_trusted_mac")) == 0) {
 		wdctl_show_trusted_maclist(fd);
 
 	} else if (strncmp(request, "clear_trusted_mac", strlen("clear_trusted_mac")) == 0) {
 		wdctl_clear_trusted_maclist(fd);
+	
+	} else if (strncmp(request, "add_trusted_local_mac", strlen("add_trusted_local_mac")) == 0) {
+		wdctl_add_trusted_local_maclist(fd, (request + strlen("add_trusted_local_mac") + 1));	
+	
+	} else if (strncmp(request, "del_trusted_local_mac", strlen("del_trusted_local_mac")) == 0) {
+		wdctl_del_trusted_local_maclist(fd, (request + strlen("del_trusted_local_mac") + 1));	
+
+	} else if (strncmp(request, "show_trusted_local_mac", strlen("show_trusted_local_mac")) == 0) {
+		wdctl_show_trusted_local_maclist(fd);
+
+	} else if (strncmp(request, "clear_trusted_local_mac", strlen("clear_trusted_local_mac")) == 0) {
+		wdctl_clear_trusted_local_maclist(fd);
 
 	} else if (strncmp(request, "add_untrusted_mac", strlen("add_untrusted_mac")) == 0) {
 		wdctl_add_untrusted_maclist(fd, (request + strlen("add_untrusted_mac") + 1));	
@@ -874,6 +890,86 @@ wdctl_clear_trusted_maclist(int fd)
     write_to_socket(fd, "Yes", 3);
 }
 
+// trusted local maclist operation
+void del_trusted_local_maclist(const char *args)
+{
+    parse_del_trusted_local_mac_list(args);   
+    
+    fw_clear_trusted_local_maclist();
+    fw_set_trusted_local_maclist();   
+}
+
+// trusted maclist
+static void
+wdctl_del_trusted_local_maclist(int fd, const char *args)
+{
+    debug(LOG_DEBUG, "Entering wdctl_del_trusted_local_maclist...");
+	
+    debug(LOG_DEBUG, "Argument: %s ", args);
+
+	del_trusted_local_maclist(args);
+	
+    write_to_socket(fd, "Yes", 3);
+
+    debug(LOG_DEBUG, "Exiting wdctl_del_trusted_local_maclist...");
+}
+
+void add_trusted_local_maclist(const char *args)
+{
+    parse_trusted_local_mac_list(args);   
+    
+    fw_clear_trusted_local_maclist();
+    fw_set_trusted_local_maclist();   
+}
+
+static void
+wdctl_add_trusted_local_maclist(int fd, const char *args)
+{
+    debug(LOG_DEBUG, "Entering wdctl_add_trusted_local_maclist...");
+	
+    debug(LOG_DEBUG, "Argument: %s ", args);
+
+	add_trusted_local_maclist(args);
+	
+    write_to_socket(fd, "Yes", 3);
+
+    debug(LOG_DEBUG, "Exiting wdctl_add_trusted_local_maclist...");
+}
+
+char *show_trusted_local_maclist()
+{
+    return mqtt_get_serialize_maclist(TRUSTED_MAC);
+}
+
+static void
+wdctl_show_trusted_local_maclist(int fd)
+{
+    char *status = NULL;
+    size_t len = 0;
+
+    status = get_trusted_local_maclist_text();
+    len = strlen(status);
+
+    write_to_socket(fd, status, len);   /* XXX Not handling error because we'd just print the same log line. */
+
+    free(status);
+}
+
+void
+clear_trusted_local_maclist(void)
+{
+    clear_trusted_local_mac_list();   
+    fw_clear_trusted_local_maclist();
+}
+
+static void
+wdctl_clear_trusted_local_maclist(int fd)
+{
+    clear_trusted_local_maclist();
+
+    write_to_socket(fd, "Yes", 3);
+}
+
 void
 del_untrusted_maclist(const char *args)
 {
@@ -953,7 +1049,8 @@ wdctl_clear_untrusted_maclist(int fd)
 void
 user_cfg_save(void)
 {
-    const char *trusted_maclist = NULL, 
+    const char *trusted_maclist = NULL,
+			   *trusted_local_maclist = NULL,
                *untrusted_maclist = NULL, 
                *trusted_domains = NULL,
                *trusted_pan_domains = NULL,
@@ -961,11 +1058,12 @@ user_cfg_save(void)
     
     iptables_fw_save_online_clients();
     
-    trusted_maclist     = get_serialize_maclist(TRUSTED_MAC);
-    untrusted_maclist   = get_serialize_maclist(UNTRUSTED_MAC);
-    trusted_domains     = get_serialize_trusted_domains();
-    trusted_iplist      = get_serialize_iplist();
-    trusted_pan_domains = get_serialize_trusted_pan_domains();
+    trusted_maclist     	= get_serialize_maclist(TRUSTED_MAC);
+	trusted_local_maclist	= get_serialize_maclist(TRUSTED_LOCAL_MAC);
+    untrusted_maclist   	= get_serialize_maclist(UNTRUSTED_MAC);
+    trusted_domains     	= get_serialize_trusted_domains();
+    trusted_iplist      	= get_serialize_iplist();
+    trusted_pan_domains 	= get_serialize_trusted_pan_domains();
 
     if(trusted_pan_domains) {
         uci_set_value("wifidog", "wifidog", "trusted_pan_domains", trusted_pan_domains);
@@ -991,6 +1089,12 @@ user_cfg_save(void)
         uci_del_value("wifidog", "wifidog", "trusted_maclist");
     }
     
+	if(trusted_local_maclist) {
+        uci_set_value("wifidog", "wifidog", "trusted_local_maclist", trusted_local_maclist);
+    } else {
+        uci_del_value("wifidog", "wifidog", "trusted_local_maclist");
+    }
+	
     if(untrusted_maclist) {
         uci_set_value("wifidog", "wifidog", "untrusted_maclist", untrusted_maclist);
     } else {
