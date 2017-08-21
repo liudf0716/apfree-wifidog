@@ -420,6 +420,18 @@ void clear_trusted_mac_list();
 
 t_trusted_mac *add_trusted_mac(const char *);
 
+// trusted local maclist operation for wdctl
+void parse_trusted_local_mac_list(const char *);
+
+void parse_del_trusted_local_mac_list(const char *);
+
+void __clear_trusted_local_mac_list();
+
+void clear_trusted_local_mac_list();
+
+t_trusted_mac *add_trusted_local_mac(const char *);
+
+
 // mac blacklist operation, for wdctl use
 void parse_untrusted_mac_list(const char*);
 
