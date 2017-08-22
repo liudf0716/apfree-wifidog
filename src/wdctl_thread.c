@@ -958,7 +958,7 @@ wdctl_show_trusted_local_maclist(int fd)
 void
 clear_trusted_local_maclist(void)
 {
-    clear_trusted_local_mac_list();   
+    clear_trusted_local_maclist();   
     fw_clear_trusted_local_maclist();
 }
 
