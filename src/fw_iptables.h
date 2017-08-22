@@ -53,6 +53,7 @@
 #define CHAIN_UNKNOWN   "WiFiDog_$ID$_Unknown"
 #define CHAIN_LOCKED    "WiFiDog_$ID$_Locked"
 #define CHAIN_TRUSTED    "WiFiDog_$ID$_Trusted"
+#define CHAIN_TRUSTED_LOCAL    "WiFiDog_$ID$_TLocal"
 #define CHAIN_AUTH_IS_DOWN "WiFiDog_$ID$_AuthIsDown"
 /*@}*/
 
@@ -123,6 +124,10 @@ void iptables_fw_set_trusted_maclist(void);
 void iptables_fw_set_trusted_mac(const char *);
 
 void iptables_fw_clear_trusted_maclist(void);
+
+void iptables_fw_set_trusted_local_maclist(void);
+
+void iptables_fw_clear_trusted_local_maclist(void);
 
 void iptables_fw_set_untrusted_maclist(void);
 
