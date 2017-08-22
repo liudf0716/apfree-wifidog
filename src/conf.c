@@ -2244,20 +2244,57 @@ get_domains_trusted(void)
 }
 
 
+static void
+__clear_mac_list(mac_choice_t which)
+{
+	t_trusted_mac *p, *p1;
+	switch (which) {
+	case TRUSTED_MAC:
+		p = config.trustedmaclist;
+		break;
+	case UNTRUSTED_MAC:
+		p = config.mac_blacklist;
+		break;
+	case TRUSTED_LOCAL_MAC:
+		p = config.trusted_local_maclist;
+		break;
+	case ROAM_MAC:
+		p = config.roam_maclist;
+		break;
+	default:
+		return;
+	}
+	
+	for (; p != NULL;) {
+		p1 = p;
+		p = p->next;
+		free(p1->mac);
+		free(p1);
+	}
+	
+	switch (which) {
+	case TRUSTED_MAC:
+		config.trustedmaclist = NULL;
+		break;
+	case UNTRUSTED_MAC:
+		config.mac_blacklist = NULL;
+		break;
+	case TRUSTED_LOCAL_MAC:
+		config.trusted_local_maclist = NULL;
+		break;
+	case ROAM_MAC:
+		config.roam_maclist = NULL;
+		break;
+	}
+}
+
 /**
  * Operate the roam mac list.
  */
 void
 __clear_roam_mac_list()
 {
-	t_trusted_mac *p, *p1;
-	for (p = config.roam_maclist; p != NULL;) {
-		p1 = p;
-		p = p->next;
-		free(p1->mac);
-		free(p1);
-	}
-	config.domains_trusted = NULL;
+	__clear_mac_list(ROAM_MAC);
 }
 
 void
@@ -2337,15 +2374,7 @@ clear_dup_trusted_mac_list(t_trusted_mac *dup_list)
 void
 __clear_trusted_mac_list()
 {
-	t_trusted_mac *p, *p1;
-	for (p = config.trustedmaclist; p != NULL;) {
-		p1 = p;
-		p = p->next;
-		if(p1->ip) free(p1->ip);
-		free(p1->mac);
-		free(p1);
-	}
-	config.trustedmaclist = NULL;
+	__clear_mac_list(TRUSTED_MAC);
 }
 
 void
@@ -2357,17 +2386,23 @@ clear_trusted_mac_list()
 }
 
 void
+__clear_trusted_local_mac_list()
+{
+	__clear_mac_list(TRUSTED_MAC);
+}
+
+void
+clear_trusted_local_mac_list()
+{
+	LOCK_CONFIG();
+	__clear_trusted_mac_list();
+	UNLOCK_CONFIG();
+}
+
+void
 __clear_untrusted_mac_list()
 {
-	t_untrusted_mac *p, *p1;
-	for (p = config.mac_blacklist; p != NULL;) {
-		p1 = p;
-		p = p->next;
-		if(p1->ip) free(p1->ip);
-		free(p1->mac);
-		free(p1);
-	}
-	config.mac_blacklist = NULL;
+	__clear_mac_list(UNTRUSTED_MAC);
 }
 
 void
