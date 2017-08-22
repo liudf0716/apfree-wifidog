@@ -1519,7 +1519,7 @@ parse_popular_servers(const char *ptr)
  * trust domain related function
  */
 
-static t_domain_trusted *
+t_domain_trusted *
 __del_domain_common(const char *domain, trusted_domain_t which)
 {
 	t_domain_trusted *p = NULL, *p1 = NULL;
@@ -1630,7 +1630,7 @@ del_domain_common(const char *domain, trusted_domain_t which)
 	}
 }
 
-static t_domain_trusted *
+t_domain_trusted *
 __add_domain_common(const char *domain, trusted_domain_t which)
 {
 	t_domain_trusted *p = NULL;
@@ -1722,7 +1722,7 @@ add_user_trusted_domain(const char *domain)
 	return add_domain_common(domain, USER_TRUSTED_DOMAIN);
 }
 
-static t_domain_trusted *
+t_domain_trusted *
 __add_user_trusted_domain(const char *domain)
 {
 	return __add_domain_common(domain, USER_TRUSTED_DOMAIN);
@@ -1735,7 +1735,7 @@ add_inner_trusted_domain(const char *domain)
 	return add_domain_common(domain, INNER_TRUSTED_DOMAIN);
 }
 
-static t_domain_trusted *
+t_domain_trusted *
 __add_inner_trusted_domain(const char *domain)
 {
 	return	__add_domain_common(domain, INNER_TRUSTED_DOMAIN);
