@@ -929,7 +929,7 @@ wdctl_add_trusted_local_maclist(int fd, const char *args)
 	
     debug(LOG_DEBUG, "Argument: %s ", args);
 
-	add_trusted_local_maclist(args);
+	add_trusted_local_mac_list(args);
 	
     write_to_socket(fd, "Yes", 3);
 
