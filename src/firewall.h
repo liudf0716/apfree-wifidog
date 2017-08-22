@@ -108,6 +108,10 @@ void fw_set_trusted_maclist();
 
 void fw_clear_trusted_maclist();
 
+void fw_set_trusted_local_maclist();
+
+void fw_clear_trusted_local_maclist();
+
 void fw_set_untrusted_maclist();
 
 void fw_clear_untrusted_maclist();
