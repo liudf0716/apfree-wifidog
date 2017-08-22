@@ -359,6 +359,21 @@ fw_clear_trusted_maclist()
 }
 
 void
+fw_set_trusted_local_maclist()
+{
+	debug(LOG_INFO, "Set trusted local maclist");
+	iptables_fw_set_trusted_local_maclist();
+}
+
+void
+fw_clear_trusted_local_maclist()
+{
+	debug(LOG_INFO, "Clear trusted local maclist");
+	iptables_fw_clear_trusted_local_maclist();
+}
+
+
+void
 fw_set_untrusted_maclist()
 {
 	debug(LOG_INFO, "Set untrusted maclist");
