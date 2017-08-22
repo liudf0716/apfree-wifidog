@@ -24,7 +24,7 @@ https://github.com/liudf0716/apfree_wifidog/wiki/%E5%9F%BA%E4%BA%8ELEDE%E7%BC%96
 
 ApFree WiFiDog 完全兼容现有的 wifidog 协议，并支持如下功能：
 
-###1. 动态添加、删除域名白名单，泛域名白名单
+###. 动态添加、删除域名白名单，泛域名白名单
 添加域名白名单
 
 wdctl add_trusted_domains domain1,domain2,domain3....
@@ -47,7 +47,7 @@ wdctl add_trusted_pdomains|del_trusted_pdomains|clear_trusted_pdomains
 
 泛域名指如baidu.com, sina.com.cn这类的域名，如添加baidu.com泛域名后，所有的如www.baidu.com， img.baidu.com, b1.b2.baidu.com的域名都会在域名白名单中
 
-###2. 动态添加、删除mac黑名单
+###. 动态添加、删除mac黑名单
 添加mac黑名单
 
 wdctl add_untrusted_mac mac1,mac2,mac3...   
@@ -65,7 +65,7 @@ wdctl del_untrusted_mac mac1,mac2,mac3...
 wdctl clear_untrusted_mac                              
 
 
-###3. 动态添加、删除mac免认证名单
+###. 动态添加、删除mac免认证名单
 添加mac免认证名单
 
 wdctl add_trusted_mac mac1,mac2,mac3...  
@@ -80,8 +80,26 @@ wdctl del_trusted_mac mac1,mac2,mac3...
 
 清空mac免认证名单
 
-wdctl clear_trusted_mac                     
-###4. 动态添加、删除ip白名单
+wdctl clear_trusted_mac   
+
+###. 动态添加、删除本地mac免认证名单
+添加本地mac免认证名单，该mac白名单不允许从云端同步
+
+wdctl add_trusted_local_mac mac1,mac2,mac3... 
+
+显示本地mac免认证名单
+
+wdctl show_trusted_local_mac
+
+删除本地mac免认证名单
+
+wdctl del_trusted_local_mac mac1,mac2,mac3...                           
+
+清空本地mac免认证名单
+
+wdctl clear_trusted_local_mac           
+
+###. 动态添加、删除ip白名单
 添加ip白名单
 
 wdctl add_trusted_iplist ip1,ip2,ip3...
@@ -94,7 +112,7 @@ ipset list WiFiDog_br-lan_TDomains或者通过wdctl show_trusted_domains
 
 wdctl clear_trusted_iplist
 
-###5. 支持无线漫游免认证(需要服务器端扩展)
+###. 支持无线漫游免认证(需要服务器端扩展)
 
 设备到路由器dhcp获取ip的时候，会触发脚本执行 wdctl add_online_client，该命令会到云端检查设备是否在别的路由器上通过认证，并支持漫游；如果支持，会把设备自动加到认证列表里面（可通过iptables -t mangle -L -n查看），同时会把另外一台路由器上通过认证的该设备踢下线。
 
@@ -106,13 +124,13 @@ wifidog_roam   enable
 
 wifidog_roam   disable
 
-###6. 支持ios弹窗（无需服务器端支持）
+###. 支持ios弹窗（无需服务器端支持）
 
 当iphone手机连接路由器，iphone会自动弹出portal页面；
 
-###7. 支持线程池模式
+###. 支持线程池模式
 
-###8. 支持https跳转
+###. 支持https跳转
 
 首先手机连接路由器，打开手机浏览器，输入带https的地址（例如：https://www.baidu.com/），
 手机也可以弹出protal页面；
