@@ -553,6 +553,26 @@ iptables_fw_set_trusted_mac(const char *mac)
 }
 
 void
+iptables_fw_clear_trusted_local_maclist(void)
+{
+	iptables_flush_ipset(CHAIN_TRUSTED_LOCAL);
+}
+
+void
+iptables_fw_set_trusted_local_maclist(void)
+{
+	const s_config *config;
+	t_trusted_mac *p = NULL;
+
+	config = config_get_config();
+
+	LOCK_CONFIG();
+	for (p = config->trusted_local_maclist; p != NULL; p = p->next)
+		ipset_do_command("add " CHAIN_TRUSTED_LOCAL " %s", p->mac);
+	UNLOCK_CONFIG();
+}
+
+void
 iptables_fw_clear_untrusted_maclist(void)
 {
 	iptables_flush_ipset(CHAIN_UNTRUSTED);
@@ -735,6 +755,7 @@ iptables_fw_init(void)
 
 	// add ipset support
 	ipset_do_command("create " CHAIN_TRUSTED " hash:mac timeout 0 ");
+	ipset_do_command("create " CHAIN_TRUSTED_LOCAL " hash:mac timeout 0 ");
 	ipset_do_command("create " CHAIN_ROAM " hash:mac timeout 0 ");
 	ipset_do_command("create " CHAIN_UNTRUSTED " hash:mac timeout 0 ");
 	ipset_do_command("create " CHAIN_DOMAIN_TRUSTED " hash:ip ");
@@ -779,6 +800,7 @@ iptables_fw_init(void)
 	iptables_do_append_command(handle, "-t mangle -I POSTROUTING 1 -o %s -j " CHAIN_INCOMING, config->gw_interface);
 	//>>> liudf added&modified 20160113
 	iptables_do_append_command(handle, "-t mangle -A " CHAIN_TRUSTED " -m set --match-set " CHAIN_TRUSTED " src -j MARK --set-mark 0x%x0000/0xff0000", FW_MARK_KNOWN);
+	iptables_do_append_command(handle, "-t mangle -A " CHAIN_TRUSTED " -m set --match-set " CHAIN_TRUSTED_LOCAL " src -j MARK --set-mark 0x%x0000/0xff0000", FW_MARK_KNOWN);
 	//<<< liudf added end
 
 	fw3_ipt_commit(handle);
@@ -1055,6 +1077,7 @@ iptables_fw_destroy(void)
 	debug(LOG_DEBUG, "Destroying our ipset entries");
 	
 	ipset_do_command("destroy " CHAIN_TRUSTED);
+	ipset_do_command("destroy " CHAIN_TRUSTED_LOCAL);
 	ipset_do_command("destroy " CHAIN_ROAM);
 	ipset_do_command("destroy " CHAIN_UNTRUSTED);
 	ipset_do_command("destroy " CHAIN_DOMAIN_TRUSTED);
