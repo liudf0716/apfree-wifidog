@@ -1171,7 +1171,7 @@ remove_online_client(const char *mac)
 static void
 remove_mac_from_list(const char *mac, mac_choice_t which)
 {
-	t_trusted_mac *p = NULL, p1 = NULL;
+	t_trusted_mac *p = NULL, *p1 = NULL;
 	switch(which) {
 	case TRUSTED_MAC:
 		p = config.trustedmaclist;
@@ -1433,7 +1433,7 @@ parse_del_trusted_mac_list(const char *pstr)
 void
 parse_del_trusted_local_mac_list(const char *pstr)
 {
-	parse_remove_local_mac_list(pstr, TRUSTED_LOCAL_MAC);
+	parse_remove_mac_list(pstr, TRUSTED_LOCAL_MAC);
 }
 
 void
@@ -1519,7 +1519,7 @@ parse_popular_servers(const char *ptr)
  * trust domain related function
  */
 
-t_domain_trusted *
+static t_domain_trusted *
 __del_domain_common(const char *domain, trusted_domain_t which)
 {
 	t_domain_trusted *p = NULL, *p1 = NULL;
@@ -1580,7 +1580,7 @@ __del_domain_common(const char *domain, trusted_domain_t which)
 	return p;
 }
 
-t_domain_trusted *
+static t_domain_trusted *
 __del_ip_domain_common(const char *domain, trusted_domain_t which)
 {
 	t_domain_trusted *p = NULL;
@@ -1630,7 +1630,7 @@ del_domain_common(const char *domain, trusted_domain_t which)
 	}
 }
 
-t_domain_trusted *
+static t_domain_trusted *
 __add_domain_common(const char *domain, trusted_domain_t which)
 {
 	t_domain_trusted *p = NULL;
@@ -1722,7 +1722,7 @@ add_user_trusted_domain(const char *domain)
 	return add_domain_common(domain, USER_TRUSTED_DOMAIN);
 }
 
-t_domain_trusted *
+static t_domain_trusted *
 __add_user_trusted_domain(const char *domain)
 {
 	return __add_domain_common(domain, USER_TRUSTED_DOMAIN);
@@ -1735,7 +1735,7 @@ add_inner_trusted_domain(const char *domain)
 	return add_domain_common(domain, INNER_TRUSTED_DOMAIN);
 }
 
-t_domain_trusted *
+static t_domain_trusted *
 __add_inner_trusted_domain(const char *domain)
 {
 	return	__add_domain_common(domain, INNER_TRUSTED_DOMAIN);
