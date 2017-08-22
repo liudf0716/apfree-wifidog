@@ -684,6 +684,9 @@ get_serialize_maclist(int which)
 	case UNTRUSTED_MAC:
 		maclist = config->mac_blacklist;
 		break;
+	case TRUSTED_LOCAL_MAC:
+		maclist = config->trusted_local_maclist;
+		break;
 	case ROAM_MAC:
 		maclist = config->roam_maclist;
 		break;
@@ -732,6 +735,11 @@ get_maclist_text(int which)
 		maclist = config->mac_blacklist;
 		pstr_cat(pstr, "\nUntrusted mac list:\n");
 		break;
+	case TRUSTED_LOCAL_MAC:
+		pstr = pstr_new();
+		maclist = config->trusted_local_maclist;
+		pstr_cat(pstr, "\nTrusted local mac list:\n");
+		break;
 	case ROAM_MAC:
 		pstr = pstr_new();
 		maclist = config->roam_maclist;
@@ -767,6 +775,12 @@ char *
 get_trusted_maclist_text()
 {
 	return get_maclist_text(TRUSTED_MAC);
+}
+
+char *
+get_trusted_local_maclist_text()
+{
+	return get_maclist_text(TRUSTED_LOCAL_MAC);
 }
 
 char *
