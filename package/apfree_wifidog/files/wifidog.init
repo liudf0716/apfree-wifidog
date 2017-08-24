@@ -67,6 +67,8 @@ prepare_wifidog_conf() {
 	local proxy_port
 	local no_auth
 	local apple_cna
+	local update_domain_interval
+	local dns_timeout
 
 	[ -f $CONFIGFILE ] && rm $CONFIGFILE
 
@@ -104,7 +106,9 @@ prepare_wifidog_conf() {
 	config_get proxy_port	"$cfg"	"proxy_port"
 	config_get no_auth	"$cfg"	"no_auth"
 	config_get apple_cna	"$cfg"	"bypass_apple_cna"
-
+	config_get update_domain_interval	"$cfg"	"update_domain_interval"
+	config_get dns_timeout	"$cfg"	"dns_timeout"
+	
 	local set_auth_server_path_login=`[ -n "$auth_server_path_login" ] && echo "    LoginScriptPathFragment $auth_server_path_login"`
 	local set_auth_server_path_portal=`[ -n "$auth_server_path_portal" ] && echo "    PortalScriptPathFragment $auth_server_path_portal"`
 	local set_auth_server_path_msg=`[ -n "$auth_server_path_msg" ] && echo "    MsgScriptPathFragment $auth_server_path_msg"`
@@ -125,7 +129,9 @@ prepare_wifidog_conf() {
 	local set_firewall_rule_unknown_users=`config_list_foreach "$cfg" "firewall_rule_unknown_users" echo_firewall_rule`
 	local set_firewall_rule_locked_users=`config_list_foreach "$cfg" "firewall_rule_locked_users" echo_firewall_rule`
 	local set_apple_cna=`[ -n "$apple_cna"  ] && echo "BypassAppleCNA"  $apple_cna`
-
+	local set_update_domain_interval=`[ -n "$update_domain_interval" ] && echo "UpdateDomainInterval" $update_domain_interval`
+	local set_dns_timeout=`[ -n "$dns_timeout" ] && echo "DNSTimeout" $dns_timeout`
+	
 	cat <<-EOF >$CONFIGFILE
 		GatewayID $gateway_id
 		GatewayInterface $gateway_interface
@@ -169,7 +175,11 @@ prepare_wifidog_conf() {
 		$set_no_auth
 
 		$set_apple_cna
- 
+		
+		$set_update_domain_interval
+ 	
+		$set_dns_timeout
+		
 		FirewallRuleSet global {
 			$set_firewall_rule_global
 		}
