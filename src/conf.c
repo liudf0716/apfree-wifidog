@@ -300,8 +300,8 @@ config_init(void)
 	config.parse_checked	= 1; // before parse domain's ip; fping check it
 	config.no_auth 			= 0; //
 	config.work_mode		= 0;
-	config.update_domain_interval  = 0;
-	config.dns_timeout         =   "0.2";  //default dns parsing timeout  is 0.2s
+	config.update_domain_interval  = 60; // very 60*interval second parse trusted domain
+	config.dns_timeout         =   "1.0";  //default dns parsing timeout  is 1.0s
 	config.bypass_apple_cna = 1; // default enable it
 
 	config.pan_domains_trusted		= NULL;
