@@ -172,7 +172,7 @@ get_auth_uri(const char *request_type, client_type_t type, void *data)
         t_trusted_mac *t_mac = (t_trusted_mac *)data;
         ip  = t_mac->ip;
         mac = t_mac->mac;
-        wired = is_device_wired(mac);
+        wired = br_is_device_wired(mac);
         break;
     }
 
