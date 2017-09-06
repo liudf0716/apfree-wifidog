@@ -1303,7 +1303,7 @@ iptables_fw_counters_update(void)
 					__get_client_name(p1);
 
 				if(p1->wired == -1) {
-					p1->wired = is_device_wired(p1->mac);
+					p1->wired = br_is_device_wired(p1->mac);
 				}
 				UNLOCK_CLIENT_LIST();
 			} else {
