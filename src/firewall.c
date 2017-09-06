@@ -478,7 +478,7 @@ update_trusted_mac_list_status(void)
 		debug(LOG_DEBUG, "update_trusted_mac_list_status: %s %s %d", p1->ip, p1->mac, p1->is_online);
 		if (config->auth_servers != NULL && p1->is_online) {
 			auth_server_request(&authresponse, REQUEST_TYPE_COUNTERS, p1->ip, p1->mac, "null", 0,
-								0, 0, 0, 0, 0, "null", is_device_wired(p1->mac));
+								0, 0, 0, 0, 0, "null", br_is_device_wired(p1->mac));
 			flag = 1;
 		}
 	}
