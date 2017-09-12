@@ -643,7 +643,7 @@ fw3_ipt_flush_chain(struct fw3_ipt_handle *h, const char *chain)
 {
 	int rv = iptc_flush_entries(chain, h->handle);
 	if (!rv)
-		debug(LOG_ERR, "iptc_create_chain(): %s\n", iptc_strerror(errno));
+		debug(LOG_ERR, "iptc_flush_chain(): %s\n", iptc_strerror(errno));
 	
 	return rv;
 }
