@@ -456,7 +456,13 @@ _httpd_sendHeaders(request * r, int contentLength, int modTime)
 	totalLength += nret;
 	nret = snprintf(hdrBuf+totalLength, HTTP_READ_BUF_LEN-totalLength, "Connection: close\r\nContent-Type: %s", 
 				r->response.contentType); // contentType already include "\r\n"
-
+	
+	totalLength += nret;
+	nret = snprintf(hdrBuf+totalLength, HTTP_READ_BUF_LEN-totalLength,
+				   	"Cache-Control: no-store, must-revalidate\r\n"
+					"Expires: 0\r\n"
+				   	"Pragma: no-cache\r\n");
+	
 #ifdef	_DEFLATE_SUPPORT_	
 	if (r->request.deflate) {
 		totalLength += nret;
