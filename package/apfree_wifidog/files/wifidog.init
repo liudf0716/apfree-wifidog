@@ -128,7 +128,7 @@ prepare_wifidog_conf() {
 	local set_firewall_rule_auth_is_down=`config_list_foreach "$cfg" "firewall_rule_auth_is_down" echo_firewall_rule`
 	local set_firewall_rule_unknown_users=`config_list_foreach "$cfg" "firewall_rule_unknown_users" echo_firewall_rule`
 	local set_firewall_rule_locked_users=`config_list_foreach "$cfg" "firewall_rule_locked_users" echo_firewall_rule`
-	local set_apple_cna=`[ -n "$apple_cna"  ] && echo "BypassAppleCNA"  $apple_cna`
+	local set_apple_cna=`[ -n "$apple_cna"  ] && echo "BypassAppleCNA" $apple_cna`
 	local set_update_domain_interval=`[ -n "$update_domain_interval" ] && echo "UpdateDomainInterval" $update_domain_interval`
 	local set_dns_timeout=`[ -n "$dns_timeout" ] && echo "DNSTimeout" $dns_timeout`
 	
