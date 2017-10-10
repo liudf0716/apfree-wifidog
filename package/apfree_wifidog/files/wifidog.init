@@ -175,7 +175,7 @@ prepare_wifidog_conf() {
 		$set_no_auth
 
 		$set_apple_cna
-		
+
 		$set_update_domain_interval
  	
 		$set_dns_timeout
