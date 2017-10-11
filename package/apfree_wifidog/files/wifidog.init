@@ -177,9 +177,9 @@ prepare_wifidog_conf() {
 		$set_apple_cna
 
 		$set_update_domain_interval
- 	
+
 		$set_dns_timeout
-		
+
 		FirewallRuleSet global {
 			$set_firewall_rule_global
 		}
