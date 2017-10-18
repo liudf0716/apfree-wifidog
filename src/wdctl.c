@@ -423,13 +423,9 @@ wdctl_command_action(const char *command)
     while ((len < sizeof(buffer)) && ((rlen = read(sock, (buffer + len), (sizeof(buffer) - len))) > 0)) {
         len += (size_t) rlen;
     }
-
-    if (strcmp(buffer, "Yes") == 0) {
-        fprintf(stdout, "Yes\n");
-    } else if (strcmp(buffer, "No") == 0) {
-        fprintf(stdout, "No\n");
-    } else {
-        fprintf(stderr, "Error\n");
+	
+    if (len > 0) {
+        fprintf(stdout, "%s\n", buffer);
     }
 
     shutdown(sock, 2);
