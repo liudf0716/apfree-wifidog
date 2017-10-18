@@ -2395,7 +2395,7 @@ void
 clear_trusted_local_mac_list()
 {
 	LOCK_CONFIG();
-	__clear_trusted_mac_list();
+	__clear_trusted_local_mac_list();
 	UNLOCK_CONFIG();
 }
 
