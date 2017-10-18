@@ -938,7 +938,7 @@ wdctl_add_trusted_local_maclist(int fd, const char *args)
 
 char *show_trusted_local_maclist()
 {
-    return mqtt_get_serialize_maclist(TRUSTED_MAC);
+    return mqtt_get_serialize_maclist(TRUSTED_LOCAL_MAC);
 }
 
 static void
@@ -958,7 +958,7 @@ wdctl_show_trusted_local_maclist(int fd)
 void
 clear_trusted_local_maclist(void)
 {
-    clear_trusted_local_maclist();   
+    clear_trusted_local_mac_list();   
     fw_clear_trusted_local_maclist();
 }
 
