@@ -2388,7 +2388,7 @@ clear_trusted_mac_list()
 void
 __clear_trusted_local_mac_list()
 {
-	__clear_mac_list(TRUSTED_MAC);
+	__clear_mac_list(TRUSTED_LOCAL_MAC);
 }
 
 void
