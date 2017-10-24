@@ -24,7 +24,7 @@
 
 ## Apfree WiFiDog: Efficient captive portal solution
 
-Apfree-WiFidog is an open source captive protal solution for wireless router which with embeddabled linux([LEDE](https://github.com/lede-project/source)/[Openwrt](https://github.com/openwrt/openwrt)). 
+Apfree-WiFidog is an open source captive portal solution for wireless router which with embeddable Linux([LEDE](https://github.com/lede-project/source)/[Openwrt](https://github.com/openwrt/openwrt)). 
 
 
 **[中文介绍](https://github.com/liudf0716/apfree_wifidog/blob/master/README_ZH.md)**
@@ -33,7 +33,7 @@ Apfree-WiFidog is an open source captive protal solution for wireless router whi
 
 It has some awesome features:
 
-* *Compatible with original wifodog protocol*. You can seamless migration Apfree WiFidog to connect your auth server if you runned traditional wifidog.
+* *Compatible with original wifidog protocol*. You can seamless migration Apfree WiFidog to connect your auth server if you runned traditional wifidog.
 
 * *HTTPS support*. Not only `HTTP`, Apfree WiFiDog can capture `HTTPS` URL request. It's a big deference between traditional WiFiDog.
 
@@ -86,7 +86,7 @@ After Doing `make package/apfree_wifidog/compile V=s`, Apfree WiFiDog `ipk` pack
 
 ## Getting started
 
-After compiling and installing Apfree WiFiDog into your local router, run the `ps | grep wifidog` command. The `ps | grep wifidog` command queries the linux system for information about Apfree WiFiDog.
+After compiling and installing Apfree WiFiDog into your local router, run the `ps | grep wifidog` command. The `ps | grep wifidog` command queries the Linux system for information about Apfree WiFiDog.
 
 ```
 root@lede:~# ps | grep wifidog
@@ -118,7 +118,7 @@ config wifidog
         option trusted_domains 'www.baidu.com,www.qq.com,www.qq.com.cn,www.weixin.com'
 ```
 
-wired_passed means whether lan access devices need to auth or not, value 1 means no need to auth 
+wired_passed means whether LAN access devices need to auth or not, value 1 means no need to auth 
 
 Domains of `www.baidu.com,www.qq.com,www.qq.com.cn,www.weixin.com` is trusted in this default configuration file, and you can modify it to what you want.
 
@@ -145,5 +145,3 @@ Feel free to create issues or pull-requests if you have any problems.
 
 ### apfree wifidog qq group： [331230369](https://jq.qq.com/?_wv=1027&k=4ADDSev)
 ---
-
-
