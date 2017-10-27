@@ -62,7 +62,6 @@
             <h3 class="title">欢迎登录</h3>
         </div>
         <div class="inpcont">
-            <input type="text" class="inp item" id="user" placeholder="请输入用户名"/>
             <input type="password" class="inp item" id="pwd" placeholder="请输入密码"/>
         </div>
         <div class="btncont">
@@ -132,9 +131,8 @@
     window.onload = function(){
         var btn = document.getElementById('btn');
         btn.onclick = function(){
-            var user = document.getElementById('user').value;
             var pwd = document.getElementById('pwd').value;
-            if(user == '' || pwd == ''){
+            if(pwd == ''){
                 alert('输入不能为空');
                 return false;
             }
