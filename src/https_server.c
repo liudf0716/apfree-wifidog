@@ -173,13 +173,13 @@ evhttp_gw_reply_js_redirect(struct evhttp_request *req, const char *peer_addr) {
 	evhttp_add_header(evhttp_request_get_output_headers(req),
 		    "Content-Type", "text/html");
 	evhttp_add_header(evhttp_request_get_output_headers(req),
-		    "Connection", "close");
-	evhttp_add_header(evhttp_request_get_output_headers(req),
 		    "Cache-Control", "no-store, must-revalidate");
 	evhttp_add_header(evhttp_request_get_output_headers(req),
 		    "Expires", "0");
 	evhttp_add_header(evhttp_request_get_output_headers(req),
 		    "Pragma", "no-cache");
+	evhttp_add_header(evhttp_request_get_output_headers(req),
+		    "Connection", "close");
 	evhttp_send_reply (req, 200, "OK", evb); 
 	
 	free(mac);
