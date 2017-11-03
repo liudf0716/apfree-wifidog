@@ -29,7 +29,7 @@ wifidog_roam disable
 
 wifidog_roam 脚本如下：
 
-···
+```
 #!/bin/sh
 
 [ -x /etc/init.d/wifidog ] || exit 1
@@ -53,6 +53,6 @@ disable)
     ;;
 esac
 
-···
+```
 
 
