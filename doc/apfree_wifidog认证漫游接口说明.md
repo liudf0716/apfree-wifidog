@@ -17,7 +17,7 @@ GET http://authserv_hostname:port/authserv_path/roam?gw_id=gwid&mac=macaddress&c
 
 #### 注意，要记得通过auth接口将该设备从原来的路由器上替下线
 
-## apfree wifidog的认证漫游功能可以开启和关闭
+## apfree wifidog的认证漫游功能在坤腾固件上可以开启和关闭
 开始漫游
 
 wifidog_roam enable
@@ -25,3 +25,34 @@ wifidog_roam enable
 关闭漫游
 
 wifidog_roam disable
+
+
+wifidog_roam 脚本如下：
+
+···
+#!/bin/sh
+
+[ -x /etc/init.d/wifidog ] || exit 1
+
+[ $# != 1 ] && {
+    echo "$0 enable|disable"
+    exit
+}
+
+case $1 in
+enable)
+    uci set wifidog.@wifidog[0].roam=1
+    uci commit wifidog
+    ;;
+disable)
+    uci set wifidog.@wifidog[0].roam=0
+    uci commit wifidog
+    ;;
+*)
+    echo "no valid param $1"
+    ;;
+esac
+
+···
+
+
