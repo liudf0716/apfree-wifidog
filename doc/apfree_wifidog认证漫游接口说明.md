@@ -55,4 +55,60 @@ esac
 
 ```
 
+## 配置dnsmasq，当用户获取ip后会执行相应脚本
 
+需要添加dhcpscript项
+
+配置如下：
+```
+config dnsmasq
+    option domainneeded 1
+    option boguspriv    1
+    option filterwin2k  0  # enable for dial on demand
+    option localise_queries 1
+    option rebind_protection 1  # disable if upstream must serve RFC1918 addresses
+    option rebind_localhost 1  # enable for RBL checking and similar services
+    #list rebind_domain example.lan  # whitelist RFC1918 responses for domains
+    option local    '/lan/'
+    option domain   'lan'
+    option expandhosts  1
+    option nonegcache   0
+    option authoritative    1
+    option readethers   1
+    option leasefile    '/tmp/dhcp.leases'
+    option resolvfile   '/tmp/resolv.conf.auto'
+    #list server        '/mycompany.local/1.2.3.4'
+    #option nonwildcard 1
+    #list interface     br-lan
+    #list notinterface  lo
+    #list bogusnxdomain     '64.94.110.11'
+    option localservice 1  # disable to allow DNS requests from non-local subnets
+    option dhcpscript   '/usr/sbin/roam_check'
+
+```
+
+其中roam_check脚本就是执行“wdctl add_online_client”的地方，如：
+
+```
+#!/bin/sh
+
+WDCTL=/usr/bin/wdctl
+UCI=/sbin/uci
+
+action=$1
+
+[ $action = "add" -o $action = "old" ] && {
+    # For the equipments in landi MAC address block                   
+    command -v landi-robot >/dev/null 2>&1 && landi-robot $2
+
+    [ -x $WDCTL ] || exit
+
+    
+    roam=`$UCI get wifidog.@wifidog[0].roam 2> /dev/null`
+    [ $roam = 1 ] && {
+        $WDCTL add_online_client {\"mac\":\"$2\",\"ip\":\"$3\",\"name\":\"$4\"}
+    }
+    
+}
+
+```
