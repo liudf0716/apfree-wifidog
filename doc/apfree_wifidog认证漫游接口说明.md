@@ -55,7 +55,7 @@ esac
 
 ```
 
-## 配置dnsmasq，当用户获取ip后会执行相应脚本
+## 配置dnsmasq，当dhcp server给用户分配ip后会执行相应脚本
 
 需要添加dhcpscript项
 
