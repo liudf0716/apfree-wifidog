@@ -46,40 +46,9 @@ It has some awesome features:
 
 ----
 
-## How To Compile
+## Added to Openwrt&LEDE 
 
-**[基于LEDE编译Apfree_wifidog](https://github.com/liudf0716/apfree_wifidog/wiki/%E5%9F%BA%E4%BA%8ELEDE%E7%BC%96%E8%AF%91Apfree_wifidog)**
-
-Fork and clone the Apfree WiFiDog project:
-
-    git clone https://github.com/liudf0716/apfree_wifidog
-    cd apfree_wifidog
-
-Assuming you have a working [LEDE](https://github.com/lede-project/source)/[Openwrt](https://github.com/openwrt/openwrt) setup, taking `LEDE` as an example and assuming your LEDE root path is `LEDE_ROOT`:
-
-	cp -r package/apfree_wifidog/ /LEDE_ROOT/package/
-
-To support `HTTPS`, you need install `libevent` with version 2.1.7 or latest in your LEDE environment, Or using the package copied in Apfree WiFiDog git project:
-
-    cp -r package/libevent2/ /LEDE_ROOT/package/libs/
-
-Now Apfree WiFiDog package has been installed in LEDE packages environment.
-
-    cd /LEDE_ROOT/
-	make menuconfig
-
-Chose your `Target System` and `Network -->Captive Portals --> apfree_wifidog`. `SAVE` and `EXIT`.
-
-Do compiling:
-
-```
-make package/apfree_wifidog/compile V=s
-```
-
-After Doing `make package/apfree_wifidog/compile V=s`, Apfree WiFiDog `ipk` package is packed in path `bin/packages/YOUR-TARGET-ARCH/base/apfree_wifidog_VERSION-RELEASE_YOUR-TARGET-ARCH.ipk `. Push it up into your LEDE-system router, use `opkg install ` command to install this `ipk`.
-
-
-**The CA-Certificate in this project is ONLY for Apfree WiFiDog HTTPS captive testing, CAN NOT be used for business scene**
+Please go to [package_apfree_wifidog](https://github.com/KunTengRom/package_apfree_wifidog)
 
 
 --------
