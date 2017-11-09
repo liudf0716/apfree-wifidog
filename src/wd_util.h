@@ -110,7 +110,6 @@ char *mqtt_get_status_text(void);
 void trim_newline(char *);
 
 /** @brief Is mac source is wired or not */
-int is_device_wired(const char *);
 int is_device_wired_intern(const char *mac, const char *bridge);
 int br_is_device_wired(const char *); // no popen impl
 
