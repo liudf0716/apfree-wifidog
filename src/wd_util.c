@@ -1030,30 +1030,7 @@ br_is_device_wired(const char *mac){
 }
 
 /*
- * 1: wired; 0: wireless
- * deprecated
- */
-int
-is_device_wired(const char *mac)
-{
-	FILE *fd = NULL;
-	char szcmd[128] = {0}; 
-	
-	snprintf(szcmd, 128, "/usr/bin/ktpriv get_mac_source %s", mac);
-	if((fd = popen(szcmd, "r"))) {
-		char buf[8] = {0};
-		fgets(buf, 7, fd);
-		pclose(fd);
-		if(buf[0] == '0')
-			return 1;
-	}
-
-	return 0;
-}
-
-
-/*
- * val can be ip or domain
+ * val must be ip 
  * 1: is online; 0: is unreachable
  */
 int
