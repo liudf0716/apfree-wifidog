@@ -343,31 +343,31 @@ static void check_device_online_cb(int result, int bytes, char * fqname, char * 
 		return;	
 	
 	switch(result) {
-	case PING_ERR_NONE：
-		tmac->is_online = 1;
-		break;
-	case PING_ERR_TIMEOUT:
-	default:
-		tmac->is_online = 0;
-		break;	
+		case PING_ERR_NONE:
+			tmac->is_online = 1;
+			break;
+		case PING_ERR_TIMEOUT:
+		default:
+			tmac->is_online = 0;
+			break;	
 	}
 	
-	evping_base_host_delete_by_ip(pingbase, tmac->ip);
+	evping_base_host_delete_by_ipname(pingbase, tmac->ip);
 }
 
 //check whether white mac device online or not
 static void check_device_online() {
-	t_trusted_mac *p1 = NULL, *tmac_list = NULL;
+	t_trusted_mac *p = NULL, *tmac_list = NULL;
 	s_config *config = config_get_config();
-	tmac_list = config.trustedmaclist;
+	tmac_list = config->trustedmaclist;
 	if (!tmac_list)
 		return;
 	
 	int flag = 0;
 	LOCK_CONFIG();
-	for(p1 = tmac_list; p1 != NULL; p1 = p1->next) {
+	for(p = tmac_list; p != NULL; p = p1->next) {
 		if(p->ip == NULL) 
-			p->ip = arp_get_ip(tmac->mac);
+			p->ip = arp_get_ip(p->mac);
 		
 		if (p->ip) {
 			evping_base_host_add(pingbase, p->ip);
