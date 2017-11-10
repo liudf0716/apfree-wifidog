@@ -418,7 +418,7 @@ void __clear_trusted_mac_list();
 
 void clear_trusted_mac_list();
 
-t_trusted_mac *add_trusted_mac(const char *);
+t_trusted_mac *get_trusted_mac_by_ip(const char *);
 
 // trusted local maclist operation for wdctl
 void parse_trusted_local_mac_list(const char *);

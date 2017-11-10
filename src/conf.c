@@ -2341,6 +2341,21 @@ is_trusted_mac(const char *mac)
 
 }
 
+t_trusted_mac *
+get_trusted_mac_by_ip(const char *ip)
+{
+	t_trusted_mac *p = NULL;
+
+	LOCK_CONFIG();
+	for (p = config.trustedmaclist; p != NULL; p = p->next) {
+		if(p->ip && strcmp(ip, p->ip) == 0)
+			break;
+	}
+	UNLOCK_CONFIG();
+
+	return p;
+}
+
 int
 is_untrusted_mac(const char *mac)
 {
@@ -2370,6 +2385,7 @@ clear_dup_trusted_mac_list(t_trusted_mac *dup_list)
 	}
 	dup_list = NULL;
 }
+
 
 void
 __clear_trusted_mac_list()
