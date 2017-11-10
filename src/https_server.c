@@ -65,6 +65,8 @@
 #include <event2/buffer.h>
 #include <event2/util.h>
 #include <event2/keyvalq_struct.h>
+#include <event2/ping.h>
+
 
 #ifdef EVENT__HAVE_NETINET_IN_H
 #include <netinet/in.h>
@@ -82,7 +84,6 @@
 #endif
 
 #include <syslog.h>
-#include <events/ping.h>
 
 #include "https_server.h"
 #include "debug.h"
