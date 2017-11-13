@@ -2456,9 +2456,9 @@ trusted_mac_dup(t_trusted_mac *src)
 		return NULL;
 
 	new = safe_malloc(sizeof(t_trusted_mac));
-	new->mac 	= safe_strdup(src->mac);
-	new->ip 	= NULL;
-	new->is_online = 0;
+	new->mac 		= safe_strdup(src->mac);
+	new->ip 		= src->ip?safe_strdup(src->ip):NULL;
+	new->is_online 	= src->is_online;
 
 	return new;
 }
