@@ -365,7 +365,7 @@ static void check_device_online() {
 	
 	int flag = 0;
 	LOCK_CONFIG();
-	for(p = tmac_list; p != NULL; p = p1->next) {
+	for(p = tmac_list; p != NULL; p = p->next) {
 		if(p->ip == NULL) 
 			p->ip = arp_get_ip(p->mac);
 		
