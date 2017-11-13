@@ -390,7 +390,7 @@ get_status_text()
         pstr_cat(pstr, "\nTrusted MAC addresses:\n");
 
         for (p = config->trustedmaclist; p != NULL; p = p->next) {
-            pstr_append_sprintf(pstr, "  %s\n", p->mac);
+            pstr_append_sprintf(pstr, "  %s status: %d\n", p->mac, p->is_online);
         }
     }
 
