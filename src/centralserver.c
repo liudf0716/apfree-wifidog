@@ -462,49 +462,52 @@ _connect_auth_server(int level) {
      */
 	auth_server = config->auth_servers;
     hostname = auth_server->authserv_hostname;
-    debug(LOG_DEBUG, "Level %d: Resolving auth server [%s]", level, hostname);
-    h_addr = wd_gethostbyname(hostname);
-    if (!h_addr) {
-        /*
-         * DNS resolving it failed
-         */
-        debug(LOG_INFO, "Level %d: Resolving auth server [%s] failed", level, hostname);
-
-		if (auth_server->last_ip) {
-			free(auth_server->last_ip);
-			auth_server->last_ip = NULL;
-		}
-		mark_auth_server_bad(auth_server);
-		return _connect_auth_server(level);
-    } else {
-        /*
-         * DNS resolving was successful
-         */
-		ip = safe_malloc(HTTP_IP_ADDR_LEN);
-		inet_ntop(AF_INET, h_addr, ip, HTTP_IP_ADDR_LEN);
-		ip[HTTP_IP_ADDR_LEN-1] = '\0';
-        debug(LOG_DEBUG, "Level %d: Resolving auth server [%s] succeeded = [%s]", level, hostname, ip);
-
-        if (!auth_server->last_ip || strcmp(auth_server->last_ip, ip) != 0) {
+	if (NULL == auth_server->last_ip){
+        debug(LOG_DEBUG, "Level %d: Resolving auth server [%s]", level, hostname);
+        h_addr = wd_gethostbyname(hostname);
+        if (!h_addr) {
             /*
-             * But the IP address is different from the last one we knew
-             * Update it
-             */
-            debug(LOG_INFO, "Level %d: Updating last_ip IP of server [%s] to [%s]", level, hostname, ip);
-            if (auth_server->last_ip)
+            * DNS resolving it failed
+            */
+            debug(LOG_INFO, "Level %d: Resolving auth server [%s] failed", level, hostname);
+        
+            if (auth_server->last_ip) {
                 free(auth_server->last_ip);
-            auth_server->last_ip = ip;
-
-            /* Update firewall rules */
-            fw_clear_authservers();
-            fw_set_authservers();
+                auth_server->last_ip = NULL;
+            }
+            mark_auth_server_bad(auth_server);
+            return _connect_auth_server(level);
         } else {
             /*
-             * IP is the same as last time
-             */
-            free(ip);
+            * DNS resolving was successful
+            */
+            ip = safe_malloc(HTTP_IP_ADDR_LEN);
+            inet_ntop(AF_INET, h_addr, ip, HTTP_IP_ADDR_LEN);
+            ip[HTTP_IP_ADDR_LEN-1] = '\0';
+            debug(LOG_DEBUG, "Level %d: Resolving auth server [%s] succeeded = [%s]", level, hostname, ip);
+        
+            if (!auth_server->last_ip || strcmp(auth_server->last_ip, ip) != 0) {
+                /*
+                * But the IP address is different from the last one we knew
+                * Update it
+                */
+                debug(LOG_INFO, "Level %d: Updating last_ip IP of server [%s] to [%s]", level, hostname, ip);
+                if (auth_server->last_ip)
+                    free(auth_server->last_ip);
+                auth_server->last_ip = ip;
+        
+                /* Update firewall rules */
+                fw_clear_authservers();
+                fw_set_authservers();
+            } else {
+                /*
+                * IP is the same as last time
+                */
+                free(ip);
+            }
+            free(h_addr);
         }
-
+    }
         /*
          * Connect to it
          */
@@ -513,9 +516,8 @@ _connect_auth_server(int level) {
 
         their_addr.sin_port = port;
         their_addr.sin_family = AF_INET;
-        their_addr.sin_addr = *h_addr;
-        memset(&(their_addr.sin_zero), '\0', sizeof(their_addr.sin_zero));
-        free(h_addr);
+        inet_aton(auth_server->last_ip, &their_addr.sin_addr);
+        memset(&(their_addr.sin_zero), '\0', sizeof(their_addr.sin_zero));        
 
         if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
             debug(LOG_ERR, "Level %d: Failed to create a new SOCK_STREAM socket: %s", strerror(errno));
@@ -537,7 +539,6 @@ _connect_auth_server(int level) {
 			mark_auth_server_bad(auth_server);
 			return _connect_auth_server(level); /* Yay recursion! */
 		}
-    }
 }
 
 // 0, failure; 1, success
