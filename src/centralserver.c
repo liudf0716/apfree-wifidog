@@ -80,7 +80,7 @@ auth_server_roam_request(const char *mac)
 	snprintf(buf, sizeof(buf),
 		"GET %sroam?gw_id=%s&mac=%s&channel_path=%s HTTP/1.1\r\n"
         "User-Agent: ApFree WiFiDog %s\r\n"
-		"Connection: keep-alive\r\n"
+		"Connection: close\r\n"
         "Host: %s\r\n"
         "\r\n",
         auth_server->authserv_path,
