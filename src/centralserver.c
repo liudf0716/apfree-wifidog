@@ -261,7 +261,7 @@ auth_server_request(t_authresponse * authresponse, const char *request_type, con
            snprintf(buf, (sizeof(buf) - 1),
              "GET %s%sstage=%s&ip=%s&mac=%s&token=%s&incoming=%llu&outgoing=%llu&incomingdelta=%llu&outgoingdelta=%llu&first_login=%lld&online_time=%u&gw_id=%s&channel_path=%s&name=%s&wired=%d HTTP/1.1\r\n"
              "User-Agent: ApFree WiFiDog %s\r\n"
-			 "Connection: keep-alive\r\n"
+			 "Connection: close\r\n"
              "Host: %s\r\n"
              "\r\n",
              auth_server->authserv_path,
@@ -283,7 +283,7 @@ auth_server_request(t_authresponse * authresponse, const char *request_type, con
             snprintf(buf, (sizeof(buf) - 1),
              "GET %s%sstage=%s&ip=%s&mac=%s&token=%s&incoming=%llu&outgoing=%llu&first_login=%lld&online_time=%u&gw_id=%s&channel_path=%s&name=%s&wired=%d HTTP/1.1\r\n"
              "User-Agent: ApFree WiFiDog %s\r\n"
-			 "Connection: keep-alive\r\n"
+			 "Connection: close\r\n"
              "Host: %s\r\n"
              "\r\n",
              auth_server->authserv_path,
@@ -344,30 +344,11 @@ connect_auth_server()
     return (sockfd);
 }
 
-// just decrease authserv_fd_ref
+// equal to close_auth_server
 void
 decrease_authserv_fd_ref()
 {
-	s_config *config = config_get_config();
-    t_auth_serv *auth_server = NULL;
-	
-	LOCK_CONFIG();
-
-	for (auth_server = config->auth_servers; auth_server; auth_server = auth_server->next) {
-        if (auth_server->authserv_fd > 0) {
-			auth_server->authserv_fd_ref -= 1;
-			if (auth_server->authserv_fd_ref == 0) {
-				debug(LOG_INFO, "authserv_fd_ref is 0, but not close this connection");
-			} else if (auth_server->authserv_fd_ref < 0) {
-				debug(LOG_ERR, "Impossible, authserv_fd_ref is %d", auth_server->authserv_fd_ref);
-				close(auth_server->authserv_fd);
-				auth_server->authserv_fd = -1;
-				auth_server->authserv_fd_ref = 0;
-			}
-		}
-    }
-	
-	UNLOCK_CONFIG();
+	close_auth_server();
 }
 
 void
@@ -386,13 +367,9 @@ _close_auth_server()
 	
 	for (auth_server = config->auth_servers; auth_server; auth_server = auth_server->next) {
         if (auth_server->authserv_fd > 0) {
-			auth_server->authserv_fd_ref -= 1;
-			if (auth_server->authserv_fd_ref <= 0) {
-				debug(LOG_DEBUG, "authserv_fd_ref is %d, close this connection", auth_server->authserv_fd_ref);
-				close(auth_server->authserv_fd);
-				auth_server->authserv_fd = -1;
-				auth_server->authserv_fd_ref = 0;
-			} 
+			debug(LOG_DEBUG, "authserv_fd_ref is %d, close this connection", auth_server->authserv_fd_ref);
+			close(auth_server->authserv_fd);
+			auth_server->authserv_fd = -1;
 		}
     }
 }
@@ -420,21 +397,6 @@ _connect_auth_server(int level) {
 	if (!is_online()) {
 		debug(LOG_INFO, "Sorry, internet is not available!");
 		return -1;
-	}
-	
-	auth_server = config->auth_servers;
-	if (auth_server->authserv_fd > 0) {
-		if (is_socket_valid(auth_server->authserv_fd)) {
-			debug(LOG_INFO, "Use keep-alive http connection, authserv_fd_ref is %d", auth_server->authserv_fd_ref);
-			auth_server->authserv_fd_ref++;
-			return auth_server->authserv_fd;
-		} else {
-			debug(LOG_INFO, "Server has closed this connection, initialize it");
-			close(auth_server->authserv_fd);
-			auth_server->authserv_fd = -1;
-			auth_server->authserv_fd_ref = 0;
-			return _connect_auth_server(level);
-		}
 	}
 	
     /* XXX level starts out at 0 and gets incremented by every iterations. */
@@ -528,8 +490,6 @@ _connect_auth_server(int level) {
 							 auth_server->authserv_connect_timeout);
 		if (res == 0) {
 			// connect successly
-			auth_server->authserv_fd = sockfd;
-			auth_server->authserv_fd_ref++;
 			return sockfd;
 		} else {
 			debug(LOG_INFO,
