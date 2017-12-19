@@ -66,8 +66,5 @@ http://v.qq.com/x/page/f03507zyfvv.html
 ## powered by 坤腾畅联固件研发团队 （ www.kunteng.org ）
 ## 加qq群讨论： [331230369](https://jq.qq.com/?_wv=1027&k=4ADDSev)
 
-## apfree wifidog 知识星球
-
-![知识星球](https://github.com/liudf0716/apfree_wifidog/blob/master/apfreewifidog.jpg)
 
 ## 如果该项目对您有帮助，请毫不犹豫点star，谢谢！
