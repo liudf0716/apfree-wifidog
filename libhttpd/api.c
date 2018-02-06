@@ -394,7 +394,7 @@ httpdReadRequest(httpd * server, request * r)
      */
     count = 0;
     inHeaders = 1;
-    while (_httpd_readLine(r, buf, HTTP_MAX_LEN) > 0) {
+    while (_httpd_readLine(r, buf, HTTP_MAX_LEN-1) > 0) {
         count++;
 
         /*
