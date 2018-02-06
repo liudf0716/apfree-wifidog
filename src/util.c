@@ -38,6 +38,7 @@
 #include <sys/wait.h>
 #include <sys/types.h>
 #include <sys/time.h>
+#include <sys/poll.h>
 #include <netinet/in.h>
 #include <sys/ioctl.h>
 #include <arpa/inet.h>
@@ -265,17 +266,26 @@ wd_connect(int sockfd, const struct sockaddr *their_addr, socklen_t addrlen, int
 	} else if (res == 0) {
 		goto success;
 	} else {
-		fd_set fdset; 
-		struct timeval tv; 
 		int so_error = 0;
-		int len = sizeof(so_error);
+        int len = sizeof(so_error);
 
-		tv.tv_sec = timeout; 
-		tv.tv_usec = 0; 
-		FD_ZERO(&fdset); 
-		FD_SET(sockfd, &fdset);
+#ifdef  SELECT
+        struct timeval tv;
+        fd_set fdset;
+        tv.tv_sec = timeout;
+        tv.tv_usec = 0;
 
-		res = select(sockfd+1, NULL, &fdset, NULL, &tv);
+        FD_ZERO(&fdset);
+        FD_SET(sockfd, &fdset);
+
+        res = select(sockfd+1, NULL, &fdset, NULL, &tv);
+#else
+        struct pollfd fds;
+        memset(&fds, 0, sizeof(fds));
+        fds.fd      = socketfd;
+        fds.event   = POLLOUT;
+        res = poll(fds, 1, timeout*1000);
+#endif
 		switch(res) {
 		case 1: // data to read				
 			getsockopt(sockfd, SOL_SOCKET, SO_ERROR, &so_error, &len);
