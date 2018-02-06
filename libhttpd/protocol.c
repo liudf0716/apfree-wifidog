@@ -50,12 +50,17 @@ int len;
     /* XXX Select based IO */
 
     int nfds;
+#ifdef SELECT
     fd_set readfds;
     struct timeval timeout;
+#else
+	struct pollfd fds;
+#endif
 	int i = 0;
    	int nread = 0, nret = 0;
  
 	do {
+#ifdef	SELECT
     	FD_ZERO(&readfds);
     	FD_SET(sock, &readfds);
     	timeout.tv_sec = 0; 
@@ -65,6 +70,13 @@ int len;
     	nfds = select(nfds, &readfds, NULL, NULL, &timeout);
 
     	if (nfds > 0 && FD_ISSET(sock, &readfds)) {
+#else
+		memset(&fds, 0, sizeof(fds));
+        fds.fd      = socket;
+        fds.event   = POLLIN;
+        nfds = poll(fds, 1, 100);
+		if (nfds > 0 && fds.revents == POLLIN)
+#endif
 			nret = read(sock, buf+nread, len-nread);
 			if (nret > 0 && nret <= (len-nread)) {
 				nread += nret;
@@ -94,13 +106,18 @@ int len;
     return (send(sock, buf, len, 0));
 #else
     // liudf modified 20160302
+#ifdef	TEST
 	int nfds;
     fd_set writefds;
+#else
+	struct pollfd fds;
+#endif
     struct timeval timeout;
 	int i = 0;
 	int nwrite = 0, nret = 0;   	
  
 	do {
+#ifdef	TEST
     	FD_ZERO(&writefds);
     	FD_SET(sock, &writefds);
     	timeout.tv_sec = 0; 
@@ -110,6 +127,13 @@ int len;
     	nfds = select(nfds, NULL, &writefds, NULL, &timeout);
 
     	if (nfds > 0 && FD_ISSET(sock, &writefds)) {
+#else
+		memset(&fds, 0, sizeof(fds));
+        fds.fd      = socket;
+        fds.event   = POLLOUT;
+        nfds = poll(fds, 1, 100);
+		if (nfds > 0 && fds.revents == POLLOUT)
+#endif
 			nret = write(sock, buf+nwrite, len-nwrite);
 			if	(nret > 0) {
 				nwrite += nret;
