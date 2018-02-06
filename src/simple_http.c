@@ -23,6 +23,7 @@
 #include <stdlib.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/poll.h>
 #include <sys/stat.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -389,10 +390,8 @@ http_get(const int sockfd, const char *req)
 char *
 http_get_ex(const int sockfd, const char *req, int wait)
 {
-    ssize_t numbytes;
-    int done, nfds;
-    fd_set readfds;
-    struct timeval timeout;
+	int done, nfds; 
+    ssize_t numbytes; 
     size_t reqlen = strlen(req);
     char readbuf[MAX_BUF];
     char *retval;
@@ -416,15 +415,24 @@ http_get_ex(const int sockfd, const char *req, int wait)
 
     debug(LOG_DEBUG, "Reading response timeout [%d]", wait);
     done = 0;
-    do {
+    do {		
+#ifdef	SELECT
+		fd_set readfds;
+		struct timeval timeout;
         FD_ZERO(&readfds);
         FD_SET(sockfd, &readfds);
-        timeout.tv_sec = wait;    /* XXX magic... 30 second is as good a timeout as any */
+        timeout.tv_sec = wait;    
         timeout.tv_usec = 0;
         nfds = sockfd + 1;
 
         nfds = select(nfds, &readfds, NULL, NULL, &timeout);
-
+#else
+		struct pollfd fds;
+        memset(&fds, 0, sizeof(fds));
+        fds.fd      = socketfd;
+        fds.event   = POLLIN;
+        nfds = poll(fds, 1, wait*1000);
+#endif
         if (nfds > 0) {
             /** We don't have to use FD_ISSET() because there
 			 *  was only one fd. */
