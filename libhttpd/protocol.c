@@ -73,8 +73,8 @@ int len;
 #else
 		memset(&fds, 0, sizeof(fds));
         fds.fd      = socket;
-        fds.event   = POLLIN;
-        nfds = poll(fds, 1, 100);
+        fds.events   = POLLIN;
+        nfds = poll(&fds, 1, 100);
 		if (nfds > 0 && fds.revents == POLLIN)
 #endif
 			nret = read(sock, buf+nread, len-nread);
@@ -130,8 +130,8 @@ int len;
 #else
 		memset(&fds, 0, sizeof(fds));
         fds.fd      = socket;
-        fds.event   = POLLOUT;
-        nfds = poll(fds, 1, 100);
+        fds.events   = POLLOUT;
+        nfds = poll(&fds, 1, 100);
 		if (nfds > 0 && fds.revents == POLLOUT)
 #endif
 			nret = write(sock, buf+nwrite, len-nwrite);
