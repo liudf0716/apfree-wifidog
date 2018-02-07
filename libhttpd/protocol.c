@@ -76,7 +76,7 @@ int len;
         fds.fd      = sock;
         fds.events   = POLLIN;
         nfds = poll(&fds, 1, 100);
-		if (nfds > 0 && fds.revents == POLLIN)
+		if (nfds > 0 && fds.revents == POLLIN) {
 #endif
 			nret = read(sock, buf+nread, len-nread);
 			if (nret > 0 && nret <= (len-nread)) {
@@ -107,18 +107,18 @@ int len;
     return (send(sock, buf, len, 0));
 #else
     // liudf modified 20160302
-#ifdef	TEST
 	int nfds;
+#ifdef	SELECT
     fd_set writefds;
+	struct timeval timeout;
 #else
 	struct pollfd fds;
 #endif
-    struct timeval timeout;
 	int i = 0;
 	int nwrite = 0, nret = 0;   	
  
 	do {
-#ifdef	TEST
+#ifdef	SELECT
     	FD_ZERO(&writefds);
     	FD_SET(sock, &writefds);
     	timeout.tv_sec = 0; 
@@ -133,7 +133,7 @@ int len;
         fds.fd      = sock;
         fds.events   = POLLOUT;
         nfds = poll(&fds, 1, 100);
-		if (nfds > 0 && fds.revents == POLLOUT)
+		if (nfds > 0 && fds.revents == POLLOUT) {
 #endif
 			nret = write(sock, buf+nwrite, len-nwrite);
 			if	(nret > 0) {
