@@ -283,8 +283,8 @@ wd_connect(int sockfd, const struct sockaddr *their_addr, socklen_t addrlen, int
         struct pollfd fds;
         memset(&fds, 0, sizeof(fds));
         fds.fd      = socketfd;
-        fds.event   = POLLOUT;
-        res = poll(fds, 1, timeout*1000);
+        fds.events   = POLLOUT;
+        res = poll(&fds, 1, timeout*1000);
 #endif
 		switch(res) {
 		case 1: // data to read				
