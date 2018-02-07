@@ -24,6 +24,7 @@
 #include <ctype.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <poll.h>
 #include <time.h>
 #include <errno.h>
 
@@ -72,7 +73,7 @@ int len;
     	if (nfds > 0 && FD_ISSET(sock, &readfds)) {
 #else
 		memset(&fds, 0, sizeof(fds));
-        fds.fd      = socket;
+        fds.fd      = sock;
         fds.events   = POLLIN;
         nfds = poll(&fds, 1, 100);
 		if (nfds > 0 && fds.revents == POLLIN)
@@ -129,7 +130,7 @@ int len;
     	if (nfds > 0 && FD_ISSET(sock, &writefds)) {
 #else
 		memset(&fds, 0, sizeof(fds));
-        fds.fd      = socket;
+        fds.fd      = sock;
         fds.events   = POLLOUT;
         nfds = poll(&fds, 1, 100);
 		if (nfds > 0 && fds.revents == POLLOUT)
