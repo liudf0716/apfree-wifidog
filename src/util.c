@@ -282,7 +282,7 @@ wd_connect(int sockfd, const struct sockaddr *their_addr, socklen_t addrlen, int
 #else
         struct pollfd fds;
         memset(&fds, 0, sizeof(fds));
-        fds.fd      = socketfd;
+        fds.fd      = sockfd;
         fds.events   = POLLOUT;
         res = poll(&fds, 1, timeout*1000);
 #endif
