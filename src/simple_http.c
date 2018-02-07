@@ -23,7 +23,7 @@
 #include <stdlib.h>
 #include <sys/types.h>
 #include <sys/socket.h>
-#include <sys/poll.h>
+#include <poll.h>
 #include <sys/stat.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -429,9 +429,9 @@ http_get_ex(const int sockfd, const char *req, int wait)
 #else
 		struct pollfd fds;
         memset(&fds, 0, sizeof(fds));
-        fds.fd      = socketfd;
-        fds.event   = POLLIN;
-        nfds = poll(fds, 1, wait*1000);
+        fds.fd      = sockfd;
+        fds.events   = POLLIN;
+        nfds = poll(&fds, 1, wait*1000);
 #endif
         if (nfds > 0) {
             /** We don't have to use FD_ISSET() because there
