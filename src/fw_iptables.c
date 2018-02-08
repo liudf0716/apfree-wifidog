@@ -1099,7 +1099,7 @@ iptables_fw_destroy(void)
  * @param count how many times to delete the chain
  */
 static int
-iptables_fw_destroy_mention(const char *table, const char *chain, const char *mention, void *handle, int count)
+__iptables_fw_destroy_mention(const char *table, const char *chain, const char *mention, void *handle, int count)
 {
 	FILE *p = NULL;
 	char *command = NULL;
