@@ -1146,7 +1146,7 @@ __iptables_fw_destroy_mention(const char *table, const char *chain, const char *
 			}
 			pclose(p);
 		}
-	} while(deleted && ++i < count)
+	} while(deleted && ++i < count);
 
 	free(command);
 	free(victim);
