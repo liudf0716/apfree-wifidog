@@ -80,7 +80,7 @@ static char *iptables_compile(const char *, const char *, const t_firewall_rule 
 // Use libiptc instead command iptables by zhangzf, 20170413
 static int iptables_do_append_command(void *handle, const char *format, ...);
 static void iptables_load_ruleset(const char *, const char *, const char *, void *handle); 
-static int iptables_fw_destroy_mention(const char *table, const char *chain, const char *mention, void *handle, int count);
+static int __iptables_fw_destroy_mention(const char *table, const char *chain, const char *mention, void *handle, int count);
 
 #define iptables_do_command(...) \
 	iptables_do_append_command(NULL, __VA_ARGS__)
@@ -1118,7 +1118,7 @@ iptables_fw_destroy_mention(const char *table, const char *chain, const char *me
 	iptables_insert_gateway_id(&command);
 	
 	do {
-		deleted = 0
+		deleted = 0;
 		if ((p = popen(command, "r"))) {
 			/* Skip first 2 lines */
 			while (!feof(p) && fgetc(p) != '\n') ;
@@ -1157,7 +1157,7 @@ iptables_fw_destroy_mention(const char *table, const char *chain, const char *me
 int
 iptables_fw_destroy_mention(const char *table, const char *chain, const char *mention, void *handle)
 {
-	return iptables_fw_destroy_mention(table, chain, mention, handle, 20);
+	return __iptables_fw_destroy_mention(table, chain, mention, handle, 20);
 }
 
 /** Set if a specific client has access through the firewall */
@@ -1319,9 +1319,9 @@ iptables_fw_counters_update(void)
 					  "iptables_fw_counters_update(): Could not find %s in client list, this should not happen unless if the gateway crashed",
 					  ip);
 				debug(LOG_ERR, "Preventively deleting firewall rules for %s in table %s", ip, CHAIN_OUTGOING);
-				iptables_fw_destroy_mention("mangle", CHAIN_OUTGOING, ip, NULL, 5);
+				__iptables_fw_destroy_mention("mangle", CHAIN_OUTGOING, ip, NULL, 5);
 				debug(LOG_ERR, "Preventively deleting firewall rules for %s in table %s", ip, CHAIN_INCOMING);
-				iptables_fw_destroy_mention("mangle", CHAIN_INCOMING, ip, NULL, 5);
+				__iptables_fw_destroy_mention("mangle", CHAIN_INCOMING, ip, NULL, 5);
 			}
 
 		}
@@ -1366,9 +1366,9 @@ iptables_fw_counters_update(void)
 					  "iptables_fw_counters_update(): Could not find %s in client list, this should not happen unless if the gateway crashed",
 					  ip);
 				debug(LOG_ERR, "Preventively deleting firewall rules for %s in table %s", ip, CHAIN_OUTGOING);
-				iptables_fw_destroy_mention("mangle", CHAIN_OUTGOING, ip, NULL, 5);
+				__iptables_fw_destroy_mention("mangle", CHAIN_OUTGOING, ip, NULL, 5);
 				debug(LOG_ERR, "Preventively deleting firewall rules for %s in table %s", ip, CHAIN_INCOMING);
-				iptables_fw_destroy_mention("mangle", CHAIN_INCOMING, ip, NULL, 5);
+				__iptables_fw_destroy_mention("mangle", CHAIN_INCOMING, ip, NULL, 5);
 			}
 		}
 	}
