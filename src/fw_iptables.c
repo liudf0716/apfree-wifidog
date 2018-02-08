@@ -1118,7 +1118,7 @@ iptables_fw_destroy_mention(const char *table, const char *chain, const char *me
 	iptables_insert_gateway_id(&command);
 	
 	do {
-		deleted = 0
+		deleted = 0;
 		if ((p = popen(command, "r"))) {
 			/* Skip first 2 lines */
 			while (!feof(p) && fgetc(p) != '\n') ;
