@@ -79,7 +79,8 @@ static char *iptables_compile(const char *, const char *, const t_firewall_rule 
 
 // Use libiptc instead command iptables by zhangzf, 20170413
 static int iptables_do_append_command(void *handle, const char *format, ...);
-static void iptables_load_ruleset(const char *, const char *, const char *, void *handle);
+static void iptables_load_ruleset(const char *, const char *, const char *, void *handle); 
+static int iptables_fw_destroy_mention(const char *table, const char *chain, const char *mention, void *handle, int count);
 
 #define iptables_do_command(...) \
 	iptables_do_append_command(NULL, __VA_ARGS__)
@@ -1095,9 +1096,10 @@ iptables_fw_destroy(void)
  * @param table The table to search
  * @param chain The chain in that table to search
  * @param mention A word to find and delete in rules in the given table+chain
+ * @param count how many times to delete the chain
  */
-int
-iptables_fw_destroy_mention(const char *table, const char *chain, const char *mention, void *handle)
+static int
+iptables_fw_destroy_mention(const char *table, const char *chain, const char *mention, void *handle, int count)
 {
 	FILE *p = NULL;
 	char *command = NULL;
@@ -1105,6 +1107,7 @@ iptables_fw_destroy_mention(const char *table, const char *chain, const char *me
 	char line[MAX_BUF] = {0};
 	char rulenum[10] = {0};
 	char *victim = safe_strdup(mention);
+	int i = 0;
 	int deleted = 0;
 
 	iptables_insert_gateway_id(&victim);
@@ -1113,44 +1116,48 @@ iptables_fw_destroy_mention(const char *table, const char *chain, const char *me
 
 	safe_asprintf(&command, "iptables -t %s -L %s -n --line-numbers -v", table, chain);
 	iptables_insert_gateway_id(&command);
-
-	if ((p = popen(command, "r"))) {
-		/* Skip first 2 lines */
-		while (!feof(p) && fgetc(p) != '\n') ;
-		while (!feof(p) && fgetc(p) != '\n') ;
-		/* Loop over entries */
-		while (fgets(line, sizeof(line), p)) {
-			/* Look for victim */
-			if (strstr(line, victim)) {
-				/* Found victim - Get the rule number into rulenum */
-				if (sscanf(line, "%9[0-9]", rulenum) == 1) {
-					/* Delete the rule: */
-					debug(LOG_DEBUG, "Deleting rule %s from %s.%s because it mentions %s", rulenum, table, chain,
-						  victim);
-					safe_asprintf(&command2, "-t %s -D %s %s", table, chain, rulenum);
-					if (handle)
-						iptables_do_append_command(handle, command2);
-					else
-						iptables_do_command(command2);
-					free(command2);
-					deleted = 1;
-					/* Do not keep looping - the captured rulenums will no longer be accurate */
-					break;
+	
+	do {
+		deleted = 0
+		if ((p = popen(command, "r"))) {
+			/* Skip first 2 lines */
+			while (!feof(p) && fgetc(p) != '\n') ;
+			while (!feof(p) && fgetc(p) != '\n') ;
+			/* Loop over entries */
+			while (fgets(line, sizeof(line), p)) {
+				/* Look for victim */
+				if (strstr(line, victim)) {
+					/* Found victim - Get the rule number into rulenum */
+					if (sscanf(line, "%9[0-9]", rulenum) == 1) {
+						/* Delete the rule: */
+						debug(LOG_DEBUG, "Deleting rule %s from %s.%s because it mentions %s", rulenum, table, chain,
+							  victim);
+						safe_asprintf(&command2, "-t %s -D %s %s", table, chain, rulenum);
+						if (handle)
+							iptables_do_append_command(handle, command2);
+						else
+							iptables_do_command(command2);
+						free(command2);
+						deleted = 1;
+						/* Do not keep looping - the captured rulenums will no longer be accurate */
+						break;
+					}
 				}
 			}
+			pclose(p);
 		}
-		pclose(p);
-	}
+	} while(deleted && ++i < count)
 
 	free(command);
 	free(victim);
 
-	if (deleted) {
-		/* Recurse just in case there are more in the same table+chain */
-		iptables_fw_destroy_mention(table, chain, mention, handle);
-	}
-
 	return (deleted);
+}
+
+int
+iptables_fw_destroy_mention(const char *table, const char *chain, const char *mention, void *handle)
+{
+	return iptables_fw_destroy_mention(table, chain, mention, handle, 20);
 }
 
 /** Set if a specific client has access through the firewall */
@@ -1312,9 +1319,9 @@ iptables_fw_counters_update(void)
 					  "iptables_fw_counters_update(): Could not find %s in client list, this should not happen unless if the gateway crashed",
 					  ip);
 				debug(LOG_ERR, "Preventively deleting firewall rules for %s in table %s", ip, CHAIN_OUTGOING);
-				iptables_fw_destroy_mention("mangle", CHAIN_OUTGOING, ip, NULL);
+				iptables_fw_destroy_mention("mangle", CHAIN_OUTGOING, ip, NULL, 5);
 				debug(LOG_ERR, "Preventively deleting firewall rules for %s in table %s", ip, CHAIN_INCOMING);
-				iptables_fw_destroy_mention("mangle", CHAIN_INCOMING, ip, NULL);
+				iptables_fw_destroy_mention("mangle", CHAIN_INCOMING, ip, NULL, 5);
 			}
 
 		}
@@ -1359,9 +1366,9 @@ iptables_fw_counters_update(void)
 					  "iptables_fw_counters_update(): Could not find %s in client list, this should not happen unless if the gateway crashed",
 					  ip);
 				debug(LOG_ERR, "Preventively deleting firewall rules for %s in table %s", ip, CHAIN_OUTGOING);
-				iptables_fw_destroy_mention("mangle", CHAIN_OUTGOING, ip, NULL);
+				iptables_fw_destroy_mention("mangle", CHAIN_OUTGOING, ip, NULL, 5);
 				debug(LOG_ERR, "Preventively deleting firewall rules for %s in table %s", ip, CHAIN_INCOMING);
-				iptables_fw_destroy_mention("mangle", CHAIN_INCOMING, ip, NULL);
+				iptables_fw_destroy_mention("mangle", CHAIN_INCOMING, ip, NULL, 5);
 			}
 		}
 	}
