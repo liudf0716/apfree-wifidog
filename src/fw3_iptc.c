@@ -471,9 +471,10 @@ fw3_ipt_rule_build(struct fw3_ipt_rule *r)
 static struct fw3_ipt_rule *
 fw3_ipt_rule_new(struct fw3_ipt_handle *h)
 {
-	struct fw3_ipt_rule *r;
+	struct fw3_ipt_rule *r = NULL;
 
 	r = fw3_alloc(sizeof(*r));
+	assert(r != NULL);
 
 	r->h = h;
 	r->argv = fw3_alloc(sizeof(char *));
@@ -486,7 +487,7 @@ static struct fw3_ipt_rule *
 fw3_ipt_rule_create(struct fw3_ipt_handle *handle, char *cmd)
 {
 	char *p, **tmp;
-	struct fw3_ipt_rule *r;
+	struct fw3_ipt_rule *r = NULL;
 
 	r = fw3_ipt_rule_new(handle);
 
@@ -623,7 +624,7 @@ fw3_ipt_rule_mask(struct fw3_ipt_rule *r)
 		p += SZ(ipt_entry_match) + m->match->size;
 	}
 
-	memset(p, 0xFF, SZ(ipt_entry_target) + (r->target) ? r->target->userspacesize : 0);
+	memset(p, 0xFF, SZ(ipt_entry_target) + ((r->target) ? r->target->userspacesize : 0));
 
 	return mask;
 }
@@ -980,7 +981,7 @@ fw3_ipt_rule_append(struct fw3_ipt_handle *handle, char *command)
 	if (!command || !*command)
 		return 0;
 
-	struct fw3_ipt_rule *r;
+	struct fw3_ipt_rule *r = NULL;
 
 	r = fw3_ipt_rule_create(handle, command);
 
