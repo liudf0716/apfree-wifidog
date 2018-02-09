@@ -277,8 +277,10 @@ fw3_strdup(const char *s)
 
 	ns = strdup(s);
 
-	if (!ns)
+	if (!ns) {
 		debug(LOG_ERR, "Out of memory while duplicating string '%s'", s);
+		exit(-1);
+	}
 
 	return ns;
 }
@@ -290,8 +292,10 @@ fw3_alloc(size_t size)
 
 	mem = calloc(1, size);
 
-	if (!mem)
+	if (!mem) {
 		debug(LOG_ERR, "Out of memory while allocating %d bytes", size);
+		exit(-1);
+	}
 
 	return mem;
 }
@@ -471,7 +475,7 @@ fw3_ipt_rule_build(struct fw3_ipt_rule *r)
 static struct fw3_ipt_rule *
 fw3_ipt_rule_new(struct fw3_ipt_handle *h)
 {
-	struct fw3_ipt_rule *r;
+	struct fw3_ipt_rule *r = NULL;
 
 	r = fw3_alloc(sizeof(*r));
 
@@ -485,20 +489,24 @@ fw3_ipt_rule_new(struct fw3_ipt_handle *h)
 static struct fw3_ipt_rule *
 fw3_ipt_rule_create(struct fw3_ipt_handle *handle, char *cmd)
 {
-	char *p, **tmp;
-	struct fw3_ipt_rule *r;
+	char *p = NULL, **tmp;
+	struct fw3_ipt_rule *r = NULL;
+	char *saveptr = NULL ;
 
 	r = fw3_ipt_rule_new(handle);
-
-	for (p = strtok(cmd, " \t"); p; p = strtok(NULL, " \t"))
-	{
+	
+	p = strtok_r(cmd, " \t", &saveptr);
+	while (p) {
 		tmp = realloc(r->argv, (r->argc + 1) * sizeof(*r->argv));
 
-		if (!tmp)
-			break;
+		if (!tmp) {
+			exit(-1);
+		}
 
 		r->argv = tmp;
 		r->argv[r->argc++] = fw3_strdup(p);
+
+		p = strtok_r(NULL, " \t", &saveptr);
 	}
 
 	return r;
@@ -699,6 +707,7 @@ fw3_ipt_delete_chain(struct fw3_ipt_handle *h, const char *chain)
 	return rv;
 }
 
+// need review
 static int
 __fw3_ipt_rule_append(struct fw3_ipt_rule *r)
 {
@@ -741,6 +750,8 @@ __fw3_ipt_rule_append(struct fw3_ipt_rule *r)
 				handle = fw3_ipt_open(table);
 				if (handle)
 					r->h = handle;
+				else 
+					goto free; // if failed, no need the following steps
 			}
 
 			break;
@@ -980,7 +991,7 @@ fw3_ipt_rule_append(struct fw3_ipt_handle *handle, char *command)
 	if (!command || !*command)
 		return 0;
 
-	struct fw3_ipt_rule *r;
+	struct fw3_ipt_rule *r = NULL;
 
 	r = fw3_ipt_rule_create(handle, command);
 
