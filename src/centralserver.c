@@ -80,7 +80,7 @@ auth_server_roam_request(const char *mac)
 	snprintf(buf, sizeof(buf),
 		"GET %sroam?gw_id=%s&mac=%s&channel_path=%s HTTP/1.1\r\n"
         "User-Agent: ApFree WiFiDog %s\r\n"
-		"Connection: keep-alive\r\n"
+		"Connection: close\r\n"
         "Host: %s\r\n"
         "\r\n",
         auth_server->authserv_path,
@@ -261,7 +261,7 @@ auth_server_request(t_authresponse * authresponse, const char *request_type, con
            snprintf(buf, (sizeof(buf) - 1),
              "GET %s%sstage=%s&ip=%s&mac=%s&token=%s&incoming=%llu&outgoing=%llu&incomingdelta=%llu&outgoingdelta=%llu&first_login=%lld&online_time=%u&gw_id=%s&channel_path=%s&name=%s&wired=%d HTTP/1.1\r\n"
              "User-Agent: ApFree WiFiDog %s\r\n"
-			 "Connection: keep-alive\r\n"
+			 "Connection: close\r\n"
              "Host: %s\r\n"
              "\r\n",
              auth_server->authserv_path,
@@ -283,7 +283,7 @@ auth_server_request(t_authresponse * authresponse, const char *request_type, con
             snprintf(buf, (sizeof(buf) - 1),
              "GET %s%sstage=%s&ip=%s&mac=%s&token=%s&incoming=%llu&outgoing=%llu&first_login=%lld&online_time=%u&gw_id=%s&channel_path=%s&name=%s&wired=%d HTTP/1.1\r\n"
              "User-Agent: ApFree WiFiDog %s\r\n"
-			 "Connection: keep-alive\r\n"
+			 "Connection: close\r\n"
              "Host: %s\r\n"
              "\r\n",
              auth_server->authserv_path,
@@ -344,30 +344,11 @@ connect_auth_server()
     return (sockfd);
 }
 
-// just decrease authserv_fd_ref
+// equal to close_auth_server
 void
 decrease_authserv_fd_ref()
 {
-	s_config *config = config_get_config();
-    t_auth_serv *auth_server = NULL;
-	
-	LOCK_CONFIG();
-
-	for (auth_server = config->auth_servers; auth_server; auth_server = auth_server->next) {
-        if (auth_server->authserv_fd > 0) {
-			auth_server->authserv_fd_ref -= 1;
-			if (auth_server->authserv_fd_ref == 0) {
-				debug(LOG_INFO, "authserv_fd_ref is 0, but not close this connection");
-			} else if (auth_server->authserv_fd_ref < 0) {
-				debug(LOG_ERR, "Impossible, authserv_fd_ref is %d", auth_server->authserv_fd_ref);
-				close(auth_server->authserv_fd);
-				auth_server->authserv_fd = -1;
-				auth_server->authserv_fd_ref = 0;
-			}
-		}
-    }
-	
-	UNLOCK_CONFIG();
+	close_auth_server();
 }
 
 void
@@ -386,13 +367,9 @@ _close_auth_server()
 	
 	for (auth_server = config->auth_servers; auth_server; auth_server = auth_server->next) {
         if (auth_server->authserv_fd > 0) {
-			auth_server->authserv_fd_ref -= 1;
-			if (auth_server->authserv_fd_ref <= 0) {
-				debug(LOG_DEBUG, "authserv_fd_ref is %d, close this connection", auth_server->authserv_fd_ref);
-				close(auth_server->authserv_fd);
-				auth_server->authserv_fd = -1;
-				auth_server->authserv_fd_ref = 0;
-			} 
+			debug(LOG_DEBUG, "authserv_fd_ref is %d, close this connection", auth_server->authserv_fd_ref);
+			close(auth_server->authserv_fd);
+			auth_server->authserv_fd = -1;
 		}
     }
 }
@@ -422,21 +399,6 @@ _connect_auth_server(int level) {
 		return -1;
 	}
 	
-	auth_server = config->auth_servers;
-	if (auth_server->authserv_fd > 0) {
-		if (is_socket_valid(auth_server->authserv_fd)) {
-			debug(LOG_INFO, "Use keep-alive http connection, authserv_fd_ref is %d", auth_server->authserv_fd_ref);
-			auth_server->authserv_fd_ref++;
-			return auth_server->authserv_fd;
-		} else {
-			debug(LOG_INFO, "Server has closed this connection, initialize it");
-			close(auth_server->authserv_fd);
-			auth_server->authserv_fd = -1;
-			auth_server->authserv_fd_ref = 0;
-			return _connect_auth_server(level);
-		}
-	}
-	
     /* XXX level starts out at 0 and gets incremented by every iterations. */
     level++;
 
@@ -462,49 +424,52 @@ _connect_auth_server(int level) {
      */
 	auth_server = config->auth_servers;
     hostname = auth_server->authserv_hostname;
-    debug(LOG_DEBUG, "Level %d: Resolving auth server [%s]", level, hostname);
-    h_addr = wd_gethostbyname(hostname);
-    if (!h_addr) {
-        /*
-         * DNS resolving it failed
-         */
-        debug(LOG_INFO, "Level %d: Resolving auth server [%s] failed", level, hostname);
-
-		if (auth_server->last_ip) {
-			free(auth_server->last_ip);
-			auth_server->last_ip = NULL;
-		}
-		mark_auth_server_bad(auth_server);
-		return _connect_auth_server(level);
-    } else {
-        /*
-         * DNS resolving was successful
-         */
-		ip = safe_malloc(HTTP_IP_ADDR_LEN);
-		inet_ntop(AF_INET, h_addr, ip, HTTP_IP_ADDR_LEN);
-		ip[HTTP_IP_ADDR_LEN-1] = '\0';
-        debug(LOG_DEBUG, "Level %d: Resolving auth server [%s] succeeded = [%s]", level, hostname, ip);
-
-        if (!auth_server->last_ip || strcmp(auth_server->last_ip, ip) != 0) {
+	if (NULL == auth_server->last_ip){
+        debug(LOG_DEBUG, "Level %d: Resolving auth server [%s]", level, hostname);
+        h_addr = wd_gethostbyname(hostname);
+        if (!h_addr) {
             /*
-             * But the IP address is different from the last one we knew
-             * Update it
-             */
-            debug(LOG_INFO, "Level %d: Updating last_ip IP of server [%s] to [%s]", level, hostname, ip);
-            if (auth_server->last_ip)
+            * DNS resolving it failed
+            */
+            debug(LOG_INFO, "Level %d: Resolving auth server [%s] failed", level, hostname);
+        
+            if (auth_server->last_ip) {
                 free(auth_server->last_ip);
-            auth_server->last_ip = ip;
-
-            /* Update firewall rules */
-            fw_clear_authservers();
-            fw_set_authservers();
+                auth_server->last_ip = NULL;
+            }
+            mark_auth_server_bad(auth_server);
+            return _connect_auth_server(level);
         } else {
             /*
-             * IP is the same as last time
-             */
-            free(ip);
+            * DNS resolving was successful
+            */
+            ip = safe_malloc(HTTP_IP_ADDR_LEN);
+            inet_ntop(AF_INET, h_addr, ip, HTTP_IP_ADDR_LEN);
+            ip[HTTP_IP_ADDR_LEN-1] = '\0';
+            debug(LOG_DEBUG, "Level %d: Resolving auth server [%s] succeeded = [%s]", level, hostname, ip);
+        
+            if (!auth_server->last_ip || strcmp(auth_server->last_ip, ip) != 0) {
+                /*
+                * But the IP address is different from the last one we knew
+                * Update it
+                */
+                debug(LOG_INFO, "Level %d: Updating last_ip IP of server [%s] to [%s]", level, hostname, ip);
+                if (auth_server->last_ip)
+                    free(auth_server->last_ip);
+                auth_server->last_ip = ip;
+        
+                /* Update firewall rules */
+                fw_clear_authservers();
+                fw_set_authservers();
+            } else {
+                /*
+                * IP is the same as last time
+                */
+                free(ip);
+            }
+            free(h_addr);
         }
-
+    }
         /*
          * Connect to it
          */
@@ -513,9 +478,8 @@ _connect_auth_server(int level) {
 
         their_addr.sin_port = port;
         their_addr.sin_family = AF_INET;
-        their_addr.sin_addr = *h_addr;
-        memset(&(their_addr.sin_zero), '\0', sizeof(their_addr.sin_zero));
-        free(h_addr);
+        inet_aton(auth_server->last_ip, &their_addr.sin_addr);
+        memset(&(their_addr.sin_zero), '\0', sizeof(their_addr.sin_zero));        
 
         if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
             debug(LOG_ERR, "Level %d: Failed to create a new SOCK_STREAM socket: %s", strerror(errno));
@@ -526,8 +490,6 @@ _connect_auth_server(int level) {
 							 auth_server->authserv_connect_timeout);
 		if (res == 0) {
 			// connect successly
-			auth_server->authserv_fd = sockfd;
-			auth_server->authserv_fd_ref++;
 			return sockfd;
 		} else {
 			debug(LOG_INFO,
@@ -537,7 +499,6 @@ _connect_auth_server(int level) {
 			mark_auth_server_bad(auth_server);
 			return _connect_auth_server(level); /* Yay recursion! */
 		}
-    }
 }
 
 // 0, failure; 1, success
