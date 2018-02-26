@@ -702,7 +702,7 @@ iptables_fw_save_online_clients()
 	f_fw_allow_open();
 
 	while (current != NULL) {
-		iptables_do_command_save("-t mangle -A " CHAIN_OUTGOING " -s %s -m mac --mac-source %s -j MARK --set-mark 0x%x0000/0xff0000", 
+		iptables_do_command_save("-t mangle -A " CHAIN_OUTGOING " -s %s -m mac --mac-source %s -j MARK --set-mark 0x%02x0000/0xff0000", 
 					current->ip, current->mac, FW_MARK_KNOWN);
 		iptables_do_command_save("-t mangle -A " CHAIN_INCOMING " -d %s -j ACCEPT", current->ip);
 
@@ -789,19 +789,19 @@ iptables_fw_init(void)
 
 	if( config->no_auth != 0 ) {
 		debug(LOG_DEBUG, "No auth set");
-		iptables_do_append_command(handle, "-t mangle -A " CHAIN_TO_PASS " -j MARK --set-mark 0x%x0000/0xff0000", FW_MARK_KNOWN);
+		iptables_do_append_command(handle, "-t mangle -A " CHAIN_TO_PASS " -j MARK --set-mark 0x%02x0000/0xff0000", FW_MARK_KNOWN);
 	}
 
 	iptables_do_append_command(handle, "-t mangle -I PREROUTING 1 -i %s -j " CHAIN_ROAM, config->gw_interface);
-	iptables_do_append_command(handle, "-t mangle -A " CHAIN_ROAM " -m set --match-set " CHAIN_ROAM " src -j MARK --set-mark 0x%x0000/0xff0000", FW_MARK_KNOWN);
+	iptables_do_append_command(handle, "-t mangle -A " CHAIN_ROAM " -m set --match-set " CHAIN_ROAM " src -j MARK --set-mark 0x%02x0000/0xff0000", FW_MARK_KNOWN);
 
 	if (got_authdown_ruleset)
 		iptables_do_append_command(handle, "-t mangle -I PREROUTING 1 -i %s -j " CHAIN_AUTH_IS_DOWN, config->gw_interface);
 
 	iptables_do_append_command(handle, "-t mangle -I POSTROUTING 1 -o %s -j " CHAIN_INCOMING, config->gw_interface);
 	//>>> liudf added&modified 20160113
-	iptables_do_append_command(handle, "-t mangle -A " CHAIN_TRUSTED " -m set --match-set " CHAIN_TRUSTED " src -j MARK --set-mark 0x%x0000/0xff0000", FW_MARK_KNOWN);
-	iptables_do_append_command(handle, "-t mangle -A " CHAIN_TRUSTED " -m set --match-set " CHAIN_TRUSTED_LOCAL " src -j MARK --set-mark 0x%x0000/0xff0000", FW_MARK_KNOWN);
+	iptables_do_append_command(handle, "-t mangle -A " CHAIN_TRUSTED " -m set --match-set " CHAIN_TRUSTED " src -j MARK --set-mark 0x%02x0000/0xff0000", FW_MARK_KNOWN);
+	iptables_do_append_command(handle, "-t mangle -A " CHAIN_TRUSTED " -m set --match-set " CHAIN_TRUSTED_LOCAL " src -j MARK --set-mark 0x%02x0000/0xff0000", FW_MARK_KNOWN);
 	//<<< liudf added end
 
 	fw3_ipt_commit(handle);
@@ -1170,14 +1170,14 @@ iptables_fw_access(fw_access_t type, const char *ip, const char *mac, int tag)
 
 	switch (type) {
 	case FW_ACCESS_ALLOW:
-		iptables_do_command("-t mangle -A " CHAIN_OUTGOING " -s %s -m mac --mac-source %s -j MARK --set-mark 0x%x0000/0xff0000", ip,
-							mac, tag);
+		iptables_do_command("-t mangle -A " CHAIN_OUTGOING " -s %s -m mac --mac-source %s -j MARK --set-mark 0x%02x0000/0xff0000", ip,
+							mac, tag & 0x000000ff);
 		rc = iptables_do_command("-t mangle -A " CHAIN_INCOMING " -d %s -j ACCEPT", ip);
 		break;
 	case FW_ACCESS_DENY:
 		/* XXX Add looping to really clear? */
-		iptables_do_command("-t mangle -D " CHAIN_OUTGOING " -s %s -m mac --mac-source %s -j MARK --set-mark 0x%x0000/0xff0000", ip,
-							mac, tag);
+		iptables_do_command("-t mangle -D " CHAIN_OUTGOING " -s %s -m mac --mac-source %s -j MARK --set-mark 0x%02x0000/0xff0000", ip,
+							mac, tag & 0x000000ff);
 		rc = iptables_do_command("-t mangle -D " CHAIN_INCOMING " -d %s -j ACCEPT", ip);
 		break;
 	default:
@@ -1218,7 +1218,7 @@ iptables_fw_auth_unreachable(int tag)
 {
 	int got_authdown_ruleset = NULL == get_ruleset(FWRULESET_AUTH_IS_DOWN) ? 0 : 1;
 	if (got_authdown_ruleset)
-		return iptables_do_command("-t mangle -A " CHAIN_AUTH_IS_DOWN " -j MARK --set-mark 0x%x0000/0xff0000", tag);
+		return iptables_do_command("-t mangle -A " CHAIN_AUTH_IS_DOWN " -j MARK --set-mark 0x%02x0000/0xff0000", tag & 0x000000ff);
 	else
 		return 1;
 }

@@ -89,6 +89,9 @@ static const struct {
 static bool
 is_chain(struct fw3_ipt_handle *h, const char *name)
 {
+	if (!h || !h->handle)
+		return false;
+
 	return iptc_is_chain(name, h->handle);
 }
 
@@ -112,9 +115,12 @@ bitlen2netmask(int bits, void *mask)
 static bool
 load_extension(struct fw3_ipt_handle *h, const char *name)
 {
-	char path[256];
+	char path[128] = {0};
 	void *lib, **tmp;
 	const char *pfx = "libipt";
+	
+	if (!h)
+		return false;
 
 	snprintf(path, sizeof(path), "/usr/lib/iptables/libxt_%s.so", name);
 	if (!(lib = dlopen(path, RTLD_NOW)))
@@ -140,7 +146,7 @@ load_extension(struct fw3_ipt_handle *h, const char *name)
 static struct xtables_match *
 find_match(struct fw3_ipt_rule *r, const char *name)
 {
-	struct xtables_match *m;
+	struct xtables_match *m = NULL;
 
 	m = xtables_find_match(name, XTF_DONT_LOAD, &r->matches);
 
@@ -222,7 +228,7 @@ load_protomatch(struct fw3_ipt_rule *r)
 static struct xtables_target *
 fw3_find_target(struct fw3_ipt_rule *r, const char *name)
 {
-	struct xtables_target *t;
+	struct xtables_target *t = NULL;
 
 	if (is_chain(r->h, name))
 		return xtables_find_target(XT_STANDARD_TARGET, XTF_LOAD_MUST_SUCCEED);
@@ -639,6 +645,11 @@ fw3_ipt_rule_mask(struct fw3_ipt_rule *r)
 static int
 fw3_ipt_create_chain(struct fw3_ipt_handle *h, const char *chain)
 {
+	if (!h || !h->handle) {
+		debug(LOG_ERR, "h or h->handle is NULL");
+		return 0;
+	}
+
 	int rv = iptc_create_chain(chain, h->handle);
 	if (!rv)
 		debug(LOG_ERR, "iptc_create_chain(): %s\n", iptc_strerror(errno));
@@ -649,6 +660,11 @@ fw3_ipt_create_chain(struct fw3_ipt_handle *h, const char *chain)
 static int
 fw3_ipt_flush_chain(struct fw3_ipt_handle *h, const char *chain)
 {
+	if (!h || !h->handle) {
+		debug(LOG_ERR, "h or h->handle is NULL");
+		return 0;
+	}
+
 	int rv = iptc_flush_entries(chain, h->handle);
 	if (!rv)
 		debug(LOG_ERR, "iptc_flush_chain(): %s\n", iptc_strerror(errno));
@@ -697,7 +713,11 @@ static int
 fw3_ipt_delete_chain(struct fw3_ipt_handle *h, const char *chain)
 {
 	int rv;
-
+	
+	if (!h || !h->handle) {
+		debug(LOG_ERR, "h is NULL");
+		return 0;
+	}
 	__fw3_ipt_delete_rules(h, chain);
 
 	rv = iptc_delete_chain(chain, h->handle);
@@ -707,7 +727,6 @@ fw3_ipt_delete_chain(struct fw3_ipt_handle *h, const char *chain)
 	return rv;
 }
 
-// need review
 static int
 __fw3_ipt_rule_append(struct fw3_ipt_rule *r)
 {
@@ -720,10 +739,10 @@ __fw3_ipt_rule_append(struct fw3_ipt_rule *r)
 
 	bool inv = false;
 
-	struct xtables_rule_match *m;
-	struct xtables_match *em;
-	struct xtables_target *et;
-	struct xtables_globals *g;
+	struct xtables_rule_match *m = NULL;
+	struct xtables_match *em = NULL;
+	struct xtables_target *et = NULL;
+	struct xtables_globals *g = NULL;
 
 	struct fw3_ipt_handle *handle = NULL;
 
@@ -757,14 +776,38 @@ __fw3_ipt_rule_append(struct fw3_ipt_rule *r)
 			break;
 
 		case 'N':
+			// liudf added 20180226; incase r->h is NULL
+			if (!r->h) {
+				handle = fw3_ipt_open(FW3_TABLE_FILTER);
+				if (handle)
+					r->h = handle;
+				else
+					goto free;
+			}
 			rv = fw3_ipt_create_chain(r->h, optarg);
 			goto free;
 
 		case 'F':
+			// liudf added 20180226; incase r->h is NULL
+			if (!r->h) {
+				handle = fw3_ipt_open(FW3_TABLE_FILTER);
+				if (handle)
+					r->h = handle;
+				else
+					goto free;
+			}
 			rv = fw3_ipt_flush_chain(r->h, optarg);
 			goto free;
 
 		case 'X':
+			// liudf added 20180226; incase r->h is NULL
+			if (!r->h) {
+				handle = fw3_ipt_open(FW3_TABLE_FILTER);
+				if (handle)
+					r->h = handle;
+				else
+					goto free;
+			}
 			rv = fw3_ipt_delete_chain(r->h, optarg);
 			goto free;
 
@@ -845,6 +888,15 @@ __fw3_ipt_rule_append(struct fw3_ipt_rule *r)
 
 		inv = false;
 	}
+	
+	// liudf added 20180226; incase r->h is NULL
+	if (!r->h && !handle) {
+		handle = fw3_ipt_open(FW3_TABLE_FILTER);
+		if (handle)
+			r->h = handle;
+		else
+			goto free;
+	}
 
 	for (m = r->matches; m; m = m->next)
 		xtables_option_mfcall(m->match);
@@ -854,41 +906,30 @@ __fw3_ipt_rule_append(struct fw3_ipt_rule *r)
 
 	rule = fw3_ipt_rule_build(r);
 
-	if (command == 'A')
-	{
+	if (command == 'A') {
 		rv = iptc_append_entry(chain, rule, r->h->handle);
 		if (!rv)
 			debug(LOG_ERR, "iptc_append_entry(): %s\n", iptc_strerror(errno));
-	} 
-	else if (command == 'D')
-	{
-		if (rule_num > 0)
-		{
+	} else if (command == 'D') {
+		if (rule_num > 0) {
 			rv = iptc_delete_num_entry(chain, rule_num - 1, r->h->handle);
 			if (!rv)
 			debug(LOG_ERR, "iptc_delete_num_entry(): %s\n", iptc_strerror(errno));
-		}
-		else
-		{
+		} else {
 			mask = fw3_ipt_rule_mask(r);
-			while (iptc_delete_entry(chain, rule, mask, r->h->handle))
-			{
+			while (iptc_delete_entry(chain, rule, mask, r->h->handle)){
 				rv = 1;
 			}
 
 			free(mask);
 		}
-	}
-	else
-	{
+	} else {
 		rv = iptc_insert_entry(chain, rule, rule_num - 1, r->h->handle);
 		if (!rv)
 			debug(LOG_ERR, "iptc_insert_entry(): %s\n", iptc_strerror(errno));
 	}
 
 	free(rule);
-
-	goto free;
 
 free:
 	for (i = 1; i < r->argc; i++)
@@ -935,15 +976,16 @@ fw3_ipt_open(enum fw3_table table)
 
 	h->table  = table;
 	h->handle = iptc_init(fw3_flag_names[table]);
-
-	xtables_set_params(&xtg);
-	xtables_set_nfproto(NFPROTO_IPV4);
-
 	if (!h->handle)
 	{
 		free(h);
 		return NULL;
 	}
+
+	xtables_set_params(&xtg);
+	xtables_set_nfproto(NFPROTO_IPV4);
+
+	
 
 	fw3_xt_reset();
 	fw3_init_extensions();
@@ -976,7 +1018,11 @@ fw3_ipt_close(struct fw3_ipt_handle *h)
 int
 fw3_ipt_commit(struct fw3_ipt_handle *h)
 {
-	int rv;
+	int rv = 0;
+	if (!h || !h->handle) {
+		debug(LOG_ERR, "h or h->handle is NULL");
+		return rv;
+	}
 
 	rv = iptc_commit(h->handle);
 	if (!rv)
@@ -988,8 +1034,10 @@ fw3_ipt_commit(struct fw3_ipt_handle *h)
 int
 fw3_ipt_rule_append(struct fw3_ipt_handle *handle, char *command)
 {
-	if (!command || !*command)
+	if (!command || !*command) {
+		debug(LOG_ERR, "fw3_ipt_rule_append : input parameters is NULL");
 		return 0;
+	}
 
 	struct fw3_ipt_rule *r = NULL;
 
