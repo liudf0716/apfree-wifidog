@@ -1983,7 +1983,7 @@ void parse_inner_trusted_domain_list()
 	parse_common_trusted_domain_list(INNER_TRUSTED_DOMAIN);
 }
 
-t_domain_trusted * del_domain_ip_common(const char *domain, trusted_domain_t which)
+static t_domain_trusted * del_domain_ip_common(const char *domain, trusted_domain_t which)
 {
 	t_domain_trusted *p = NULL;
 	LOCK_DOMAIN();
