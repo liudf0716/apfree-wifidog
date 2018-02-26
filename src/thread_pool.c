@@ -42,22 +42,7 @@
 int
 create_thread(pthread_t * thread, void *(*start_routine)(void*), void *arg)
 {
-	pthread_attr_t attr;
-  	int ret;
-
-    if (0 != (ret = pthread_attr_init (&attr)))
-    	goto ERR;
-    if (0 != (ret = pthread_attr_setstacksize (&attr, 1024*512))){
-      	pthread_attr_destroy (&attr);
-      	goto ERR;
-    }
-	
-	ret = pthread_create (thread, &attr, start_routine, arg);
-    pthread_attr_destroy (&attr);
-  	return ret;
-ERR:
-  	errno = EINVAL;
-  	return ret;	
+	return pthread_create (thread, NULL, start_routine, arg);
 }
 //<<< liudf added end
 
