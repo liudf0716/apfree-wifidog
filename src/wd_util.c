@@ -390,7 +390,7 @@ get_status_text()
         pstr_cat(pstr, "\nTrusted MAC addresses:\n");
 
         for (p = config->trustedmaclist; p != NULL; p = p->next) {
-            pstr_append_sprintf(pstr, "  %s status: %d\n", p->mac, p->is_online);
+            pstr_append_sprintf(pstr, "  %s\n", p->mac);
         }
     }
 
@@ -1024,6 +1024,54 @@ br_is_device_wired(const char *mac){
 		char *bridge = config_get_config()->gw_interface;
 		debug(LOG_DEBUG,"mac %s check in bridge %s is wired", mac, bridge);
 		return is_device_wired_intern(mac, bridge);
+	}
+
+	return 0;
+}
+
+/*
+ * 1: wired; 0: wireless
+ * deprecated
+ */
+int
+is_device_wired(const char *mac)
+{
+	FILE *fd = NULL;
+	char szcmd[128] = {0}; 
+	
+	snprintf(szcmd, 128, "/usr/bin/ktpriv get_mac_source %s", mac);
+	if((fd = popen(szcmd, "r"))) {
+		char buf[8] = {0};
+		fgets(buf, 7, fd);
+		pclose(fd);
+		if(buf[0] == '0')
+			return 1;
+	}
+
+	return 0;
+}
+
+
+/*
+ * val can be ip or domain
+ * 1: is online; 0: is unreachable
+ */
+int
+is_device_online(const char *val)
+{
+	char cmd[256] = {0};
+	FILE *fd = NULL;
+
+	if(val == NULL || strlen(val) < 4)
+		return 0;
+	
+	snprintf(cmd, 256, "/usr/sbin/wdping %s", val);
+	if((fd = popen(cmd, "r")) != NULL) {
+		char result[4] = {0};
+		fgets(result, 3, fd);
+		pclose(fd);
+		if(result[0] == '1')
+			return 1;
 	}
 
 	return 0;

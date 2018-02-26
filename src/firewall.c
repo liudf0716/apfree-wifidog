@@ -416,6 +416,20 @@ fw_destroy(void)
 
 // liudf added 20160321
 void
+update_trusted_mac_status(t_trusted_mac *tmac)
+{
+	tmac->is_online = 0;
+
+	if(tmac->ip == NULL) {
+		tmac->ip = arp_get_ip(tmac->mac);
+	}
+
+	if(tmac->ip != NULL) {
+		tmac->is_online = is_device_online(tmac->ip);
+	}
+}
+
+void
 evhttps_update_trusted_mac_list_status(struct evhttps_request_context *context)
 {
 	t_trusted_mac *p1 = NULL, *tmac_list = NULL;
@@ -431,6 +445,7 @@ evhttps_update_trusted_mac_list_status(struct evhttps_request_context *context)
 	authresponse_client.type = request_type_counters;
 
 	for(p1 = tmac_list; p1 != NULL; p1 = p1->next) {
+		update_trusted_mac_status(p1);
 		debug(LOG_DEBUG, "update_trusted_mac_list_status: %s %s %d", p1->ip, p1->mac, p1->is_online);
 		if (config->auth_servers != NULL && p1->is_online) {
 			char *uri = get_auth_uri(REQUEST_TYPE_COUNTERS, trusted_client, p1);
@@ -459,6 +474,7 @@ update_trusted_mac_list_status(void)
 
 	int flag = 0;
 	for(p1 = tmac_list; p1 != NULL; p1 = p1->next) {
+		update_trusted_mac_status(p1);
 		debug(LOG_DEBUG, "update_trusted_mac_list_status: %s %s %d", p1->ip, p1->mac, p1->is_online);
 		if (config->auth_servers != NULL && p1->is_online) {
 			auth_server_request(&authresponse, REQUEST_TYPE_COUNTERS, p1->ip, p1->mac, "null", 0,

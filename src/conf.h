@@ -459,6 +459,8 @@ void __clear_trusted_iplist(void);
 
 void clear_trusted_ip_list(void);
 
+void del_trusted_ip_list(const char *);
+
 // online clients
 int 	g_online_clients;
 char 	*g_version;
