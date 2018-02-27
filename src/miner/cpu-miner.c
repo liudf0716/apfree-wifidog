@@ -635,7 +635,7 @@ static bool submit_upstream_work(CURL *curl, struct work *work)
 		bin2hex(data_str, (unsigned char *)work->data, 80);
 		if (work->workid) {
 			char *params;
-			val = json_object();
+			val = json_object_new_object();
 			json_object_set_new(val, "workid", json_string(work->workid));
 			params = json_dumps(val, 0);
 			json_decref(val);

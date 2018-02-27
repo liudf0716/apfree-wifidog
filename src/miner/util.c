@@ -1332,7 +1332,7 @@ static bool stratum_get_version(struct stratum_ctx *sctx, json_t *id)
 	if (!id || json_is_null(id))
 		return false;
 
-	val = json_object();
+	val = json_object_new_object();
 	json_object_set(val, "id", id);
 	json_object_set_new(val, "error", NULL);
 	json_object_set_new(val, "result", json_string(USER_AGENT));
@@ -1357,7 +1357,7 @@ static bool stratum_show_message(struct stratum_ctx *sctx, json_t *id, json_t *p
 	if (!id || json_is_null(id))
 		return true;
 
-	val = json_object();
+	val = json_object_new_object();
 	json_object_set(val, "id", id);
 	json_object_set_new(val, "error", json_null());
 	json_object_set_new(val, "result", json_true());
