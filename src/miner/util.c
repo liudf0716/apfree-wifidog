@@ -104,7 +104,7 @@ void applog(int prio, const char *fmt, ...)
 
 		len = 40 + strlen(fmt) + 2;
 		f = alloca(len);
-		sprintf(f, "[%d-%02d-%02d %02d:%02d:%02d] %s\n",
+		snprintf(f, len, "[%d-%02d-%02d %02d:%02d:%02d] %s\n",
 			tm.tm_year + 1900,
 			tm.tm_mon + 1,
 			tm.tm_mday,
@@ -356,7 +356,6 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 	struct data_buffer all_data = {0};
 	struct upload_buffer upload_data;
 	char *json_buf;
-	json_error_t err;
 	struct curl_slist *headers = NULL;
 	char len_hdr[64];
 	char curl_err_str[CURL_ERROR_SIZE];
@@ -454,12 +453,11 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 		goto err_out;
 	}
 
-	json_buf = hack_json_numbers(all_data.buf);
-	errno = 0; /* needed for Jansson < 2.1 */
-	val = JSON_LOADS(json_buf, &err);
+	json_buf = hack_json_numbers(all_data.buf); // liudf, seems no need do that for json-c
+	val = json_tokener_parse(json_buf);
 	free(json_buf);
-	if (!val) {
-		applog(LOG_ERR, "JSON decode failed(%d): %s", err.line, err.text);
+	if (is_error(val)) {
+		applog(LOG_ERR, "JSON decode failed");
 		goto err_out;
 	}
 
@@ -475,14 +473,8 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 
 	if (!res_val || (err_val && !json_is_null(err_val))) {
 		char *s;
-
-		if (err_val)
-			s = json_dumps(err_val, JSON_INDENT(3));
-		else
-			s = strdup("(unknown reason)");
-
+		s = strdup("(unknown reason)");
 		applog(LOG_ERR, "JSON-RPC call failed: %s", s);
-
 		free(s);
 
 		goto err_out;
@@ -1093,10 +1085,7 @@ start:
 	    (err_val && !json_is_null(err_val))) {
 		if (opt_debug || retry) {
 			free(s);
-			if (err_val)
-				s = json_dumps(err_val, JSON_INDENT(3));
-			else
-				s = strdup("(unknown reason)");
+			s = strdup("(unknown reason)");
 			applog(LOG_ERR, "JSON-RPC call failed: %s", s);
 		}
 		goto out;
@@ -1174,10 +1163,10 @@ bool stratum_authorize(struct stratum_ctx *sctx, const char *user, const char *p
 		free(sret);
 	}
 
-	val = JSON_LOADS(sret, &err);
+	val = json_tokener_parse(sret);
 	free(sret);
-	if (!val) {
-		applog(LOG_ERR, "JSON decode failed(%d): %s", err.line, err.text);
+	if (is_error(val)) {
+		applog(LOG_ERR, "JSON decode failed");
 		goto out;
 	}
 
@@ -1345,9 +1334,9 @@ static bool stratum_get_version(struct stratum_ctx *sctx, json_t *id)
 
 	val = json_object();
 	json_object_set(val, "id", id);
-	json_object_set_new(val, "error", json_null());
+	json_object_set_new(val, "error", NULL);
 	json_object_set_new(val, "result", json_string(USER_AGENT));
-	s = json_dumps(val, 0);
+	s = json_dumps(val);
 	ret = stratum_send_line(sctx, s);
 	json_decref(val);
 	free(s);
@@ -1372,7 +1361,7 @@ static bool stratum_show_message(struct stratum_ctx *sctx, json_t *id, json_t *p
 	json_object_set(val, "id", id);
 	json_object_set_new(val, "error", json_null());
 	json_object_set_new(val, "result", json_true());
-	s = json_dumps(val, 0);
+	s = json_dumps(val);
 	ret = stratum_send_line(sctx, s);
 	json_decref(val);
 	free(s);
@@ -1383,13 +1372,12 @@ static bool stratum_show_message(struct stratum_ctx *sctx, json_t *id, json_t *p
 bool stratum_handle_method(struct stratum_ctx *sctx, const char *s)
 {
 	json_t *val, *id, *params;
-	json_error_t err;
 	const char *method;
 	bool ret = false;
 
-	val = JSON_LOADS(s, &err);
-	if (!val) {
-		applog(LOG_ERR, "JSON decode failed(%d): %s", err.line, err.text);
+	val = json_tokener_parse(s);
+	if (is_error(val)) {
+		applog(LOG_ERR, "JSON decode failed");
 		goto out;
 	}
 
