@@ -10,7 +10,6 @@
  */
 
 #define _GNU_SOURCE
-#include "cpuminer-config.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -22,9 +21,9 @@
 #include <limits.h>
 #include <errno.h>
 #include <unistd.h>
-#include <jansson.h>
 #include <curl/curl.h>
 #include <time.h>
+#include <json-c/json.h>
 #if defined(WIN32)
 #include <winsock2.h>
 #include <mstcpip.h>
