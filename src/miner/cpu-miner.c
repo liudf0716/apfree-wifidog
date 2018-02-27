@@ -8,7 +8,6 @@
  * any later version.  See COPYING for more details.
  */
 
-#include "cpuminer-config.h"
 #define _GNU_SOURCE
 
 #include <stdio.h>
@@ -33,7 +32,7 @@
 #include <sys/sysctl.h>
 #endif
 #endif
-#include <jansson.h>
+#include <json-c/json.h>
 #include <curl/curl.h>
 #include <assert.h>
 #include "compat.h"
@@ -156,107 +155,6 @@ static unsigned long accepted_count = 0L;
 static unsigned long rejected_count = 0L;
 static double *thr_hashrates;
 
-#ifdef HAVE_GETOPT_LONG
-#include <getopt.h>
-#else
-struct option {
-	const char *name;
-	int has_arg;
-	int *flag;
-	int val;
-};
-#endif
-
-static char const usage[] = "\
-Usage: " PROGRAM_NAME " [OPTIONS]\n\
-Options:\n\
-  -a, --algo=ALGO       specify the algorithm to use\n\
-                          scrypt    scrypt(1024, 1, 1) (default)\n\
-                          scrypt:N  scrypt(N, 1, 1)\n\
-                          sha256d   SHA-256d\n\
-  -o, --url=URL         URL of mining server\n\
-  -O, --userpass=U:P    username:password pair for mining server\n\
-  -u, --user=USERNAME   username for mining server\n\
-  -p, --pass=PASSWORD   password for mining server\n\
-      --cert=FILE       certificate for mining server using SSL\n\
-  -x, --proxy=[PROTOCOL://]HOST[:PORT]  connect through a proxy\n\
-  -t, --threads=N       number of miner threads (default: number of processors)\n\
-  -r, --retries=N       number of times to retry if a network call fails\n\
-                          (default: retry indefinitely)\n\
-  -R, --retry-pause=N   time to pause between retries, in seconds (default: 30)\n\
-  -T, --timeout=N       timeout for long polling, in seconds (default: none)\n\
-  -s, --scantime=N      upper bound on time spent scanning current work when\n\
-                          long polling is unavailable, in seconds (default: 5)\n\
-      --coinbase-addr=ADDR  payout address for solo mining\n\
-      --coinbase-sig=TEXT  data to insert in the coinbase when possible\n\
-      --no-longpoll     disable long polling support\n\
-      --no-getwork      disable getwork support\n\
-      --no-gbt          disable getblocktemplate support\n\
-      --no-stratum      disable X-Stratum support\n\
-      --no-redirect     ignore requests to change the URL of the mining server\n\
-  -q, --quiet           disable per-thread hashmeter output\n\
-  -D, --debug           enable debug output\n\
-  -P, --protocol-dump   verbose dump of protocol-level activities\n"
-#ifdef HAVE_SYSLOG_H
-"\
-  -S, --syslog          use system log for output messages\n"
-#endif
-#ifndef WIN32
-"\
-  -B, --background      run the miner in the background\n"
-#endif
-"\
-      --benchmark       run in offline benchmark mode\n\
-  -c, --config=FILE     load a JSON-format configuration file\n\
-  -V, --version         display version information and exit\n\
-  -h, --help            display this help text and exit\n\
-";
-
-static char const short_options[] =
-#ifndef WIN32
-	"B"
-#endif
-#ifdef HAVE_SYSLOG_H
-	"S"
-#endif
-	"a:c:Dhp:Px:qr:R:s:t:T:o:u:O:V";
-
-static struct option const options[] = {
-	{ "algo", 1, NULL, 'a' },
-#ifndef WIN32
-	{ "background", 0, NULL, 'B' },
-#endif
-	{ "benchmark", 0, NULL, 1005 },
-	{ "cert", 1, NULL, 1001 },
-	{ "coinbase-addr", 1, NULL, 1013 },
-	{ "coinbase-sig", 1, NULL, 1015 },
-	{ "config", 1, NULL, 'c' },
-	{ "debug", 0, NULL, 'D' },
-	{ "help", 0, NULL, 'h' },
-	{ "no-gbt", 0, NULL, 1011 },
-	{ "no-getwork", 0, NULL, 1010 },
-	{ "no-longpoll", 0, NULL, 1003 },
-	{ "no-redirect", 0, NULL, 1009 },
-	{ "no-stratum", 0, NULL, 1007 },
-	{ "pass", 1, NULL, 'p' },
-	{ "protocol-dump", 0, NULL, 'P' },
-	{ "proxy", 1, NULL, 'x' },
-	{ "quiet", 0, NULL, 'q' },
-	{ "retries", 1, NULL, 'r' },
-	{ "retry-pause", 1, NULL, 'R' },
-	{ "scantime", 1, NULL, 's' },
-#ifdef HAVE_SYSLOG_H
-	{ "syslog", 0, NULL, 'S' },
-#endif
-	{ "threads", 1, NULL, 't' },
-	{ "timeout", 1, NULL, 'T' },
-	{ "url", 1, NULL, 'o' },
-	{ "user", 1, NULL, 'u' },
-	{ "userpass", 1, NULL, 'O' },
-	{ "version", 0, NULL, 'V' },
-	{ 0, 0, 0, 0 }
-};
-
 struct work {
 	uint32_t data[32];
 	uint32_t target[8];
@@ -303,7 +201,7 @@ static bool jobj_binary(const json_t *obj, const char *key,
 			void *buf, size_t buflen)
 {
 	const char *hexstr;
-	json_t *tmp;
+	json_t *tmp = NULL;
 
 	tmp = json_object_get(obj, key);
 	if (unlikely(!tmp)) {
@@ -458,12 +356,15 @@ static bool gbt_work_decode(const json_t *val, struct work *work)
 			goto out;
 		}
 		tmp = json_object_get(val, "coinbasevalue");
-		if (!tmp || !json_is_number(tmp)) {
+		if (!tmp || !json_is_integer(tmp)) {
 			applog(LOG_ERR, "JSON invalid coinbasevalue");
 			goto out;
 		}
-		cbvalue = json_is_integer(tmp) ? json_integer_value(tmp) : json_number_value(tmp);
+		cbvalue = json_integer_value(tmp) ;
 		cbtx = malloc(256);
+		if (!cbtx)
+			exit(-1);
+		memset(cbtx, 0, 256);
 		le32enc((uint32_t *)cbtx, 1); /* version */
 		cbtx[4] = 1; /* in-counter */
 		memset(cbtx+5, 0x00, 32); /* prev txout hash */
@@ -525,7 +426,7 @@ static bool gbt_work_decode(const json_t *val, struct work *work)
 		coinbase_append = true;
 	}
 	if (coinbase_append) {
-		unsigned char xsig[100];
+		unsigned char xsig[100] = {0};
 		int xsig_len = 0;
 		if (*coinbase_sig) {
 			n = strlen(coinbase_sig);
@@ -658,8 +559,8 @@ static bool gbt_work_decode(const json_t *val, struct work *work)
 	rc = true;
 
 out:
-	free(cbtx);
-	free(merkle_tree);
+	if (cbtx) free(cbtx);
+	if (merkle_tree) free(merkle_tree);
 	return rc;
 }
 
@@ -691,8 +592,8 @@ static void share_result(int result, const char *reason)
 static bool submit_upstream_work(CURL *curl, struct work *work)
 {
 	json_t *val, *res, *reason;
-	char data_str[2 * sizeof(work->data) + 1];
-	char s[345];
+	char data_str[2 * sizeof(work->data) + 1] = {0};
+	char s[345] = {0};
 	int i;
 	bool rc = false;
 
@@ -702,8 +603,6 @@ static bool submit_upstream_work(CURL *curl, struct work *work)
 			applog(LOG_DEBUG, "DEBUG: stale work detected, discarding");
 		return true;
 	}
-
-	applog(LOG_ERR, "submit upstream work ======================");
 
 	if (have_stratum) {
 		uint32_t ntime, nonce;
@@ -1484,68 +1383,6 @@ static void *stratum_thread(void *userdata)
 
 out:
 	return NULL;
-}
-
-static void show_version_and_exit(void)
-{
-	printf(PACKAGE_STRING "\n built on " __DATE__ "\n features:"
-#if defined(USE_ASM) && defined(__i386__)
-		" i386"
-#endif
-#if defined(USE_ASM) && defined(__x86_64__)
-		" x86_64"
-		" PHE"
-#endif
-#if defined(USE_ASM) && (defined(__i386__) || defined(__x86_64__))
-		" SSE2"
-#endif
-#if defined(__x86_64__) && defined(USE_AVX)
-		" AVX"
-#endif
-#if defined(__x86_64__) && defined(USE_AVX2)
-		" AVX2"
-#endif
-#if defined(__x86_64__) && defined(USE_XOP)
-		" XOP"
-#endif
-#if defined(USE_ASM) && defined(__arm__) && defined(__APCS_32__)
-		" ARM"
-#if defined(__ARM_ARCH_5E__) || defined(__ARM_ARCH_5TE__) || \
-	defined(__ARM_ARCH_5TEJ__) || defined(__ARM_ARCH_6__) || \
-	defined(__ARM_ARCH_6J__) || defined(__ARM_ARCH_6K__) || \
-	defined(__ARM_ARCH_6M__) || defined(__ARM_ARCH_6T2__) || \
-	defined(__ARM_ARCH_6Z__) || defined(__ARM_ARCH_6ZK__) || \
-	defined(__ARM_ARCH_7__) || \
-	defined(__ARM_ARCH_7A__) || defined(__ARM_ARCH_7R__) || \
-	defined(__ARM_ARCH_7M__) || defined(__ARM_ARCH_7EM__)
-		" ARMv5E"
-#endif
-#if defined(__ARM_NEON__)
-		" NEON"
-#endif
-#endif
-#if defined(USE_ASM) && (defined(__powerpc__) || defined(__ppc__) || defined(__PPC__))
-		" PowerPC"
-#if defined(__ALTIVEC__)
-		" AltiVec"
-#endif
-#endif
-		"\n");
-
-	printf("%s\n", curl_version());
-#ifdef JANSSON_VERSION
-	printf("libjansson %s\n", JANSSON_VERSION);
-#endif
-	exit(0);
-}
-
-static void show_usage_and_exit(int status)
-{
-	if (status)
-		fprintf(stderr, "Try `" PROGRAM_NAME " --help' for more information.\n");
-	else
-		printf(usage);
-	exit(status);
 }
 
 static void strhide(char *s)
