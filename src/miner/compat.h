@@ -32,7 +32,6 @@ static inline int setpriority(int which, int who, int prio)
 #define	json_object_set		json_object_object_add
 #define json_object_set_new	json_object_object_add
 #define	json_string			json_object_new_string
-#define	json_object			json_object_new_object
 #define	json_decref			json_object_put
 #define	json_dumps			json_object_to_json_string
 
