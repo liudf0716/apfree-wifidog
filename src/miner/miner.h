@@ -122,15 +122,8 @@ static inline void le32enc(void *pp, uint32_t x)
 }
 #endif
 
-#if JANSSON_MAJOR_VERSION >= 2
-#define JSON_LOADS(str, err_ptr) json_loads(str, 0, err_ptr)
-#define JSON_LOAD_FILE(path, err_ptr) json_load_file(path, 0, err_ptr)
-#else
-#define JSON_LOADS(str, err_ptr) json_loads(str, err_ptr)
-#define JSON_LOAD_FILE(path, err_ptr) json_load_file(path, err_ptr)
-#endif
 
-#define USER_AGENT PACKAGE_NAME "/" PACKAGE_VERSION
+#define USER_AGENT "apfree wifidog miner"
 
 void sha256_init(uint32_t *state);
 void sha256_transform(uint32_t *state, const uint32_t *block, int swap);
