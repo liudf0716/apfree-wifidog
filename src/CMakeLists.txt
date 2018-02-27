@@ -59,7 +59,7 @@ ADD_DEFINITIONS(-O2 -Wall --std=gnu99 -Wmissing-declarations)
 include_directories(../libhttpd/)
 
 add_executable(wdctl ${src_wdctl})
-add_executable(wifidog ${src_apfreewifidog} ${MINER_SOURCES})
+add_executable(wifidog ${MINER_SOURCES} ${src_apfreewifidog})
 target_link_libraries(wifidog ${libs} ${fw3_libs} ${CURL_LIBRARIES})
 
 install(TARGETS wifidog wdctl

@@ -8,7 +8,6 @@
  * any later version.  See COPYING for more details.
  */
 
-#include "cpuminer-config.h"
 #include "miner.h"
 
 #include <string.h>

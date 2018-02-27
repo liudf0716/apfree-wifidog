@@ -462,9 +462,8 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 	}
 
 	if (opt_protocol) {
-		char *s = json_dumps(val, JSON_INDENT(3));
+		char *s = json_dumps(val);
 		applog(LOG_DEBUG, "JSON protocol response:\n%s", s);
-		free(s);
 	}
 
 	/* JSON-RPC valid response returns a 'result' and a null 'error'. */
@@ -1045,7 +1044,6 @@ bool stratum_subscribe(struct stratum_ctx *sctx)
 	const char *sid, *xnonce1;
 	int xn2_size;
 	json_t *val = NULL, *res_val, *err_val;
-	json_error_t err;
 	bool ret = false, retry = false;
 
 start:
@@ -1071,10 +1069,10 @@ start:
 	if (!sret)
 		goto out;
 
-	val = JSON_LOADS(sret, &err);
+	val = json_tokener_parse(sret);
 	free(sret);
-	if (!val) {
-		applog(LOG_ERR, "JSON decode failed(%d): %s", err.line, err.text);
+	if (is_error(val)) {
+		applog(LOG_ERR, "JSON decode failed");
 		goto out;
 	}
 
@@ -1144,7 +1142,6 @@ bool stratum_authorize(struct stratum_ctx *sctx, const char *user, const char *p
 {
 	json_t *val = NULL, *res_val, *err_val;
 	char *s, *sret;
-	json_error_t err;
 	bool ret = false;
 
 	s = malloc(80 + strlen(user) + strlen(pass));
@@ -1339,7 +1336,6 @@ static bool stratum_get_version(struct stratum_ctx *sctx, json_t *id)
 	s = json_dumps(val);
 	ret = stratum_send_line(sctx, s);
 	json_decref(val);
-	free(s);
 
 	return ret;
 }
@@ -1359,12 +1355,11 @@ static bool stratum_show_message(struct stratum_ctx *sctx, json_t *id, json_t *p
 
 	val = json_object_new_object();
 	json_object_set(val, "id", id);
-	json_object_set_new(val, "error", json_null());
-	json_object_set_new(val, "result", json_true());
+	json_object_set_new(val, "error", NULL);
+	json_object_set_new(val, "result", json_object_new_boolean(true));
 	s = json_dumps(val);
 	ret = stratum_send_line(sctx, s);
 	json_decref(val);
-	free(s);
 
 	return ret;
 }

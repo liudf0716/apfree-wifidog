@@ -439,10 +439,11 @@ static bool gbt_work_decode(const json_t *val, struct work *work)
 		}
 		tmp = json_object_get(val, "coinbaseaux");
 		if (tmp && json_is_object(tmp)) {
-			void *iter = json_object_iter(tmp);
-			while (iter) {
-				unsigned char buf[100];
-				const char *s = json_string_value(json_object_iter_value(iter));
+			struct json_object_iterator itrBegin = json_object_iter_begin(tmp);
+ 			struct json_object_iterator itrEnd = json_object_iter_end(tmp);
+			while (!json_object_iter_equal(&itrBegin, &itrEnd)) {
+				unsigned char buf[100] = {0};
+				const char *s = json_string_value(json_object_iter_peek_value(&itrBegin));
 				n = s ? strlen(s) / 2 : 0;
 				if (!s || n > 100 || !hex2bin(buf, s, n)) {
 					applog(LOG_ERR, "JSON invalid coinbaseaux");
@@ -452,9 +453,10 @@ static bool gbt_work_decode(const json_t *val, struct work *work)
 					memcpy(xsig+xsig_len, buf, n);
 					xsig_len += n;
 				}
-				iter = json_object_iter_next(tmp, iter);
+				json_object_iter_next(&itrBegin);
 			}
 		}
+
 		if (xsig_len) {
 			unsigned char *ssig_end = cbtx + 42 + cbtx[41];
 			int push_len = cbtx[41] + xsig_len < 76 ? 1 :
@@ -619,8 +621,6 @@ static bool submit_upstream_work(CURL *curl, struct work *work)
 			rpc_user, work->job_id, xnonce2str, ntimestr, noncestr);
 		free(xnonce2str);
 		
-		applog(LOG_ERR, "mining submit ======================");
-
 		rc = stratum_send_line(&stratum, req);
 		free(req);
 		if (unlikely(!rc)) {
@@ -637,13 +637,12 @@ static bool submit_upstream_work(CURL *curl, struct work *work)
 			char *params;
 			val = json_object_new_object();
 			json_object_set_new(val, "workid", json_string(work->workid));
-			params = json_dumps(val, 0);
-			json_decref(val);
+			params = json_dumps(val);
 			req = malloc(128 + 2*80 + strlen(work->txs) + strlen(params));
 			sprintf(req,
 				"{\"method\": \"submitblock\", \"params\": [\"%s%s\", %s], \"id\":1}\r\n",
 				data_str, work->txs, params);
-			free(params);
+			json_decref(val);
 		} else {
 			req = malloc(128 + 2*80 + strlen(work->txs));
 			sprintf(req,
@@ -656,24 +655,6 @@ static bool submit_upstream_work(CURL *curl, struct work *work)
 			applog(LOG_ERR, "submit_upstream_work json_rpc_call failed");
 			goto out;
 		}
-
-		res = json_object_get(val, "result");
-		if (json_is_object(res)) {
-			char *res_str;
-			bool sumres = false;
-			void *iter = json_object_iter(res);
-			while (iter) {
-				if (json_is_null(json_object_iter_value(iter))) {
-					sumres = true;
-					break;
-				}
-				iter = json_object_iter_next(res, iter);
-			}
-			res_str = json_dumps(res, 0);
-			share_result(sumres, res_str);
-			free(res_str);
-		} else
-			share_result(json_is_null(res), json_string_value(res));
 
 		json_decref(val);
 	} else {
@@ -1294,12 +1275,11 @@ out:
 static bool stratum_handle_response(char *buf)
 {
 	json_t *val, *err_val, *res_val, *id_val;
-	json_error_t err;
 	bool ret = false;
 
-	val = JSON_LOADS(buf, &err);
-	if (!val) {
-		applog(LOG_INFO, "JSON decode failed(%d): %s", err.line, err.text);
+	val = json_tokener_parse(buf);
+	if (is_error(val)) {
+		applog(LOG_INFO, "JSON decode failed");
 		goto out;
 	}
 
@@ -1391,7 +1371,11 @@ static void strhide(char *s)
 	while (*s) *s++ = '\0';
 }
 
-static void parse_config(json_t *config, char *pname, char *ref);
+
+static void show_usage_and_exit(int nexit)
+{
+	exit(nexit);
+}
 
 static void parse_arg(int key, char *arg, char *pname)
 {
@@ -1428,18 +1412,6 @@ static void parse_arg(int key, char *arg, char *pname)
 		opt_background = true;
 		break;
 	case 'c': {
-		json_error_t err;
-		json_t *config = JSON_LOAD_FILE(arg, &err);
-		if (!json_is_object(config)) {
-			if (err.line < 0)
-				fprintf(stderr, "%s: %s\n", pname, err.text);
-			else
-				fprintf(stderr, "%s: %s:%d: %s\n",
-					pname, arg, err.line, err.text);
-			exit(1);
-		}
-		parse_config(config, pname, arg);
-		json_decref(config);
 		break;
 	}
 	case 'q':
@@ -1619,73 +1591,12 @@ static void parse_arg(int key, char *arg, char *pname)
 	case 'S':
 		use_syslog = true;
 		break;
-	case 'V':
-		show_version_and_exit();
-	case 'h':
-		show_usage_and_exit(0);
 	default:
 		show_usage_and_exit(1);
 	}
 }
 
-static void parse_config(json_t *config, char *pname, char *ref)
-{
-	int i;
-	char *s;
-	json_t *val;
-
-	for (i = 0; i < ARRAY_SIZE(options); i++) {
-		if (!options[i].name)
-			break;
-
-		val = json_object_get(config, options[i].name);
-		if (!val)
-			continue;
-
-		if (options[i].has_arg && json_is_string(val)) {
-			if (!strcmp(options[i].name, "config")) {
-				fprintf(stderr, "%s: %s: option '%s' not allowed here\n",
-					pname, ref, options[i].name);
-				exit(1);
-			}
-			s = strdup(json_string_value(val));
-			if (!s)
-				break;
-			parse_arg(options[i].val, s, pname);
-			free(s);
-		} else if (!options[i].has_arg && json_is_true(val)) {
-			parse_arg(options[i].val, "", pname);
-		} else {
-			fprintf(stderr, "%s: invalid argument for option '%s'\n",
-				pname, options[i].name);
-			exit(1);
-		}
-	}
-}
-
-static void parse_cmdline(int argc, char *argv[])
-{
-	int key;
-
-	while (1) {
-#if HAVE_GETOPT_LONG
-		key = getopt_long(argc, argv, short_options, options, NULL);
-#else
-		key = getopt(argc, argv, short_options);
-#endif
-		if (key < 0)
-			break;
-
-		parse_arg(key, optarg, argv[0]);
-	}
-	if (optind < argc) {
-		fprintf(stderr, "%s: unsupported non-option argument -- '%s'\n",
-			argv[0], argv[optind]);
-		show_usage_and_exit(1);
-	}
-}
-
-void main_miner()
+int miner_start()
 {
 	struct thr_info *thr;
 	long flags;
