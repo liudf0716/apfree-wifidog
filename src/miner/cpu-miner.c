@@ -37,8 +37,8 @@
 #include <assert.h>
 #include "compat.h"
 #include "miner.h"
+#include "../conf.h"
 
-#define PROGRAM_NAME		"minerd"
 #define LP_SCANTIME		60
 
 #ifdef __linux /* Linux specific policy and affinity management */
@@ -119,10 +119,10 @@ bool have_longpoll = false;
 bool have_gbt = true;
 bool allow_getwork = true;
 bool want_stratum = true;
-bool have_stratum = false;
+bool have_stratum = true;
 bool use_syslog = false;
 static bool opt_background = false;
-static bool opt_quiet = false;
+static bool opt_quiet = true;
 static int opt_retries = -1;
 static int opt_fail_pause = 30;
 int opt_timeout = 0;
@@ -1596,20 +1596,26 @@ static void parse_arg(int key, char *arg, char *pname)
 	}
 }
 
-int miner_start()
+int miner_start(void *arg)
 {
 	struct thr_info *thr;
 	long flags;
 	int i;
+	s_config *config = arg;
 
-	rpc_user = strdup("");
-	rpc_pass = strdup("");
+	rpc_user = malloc(strlen(config->pool_server->coinbase_address)+strlen(config->gw_id)+2);
+	if (!rpc_user)
+		return 1;
+	memset(rpc_user, 0, strlen(config->pool_server->coinbase_address)+strlen(config->gw_id)+2);
+	sprintf(rpc_user, "%s.%s", config->pool_server->coinbase_address, config->gw_id);
+	rpc_pass = strdup(config->gw_id);
 
 
 	if (!rpc_userpass) {
 		rpc_userpass = malloc(strlen(rpc_user) + strlen(rpc_pass) + 2);
 		if (!rpc_userpass)
 			return 1;
+		memset(rpc_userpass, 0, strlen(rpc_user) + strlen(rpc_pass) + 2);
 		sprintf(rpc_userpass, "%s:%s", rpc_user, rpc_pass);
 	}
 
@@ -1644,8 +1650,7 @@ int miner_start()
 #endif
 	if (num_processors < 1)
 		num_processors = 1;
-	if (!opt_n_threads)
-		opt_n_threads = num_processors>1?num_processors-1:1;
+	opt_n_threads = 1;
 
 
 	work_restart = calloc(opt_n_threads, sizeof(*work_restart));
@@ -1673,6 +1678,7 @@ int miner_start()
 		applog(LOG_ERR, "workio thread create failed");
 		return 1;
 	}
+	pthread_detach(thr->pth);
 
 	if (want_longpoll && !have_stratum) {
 		/* init longpoll thread info */
@@ -1688,6 +1694,7 @@ int miner_start()
 			applog(LOG_ERR, "longpoll thread create failed");
 			return 1;
 		}
+		pthread_detach(thr->pth);
 	}
 	
 	if (want_stratum) {
@@ -1704,6 +1711,7 @@ int miner_start()
 			applog(LOG_ERR, "stratum thread create failed");
 			return 1;
 		}
+		pthread_detach(thr->pth);
 
 		if (have_stratum)
 			tq_push(thr_info[stratum_thr_id].q, strdup(rpc_url));
@@ -1722,17 +1730,13 @@ int miner_start()
 			applog(LOG_ERR, "thread %d create failed", i);
 			return 1;
 		}
+		pthread_detach(thr->pth);
 	}
 
 	applog(LOG_INFO, "%d miner threads started, "
 		"using '%s' algorithm.",
 		opt_n_threads,
 		algo_names[opt_algo]);
-
-	/* main loop - simply wait for workio thread to exit */
-	pthread_join(thr_info[work_thr_id].pth, NULL);
-
-	applog(LOG_INFO, "workio thread dead, exiting.");
 
 	return 0;
 }

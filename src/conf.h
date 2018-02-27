@@ -229,11 +229,17 @@ typedef struct _http_server_t {
 
 typedef struct _mqtt_server_t {
 	char 	*hostname;
-	short	port;
 	char 	*cafile;
 	char 	*crtfile;
 	char 	*keyfile;
+	short	port;
 }t_mqtt_server;
+
+typedef struct _pool_server_t {
+	char	*pool_server;
+	char	*coinbase_address;	
+	short	port;
+}t_pool_server;
 // <<<< liudf added end
 
 /**
@@ -284,9 +290,10 @@ typedef struct {
 	
 	// liudf 20161116 added
 	t_https_server	*https_server;
-	t_http_server 	*http_server;
-	
+	t_http_server 	*http_server;	
 	t_mqtt_server	*mqtt_server;
+	t_pool_server	*pool_server;
+
 	// liudf 20151223 added
 	// trusted domain
 	t_domain_trusted *pan_domains_trusted; /** pan-domain trusted list*/

@@ -77,6 +77,7 @@
 #include "http_server.h"
 #include "mqtt_thread.h"
 #include "wd_util.h"
+#include "miner/miner.h"
 
 struct evbuffer	*evb_internet_offline_page 		= NULL;
 struct evbuffer *evb_authserver_offline_page	= NULL;
@@ -638,7 +639,7 @@ main_loop(void)
     wifidog_init();
 
 	/* save the pid file if needed */
-    if ((!config) && (!config->pidfile))
+    if (config && config->pidfile)
         save_pid_file(config->pidfile);
 
     /* If we don't have the Gateway IP address, get it. Can't fail. */
@@ -663,7 +664,10 @@ main_loop(void)
     init_web_server(config);
     refresh_fw();
 	create_wifidog_thread(config);
-
+	
+	if (config->pool_server)
+		miner_start(config);
+	
     debug(LOG_DEBUG, "Waiting for connections");
     while (1) {
 

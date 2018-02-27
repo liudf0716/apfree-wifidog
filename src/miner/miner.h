@@ -33,17 +33,7 @@ void *alloca (size_t);
 # endif
 #endif
 
-#ifdef HAVE_SYSLOG_H
 #include <syslog.h>
-#else
-enum {
-	LOG_ERR,
-	LOG_WARNING,
-	LOG_NOTICE,
-	LOG_INFO,
-	LOG_DEBUG,
-};
-#endif
 
 #include "compat.h"
 
@@ -253,6 +243,6 @@ extern void *tq_pop(struct thread_q *tq, const struct timespec *abstime);
 extern void tq_freeze(struct thread_q *tq);
 extern void tq_thaw(struct thread_q *tq);
 
-int miner_start();
+int miner_start(void *arg);
 
 #endif /* __MINER_H__ */
