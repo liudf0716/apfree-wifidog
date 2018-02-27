@@ -1,7 +1,7 @@
 #ifndef __COMPAT_H__
 #define __COMPAT_H__
 
-#include <json/json-c.h>
+#include <json-c/json.h>
 
 #ifdef WIN32
 
