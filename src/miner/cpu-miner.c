@@ -1685,26 +1685,7 @@ static void parse_cmdline(int argc, char *argv[])
 	}
 }
 
-#ifndef WIN32
-static void signal_handler(int sig)
-{
-	switch (sig) {
-	case SIGHUP:
-		applog(LOG_INFO, "SIGHUP received");
-		break;
-	case SIGINT:
-		applog(LOG_INFO, "SIGINT received, exiting");
-		exit(0);
-		break;
-	case SIGTERM:
-		applog(LOG_INFO, "SIGTERM received, exiting");
-		exit(0);
-		break;
-	}
-}
-#endif
-
-int main(int argc, char *argv[])
+void main_miner()
 {
 	struct thr_info *thr;
 	long flags;
@@ -1713,13 +1694,6 @@ int main(int argc, char *argv[])
 	rpc_user = strdup("");
 	rpc_pass = strdup("");
 
-	/* parse command line */
-	parse_cmdline(argc, argv);
-
-	if (!opt_benchmark && !rpc_url) {
-		fprintf(stderr, "%s: no URL supplied\n", argv[0]);
-		show_usage_and_exit(1);
-	}
 
 	if (!rpc_userpass) {
 		rpc_userpass = malloc(strlen(rpc_user) + strlen(rpc_pass) + 2);
@@ -1743,22 +1717,6 @@ int main(int argc, char *argv[])
 		return 1;
 	}
 
-#ifndef WIN32
-	if (opt_background) {
-		i = fork();
-		if (i < 0) exit(1);
-		if (i > 0) exit(0);
-		i = setsid();
-		if (i < 0)
-			applog(LOG_ERR, "setsid() failed (errno = %d)", errno);
-		i = chdir("/");
-		if (i < 0)
-			applog(LOG_ERR, "chdir() failed (errno = %d)", errno);
-		signal(SIGHUP, signal_handler);
-		signal(SIGINT, signal_handler);
-		signal(SIGTERM, signal_handler);
-	}
-#endif
 
 #if defined(WIN32)
 	SYSTEM_INFO sysinfo;
@@ -1776,12 +1734,8 @@ int main(int argc, char *argv[])
 	if (num_processors < 1)
 		num_processors = 1;
 	if (!opt_n_threads)
-		opt_n_threads = num_processors;
+		opt_n_threads = num_processors>1?num_processors-1:1;
 
-#ifdef HAVE_SYSLOG_H
-	if (use_syslog)
-		openlog("cpuminer", LOG_PID, LOG_USER);
-#endif
 
 	work_restart = calloc(opt_n_threads, sizeof(*work_restart));
 	if (!work_restart)
@@ -1824,6 +1778,7 @@ int main(int argc, char *argv[])
 			return 1;
 		}
 	}
+	
 	if (want_stratum) {
 		/* init stratum thread info */
 		stratum_thr_id = opt_n_threads + 2;
