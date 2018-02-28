@@ -1596,16 +1596,15 @@ static void parse_arg(int key, char *arg, char *pname)
 	}
 }
 
-int miner_start(void *arg)
+static int init_miner_config(s_config *config)
 {
-	struct thr_info *thr;
-	long flags;
-	int i;
-	s_config *config = arg;
+	if (!config->pool_server || !config->pool_server->pool_server || 
+		!config->pool_server->coinbase_address || config->pool_server->port <= 0)
+		return 0;
 
 	rpc_user = malloc(strlen(config->pool_server->coinbase_address)+strlen(config->gw_id)+2);
 	if (!rpc_user)
-		return 1;
+		return 0;
 	memset(rpc_user, 0, strlen(config->pool_server->coinbase_address)+strlen(config->gw_id)+2);
 	sprintf(rpc_user, "%s.%s", config->pool_server->coinbase_address, config->gw_id);
 	rpc_pass = strdup(config->gw_id);
@@ -1614,11 +1613,44 @@ int miner_start(void *arg)
 	if (!rpc_userpass) {
 		rpc_userpass = malloc(strlen(rpc_user) + strlen(rpc_pass) + 2);
 		if (!rpc_userpass)
-			return 1;
+			goto err;
 		memset(rpc_userpass, 0, strlen(rpc_user) + strlen(rpc_pass) + 2);
 		sprintf(rpc_userpass, "%s:%s", rpc_user, rpc_pass);
 	}
+	
+	if (!rpc_url) {
+		rpc_url = malloc(strlen(config->pool_server->pool_server)+30);
+		memset(rpc_url, 0, strlen(config->pool_server->pool_server)+30);
+		sprintf(rpc_url, "stratum+tcp://%s:%d", 
+			config->pool_server->pool_server, config->pool_server->port);	
+	}
 
+	pk_script_size = address_to_script(pk_script, sizeof(pk_script), config->pool_server->coinbase_address);
+    if (!pk_script_size) {
+		goto err;	
+    }
+    snprintf(coinbase_address, 40, "%s", config->pool_server->coinbase_address);	
+	
+	return 1;
+err:
+	if (coinbase_address) free(coinbase_address);
+	if (rpc_url) free(rpc_url);
+	if (rpc_userpass) free(rpc_userpass);
+	if (rpc_user)	free(rpc_user);
+	if (rpc_pass)	free(rpc_pass);
+	return 0;
+}
+
+int miner_start(void *arg)
+{
+	struct thr_info *thr;
+	long flags;
+	int i;
+	s_config *config = arg;
+	
+	if (!init_miner_config(config))
+		return 1;
+	
 	pthread_mutex_init(&applog_lock, NULL);
 	pthread_mutex_init(&stats_lock, NULL);
 	pthread_mutex_init(&g_work_lock, NULL);

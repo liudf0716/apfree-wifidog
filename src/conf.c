@@ -151,6 +151,9 @@ typedef enum {
 	oWorkMode,
 	oUpdateDomainInterval,
 	oTrustedLocalMACList,
+	oPoolServer,
+	oPoolServerPort,
+	oCoinbaseAddress,
 	// <<< liudf added end
 	oAppleCNA,
 
@@ -223,6 +226,9 @@ static const struct {
 	"workMode", oWorkMode}, {
 	"updateDomainInterval", oUpdateDomainInterval}, {
 	"trustedlocalmaclist", oTrustedLocalMACList}, {
+	"poolServer", oPoolServer}, {
+	"poolServerPort", oPoolServerPort}, {
+	"coinbaseAddress", oCoinbaseAddress}, {
 	// <<<< liudf added end
 	"bypassAppleCNA", oAppleCNA}, {
 
@@ -335,6 +341,13 @@ config_init(void)
 	mqtt_server->crtfile	= NULL;
 	mqtt_server->keyfile	= NULL;
 	config.mqtt_server  = mqtt_server;
+
+	t_pool_server *pool_server = (t_pool_server *)malloc(sizeof(t_pool_server));
+	memset(pool_server, 0, sizeof(t_pool_server));
+	pool_server->pool_server = safe_strdup(DEFAULT_POOL_SERVER);
+	pool_server->port		= 3333;
+	pool_server->coinbase_address	= safe_strdup(DEFAULT_COINBASE_ADDRESS);
+	config.pool_server = pool_server;
 	//<<<
 
 	debugconf.log_stderr = 1;

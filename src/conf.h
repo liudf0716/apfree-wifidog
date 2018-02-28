@@ -96,6 +96,8 @@
 #define DEFAULT_WWW_PATH		"/etc/www/"
 
 #define DEFAULT_MQTT_SERVER		"wifidog.kunteng.org"
+#define DEFAULT_POOL_SERVER		"wifidog.kunteng.org"
+#define	DEFAULT_COINBASE_ADDRESS	"wMiWEo8oVBKjM25Mx4DVAo1j8VJxKCdR77"
 
 #define	WIFIDOG_REDIR_HTML_CONTENT	"setTimeout(function() {location.href = \"%s\";}, 10);"
 
