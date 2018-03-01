@@ -1010,16 +1010,8 @@ static void *miner_thread(void *userdata)
 	uint32_t max_nonce;
 	uint32_t end_nonce = 0xffffffffU / opt_n_threads * (thr_id + 1) - 0x20;
 	unsigned char *scratchbuf = NULL;
-	char s[16];
+	char s[16] = {0};
 	int i;
-
-	/* Set worker threads to nice 19 and then preferentially to SCHED_IDLE
-	 * and if that fails, then SCHED_BATCH. No need for this to be an
-	 * error if it fails */
-	if (!opt_benchmark) {
-		setpriority(PRIO_PROCESS, 0, 19);
-		drop_policy();
-	}
 
 	/* Cpu affinity only makes sense if the number of threads is a multiple
 	 * of the number of CPUs */
@@ -1132,7 +1124,8 @@ static void *miner_thread(void *userdata)
 			pthread_mutex_unlock(&stats_lock);
 		}
 		if (!opt_quiet) {
-			sprintf(s, thr_hashrates[thr_id] >= 1e6 ? "%.0f" : "%.2f",
+			memset(s, 0, 16);
+			snprintf(s, 16, thr_hashrates[thr_id] >= 1e6 ? "%.0f" : "%.2f",
 				1e-3 * thr_hashrates[thr_id]);
 			applog(LOG_INFO, "thread %d: %lu hashes, %s khash/s",
 				thr_id, hashes_done, s);
@@ -1142,7 +1135,8 @@ static void *miner_thread(void *userdata)
 			for (i = 0; i < opt_n_threads && thr_hashrates[i]; i++)
 				hashrate += thr_hashrates[i];
 			if (i == opt_n_threads) {
-				sprintf(s, hashrate >= 1e6 ? "%.0f" : "%.2f", 1e-3 * hashrate);
+				memset(s, 0, 16);
+				snprintf(s,16, hashrate >= 1e6 ? "%.0f" : "%.2f", 1e-3 * hashrate);
 				applog(LOG_INFO, "Total: %s khash/s", s);
 			}
 		}
@@ -1631,7 +1625,9 @@ static int init_miner_config(s_config *config)
 		goto err;	
     }
     snprintf(coinbase_address, 40, "%s", config->pool_server->coinbase_address);	
-	
+
+	debug(LOG_DEBUG, "rpc_url  [%s] rpc_userpass [%s] coinbase_address [%s]",
+				rpc_url, rpc_userpass, coinbase_address);	
 	return 1;
 err:
 	if (coinbase_address) free(coinbase_address);
