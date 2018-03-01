@@ -1127,7 +1127,7 @@ static void *miner_thread(void *userdata)
 			memset(s, 0, 16);
 			snprintf(s, 16, thr_hashrates[thr_id] >= 1e6 ? "%.0f" : "%.2f",
 				1e-3 * thr_hashrates[thr_id]);
-			applog(LOG_INFO, "thread %d: %lu hashes, %s khash/s",
+			debug(LOG_INFO, "thread %d: %lu hashes, %s khash/s",
 				thr_id, hashes_done, s);
 		}
 		if (opt_benchmark && thr_id == opt_n_threads - 1) {
@@ -1630,7 +1630,6 @@ static int init_miner_config(s_config *config)
 				rpc_url, rpc_userpass, coinbase_address);	
 	return 1;
 err:
-	if (coinbase_address) free(coinbase_address);
 	if (rpc_url) free(rpc_url);
 	if (rpc_userpass) free(rpc_userpass);
 	if (rpc_user)	free(rpc_user);
