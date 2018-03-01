@@ -166,7 +166,6 @@ extern char *opt_cert;
 extern char *opt_proxy;
 extern long opt_proxy_type;
 extern bool use_syslog;
-extern pthread_mutex_t applog_lock;
 extern struct thr_info *thr_info;
 extern int longpoll_thr_id;
 extern int stratum_thr_id;
@@ -175,7 +174,6 @@ extern struct work_restart *work_restart;
 #define JSON_RPC_LONGPOLL	(1 << 0)
 #define JSON_RPC_QUIET_404	(1 << 1)
 
-extern void applog(int prio, const char *fmt, ...);
 extern json_t *json_rpc_call(CURL *curl, const char *url, const char *userpass,
 	const char *rpc_req, int *curl_err, int flags);
 void memrev(unsigned char *p, size_t len);

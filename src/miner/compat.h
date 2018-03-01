@@ -3,6 +3,7 @@
 
 #include <json-c/json.h>
 
+#include "../debug.h"
 #ifdef WIN32
 
 #include <windows.h>
@@ -35,6 +36,8 @@ static inline int setpriority(int which, int who, int prio)
 #define	json_decref			json_object_put
 #define	json_dumps			json_object_to_json_string
 #define json_number_value	json_object_get_double
+
+#define	applog				debug
 
 static inline int json_is_object(const json_object *json_obj)
 {

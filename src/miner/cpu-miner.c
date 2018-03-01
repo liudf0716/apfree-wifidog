@@ -148,7 +148,9 @@ int stratum_thr_id = -1;
 struct work_restart *work_restart = NULL;
 static struct stratum_ctx stratum;
 
+#if	0
 pthread_mutex_t applog_lock;
+#endif
 static pthread_mutex_t stats_lock;
 
 static unsigned long accepted_count = 0L;
@@ -1032,7 +1034,6 @@ static void *miner_thread(void *userdata)
 		scratchbuf = scrypt_buffer_alloc(opt_scrypt_n);
 		if (!scratchbuf) {
 			applog(LOG_ERR, "scrypt buffer allocation failed");
-			pthread_mutex_lock(&applog_lock);
 			exit(1);
 		}
 	}
@@ -1650,8 +1651,9 @@ int miner_start(void *arg)
 	
 	if (!init_miner_config(config))
 		return 1;
-	
+#if	0	
 	pthread_mutex_init(&applog_lock, NULL);
+#endif	
 	pthread_mutex_init(&stats_lock, NULL);
 	pthread_mutex_init(&g_work_lock, NULL);
 	pthread_mutex_init(&stratum.sock_lock, NULL);

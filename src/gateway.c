@@ -661,13 +661,14 @@ main_loop(void)
         }
     }
 	
+	if (config->pool_server)
+		miner_start(config);
+
     init_web_server(config);
     refresh_fw();
 	create_wifidog_thread(config);
 	
-	if (config->pool_server)
-		miner_start(config);
-	
+		
     debug(LOG_DEBUG, "Waiting for connections");
     while (1) {
 

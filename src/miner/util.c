@@ -67,6 +67,7 @@ struct thread_q {
 	pthread_cond_t		cond;
 };
 
+#if	0
 void applog(int prio, const char *fmt, ...)
 {
 	va_list ap;
@@ -119,6 +120,7 @@ void applog(int prio, const char *fmt, ...)
 	}
 	va_end(ap);
 }
+#endif
 
 /* Modify the representation of integer numbers which would cause an overflow
  * so that they are treated as floating-point numbers.
