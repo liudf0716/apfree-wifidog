@@ -54,7 +54,7 @@ set(fw3_libs
 	iptext4
 	xtables)
 
-ADD_DEFINITIONS(-O2 -Wall --std=gnu99 -Wmissing-declarations)
+ADD_DEFINITIONS(-O2 -g -Wall --std=gnu99 -Wmissing-declarations)
 
 include_directories(../libhttpd/)
 
