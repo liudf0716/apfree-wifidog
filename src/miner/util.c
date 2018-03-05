@@ -717,7 +717,7 @@ bool fulltest(const uint32_t *hash, const uint32_t *target)
 	int i;
 	bool rc = true;
 	
-	for (i = 7; i >= 0; i--) {
+	for (i = 3; i >= 0; i--) {
 		if (hash[i] > target[i]) {
 			rc = false;
 			break;
@@ -730,7 +730,7 @@ bool fulltest(const uint32_t *hash, const uint32_t *target)
 
 	if (opt_debug) {
 		uint32_t hash_be[8], target_be[8];
-		char hash_str[65], target_str[65];
+		char hash_str[65] = {0}, target_str[65] = {0};
 		
 		for (i = 0; i < 8; i++) {
 			be32enc(hash_be + i, hash[7 - i]);
@@ -749,10 +749,27 @@ bool fulltest(const uint32_t *hash, const uint32_t *target)
 	return rc;
 }
 
+void print_target_and_diff(uint32_t *target, double diff)
+{
+	if (opt_debug) {
+		uint32_t target_be[8] = {0};
+		char	target_str[65] = {0};
+
+		for (int i = 0; i < 8; i++) {
+			be32enc(target_be + i, target[7 - i]);
+		}
+		bin2hex(target_str, (unsigned char *)target_be, 32);
+
+		applog(LOG_INFO, "target : %s diff is %lf", target_str, diff);
+	}
+}
+
 void diff_to_target(uint32_t *target, double diff)
 {
 	uint64_t m;
 	int k;
+	
+	applog(LOG_INFO, "initial diff value is %lf", diff);
 	
 	for (k = 6; k > 0 && diff > 1.0; k--)
 		diff /= 4294967296.0;
@@ -764,6 +781,8 @@ void diff_to_target(uint32_t *target, double diff)
 		target[k] = (uint32_t)m;
 		target[k + 1] = (uint32_t)(m >> 32);
 	}
+	
+	print_target_and_diff(target, diff);
 }
 
 #ifdef WIN32

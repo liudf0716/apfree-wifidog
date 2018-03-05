@@ -113,6 +113,7 @@ evhttps_logout_client(void *ctx, t_client *client)
     client_list_remove(client);
 
     if (config->auth_servers != NULL) {
+        UNLOCK_CLIENT_LIST();
         char *uri = get_auth_uri(REQUEST_TYPE_LOGOUT, online_client, client);
         if (uri) {
             struct auth_response_client authresponse_client;
@@ -121,7 +122,10 @@ evhttps_logout_client(void *ctx, t_client *client)
             evhttps_request(context, uri, 2, process_auth_server_response, &authresponse_client);
             free(uri);
         }
+        LOCK_CLIENT_LIST();
     }
+
+    client_free_node(client);
 }
 
 /**
@@ -277,11 +281,11 @@ authenticate_client(request * r)
         break;
 
     case AUTH_VALIDATION:
+        fw_allow(client, FW_MARK_PROBATION);
     	UNLOCK_CLIENT_LIST();
         /* They just got validated for X minutes to check their email */
         debug(LOG_INFO, "Got VALIDATION from central server authenticating token %s from %s at %s"
               "- adding to firewall and redirecting them to activate message", client->token, client->ip, client->mac);
-        fw_allow(client, FW_MARK_PROBATION);
         safe_asprintf(&urlFragment, "%smessage=%s",
                       auth_server->authserv_msg_script_path_fragment, GATEWAY_MESSAGE_ACTIVATE_ACCOUNT);
         http_send_redirect_to_auth(r, urlFragment, "Redirect to activate message");
@@ -289,11 +293,11 @@ authenticate_client(request * r)
         break;
 
     case AUTH_ALLOWED:
+        fw_allow(client, FW_MARK_KNOWN);
         UNLOCK_CLIENT_LIST();
         /* Logged in successfully as a regular account */
         debug(LOG_INFO, "Got ALLOWED from central server authenticating token %s from %s at %s - "
               "adding to firewall and redirecting them to portal", client->token, client->ip, client->mac);
-        fw_allow(client, FW_MARK_KNOWN);
     	
 		//>>> liudf added 20160112
 		client->first_login = time(NULL);

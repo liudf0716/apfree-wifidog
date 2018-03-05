@@ -110,8 +110,8 @@ static const char *algo_names[] = {
 	[ALGO_SHA256D]		= "sha256d",
 };
 
-bool opt_debug = false;
-bool opt_protocol = false;
+bool opt_debug = true;
+bool opt_protocol = true;
 static bool opt_benchmark = false;
 bool opt_redirect = true;
 bool want_longpoll = true;
@@ -991,7 +991,7 @@ static void stratum_gen_work(struct stratum_ctx *sctx, struct work *work)
 
 	if (opt_debug) {
 		char *xnonce2str = abin2hex(work->xnonce2, work->xnonce2_len);
-		applog(LOG_DEBUG, "DEBUG: job_id='%s' extranonce2=%s ntime=%08x",
+		applog(LOG_INFO, "DEBUG: job_id='%s' extranonce2=%s ntime=%08x",
 		       work->job_id, xnonce2str, swab32(work->data[17]));
 		free(xnonce2str);
 	}
