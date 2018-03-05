@@ -717,7 +717,7 @@ bool fulltest(const uint32_t *hash, const uint32_t *target)
 	int i;
 	bool rc = true;
 	
-	for (i = 3; i >= 0; i--) {
+	for (i = 7; i >= 0; i--) {
 		if (hash[i] > target[i]) {
 			rc = false;
 			break;
@@ -739,7 +739,7 @@ bool fulltest(const uint32_t *hash, const uint32_t *target)
 		bin2hex(hash_str, (unsigned char *)hash_be, 32);
 		bin2hex(target_str, (unsigned char *)target_be, 32);
 
-		applog(LOG_DEBUG, "DEBUG: %s\nHash:   %s\nTarget: %s",
+		applog(LOG_INFO, "DEBUG: %s\nHash:   %s\nTarget: %s",
 			rc ? "hash <= target"
 			   : "hash > target (false positive)",
 			hash_str,
@@ -768,8 +768,6 @@ void diff_to_target(uint32_t *target, double diff)
 {
 	uint64_t m;
 	int k;
-	
-	applog(LOG_INFO, "initial diff value is %lf", diff);
 	
 	for (k = 6; k > 0 && diff > 1.0; k--)
 		diff /= 4294967296.0;
