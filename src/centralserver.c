@@ -664,11 +664,11 @@ reply_login_response(t_authresponse *authresponse, struct evhttps_request_contex
         break;
 
     case AUTH_VALIDATION:
+        fw_allow(client, FW_MARK_PROBATION);    
         UNLOCK_CLIENT_LIST();
         /* They just got validated for X minutes to check their email */
         debug(LOG_INFO, "Got VALIDATION from central server authenticating token %s from %s at %s"
               "- adding to firewall and redirecting them to activate message", client->token, client->ip, client->mac);
-        fw_allow(client, FW_MARK_PROBATION);    
 
         safe_asprintf(&urlFragment, "%smessage=%s",
                       auth_server->authserv_msg_script_path_fragment, GATEWAY_MESSAGE_ACTIVATE_ACCOUNT);
@@ -677,11 +677,11 @@ reply_login_response(t_authresponse *authresponse, struct evhttps_request_contex
         break;
 
     case AUTH_ALLOWED:
+        fw_allow(client, FW_MARK_KNOWN);
         UNLOCK_CLIENT_LIST();
         /* Logged in successfully as a regular account */
         debug(LOG_INFO, "Got ALLOWED from central server authenticating token %s from %s at %s - "
               "adding to firewall and redirecting them to portal", client->token, client->ip, client->mac);
-        fw_allow(client, FW_MARK_KNOWN);
         
         //>>> liudf added 20160112
         client->first_login = time(NULL);

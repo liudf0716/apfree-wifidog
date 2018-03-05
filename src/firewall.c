@@ -573,9 +573,10 @@ fw_client_process_from_authserver_response(t_authresponse *authresponse, t_clien
 			break;
 		}
 	}
-	UNLOCK_CLIENT_LIST();
 
 	fw_client_operation(operation, p1);
+
+	UNLOCK_CLIENT_LIST();
 }
 
 void
