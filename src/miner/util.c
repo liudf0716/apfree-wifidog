@@ -69,7 +69,7 @@ struct thread_q {
 	pthread_cond_t		cond;
 };
 
-static const double truediffone = 6901739764772334502610587242400295223049089041226924020843070829363200.0;
+static const double truediffone = 110427836236357352041769395878404723568785424659630784333489133269811200.0;
 static const double bits224 = 26959946667150639794667015087019630673637144422540572481103610249216.0;
 static const double bits192 = 6277101735386680763835789423207666416102355444464034512896.0;
 static const double bits160 = 1461501637330902918203684832716283019655932542976.0;
@@ -819,37 +819,50 @@ void target_from_diff(uint32_t *target, double diff)
 
     d32 = truediffone;
     d32 /= diff;
-	
+
 	dcut32 = d32 / bits224;
-	target[7] = (uint32_t)dcut32;	
-	d32 = dcut32;
+	target[7] = (uint32_t)dcut32;
+	dcut32 = target[7];
+	dcut32 *= bits224;	
+	d32 -= dcut32;
 	
 	dcut32 = d32 / bits192;
 	target[6] = (uint32_t)dcut32;	
-	d32 = dcut32;
+	dcut32 = target[6];
+	dcut32 *= bits192;	
+	d32 -= dcut32;
 	
 	dcut32 = d32 / bits160;
 	target[5] = (uint32_t)dcut32;	
-	d32 = dcut32;
+	dcut32 = target[5];
+	dcut32 *= bits160;	
+	d32 -= dcut32;
 	
 	dcut32 = d32 / bits128;
 	target[4] = (uint32_t)dcut32;	
-	d32 = dcut32;
+	dcut32 = target[4];
+	dcut32 *= bits128;	
+	d32 -= dcut32;
 	
 	dcut32 = d32 / bits96;
 	target[3] = (uint32_t)dcut32;	
-	d32 = dcut32;
+	dcut32 = target[3];
+	dcut32 *= bits96;	
+	d32 -= dcut32;
 	
+	dcut32 = d32 / bits64;
+	target[2] = (uint32_t)dcut32;		
+	dcut32 = target[2];
+	dcut32 *= bits64;	
+	d32 -= dcut32;
+
 	dcut32 = d32 / bits32;
-	target[2] = (uint32_t)dcut32;	
-	d32 = dcut32;
-
-	dcut32 = d32 / bits224;
 	target[1] = (uint32_t)dcut32;	
-	d32 = dcut32;
+	dcut32 = target[1];
+	dcut32 *= bits32;	
+	d32 -= dcut32;
 
-	dcut32 = d32 / bits224;
-	target[0] = (uint32_t)dcut32;	
+	target[0] = (uint32_t)d32;	
 
 	print_target_and_diff(target, diff);
 }
