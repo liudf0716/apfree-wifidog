@@ -999,7 +999,7 @@ static void stratum_gen_work(struct stratum_ctx *sctx, struct work *work)
 	if (opt_algo == ALGO_SCRYPT)
 		diff_to_target(work->target, sctx->job.diff / 65536.0);
 	else
-		diff_to_target(work->target, sctx->job.diff);
+		target_from_diff(work->target, sctx->job.diff);
 }
 
 static void *miner_thread(void *userdata)

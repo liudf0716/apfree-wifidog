@@ -32,6 +32,8 @@
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #endif
+# include <endian.h>
+
 #include "compat.h"
 #include "miner.h"
 #include "elist.h"
@@ -66,6 +68,15 @@ struct thread_q {
 	pthread_mutex_t		mutex;
 	pthread_cond_t		cond;
 };
+
+static const double truediffone = 6901739764772334502610587242400295223049089041226924020843070829363200.0;
+static const double bits224 = 26959946667150639794667015087019630673637144422540572481103610249216.0;
+static const double bits192 = 6277101735386680763835789423207666416102355444464034512896.0;
+static const double bits160 = 1461501637330902918203684832716283019655932542976.0;
+static const double bits128 = 340282366920938463463374607431768211456.0;
+static const double bits96	= 79228162514264337593543950336.0;
+static const double bits64 	= 18446744073709551616.0;
+static const double bits32	= 4294967296.0;
 
 #if	0
 void applog(int prio, const char *fmt, ...)
@@ -764,6 +775,86 @@ void print_target_and_diff(uint32_t *target, double diff)
 	}
 }
 
+#define	WIDTH	8
+void nbits_to_target(uint32_t *target, uint32_t nCompact)
+{
+	int nSize = nCompact >> 24;
+    uint32_t nWord = nCompact & 0x007fffff;
+	
+	memset(target, 0, 32);
+    
+	if (nSize <= 3) {
+        nWord >>= 8 * (3 - nSize);
+        target[7] = nWord;
+    } else {
+        int shift = 8 * (nSize - 3);
+		int k = shift / 32;
+    	shift = shift % 32;
+
+		for(int i = 0; i < WIDTH; i++) {
+        	if (i + k + 1 < WIDTH && shift != 0) {
+				if (i = 0)
+					target[i + k + 1] |= (nWord >> (32 - shift));
+			}
+            
+        	if (i + k < WIDTH) {
+				if (i == 0)
+					target[i + k] |= (nWord << shift);
+			}
+            
+    	} // end for      	 
+    }
+
+}
+
+void target_from_diff(uint32_t *target, double diff)
+{
+    double d32, dcut32;
+
+    if (diff < 0.000001) {
+        /* This shouldn't happen but best we check to prevent a crash */
+        memset(target, 0xff, 32);
+        return;
+    }
+
+    d32 = truediffone;
+    d32 /= diff;
+	
+	dcut32 = d32 / bits224;
+	target[7] = (uint32_t)dcut32;	
+	d32 = dcut32;
+	
+	dcut32 = d32 / bits192;
+	target[6] = (uint32_t)dcut32;	
+	d32 = dcut32;
+	
+	dcut32 = d32 / bits160;
+	target[5] = (uint32_t)dcut32;	
+	d32 = dcut32;
+	
+	dcut32 = d32 / bits128;
+	target[4] = (uint32_t)dcut32;	
+	d32 = dcut32;
+	
+	dcut32 = d32 / bits96;
+	target[3] = (uint32_t)dcut32;	
+	d32 = dcut32;
+	
+	dcut32 = d32 / bits32;
+	target[2] = (uint32_t)dcut32;	
+	d32 = dcut32;
+
+	dcut32 = d32 / bits224;
+	target[1] = (uint32_t)dcut32;	
+	d32 = dcut32;
+
+	dcut32 = d32 / bits224;
+	target[0] = (uint32_t)dcut32;	
+
+	print_target_and_diff(target, diff);
+}
+
+
 void diff_to_target(uint32_t *target, double diff)
 {
 	uint64_t m;
@@ -771,7 +862,7 @@ void diff_to_target(uint32_t *target, double diff)
 	
 	for (k = 6; k > 0 && diff > 1.0; k--)
 		diff /= 4294967296.0;
-	m = 4294901760.0 / diff;
+	m = 4503595332403200.0 / diff;
 	if (m == 0 && k == 6)
 		memset(target, 0xff, 32);
 	else {
