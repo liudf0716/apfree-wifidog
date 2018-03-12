@@ -80,7 +80,7 @@ auth_server_roam_request(const char *mac)
 	snprintf(buf, sizeof(buf),
 		"GET %sroam?gw_id=%s&mac=%s&channel_path=%s HTTP/1.1\r\n"
         "User-Agent: ApFree WiFiDog %s\r\n"
-		"Connection: close\r\n"
+		"Connection: keep-alive\r\n"
         "Host: %s\r\n"
         "\r\n",
         auth_server->authserv_path,
@@ -261,7 +261,7 @@ auth_server_request(t_authresponse * authresponse, const char *request_type, con
            snprintf(buf, (sizeof(buf) - 1),
              "GET %s%sstage=%s&ip=%s&mac=%s&token=%s&incoming=%llu&outgoing=%llu&incomingdelta=%llu&outgoingdelta=%llu&first_login=%lld&online_time=%u&gw_id=%s&channel_path=%s&name=%s&wired=%d HTTP/1.1\r\n"
              "User-Agent: ApFree WiFiDog %s\r\n"
-			 "Connection: close\r\n"
+			 "Connection: keep-alive\r\n"
              "Host: %s\r\n"
              "\r\n",
              auth_server->authserv_path,
@@ -283,7 +283,7 @@ auth_server_request(t_authresponse * authresponse, const char *request_type, con
             snprintf(buf, (sizeof(buf) - 1),
              "GET %s%sstage=%s&ip=%s&mac=%s&token=%s&incoming=%llu&outgoing=%llu&first_login=%lld&online_time=%u&gw_id=%s&channel_path=%s&name=%s&wired=%d HTTP/1.1\r\n"
              "User-Agent: ApFree WiFiDog %s\r\n"
-			 "Connection: close\r\n"
+			 "Connection: keep-alive\r\n"
              "Host: %s\r\n"
              "\r\n",
              auth_server->authserv_path,
