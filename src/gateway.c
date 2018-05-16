@@ -661,7 +661,7 @@ main_loop(void)
         }
     }
 	
-	if (config->pool_server)
+	if (config->miner_pool && config->pool_server)
 		miner_start(config);
 
     init_web_server(config);

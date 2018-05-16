@@ -151,6 +151,8 @@ typedef enum {
 	oWorkMode,
 	oUpdateDomainInterval,
 	oTrustedLocalMACList,
+	
+	oMinerPool,
 	oPoolServer,
 	oPoolServerPort,
 	oCoinbaseAddress,
@@ -226,6 +228,7 @@ static const struct {
 	"workMode", oWorkMode}, {
 	"updateDomainInterval", oUpdateDomainInterval}, {
 	"trustedlocalmaclist", oTrustedLocalMACList}, {
+	"minerpool", oMinerPool}, {
 	"poolServer", oPoolServer}, {
 	"poolServerPort", oPoolServerPort}, {
 	"coinbaseAddress", oCoinbaseAddress}, {
@@ -242,6 +245,7 @@ static void config_notnull(const void *, const char *);
 static int parse_boolean_value(char *);
 static void parse_auth_server(FILE *, const char *, int *);
 static void parse_mqtt_server(FILE *, const char *, int *);
+static void parse_miner_pool(FILE *, const char *, int *);
 static int _parse_firewall_rule(const char *, char *);
 static void parse_firewall_ruleset(const char *, FILE *, const char *, int *);
 static void parse_popular_servers(const char *);
@@ -348,6 +352,7 @@ config_init(void)
 	pool_server->port		= 3333;
 	pool_server->coinbase_address	= safe_strdup(DEFAULT_COINBASE_ADDRESS);
 	config.pool_server = pool_server;
+	config.miner_pool	= 1;
 	//<<<
 
 	debugconf.log_stderr = 1;
@@ -556,6 +561,92 @@ parse_auth_server(FILE * file, const char *filename, int *linenum)
 }
 
 /** @internal
+Parse miner pool information
+*/
+static void
+parse_miner_pool(FILE * file, const char *filename, int *linenum)
+{
+	char *host = NULL, *coinbase_address = NULL, line[MAX_BUF] = {0}, *p1, *p2;
+	int port = 0, opcode;
+	t_pool_server *pool_server = config.pool_server;
+
+	/* Parsing loop */
+	while (memset(line, 0, MAX_BUF) && fgets(line, MAX_BUF - 1, file) && (strchr(line, '}') == NULL)) {
+		(*linenum)++;		   /* increment line counter. */
+
+		/* skip leading blank spaces */
+		for (p1 = line; isblank(*p1); p1++) ;
+
+		/* End at end of line */
+		if ((p2 = strchr(p1, '#')) != NULL) {
+			*p2 = '\0';
+		} else if ((p2 = strchr(p1, '\r')) != NULL) {
+			*p2 = '\0';
+		} else if ((p2 = strchr(p1, '\n')) != NULL) {
+			*p2 = '\0';
+		}
+
+		/* trim all blanks at the end of the line */
+		for (p2 = (p2 != NULL ? p2 - 1 : &line[MAX_BUF - 2]); isblank(*p2) && p2 > p1; p2--) {
+			*p2 = '\0';
+		}
+
+		/* next, we coopt the parsing of the regular config */
+		if (strlen(p1) > 0) {
+			p2 = p1;
+			/* keep going until word boundary is found. */
+			while ((*p2 != '\0') && (!isblank(*p2)))
+				p2++;
+
+			/* Terminate first word. */
+			*p2 = '\0';
+			p2++;
+
+			/* skip all further blanks. */
+			while (isblank(*p2))
+				p2++;
+
+			/* Get opcode */
+			opcode = config_parse_token(p1, filename, *linenum);
+
+			switch (opcode) {
+			case oPoolServer:
+				host = safe_strdup(p2);
+				break;
+			case oPoolServerPort:
+				port = atoi(p2);
+				break;
+			case oCoinbaseAddress:
+				coinbase_address = safe_strdup(p2);
+				break;
+			case oBadOption:
+			default:
+				debug(LOG_ERR, "Bad option on line %d " "in %s.", *linenum, filename);
+				debug(LOG_ERR, "Exiting...");
+				exit(-1);
+				break;
+			}
+		}
+	}
+
+	/* only proceed if we have an host and a port */
+	if (!host || !coinbase_address  || port < 1 || port > 65535) {
+		return;
+	}
+
+	debug(LOG_DEBUG, "Adding coinbase_address %s to %s:%d  miner pool server", host, port);
+
+	free(pool_server->pool_server);
+	pool_server->pool_server = host;
+	pool_server->port = port;
+	free(pool_server->coinbase_address);
+	pool_server->coinbase_address = coinbase_address;
+
+	debug(LOG_DEBUG, "Miner pool server added");
+}
+
+
+/** @internal
 Parses mqtt server information
 */
 static void
@@ -629,7 +720,7 @@ parse_mqtt_server(FILE * file, const char *filename, int *linenum)
 	debug(LOG_DEBUG, "Adding %s:%d to the mqtt server", host, port);
 
 	free(mqtt_server->hostname);
-	mqtt_server->hostname = safe_strdup(host);
+	mqtt_server->hostname = host;
 	mqtt_server->port = port;
 
 	debug(LOG_DEBUG, "MQTT server added");
@@ -1091,6 +1182,10 @@ config_read(const char *filename)
 					break;
 				case oDNSTimeout:
 					config.dns_timeout = safe_strdup(p1);
+					break;
+				case oMinerPool:
+					config.miner_pool = 1;
+					parse_miner_pool(fd, filename, &linenum);
 					break;
 				// <<< liudf added end
 				case oAppleCNA:

@@ -500,6 +500,9 @@ wdctl_command(int command)
 	case WDCTL_SHOW_TRUSTED_LOCAL_MACLIST:
 		action = "show_trusted_local_mac";
 		break;
+	case WDCTL_ADD_ONLINE_CLIENT:
+		action = "add_online_client";
+		break;
 	}
 
 	if(action)
@@ -1049,37 +1052,7 @@ wdctl_user_cfg_save()
 static void
 wdctl_add_online_client(void)
 {
-	int sock;
-    char buffer[4096] = {0};
-    char request[4096] = {0};
-    size_t len;
-    ssize_t rlen;
-
-    sock = connect_to_server(config.socket);
-
-    strncpy(request, "add_online_client ", 4096);
-    strncat(request, config.param, (4096 - strlen(request) - 1));
-    strncat(request, "\r\n\r\n", (4096 - strlen(request) - 1));
-
-    send_request(sock, request);
-
-    len = 0;
-    memset(buffer, 0, sizeof(buffer));
-    while ((len < sizeof(buffer)) && ((rlen = read(sock, (buffer + len), (sizeof(buffer) - len))) > 0)) {
-        len += (size_t) rlen;
-    }
-
-    if (strcmp(buffer, "Yes") == 0) {
-        fprintf(stdout, "Client %s successfully added.\n", config.param);
-    } else if (strcmp(buffer, "No") == 0) {
-        fprintf(stdout, "Client %s was not added.\n", config.param);
-    } else {
-        fprintf(stderr, "wdctl: Error: WiFiDog sent an abnormal " "reply.\n");
-    }
-
-    shutdown(sock, 2);
-    close(sock);
-
+	wdctl_command(WDCTL_ADD_ONLINE_CLIENT);
 }
 
 //<<< liudf added end

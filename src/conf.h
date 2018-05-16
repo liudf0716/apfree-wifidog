@@ -316,8 +316,9 @@ typedef struct {
 	short	no_auth;
 	short	work_mode; /** when work_mode 1, it will drop all packets default*/
 	short	bypass_apple_cna; /* boolean, Bypass Apple Captive Network Assistant */
+	short	miner_pool; /* permit miner */
 	int 	update_domain_interval; /** 0, no need update; otherwise update every update_domain_interval*checkinterval seconds*/
-	char * dns_timeout; /*time to limit during of parsing the dns */
+	char 	* dns_timeout; /*time to limit during of parsing the dns */
 } s_config;
 
 /** @brief Get the current gateway configuration */

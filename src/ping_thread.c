@@ -155,7 +155,7 @@ get_ping_request(const struct sys_info *info)
 	int nret = safe_asprintf(&request,
 			"GET %s%sgw_id=%s&sys_uptime=%lu&sys_memfree=%u&sys_load=%.2f&nf_conntrack_count=%lu&cpu_usage=%3.2lf%%25&wifidog_uptime=%lu&online_clients=%d&offline_clients=%d&ssid=%s&version=%s&type=%s&name=%s&channel_path=%s&wired_passed=%d HTTP/1.1\r\n"
              "User-Agent: ApFree WiFiDog %s\r\n"
-			 "Connection: close\r\n"
+			 "Connection: keep-alive\r\n"
              "Host: %s\r\n"
              "\r\n",
              auth_server->authserv_path,
