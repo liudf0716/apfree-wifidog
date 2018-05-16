@@ -412,7 +412,7 @@ wdctl_command_action(const char *command)
 		
     sock = connect_to_server(config.socket);
 	
-	FD_SET(sock, read_fds);
+	FD_SET(sock, &read_fds);
 	
 	if(config.param)	
 		snprintf(request, 4096, "%s %s\r\n\r\n", command, config.param);
