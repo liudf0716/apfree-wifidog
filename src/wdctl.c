@@ -404,8 +404,15 @@ wdctl_command_action(const char *command)
     char request[4096] = {0};
     size_t len;
     ssize_t rlen;
-
+	fd_set read_fds;
+	struct timeval timeout;
+	int activity = 0;
+	
+ 	FD_ZERO(&read_fds);
+		
     sock = connect_to_server(config.socket);
+	
+	FD_SET(sock, read_fds);
 	
 	if(config.param)	
 		snprintf(request, 4096, "%s %s\r\n\r\n", command, config.param);
@@ -416,14 +423,23 @@ wdctl_command_action(const char *command)
 
     len = 0;
     memset(buffer, 0, sizeof(buffer));
-    while ((len < sizeof(buffer)) && ((rlen = read(sock, (buffer + len), (sizeof(buffer) - len))) > 0)) {
-        len += (size_t) rlen;
-    }
+	timeout.tv_sec 	= 0;
+	timeout.tv_usec = 500;
+	activity = select(sock + 1, &read_fds, NULL, NULL, &timeout);
+	if (activity <= 0)
+		goto err;
 	
-    if (len > 0) {
-        fprintf(stdout, "%s\n", buffer);
-    }
+	if (FD_ISSET(sock, &read_fds)) {
+		while ((len < sizeof(buffer)) && ((rlen = read(sock, (buffer + len), (sizeof(buffer) - len))) > 0)) {
+			len += (size_t) rlen;
+		}
 
+		if (len > 0) {
+			fprintf(stdout, "%s\n", buffer);
+		}
+	}
+	
+err:
     shutdown(sock, 2);
     close(sock);
 }
