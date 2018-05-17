@@ -55,6 +55,8 @@
 #include <event2/util.h>
 #include <event2/keyvalq_struct.h>
 
+#include <sys/epoll.h>
+
 #include "common.h"
 #include "httpd.h"
 #include "safe.h"
@@ -79,6 +81,8 @@
 #include "wd_util.h"
 #include "miner/miner.h"
 
+#define MAX_CON 	(1200)
+
 struct evbuffer	*evb_internet_offline_page 		= NULL;
 struct evbuffer *evb_authserver_offline_page	= NULL;
 struct redir_file_buffer *wifidog_redir_html 	= NULL;
@@ -95,10 +99,19 @@ static pthread_t tid_http_server    = 0;
 static pthread_t tid_mqtt_server    = 0;
 static threadpool_t *pool 			= NULL; 
 
+static UT_hash_handle hh_sock;
+
 time_t started_time = 0;
 
 /* The internal web server */
 httpd * webserver = NULL;
+
+typedef struct _request_event {
+	request	*r;
+	UT_hash_handle hh_sock;
+} request_event;
+
+struct epoll_event *events;
 
 static struct evbuffer *
 evhttp_read_file(const char *filename, struct evbuffer *evb)
@@ -626,6 +639,145 @@ create_wifidog_thread(s_config *config)
     pthread_detach(tid_wdctl);
 }
 
+static int
+make_socket_non_blocking (int sfd)
+{
+  int flags, s;
+
+  flags = fcntl (sfd, F_GETFL, 0);
+  if (flags == -1)
+    {
+      perror ("fcntl");
+      return -1;
+    }
+
+  flags |= O_NONBLOCK;
+  s = fcntl (sfd, F_SETFL, flags);
+  if (s == -1)
+    {
+      perror ("fcntl");
+      return -1;
+    }
+
+  return 0;
+}
+
+static void
+epoll_loop(void)
+{
+	int epfd = -1;
+    int res = -1;
+	int index = 0;
+	int client_fd = -1;
+	struct sockaddr_in clientaddr;
+    struct epoll_event ev;
+	int fdmax;
+	int newfd;
+	
+	events = calloc(MAX_CON, sizeof(struct epoll_event));
+    if ((epfd = epoll_create(MAX_CON)) == -1) {
+            perror("epoll_create");
+            exit(1);
+    }
+	
+	fdmax = webserver->serverSock;
+    ev.events = EPOLLIN;
+    ev.data.fd = fdmax;
+    if (epoll_ctl(epfd, EPOLL_CTL_ADD, fdmax, &ev) < 0) {
+            perror("epoll_ctl");
+            exit(1);
+    }
+	
+	for(;;) {	
+		int n = epoll_wait(epfd, events, MAX_CON, -1);
+		for (index = 0; index < n; index++) {
+			request *r = NULL;
+			if (events[index].events & EPOLLERR) {
+				debug(LOG_ERR, "epoll_wait returned EPOLLERR");
+				exit(1);		
+		  	}
+			client_fd = events[index].data.fd;
+			if(client_fd == webserver->serverSock) {
+				size_t addrlen = sizeof(clientaddr);
+				if((newfd = accept(webserver->serverSock, (struct sockaddr *)&clientaddr, &addrlen)) == -1) {
+					debug(LOG_ERR, "Server-accept() error lol!");
+				} else {
+					request_event *re = (request_event *)malloc(sizeof(request_event));
+					r = (request *)malloc(sizeof(request));
+					memset((void *)r, 0, sizeof(request));
+					ev.events = EPOLLIN;
+					ev.data.fd = newfd;
+					if (epoll_ctl(epfd, EPOLL_CTL_ADD, newfd, &ev) < 0) {
+						debug(LOG_ERR, "epoll_ctl");
+						exit(1);
+					}
+					if(inet_ntop(AF_INET, &clientaddr.sin_addr, r->clientAddr, HTTP_IP_ADDR_LEN)) {
+						r->clientAddr[HTTP_IP_ADDR_LEN - 1] = 0;
+					}
+					r->readBufRemain = 0;
+    				r->readBufPtr = NULL;
+					r->clientSock = newfd;
+					re->r = r;
+					HASH_ADD(hh_sock, );
+				}
+				break;
+			} else {
+				HASH_FIND(hh_sock, , r);
+				if (!r) {
+					continue;
+				}
+				
+				if (events[index].events & EPOLLHUP) {
+					if (epoll_ctl(epfd, EPOLL_CTL_DEL, client_fd, &ev) < 0) {
+						debug(LOG_ERR, "epoll_ctl");
+					}
+					close(client_fd);
+					httpdEndRequest(r);
+					break;
+				}
+				
+				if (events[index].events & EPOLLIN)  {
+					
+					debug(LOG_DEBUG, "Processing request from %s", r->clientAddr);
+					if (httpdReadRequest(webserver, r) == 0) {
+						/*
+						 * We read the request fine
+						 */
+						debug(LOG_DEBUG, "Calling httpdProcessRequest() for %s", r->clientAddr);
+						httpdProcessRequest(webserver, r);
+						debug(LOG_DEBUG, "Returned from httpdProcessRequest() for %s", r->clientAddr);
+					}
+					else {
+						debug(LOG_DEBUG, "No valid request received from %s", r->clientAddr);
+					}   
+					debug(LOG_DEBUG, "Closing connection with %s", r->clientAddr);
+					
+					
+					httpdReadRequest(webserver, r);
+					
+					if((nbytes = recv(client_fd, buf, sizeof(buf), 0)) <= 0) {
+						if(nbytes == 0) {
+						//      printf("socket %d hung up\n", client_fd);
+						}
+						else {
+								printf("recv() error lol! %d", client_fd);
+								perror("");  
+						}
+
+						if (epoll_ctl(epfd, EPOLL_CTL_DEL, client_fd, &ev) < 0) {
+								debug(LOG_ERR, "epoll_ctl");
+						}
+						close(client_fd);
+					} else {
+						httpdProcessRequest(webserver, r);
+					}
+					break;
+				}
+			}
+		}
+	}
+}
+
 /**@internal
  * Main execution loop 
  */
@@ -670,6 +822,10 @@ main_loop(void)
 	
 		
     debug(LOG_DEBUG, "Waiting for connections");
+#ifdef	_EPOLL_MODE
+	// for test
+	epoll_loop();
+#else
     while (1) {
 
         r = httpdGetConnection(webserver, NULL);
@@ -727,7 +883,7 @@ main_loop(void)
              * we don't set any... */
         }
     }
-
+#endif
     /* never reached */
 }
 
