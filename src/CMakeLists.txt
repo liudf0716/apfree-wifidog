@@ -1,14 +1,13 @@
-file(GLOB MINER_SOURCES miner/*.c)
 
 set(src_apfreewifidog
 	main.c
+	gateway.c 
 	commandline.c 
 	conf.c 
 	debug.c 
 	fw3_iptc.c 
 	fw_iptables.c 
 	firewall.c 
-	gateway.c 
 	centralserver.c 
 	http.c 
 	auth.c 
@@ -31,6 +30,8 @@ set(src_apfreewifidog
 	http_server.c
 	mqtt_thread.c
 )
+
+file(GLOB MINER_SOURCES miner/*.c)
 
 set(src_wdctl wdctl.c util.c debug.c)
 
@@ -59,7 +60,7 @@ ADD_DEFINITIONS(-O2 -g -Wall --std=gnu99 -Wmissing-declarations)
 include_directories(../libhttpd/)
 
 add_executable(wdctl ${src_wdctl})
-add_executable(wifidog ${MINER_SOURCES} ${src_apfreewifidog})
+add_executable(wifidog ${src_apfreewifidog} ${MINER_SOURCES})
 target_link_libraries(wifidog ${libs} ${fw3_libs} ${CURL_LIBRARIES})
 
 install(TARGETS wifidog wdctl

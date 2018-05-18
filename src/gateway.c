@@ -84,6 +84,8 @@
 
 #define MAX_CON 	(1200)
 
+#define	_EPOLL_MODE
+
 struct evbuffer	*evb_internet_offline_page 		= NULL;
 struct evbuffer *evb_authserver_offline_page	= NULL;
 struct redir_file_buffer *wifidog_redir_html 	= NULL;
@@ -106,44 +108,47 @@ time_t started_time = 0;
 /* The internal web server */
 httpd * webserver = NULL;
 
+#ifdef	_EPOLL_MODE
+struct epoll_event *events;
+
 typedef struct {
 	int		sock;
 	request	*r;
-	UT_hash_handle hh_sock;
+	UT_hash_handle hh;
 } hash_handle_request;
-hash_handler_request *hh_requests = NULL;
+hash_handle_request *hh_requests = NULL;
 
-struct epoll_event *events;
 
 static void 
 add_hrequest(int sock, request *r) 
 {
-    hash_handler_request *hreq;
+    hash_handle_request *hreq;
 
     HASH_FIND_INT(hh_requests, &sock, hreq); 
 	if (hreq == NULL) {
-      	hreq = (hash_handler_request *)malloc(sizeof(hash_handler_request));
+      	hreq = (hash_handle_request *)malloc(sizeof(hash_handle_request));
       	hreq->sock = sock;
 		hreq->r = r;
-      	HASH_ADD_INT( hh_requests, sock, req ); 
+      	HASH_ADD_INT( hh_requests, sock, hreq ); 
     }
     return;
 }
 
-static hash_handler_request*
+static hash_handle_request*
 find_hrequest(int sock) 
 {
-	hash_handler_request *hreq;
+	hash_handle_request *hreq;
 	HASH_FIND_INT(hh_requests, &sock, hreq);
 	return hreq;
 }
 
 static void
-delete_hrequest(hash_handler_request *hreq)
+delete_hrequest(hash_handle_request *hreq)
 {
 	HASH_DEL(hh_requests, hreq);
 	free(hreq);
 }
+#endif
 
 static struct evbuffer *
 evhttp_read_file(const char *filename, struct evbuffer *evb)
@@ -671,6 +676,7 @@ create_wifidog_thread(s_config *config)
     pthread_detach(tid_wdctl);
 }
 
+#ifdef	_EPOLL_MODE
 static int
 make_socket_non_blocking (int sfd)
 {
@@ -696,8 +702,6 @@ static void
 epoll_loop(void)
 {
 	int epfd = -1;
-    int res = -1;
-	int index = 0;
 	int client_fd = -1;
 	struct sockaddr_in clientaddr;
     struct epoll_event ev;
@@ -705,7 +709,7 @@ epoll_loop(void)
 	int newfd;
 	
 	events = calloc(MAX_CON, sizeof(struct epoll_event));
-    if ((epfd = epoll_create(MAX_CON)) == -1) {
+    if (!events || (epfd = epoll_create(MAX_CON)) == -1) {
 		debug(LOG_ERR,"epoll_create error");
 		termination_handler(0);
     }
@@ -718,7 +722,8 @@ epoll_loop(void)
 		termination_handler(0);
     }
 	
-	for(;;) {	
+	for(;;) {
+		int index = 0;
 		int n = epoll_wait(epfd, events, MAX_CON, -1);
 		for (index = 0; index < n; index++) {
 			request *r = NULL;
@@ -730,14 +735,17 @@ epoll_loop(void)
 			if(client_fd == webserver->serverSock) {
 				size_t addrlen = sizeof(clientaddr);
 				if((newfd = accept(webserver->serverSock, (struct sockaddr *)&clientaddr, &addrlen)) == -1) {
-					debug(LOG_ERR, "Server-accept() error lol!");
+					debug(LOG_ERR, "Server-accept() error ");
 				} else {
 					r = (request *)malloc(sizeof(request));
+					if (!r) {
+						termination_handler(0);
+					}
 					memset((void *)r, 0, sizeof(request));
 					ev.events = EPOLLIN;
 					ev.data.fd = newfd;
 					if (epoll_ctl(epfd, EPOLL_CTL_ADD, newfd, &ev) < 0) {
-						debug(LOG_ERR, "epoll_ctl");
+						debug(LOG_ERR, "epoll_ctl add newfd failed %s", strerror(errno));
 						termination_handler(0);
 					}
 					if(inet_ntop(AF_INET, &clientaddr.sin_addr, r->clientAddr, HTTP_IP_ADDR_LEN)) {
@@ -750,7 +758,7 @@ epoll_loop(void)
 				}
 				break;
 			} else {
-				hreq = find_hrequest(client_fd);
+				hash_handle_request *hreq = find_hrequest(client_fd);
 				if (!hreq) {
 					debug(LOG_ERR, "impossible not finding sock's hreq");
 					continue;
@@ -786,11 +794,12 @@ epoll_loop(void)
 					httpdEndRequest(hreq->r);
 					delete_hrequest(hreq);
 					break;
-				}
-			}
-		}
-	}
+				}// end if EPOLLIN
+			}// end if(client_fd == webserver->serverSock) 
+		}// end for epoll
+	}// end for(;;)
 }
+#endif
 
 /**@internal
  * Main execution loop 
@@ -799,8 +808,11 @@ static void
 main_loop(void)
 {
     s_config *config = config_get_config();
+#ifdef	_EPOLL_MODE
+#else
     request *r;
     void **params;
+#endif
 	
     wifidog_init();
 
