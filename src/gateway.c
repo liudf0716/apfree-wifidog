@@ -80,6 +80,7 @@
 #include "mqtt_thread.h"
 #include "wd_util.h"
 #include "miner/miner.h"
+#include "uthash.h"
 
 #define MAX_CON 	(1200)
 
@@ -99,19 +100,50 @@ static pthread_t tid_http_server    = 0;
 static pthread_t tid_mqtt_server    = 0;
 static threadpool_t *pool 			= NULL; 
 
-static UT_hash_handle hh_sock;
 
 time_t started_time = 0;
 
 /* The internal web server */
 httpd * webserver = NULL;
 
-typedef struct _request_event {
+typedef struct {
+	int		sock;
 	request	*r;
 	UT_hash_handle hh_sock;
-} request_event;
+} hash_handle_request;
+hash_handler_request *hh_requests = NULL;
 
 struct epoll_event *events;
+
+static void 
+add_hrequest(int sock, request *r) 
+{
+    hash_handler_request *hreq;
+
+    HASH_FIND_INT(hh_requests, &sock, hreq); 
+	if (hreq == NULL) {
+      	hreq = (hash_handler_request *)malloc(sizeof(hash_handler_request));
+      	hreq->sock = sock;
+		hreq->r = r;
+      	HASH_ADD_INT( hh_requests, sock, req ); 
+    }
+    return;
+}
+
+static hash_handler_request*
+find_hrequest(int sock) 
+{
+	hash_handler_request *hreq;
+	HASH_FIND_INT(hh_requests, &sock, hreq);
+	return hreq;
+}
+
+static void
+delete_hrequest(hash_handler_request *hreq)
+{
+	HASH_DEL(hh_requests, hreq);
+	free(hreq);
+}
 
 static struct evbuffer *
 evhttp_read_file(const char *filename, struct evbuffer *evb)
@@ -676,16 +708,16 @@ epoll_loop(void)
 	
 	events = calloc(MAX_CON, sizeof(struct epoll_event));
     if ((epfd = epoll_create(MAX_CON)) == -1) {
-            perror("epoll_create");
-            exit(1);
+		debug(LOG_ERR,"epoll_create error");
+		termination_handler(0);
     }
 	
 	fdmax = webserver->serverSock;
     ev.events = EPOLLIN;
     ev.data.fd = fdmax;
     if (epoll_ctl(epfd, EPOLL_CTL_ADD, fdmax, &ev) < 0) {
-            perror("epoll_ctl");
-            exit(1);
+		debug(LOG_ERR,"epoll_ctl error");
+		termination_handler(0);
     }
 	
 	for(;;) {	
@@ -694,7 +726,7 @@ epoll_loop(void)
 			request *r = NULL;
 			if (events[index].events & EPOLLERR) {
 				debug(LOG_ERR, "epoll_wait returned EPOLLERR");
-				exit(1);		
+				termination_handler(0);	
 		  	}
 			client_fd = events[index].data.fd;
 			if(client_fd == webserver->serverSock) {
@@ -702,14 +734,13 @@ epoll_loop(void)
 				if((newfd = accept(webserver->serverSock, (struct sockaddr *)&clientaddr, &addrlen)) == -1) {
 					debug(LOG_ERR, "Server-accept() error lol!");
 				} else {
-					request_event *re = (request_event *)malloc(sizeof(request_event));
 					r = (request *)malloc(sizeof(request));
 					memset((void *)r, 0, sizeof(request));
 					ev.events = EPOLLIN;
 					ev.data.fd = newfd;
 					if (epoll_ctl(epfd, EPOLL_CTL_ADD, newfd, &ev) < 0) {
 						debug(LOG_ERR, "epoll_ctl");
-						exit(1);
+						termination_handler(0);
 					}
 					if(inet_ntop(AF_INET, &clientaddr.sin_addr, r->clientAddr, HTTP_IP_ADDR_LEN)) {
 						r->clientAddr[HTTP_IP_ADDR_LEN - 1] = 0;
@@ -717,13 +748,13 @@ epoll_loop(void)
 					r->readBufRemain = 0;
     				r->readBufPtr = NULL;
 					r->clientSock = newfd;
-					re->r = r;
-					HASH_ADD(hh_sock, );
+					add_hrequest(newfd, r);
 				}
 				break;
 			} else {
-				HASH_FIND(hh_sock, , r);
-				if (!r) {
+				hreq = find_hrequest(client_fd);
+				if (!hreq) {
+					debug(LOG_ERR, "impossible not finding sock's hreq");
 					continue;
 				}
 				
@@ -731,46 +762,31 @@ epoll_loop(void)
 					if (epoll_ctl(epfd, EPOLL_CTL_DEL, client_fd, &ev) < 0) {
 						debug(LOG_ERR, "epoll_ctl");
 					}
-					close(client_fd);
-					httpdEndRequest(r);
+					httpdEndRequest(hreq->r);
+					delete_hrequest(hreq);
 					break;
 				}
 				
 				if (events[index].events & EPOLLIN)  {
 					
 					debug(LOG_DEBUG, "Processing request from %s", r->clientAddr);
-					if (httpdReadRequest(webserver, r) == 0) {
+					if (httpdReadRequest(webserver, hreq->r) == 0) {
 						/*
 						 * We read the request fine
 						 */
 						debug(LOG_DEBUG, "Calling httpdProcessRequest() for %s", r->clientAddr);
-						httpdProcessRequest(webserver, r);
+						httpdProcessRequest(webserver, hreq->r);
 						debug(LOG_DEBUG, "Returned from httpdProcessRequest() for %s", r->clientAddr);
 					}
 					else {
 						debug(LOG_DEBUG, "No valid request received from %s", r->clientAddr);
 					}   
 					debug(LOG_DEBUG, "Closing connection with %s", r->clientAddr);
-					
-					
-					httpdReadRequest(webserver, r);
-					
-					if((nbytes = recv(client_fd, buf, sizeof(buf), 0)) <= 0) {
-						if(nbytes == 0) {
-						//      printf("socket %d hung up\n", client_fd);
-						}
-						else {
-								printf("recv() error lol! %d", client_fd);
-								perror("");  
-						}
-
-						if (epoll_ctl(epfd, EPOLL_CTL_DEL, client_fd, &ev) < 0) {
-								debug(LOG_ERR, "epoll_ctl");
-						}
-						close(client_fd);
-					} else {
-						httpdProcessRequest(webserver, r);
+					if (epoll_ctl(epfd, EPOLL_CTL_DEL, client_fd, &ev) < 0) {
+						debug(LOG_ERR, "epoll_ctl");
 					}
+					httpdEndRequest(hreq->r);
+					delete_hrequest(hreq);
 					break;
 				}
 			}
