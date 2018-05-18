@@ -676,22 +676,20 @@ make_socket_non_blocking (int sfd)
 {
   int flags, s;
 
-  flags = fcntl (sfd, F_GETFL, 0);
-  if (flags == -1)
-    {
-      perror ("fcntl");
+  	flags = fcntl (sfd, F_GETFL, 0);
+  	if (flags == -1) {
+		debug(LOG_ERR,"fcntl F_GETFL error");
+      	return -1;
+	}
+
+  	flags |= O_NONBLOCK;
+  	s = fcntl (sfd, F_SETFL, flags);
+  	if (s == -1) {
+      debug(LOG_ERR, "fcntl F_SETFL error");
       return -1;
     }
 
-  flags |= O_NONBLOCK;
-  s = fcntl (sfd, F_SETFL, flags);
-  if (s == -1)
-    {
-      perror ("fcntl");
-      return -1;
-    }
-
-  return 0;
+  	return 0;
 }
 
 static void
@@ -716,7 +714,7 @@ epoll_loop(void)
     ev.events = EPOLLIN;
     ev.data.fd = fdmax;
     if (epoll_ctl(epfd, EPOLL_CTL_ADD, fdmax, &ev) < 0) {
-		debug(LOG_ERR,"epoll_ctl error");
+		debug(LOG_ERR, "epoll_ctl error");
 		termination_handler(0);
     }
 	
