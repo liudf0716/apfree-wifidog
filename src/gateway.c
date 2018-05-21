@@ -776,19 +776,19 @@ epoll_loop(void)
 				
 				if (events[index].events & EPOLLIN)  {
 					
-					debug(LOG_DEBUG, "Processing request from %s", r->clientAddr);
+					debug(LOG_DEBUG, "Processing request from %s", hreq->r->clientAddr);
 					if (httpdReadRequest(webserver, hreq->r) == 0) {
 						/*
 						 * We read the request fine
 						 */
-						debug(LOG_WARNING, "Calling httpdProcessRequest() for %s", r->clientAddr);
+						debug(LOG_WARNING, "Calling httpdProcessRequest() for %s", hreq->r->clientAddr);
 						httpdProcessRequest(webserver, hreq->r);
-						debug(LOG_WARNING, "Returned from httpdProcessRequest() for %s", r->clientAddr);
+						debug(LOG_WARNING, "Returned from httpdProcessRequest() for %s", hreq->r->clientAddr);
 					}
 					else {
-						debug(LOG_WARNING, "No valid request received from %s", r->clientAddr);
+						debug(LOG_WARNING, "No valid request received from %s", hreq->r->clientAddr);
 					}   
-					debug(LOG_DEBUG, "Closing connection with %s", r->clientAddr);
+					debug(LOG_DEBUG, "Closing connection with %s", hreq->r->clientAddr);
 					if (epoll_ctl(epfd, EPOLL_CTL_DEL, client_fd, &ev) < 0) {
 						debug(LOG_WARNING, "epoll_ctl_del[2] error %s", strerror(errno));
 					}
