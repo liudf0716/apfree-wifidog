@@ -84,8 +84,6 @@
 
 #define MAX_CON 	(1200)
 
-#define	_EPOLL_MODE
-
 struct evbuffer	*evb_internet_offline_page 		= NULL;
 struct evbuffer *evb_authserver_offline_page	= NULL;
 struct redir_file_buffer *wifidog_redir_html 	= NULL;
@@ -108,7 +106,7 @@ time_t started_time = 0;
 /* The internal web server */
 httpd * webserver = NULL;
 
-#ifdef	_EPOLL_MODE
+#ifdef	_EPOLL_MODE_
 struct epoll_event *events;
 
 typedef struct {
@@ -645,6 +643,7 @@ create_wifidog_thread(s_config *config)
     }
     pthread_detach(tid_fw_counter);
 
+#ifndef	_EPOLL_MODE_ 
     if(config->pool_mode) {
         int thread_number = config->thread_number;
         int queue_size = config->queue_size;
@@ -656,6 +655,7 @@ create_wifidog_thread(s_config *config)
         }
         debug(LOG_DEBUG, "Create thread pool thread_num %d, queue_size %d", thread_number, queue_size);
     }   
+#endif
 
 #ifdef	_MQTT_SUPPORT_
     // start mqtt subscript thread
@@ -676,7 +676,7 @@ create_wifidog_thread(s_config *config)
     pthread_detach(tid_wdctl);
 }
 
-#ifdef	_EPOLL_MODE
+#ifdef	_EPOLL_MODE_
 static int
 make_socket_non_blocking (int sfd)
 {
@@ -710,7 +710,7 @@ epoll_loop(void)
 	
 	events = calloc(MAX_CON, sizeof(struct epoll_event));
     if (!events || (epfd = epoll_create(MAX_CON)) == -1) {
-		debug(LOG_ERR,"epoll_create error");
+		debug(LOG_ERR,"epoll_create error : %s", strerror(errno));
 		termination_handler(0);
     }
 	
@@ -718,7 +718,7 @@ epoll_loop(void)
     ev.events = EPOLLIN;
     ev.data.fd = fdmax;
     if (epoll_ctl(epfd, EPOLL_CTL_ADD, fdmax, &ev) < 0) {
-		debug(LOG_ERR, "epoll_ctl error");
+		debug(LOG_ERR, "epoll_ctl_add error : %s", strerror(errno));
 		termination_handler(0);
     }
 	
@@ -735,7 +735,7 @@ epoll_loop(void)
 			if(client_fd == webserver->serverSock) {
 				size_t addrlen = sizeof(clientaddr);
 				if((newfd = accept(webserver->serverSock, (struct sockaddr *)&clientaddr, &addrlen)) == -1) {
-					debug(LOG_ERR, "Server-accept() error ");
+					debug(LOG_ERR, "Server-accept() error : %s", strerror(errno));
 				} else {
 					r = (request *)malloc(sizeof(request));
 					if (!r) {
@@ -761,15 +761,16 @@ epoll_loop(void)
 				hash_handle_request *hreq = find_hrequest(client_fd);
 				if (!hreq) {
 					debug(LOG_ERR, "impossible not finding sock's hreq");
-					continue;
 				}
 				
-				if (events[index].events & EPOLLHUP) {
+				if (!hreq || events[index].events & EPOLLHUP) {
 					if (epoll_ctl(epfd, EPOLL_CTL_DEL, client_fd, &ev) < 0) {
-						debug(LOG_ERR, "epoll_ctl");
+						debug(LOG_WARNING, "epoll_ctl_del[1] error : %s ", strerror(errno));
 					}
-					httpdEndRequest(hreq->r);
-					delete_hrequest(hreq);
+					if (hreq) {
+						httpdEndRequest(hreq->r);
+						delete_hrequest(hreq);
+					}
 					break;
 				}
 				
@@ -780,16 +781,16 @@ epoll_loop(void)
 						/*
 						 * We read the request fine
 						 */
-						debug(LOG_DEBUG, "Calling httpdProcessRequest() for %s", r->clientAddr);
+						debug(LOG_WARNING, "Calling httpdProcessRequest() for %s", r->clientAddr);
 						httpdProcessRequest(webserver, hreq->r);
-						debug(LOG_DEBUG, "Returned from httpdProcessRequest() for %s", r->clientAddr);
+						debug(LOG_WARNING, "Returned from httpdProcessRequest() for %s", r->clientAddr);
 					}
 					else {
-						debug(LOG_DEBUG, "No valid request received from %s", r->clientAddr);
+						debug(LOG_WARNING, "No valid request received from %s", r->clientAddr);
 					}   
 					debug(LOG_DEBUG, "Closing connection with %s", r->clientAddr);
 					if (epoll_ctl(epfd, EPOLL_CTL_DEL, client_fd, &ev) < 0) {
-						debug(LOG_ERR, "epoll_ctl");
+						debug(LOG_WARNING, "epoll_ctl_del[2] error %s", strerror(errno));
 					}
 					httpdEndRequest(hreq->r);
 					delete_hrequest(hreq);
@@ -808,8 +809,7 @@ static void
 main_loop(void)
 {
     s_config *config = config_get_config();
-#ifdef	_EPOLL_MODE
-#else
+#ifndef	_EPOLL_MODE_
     request *r;
     void **params;
 #endif
@@ -848,7 +848,7 @@ main_loop(void)
 	
 		
     debug(LOG_DEBUG, "Waiting for connections");
-#ifdef	_EPOLL_MODE
+#ifdef	_EPOLL_MODE_
 	// for test
 	epoll_loop();
 #else

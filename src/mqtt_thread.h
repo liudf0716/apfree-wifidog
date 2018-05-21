@@ -28,7 +28,6 @@
 #ifndef	_MQTT_THREAD_H_
 #define	_MQTT_THREAD_H_
 
-#define _MQTT_SUPPORT_
 #ifdef  _MQTT_SUPPORT_
 
 #include "wdctl_thread.h"
