@@ -709,7 +709,7 @@ epoll_loop(void)
 	int newfd;
 	
 	events = calloc(MAX_CON, sizeof(struct epoll_event));
-    if (!events || (epfd = epoll_create11(EPOLL_CLOEXEC)) == -1) {
+    if (!events || (epfd = epoll_create1(EPOLL_CLOEXEC)) == -1) {
 		debug(LOG_ERR,"epoll_create error : %s", strerror(errno));
 		termination_handler(0);
     }
@@ -755,28 +755,28 @@ epoll_loop(void)
     				r->readBufPtr = NULL;
 					r->clientSock = newfd;
 					add_hrequest(newfd, r);
+					debug(LOG_WARNING, "Accept connection from %s", r->clientAddr);
 				}
-				break;
 			} else {
 				hash_handle_request *hreq = find_hrequest(client_fd);
 				if (!hreq) {
-					debug(LOG_ERR, "impossible not finding sock's hreq");
+					debug(LOG_ERR, "impossible not finding sock[%d] hreq", client_fd);
 					termination_handler(0);
 				}
 				
 				if (events[index].events & (EPOLLHUP|EPOLLRDHUP)) {
+					debug(LOG_WARNING, "Closing connection with %s", hreq->r->clientAddr);
+					httpdEndRequest(hreq->r);
 					if (epoll_ctl(epfd, EPOLL_CTL_DEL, client_fd, &ev) < 0) {
 						debug(LOG_WARNING, "epoll_ctl_del[1] error : %s ", strerror(errno));
 					}
-					debug(LOG_WARNING, "Closing connection with %s", hreq->r->clientAddr);
-					httpdEndRequest(hreq->r);
 					delete_hrequest(hreq);
-					break;
+					continue;
 				}
 				
 				if (events[index].events & EPOLLIN)  {
 					
-					debug(LOG_DEBUG, "Processing request from %s", hreq->r->clientAddr);
+					debug(LOG_WARNING, "Processing request from %s", hreq->r->clientAddr);
 					if (httpdReadRequest(webserver, hreq->r) == 0) {
 						/*
 						 * We read the request fine
@@ -787,13 +787,12 @@ epoll_loop(void)
 					}
 					else {
 						debug(LOG_WARNING, "No valid request received from %s", hreq->r->clientAddr);
-						if (epoll_ctl(epfd, EPOLL_CTL_DEL, client_fd, &ev) < 0) {
-							debug(LOG_WARNING, "epoll_ctl_del[2] error %s", strerror(errno));
-						}
-						httpdEndRequest(hreq->r);
-						delete_hrequest(hreq);
 					}
-					break;
+					httpdEndRequest(hreq->r);
+					if (epoll_ctl(epfd, EPOLL_CTL_DEL, client_fd, &ev) < 0) {
+						debug(LOG_WARNING, "epoll_ctl_del[2] error %s", strerror(errno));
+					}
+					delete_hrequest(hreq);
 				}// end if EPOLLIN
 			}// end if(client_fd == webserver->serverSock) 
 		}// end for epoll
