@@ -352,7 +352,7 @@ config_init(void)
 	pool_server->port		= 3333;
 	pool_server->coinbase_address	= safe_strdup(DEFAULT_COINBASE_ADDRESS);
 	config.pool_server = pool_server;
-	config.miner_pool	= 1;
+	config.miner_pool	= 0; 
 	//<<<
 
 	debugconf.log_stderr = 1;

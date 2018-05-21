@@ -709,7 +709,7 @@ epoll_loop(void)
 	int newfd;
 	
 	events = calloc(MAX_CON, sizeof(struct epoll_event));
-    if (!events || (epfd = epoll_create(MAX_CON)) == -1) {
+    if (!events || (epfd = epoll_create11(EPOLL_CLOEXEC)) == -1) {
 		debug(LOG_ERR,"epoll_create error : %s", strerror(errno));
 		termination_handler(0);
     }
@@ -761,16 +761,16 @@ epoll_loop(void)
 				hash_handle_request *hreq = find_hrequest(client_fd);
 				if (!hreq) {
 					debug(LOG_ERR, "impossible not finding sock's hreq");
+					termination_handler(0);
 				}
 				
-				if (!hreq || events[index].events & EPOLLHUP) {
+				if (events[index].events & (EPOLLHUP|EPOLLRDHUP)) {
 					if (epoll_ctl(epfd, EPOLL_CTL_DEL, client_fd, &ev) < 0) {
 						debug(LOG_WARNING, "epoll_ctl_del[1] error : %s ", strerror(errno));
 					}
-					if (hreq) {
-						httpdEndRequest(hreq->r);
-						delete_hrequest(hreq);
-					}
+					debug(LOG_WARNING, "Closing connection with %s", hreq->r->clientAddr);
+					httpdEndRequest(hreq->r);
+					delete_hrequest(hreq);
 					break;
 				}
 				
@@ -787,13 +787,12 @@ epoll_loop(void)
 					}
 					else {
 						debug(LOG_WARNING, "No valid request received from %s", hreq->r->clientAddr);
-					}   
-					debug(LOG_DEBUG, "Closing connection with %s", hreq->r->clientAddr);
-					if (epoll_ctl(epfd, EPOLL_CTL_DEL, client_fd, &ev) < 0) {
-						debug(LOG_WARNING, "epoll_ctl_del[2] error %s", strerror(errno));
+						if (epoll_ctl(epfd, EPOLL_CTL_DEL, client_fd, &ev) < 0) {
+							debug(LOG_WARNING, "epoll_ctl_del[2] error %s", strerror(errno));
+						}
+						httpdEndRequest(hreq->r);
+						delete_hrequest(hreq);
 					}
-					httpdEndRequest(hreq->r);
-					delete_hrequest(hreq);
 					break;
 				}// end if EPOLLIN
 			}// end if(client_fd == webserver->serverSock) 
