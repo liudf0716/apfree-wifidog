@@ -27,6 +27,7 @@
 #include <poll.h>
 #include <time.h>
 #include <errno.h>
+#include <sys/socket.h>
 
 #if defined(_WIN32)
 #else
@@ -44,7 +45,7 @@ int sock;
 char *buf;
 int len;
 {
-#if defined(_WIN32)
+#if defined(_EPOLL_MODE_)
     return (recv(sock, buf, len, 0));
 #else
     /*return( read(sock, buf, len)); */
@@ -103,7 +104,7 @@ int sock;
 char *buf;
 int len;
 {
-#if defined(_WIN32)
+#if defined(_EPOLL_MODE_)
     return (send(sock, buf, len, 0));
 #else
     // liudf modified 20160302
