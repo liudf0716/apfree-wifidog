@@ -46,7 +46,7 @@ char *buf;
 int len;
 {
 #if defined(_EPOLL_MODE_)
-    return (recv(sock, buf, len, 0));
+    return recv(sock, buf, len, MSG_DONTWAIT);
 #else
     /*return( read(sock, buf, len)); */
     /* XXX Select based IO */
@@ -105,7 +105,7 @@ char *buf;
 int len;
 {
 #if defined(_EPOLL_MODE_)
-    return (send(sock, buf, len, 0));
+    return send(sock, buf, len, MSG_NOSIGNAL);
 #else
     // liudf modified 20160302
 	int nfds;
