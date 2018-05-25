@@ -161,9 +161,15 @@ _httpd_readChar(request * r, char *cp)
     if (r->readBufRemain == 0) {
         bzero(r->readBuf, HTTP_READ_BUF_LEN + 1);
         r->readBufRemain = _httpd_net_read(r->clientSock, r->readBuf, HTTP_READ_BUF_LEN);
+#if	define(_EPOLL_MODE_)
+		if (0 == r->readBufRemain || (r->readBufRemain < 0 && errno != EAGAIN && errno != EWOULDBLOCK)) {
+			return (0);
+		}
+#else
         if (r->readBufRemain < 1){
             return (0);
 		}
+#endif
         r->readBuf[r->readBufRemain] = 0;
         r->readBufPtr = r->readBuf;
     }
