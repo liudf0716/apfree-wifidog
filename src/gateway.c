@@ -703,21 +703,14 @@ epoll_loop(void)
 {
 	int epfd = -1;
 	int client_fd = -1;
-	struct sockaddr_in clientaddr;
-    struct epoll_event ev;
-	int fdmax;
+	struct epoll_event events[MAX_CON],ev;
 	int newfd;
 	
-	events = calloc(MAX_CON, sizeof(struct epoll_event));
-    if (!events || (epfd = epoll_create1(EPOLL_CLOEXEC)) == -1) {
-		debug(LOG_ERR,"epoll_create error : %s", strerror(errno));
-		termination_handler(0);
-    }
+	make_socket_non_blocking(webserver->serverSock);
 	
-	fdmax = webserver->serverSock;
     ev.events = EPOLLIN;
-    ev.data.fd = fdmax;
-    if (epoll_ctl(epfd, EPOLL_CTL_ADD, fdmax, &ev) < 0) {
+    ev.data.fd = webserver->serverSock;
+    if (epoll_ctl(epfd, EPOLL_CTL_ADD, ev.data.fd, &ev) < 0) {
 		debug(LOG_ERR, "epoll_ctl_add error : %s", strerror(errno));
 		termination_handler(0);
     }
@@ -725,76 +718,63 @@ epoll_loop(void)
 	for(;;) {
 		int index = 0;
 		int n = epoll_wait(epfd, events, MAX_CON, -1);
+		if (n <= 0) {
+			debug(LOG_ERR, "epoll_wait error : %s", strerror(errno));
+			termination_handler(0);
+		}
 		for (index = 0; index < n; index++) {
 			request *r = NULL;
-			if (events[index].events & EPOLLERR) {
-				debug(LOG_ERR, "epoll_wait returned EPOLLERR");
-				termination_handler(0);	
-		  	}
 			client_fd = events[index].data.fd;
-			if(client_fd == webserver->serverSock) {
+			if(client_fd == webserver->serverSock && (events[i].events & EPOLLIN)) {
+				struct sockaddr_in clientaddr;
 				size_t addrlen = sizeof(clientaddr);
-				if((newfd = accept(webserver->serverSock, (struct sockaddr *)&clientaddr, &addrlen)) == -1) {
-					debug(LOG_ERR, "Server-accept() error : %s", strerror(errno));
-				} else {
-					r = (request *)malloc(sizeof(request));
-					if (!r) {
-						termination_handler(0);
+				for (;;) {
+					if((newfd = accept(webserver->serverSock, (struct sockaddr *)&clientaddr, &addrlen)) == -1) {
+						debug(LOG_ERR, "Server-accept() error : %s", strerror(errno));
+						break;
+					} else {
+						r = (request *)malloc(sizeof(request));
+						if (!r) {
+							termination_handler(0);
+						}
+						memset((void *)r, 0, sizeof(request));
+						make_socket_non_blocking(newfd);
+						ev.events = EPOLLIN;
+						ev.data.ptr = r;
+						if (epoll_ctl(epfd, EPOLL_CTL_ADD, newfd, &ev) < 0) {
+							debug(LOG_ERR, "epoll_ctl add newfd failed %s", strerror(errno));
+							termination_handler(0);
+						}
+						if(inet_ntop(AF_INET, &clientaddr.sin_addr, r->clientAddr, HTTP_IP_ADDR_LEN)) {
+							r->clientAddr[HTTP_IP_ADDR_LEN - 1] = 0;
+						}
+						r->clientSock = newfd;
+						debug(LOG_WARNING, "Accept connection from %s", r->clientAddr);
 					}
-					memset((void *)r, 0, sizeof(request));
-					ev.events = EPOLLIN;
-					ev.data.fd = newfd;
-					if (epoll_ctl(epfd, EPOLL_CTL_ADD, newfd, &ev) < 0) {
-						debug(LOG_ERR, "epoll_ctl add newfd failed %s", strerror(errno));
-						termination_handler(0);
-					}
-					if(inet_ntop(AF_INET, &clientaddr.sin_addr, r->clientAddr, HTTP_IP_ADDR_LEN)) {
-						r->clientAddr[HTTP_IP_ADDR_LEN - 1] = 0;
-					}
-					r->readBufRemain = 0;
-    				r->readBufPtr = NULL;
-					r->clientSock = newfd;
-					add_hrequest(newfd, r);
-					debug(LOG_WARNING, "Accept connection from %s", r->clientAddr);
 				}
-			} else {
-				hash_handle_request *hreq = find_hrequest(client_fd);
-				if (!hreq) {
-					debug(LOG_ERR, "impossible not finding sock[%d] hreq", client_fd);
-					termination_handler(0);
+				continue;
+			}
+			
+			r = (request *)events[index].data.ptr;
+			if (events[i].events & EPOLLIN) {
+				httpdReadRequest(webserver, r)
+				ev.events = EPOLLOUT;
+				if (epoll_ctl(epfd, EPOLL_CTL_MOD, r->clientSock, &ev) < 0) {
+					debug(LOG_WARNING, "epoll_ctl_mod error : %s ", strerror(errno));
 				}
-				
-				if (events[index].events & (EPOLLHUP|EPOLLRDHUP)) {
-					debug(LOG_WARNING, "Closing connection with %s", hreq->r->clientAddr);
-					httpdEndRequest(hreq->r);
-					if (epoll_ctl(epfd, EPOLL_CTL_DEL, client_fd, &ev) < 0) {
-						debug(LOG_WARNING, "epoll_ctl_del[1] error : %s ", strerror(errno));
-					}
-					delete_hrequest(hreq);
-					continue;
+			} else if (events[i].events & EPOLLOUT) {
+				httpdProcessRequest(webserver, r);			
+				if (epoll_ctl(epfd, EPOLL_CTL_DEL, r->clientSock, &ev) < 0) {
+					debug(LOG_WARNING, "epoll_ctl_del[1] error : %s ", strerror(errno));
 				}
-				
-				if (events[index].events & EPOLLIN)  {
-					
-					debug(LOG_WARNING, "Processing request from %s", hreq->r->clientAddr);
-					if (httpdReadRequest(webserver, hreq->r) == 0) {
-						/*
-						 * We read the request fine
-						 */
-						debug(LOG_WARNING, "Calling httpdProcessRequest() for %s", hreq->r->clientAddr);
-						httpdProcessRequest(webserver, hreq->r);
-						debug(LOG_WARNING, "Returned from httpdProcessRequest() for %s", hreq->r->clientAddr);
-					}
-					else {
-						debug(LOG_WARNING, "No valid request received from %s", hreq->r->clientAddr);
-					}
-					httpdEndRequest(hreq->r);
-					if (epoll_ctl(epfd, EPOLL_CTL_DEL, client_fd, &ev) < 0) {
-						debug(LOG_WARNING, "epoll_ctl_del[2] error %s", strerror(errno));
-					}
-					delete_hrequest(hreq);
-				}// end if EPOLLIN
-			}// end if(client_fd == webserver->serverSock) 
+				httpdEndRequest(r);
+			} else if (events[i].events & EPOLLERR) {
+				if (epoll_ctl(epfd, EPOLL_CTL_DEL, r->clientSock, &ev) < 0) {
+					debug(LOG_WARNING, "epoll_ctl_del[2] error : %s ", strerror(errno));
+				}
+				httpdEndRequest(r);
+			}// end if EPOLLIN
+
 		}// end for epoll
 	}// end for(;;)
 }
