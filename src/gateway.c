@@ -706,6 +706,12 @@ epoll_loop(void)
 	struct epoll_event events[MAX_CON],ev;
 	int newfd;
 	
+	epfd = epoll_create(10);
+    if (epfd == -1) {
+		debug(LOG_ERR, "epoll_create error : %s", strerror(errno));
+		termination_handler(0);
+    }
+	
 	make_socket_non_blocking(webserver->serverSock);
 	
     ev.events = EPOLLIN;
