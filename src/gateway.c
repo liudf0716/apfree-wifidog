@@ -724,7 +724,7 @@ epoll_loop(void)
 	for(;;) {
 		int index = 0;
 		int n = epoll_wait(epfd, events, MAX_CON, -1);
-		if (n <= 0) {
+		if (n < 0 && errno != EINTR) {
 			debug(LOG_ERR, "epoll_wait error : %s", strerror(errno));
 			termination_handler(0);
 		}
