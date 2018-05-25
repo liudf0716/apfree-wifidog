@@ -736,7 +736,8 @@ epoll_loop(void)
 				size_t addrlen = sizeof(clientaddr);
 				for (;;) {
 					if((newfd = accept(webserver->serverSock, (struct sockaddr *)&clientaddr, &addrlen)) == -1) {
-						debug(LOG_ERR, "Server-accept() error : %s", strerror(errno));
+						if (errno != EAGAIN || errno != EWOULDBLOCK)
+							debug(LOG_ERR, "Server-accept() error : %s", strerror(errno));
 						break;
 					} else {
 						r = (request *)malloc(sizeof(request));
@@ -763,6 +764,7 @@ epoll_loop(void)
 			
 			r = (request *)events[index].data.ptr;
 			if (events[index].events & EPOLLIN) {
+				ev.data.ptr = r;
 				if (httpdReadRequest(webserver, r) == -1) {
 					if (epoll_ctl(epfd, EPOLL_CTL_DEL, r->clientSock, &ev) < 0) {
 						debug(LOG_WARNING, "epoll_ctl_del[1] error : %s ", strerror(errno));
@@ -775,14 +777,16 @@ epoll_loop(void)
 					}
 				}
 			} else if (events[index].events & EPOLLOUT) {
-				httpdProcessRequest(webserver, r);			
+				httpdProcessRequest(webserver, r);
+				ev.data.ptr = r;
 				if (epoll_ctl(epfd, EPOLL_CTL_DEL, r->clientSock, &ev) < 0) {
-					debug(LOG_WARNING, "epoll_ctl_del[1] error : %s ", strerror(errno));
+					debug(LOG_WARNING, "epoll_ctl_del[2] error : %s ", strerror(errno));
 				}
 				httpdEndRequest(r);
 			} else if (events[index].events & EPOLLERR) {
+				ev.data.ptr = r;
 				if (epoll_ctl(epfd, EPOLL_CTL_DEL, r->clientSock, &ev) < 0) {
-					debug(LOG_WARNING, "epoll_ctl_del[2] error : %s ", strerror(errno));
+					debug(LOG_WARNING, "epoll_ctl_del[3] error : %s ", strerror(errno));
 				}
 				httpdEndRequest(r);
 			}// end if EPOLLIN
