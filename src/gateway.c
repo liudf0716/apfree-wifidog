@@ -725,7 +725,7 @@ epoll_loop(void)
 		for (index = 0; index < n; index++) {
 			request *r = NULL;
 			client_fd = events[index].data.fd;
-			if(client_fd == webserver->serverSock && (events[i].events & EPOLLIN)) {
+			if(client_fd == webserver->serverSock && (events[index].events & EPOLLIN)) {
 				struct sockaddr_in clientaddr;
 				size_t addrlen = sizeof(clientaddr);
 				for (;;) {
@@ -756,19 +756,25 @@ epoll_loop(void)
 			}
 			
 			r = (request *)events[index].data.ptr;
-			if (events[i].events & EPOLLIN) {
-				httpdReadRequest(webserver, r)
-				ev.events = EPOLLOUT;
-				if (epoll_ctl(epfd, EPOLL_CTL_MOD, r->clientSock, &ev) < 0) {
-					debug(LOG_WARNING, "epoll_ctl_mod error : %s ", strerror(errno));
+			if (events[index].events & EPOLLIN) {
+				if (httpdReadRequest(webserver, r) == -1) {
+					if (epoll_ctl(epfd, EPOLL_CTL_DEL, r->clientSock, &ev) < 0) {
+						debug(LOG_WARNING, "epoll_ctl_del[1] error : %s ", strerror(errno));
+					}
+					httpdEndRequest(r);
+				} else {
+					ev.events = EPOLLOUT;
+					if (epoll_ctl(epfd, EPOLL_CTL_MOD, r->clientSock, &ev) < 0) {
+						debug(LOG_WARNING, "epoll_ctl_mod error : %s ", strerror(errno));
+					}
 				}
-			} else if (events[i].events & EPOLLOUT) {
+			} else if (events[index].events & EPOLLOUT) {
 				httpdProcessRequest(webserver, r);			
 				if (epoll_ctl(epfd, EPOLL_CTL_DEL, r->clientSock, &ev) < 0) {
 					debug(LOG_WARNING, "epoll_ctl_del[1] error : %s ", strerror(errno));
 				}
 				httpdEndRequest(r);
-			} else if (events[i].events & EPOLLERR) {
+			} else if (events[index].events & EPOLLERR) {
 				if (epoll_ctl(epfd, EPOLL_CTL_DEL, r->clientSock, &ev) < 0) {
 					debug(LOG_WARNING, "epoll_ctl_del[2] error : %s ", strerror(errno));
 				}

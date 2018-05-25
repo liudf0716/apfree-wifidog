@@ -414,9 +414,11 @@ httpdReadRequest(httpd * server, request * r)
             if (strcasecmp(cp, "POST") == 0)
                 r->request.method = HTTP_POST;
             if (r->request.method == 0) {
+#if !defined(_EPOLL_MODE_)
                 _httpd_net_write(r->clientSock, HTTP_METHOD_ERROR, strlen(HTTP_METHOD_ERROR));
                 _httpd_net_write(r->clientSock, cp, strlen(cp));
                 _httpd_writeErrorLog(server, r, LEVEL_ERROR, "Invalid method received");
+#endif
                 return (-1);
             }
             cp = cp2 + 1;
@@ -762,7 +764,8 @@ httpdOutputLengthDirect(request *r, const char *msg, int msg_len)
 	r->response.responseLength += msg_len;
     if (r->response.headersSent == 0)
         _httpd_sendHeaders(r, msg_len, 0);
-    _httpd_net_write(r->clientSock, msg, msg_len);
+	if (r->retcode >= 0)
+    	r->retcode = _httpd_net_write(r->clientSock, msg, msg_len);
 }
 
 void
@@ -817,7 +820,8 @@ httpdOutput(request * r, const char *msg)
     r->response.responseLength += strlen(buf);
     if (r->response.headersSent == 0)
         httpdSendHeaders(r);
-    _httpd_net_write(r->clientSock, buf, strlen(buf));
+	if (r->retcode >= 0)
+    	r->retcode = _httpd_net_write(r->clientSock, buf, strlen(buf));
 }
 
 void
@@ -833,7 +837,8 @@ httpdPrintf(request * r, const char *fmt, ...)
     vsnprintf(buf, HTTP_MAX_LEN, fmt, args);
     va_end(args); /* Works with both stdargs.h and varargs.h */
     r->response.responseLength += strlen(buf);
-    _httpd_net_write(r->clientSock, buf, strlen(buf));
+	if (r->retcode >= 0)
+    	r->retcode = _httpd_net_write(r->clientSock, buf, strlen(buf));
 }
 
 void

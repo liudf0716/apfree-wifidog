@@ -105,7 +105,10 @@ char *buf;
 int len;
 {
 #if defined(_EPOLL_MODE_)
-    return send(sock, buf, len, MSG_NOSIGNAL);
+    int nret = send(sock, buf, len, MSG_NOSIGNAL);
+	if (nret < 0 && (errno == EAGAIN || errno == EWOULDBLOCK))
+		return 0;
+	return nret == 0?-1:nret;
 #else
     // liudf modified 20160302
 	int nfds;
@@ -161,7 +164,7 @@ _httpd_readChar(request * r, char *cp)
     if (r->readBufRemain == 0) {
         bzero(r->readBuf, HTTP_READ_BUF_LEN + 1);
         r->readBufRemain = _httpd_net_read(r->clientSock, r->readBuf, HTTP_READ_BUF_LEN);
-#if	define(_EPOLL_MODE_)
+#if	defined(_EPOLL_MODE_)
 		if (0 == r->readBufRemain || (r->readBufRemain < 0 && errno != EAGAIN && errno != EWOULDBLOCK)) {
 			return (0);
 		}
@@ -511,7 +514,9 @@ _httpd_sendHeaders(request * r, int contentLength, int modTime)
 	totalLength += nret;
 	nret = snprintf(hdrBuf+totalLength, HTTP_READ_BUF_LEN-totalLength, "\r\n");
 	totalLength += nret;
-	_httpd_net_write(r->clientSock, hdrBuf, totalLength);
+	if (r->retcode >= 0) {
+		r->retcode = _httpd_net_write(r->clientSock, hdrBuf, totalLength);
+	}
 }
 
 httpDir *
@@ -633,7 +638,9 @@ _httpd_catFile(request * r, const char *path)
     len = read(fd, buf, HTTP_MAX_LEN);
     while (len > 0) {
         r->response.responseLength += len;
-        _httpd_net_write(r->clientSock, buf, len);
+		if (r->retcode >= 0) {
+			r->retcode = _httpd_net_write(r->clientSock, buf, len);
+		}
         len = read(fd, buf, HTTP_MAX_LEN);
     }
     close(fd);
@@ -694,7 +701,9 @@ void
 _httpd_sendText(request * r, char *msg)
 {
     r->response.responseLength += strlen(msg);
-    _httpd_net_write(r->clientSock, msg, strlen(msg));
+	if (r->retcode >= 0) {
+		r->retcode = _httpd_net_write(r->clientSock, msg, strlen(msg));
+	}
 }
 
 int

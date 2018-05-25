@@ -305,7 +305,6 @@ http_send_redirect(request * r, const char *url, const char *text)
 
     safe_asprintf(&message, "<html><body>Please <a href='%s'>click here</a>.</body></html>", url);
     httpdOutputDirect(r, message);
-	_httpd_closeSocket(r);
     free(message);
 }
 
@@ -487,8 +486,6 @@ http_send_js_redirect(request *r, const char *redir_url)
 #endif
 		httpdOutputLengthDirect(r, redirect_html, html_length);
 	
-	_httpd_closeSocket(r);
-	
 	free(redirect_html);
 	evbuffer_free(evb);
 	evbuffer_free(evb_redir_url);
@@ -498,20 +495,17 @@ void
 http_send_apple_redirect(request *r, const char *redir_url)
 {
    	httpdPrintf(r, APPLE_REDIRECT_MSG, redir_url);
-	_httpd_closeSocket(r);
 }
 
 void
 http_relay_wisper(request *r)
 {
 	httpdOutputDirect(r, apple_wisper);
-	_httpd_closeSocket(r);
 }
 
 void send_http_page_direct(request *r,  char *msg) 
 {
 	httpdOutputDirect(r, msg);
-	_httpd_closeSocket(r);
 }
 
 //<<< liudf added end
