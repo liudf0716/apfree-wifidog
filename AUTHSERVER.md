@@ -11,6 +11,9 @@
 
 1. [Echowxsy/wx-apfree_wifidog-auth](https://github.com/Echowxsy/wx-apfree_wifidog-auth)
 
+### apfree wifidog官方认证服务器
+[apfree wifidog官方认证服务器](https://github.com/wificoin-project/wificoin-wifidog-auth-server)
+
 
 
 
