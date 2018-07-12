@@ -114,4 +114,7 @@ Feel free to create issues or pull-requests if you have any problems.
 
 ### apfree wifidog qq group： [331230369](https://jq.qq.com/?_wv=1027&k=4ADDSev)
 
+## donate
+### wfc: weiKbu9DYg26gH2zucSHJHgH5KsuuZd3wW
+
 ---
