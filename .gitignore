@@ -31,3 +31,5 @@
 # Debug files
 *.dSYM/
 *.su
+
+tags
