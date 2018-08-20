@@ -4,11 +4,6 @@ project(ApFreeWiFidog C)
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/Modules/")
 
-find_package(CURL)
-if(NOT CURL_FOUND)
-  message(FATAL_ERROR "libcurl not found!")
-endif(NOT CURL_FOUND)
-
 find_package(LibEvent)
 if(NOT LibEvent_FOUND)
   message(FATAL_ERROR "libevent2 not found!")
