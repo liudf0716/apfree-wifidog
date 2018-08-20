@@ -31,7 +31,6 @@ set(src_apfreewifidog
 	mqtt_thread.c
 )
 
-file(GLOB MINER_SOURCES miner/*.c)
 
 set(src_wdctl wdctl.c util.c debug.c)
 
@@ -60,7 +59,7 @@ ADD_DEFINITIONS(-O2 -g -Wall --std=gnu99 -Wmissing-declarations)
 include_directories(../libhttpd/)
 
 add_executable(wdctl ${src_wdctl})
-add_executable(wifidog ${src_apfreewifidog} ${MINER_SOURCES})
+add_executable(wifidog ${src_apfreewifidog})
 target_link_libraries(wifidog ${libs} ${fw3_libs} ${CURL_LIBRARIES})
 
 install(TARGETS wifidog wdctl

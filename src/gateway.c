@@ -79,7 +79,6 @@
 #include "http_server.h"
 #include "mqtt_thread.h"
 #include "wd_util.h"
-#include "miner/miner.h"
 #include "uthash.h"
 
 #define MAX_CON 	(1200)
@@ -832,9 +831,6 @@ main_loop(void)
             exit(1);
         }
     }
-	
-	if (config->miner_pool && config->pool_server)
-		miner_start(config);
 
     init_web_server(config);
     refresh_fw();
