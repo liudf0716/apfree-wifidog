@@ -107,44 +107,6 @@ httpd * webserver = NULL;
 
 #ifdef	_EPOLL_MODE_
 struct epoll_event *events;
-
-typedef struct {
-	int		sock;
-	request	*r;
-	UT_hash_handle hh;
-} hash_handle_request;
-hash_handle_request *hh_requests = NULL;
-
-
-static void 
-add_hrequest(int sock, request *r) 
-{
-    hash_handle_request *hreq;
-
-    HASH_FIND_INT(hh_requests, &sock, hreq); 
-	if (hreq == NULL) {
-      	hreq = (hash_handle_request *)malloc(sizeof(hash_handle_request));
-      	hreq->sock = sock;
-		hreq->r = r;
-      	HASH_ADD_INT( hh_requests, sock, hreq ); 
-    }
-    return;
-}
-
-static hash_handle_request*
-find_hrequest(int sock) 
-{
-	hash_handle_request *hreq;
-	HASH_FIND_INT(hh_requests, &sock, hreq);
-	return hreq;
-}
-
-static void
-delete_hrequest(hash_handle_request *hreq)
-{
-	HASH_DEL(hh_requests, hreq);
-	free(hreq);
-}
 #endif
 
 static struct evbuffer *
