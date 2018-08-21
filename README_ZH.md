@@ -36,6 +36,10 @@ ApFree WiFiDog 在完全兼容原版WiFiDog的基础上，在功能、性能和�
  3，性能优异 用time curl 命令测试， http的响应时间是0.05s左右, https的响应时间是0.2s左右，用户真实的体验是秒开
  
  4，支持https请求跳转
+ 
+## ApFree WiFiDog认证服务器
+
+官方认证服务器是[WWAS](https://github.com/wificoin-project/wificoin-wifidog-auth-server)， 当前支持支付WFCS上网，微信连认证上网方式，后期将完善补充短信认证上网方式
 
 ## HTTPS请求跳转演示视频
 
