@@ -67,7 +67,19 @@ static struct xtables_globals xtg = {
 	.option_offset = 0,
 	.program_version = "4",
 	.orig_opts = base_opts,
+#if XTABLES_VERSION_CODE > 10
+	.compat_rev = xtables_compatible_revision,
+#endif
 };
+
+static struct {
+	bool retain;
+	int mcount, tcount;
+	struct xtables_match **matches;
+	struct xtables_target **targets;
+	void (*register_match)(struct xtables_match *);
+	void (*register_target)(struct xtables_target *);
+} xext;
 
 const char *fw3_flag_names[] = {
 	"filter",
@@ -989,6 +1001,15 @@ fw3_ipt_open(enum fw3_table table)
 
 	fw3_xt_reset();
 	fw3_init_extensions();
+	
+	if (xext.register_match)
+		for (i = 0; i < xext.mcount; i++)
+			xext.register_match(xext.matches[i]);
+
+	if (xext.register_target)
+		for (i = 0; i < xext.tcount; i++)
+			xext.register_target(xext.targets[i]);
+
 
 	return h;
 }
