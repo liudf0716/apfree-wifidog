@@ -67,26 +67,10 @@ static struct option base_opts[] = {
 	{ NULL }
 };
 
-static __attribute__((noreturn))
-void fw3_ipt_error_handler(enum xtables_exittype status,
-                           const char *fmt, ...)
-{
-	va_list args;
-
-	fprintf(stderr, "     ! Exception: ");
-
-	va_start(args, fmt);
-	vfprintf(stderr, fmt, args);
-	va_end(args);
-
-	longjmp(fw3_ipt_error_jmp, status);
-}
-
 static struct xtables_globals xtg = {
 	.option_offset = 0,
 	.program_version = "4",
 	.orig_opts = base_opts,
-	.exit_err = fw3_ipt_error_handler,
 #if XTABLES_VERSION_CODE > 10
 	.compat_rev = xtables_compatible_revision,
 #endif
@@ -971,6 +955,7 @@ struct fw3_ipt_handle *
 fw3_ipt_open(enum fw3_table table)
 {
 	struct fw3_ipt_handle *h;
+	int i = 0;
 
 	h = fw3_alloc(sizeof(*h));
 
