@@ -144,37 +144,6 @@ bitlen2netmask(int bits, void *mask)
 	return true;
 }
 
-static bool
-load_extension(struct fw3_ipt_handle *h, const char *name)
-{
-	char path[128] = {0};
-	void *lib, **tmp;
-	const char *pfx = "libipt";
-	
-	if (!h)
-		return false;
-
-	snprintf(path, sizeof(path), "/usr/lib/iptables/libxt_%s.so", name);
-	if (!(lib = dlopen(path, RTLD_NOW)))
-	{
-		snprintf(path, sizeof(path), "/usr/lib/iptables/%s_%s.so", pfx, name);
-		lib = dlopen(path, RTLD_NOW);
-	}
-
-	if (!lib)
-		return false;
-
-	tmp = realloc(h->libv, sizeof(lib) * (h->libc + 1));
-
-	if (!tmp)
-		return false;
-
-	h->libv = tmp;
-	h->libv[h->libc++] = lib;
-
-	return true;
-}
-
 static struct xtables_match *
 find_match(struct fw3_ipt_rule *r, const char *name)
 {
