@@ -58,15 +58,35 @@
 
 
 static struct option base_opts[] = {
-	{ .name = "match",  .has_arg = 1, .val = 'm' },
-	{ .name = "jump",   .has_arg = 1, .val = 'j' },
+	{ .name = "match",         .has_arg = 1, .val = 'm' },
+	{ .name = "jump",          .has_arg = 1, .val = 'j' },
+	{ .name = "in-interface",  .has_arg = 1, .val = 'i' },
+	{ .name = "out-interface", .has_arg = 1, .val = 'o' },
+	{ .name = "source",        .has_arg = 1, .val = 's' },
+	{ .name = "destination",   .has_arg = 1, .val = 'd' },
 	{ NULL }
 };
+
+static __attribute__((noreturn))
+void fw3_ipt_error_handler(enum xtables_exittype status,
+                           const char *fmt, ...)
+{
+	va_list args;
+
+	fprintf(stderr, "     ! Exception: ");
+
+	va_start(args, fmt);
+	vfprintf(stderr, fmt, args);
+	va_end(args);
+
+	longjmp(fw3_ipt_error_jmp, status);
+}
 
 static struct xtables_globals xtg = {
 	.option_offset = 0,
 	.program_version = "4",
 	.orig_opts = base_opts,
+	.exit_err = fw3_ipt_error_handler,
 #if XTABLES_VERSION_CODE > 10
 	.compat_rev = xtables_compatible_revision,
 #endif
@@ -158,15 +178,15 @@ load_extension(struct fw3_ipt_handle *h, const char *name)
 static struct xtables_match *
 find_match(struct fw3_ipt_rule *r, const char *name)
 {
-	struct xtables_match *m = NULL;
+	struct xtables_match *m;
 
-	m = xtables_find_match(name, XTF_DONT_LOAD, &r->matches);
-
-	if (!m && load_extension(r->h, name))
-		m = xtables_find_match(name, XTF_DONT_LOAD, &r->matches);
+	xext.retain = true;
+	m = xtables_find_match(name, XTF_TRY_LOAD, &r->matches);
+	xext.retain = false;
 
 	return m;
 }
+
 
 static void
 init_match(struct fw3_ipt_rule *r, struct xtables_match *m, bool no_clone)
@@ -242,13 +262,14 @@ fw3_find_target(struct fw3_ipt_rule *r, const char *name)
 {
 	struct xtables_target *t = NULL;
 
+	xext.retain = true;
+
 	if (is_chain(r->h, name))
-		return xtables_find_target(XT_STANDARD_TARGET, XTF_LOAD_MUST_SUCCEED);
+		t = xtables_find_target(XT_STANDARD_TARGET, XTF_TRY_LOAD);
+	else
+		t = xtables_find_target(name, XTF_TRY_LOAD);
 
-	t = xtables_find_target(name, XTF_DONT_LOAD);
-
-	if (!t && load_extension(r->h, name))
-		t = xtables_find_target(name, XTF_DONT_LOAD);
+	xext.retain = false;
 
 	return t;
 }
