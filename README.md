@@ -95,6 +95,10 @@ Domains of `www.baidu.com,www.qq.com,www.qq.com.cn,www.weixin.com` is trusted in
 
 apfree wifidog's official auth server is [wwas](https://github.com/wificoin-project/wificoin-wifidog-auth-server), which support wfc pay and weixin auth-mode and more auth-way will be support.
 
+### demo video
+
+http://www.iqiyi.com/w_19s09zie6t.html
+
 **More auth server please read [AUTHSERVER.md](https://github.com/liudf0716/apfree_wifidog/blob/master/AUTHSERVER.md)**
 
 ### Test document
