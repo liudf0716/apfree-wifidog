@@ -15,7 +15,7 @@
 [4]: https://github.com/liudf0716/apfree_wifidog/pulls
 [5]: https://img.shields.io/badge/Issues-welcome-brightgreen.svg?style=plastic
 [6]: https://github.com/liudf0716/apfree_wifidog/issues/new
-[7]: https://img.shields.io/badge/release-2.10.1437-red.svg?style=plastic
+[7]: https://img.shields.io/badge/release-3.8.1588-red.svg?style=plastic
 [8]: https://github.com/liudf0716/apfree_wifidog/releases
 [11]: https://img.shields.io/badge/Platform-%20OpenWRT%7C%20LEDE%20-brightgreen.svg?style=plastic
 [12]: https://github.com/KunTengRom/kunteng-lede-17.01.4
@@ -94,6 +94,10 @@ Domains of `www.baidu.com,www.qq.com,www.qq.com.cn,www.weixin.com` is trusted in
 ### Apfree wifidog Auth server open source project
 
 apfree wifidog's official auth server is [wwas](https://github.com/wificoin-project/wificoin-wifidog-auth-server), which support wfc pay and weixin auth-mode and more auth-way will be support.
+
+### demo video
+
+http://www.iqiyi.com/w_19s09zie6t.html
 
 **More auth server please read [AUTHSERVER.md](https://github.com/liudf0716/apfree_wifidog/blob/master/AUTHSERVER.md)**
 
