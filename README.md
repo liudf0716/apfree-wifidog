@@ -46,7 +46,7 @@ It has some awesome features:
 
 ----
 
-## Added to Openwrt&LEDE 
+## How to added apfree-wifidog into Openwrt package 
 
 Please go to [package_apfree_wifidog](https://github.com/KunTengRom/package_apfree_wifidog)
 
@@ -55,7 +55,7 @@ Please go to [package_apfree_wifidog](https://github.com/KunTengRom/package_apfr
 
 ## Getting started
 
-After compiling and installing Apfree WiFiDog into your local router, run the `ps | grep wifidog` command. The `ps | grep wifidog` command queries the Linux system for information about Apfree WiFiDog.
+After compiling and installing Apree WiFiDog into your local router, run the `ps | grep wifidog` command. The `ps | grep wifidog` command queries the Linux system for information about Apfree WiFiDog.
 
 ```
 root@lede:~# ps | grep wifidog
