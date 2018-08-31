@@ -40,6 +40,13 @@ before_install:
   sudo make install &&
   cd -
   
+  wget https://github.com/eclipse/mosquitto/archive/v1.5.1.tar.gz &&
+  tar -zxf v1.5.1.tar.gz &&
+  cd v1.5.1 &&
+  make &&
+  sudo make install &&
+  cd -
+  
 script:
   - cmake .
   - make
