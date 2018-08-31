@@ -7,6 +7,7 @@
 [![Release Version][7]][8]
 [![OpenWRT][11]][12]
 [![KunTeng][13]][14]
+[![Build][15]][16]
 
 
 [1]: https://img.shields.io/badge/license-GPLV3-brightgreen.svg?style=plastic
@@ -20,7 +21,9 @@
 [11]: https://img.shields.io/badge/Platform-%20OpenWRT%7C%20LEDE%20-brightgreen.svg?style=plastic
 [12]: https://github.com/KunTengRom/kunteng-lede-17.01.4
 [13]: https://img.shields.io/badge/KunTeng-Inside-blue.svg?style=plastic
-[14]: http://rom.kunteng.org
+[14]: http://rom.kunteng.org.cn
+[15]: https://travis-ci.org/liudf0716/apfree_wifidog.svg?branch=master
+[16]: https://travis-ci.org/liudf0716/apfree_wifidog
 
 ## Apfree WiFiDog: Efficient captive portal solution
 
