@@ -19,12 +19,14 @@ addons:
 
 before_install:
   wget https://sources.lede-project.org/libubox-2018-07-25-c83a84af.tar.xz &&
-  xzcat libubox-2018-07-25-c83a84af.tar.xz | tar -C libubox-2018-07-25-c83a84af&&
+  xzcat libubox-2018-07-25-c83a84af.tar.xz | tar -x && 
+  cd libubox-2018-07-25-c83a84af&&
   cmake . &&
   sudo make install
   
   wget https://sources.lede-project.org/uci-2018-08-11-4c8b4d6e.tar.xz &&
-  xzcat uci-2018-08-11-4c8b4d6e.tar.xz | tar -C uci-2018-08-11-4c8b4d6e &&
+  xzcat uci-2018-08-11-4c8b4d6e.tar.xz | tar -x && 
+  cd uci-2018-08-11-4c8b4d6e &&
   cmake . &&
   sudo make install 
 script:
