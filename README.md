@@ -39,7 +39,7 @@ apfree-wifidog was widely used in tens of thousands device, which were running i
 
 > Efficent
 
-apfree-wifidog's http request-response is more short, u can find statistic data in our test document
+apfree-wifidog's http request-response is more quick, u can find statistic data in our test document
 
 > More features
 
