@@ -17,6 +17,7 @@ addons:
     - iptables-dev
 
 before_install:
+  - export cur_dir=`pwd`
   - cd ~
   - wget https://sources.lede-project.org/libubox-2018-07-25-c83a84af.tar.xz &&
   xzcat libubox-2018-07-25-c83a84af.tar.xz | tar -x && 
@@ -30,6 +31,8 @@ before_install:
   cd uci-2018-08-11-4c8b4d6e &&
   cmake -DBUILD_LUA=off &&
   sudo make install 
+  
+  - cd $cur_dir
   
 script:
   - cd ~
