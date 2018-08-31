@@ -15,7 +15,6 @@ addons:
     - build-essential
     - libjson-c-dev
     - iptables-dev
-    - libevent-2.1-6
 
 before_install:
   wget https://sources.lede-project.org/libubox-2018-07-25-c83a84af.tar.xz &&
@@ -32,6 +31,13 @@ before_install:
   sudo make install &&
   cd -
   
+  wget https://github.com/libevent/libevent/releases/download/release-2.1.8-stable/libevent-2.1.8-stable.tar.gz &&
+  tar -zxf libevent-2.1.8-stable.tar.gz &&
+  cd libevent-2.1.8-stable &&
+  ./configure &&
+  make &&
+  sudo make install &&
+  cd -
   
 script:
   - cmake .
