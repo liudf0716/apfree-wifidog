@@ -117,6 +117,8 @@ generate_keys() {
 
 or when u start `/etc/init.d/wifidog start`, it will generate it automatically
 
+### Attention! when apfree-wifidog redirect https request, u will receive certificate file is illegal warning, no need to panic, it's normal response
+
 ### apfree-wifidog Auth server open source project
 
 apfree wifidog's official auth server is [wwas](https://github.com/wificoin-project/wificoin-wifidog-auth-server), which support wfc pay and weixin auth-mode and more auth-way will be support.
