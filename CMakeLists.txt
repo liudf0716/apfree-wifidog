@@ -19,7 +19,5 @@ else()
   set(LIB_INSTALL_DIR lib)
 endif()
 
-add_definitions(-D_MQTT_SUPPORT_)
-
 add_subdirectory(src)
 add_subdirectory(libhttpd)
