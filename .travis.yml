@@ -15,7 +15,6 @@ addons:
     - build-essential
     - libjson-c-dev
     - iptables-dev
-    - libmosquitto-dev
 
 before_install:
   wget https://sources.lede-project.org/libubox-2018-07-25-c83a84af.tar.xz &&
