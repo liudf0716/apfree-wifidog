@@ -31,6 +31,8 @@ before_install:
   sudo make install &&
   cd -
   
+  sudo apt-get install -y debhelper libc-ares-dev libssl-dev libwrap0-dev python-all python3-all uthash-dev uuid-dev libuuid1 xsltproc docbook-xsl
+  
   wget https://github.com/libevent/libevent/releases/download/release-2.1.8-stable/libevent-2.1.8-stable.tar.gz &&
   tar -zxf libevent-2.1.8-stable.tar.gz &&
   cd libevent-2.1.8-stable &&
