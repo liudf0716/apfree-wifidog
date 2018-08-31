@@ -14,7 +14,6 @@ addons:
     packages:
     - build-essential
     - libjson-c-dev
-    - libevent-dev
     - iptables-dev
 
 before_install:
