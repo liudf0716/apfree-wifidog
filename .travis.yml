@@ -41,7 +41,7 @@ before_install:
   
   wget https://github.com/eclipse/mosquitto/archive/v1.5.1.tar.gz &&
   tar -zxf v1.5.1.tar.gz &&
-  cd v1.5.1 &&
+  cd mosquitto-1.5.1 &&
   make &&
   sudo make install &&
   cd -
