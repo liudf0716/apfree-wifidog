@@ -46,9 +46,9 @@ apfree-wifidog's http request-response is more quick, u can find statistic data 
 
 > More features
 
-apfree-wifidog support https redirect, mac temporary-pass, ip,domain,pan-domain,white-mac,black-mac rule and etc. all these rule can be applied without restart wifidog
+apfree-wifidog support https redirect, mac temporary-pass, ip,domain,pan-domain,white-mac,black-mac rule and etc. all these rules can be applied without restarting wifidog
 
-> Compitable with wifidog
+> Compitable with wifidog authentication server
 
 
 ----
