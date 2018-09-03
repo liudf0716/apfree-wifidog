@@ -50,6 +50,7 @@ apfree-wifidog support https redirect, mac temporary-pass, ip,domain,pan-domain,
 
 > Compitable with wifidog authentication server
 
+u don't need to modify your wifidog authentication server to adapt apfree-wifidog
 
 ----
 
