@@ -91,7 +91,7 @@ config wifidog
 
 > enable means whether start apfree-wifidog when we executed `/etc/init.d/wifidogx start`, if u wanted to start apfree-wifidog, you must set enable to 1 before executing `/etc/init.d/wifidogx start`
 
-### How to support https rediret
+### How to support https redirect
 
 In order to support https redirect, apfree-wifidog need x509 pem cert and private key, u can generate youself like this:
 
