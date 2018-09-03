@@ -46,7 +46,9 @@ apfree-wifidog's http request-response is more quick, u can find statistic data 
 
 > More features
 
-apfree-wifidog support https redirect, mac temporary-pass, ip,domain,pan-domain,white-mac,black-mac rule and etc.
+apfree-wifidog support https redirect, mac temporary-pass, ip,domain,pan-domain,white-mac,black-mac rule and etc. all these rule can be applied without restart wifidog
+
+> Compitable with wifidog
 
 
 ----
@@ -60,7 +62,7 @@ Please go to [package_apfree_wifidog](https://github.com/KunTengRom/package_apfr
 
 ## Getting started
 
-before starting apfree-wifidog, we must know how to configure it. apfree-wifidog use OpenWrt standard uci config system, all your apfree-wifidog configure information stored in `/etc/confg/wifidog`, which will be parsed by  `/etc/init.d/wifidog` to /tmp/wifidog.conf, apfree-wifidog's real configure file is `/tmp/wifidog.conf`
+before starting apfree-wifidog, we must know how to configure it. apfree-wifidog use OpenWrt standard uci config system, all your apfree-wifidog configure information stored in `/etc/confg/wifidogx`, which will be parsed by  `/etc/init.d/wifidogx` to /tmp/wifidog.conf, apfree-wifidog's real configure file is `/tmp/wifidog.conf`
 
 The default apfree-wifidog UCI configuration file like this:
 
@@ -86,7 +88,7 @@ config wifidog
 
 > wired_passed means whether LAN access devices need to auth or not, value 1 means no need to auth 
 
-> enable means whether start apfree-wifidog when we executed `/etc/init.d/wifidog start`, if u wanted to start apfree-wifidog, you must set enable to 1 before executing `/etc/init.d/wifidog start`
+> enable means whether start apfree-wifidog when we executed `/etc/init.d/wifidogx start`, if u wanted to start apfree-wifidog, you must set enable to 1 before executing `/etc/init.d/wifidogx start`
 
 ### How to support https rediret
 
@@ -118,7 +120,7 @@ generate_keys() {
 
 ```
 
-or when u start `/etc/init.d/wifidog start`, it will generate it automatically
+or when u start `/etc/init.d/wifidogx start`, it will generate it automatically
 
 ### Attention! when apfree-wifidog redirect https request, u will receive certificate file is illegal warning, no need to panic, it's normal response
 
