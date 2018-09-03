@@ -25,7 +25,7 @@
 [15]: https://travis-ci.org/liudf0716/apfree_wifidog.svg?branch=master
 [16]: https://travis-ci.org/liudf0716/apfree_wifidog
 
-## Apfree WiFiDog: Efficient captive portal solution
+## Apfree WiFiDog: More efficient captive portal solution 
 
 Apfree-WiFidog is an open source captive portal solution for wireless router which with embeddable Linux([LEDE](https://github.com/lede-project/source)/[Openwrt](https://github.com/openwrt/openwrt)). 
 
