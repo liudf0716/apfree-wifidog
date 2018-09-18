@@ -806,7 +806,7 @@ main_loop(void)
 #else
     while (1) {
 
-        r = httpdGetConnection(webserver, NULL);
+        r = httpdGetConnection(webserver);
 
         /* We can't convert this to a switch because there might be
          * values that are not -1, 0 or 1. */

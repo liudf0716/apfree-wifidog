@@ -164,7 +164,7 @@ extern "C" {
     int httpdAddCWildcardContent __ANSI_PROTO((httpd *, char *, int (*)(), void (*)()));
     int httpdAddVariable __ANSI_PROTO((request *, const char *, const char *));
     int httpdSetVariableValue __ANSI_PROTO((request *, const char *, const char *));
-    request *httpdGetConnection __ANSI_PROTO((httpd *, struct timeval *));
+    request *httpdGetConnection __ANSI_PROTO((httpd *));
     int httpdReadRequest __ANSI_PROTO((httpd *, request *));
     int httpdCheckAcl __ANSI_PROTO((httpd *, request *, httpAcl *));
     int httpdAuthenticate __ANSI_PROTO((request *, const char *));

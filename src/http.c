@@ -172,7 +172,7 @@ http_callback_404(httpd * webserver, request * r, int error_code)
             strncpy(mac, "ff:ff:ff:ff:ff:ff", 17);
         }
 		
-		snprintf(tmp_url, (sizeof(tmp_url) - 1), "http://%s%s%s%s",
+		snprintf(tmp_url, MAX_BUF, "http://%s%s%s%s",
              r->request.host, r->request.path, r->request.query[0] ? "?" : "", r->request.query);
 		
     	char *url = httpdUrlEncode(tmp_url);	

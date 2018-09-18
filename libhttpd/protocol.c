@@ -751,6 +751,7 @@ const char *str;
         if (!ACCEPTABLE((unsigned char)*p))
             unacceptable += 2;
     result = (char *)malloc(p - str + unacceptable + 1);
+	if (!result) return NULL;
     bzero(result, (p - str + unacceptable + 1));
 
     if (result == NULL) {

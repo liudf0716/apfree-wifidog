@@ -80,7 +80,8 @@ httpdRequestMethodName(request * r)
 httpVar *
 httpdGetVariableByName(request * r, const char *name)
 {
-    httpVar *curVar;
+    httpVar *curVar = NULL;
+	if (!r) return NULL;
 
     curVar = r->variables;
     while (curVar) {
@@ -94,7 +95,8 @@ httpdGetVariableByName(request * r, const char *name)
 httpVar *
 httpdGetVariableByPrefix(request * r, const char *prefix)
 {
-    httpVar *curVar;
+    httpVar *curVar = NULL;
+	if (!r) return NULL;
 
     if (prefix == NULL)
         return (r->variables);
@@ -161,10 +163,13 @@ int
 httpdAddVariable(request * r, const char *name, const char *value)
 {
     httpVar *curVar, *lastVar, *newVar;
+	if (!r || !name || !value)
+		return 0;
 
     while (*name == ' ' || *name == '\t')
         name++;
     newVar = malloc(sizeof(httpVar));
+	if (!newVar) return 0;
     bzero(newVar, sizeof(httpVar));
     newVar->name = strdup(name);
     newVar->value = strdup(value);
@@ -203,8 +208,7 @@ int port;
      ** Create the handle and setup it's basic config
      */
     new = malloc(sizeof(httpd));
-    if (new == NULL)
-        return (NULL);
+    if (new == NULL) return (NULL);
     bzero(new, sizeof(httpd));
     new->port = port;
     if (host == HTTP_ANY_ADDR)
@@ -212,6 +216,7 @@ int port;
     else
         new->host = strdup(host);
     new->content = (httpDir *) malloc(sizeof(httpDir));
+	if (!new->content) return NULL;
     bzero(new->content, sizeof(httpDir));
     new->content->name = strdup("");
 
@@ -300,34 +305,14 @@ httpd *server;
 }
 
 request *
-httpdGetConnection(server, timeout)
+httpdGetConnection(server)
 httpd *server;
-struct timeval *timeout;
 {
-    int result;
-    fd_set fds;
     struct sockaddr_in addr;
     socklen_t addrLen;
     request *r;
     /* Reset error */
     server->lastError = 0;
-    FD_ZERO(&fds);
-    FD_SET(server->serverSock, &fds);
-    result = 0;
-    while (result == 0) {
-        result = select(server->serverSock + 1, &fds, 0, 0, timeout);
-        if (result < 0) {
-            server->lastError = -1;
-            return (NULL);
-        }
-        if (timeout != 0 && result == 0) {
-            server->lastError = 0;
-            return (NULL);
-        }
-        if (result > 0) {
-            break;
-        }
-    }
     /* Allocate request struct */
     r = (request *) malloc(sizeof(request));
     if (r == NULL) {
@@ -354,7 +339,11 @@ struct timeval *timeout;
 		
 	if(inet_ntop(AF_INET, &addr.sin_addr, r->clientAddr, HTTP_IP_ADDR_LEN)) {
         r->clientAddr[HTTP_IP_ADDR_LEN - 1] = 0;
-    } 
+    } else {
+		server->lastError = -1;
+		free(r);
+		return NULL;
+	} 
 	
     r->readBufRemain = 0;
     r->readBufPtr = NULL;
