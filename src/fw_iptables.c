@@ -1247,10 +1247,11 @@ __get_client_name(t_client *client)
 	debug(LOG_INFO, "__get_client_name [%s]", cmd);
 	if((f_dhcp = popen(cmd, "r")) != NULL) {
 		char name[32] = {0};
-		fgets(name, 31,  f_dhcp);
+		if (fgets(name, 31,  f_dhcp)) {
+			trim_newline(name);
+			client->name = safe_strdup(name);
+		}
 		pclose(f_dhcp);
-		trim_newline(name);
-		client->name = safe_strdup(name);
 		debug(LOG_INFO, "__get_client_name [%s]", name);
 	}
 }

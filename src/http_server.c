@@ -81,6 +81,8 @@ static const char *
 get_content_extension(const char *path)
 {
 	const char *last_period, *extension;
+	if (!path) return NULL;
+
 	last_period = strrchr(path, '.');
 	if (!last_period || strchr(last_period, '/'))
 		return NULL; /* no exension */
@@ -94,14 +96,14 @@ guess_content_type(const char *extension)
 {
 	const struct table_entry *ent;
 	if (extension == NULL)
-		goto not_found;
+		goto OUT;
 
 	for (ent = &content_type_table[0]; ent->extension; ++ent) {
 		if (!evutil_ascii_strcasecmp(ent->extension, extension))
 			return ent->content_type;
 	}
 
-not_found:
+OUT:
 	return "text/html";
 }
 
@@ -138,25 +140,25 @@ http_403_callback(struct evhttp_request *req, void *arg) {
 	/* We need to decode it, to see what path the user really wanted. */
 	decoded_path = evhttp_uridecode(path, 0, NULL);
 	if (decoded_path == NULL)
-		goto err;	
+		goto ERR;	
 
 	const char *extension = get_content_extension(decoded_path);
 	if ((extension != NULL) && (strncmp(extension,"jpg",3) == 0)) {
 		len = strlen("img/limited.jpg")+strlen(docroot)+2;
 		if (!(whole_path = malloc(len))) {
-			goto err;
+			goto ERR;
 		}
 		evutil_snprintf(whole_path, len, "%s%s", docroot, "img/limited.jpg");
 	} else {	
 		len = strlen("403.html")+strlen(docroot)+2;
 		if (!(whole_path = malloc(len))) {
-			goto err;
+			goto ERR;
 		}
 		evutil_snprintf(whole_path, len, "%s403.html", docroot);
 	}
 
 	if (stat(whole_path, &st)<0) {
-		goto err;
+		goto ERR;
 	}
 
 	evb = evbuffer_new();
@@ -167,13 +169,13 @@ http_403_callback(struct evhttp_request *req, void *arg) {
 		
 		const char *type = guess_content_type(extension);
 		if ((fd = open(whole_path, O_RDONLY)) < 0) {
-			goto err;
+			goto ERR;
 		}
 
 		if (fstat(fd, &st)<0) {
 			/* Make sure the length still matches, now that we
 			 * opened the file :/ */
-			goto err;
+			goto ERR;
 		}
 
 		evhttp_add_header(evhttp_request_get_output_headers(req),
@@ -182,13 +184,13 @@ http_403_callback(struct evhttp_request *req, void *arg) {
 	}
 
 	evhttp_send_reply(req, 200, "OK", evb);
-	goto done;
+	goto DONE;
 
-err:
+ERR:
 	evhttp_send_error(req, 404, "Document was not found");
 	if (fd >= 0)
 		close(fd);
-done:
+DONE:
 	if (decoded)
 		evhttp_uri_free(decoded);
 	if (decoded_path)
@@ -199,7 +201,8 @@ done:
 		evbuffer_free(evb);	
 }
 
-static void serve_403_http(const char *address, const t_http_server *http_server) {
+static void 
+serve_403_http(const char *address, const t_http_server *http_server) {
 	struct event_base *base;
 	struct evhttp *http;
 	struct evhttp_bound_socket *handle = NULL;
@@ -212,22 +215,19 @@ static void serve_403_http(const char *address, const t_http_server *http_server
 	/* Create a new evhttp object to handle requests. */
 	http = evhttp_new(base);
 	if (!http) {
-		goto end_loop;
+		goto OUT;
 	}
 
 	evhttp_set_gencb(http, http_403_callback, http_server->base_path);
 
 	handle = evhttp_bind_socket_with_handle(http, address, http_server->gw_http_port);
 	if (!handle) {
-		goto end_loop;
+		goto OUT;
 	}
 
 	event_base_dispatch(base);
 
-end_loop:
-	if (handle)
-		evhttp_del_accept_socket(http, handle);
-
+OUT:
 	if (http)
 		evhttp_free(http);
 

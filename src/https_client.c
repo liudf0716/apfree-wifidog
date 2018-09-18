@@ -44,25 +44,23 @@
 #include "debug.h"
 #include "pstring.h"
 #include "centralserver.h"
-#include "simple_http.h"
-#include "openssl_hostname_validation.h"
+#include "https_client.h"
 #include "conf.h"
 #include "version.h"
 
-static int ignore_cert = 0;
 
 void http_process_user_data(struct evhttp_request *req, struct http_request_get *http_req_get)
 {
 	struct evbuffer* buf = evhttp_request_get_input_buffer(req);
 	size_t len = evbuffer_get_length(buf);
-	char	*encoding = evhttp_find_header(evhttp_request_get_input_headers(req), "Content-Encoding");
+	const char	*encoding = evhttp_find_header(evhttp_request_get_input_headers(req), "Content-Encoding");
 	unsigned char *tmp = malloc(len+1);
 	memset(tmp, 0, len+1);
 	memcpy(tmp, evbuffer_pullup(buf, -1), len);
 	
 	int final_len = len;
 	if (encoding && strcmp(encoding, "deflate") == 0) {
-		char *uncompressed = NULL;
+		unsigned char *uncompressed = NULL;
 		int ret = inflate_read(tmp, len, &uncompressed, &final_len, 1);
 		if (ret != Z_OK) {
 			debug(LOG_INFO, "http_process_user_data  inflate_read failed ");
@@ -266,68 +264,13 @@ void start_http_request(const char *url, int req_get_flag,
     event_base_free(base);
 }
 
-int
-deflate_write(char *source, int len, char **dest, int *wlen, int gzip)
-{
-	int ret;  
-	unsigned have;  
-	z_stream strm;  
-	unsigned char out[CHUNK] = {0};  
-	int totalsize = 0;  
-
-	/* allocate inflate state */  
-	strm.zalloc = Z_NULL;  
-	strm.zfree = Z_NULL;  
-	strm.opaque = Z_NULL;  
-	strm.avail_in = 0;  
-	strm.next_in = Z_NULL;  
-
-	if(gzip)  
-		ret = deflateInit2(&strm, Z_DEFAULT_COMPRESSION, Z_DEFLATED,
-					  windowBits | GZIP_ENCODING,
-					  8,
-					  Z_DEFAULT_STRATEGY);  
-	else  
-		ret = deflateInit(&strm, Z_DEFAULT_COMPRESSION);  
-	
-	if (ret != Z_OK)  
-		return ret;  
-
-	strm.avail_in = len;  
-	strm.next_in = source;  
-  
-	do {  
-		strm.avail_out = CHUNK;  
-		strm.next_out = out;  
-		ret = deflate(&strm, Z_FINISH);
-		switch (ret) {  
-		case Z_NEED_DICT:  
-			ret = Z_DATA_ERROR; /* and fall through */  
-		case Z_DATA_ERROR:  
-		case Z_MEM_ERROR:  
-			deflateEnd(&strm);  
-			return ret;  
-		}  
-
-		have = CHUNK - strm.avail_out;  
-		totalsize += have;  
-		*dest = realloc(*dest, totalsize);  
-		memcpy(*dest + totalsize - have, out, have);
-	} while (strm.avail_out == 0);  
-
-	/* clean up and return */  
-	(void)deflateEnd(&strm);
-	*wlen = totalsize;
-	return ret == Z_STREAM_END ? Z_OK : Z_DATA_ERROR;
-}
-
 int 
-inflate_read(char *source, int len, char **dest, int *rlen, int gzip)
+inflate_read(uint8_t *source, int len, uint8_t **dest, int *rlen, int gzip)
 {  
 	int ret;  
 	unsigned have;  
 	z_stream strm;  
-	unsigned char out[CHUNK] = {0};  
+	uint8_t out[CHUNK] = {0};  
 	int totalsize = 0;  
 
 	/* allocate inflate state */  
@@ -346,7 +289,7 @@ inflate_read(char *source, int len, char **dest, int *rlen, int gzip)
 		return ret;  
 
 	strm.avail_in = len;  
-	strm.next_in = source;  
+	strm.next_in = (unsigned char *)source;  
 
 	/* run inflate() on input until output buffer not full */  
 	do {  
@@ -471,69 +414,6 @@ http_get_ex(const int sockfd, const char *req, int wait)
     return NULL;
 }
 
-static int 
-cert_verify_callback(X509_STORE_CTX *x509_ctx, void *arg)
-{
-	char cert_str[256] = {0};
-	const char *host = (const char *) arg;
-	const char *res_str = "X509_verify_cert failed";
-	HostnameValidationResult res = Error;
-
-	/* This is the function that OpenSSL would call if we hadn't called
-	 * SSL_CTX_set_cert_verify_callback().  Therefore, we are "wrapping"
-	 * the default functionality, rather than replacing it. */
-	int ok_so_far = 0;
-
-	X509 *server_cert = NULL;
-
-	if (ignore_cert) {
-		return 1;
-	}
-
-	ok_so_far = X509_verify_cert(x509_ctx);
-
-	server_cert = X509_STORE_CTX_get_current_cert(x509_ctx);
-
-	if (ok_so_far) {
-		res = validate_hostname(host, server_cert);
-
-		switch (res) {
-		case MatchFound:
-			res_str = "MatchFound";
-			break;
-		case MatchNotFound:
-			res_str = "MatchNotFound";
-			break;
-		case NoSANPresent:
-			res_str = "NoSANPresent";
-			break;
-		case MalformedCertificate:
-			res_str = "MalformedCertificate";
-			break;
-		case Error:
-			res_str = "Error";
-			break;
-		default:
-			res_str = "WTF!";
-			break;
-		}
-	}
-
-	X509_NAME_oneline(X509_get_subject_name (server_cert),
-			  cert_str, sizeof (cert_str));
-
-	if (res == MatchFound) {
-		debug(LOG_INFO, "https server '%s' has this certificate, "
-		       "which looks good to me:\n%s\n",
-		       host, cert_str);
-		return 1;
-	} else {
-		debug(LOG_INFO, "Got '%s' for hostname '%s' and certificate:\n%s\n",
-		       res_str, host, cert_str);
-		return 0;
-	}
-}
-
 struct evhttps_request_context *
 evhttps_context_init(void)
 {
@@ -559,17 +439,6 @@ evhttps_context_init(void)
 		goto cleanup;
 	}
 
-#ifdef	VERIFY_PEER
-	if (1 != SSL_CTX_load_verify_locations(ssl_ctx, crt, NULL)) {
-		debug(LOG_ERR, "SSL_CTX_load_verify_locations failed");
-		goto cleanup;
-	}
-	
-	SSL_CTX_set_verify(ssl_ctx, SSL_VERIFY_PEER, NULL);
-	
-	SSL_CTX_set_cert_verify_callback(ssl_ctx, cert_verify_callback,
-					  (void *) auth_server->authserv_hostname);
-#endif
 	// Create event base
 	base = event_base_new();
 	if (!base) {

@@ -4,10 +4,6 @@
 #ifndef COMMON_MAN
 #define COMMON_MAN
 
-/**
- * This is the string the client tells the server in the POST request.
- */
-#define COMMON_PASSCODE "R23"
 
 /**
  * If an OpenSSL function returns a return value indicating failure
@@ -23,8 +19,6 @@
  * something meaningful) and exits.
  */
 void die_most_horribly_from_openssl_error (const char *func);
-
-void error_exit (const char *fmt, ...);
 
 #define error_report printf
 #define info_report printf

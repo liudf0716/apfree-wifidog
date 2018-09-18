@@ -237,7 +237,7 @@ is_valid_mac(const char *mac)
 int is_socket_valid(int sockfd)
 {
 	int err = 0;
-	int errlen = sizeof(err);
+	unsigned errlen = sizeof(err);
 	if (getsockopt(sockfd, SOL_SOCKET, SO_ERROR, &err, &errlen) == -1) {
 		debug(LOG_INFO, "getsockopt(SO_ERROR): %s", strerror(errno));
 		return 0;
@@ -262,35 +262,23 @@ wd_connect(int sockfd, const struct sockaddr *their_addr, socklen_t addrlen, int
        	
 	int res = connect(sockfd, their_addr, addrlen); 
 	if ((res == -1) && (errno != EINPROGRESS)) {
-		goto error;
+		goto ERROR;
 	} else if (res == 0) {
-		goto success;
+		goto SUCCESS;
 	} else {
 		int so_error = 0;
-        int len = sizeof(so_error);
+        unsigned len = sizeof(so_error);
 
-#ifdef  SELECT
-        struct timeval tv;
-        fd_set fdset;
-        tv.tv_sec = timeout;
-        tv.tv_usec = 0;
-
-        FD_ZERO(&fdset);
-        FD_SET(sockfd, &fdset);
-
-        res = select(sockfd+1, NULL, &fdset, NULL, &tv);
-#else
         struct pollfd fds;
         memset(&fds, 0, sizeof(fds));
         fds.fd      = sockfd;
         fds.events   = POLLOUT;
         res = poll(&fds, 1, timeout*1000);
-#endif
 		switch(res) {
 		case 1: // data to read				
 			getsockopt(sockfd, SOL_SOCKET, SO_ERROR, &so_error, &len);
 			if (so_error == 0) {
-				goto success;
+				goto SUCCESS;
 			}
 			break;
 		default: 
@@ -298,9 +286,9 @@ wd_connect(int sockfd, const struct sockaddr *their_addr, socklen_t addrlen, int
 		}
 	} 
 
-error:
+ERROR:
 	return -1;
-success:	
+SUCCESS:	
 	// Set to blocking mode again... 
 	arg = fcntl(sockfd, F_GETFL, NULL); 
 	arg &= (~O_NONBLOCK); 
@@ -317,7 +305,7 @@ read_cpu_fields (FILE *fp, unsigned long *fields)
 	char buffer[BUF_MAX] = {0};
 	unsigned long total_tick = 0;
 
-	if (!fgets (buffer, BUF_MAX, fp)) { 
+	if (!fp || !fgets (buffer, BUF_MAX, fp)) { 
 	 	return 0;
 	}
 
@@ -332,7 +320,7 @@ read_cpu_fields (FILE *fp, unsigned long *fields)
 							&fields[7], 
 							&fields[8], 
 							&fields[9]); 
-	if (retval < 4) { /* Atleast 4 fields is to be read */
+	if (retval != 10) { /* Atleast 4 fields is to be read */
 		return 0;
 	}
 	
@@ -366,7 +354,7 @@ get_cpu_usage()
 	}
 	idle = fields[3]; /* idle ticks index */
 
-	s_sleep(1, 0);
+	wd_sleep(1, 0);
 	total_tick_old = total_tick;
 	idle_old = idle;
 
@@ -393,10 +381,10 @@ get_cpu_usage()
 	return percent_usage;
 }
 
-// s_sleep using select timeout method to instead of sleep-func
+// wd_sleep using select timeout method to instead of sleep-func
 // s: second, u: usec 10^6usec = 1s
 void 
-s_sleep(unsigned int s, unsigned int u){
+wd_sleep(unsigned int s, unsigned int u){
 	struct timeval timeout;
 	timeout.tv_sec = s;
 	timeout.tv_usec = u;

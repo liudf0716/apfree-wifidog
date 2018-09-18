@@ -63,8 +63,6 @@
 #include "http.h"
 #include "auth.h"
 #include "firewall.h"
-#include "simple_http.h"
-#include "ezxml.h"
 #include "util.h"
 #include "wd_util.h"
 
@@ -1241,20 +1239,6 @@ parse_boolean_value(char *line)
 	return -1;
 }
 
-/**
- * Parse possiblemac to see if it is valid MAC address format */
-static int
-check_mac_format(const char *possiblemac)
-{
-	char hex2[3];
-	if(!possiblemac || strlen(possiblemac) != 17)
-		return 0;
-
-	return
-		sscanf(possiblemac,
-			   "%2[A-Fa-f0-9]:%2[A-Fa-f0-9]:%2[A-Fa-f0-9]:%2[A-Fa-f0-9]:%2[A-Fa-f0-9]:%2[A-Fa-f0-9]",
-			   hex2, hex2, hex2, hex2, hex2, hex2) == 6;
-}
 
 //>>> liudf added 20160114
 /** @internal
@@ -2201,52 +2185,6 @@ void add_trusted_ip_list(const char *ptr)
 
 	free(pt);
 
-}
-
-static void parse_weixin_http_dns_ip_cb(char *xml_buffer, int buffer_size)
-{
-	if (!xml_buffer)
-		debug(LOG_INFO, "xml_buffer is NULL\n");
-
-	ezxml_t xml_dns = ezxml_parse_str(xml_buffer, buffer_size);
-	ezxml_t domain_list, domain, ip;
-
-	if (!xml_dns) {
-		debug(LOG_INFO, "ezxml_parse_str failed ");
-		return;
-	}
-
-	LOCK_DOMAIN();
-
-	t_domain_trusted *dt = __add_inner_trusted_domain("short.weixin.qq.com");
-
-	for (domain_list = ezxml_child(xml_dns, "domainlist"); domain_list; domain_list = domain_list->next) {
-		for (domain = ezxml_child(domain_list, "domain"); domain; domain = domain->next) {
-			char *name = ezxml_attr(domain, "name");
-			if (name && strcmp(name, "short.weixin.qq.com") == 0) {
-				for (ip = ezxml_child(domain, "ip"); ip; ip = ip->next) {
-					char *addr = ip->txt;
-					if (dt) {
-						debug(LOG_DEBUG, "Add short.weixin.qq.com ip %s\n", addr);
-						__add_ip_2_domain(dt, addr);
-					}
-				}
-			}
-		}
-	}
-
-	UNLOCK_DOMAIN();
-
-	ezxml_free(xml_dns);
-
-	return ;
-}
-
-void
-fix_weixin_http_dns_ip (void)
-{
-	const char *url_weixin_dns = "http://dns.weixin.qq.com/cgi-bin/micromsg-bin/newgetdns";
-	start_http_request(url_weixin_dns, REQUEST_GET_FLAG, NULL, NULL, parse_weixin_http_dns_ip_cb);
 }
 
 // clear domain's ip collection

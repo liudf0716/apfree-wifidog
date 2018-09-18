@@ -53,6 +53,6 @@ int wd_connect(int, const struct sockaddr *, socklen_t, int);
 
 float get_cpu_usage();
 
-void s_sleep(unsigned int, unsigned int);
+void wd_sleep(unsigned, unsigned );
 
 #endif                          /* _UTIL_H_ */

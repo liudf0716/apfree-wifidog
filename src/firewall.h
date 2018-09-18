@@ -30,7 +30,6 @@
 
 #include "client_list.h"
 #include "auth.h"
-#include "simple_http.h"
 
 /** Used by fw_iptables.c */
 typedef enum _t_fw_marks {
@@ -41,6 +40,8 @@ typedef enum _t_fw_marks {
     FW_MARK_AUTH_IS_DOWN = 253, /**< @brief The auth servers are down */
     FW_MARK_LOCKED = 254 /**< @brief The client has been locked out */
 } t_fw_marks;
+
+struct evhttps_request_context;
 
 /** @brief Initialize the firewall */
 int fw_init(void);

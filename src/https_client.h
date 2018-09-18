@@ -19,8 +19,8 @@
  *                                                                  *
  \********************************************************************/
 
-#ifndef _SIMPLE_HTTP_H_
-#define _SIMPLE_HTTP_H_
+#ifndef _HTTPS_CLIENT_H_
+#define _HTTPS_CLIENT_H_
 
 #include <openssl/ssl.h>
 #include <openssl/err.h>
@@ -92,9 +92,7 @@ void *http_request_new(struct event_base* , const char *, int ,
 
 void http_request_free(struct http_request_get *, int);
 
-int inflate_read(char *, int , char **, int *, int );
-
-int deflate_write(char *, int, char **, int *, int);
+int inflate_read(uint8_t *, int , uint8_t **, int *, int );
 
 char *http_get(const int, const char *);
 
@@ -108,4 +106,4 @@ void evhttps_request(struct evhttps_request_context *, const char *, int, reques
 
 void evhttp_set_request_header(struct evhttp_request *);
 
-#endif                          /* defined(_SIMPLE_HTTP_H_) */
+#endif                          /* defined(_HTTPS_CLIENT_H_) */

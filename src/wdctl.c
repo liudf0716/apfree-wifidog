@@ -57,7 +57,6 @@ static void wdctl_restart(void);
 static void wdctl_add_trusted_pan_domains(void);
 static void wdctl_del_trusted_pan_domains(void);
 static void wdctl_clear_trusted_pan_domains(void);
-static void wdctl_show_trusted_pan_domains(void);
 static void wdctl_add_trusted_iplist(void);
 static void wdctl_del_trusted_iplist(void);
 static void wdctl_clear_trusted_iplist(void);
@@ -427,7 +426,7 @@ wdctl_command_action(const char *command)
 	timeout.tv_usec = 500;
 	activity = select(sock + 1, &read_fds, NULL, NULL, &timeout);
 	if (activity <= 0)
-		goto err;
+		goto ERR;
 	
 	if (FD_ISSET(sock, &read_fds)) {
 		while ((len < sizeof(buffer)) && ((rlen = read(sock, (buffer + len), (sizeof(buffer) - len))) > 0)) {
@@ -439,7 +438,7 @@ wdctl_command_action(const char *command)
 		}
 	}
 	
-err:
+ERR:
     shutdown(sock, 2);
     close(sock);
 }
@@ -555,12 +554,6 @@ static void
 wdctl_clear_trusted_pan_domains(void)
 {
 	wdctl_command(WDCTL_CLEAR_TRUSTED_PAN_DOMAINS);
-}
-
-static void
-wdctl_show_trusted_pan_domains(void)
-{
-	wdctl_command(WDCTL_SHOW_TRUSTED_PAN_DOMAINS);
 }
 
 static void

@@ -796,45 +796,6 @@ trim_newline(char *line)
 		line[strlen(line)-1] = '\0';
 }
 
-static FILE *fpopen(const char *dir, const char *name)
-{
-    char path[SYSFS_PATH_MAX] = {0};
-
-    snprintf(path, SYSFS_PATH_MAX, "%s/%s", dir, name);
-    debug(LOG_INFO, "path is %s", path);
-    return fopen(path, "r");
-}
-
-
-/* Fetch an integer attribute out of sysfs. */
-static int fetch_id(const char *dev, const char *name)
-{
-    FILE *f = fpopen(dev, name);
-    int value = -1;
-
-    if (!f)
-        return 0;
-
-    fscanf(f, "0x%d", &value);
-    fclose(f);
-    debug(LOG_INFO, "fetch_id %d", value);
-    return value;
-}
-
-static int
-br_get_port_no(const char *port)
-{
-	DIR *d;
-    char path[SYSFS_PATH_MAX];
-
-    snprintf(path, SYSFS_PATH_MAX, SYSFS_CLASS_NET "%s/brport", port);
-    d = opendir(path);
-    if (!d)
-		return -1;
-	
-	return fetch_id(path, "port_no");
-}
-
 static int 
 get_portno(const char *brname, const char *ifname)
 {
@@ -845,11 +806,11 @@ get_portno(const char *brname, const char *ifname)
     unsigned long args[4] = { BRCTL_GET_PORT_LIST,
                   (unsigned long)ifindices, MAX_PORTS, 0 };
     struct ifreq ifr;
+    int br_socket_fd = -1;
 
     if (ifindex <= 0)
         goto error;
 
-    int br_socket_fd = -1;
     if ((br_socket_fd = socket(AF_LOCAL, SOCK_STREAM, 0)) < 0)
     	goto error;
 
@@ -961,14 +922,6 @@ mac_str_2_byte(const char *mac, uint8_t *mac_addr)
 	}
 }
 
-static int
-mac_byte_2_str(const uint8_t *mac_addr, char *mac)
-{
-	return snprintf(mac, 18, "%x:%x:%x:%x:%x:%x",
-		mac_addr[0], mac_addr[1], mac_addr[2],
-		mac_addr[3], mac_addr[4], mac_addr[5]);
-}
-
 /*
  * -1: error; >0: sucess
  */
@@ -1030,29 +983,6 @@ br_is_device_wired(const char *mac){
 }
 
 /*
- * 1: wired; 0: wireless
- * deprecated
- */
-int
-is_device_wired(const char *mac)
-{
-	FILE *fd = NULL;
-	char szcmd[128] = {0}; 
-	
-	snprintf(szcmd, 128, "/usr/bin/ktpriv get_mac_source %s", mac);
-	if((fd = popen(szcmd, "r"))) {
-		char buf[8] = {0};
-		fgets(buf, 7, fd);
-		pclose(fd);
-		if(buf[0] == '0')
-			return 1;
-	}
-
-	return 0;
-}
-
-
-/*
  * val can be ip or domain
  * 1: is online; 0: is unreachable
  */
@@ -1068,8 +998,9 @@ is_device_online(const char *val)
 	snprintf(cmd, 256, "/usr/sbin/wdping %s", val);
 	if((fd = popen(cmd, "r")) != NULL) {
 		char result[4] = {0};
-		fgets(result, 3, fd);
+		char *pret = fgets(result, 3, fd);
 		pclose(fd);
+		if (!pret) return 0;
 		if(result[0] == '1')
 			return 1;
 	}
@@ -1220,38 +1151,40 @@ uci_del_value(const char *c_filename, const char *section, const char *name)
 	char uciOption[128] = {0};
 	struct uci_context * ctx = uci_alloc_context(); 
     struct uci_ptr ptr; 
-	if (NULL == ctx)  
+	if (!c_filename || !section || !name || !ctx)  
         return nret;  
     memset(&ptr, 0, sizeof(ptr));  
      
     snprintf(uciOption, sizeof(uciOption), "%s.@%s[0].%s", c_filename, section, name); 
     if(UCI_OK != uci_lookup_ptr(ctx, &ptr, uciOption, true)) {
 		nret = 0;
-		goto out;
+		goto OUT;
 	} 
 	
 	nret = uci_delete(ctx, &ptr);
 	if (UCI_OK != nret) {
 		nret = 0;
-		goto out;
+		goto OUT;
 	}
 
 	nret = uci_save(ctx, ptr.p);
 	if (UCI_OK != nret) {
 		nret = 0;
-		goto out;
+		goto OUT;
 	}
 
 	nret = uci_commit(ctx, &ptr.p, false);
 	if (UCI_OK != nret) {
 		nret = 0;
-		goto out;
+		goto OUT;
 	}
 	
 	nret = 1;
-out:
-	uci_unload(ctx, ptr.p);  
-    uci_free_context(ctx); 
+OUT:
+	if (!ctx) {
+		uci_unload(ctx, ptr.p);  
+    	uci_free_context(ctx);
+	} 
 	return nret;
 }
 
@@ -1262,57 +1195,59 @@ uci_set_value(const char *c_filename, const char *section, const char *name, con
 	char uciOption[128] = {0};
 	struct uci_context * ctx = uci_alloc_context(); 
     struct uci_ptr ptr; 
-	if (NULL == ctx)  
-        return nret;  
+	if (!c_filename || !section || !name || !value || !ctx)  
+        goto OUT;  
     memset(&ptr, 0, sizeof(ptr));  
      
     snprintf(uciOption, sizeof(uciOption), "%s.@%s[0].%s", c_filename, section, name); 
     if(UCI_OK != uci_lookup_ptr(ctx, &ptr, uciOption, true)) {
 		nret = 0;
-		goto out;
+		goto OUT;
 	}   
     ptr.value = value; 
     
     nret = uci_set(ctx, &ptr);  
     if (UCI_OK != nret){  
         nret = 0;
-		goto out;
+		goto OUT;
     } 
 	
 	nret = uci_save(ctx, ptr.p);
 	if (UCI_OK != nret) {
 		nret = 0;
-		goto out;
+		goto OUT;
 	}
 
 	nret = uci_commit(ctx, &ptr.p, false);
 	if (UCI_OK != nret) {
 		nret = 0;
-		goto out;
+		goto OUT;
 	}
 	
 	nret = 1;
-out:
-	uci_unload(ctx, ptr.p);  
-    uci_free_context(ctx); 
+OUT:
+	if (ctx) {
+		uci_unload(ctx, ptr.p);  
+    	uci_free_context(ctx);
+	} 
 	return nret;
 }
 
 int
 uci_get_value(const char *c_filename, const char *name, char *value, int v_len)
 {
-	struct uci_context * uci = uci_alloc_context();  
-    char * pValueData = NULL;  
-    struct uci_package * pkg = NULL;    
-    struct uci_element * e;
+	struct uci_context *uci = uci_alloc_context();  
+    struct uci_package *pkg = NULL;    
+    struct uci_element *e 	= NULL;
+    const char * pValueData = NULL;  
   	int nret	= 0;
 	
-    if (!uci || UCI_OK != uci_load(uci, c_filename, &pkg))    
-        goto cleanup;  
+    if (!c_filename || !name || !value || !uci || UCI_OK != uci_load(uci, c_filename, &pkg))    
+        goto OUT;  
     
     uci_foreach_element(&pkg->sections, e) {    
         struct uci_section *s = uci_to_section(e);    
-        if (NULL != (pValueData = uci_lookup_option_string(uci, s, name))) {  
+        if ((pValueData = uci_lookup_option_string(uci, s, name))) {  
             strncpy(value, pValueData, v_len);
 			nret = 1;
 			break;
@@ -1321,9 +1256,8 @@ uci_get_value(const char *c_filename, const char *name, char *value, int v_len)
       
     uci_unload(uci, pkg);    
       
-cleanup:    
-    uci_free_context(uci);    
-    uci = NULL;
+OUT:    
+    if (uci) uci_free_context(uci);    
 	return nret;
 }
 

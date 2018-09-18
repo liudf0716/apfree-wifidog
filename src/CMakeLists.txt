@@ -17,16 +17,13 @@ set(src_apfreewifidog
 	ping_thread.c 
 	safe.c 
 	httpd_thread.c 
-	simple_http.c 
 	pstring.c 
 	thread_pool.c 
 	ipset.c 
 	https_server.c 
 	https_common.c 
+	https_client.c
 	wd_util.c 
-	ezxml.c
-	openssl_hostname_validation.c
-	hostcheck.c
 	http_server.c
 	mqtt_thread.c
 )

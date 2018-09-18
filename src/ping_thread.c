@@ -58,10 +58,10 @@
 #include "centralserver.h"
 #include "firewall.h"
 #include "gateway.h"
-#include "simple_http.h"
 #include "wd_util.h"
 #include "version.h"
 #include "httpd_priv.h"
+#include "https_client.h"
 
 static void ping(void);
 static void evpings(struct evhttps_request_context *context);
@@ -82,8 +82,6 @@ thread_ping(void *arg)
 	//>>> liudf added 20160411
 	// move from fw_init to here	
 	fw_set_pan_domains_trusted();
-
-	//fix_weixin_http_dns_ip();
 
 	parse_inner_trusted_domain_list();
 	fw_set_inner_domains_trusted();
@@ -283,24 +281,26 @@ get_sys_info(struct sys_info *info)
 	if(!g_type) {
 		if ((fh = fopen("/var/sysinfo/board_type", "r"))) {
 			char name[32] = {0};
-			fgets(name, 32, fh);
+			if (fgets(name, 31, fh)) {
+				fh = NULL;
+				trim_newline(name);
+				if(strlen(name) > 0)
+					g_type = safe_strdup(name);
+			}
 			fclose(fh);
-			fh = NULL;
-			trim_newline(name);
-			if(strlen(name) > 0)
-				g_type = safe_strdup(name);
 		}
 	}
 	
 	if(!g_name) {
 		if ((fh = fopen("/var/sysinfo/board_name", "r"))) {
 			char name[32] = {0};
-			fgets(name, 32, fh);
+			if (fgets(name, 31, fh)) {
+				fh = NULL;
+				trim_newline(name);
+				if(strlen(name) > 0)
+					g_name = safe_strdup(name);
+			}
 			fclose(fh);
-			fh = NULL;
-			trim_newline(name);
-			if(strlen(name) > 0)
-				g_name = safe_strdup(name);
 		}
 	}
 	
@@ -323,7 +323,7 @@ process_ping_response(struct evhttp_request *req, void *ctx)
 {
 	static int authdown = 0;
 	
-	if (req == NULL || (req && req->response_code != 200)) {
+	if (!req || req->response_code != 200) {
 		mark_auth_offline();
 		if (!authdown) {		
             fw_set_authdown();
@@ -335,9 +335,6 @@ process_ping_response(struct evhttp_request *req, void *ctx)
 	char buffer[MAX_BUF] = {0};
 	int nread = evbuffer_remove(evhttp_request_get_input_buffer(req),
 		    buffer, MAX_BUF-1);
-	if (nread > 0)
-		debug(LOG_DEBUG, "process_ping_result buffer is %s", buffer);
-	
 	if (nread <= 0) {
 		mark_auth_offline();
         debug(LOG_ERR, "There was a problem getting response from the auth server!");
