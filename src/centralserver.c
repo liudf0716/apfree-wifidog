@@ -52,7 +52,7 @@
 #include "firewall.h"
 #include "version.h"
 #include "debug.h"
-#include "simple_http.h"
+#include "https_client.h"
 #include "http.h"
 
 json_object *
@@ -60,10 +60,9 @@ auth_server_roam_request(const char *mac)
 {
 	s_config *config = config_get_config();
     int sockfd;
-    char buf[MAX_BUF];
+    char buf[MAX_BUF] = {0};
     char *tmp = NULL, *end = NULL;
-    t_auth_serv *auth_server = NULL;
-    auth_server = get_auth_server();
+    t_auth_serv *auth_server = get_auth_server();
 
 
     sockfd = connect_auth_server();
@@ -76,11 +75,10 @@ auth_server_roam_request(const char *mac)
 	 * TODO: XXX change the PHP so we can harmonize stage as request_type
 	 * everywhere.
 	 */
-    memset(buf, 0, sizeof(buf));
 	snprintf(buf, sizeof(buf),
 		"GET %sroam?gw_id=%s&mac=%s&channel_path=%s HTTP/1.1\r\n"
         "User-Agent: ApFree WiFiDog %s\r\n"
-		"Connection: keep-alive\r\n"
+		"Connection: close\r\n"
         "Host: %s\r\n"
         "\r\n",
         auth_server->authserv_path,
@@ -107,7 +105,7 @@ auth_server_roam_request(const char *mac)
 			return NULL;
 		}
         
-        char *is_roam = NULL;
+        const char *is_roam = NULL;
         json_object *roam_jo = NULL;
         if ( ! json_object_object_get_ex(roam_info, "roam", &roam_jo)) {
             free(res);

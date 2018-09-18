@@ -331,7 +331,7 @@ void config_init(void);
 void config_init_override(void);
 
 /** @brief Reads the configuration file */
-void config_read(const char *filename);
+void config_read(;
 
 /** @brief Check that the configuration is valid */
 void config_validate(void);

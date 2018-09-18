@@ -90,7 +90,7 @@ safe_malloc(size_t size)
     if (!retval) {
 		fw_destroy();
         debug(LOG_CRIT, "Failed to malloc %d bytes of memory: %s.  Bailing out", size, strerror(errno));
-        exit(1);
+        exit(EXIT_FAILURE);
     }
     memset(retval, 0, size);
     return (retval);
@@ -112,7 +112,7 @@ safe_realloc(void *ptr, size_t newsize)
     if (NULL == retval) {
 		fw_destroy();
         debug(LOG_CRIT, "Failed to realloc buffer to %d bytes of memory: %s. Bailing out", newsize, strerror(errno));
-        exit(1);
+        exit(EXIT_FAILURE);
     }
     return retval;
 }
@@ -128,13 +128,13 @@ safe_strdup(const char *s)
     if (!s) {
 		fw_destroy();
         debug(LOG_CRIT, "safe_strdup called with NULL which would have crashed strdup. Bailing out");
-        exit(1);
+        exit(EXIT_FAILURE);
     }
     retval = strdup(s);
     if (!retval) {
 		fw_destroy();
         debug(LOG_CRIT, "Failed to duplicate a string: %s.  Bailing out", strerror(errno));
-        exit(1);
+        exit(EXIT_FAILURE);
     }
     return (retval);
 }
@@ -176,7 +176,7 @@ safe_vasprintf(char **strp, const char *fmt, va_list ap)
     if (retval == -1) {
 		fw_destroy();
         debug(LOG_CRIT, "Failed to vasprintf: %s.  Bailing out", strerror(errno));
-        exit(1);
+        exit(EXIT_FAILURE);
     }
     return (retval);
 }
@@ -193,14 +193,12 @@ safe_fork(void)
 
     if (result == -1) {
         debug(LOG_CRIT, "Failed to fork: %s.  Bailing out", strerror(errno));
-        exit(1);
+        exit(EXIT_FAILURE);
     }
-#if	0 
 	else if (result == 0) {
         /* I'm the child - do some cleanup */
         cleanup_fds();
     }
-#endif
 
     return result;
 }

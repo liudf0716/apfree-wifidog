@@ -32,7 +32,6 @@
 #include <json-c/json.h>
 
 #include "auth.h"
-#include "simple_http.h"
 
 /** @brief Ask the central server to login a client */
 #define REQUEST_TYPE_LOGIN     "login"
@@ -66,6 +65,8 @@ struct auth_response_client {
     t_client       *client;
     request        *req;
 };
+
+struct evhttp_request;
 
 json_object *auth_server_roam_request(const char *mac);
 

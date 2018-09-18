@@ -105,55 +105,28 @@ time_t started_time = 0;
 /* The internal web server */
 httpd * webserver = NULL;
 
-#ifdef	_EPOLL_MODE_
-struct epoll_event *events;
-#endif
-
-static struct evbuffer *
-evhttp_read_file(const char *filename, struct evbuffer *evb)
-{
-	int fd;
-	struct stat stat_info;
-	
-	fd = open(filename, O_RDONLY);
-	if (fd == -1) {
-		debug(LOG_CRIT, "Failed to open HTML message file %s: %s", strerror(errno), 
-			filename);
-		return NULL;
-	}
-	
-	if (fstat(fd, &stat_info) == -1) {
-		debug(LOG_CRIT, "Failed to stat HTML message file: %s", strerror(errno));
-		close(fd);
-		return NULL;
-	}
-	
-	evbuffer_add_file(evb, fd, 0, stat_info.st_size);
-	close(fd);
-	return evb;
-}
 
 static void
 init_wifidog_msg_html()
 {
-	s_config *config 			= config_get_config();	
+	s_config *config = config_get_config();	
 	
 	evb_internet_offline_page 	= evbuffer_new();
 	if (!evb_internet_offline_page)
-		exit(0);
+		exit(EXIT_FAILURE);
 	
 	evb_authserver_offline_page	= evbuffer_new();
 	if (!evb_authserver_offline_page)
-		exit(0);
+		exit(EXIT_FAILURE);
 	
 	if ( !evhttp_read_file(config->internet_offline_file, evb_internet_offline_page) || 
 		 !evhttp_read_file(config->authserver_offline_file, evb_authserver_offline_page)) {
 		debug(LOG_ERR, "init_wifidog_msg_html failed, exiting...");
-		exit(0);
+		exit(EXIT_FAILURE);
 	}
 }
 
-static int
+static void
 init_wifidog_redir_html(void)
 {
 	s_config *config = config_get_config();	
@@ -163,22 +136,19 @@ init_wifidog_redir_html(void)
 	char	rear_file[128] = {0};
 	
 	
-	wifidog_redir_html = (struct redir_file_buffer *)malloc(sizeof(struct redir_file_buffer));
-	if (wifidog_redir_html == NULL) {
-		goto err;
-	}
+	wifidog_redir_html = (struct redir_file_buffer *)safe_malloc(sizeof(struct redir_file_buffer));
 	
 	evb_front 	= evbuffer_new();
 	evb_rear	= evbuffer_new();
 	if (evb_front == NULL || evb_rear == NULL)  {
-		goto err;
+		exit(EXIT_FAILURE);
 	}
 	
 	snprintf(front_file, 128, "%s.front", config->htmlredirfile);
 	snprintf(rear_file, 128, "%s.rear", config->htmlredirfile);
 	if (!evhttp_read_file(front_file, evb_front) || 
 		!evhttp_read_file(rear_file, evb_rear)) {
-		goto err;
+		exit(EXIT_FAILURE);
 	}
 	
 	int len = 0;
@@ -190,12 +160,6 @@ init_wifidog_redir_html(void)
 	if (evb_front) evbuffer_free(evb_front);	
 	if (evb_rear) evbuffer_free(evb_rear);
 	return 1;
-err:
-	if (evb_front) evbuffer_free(evb_front);	
-	if (evb_rear) evbuffer_free(evb_rear);
-	if (wifidog_redir_html) free(wifidog_redir_html);
-	wifidog_redir_html = NULL;
-	return 0;
 }
 
 /* Appends -x, the current PID, and NULL to restartargv
@@ -207,9 +171,7 @@ err:
 void
 append_x_restartargv(void)
 {
-    int i;
-
-    for (i = 0; restartargv[i]; i++) ;
+    for (int i = 0; restartargv[i]; i++) ;
 
     restartargv[i++] = safe_strdup("-x");
     safe_asprintf(&(restartargv[i++]), "%d", getpid());
@@ -221,23 +183,22 @@ append_x_restartargv(void)
  */
 static void
 get_clients_from_parent(void)
-{
-    int sock;
+{ 
     struct sockaddr_un sa_un;
-    s_config *config = NULL;
+    s_config *config = config_get_config();
     char linebuffer[MAX_BUF] = { 0 };
-    int len = 0;
     char *running1 = NULL;
     char *running2 = NULL;
     char *token1 = NULL;
     char *token2 = NULL;
-    char onechar;
     char *command = NULL;
     char *key = NULL;
     char *value = NULL;
     t_client *client = NULL;
+    char onechar;
+    int sock;
+    int len = 0;
 
-    config = config_get_config();
 
     debug(LOG_INFO, "Connecting to parent to download clients");
 
@@ -264,11 +225,6 @@ get_clients_from_parent(void)
     debug(LOG_INFO, "Connected to parent.  Downloading clients");
 
     LOCK_CLIENT_LIST();
-
-    command = NULL;
-    memset(linebuffer, 0, sizeof(linebuffer));
-    len = 0;
-    client = NULL;
     /* Get line by line */
     while (read(sock, &onechar, 1) == 1) {
         if (onechar == '\n') {
@@ -375,8 +331,6 @@ sigchld_handler(int s)
 	do {
     	rc = waitpid(-1, &status, WNOHANG);
 	} while(rc != (pid_t)0 && rc != (pid_t)-1);
-
-    debug(LOG_DEBUG, "Handler for SIGCHLD reaped child PID %d", rc);
 }
 
 /** Exits cleanly after cleaning up the firewall.  
@@ -395,9 +349,7 @@ termination_handler(int s)
     if (pthread_mutex_trylock(&sigterm_mutex)) {
         debug(LOG_INFO, "Another thread already began global termination handler. I'm exiting");
         pthread_exit(NULL);
-    } else {
-        debug(LOG_INFO, "Cleaning up and exiting");
-    }
+    } 
 
     debug(LOG_INFO, "Flushing firewall rules...");
     fw_destroy();
@@ -415,7 +367,7 @@ termination_handler(int s)
         debug(LOG_INFO, "Explicitly killing the ping thread");
         pthread_kill(tid_ping, SIGKILL);
     }
-	// liudf added 20160301
+	
 	if (tid_wdctl && self != tid_wdctl) {
         debug(LOG_INFO, "Explicitly killing the wdctl thread");
 		pthread_kill(tid_wdctl, SIGKILL);
@@ -437,7 +389,7 @@ termination_handler(int s)
 	}
 
     debug(LOG_NOTICE, "Exiting...");
-    exit(s == 0 ? 1 : 0);
+    exit(s == 0 ? EXIT_FAILURE : EXIT_SUCCESS);
 }
 
 /** @internal 
@@ -455,7 +407,7 @@ init_signals(void)
     sa.sa_flags = SA_RESTART;
     if (sigaction(SIGCHLD, &sa, NULL) == -1) {
         debug(LOG_ERR, "sigaction(): %s", strerror(errno));
-        exit(1);
+        exit(EXIT_FAILURE);
     }
 
     /* Trap SIGPIPE */
@@ -467,7 +419,7 @@ init_signals(void)
     sa.sa_handler = SIG_IGN;
     if (sigaction(SIGPIPE, &sa, NULL) == -1) {
         debug(LOG_ERR, "sigaction(): %s", strerror(errno));
-        exit(1);
+        exit(EXIT_FAILURE);
     }
 
     sa.sa_handler = termination_handler;
@@ -477,52 +429,62 @@ init_signals(void)
     /* Trap SIGTERM */
     if (sigaction(SIGTERM, &sa, NULL) == -1) {
         debug(LOG_ERR, "sigaction(): %s", strerror(errno));
-        exit(1);
+        exit(EXIT_FAILURE);
     }
 
     /* Trap SIGQUIT */
     if (sigaction(SIGQUIT, &sa, NULL) == -1) {
         debug(LOG_ERR, "sigaction(): %s", strerror(errno));
-        exit(1);
+        exit(EXIT_FAILURE);
     }
 
     /* Trap SIGINT */
     if (sigaction(SIGINT, &sa, NULL) == -1) {
         debug(LOG_ERR, "sigaction(): %s", strerror(errno));
-        exit(1);
+        exit(EXIT_FAILURE);
     }
 }
 
 static void
-wifidog_init()
+wifidog_init(s_config *config)
 {
-    if(ipset_init() == 0) {
-        debug(LOG_ERR, "failed to create IPset control socket: %s");
-        exit(1);
-    }
-    
-	debug(LOG_DEBUG, "after ipset_init");
-	
-    common_setup ();              /* Initialize OpenSSL */
-	
-	debug(LOG_DEBUG, "after common_setup");
+    // read wifidog msg file to memory
+    init_wifidog_msg_html();    
+    init_wifidog_redir_html()
+    openssl_init ();              /* Initialize OpenSSL */
+    ipset_init();
 	
     /* Set the time when wifidog started */
     if (!started_time) {
-        debug(LOG_INFO, "Setting started_time");
         started_time = time(NULL);
     } else if (started_time < MINIMUM_STARTED_TIME) {
-        debug(LOG_WARNING, "Detected possible clock skew - re-setting started_time");
         started_time = time(NULL);
-    }
+    }  
 
-    // liudf added 20161124
-    // read wifidog msg file to memory
-    init_wifidog_msg_html();    
-    if (!init_wifidog_redir_html()) {
-        debug(LOG_ERR, "init_wifidog_redir_html failed, exiting...");
-        exit(1);
+    /* save the pid file if needed */
+    if (config->pidfile)
+        save_pid_file(config->pidfile);
+
+    /* If we don't have the Gateway IP address, get it. Can't fail. */
+    if (!config->gw_address) {
+        if ((config->gw_address = get_iface_ip(config->gw_interface)) == NULL) {
+            debug(LOG_ERR, "Could not get IP address information of %s, exiting...", config->gw_interface);
+            exit(EXIT_FAILURE);
+        }
+        
     }
+    
+    /* If we don't have the Gateway ID, construct it from the internal MAC address.
+     * "Can't fail" so exit() if the impossible happens. */
+    if (!config->gw_id) {
+        if ((config->gw_id = get_iface_mac(config->gw_interface)) == NULL) {
+            debug(LOG_ERR, "Could not get MAC address information of %s, exiting...", config->gw_interface);
+            exit(EXIT_FAILURE);
+        }
+    } 
+
+    debug(LOG_DEBUG, "gw_id [%s] %s = %s ", 
+        config->gw_id, config->gw_interface, config->gw_address);
 }
 
 static void
@@ -533,7 +495,7 @@ refresh_fw()
     /* Then initialize it */
     if (!fw_init()) {
         debug(LOG_ERR, "FATAL: Failed to initialize firewall");
-        exit(1);
+        exit(EXIT_FAILURE);
     }
 }
 
@@ -544,11 +506,11 @@ init_web_server(s_config *config)
     debug(LOG_NOTICE, "Creating web server on %s:%d", config->gw_address, config->gw_port);
     if ((webserver = httpdCreate(config->gw_address, config->gw_port)) == NULL) {
         debug(LOG_ERR, "Could not create web server: %s", strerror(errno));
-        exit(1);
+        exit(EXIT_FAILURE);
     }
     register_fd_cleanup_on_fork(webserver->serverSock);
 
-    debug(LOG_DEBUG, "Assigning callbacks to web server");
+
     httpdAddCContent(webserver, "/", "wifidog", 0, NULL, http_callback_wifidog);
     httpdAddCContent(webserver, "/wifidog", "", 0, NULL, http_callback_wifidog);
     httpdAddCContent(webserver, "/wifidog", "about", 0, NULL, http_callback_about);
@@ -604,7 +566,6 @@ create_wifidog_thread(s_config *config)
     }
     pthread_detach(tid_fw_counter);
 
-#ifndef	_EPOLL_MODE_ 
     if(config->pool_mode) {
         int thread_number = config->thread_number;
         int queue_size = config->queue_size;
@@ -614,9 +575,8 @@ create_wifidog_thread(s_config *config)
             debug(LOG_ERR, "FATAL: Failed to create threadpool - exiting");
             termination_handler(0);
         }
-        debug(LOG_DEBUG, "Create thread pool thread_num %d, queue_size %d", thread_number, queue_size);
     }   
-#endif
+
 
 #ifdef	_MQTT_SUPPORT_
     // start mqtt subscript thread
@@ -637,126 +597,6 @@ create_wifidog_thread(s_config *config)
     pthread_detach(tid_wdctl);
 }
 
-#ifdef	_EPOLL_MODE_
-static int
-make_socket_non_blocking (int sfd)
-{
-  int flags, s;
-
-  	flags = fcntl (sfd, F_GETFL, 0);
-  	if (flags == -1) {
-		debug(LOG_ERR,"fcntl F_GETFL error");
-      	return -1;
-	}
-
-  	flags |= O_NONBLOCK;
-  	s = fcntl (sfd, F_SETFL, flags);
-  	if (s == -1) {
-      debug(LOG_ERR, "fcntl F_SETFL error");
-      return -1;
-    }
-
-  	return 0;
-}
-
-static void
-epoll_loop(void)
-{
-	int epfd = -1;
-	int client_fd = -1;
-	struct epoll_event events[MAX_CON],ev;
-	int newfd;
-	
-	epfd = epoll_create(10);
-    if (epfd == -1) {
-		debug(LOG_ERR, "epoll_create error : %s", strerror(errno));
-		termination_handler(0);
-    }
-	
-	make_socket_non_blocking(webserver->serverSock);
-	
-    ev.events = EPOLLIN;
-    ev.data.fd = webserver->serverSock;
-    if (epoll_ctl(epfd, EPOLL_CTL_ADD, ev.data.fd, &ev) < 0) {
-		debug(LOG_ERR, "epoll_ctl_add error : %s", strerror(errno));
-		termination_handler(0);
-    }
-	
-	for(;;) {
-		int index = 0;
-		int n = epoll_wait(epfd, events, MAX_CON, -1);
-		if (n < 0 && errno != EINTR) {
-			debug(LOG_ERR, "epoll_wait error : %s", strerror(errno));
-			termination_handler(0);
-		}
-		for (index = 0; index < n; index++) {
-			request *r = NULL;
-			client_fd = events[index].data.fd;
-			if(client_fd == webserver->serverSock && (events[index].events & EPOLLIN)) {
-				struct sockaddr_in clientaddr;
-				size_t addrlen = sizeof(clientaddr);
-				for (;;) {
-					if((newfd = accept(webserver->serverSock, (struct sockaddr *)&clientaddr, &addrlen)) == -1) {
-						if (errno != EAGAIN || errno != EWOULDBLOCK)
-							debug(LOG_ERR, "Server-accept() error : %s", strerror(errno));
-						break;
-					} else {
-						r = (request *)malloc(sizeof(request));
-						if (!r) {
-							termination_handler(0);
-						}
-						memset((void *)r, 0, sizeof(request));
-						make_socket_non_blocking(newfd);
-						ev.events = EPOLLIN;
-						ev.data.ptr = r;
-						if (epoll_ctl(epfd, EPOLL_CTL_ADD, newfd, &ev) < 0) {
-							debug(LOG_ERR, "epoll_ctl add newfd failed %s", strerror(errno));
-							termination_handler(0);
-						}
-						if(inet_ntop(AF_INET, &clientaddr.sin_addr, r->clientAddr, HTTP_IP_ADDR_LEN)) {
-							r->clientAddr[HTTP_IP_ADDR_LEN - 1] = 0;
-						}
-						r->clientSock = newfd;
-						debug(LOG_WARNING, "Accept connection from %s", r->clientAddr);
-					}
-				}
-				continue;
-			}
-			
-			r = (request *)events[index].data.ptr;
-			if (events[index].events & EPOLLIN) {
-				ev.data.ptr = r;
-				if (httpdReadRequest(webserver, r) == -1) {
-					if (epoll_ctl(epfd, EPOLL_CTL_DEL, r->clientSock, &ev) < 0) {
-						debug(LOG_WARNING, "epoll_ctl_del[1] error : %s ", strerror(errno));
-					}
-					httpdEndRequest(r);
-				} else {
-					ev.events = EPOLLOUT;
-					if (epoll_ctl(epfd, EPOLL_CTL_MOD, r->clientSock, &ev) < 0) {
-						debug(LOG_WARNING, "epoll_ctl_mod error : %s ", strerror(errno));
-					}
-				}
-			} else if (events[index].events & EPOLLOUT) {
-				httpdProcessRequest(webserver, r);
-				ev.data.ptr = r;
-				if (epoll_ctl(epfd, EPOLL_CTL_DEL, r->clientSock, &ev) < 0) {
-					debug(LOG_WARNING, "epoll_ctl_del[2] error : %s ", strerror(errno));
-				}
-				httpdEndRequest(r);
-			} else if (events[index].events & EPOLLERR) {
-				ev.data.ptr = r;
-				if (epoll_ctl(epfd, EPOLL_CTL_DEL, r->clientSock, &ev) < 0) {
-					debug(LOG_WARNING, "epoll_ctl_del[3] error : %s ", strerror(errno));
-				}
-				httpdEndRequest(r);
-			}// end if EPOLLIN
-
-		}// end for epoll
-	}// end for(;;)
-}
-#endif
-
 /**@internal
  * Main execution loop 
  */
@@ -764,46 +604,14 @@ static void
 main_loop(void)
 {
     s_config *config = config_get_config();
-#ifndef	_EPOLL_MODE_
     request *r;
     void **params;
-#endif
 	
-    wifidog_init();
-
-	/* save the pid file if needed */
-    if (config && config->pidfile)
-        save_pid_file(config->pidfile);
-
-    /* If we don't have the Gateway IP address, get it. Can't fail. */
-    if (!config->gw_address) {
-        debug(LOG_DEBUG, "Finding IP address of %s", config->gw_interface);
-        if ((config->gw_address = get_iface_ip(config->gw_interface)) == NULL) {
-            debug(LOG_ERR, "Could not get IP address information of %s, exiting...", config->gw_interface);
-            exit(1);
-        }
-        debug(LOG_DEBUG, "%s = %s", config->gw_interface, config->gw_address);
-    }
-
-    /* If we don't have the Gateway ID, construct it from the internal MAC address.
-     * "Can't fail" so exit() if the impossible happens. */
-    if (!config->gw_id) {
-        if ((config->gw_id = get_iface_mac(config->gw_interface)) == NULL) {
-            debug(LOG_ERR, "Could not get MAC address information of %s, exiting...", config->gw_interface);
-            exit(1);
-        }
-    }
-
+    wifidog_init(config);
     init_web_server(config);
     refresh_fw();
 	create_wifidog_thread(config);
 	
-		
-    debug(LOG_DEBUG, "Waiting for connections");
-#ifdef	_EPOLL_MODE_
-	// for test
-	epoll_loop();
-#else
     while (1) {
 
         r = httpdGetConnection(webserver);
@@ -861,7 +669,6 @@ main_loop(void)
              * we don't set any... */
         }
     }
-#endif
     /* never reached */
 }
 
@@ -869,14 +676,12 @@ main_loop(void)
 int
 gw_main(int argc, char **argv)
 {
-
-    s_config *config = config_get_config();
     config_init();
 
     parse_commandline(argc, argv);
 
     /* Initialize the config */
-    config_read(config->configfile);
+    config_read();
     config_validate();
 
     /* Initializes the linked list of connected clients */
@@ -896,14 +701,13 @@ gw_main(int argc, char **argv)
          */
         while (kill(restart_orig_pid, 0) != -1) {
             debug(LOG_INFO, "Waiting for parent PID %d to die before continuing loading", restart_orig_pid);
-            s_sleep(1, 0);
+            wd_sleep(1, 0);
         }
 
         debug(LOG_INFO, "Parent PID %d seems to be dead. Continuing loading.");
     }
 
     if (config->daemon) {
-
         debug(LOG_INFO, "Forking into background");
 
         switch (safe_fork()) {

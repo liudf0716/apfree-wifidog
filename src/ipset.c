@@ -126,13 +126,11 @@ static inline void add_attr(struct nlmsghdr *nlh, uint16_t type, size_t len, con
 	nlh->nlmsg_len += NL_ALIGN(payload_len);
 }
 
-int  ipset_init(void)
+void  ipset_init(void)
 {
   	if ((ipset_sock = socket(AF_NETLINK, SOCK_RAW, NETLINK_NETFILTER)) != -1 &&
         (bind(ipset_sock, (struct sockaddr *)&snl, sizeof(snl)) != -1))
-		return 1;
-	
-	return 0;
+		exit(EXIT_FAILURE);
 }
 
 static int new_add_to_ipset(const char *setname, const struct in_addr *ipaddr, int af, int remove)

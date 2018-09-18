@@ -61,7 +61,7 @@
 
 struct fdb_entry {
 	u_int8_t mac_addr[6];
-    u_int16_t port_no;
+  u_int16_t port_no;
 };
 
 /** @brief Client server this session. */
@@ -90,19 +90,30 @@ int is_auth_online(void);
 /** @brief Creates a human-readable paragraph of the status of wifidog */
 char *get_status_text(void);
 
-//>>> liudf added 20151225
 char *mqtt_get_serialize_maclist(int);
+
 char *get_serialize_maclist(int);
+
 char *get_serialize_trusted_domains(void);
+
 char *get_serialize_iplist(void);
+
 char *mqtt_get_trusted_domains_text(void);
+
 char *mqtt_get_trusted_iplist_text(void);
+
 char *get_trusted_domains_text(void);
+
 char *get_untrusted_maclist_text(void);
+
 char *get_trusted_maclist_text(void);
+
 char *get_trusted_local_maclist_text(void);
+
 char *get_roam_maclist_text(void);
+
 char *get_serialize_trusted_pan_domains(void);
+
 char *mqtt_get_trusted_pan_domains_text(void);
 
 char *mqtt_get_status_text(void);
@@ -110,8 +121,8 @@ char *mqtt_get_status_text(void);
 void trim_newline(char *);
 
 /** @brief Is mac source is wired or not */
-int is_device_wired(const char *);
 int is_device_wired_intern(const char *mac, const char *bridge);
+
 int br_is_device_wired(const char *); // no popen impl
 
 /** @brief Is ip online or domain parsable */
@@ -121,6 +132,8 @@ void evdns_parse_trusted_domain_2_ip(t_domain_trusted *p);
 
 void evdns_add_trusted_domain_ip_cb(int errcode, struct evutil_addrinfo *addr, void *ptr);
 
+struct evbuffer *evhttp_read_file(const char *, struct evbuffer *);
+
 char *evb_2_string(struct evbuffer *, int *);
 
 int uci_get_value(const char *, const char *, char *, int);
@@ -128,7 +141,6 @@ int uci_get_value(const char *, const char *, char *, int);
 int uci_set_value(const char *, const char *, const char *, const char *);
 
 int uci_del_value(const char *, const char *, const char *);
-//<<< liudf added end
 
 /** @brief Execute a shell command */
 int execute(const char *, int);
@@ -147,5 +159,6 @@ char *get_ext_iface(void);
 
 /** 1: success; 0: error*/
 int arp_get_mac(const char *dev_name, const char *i_ip, char *o_mac);
+
 int br_arp_get_mac(const char *i_ip, char *o_mac);
 #endif /* _WD_UTIL_H_ */

@@ -59,7 +59,6 @@
 #include "wd_util.h"
 #include "gateway.h"
 #include "https_server.h"
-#include "simple_http.h"
 #include "wdctl_thread.h"
 #include "version.h"
 
@@ -471,20 +470,7 @@ http_send_js_redirect(request *r, const char *redir_url)
 	int html_length = 0;
 	char *redirect_html = evb_2_string(evb, &html_length);
 	
-#ifdef	_DEFLATE_SUPPORT_
-	if (r->request.deflate) {
-		char *deflate_html = NULL;
-		int wlen = 0;
-		
-		if (deflate_write(redirect_html, html_length, &deflate_html, &wlen, 1) == Z_OK) {
-			httpdOutputLengthDirect(r, deflate_html, wlen);				
-		} else
-			debug(LOG_INFO, "deflate_write failed");
-		
-		if (deflate_html) free(deflate_html);
-	} else
-#endif
-		httpdOutputLengthDirect(r, redirect_html, html_length);
+	httpdOutputLengthDirect(r, redirect_html, html_length);
 	
 	free(redirect_html);
 	evbuffer_free(evb);

@@ -59,6 +59,7 @@
 #include "client_list.h"
 #include "commandline.h"
 #include "wd_util.h"
+#include "https_client.h"
 
 static int _fw_deny_raw(const char *, const char *, const int);
 

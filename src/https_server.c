@@ -365,18 +365,20 @@ static int https_redirect (char *gw_ip,  t_https_server *https_server) {
   	struct evhttp_bound_socket *handle;
 	struct event timeout;
 	struct timeval tv;
-	
+	int nret = 0;
+
   	base = event_base_new ();
   	if (! base) { 
 		debug (LOG_ERR, "Couldn't create an event_base: exiting\n");
       	return 1;
     }
 	
-  	/* Create a new evhttp object to handle requests. */
+  	// Create a new evhttp object to handle requests.
   	http = evhttp_new (base);
   	if (! http) { 
 		debug (LOG_ERR, "couldn't create evhttp. Exiting.\n");
-      	return 1;
+      	nret = 1;
+		goto ERROR;
     }
  
  	SSL_CTX *ctx = SSL_CTX_new (SSLv23_server_method ());
@@ -396,24 +398,29 @@ static int https_redirect (char *gw_ip,  t_https_server *https_server) {
 
 	server_setup_certs (ctx, https_server->svr_crt_file, https_server->svr_key_file);
 
-	/* This is the magic that lets evhttp use SSL. */
+	// This is the magic that lets evhttp use SSL.
 	evhttp_set_bevcb (http, bevcb, ctx);
  
-	/* This is the callback that gets called when a request comes in. */
+	// This is the callback that gets called when a request comes in.
 	evhttp_set_gencb (http, process_https_cb, NULL);
 
-	/* Now we tell the evhttp what port to listen on */
+	// Now we tell the evhttp what port to listen on. 
 	handle = evhttp_bind_socket_with_handle (http, gw_ip, https_server->gw_https_port);
 	if (! handle) { 
 		debug (LOG_ERR, "couldn't bind to port %d. Exiting.\n",
                (int) https_server->gw_https_port);
-		return 1;
+		nret = 1;
+		goto ERROR;
     }
     
 	// check whether internet available or not
 	dnsbase = evdns_base_new(base, 0);
-	if ( 0 != evdns_base_resolv_conf_parse(dnsbase, DNS_OPTION_NAMESERVERS, "/tmp/resolv.conf.auto") ) {
-		debug (LOG_ERR, "evdns_base_resolv_conf_parse failed \n");
+	if (!dnsbase) {
+		debug (LOG_ERR, "dnsbase new failed. \n");
+		nret = 1;
+		goto ERROR;
+	} else if ( 0 != evdns_base_resolv_conf_parse(dnsbase, DNS_OPTION_NAMESERVERS, "/tmp/resolv.conf.auto") ) {
+		debug (LOG_ERR, "evdns_base_resolv_conf_parse failed. \n");
 		evdns_base_free(dnsbase, 0);
 		dnsbase = evdns_base_new(base, 1);
 	}
@@ -433,12 +440,13 @@ static int https_redirect (char *gw_ip,  t_https_server *https_server) {
     event_base_dispatch (base);
 
 	event_del(&timeout);
+ERROR:
+	if (http) evhttp_free(http);
+	if (dnsbase) evdns_base_free(dnsbase, 0);
 	event_base_free(base);
-	evdns_base_free(dnsbase, 0);
-	close(handle);
 	
   	/* not reached; runs forever */
-  	return 0;
+  	return nret;
 }
 
 void thread_https_server(void *args) {

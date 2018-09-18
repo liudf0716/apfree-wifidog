@@ -618,49 +618,49 @@ add_online_client(const char *info)
     }
 
     int ret = 1;
+	int roam_client_need_free = 0;
 	json_object *mac_jo = NULL;
-    json_object *ip_jo = NULL;
+    json_object *ip_jo 	= NULL;
     json_object *name_jo = NULL;
-    if (!json_object_object_get_ex(client_info, "mac", &mac_jo)) {
-        goto OUT;
-    }
-    if (!json_object_object_get_ex(client_info, "ip", &ip_jo)) {
-        goto OUT;
-    }
-    if (!json_object_object_get_ex(client_info, "name", &name_jo)) {
+
+    if(!json_object_object_get_ex(client_info, "mac", &mac_jo) || 
+	   !json_object_object_get_ex(client_info, "ip", &ip_jo) || 
+	   !json_object_object_get_ex(client_info, "name", &name_jo)) {
         goto OUT;
     }
 
-    int roam_client_need_free = json_object_object_get_ex(client_info, "client", &roam_client)?0:1;
-
+    roam_client_need_free = json_object_object_get_ex(client_info, "client", &roam_client)?0:1;
 	mac 	= json_object_get_string(mac_jo);
 	ip		= json_object_get_string(ip_jo);
 	name	= json_object_get_string(name_jo);
 
 	if(is_valid_mac(mac) &&  
-        is_valid_ip(ip) && 
-        !is_trusted_mac(mac) &&
-        !is_untrusted_mac(mac) && 
-        (roam_client != NULL || (roam_client = auth_server_roam_request(mac)) != NULL)) {
+       is_valid_ip(ip) && 
+       !is_trusted_mac(mac) &&
+       !is_untrusted_mac(mac) && 
+       (roam_client != NULL || (roam_client = auth_server_roam_request(mac)) != NULL)) {
 
 		LOCK_CLIENT_LIST();
 		old_client = client_list_find_by_mac(mac);
-		if(old_client == NULL) {
-            json_object *token_jo = NULL;
+		if(!old_client) {
+            json_object *token_jo 		= NULL;
+            json_object *first_login_jo = NULL;
+			const char *token 		= NULL;
+			const char *first_login	= NULL;
+
             if (!json_object_object_get_ex(roam_client, "token", &token_jo)) {
                 UNLOCK_CLIENT_LIST();
                 goto OUT;
-            }
-			char *token = json_object_get_string(token_jo);
+            } else 
+				token = json_object_get_string(token_jo);
 
-            json_object *first_login_jo = NULL;
             if (!json_object_object_get_ex(roam_client, "first_login", &first_login_jo)) {
                 UNLOCK_CLIENT_LIST();
                 goto OUT;
-            }
-			char *first_login = json_object_get_string(first_login_jo);
+            } else
+				first_login = json_object_get_string(first_login_jo);
 
-			if(token != NULL) {
+			if(token) {
 				t_client *client = client_list_add(ip, mac, token);
 				client->wired = 0;
 				if (name) {
@@ -691,12 +691,4 @@ OUT:
     }
     json_object_put(client_info);
 	return ret;	
-}
-
-char *
-get_online_client_uri(t_client *client)
-{
-    char *client_uri = NULL;
-
-    safe_asprintf(&client_uri, "");
 }

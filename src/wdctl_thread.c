@@ -403,7 +403,7 @@ wdctl_restart(int afd)
     char *sock_name;
     s_config *conf = NULL;
     struct sockaddr_un sa_un;
-    t_client *client;
+    t_client *client = NULL;
     char *tempstring = NULL;
     pid_t pid;
     socklen_t len;
@@ -518,8 +518,8 @@ wdctl_reset(int fd, const char *arg)
     debug(LOG_DEBUG, "Exiting wdctl_reset...");
 }
 
-//>>> liudf added 20151225
-void add_trusted_pdomains(const char *arg)
+void 
+add_trusted_pdomains(const char *arg)
 {
     debug(LOG_DEBUG, "Argument: %s ", arg);
 
@@ -539,7 +539,8 @@ wdctl_add_trusted_pan_domains(int fd, const char *arg)
     debug(LOG_DEBUG, "Exiting wdctl_add_trusted_pan_domains...");
 }
 
-void del_trusted_pdomains(const char *arg)
+void 
+del_trusted_pdomains(const char *arg)
 {
     debug(LOG_DEBUG, "Argument: %s ", arg);
    
@@ -560,7 +561,8 @@ wdctl_del_trusted_pan_domains(int fd, const char *arg)
 
 }
 
-void clear_trusted_pdomains(void)
+void 
+clear_trusted_pdomains(void)
 {
     clear_trusted_pan_domains();
     fw_clear_pan_domains_trusted(); 
@@ -578,7 +580,8 @@ wdctl_clear_trusted_pan_domains(int fd)
     debug(LOG_DEBUG, "Exiting wdctl_clear_trusted_pan_domains...");
 }
 
-char *show_trusted_pdomains()
+char *
+show_trusted_pdomains()
 {
     return mqtt_get_trusted_pan_domains_text();
 }
@@ -590,12 +593,14 @@ wdctl_show_trusted_pan_domains(int fd)
     write_to_socket(fd, "Yes", 3);
 }
 
-char *show_trusted_iplist()
+char *
+show_trusted_iplist()
 {
     return mqtt_get_trusted_iplist_text();
 }
 
-void add_trusted_iplist(const char *arg)
+void 
+add_trusted_iplist(const char *arg)
 {
     add_trusted_ip_list(arg);
     fw_refresh_user_domains_trusted();  
@@ -616,7 +621,8 @@ wdctl_add_trusted_iplist(int fd, const char *arg)
 
 }
 
-void del_trusted_iplist(const char *arg)
+void 
+del_trusted_iplist(const char *arg)
 {
     del_trusted_ip_list(arg);
     fw_refresh_user_domains_trusted();  
@@ -637,7 +643,8 @@ wdctl_del_trusted_iplist(int fd, const char *arg)
 
 }
 
-void clear_trusted_iplist(void)
+void 
+clear_trusted_iplist(void)
 {
     clear_trusted_ip_list();
     fw_refresh_user_domains_trusted();  
@@ -655,7 +662,8 @@ wdctl_clear_trusted_iplist(int fd)
     debug(LOG_DEBUG, "Exiting wdctl_clear_trusted_domains...");
 }
 
-void add_trusted_domains(const char *arg)
+void 
+add_trusted_domains(const char *arg)
 {
     parse_user_trusted_domain_string(arg);
     parse_user_trusted_domain_list();
@@ -677,7 +685,8 @@ wdctl_add_trusted_domains(int fd, const char *arg)
     debug(LOG_DEBUG, "Exiting wdctl_add_trusted_domains...");
 }
 
-void del_trusted_domains(const char *arg)
+void 
+del_trusted_domains(const char *arg)
 {
     parse_del_trusted_domain_string(arg);
     fw_refresh_user_domains_trusted();
@@ -712,7 +721,8 @@ wdctl_reparse_trusted_domains(int fd)
     debug(LOG_DEBUG, "Exiting wdctl_reparse_trusted_domains...");
 }
 
-void clear_trusted_domains()
+void 
+clear_trusted_domains()
 {
     clear_trusted_domains_();
 
@@ -731,7 +741,8 @@ wdctl_clear_trusted_domains(int fd)
     debug(LOG_DEBUG, "Exiting wdctl_clear_trusted_domains...");
 }
 
-char *show_trusted_domains(void)
+char *
+show_trusted_domains(void)
 {
     return mqtt_get_trusted_domains_text();
 }
@@ -750,7 +761,8 @@ wdctl_show_trusted_domains(int fd)
     free(status);
 }
 
-void add_domain_ip(const char *args)
+static void 
+add_domain_ip(const char *args)
 {
     add_domain_ip_pair(args, USER_TRUSTED_DOMAIN);
     fw_refresh_user_domains_trusted();  
