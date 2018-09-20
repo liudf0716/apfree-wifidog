@@ -159,7 +159,6 @@ init_wifidog_redir_html(void)
 	
 	if (evb_front) evbuffer_free(evb_front);	
 	if (evb_rear) evbuffer_free(evb_rear);
-	return 1;
 }
 
 /* Appends -x, the current PID, and NULL to restartargv
@@ -171,7 +170,8 @@ init_wifidog_redir_html(void)
 void
 append_x_restartargv(void)
 {
-    for (int i = 0; restartargv[i]; i++) ;
+	int i;
+    for (i = 0; restartargv[i]; i++) ;
 
     restartargv[i++] = safe_strdup("-x");
     safe_asprintf(&(restartargv[i++]), "%d", getpid());
@@ -450,8 +450,8 @@ wifidog_init(s_config *config)
 {
     // read wifidog msg file to memory
     init_wifidog_msg_html();    
-    init_wifidog_redir_html()
-    openssl_init ();              /* Initialize OpenSSL */
+    init_wifidog_redir_html();
+    openssl_init();              /* Initialize OpenSSL */
     ipset_init();
 	
     /* Set the time when wifidog started */
@@ -707,7 +707,7 @@ gw_main(int argc, char **argv)
         debug(LOG_INFO, "Parent PID %d seems to be dead. Continuing loading.");
     }
 
-    if (config->daemon) {
+    if (config_get_config()->daemon) {
         debug(LOG_INFO, "Forking into background");
 
         switch (safe_fork()) {
