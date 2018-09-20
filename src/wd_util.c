@@ -35,7 +35,7 @@
 #include <string.h>
 #include <pthread.h>
 #include <sys/socket.h>
-
+#include <sys/stat.h>
 #include <unistd.h>
 #include <sys/wait.h>
 #include <sys/types.h>
