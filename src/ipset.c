@@ -18,6 +18,7 @@
 #include <syslog.h>
 #include <time.h>
 #include <string.h>
+#include <stdlib.h>
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/socket.h>
