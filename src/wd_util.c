@@ -1036,7 +1036,7 @@ evhttp_read_file(const char *filename, struct evbuffer *evb)
 char *evb_2_string(struct evbuffer *evb, int *olen) 
 {
 	int rlen = evbuffer_get_length(evb);
-	char *str = (char *)malloc(rlen+1);
+	char *str = (char *)safe_malloc(rlen+1);
 	memset(str, 0, rlen+1);
 	evbuffer_copyout(evb, str, rlen);
 	if (olen)

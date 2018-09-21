@@ -118,7 +118,7 @@ int
 pstr_append_sprintf(pstr_t *pstr, const char *fmt, ...)
 {
     va_list ap;
-    char *str;
+    char *str = NULL;
     int retval;
 
     va_start(ap, fmt);

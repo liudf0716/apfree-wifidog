@@ -94,9 +94,8 @@ _is_apple_captive(const char *domain)
 {
 	int i = 0;
 	while(apple_domains[i] != NULL) {
-		if(strcmp(domain, apple_domains[i]) == 0)
+		if(strcmp(domain, apple_domains[i++]) == 0)
 			return 1;
-		i++;
 	}
 
 	return 0;
@@ -117,9 +116,6 @@ _special_process(request *r, const char *mac, const char *redir_url)
 			o_client->last_login = time(NULL);
 			interval = o_client->last_login - o_client->first_login;
 		}
-
-		debug(LOG_DEBUG, "Into captive.apple.com hit_counts %d interval %d http version %d\n", 
-				o_client->hit_counts, interval, r->request.version);
     	
 		o_client->hit_counts++;
 
@@ -164,11 +160,10 @@ http_callback_404(httpd * webserver, request * r, int error_code)
     } else {
 		/* Re-direct them to auth server */
 		const s_config *config = config_get_config();
-		char tmp_url[MAX_BUF] = {0};
-        char  mac[18] = {0};
+		char tmp_url[MAX_BUF] = {0}, mac[MAC_LENGTH] = {0};
         int nret = br_arp_get_mac(r->clientAddr, mac);  
 		if (nret == 0) {
-            strncpy(mac, "ff:ff:ff:ff:ff:ff", 17);
+            strncpy(mac, "ff:ff:ff:ff:ff:ff", MAC_LENGTH-1);
         }
 		
 		snprintf(tmp_url, MAX_BUF, "http://%s%s%s%s",

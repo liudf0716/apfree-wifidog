@@ -46,7 +46,7 @@ Do not use directly, use the debug macro */
 void
 _debug(const char *filename, int line, int level, const char *format, ...)
 {
-    char buf[28];
+    char buf[28] = {0};
     va_list vlist;
     time_t ts;
     sigset_t block_chld;
