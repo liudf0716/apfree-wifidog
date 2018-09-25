@@ -92,7 +92,7 @@ openssl_init (void)
 }
 
 static void
-init_wifidog_msg_html()
+wd_msg_init()
 {
 	s_config *config = config_get_config();	
 	
@@ -106,13 +106,13 @@ init_wifidog_msg_html()
 	
 	if ( !evhttp_read_file(config->internet_offline_file, evb_internet_offline_page) || 
 		 !evhttp_read_file(config->authserver_offline_file, evb_authserver_offline_page)) {
-		debug(LOG_ERR, "init_wifidog_msg_html failed, exiting...");
+		debug(LOG_ERR, "wd_msg_init failed, exiting...");
 		exit(EXIT_FAILURE);
 	}
 }
 
 static void
-init_wifidog_redir_html(void)
+wd_redir_init(void)
 {
 	s_config *config = config_get_config();	
 	struct evbuffer *evb_front = NULL;
@@ -428,11 +428,11 @@ init_signals(void)
 }
 
 static void
-wifidog_init(s_config *config)
+wd_init(s_config *config)
 {
     // read wifidog msg file to memory
-    init_wifidog_msg_html();    
-    init_wifidog_redir_html();
+    wd_msg_init();    
+    wd_redir_init();
     openssl_init();              /* Initialize OpenSSL */
     ipset_init();
 	
@@ -470,7 +470,7 @@ wifidog_init(s_config *config)
 }
 
 static void
-refresh_fw()
+firewall_init()
 {
     /* Reset the firewall (if WiFiDog crashed) */
     fw_destroy();
@@ -482,7 +482,7 @@ refresh_fw()
 }
 
 static void
-init_web_server(s_config *config)
+webserver_init(s_config *config)
 {
     /* Initializes the web server */
     debug(LOG_NOTICE, "Creating web server on %s:%d", config->gw_address, config->gw_port);
@@ -508,7 +508,7 @@ init_web_server(s_config *config)
 }
 
 static void
-create_wifidog_thread(s_config *config)
+threads_init(s_config *config)
 {
     int result;
 
@@ -578,10 +578,10 @@ main_loop(void)
     request *r;
     void **params;
 	
-    wifidog_init(config);
-    init_web_server(config);
-    refresh_fw();
-	create_wifidog_thread(config);
+    wd_init(config);
+    webserver_init(config);
+    firewall_init();
+	threads_init(config);
 	
     while (1) {
 
