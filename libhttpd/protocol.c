@@ -39,63 +39,23 @@
 #include "httpd.h"
 #include "httpd_priv.h"
 
+#define HTTP_NET_TIMEOUT    100
+
 int
 _httpd_net_read(sock, buf, len)
 int sock;
 char *buf;
 int len;
 {
-#if defined(_EPOLL_MODE_)
-    return recv(sock, buf, len, MSG_DONTWAIT);
-#else
-    /*return( read(sock, buf, len)); */
-    /* XXX Select based IO */
-
-    int nfds;
-#ifdef SELECT
-    fd_set readfds;
-    struct timeval timeout;
-#else
 	struct pollfd fds;
-#endif
-	int i = 0;
-   	int nread = 0, nret = 0;
- 
-	do {
-#ifdef	SELECT
-    	FD_ZERO(&readfds);
-    	FD_SET(sock, &readfds);
-    	timeout.tv_sec = 0; 
-    	timeout.tv_usec = 100;
+    fds.fd      = sock;
+    fds.events   = POLLIN;
 
-		nfds = sock + 1;
-    	nfds = select(nfds, &readfds, NULL, NULL, &timeout);
-
-    	if (nfds > 0 && FD_ISSET(sock, &readfds)) {
-#else
-		memset(&fds, 0, sizeof(fds));
-        fds.fd      = sock;
-        fds.events   = POLLIN;
-        nfds = poll(&fds, 1, 100);
-		if (nfds > 0 && fds.revents == POLLIN) {
-#endif
-			nret = read(sock, buf+nread, len-nread);
-			if (nret > 0 && nret <= (len-nread)) {
-				nread += nret;
-				return nread;
-			} else if (nret == 0) {
-				return nread;
-			} else if (nret < 0 && errno == EINTR) {
-				i++;
-				continue;
-			} else
-				return -1;
-    	} else if(nfds < 0)
-			return nfds;
-	} while(nread < len && i++ < 100);
+    if (poll(&fds, 1, HTTP_NET_TIMEOUT) > 0 && fds.revents == POLLIN) {
+        return read(sock, buf, len);   
+    } 
 	
-    return (nfds);
-#endif
+    return 0;
 }
 
 int
@@ -104,58 +64,15 @@ int sock;
 char *buf;
 int len;
 {
-#if defined(_EPOLL_MODE_)
-    int nret = send(sock, buf, len, MSG_NOSIGNAL);
-	if (nret < 0 && (errno == EAGAIN || errno == EWOULDBLOCK))
-		return 0;
-	return nret == 0?-1:nret;
-#else
-    // liudf modified 20160302
-	int nfds;
-#ifdef	SELECT
-    fd_set writefds;
-	struct timeval timeout;
-#else
-	struct pollfd fds;
-#endif
-	int i = 0;
-	int nwrite = 0, nret = 0;   	
- 
-	do {
-#ifdef	SELECT
-    	FD_ZERO(&writefds);
-    	FD_SET(sock, &writefds);
-    	timeout.tv_sec = 0; 
-    	timeout.tv_usec = 100;
+	struct pollfd fds;	
+    fds.fd      = sock;
+    fds.events   = POLLOUT;
 
-		nfds = sock + 1;
-    	nfds = select(nfds, NULL, &writefds, NULL, &timeout);
+    if (poll(&fds, 1, HTTP_NET_TIMEOUT) > 0 && fds.revents == POLLOUT) {
+        return write(sock, buf, len);
+    } 
 
-    	if (nfds > 0 && FD_ISSET(sock, &writefds)) {
-#else
-		memset(&fds, 0, sizeof(fds));
-        fds.fd      = sock;
-        fds.events   = POLLOUT;
-        nfds = poll(&fds, 1, 100);
-		if (nfds > 0 && fds.revents == POLLOUT) {
-#endif
-			nret = write(sock, buf+nwrite, len-nwrite);
-			if	(nret > 0) {
-				nwrite += nret;
-				if (nwrite == len)
-					return nwrite;
-			} else if (nret == 0)
-				return nwrite;
-			else if (nret < 0 && errno == EINTR)
-				continue;
-			else
-				return -1;
-    	} else if(nfds < 0)
-			return nfds;
-	} while(nwrite < len && i++ < 100);
-
-    return (nfds);
-#endif
+    return 0;
 }
 
 int
@@ -164,15 +81,9 @@ _httpd_readChar(request * r, char *cp)
     if (r->readBufRemain == 0) {
         bzero(r->readBuf, HTTP_READ_BUF_LEN + 1);
         r->readBufRemain = _httpd_net_read(r->clientSock, r->readBuf, HTTP_READ_BUF_LEN);
-#if	defined(_EPOLL_MODE_)
-		if (0 == r->readBufRemain || (r->readBufRemain < 0 && errno != EAGAIN && errno != EWOULDBLOCK)) {
-			return (0);
-		}
-#else
         if (r->readBufRemain < 1){
             return (0);
 		}
-#endif
         r->readBuf[r->readBufRemain] = 0;
         r->readBufPtr = r->readBuf;
     }
@@ -184,11 +95,9 @@ _httpd_readChar(request * r, char *cp)
 int
 _httpd_readLine(request * r, char *destBuf, int len)
 {
-    char curChar, *dst;
-    int count;
+    char curChar, *dst = destBuf;
+    int count = 0;
 
-    count = 0;
-    dst = destBuf;
     while (count < len) {
         if (_httpd_readChar(r, &curChar) < 1)
             return (0);
@@ -212,11 +121,9 @@ _httpd_readLine(request * r, char *destBuf, int len)
 int
 _httpd_readBuf(request * r, char *destBuf, int len)
 {
-    char curChar, *dst;
-    int count;
+    char curChar, *dst = destBuf;
+    int count = 0;
 
-    count = 0;
-    dst = destBuf;
     while (count < len) {
         if (_httpd_readChar(r, &curChar) < 1)
             return (0);
@@ -229,15 +136,13 @@ _httpd_readBuf(request * r, char *destBuf, int len)
 void
 _httpd_writeAccessLog(httpd * server, request * r)
 {
-    char dateBuf[30];
-    struct tm *timePtr;
-    time_t clock;
+    char dateBuf[30] = {0};
+    time_t clock = time(NULL);
+    struct tm *timePtr = localtime(&clock);
     int responseCode;
 
-    if (server->accessLog == NULL)
-        return;
-    clock = time(NULL);
-    timePtr = localtime(&clock);
+    if (!server->accessLog) return;
+
     strftime(dateBuf, 30, "%d/%b/%Y:%T %Z", timePtr);
     responseCode = atoi(r->response.response);
     fprintf(server->accessLog, "%s - - [%s] %s \"%s\" %d %d\n",
@@ -248,14 +153,12 @@ _httpd_writeAccessLog(httpd * server, request * r)
 void
 _httpd_writeErrorLog(httpd * server, request * r, char *level, char *message)
 {
-    char dateBuf[30];
-    struct tm *timePtr;
-    time_t clock;
+    char dateBuf[30] = {0};
+    time_t clock = time(NULL);
+    struct tm *timePtr = localtime(&clock);
 
-    if (server->errorLog == NULL)
-        return;
-    clock = time(NULL);
-    timePtr = localtime(&clock);
+    if (!server->errorLog) return;
+        
     strftime(dateBuf, 30, "%a %b %d %T %Y", timePtr);
     if (r != NULL && *r->clientAddr != 0) {
         fprintf(server->errorLog, "[%s] [%s] [client %s] %s\n", dateBuf, level, r->clientAddr, message);
@@ -350,18 +253,15 @@ char *
 _httpd_unescape(str)
 char *str;
 {
-    char *p = str;
-    char *q = str;
+    char *p = str， *q = str;
 
-    if (!str)
-        return ("");
+    if (!str) return ("");
+
     while (*p) {
         if (*p == '%') {
             p++;
-            if (*p)
-                *q = _httpd_from_hex(*p++) * 16;
-            if (*p)
-                *q = (*q + _httpd_from_hex(*p++));
+            if (*p) *q = _httpd_from_hex(*p++) * 16;
+            if (*p) *q = (*q + _httpd_from_hex(*p++));
             q++;
         } else {
             if (*p == '+') {
@@ -383,8 +283,8 @@ httpVar *var;
 {
     httpVar *curVar, *lastVar;
 
-    if (var == NULL)
-        return;
+    if (var == NULL) return;
+
     _httpd_freeVariables(var->nextVariable);
     var->nextVariable = NULL;
     curVar = var;
@@ -401,25 +301,23 @@ httpVar *var;
 void
 _httpd_storeData(request * r, char *query)
 {
-    char *cp, *cp2, *var, *val, *tmpVal;
+    char *cp = query, *cp2 = NULL, *var = NULL, *val = NULL, *tmpVal = NULL;
 
-    if (!query)
+    if (!r || !query)
         return;
 
     var = (char *)malloc(strlen(query) + 1);
-
-    cp = query;
+    if (!var) exit(EXIT_FAILURE);
     cp2 = var;
     bzero(var, strlen(query) + 1);
-    val = NULL;
+
     while (*cp) {
         if (*cp == '=') {
             cp++;
             *cp2 = 0;
             val = cp;
             continue;
-        }
-        if (*cp == '&') {
+        } else if (*cp == '&') {
             *cp = 0;
             tmpVal = _httpd_unescape(val);
             httpdAddVariable(r, var, tmpVal);
@@ -428,25 +326,14 @@ _httpd_storeData(request * r, char *query)
             val = NULL;
             continue;
         }
-        if (val) {
-            cp++;
-        } else {
-            *cp2 = *cp++;
-            /*
-               if (*cp2 == '.')
-               {
-               strcpy(cp2,"_dot_");
-               cp2 += 5;
-               }
-               else
-               {
-             */
+
+        if (val)  cp++;
+        else {
+            *cp2 = *cp++;        
             cp2++;
-            /*
-               }
-             */
         }
     }
+
     if (val != NULL) {
         *cp = 0;
         tmpVal = _httpd_unescape(val);
@@ -458,11 +345,8 @@ _httpd_storeData(request * r, char *query)
 void
 _httpd_formatTimeString(char *ptr, int clock)
 {
-    struct tm *timePtr;
-    time_t t;
-
-    t = (clock == 0) ? time(NULL) : clock;
-    timePtr = gmtime(&t);
+    time_t t = (clock == 0) ? time(NULL) : clock;
+    struct tm *timePtr = gmtime(&t);
     strftime(ptr, HTTP_TIME_STRING_LEN, "%a, %d %b %Y %T GMT", timePtr);
 }
 
@@ -498,13 +382,6 @@ _httpd_sendHeaders(request * r, int contentLength, int modTime)
 					"Expires: 0\r\n"
 				   	"Pragma: no-cache\r\n");
 	
-#ifdef	_DEFLATE_SUPPORT_	
-	if (r->request.deflate) {
-		totalLength += nret;
-		nret = snprintf(hdrBuf+totalLength, HTTP_READ_BUF_LEN-totalLength, "Content-Encoding: gzip\r\n");
-	}
-#endif
-	
     if (contentLength > 0) {	
         _httpd_formatTimeString(timeBuf, modTime);
 		totalLength += nret;
@@ -528,8 +405,7 @@ int createFlag;
     char buffer[HTTP_MAX_URL] = { 0 }, *curDir, *saveptr;
     httpDir *curItem, *curChild;
 
-    strncpy(buffer, dir, HTTP_MAX_URL);
-    buffer[HTTP_MAX_URL - 1] = 0;
+    strncpy(buffer, dir, HTTP_MAX_URL-1);
     curItem = server->content;
     curDir = strtok_r(buffer, "/", &saveptr);
     while (curDir) {
@@ -542,6 +418,7 @@ int createFlag;
         if (curChild == NULL) {
             if (createFlag == HTTP_TRUE) {
                 curChild = malloc(sizeof(httpDir));
+                if (!curChild) return NULL;
                 bzero(curChild, sizeof(httpDir));
                 curChild->name = strdup(curDir);
                 curChild->next = curItem->children;
@@ -559,9 +436,9 @@ int createFlag;
 httpContent *
 _httpd_findContentEntry(request * r, httpDir * dir, char *entryName)
 {
-    httpContent *curEntry;
+    if (!r || !dir || !entryName) return NULL;
 
-    curEntry = dir->entries;
+    httpContent *curEntry = dir->entries;
     while (curEntry) {
         if (curEntry->type == HTTP_WILDCARD || curEntry->type == HTTP_C_WILDCARD)
             break;
@@ -659,10 +536,9 @@ _httpd_sendStatic(httpd * server, request * r, char *data)
 void
 _httpd_sendFile(httpd * server, request * r, char *path)
 {
-    char *suffix;
     struct stat sbuf;
+    char *suffix = strrchr(path, '.');
 
-    suffix = strrchr(path, '.');
     if (suffix != NULL) {
         if (strcasecmp(suffix, ".gif") == 0)
             strcpy(r->response.contentType, "image/gif");
@@ -690,7 +566,7 @@ _httpd_sendFile(httpd * server, request * r, char *path)
 int
 _httpd_sendDirectoryEntry(httpd * server, request * r, httpContent * entry, char *entryName)
 {
-    char path[HTTP_MAX_URL];
+    char path[HTTP_MAX_URL] = {0};
 
     snprintf(path, HTTP_MAX_URL, "%s/%s", entry->path, entryName);
     _httpd_sendFile(server, r, path);
@@ -709,7 +585,7 @@ _httpd_sendText(request * r, char *msg)
 int
 _httpd_checkLastModified(request * r, int modTime)
 {
-    char timeBuf[HTTP_TIME_STRING_LEN];
+    char timeBuf[HTTP_TIME_STRING_LEN] = {0};
 
     _httpd_formatTimeString(timeBuf, modTime);
     if (strcmp(timeBuf, r->request.ifModified) == 0)
@@ -747,6 +623,7 @@ const char *str;
     char *q;
     char *result;
     int unacceptable = 0;
+
     for (p = str; *p; p++)
         if (!ACCEPTABLE((unsigned char)*p))
             unacceptable += 2;
@@ -783,11 +660,11 @@ char *url;
     while (*from) {
         if (*from == '/' && *(from + 1) == '/') {
             from++;
-            continue;
+        } else {
+            *to = *from;
+            to++;
+            from++;
         }
-        *to = *from;
-        to++;
-        from++;
     }
     *to = 0;
 
@@ -798,11 +675,11 @@ char *url;
     while (*from) {
         if (*from == '/' && *(from + 1) == '.' && *(from + 2) == '/') {
             from += 2;
-            continue;
+        } else { 
+            *to = *from;
+            to++;
+            from++;
         }
-        *to = *from;
-        to++;
-        from++;
     }
     *to = 0;
 
@@ -815,14 +692,13 @@ char *url;
         if (*from == '/' && *(from + 1) == '.' && *(from + 2) == '.' && *(from + 3) == '/') {
             to = last;
             from += 3;
-            continue;
-        }
-        if (*from == '/') {
+        } else if (*from == '/') {
             last = to;
+        } else {
+            *to = *from;
+            to++;
+            from++;
         }
-        *to = *from;
-        to++;
-        from++;
     }
     *to = 0;
 }

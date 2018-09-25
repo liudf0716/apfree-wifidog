@@ -31,20 +31,8 @@
 /* Note that libcs other than GLIBC also use this macro to enable vasprintf */
 #define _GNU_SOURCE
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <pthread.h>
-#include <string.h>
-#include <unistd.h>
-#include <syslog.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <errno.h>
 
-#include <zlib.h>
 
-#include <httpd.h>
 
 #include "safe.h"
 #include "debug.h"
@@ -139,7 +127,6 @@ _special_process(request *r, const char *mac, const char *redir_url)
 
 	return 0;
 }
-//<<< liudf added end
 
 /** The 404 handler is also responsible for redirecting to the auth server */
 void
@@ -233,8 +220,7 @@ void
 http_callback_status(httpd * webserver, request * r)
 {
     const s_config *config = config_get_config();
-    char *status = NULL;
-    char *buf;
+    char *status = NULL, *buf = NULL;
 
     if (config->httpdusername &&
         (strcmp(config->httpdusername, r->request.authUser) ||
@@ -258,7 +244,7 @@ http_callback_status(httpd * webserver, request * r)
 void
 http_send_redirect_to_auth(request * r, const char *urlFragment, const char *text)
 {
-    char *protocol = NULL;
+    char *protocol = NULL, *url = NULL;
     int port = 80;
     t_auth_serv *auth_server = get_auth_server();
 
@@ -270,7 +256,6 @@ http_send_redirect_to_auth(request * r, const char *urlFragment, const char *tex
         port = auth_server->authserv_http_port;
     }
 
-    char *url = NULL;
     safe_asprintf(&url, "%s://%s:%d%s%s",
                   protocol, auth_server->authserv_hostname, port, auth_server->authserv_path, urlFragment);
     http_send_redirect(r, url, text);
@@ -284,13 +269,10 @@ http_send_redirect_to_auth(request * r, const char *urlFragment, const char *tex
 void
 http_send_redirect(request * r, const char *url, const char *text)
 {
-    char *message = NULL;
-    char *header = NULL;
-    char *response = NULL;
+    char *message = NULL, *header = NULL, *response = NULL;
     /* Re-direct them to auth server */
     debug(LOG_DEBUG, "Redirecting client browser to %s", url);
     safe_asprintf(&header, "Location: %s", url);
-	// liudf 20160104; change 302 to 307
     safe_asprintf(&response, "307 %s\r\n", text ? text : "Redirecting");
     httpdSetResponse(r, response);
     httpdAddHeader(r, header);
@@ -305,18 +287,17 @@ http_send_redirect(request * r, const char *url, const char *text)
 void
 http_callback_auth(httpd * webserver, request * r)
 {
-    t_client *client;
-    httpVar *token;
-    char *mac;
-    httpVar *logout = httpdGetVariableByName(r, "logout");
-
-    if ((token = httpdGetVariableByName(r, "token"))) {
+    httpVar *token = httpdGetVariableByName(r, "token"); 
+    if (token) {
+        httpVar *logout = httpdGetVariableByName(r, "logout");
+        char *mac;
         /* They supplied variable "token" */
         if (!(mac = arp_get(r->clientAddr))) {
             /* We could not get their MAC address */
             debug(LOG_ERR, "Failed to retrieve MAC address for ip %s", r->clientAddr);
             send_http_page(r, "WiFiDog Error", "Failed to retrieve your MAC address");
         } else {
+            t_client *client;
             /* We have their MAC address */
             LOCK_CLIENT_LIST();
 
@@ -450,7 +431,6 @@ send_http_page(request * r, const char *title, const char *message)
     free(buffer);
 }
 
-//>>> liudf added 20160104
 void
 http_send_js_redirect(request *r, const char *redir_url)
 {
@@ -484,9 +464,9 @@ http_relay_wisper(request *r)
 	httpdOutputDirect(r, apple_wisper);
 }
 
-void send_http_page_direct(request *r,  char *msg) 
+void 
+send_http_page_direct(request *r,  char *msg) 
 {
 	httpdOutputDirect(r, msg);
 }
 
-//<<< liudf added end

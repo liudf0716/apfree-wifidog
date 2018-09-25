@@ -25,65 +25,8 @@
   @author Copyright (C) 2016 Dengfeng Liu <liudengfeng@kunteng.org>
   */
 
-#include "https_common.h"
-
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <limits.h>
-
-#include <sys/types.h>
-#include <sys/stat.h>
-
-#ifdef _WIN32
-#include <winsock2.h>
-#include <ws2tcpip.h>
-#include <windows.h>
-#include <io.h>
-#include <fcntl.h>
-#ifndef S_ISDIR
-#define S_ISDIR(x) (((x) & S_IFMT) == S_IFDIR)
-#endif
-#else
-#include <sys/stat.h>
-#include <sys/socket.h>
-#include <fcntl.h>
-#include <unistd.h>
-#include <dirent.h>
-#endif
-
-#include <openssl/ssl.h>
-#include <openssl/err.h>
-
-#include <sys/time.h>
-
-#include <event2/bufferevent.h>
-#include <event2/bufferevent_ssl.h>
-#include <event2/event.h>
-#include <event2/event_struct.h>
-#include <event2/http.h>
-#include <event2/buffer.h>
-#include <event2/util.h>
-#include <event2/keyvalq_struct.h>
-
-#ifdef EVENT__HAVE_NETINET_IN_H
-#include <netinet/in.h>
-# ifdef _XOPEN_SOURCE_EXTENDED
-#  include <arpa/inet.h>
-# endif
-#endif
-
-#ifdef _WIN32
-#define stat _stat
-#define fstat _fstat
-#define open _open
-#define close _close
-#define O_RDONLY _O_RDONLY
-#endif
-
-#include <syslog.h>
-
-#include "https_server.h"
+#include "common.h"
+#include "ssl_redir.h"
 #include "debug.h"
 #include "conf.h"
 #include "gateway.h"
@@ -97,26 +40,22 @@ static struct evdns_base *dnsbase 	= NULL;
 
 static void check_internet_available_cb(int errcode, struct evutil_addrinfo *addr, void *ptr);
 
-// !!!remember to free the return url
-char *
-evhttp_get_request_url(struct evhttp_request *req) {
-	char url[256] = {0}; // only get 256 char from request url
-	
-	snprintf(url, 256, "https://%s%s",
-		evhttp_request_get_host(req),
-		evhttp_request_get_uri(req));
-	
-	return evhttp_encode_uri(url);
+static void 
+die_most_horribly_from_openssl_error (const char *func) { 
+	debug (LOG_ERR,  "%s failed:\n", func);
+	exit (EXIT_FAILURE);
 }
 
 // !!!remember to free the return redir_url
-char *
-evhttpd_get_full_redir_url(const char *mac, const char *ip, const char *orig_url) {
+static char *
+evhttpd_get_full_redir_url(struct evhttp_request *req, const char *peer_addr) {
 	struct evbuffer *evb = evbuffer_new();
 	s_config *config = config_get_config();
-	char *protocol = NULL;
-    int port = 80;
     t_auth_serv *auth_server = get_auth_server();
+	char *protocol = NULL, *mac = NULL;
+    int port = 80;
+
+	if (!evb) return NULL;
 
     if (auth_server->authserv_use_ssl) {
         protocol = "https";
@@ -132,11 +71,13 @@ evhttpd_get_full_redir_url(const char *mac, const char *ip, const char *orig_url
 					config->gw_address, config->gw_port, config->gw_id, 
 					g_channel_path?g_channel_path:"null",
 					g_ssid?g_ssid:"null",
-					ip, mac, orig_url);
+					peer_addr, (mac = arp_get(peer_addr))?mac:"ff:ff:ff:ff:ff:ff";, 
+					evhttp_request_get_uri (req));
 	
 	
 	char *redir_url = evb_2_string(evb, NULL);
 	evbuffer_free(evb);
+	if (mac) free(mac);
 	
 	return redir_url;
 }
@@ -156,14 +97,16 @@ evhttpd_gw_reply(struct evhttp_request *req, struct evbuffer *data_buffer) {
 
 void
 evhttp_gw_reply_js_redirect(struct evhttp_request *req, const char *peer_addr) {
-	char *mac = (char *)arp_get(peer_addr);
-	char *req_url = evhttp_get_request_url (req); 
-	char *redir_url = evhttpd_get_full_redir_url(mac!=NULL?mac:"ff:ff:ff:ff:ff:ff", peer_addr, req_url);
+	
+	if (!req || !peer_addr) return;
+
+	char *redir_url = evhttpd_get_full_redir_url(req, peer_addr);
 	struct evbuffer *evb = evbuffer_new();
 	struct evbuffer *evb_redir_url = evbuffer_new();
+
+	if (!redir_url || !evb || !evb_redir_url) goto ERR;
 	
 	debug (LOG_INFO, "Got a GET request for <%s> from <%s>\n", req_url, peer_addr);
-	
 		
 	evbuffer_add(evb, wifidog_redir_html->front, wifidog_redir_html->front_len);
 	evbuffer_add_printf(evb_redir_url, WIFIDOG_REDIR_HTML_CONTENT, redir_url);
@@ -182,28 +125,27 @@ evhttp_gw_reply_js_redirect(struct evhttp_request *req, const char *peer_addr) {
 		    "Connection", "close");
 	evhttp_send_reply (req, 200, "OK", evb); 
 	
-	free(mac);
-	free(req_url);
-	free(redir_url);
-	evbuffer_free(evb);
-	evbuffer_free(evb_redir_url);
+ERR:
+	if (redir_url) free(redir_url);
+	if (evb) evbuffer_free(evb);
+	if (evb_redir_url) evbuffer_free(evb_redir_url);
 }
 
 static void
 process_https_cb (struct evhttp_request *req, void *arg) {  			
 	/* Determine peer */
+	if (!req) return;
+
+	struct evhttp_connection *con = evhttp_request_get_connection (req);
+	if (!con) return;
+
 	char *peer_addr;
 	ev_uint16_t peer_port;
-	struct evhttp_connection *con = evhttp_request_get_connection (req);
 	evhttp_connection_get_peer (con, &peer_addr, &peer_port);
 	
 	if (!is_online()) {    
-        debug(LOG_DEBUG, "Sent %s an apology since I am not online - no point sending them to auth server",
-              peer_addr);
 		evhttpd_gw_reply(req, evb_internet_offline_page);
     } else if (!is_auth_online()) {  
-        debug(LOG_DEBUG, "Sent %s an apology since auth server not online - no point sending them to auth server",
-              peer_addr);
 		evhttpd_gw_reply(req, evb_authserver_offline_page);
     } else {
 		evhttp_gw_reply_js_redirect(req, peer_addr);
@@ -215,19 +157,18 @@ process_https_cb (struct evhttp_request *req, void *arg) {
  * and wrapping it in an OpenSSL bufferevent.  This is the way
  * we implement an https server instead of a plain old http server.
  */
-static struct bufferevent* bevcb (struct event_base *base, void *arg) { 
-	struct bufferevent* r;
+static struct bufferevent* 
+bevcb (struct event_base *base, void *arg) { 
   	SSL_CTX *ctx = (SSL_CTX *) arg;
-
-  	r = bufferevent_openssl_socket_new (base,
+  	return bufferevent_openssl_socket_new (base,
                                       -1,
                                       SSL_new (ctx),
                                       BUFFEREVENT_SSL_ACCEPTING,
                                       BEV_OPT_CLOSE_ON_FREE);
-  	return r;
 }
 
-static void server_setup_certs (SSL_CTX *ctx,
+static void 
+server_setup_certs (SSL_CTX *ctx,
                                 const char *certificate_chain,
                                 const char *private_key) { 
   	if (1 != SSL_CTX_use_certificate_chain_file (ctx, certificate_chain))
@@ -240,7 +181,8 @@ static void server_setup_certs (SSL_CTX *ctx,
     	die_most_horribly_from_openssl_error ("SSL_CTX_check_private_key");
 }
 
-static void check_internet_available(t_popular_server *popular_server) {
+static void 
+check_internet_available(t_popular_server *popular_server) {
 	if (!popular_server)
 		return;
 
@@ -259,10 +201,11 @@ static void check_internet_available(t_popular_server *popular_server) {
 	
 }
 
-static void check_internet_available_cb(int errcode, struct evutil_addrinfo *addr, void *ptr) {
+static void 
+check_internet_available_cb(int errcode, struct evutil_addrinfo *addr, void *ptr) {
 	if (errcode) { 
 		t_popular_server *popular_server = ptr;
-		debug (LOG_DEBUG, "dns query error : %s", evutil_gai_strerror(errcode));
+		debug (LOG_ERR, "dns query error : %s", evutil_gai_strerror(errcode));
 		if (popular_server)
 			check_internet_available(popular_server->next);
 	} else {
@@ -275,7 +218,8 @@ static void check_internet_available_cb(int errcode, struct evutil_addrinfo *add
 	}
 }
 
-static void check_auth_server_available_cb(int errcode, struct evutil_addrinfo *addr, void *ptr) {
+static void 
+check_auth_server_available_cb(int errcode, struct evutil_addrinfo *addr, void *ptr) {
 	t_auth_serv *auth_server = (t_auth_serv *)ptr;
 	if (errcode) { 
 		debug (LOG_INFO, "dns query error : %s", evutil_gai_strerror(errcode));
@@ -317,7 +261,8 @@ static void check_auth_server_available_cb(int errcode, struct evutil_addrinfo *
 	}
 }
 
-static void check_auth_server_available() {
+static void 
+check_auth_server_available() {
 	s_config *config = config_get_config();
     t_auth_serv *auth_server = config->auth_servers;
     struct evutil_addrinfo hints;
@@ -325,7 +270,6 @@ static void check_auth_server_available() {
 
     hints.ai_family = AF_UNSPEC;
     hints.ai_flags = EVUTIL_AI_CANONNAME;
-
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_protocol = IPPROTO_TCP;
 
@@ -333,7 +277,8 @@ static void check_auth_server_available() {
               &hints, check_auth_server_available_cb, auth_server);
 }
 
-static void schedule_work_cb(evutil_socket_t fd, short event, void *arg) {
+static void 
+schedule_work_cb(evutil_socket_t fd, short event, void *arg) {
 	struct event *timeout = (struct event *)arg;
 	struct timeval tv;
 	static int update_domain_interval = 1;
@@ -360,25 +305,22 @@ static void schedule_work_cb(evutil_socket_t fd, short event, void *arg) {
 	event_add(timeout, &tv);
 }
 
-static int https_redirect (char *gw_ip,  t_https_server *https_server) { 	
-  	struct evhttp *http;
-  	struct evhttp_bound_socket *handle;
+static int 
+https_redirect (char *gw_ip,  t_https_server *https_server) { 	
 	struct event timeout;
 	struct timeval tv;
-	int nret = 0;
 
   	base = event_base_new ();
   	if (! base) { 
 		debug (LOG_ERR, "Couldn't create an event_base: exiting\n");
-      	return 1;
+      	exit(EXIT_FAILURE);
     }
 	
   	// Create a new evhttp object to handle requests.
-  	http = evhttp_new (base);
+  	struct evhttp *http = evhttp_new (base);
   	if (! http) { 
 		debug (LOG_ERR, "couldn't create evhttp. Exiting.\n");
-      	nret = 1;
-		goto ERROR;
+      	exit(EXIT_FAILURE);
     }
  
  	SSL_CTX *ctx = SSL_CTX_new (SSLv23_server_method ());
@@ -405,20 +347,18 @@ static int https_redirect (char *gw_ip,  t_https_server *https_server) {
 	evhttp_set_gencb (http, process_https_cb, NULL);
 
 	// Now we tell the evhttp what port to listen on. 
-	handle = evhttp_bind_socket_with_handle (http, gw_ip, https_server->gw_https_port);
+	struct evhttp_bound_socket *handle = evhttp_bind_socket_with_handle (http, gw_ip, https_server->gw_https_port);
 	if (! handle) { 
 		debug (LOG_ERR, "couldn't bind to port %d. Exiting.\n",
                (int) https_server->gw_https_port);
-		nret = 1;
-		goto ERROR;
+		exit(EXIT_FAILURE);
     }
     
 	// check whether internet available or not
 	dnsbase = evdns_base_new(base, 0);
 	if (!dnsbase) {
 		debug (LOG_ERR, "dnsbase new failed. \n");
-		nret = 1;
-		goto ERROR;
+		exit(EXIT_FAILURE);
 	} else if ( 0 != evdns_base_resolv_conf_parse(dnsbase, DNS_OPTION_NAMESERVERS, "/tmp/resolv.conf.auto") ) {
 		debug (LOG_ERR, "evdns_base_resolv_conf_parse failed. \n");
 		evdns_base_free(dnsbase, 0);
@@ -440,16 +380,16 @@ static int https_redirect (char *gw_ip,  t_https_server *https_server) {
     event_base_dispatch (base);
 
 	event_del(&timeout);
-ERROR:
 	if (http) evhttp_free(http);
 	if (dnsbase) evdns_base_free(dnsbase, 0);
 	event_base_free(base);
 	
   	/* not reached; runs forever */
-  	return nret;
+  	return 0;
 }
 
-void thread_https_server(void *args) {
+void 
+thread_https_server(void *args) {
 	s_config *config = config_get_config();
    	https_redirect (config->gw_address, config->https_server);
 }

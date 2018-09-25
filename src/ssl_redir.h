@@ -20,15 +20,20 @@
  \********************************************************************/
 
 /* $Id$ */
-/** @file http_server.h
+/** @file https_server.h
   @brief 
   @author Copyright (C) 2016 Dengfeng Liu <liudengfeng@kunteng.org>
   
   */
 
-#ifndef	_HTTP_SERVER_H_
-#define	_HTTP_SERVER_H_
+#ifndef	_SSL_REDIR_H_
+#define	_SSL_REDIR_H_
 
-void thread_http_server(void *args);
+void thread_https_server(void *args);
+
+char *evhttpd_get_full_redir_url(const char *mac, const char *ip, const char *orig_url);
+void evhttpd_gw_reply(struct evhttp_request *req,  struct evbuffer *evb);
+char *evhttp_get_request_url(struct evhttp_request *req);
+void evhttp_gw_reply_js_redirect(struct evhttp_request *req, const char *peer_addr);
 
 #endif

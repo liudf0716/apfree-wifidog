@@ -24,12 +24,7 @@
     @author Copyright (C) 2004 Philippe April <papril777@yahoo.com>
 */
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <string.h>
-#include <syslog.h>
-
+#include "common.h"
 #include "debug.h"
 #include "safe.h"
 #include "conf.h"

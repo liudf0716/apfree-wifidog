@@ -28,13 +28,7 @@
 /* Enable vasprintf */
 #define _GNU_SOURCE
 
-#include <stdarg.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <errno.h>
-#include <syslog.h>
-
+#include "common.h"
 #include "safe.h"
 #include "debug.h"
 #include "firewall.h"

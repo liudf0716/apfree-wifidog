@@ -27,36 +27,6 @@
   @author Copyright (C) 2016 Dengfeng Liu <liudengfeng@kunteng.org>
  */
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <syslog.h>
-#include <pthread.h>
-#include <signal.h>
-#include <errno.h>
-#include <time.h>
-
-/* for strerror() */
-#include <string.h>
-
-/* for wait() */
-#include <sys/wait.h>
-
-/* for unix socket communication*/
-#include <sys/socket.h>
-#include <sys/un.h>
-
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-
-#include <event2/event.h>
-#include <event2/http.h>
-#include <event2/buffer.h>
-#include <event2/util.h>
-#include <event2/keyvalq_struct.h>
-
-#include <sys/epoll.h>
-
 #include "common.h"
 #include "httpd.h"
 #include "safe.h"
@@ -74,37 +44,54 @@
 #include "util.h"
 #include "thread_pool.h"
 #include "ipset.h"
-#include "https_server.h"
+#include "ssl_redir.h"
 #include "https_common.h"
-#include "http_server.h"
 #include "mqtt_thread.h"
 #include "wd_util.h"
-#include "uthash.h"
 
 #define MAX_CON 	(1200)
 
-struct evbuffer	*evb_internet_offline_page 		= NULL;
-struct evbuffer *evb_authserver_offline_page	= NULL;
-struct redir_file_buffer *wifidog_redir_html 	= NULL;
+static struct evbuffer	*evb_internet_offline_page 		= NULL;
+static struct evbuffer *evb_authserver_offline_page	= NULL;
+static struct redir_file_buffer *wifidog_redir_html 	= NULL;
 
 /** XXX Ugly hack 
  * We need to remember the thread IDs of threads that simulate wait with pthread_cond_timedwait
  * so we can explicitly kill them in the termination handler
  */
-static pthread_t tid_fw_counter 	= 0;
-static pthread_t tid_ping 			= 0;
-static pthread_t tid_wdctl		 	= 0;
-static pthread_t tid_https_server	= 0;
-static pthread_t tid_http_server    = 0;
-static pthread_t tid_mqtt_server    = 0;
-static threadpool_t *pool 			= NULL; 
+static pthread_t tid_fw_counter;
+static pthread_t tid_ping;
+static pthread_t tid_wdctl;
+static pthread_t tid_https_server;
+#ifdef _MQTT_SUPPORT_
+static pthread_t tid_mqtt_server;
+#endif
+static threadpool_t *pool; 
 
 
-time_t started_time = 0;
+time_t started_time;
 
 /* The internal web server */
-httpd * webserver = NULL;
+httpd * webserver;
 
+
+static void *
+wd_zeroing_malloc (size_t howmuch) { 
+	return calloc (1, howmuch); 
+}
+
+static void 
+openssl_init (void)
+{ 
+	CRYPTO_set_mem_functions (wd_zeroing_malloc, realloc, free);
+	SSL_library_init ();
+	SSL_load_error_strings ();
+	OpenSSL_add_all_algorithms ();
+
+	debug (LOG_DEBUG, "Using OpenSSL version \"%s\"\nand libevent version \"%s\"\n",
+		  SSLeay_version (SSLEAY_VERSION),
+		  event_get_version ());
+}
 
 static void
 init_wifidog_msg_html()
@@ -367,7 +354,6 @@ termination_handler(int s)
         debug(LOG_INFO, "Explicitly killing the ping thread");
         pthread_kill(tid_ping, SIGKILL);
     }
-	
 	if (tid_wdctl && self != tid_wdctl) {
         debug(LOG_INFO, "Explicitly killing the wdctl thread");
 		pthread_kill(tid_wdctl, SIGKILL);
@@ -376,14 +362,12 @@ termination_handler(int s)
 		debug(LOG_INFO, "Explicitly killing the https_server thread");
 		pthread_kill(tid_https_server, SIGKILL);
 	}
-    if (tid_http_server && self != tid_http_server) {
-        debug(LOG_INFO, "Explicitly killing the http_server thread");
-        pthread_kill(tid_http_server, SIGKILL);
-    }
+#ifdef _MQTT_SUPPORT_
     if (tid_mqtt_server && self != tid_mqtt_server) {
         debug(LOG_INFO, "Explicitly killing the mqtt_server thread");
         pthread_kill(tid_mqtt_server, SIGKILL);
     }
+#endif
 	if(pool != NULL) {
 		threadpool_destroy(pool, 0);
 	}
@@ -537,17 +521,6 @@ create_wifidog_thread(s_config *config)
         termination_handler(0);
     }
     pthread_detach(tid_https_server);
-    
-
-    if (config->work_mode) {
-        // start http server thread
-        result = pthread_create(&tid_http_server, NULL, (void *)thread_http_server, NULL);
-        if (result != 0) {
-            debug(LOG_ERR, "FATAL: Failed to create a new thread (http_server) - exiting");
-            termination_handler(0);
-        }
-        pthread_detach(tid_http_server);
-    }
 
     /* Start heartbeat thread */
     result = pthread_create(&tid_ping, NULL, (void *)thread_ping, NULL);

@@ -29,31 +29,9 @@
 
 #define _GNU_SOURCE
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <syslog.h>
-#include <errno.h>
-#include <pthread.h>
-#include <unistd.h>
-#include <sys/wait.h>
-#include <sys/types.h>
-#include <sys/time.h>
-#include <sys/poll.h>
-#include <netinet/in.h>
-#include <sys/ioctl.h>
-#include <arpa/inet.h>
 
-#include <net/if.h>
 
-#include <fcntl.h>
-#include <net/ethernet.h>
-#include <netinet/ip.h>
-#include <netinet/ip_icmp.h>
-#include <netpacket/packet.h>
 
-#include <string.h>
-#include <netdb.h>
-#include <ctype.h>
 
 #include "util.h"
 #include "debug.h"
@@ -234,7 +212,8 @@ is_valid_mac(const char *mac)
 /*
  * 0, FALSE; 1, TRUE
  */
-int is_socket_valid(int sockfd)
+int 
+is_socket_valid(int sockfd)
 {
 	int err = 0;
 	unsigned errlen = sizeof(err);

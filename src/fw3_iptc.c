@@ -26,23 +26,8 @@
   @author Copyright (C) 2017 ZengFei Zhang <zhangzengfei@kunteng.org>
  */
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <stdarg.h>
-#include <string.h>
-#include <unistd.h>
 
-#include <ctype.h>
-#include <err.h>
-#include <errno.h>
-#include <dlfcn.h>
-#include <getopt.h>
-#include <syslog.h>
-#include <sys/types.h>
-#include <sys/utsname.h>
-
-#include <xtables.h>
-
+#include "common.h"
 #include "fw3_iptc.h"
 #include "debug.h"
 

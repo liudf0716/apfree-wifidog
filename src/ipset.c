@@ -14,21 +14,7 @@
    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-
-#include <syslog.h>
-#include <time.h>
-#include <string.h>
-#include <stdlib.h>
-#include <errno.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <arpa/inet.h>
-#include <linux/version.h>
-#include <linux/netlink.h>
-#include <net/ethernet.h>
-#include <netinet/ether.h>
-
-
+#include "common.h"
 #include "ipset.h"
 #include "safe.h"
 #include "debug.h"

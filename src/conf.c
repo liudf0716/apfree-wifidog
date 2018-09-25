@@ -29,33 +29,6 @@
 
 #define _GNU_SOURCE
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <syslog.h>
-
-#include <pthread.h>
-
-#include <string.h>
-#include <ctype.h>
-
-#include <netdb.h>
-#include <arpa/inet.h>
-
-#include <setjmp.h>
-#include <signal.h>
-#include <time.h>
-#include <sys/time.h>
-
-#include <netinet/in.h>
-#include <arpa/nameser.h>
-#include <resolv.h>
-
-#include <event2/dns.h>
-#include <event2/util.h>
-#include <event2/event.h>
-
-#include <sys/socket.h>
-
 #include "common.h"
 #include "safe.h"
 #include "debug.h"

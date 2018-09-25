@@ -27,18 +27,7 @@
 
 #define _GNU_SOURCE
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <pthread.h>
-#include <string.h>
-#include <stdarg.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <sys/un.h>
-#include <unistd.h>
-#include <syslog.h>
-#include <errno.h>
-
+#include "common.h"
 #include "wdctl.h"
 #include "util.h"
 

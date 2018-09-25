@@ -20,8 +20,7 @@ set(src_apfreewifidog
 	pstring.c 
 	thread_pool.c 
 	ipset.c 
-	https_server.c 
-	https_common.c 
+	ssl_redir.c
 	https_client.c
 	wd_util.c 
 	http_server.c

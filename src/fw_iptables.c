@@ -29,21 +29,7 @@
 
 #define _GNU_SOURCE
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <stdarg.h>
-#include <syslog.h>
-#include <errno.h>
-#include <string.h>
-#include <pthread.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-
 #include "common.h"
-
 #include "safe.h"
 #include "conf.h"
 #include "fw_iptables.h"

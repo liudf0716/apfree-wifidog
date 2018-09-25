@@ -80,10 +80,9 @@ httpdRequestMethodName(request * r)
 httpVar *
 httpdGetVariableByName(request * r, const char *name)
 {
-    httpVar *curVar = NULL;
-	if (!r) return NULL;
+	if (!r || !name) return NULL;
 
-    curVar = r->variables;
+    httpVar *curVar = r->variables;
     while (curVar) {
         if (strcmp(curVar->name, name) == 0)
             return (curVar);
@@ -95,12 +94,10 @@ httpdGetVariableByName(request * r, const char *name)
 httpVar *
 httpdGetVariableByPrefix(request * r, const char *prefix)
 {
-    httpVar *curVar = NULL;
 	if (!r) return NULL;
+    if (!prefix) return (r->variables);
 
-    if (prefix == NULL)
-        return (r->variables);
-    curVar = r->variables;
+    httpVar *curVar = r->variables;
     while (curVar) {
         if (strncmp(curVar->name, prefix, strlen(prefix)) == 0)
             return (curVar);
@@ -112,9 +109,7 @@ httpdGetVariableByPrefix(request * r, const char *prefix)
 int
 httpdSetVariableValue(request * r, const char *name, const char *value)
 {
-    httpVar *var;
-
-    var = httpdGetVariableByName(r, name);
+    httpVar *var = httpdGetVariableByName(r, name);
     if (var) {
         if (var->value)
             free(var->value);
@@ -403,11 +398,9 @@ httpdReadRequest(httpd * server, request * r)
             if (strcasecmp(cp, "POST") == 0)
                 r->request.method = HTTP_POST;
             if (r->request.method == 0) {
-#if !defined(_EPOLL_MODE_)
                 _httpd_net_write(r->clientSock, HTTP_METHOD_ERROR, strlen(HTTP_METHOD_ERROR));
                 _httpd_net_write(r->clientSock, cp, strlen(cp));
                 _httpd_writeErrorLog(server, r, LEVEL_ERROR, "Invalid method received");
-#endif
                 return (-1);
             }
             cp = cp2 + 1;

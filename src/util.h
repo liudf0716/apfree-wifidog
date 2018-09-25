@@ -28,8 +28,7 @@
 #ifndef _UTIL_H_
 #define _UTIL_H_
 
-#include <sys/types.h>
-#include <sys/socket.h>
+struct sockaddr;
 
 /** @brief Initialize the ICMP socket */
 int init_icmp_socket(void);

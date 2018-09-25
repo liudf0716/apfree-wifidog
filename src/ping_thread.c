@@ -30,27 +30,9 @@
 
 #define _GNU_SOURCE
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <pthread.h>
-#include <string.h>
-#include <stdarg.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <netdb.h>
-#include <unistd.h>
-#include <syslog.h>
-#include <signal.h>
-#include <errno.h>
-
-#include <openssl/ssl.h>
-#include <openssl/err.h>
-#include <openssl/rand.h>
-
 #include "safe.h"
 #include "common.h"
+#include "https_common.h"
 #include "conf.h"
 #include "debug.h"
 #include "ping_thread.h"

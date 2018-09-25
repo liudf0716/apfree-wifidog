@@ -31,11 +31,7 @@
  * @brief Threadpool implementation file
  */
 
-#include <stdlib.h>
-#include <pthread.h>
-#include <unistd.h>
-#include <errno.h>
-
+#include "common.h"
 #include "thread_pool.h"
 
 //>>> liudf added 20160224

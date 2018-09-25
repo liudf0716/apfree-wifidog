@@ -24,14 +24,7 @@
     @author Copyright (C) 2004 Philippe April <papril777@yahoo.com>
 */
 
-#include <stdio.h>
-#include <errno.h>
-#include <syslog.h>
-#include <stdarg.h>
-#include <time.h>
-#include <unistd.h>
-#include <signal.h>
-
+#include "common.h"
 #include "debug.h"
 
 debugconf_t debugconf = {

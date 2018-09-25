@@ -29,24 +29,7 @@
 
 #define _GNU_SOURCE
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <syslog.h>
-#include <errno.h>
-#include <pthread.h>
-#include <sys/wait.h>
-#include <sys/types.h>
-
-#include <string.h>
-
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <unistd.h>
-#include <sys/uio.h>
-#include <netdb.h>
-#include <sys/time.h>
-
+#include "common.h"
 #include "httpd.h"
 #include "safe.h"
 #include "util.h"
@@ -163,12 +146,8 @@ fw_set_authup(void)
 char *
 arp_get(const char *req_ip)
 {
-	FILE *proc 		= NULL;
-	char ip[16] 	= {0};
-	char mac[18] 	= {0};
-	char *reply;
 	s_config *config = config_get_config();
-
+	FILE *proc;
 	if (!(proc = fopen(config->arp_table_path, "r"))) {
 		return NULL;
 	}
@@ -177,17 +156,15 @@ arp_get(const char *req_ip)
 	while (!feof(proc) && fgetc(proc) != '\n') ;
 
 	/* find ip, copy mac in reply */
-	reply = NULL;
+	char ip[IP_LENGTH] = {0}, mac[MAC_LENGTH] = {0};
 	while (!feof(proc) && (fscanf(proc, " %15[0-9.] %*s %*s %17[a-fa-f0-9:] %*s %*s", ip, mac) == 2)) {
 		if (strcmp(ip, req_ip) == 0) {
-			reply = safe_strdup(mac);
-			break;
+			return safe_strdup(mac);
 		}
 	}
-
 	fclose(proc);
 
-	return reply;
+	return NULL;
 }
 
 char *

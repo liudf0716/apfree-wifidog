@@ -26,16 +26,7 @@
   
   */
 
-#include <errno.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-#include <syslog.h>
-
-#include <mosquitto.h>
-#include <json-c/json.h>
-
+#include "common.h"
 #include "mqtt_thread.h"
 #include "wdctl_thread.h"
 #include "conf.h"
