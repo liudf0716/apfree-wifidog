@@ -27,31 +27,37 @@
 #ifndef _COMMON_H_
 #define _COMMON_H_
 
+#include <ctype.h>
+#include <dirent.h>
+#include <dlfcn.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <getopt.h>
+#include <limits.h>
+#include <netdb.h>
+#include <pthread.h>
+#include <resolv.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <limits.h>
-#include <fcntl.h>
-#include <unistd.h>
-#include <dirent.h>
 #include <syslog.h>
-#include <pthread.h>
 #include <stdarg.h>
-#include <errno.h>
-#include <fcntl.h>
-#include <errno.h>
-#include <netdb.h>
 #include <setjmp.h>
 #include <signal.h>
-#include <resolv.h>
-#include <dlfcn.h>
-#include <getopt.h>
-#include <dirent.h>
+#include <unistd.h>
 
-
-
-#include <netinet/in.h>
 #include <arpa/nameser.h>
+#include <arpa/inet.h>
+#include <linux/version.h>
+#include <linux/netlink.h>
+#include <linux/if_bridge.h>
+#include <net/ethernet.h>
+#include <net/if.h>
+#include <netinet/ip.h>
+#include <netinet/in.h>
+#include <netinet/ip_icmp.h>
+#include <netinet/ether.h>
+#include <netpacket/packet.h>
 #include <sys/uio.h>
 #include <sys/time.h>
 #include <sys/types.h>
@@ -60,20 +66,10 @@
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/utsname.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
+#include <sys/un.h>
 #include <sys/wait.h>
-#include <linux/version.h>
-#include <linux/netlink.h>
-#include <net/ethernet.h>
-#include <netinet/ether.h>
 #include <sys/poll.h>
 #include <sys/ioctl.h>
-#include <net/if.h>
-#include <netinet/ip.h>
-#include <netinet/ip_icmp.h>
-#include <netpacket/packet.h>
-#include <linux/if_bridge.h>
 
 #include <event2/bufferevent.h>
 #include <event2/bufferevent_ssl.h>
@@ -105,5 +101,7 @@
 #define MAX_BUF             4096
 
 #define HTTP_IP_ADDR_LEN    17
+
+#define	DEFAULT_MAC			"FF:FF:FF:FF:FF:FF"
 
 #endif /* _COMMON_H_ */

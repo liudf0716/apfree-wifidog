@@ -29,25 +29,12 @@
 #ifndef _GATEWAY_H_
 #define _GATEWAY_H_
 
-#include <stdio.h>
-
-#include "httpd.h"
-
 struct redir_file_buffer {
     char    *front;
     int     front_len;
     char    *rear;
     int     rear_len;
 };
-
-extern struct evbuffer	*evb_internet_offline_page;
-extern struct evbuffer *evb_authserver_offline_page;
-extern struct redir_file_buffer *wifidog_redir_html;
-
-extern time_t started_time;
-
-/** @brief The internal web server */
-extern httpd *webserver;
 
 void sigchld_handler(int s);
 void append_x_restartargv(void);

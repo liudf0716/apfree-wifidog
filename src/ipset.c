@@ -53,7 +53,6 @@
 #define NLA_F_NET_BYTEORDER	(1 << 14)
 #endif
 
-#define INADDRSZ        4
 #define INETHSZ			6
 
 struct my_nlattr {

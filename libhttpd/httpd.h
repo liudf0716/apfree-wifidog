@@ -32,6 +32,7 @@
 #define LIB_HTTPD_H 1
 
 #include <sys/time.h>
+#include <stdio.h>
 
 #if !defined(__ANSI_PROTO)
 #if defined(_WIN32) || defined(__STDC__) || defined(__cplusplus)

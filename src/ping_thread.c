@@ -30,10 +30,9 @@
 
 #define _GNU_SOURCE
 
-#include "safe.h"
 #include "common.h"
-#include "https_common.h"
 #include "conf.h"
+#include "safe.h"
 #include "debug.h"
 #include "ping_thread.h"
 #include "util.h"
@@ -44,6 +43,8 @@
 #include "version.h"
 #include "httpd_priv.h"
 #include "https_client.h"
+
+extern time_t started_time;
 
 static void ping(void);
 static void evpings(struct evhttps_request_context *context);

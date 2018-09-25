@@ -45,15 +45,14 @@
 #include "thread_pool.h"
 #include "ipset.h"
 #include "ssl_redir.h"
-#include "https_common.h"
 #include "mqtt_thread.h"
 #include "wd_util.h"
 
 #define MAX_CON 	(1200)
 
-static struct evbuffer	*evb_internet_offline_page 		= NULL;
-static struct evbuffer *evb_authserver_offline_page	= NULL;
-static struct redir_file_buffer *wifidog_redir_html 	= NULL;
+struct evbuffer *evb_internet_offline_page, *evb_authserver_offline_page;
+struct redir_file_buffer *wifidog_redir_html;
+time_t started_time;
 
 /** XXX Ugly hack 
  * We need to remember the thread IDs of threads that simulate wait with pthread_cond_timedwait
@@ -69,7 +68,6 @@ static pthread_t tid_mqtt_server;
 static threadpool_t *pool; 
 
 
-time_t started_time;
 
 /* The internal web server */
 httpd * webserver;

@@ -253,7 +253,7 @@ char *
 _httpd_unescape(str)
 char *str;
 {
-    char *p = str， *q = str;
+    char *p = str, *q = str;
 
     if (!str) return ("");
 

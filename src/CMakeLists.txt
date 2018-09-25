@@ -23,7 +23,6 @@ set(src_apfreewifidog
 	ssl_redir.c
 	https_client.c
 	wd_util.c 
-	http_server.c
 	mqtt_thread.c
 )
 

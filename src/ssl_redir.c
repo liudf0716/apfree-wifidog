@@ -35,6 +35,9 @@
 #include "firewall.h"
 #include "safe.h"
 
+extern struct evbuffer *evb_internet_offline_page, *evb_authserver_offline_page;
+extern struct redir_file_buffer *wifidog_redir_html;
+
 static struct event_base *base		= NULL;
 static struct evdns_base *dnsbase 	= NULL;
 
@@ -46,13 +49,12 @@ die_most_horribly_from_openssl_error (const char *func) {
 	exit (EXIT_FAILURE);
 }
 
-// !!!remember to free the return redir_url
-static char *
-evhttpd_get_full_redir_url(struct evhttp_request *req, const char *peer_addr) {
+char *
+get_full_redir_url(const char *mac, const char *orig_url, const char *peer_addr) {
 	struct evbuffer *evb = evbuffer_new();
 	s_config *config = config_get_config();
     t_auth_serv *auth_server = get_auth_server();
-	char *protocol = NULL, *mac = NULL;
+	char *protocol = NULL;
     int port = 80;
 
 	if (!evb) return NULL;
@@ -71,15 +73,25 @@ evhttpd_get_full_redir_url(struct evhttp_request *req, const char *peer_addr) {
 					config->gw_address, config->gw_port, config->gw_id, 
 					g_channel_path?g_channel_path:"null",
 					g_ssid?g_ssid:"null",
-					peer_addr, (mac = arp_get(peer_addr))?mac:"ff:ff:ff:ff:ff:ff";, 
-					evhttp_request_get_uri (req));
+					peer_addr, mac, orig_url); 
 	
 	
 	char *redir_url = evb_2_string(evb, NULL);
 	evbuffer_free(evb);
-	if (mac) free(mac);
 	
 	return redir_url;
+
+}
+
+// !!!remember to free the return redir_url
+char *
+evhttpd_get_full_redir_url(struct evhttp_request *req, const char *peer_addr) {
+	const char *orig_url = evhttp_request_get_uri(req);
+	char *mac = arp_get(peer_addr);
+	char *pret = get_full_redir_url(mac?mac:DEFAULT_MAC, orig_url, peer_addr);
+
+	if (mac) free(mac);
+	return pret;
 }
 
 void
@@ -106,7 +118,7 @@ evhttp_gw_reply_js_redirect(struct evhttp_request *req, const char *peer_addr) {
 
 	if (!redir_url || !evb || !evb_redir_url) goto ERR;
 	
-	debug (LOG_INFO, "Got a GET request for <%s> from <%s>\n", req_url, peer_addr);
+	debug (LOG_INFO, "Got a GET request for from <%s>\n",  peer_addr);
 		
 	evbuffer_add(evb, wifidog_redir_html->front, wifidog_redir_html->front_len);
 	evbuffer_add_printf(evb_redir_url, WIFIDOG_REDIR_HTML_CONTENT, redir_url);

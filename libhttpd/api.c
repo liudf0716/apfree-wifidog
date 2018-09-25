@@ -747,7 +747,7 @@ httpdOutputLengthDirect(request *r, const char *msg, int msg_len)
     if (r->response.headersSent == 0)
         _httpd_sendHeaders(r, msg_len, 0);
 	if (r->retcode >= 0)
-    	r->retcode = _httpd_net_write(r->clientSock, msg, msg_len);
+    	r->retcode = _httpd_net_write(r->clientSock, (char *)msg, msg_len);
 }
 
 void

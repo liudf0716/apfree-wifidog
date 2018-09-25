@@ -31,23 +31,20 @@
 /* Note that libcs other than GLIBC also use this macro to enable vasprintf */
 #define _GNU_SOURCE
 
-
-
-
-#include "safe.h"
-#include "debug.h"
-#include "conf.h"
 #include "auth.h"
+#include "common.h"
+#include "conf.h"
+#include "centralserver.h"
+#include "client_list.h"
+#include "debug.h"
 #include "firewall.h"
 #include "http.h"
-#include "client_list.h"
-#include "common.h"
-#include "centralserver.h"
-#include "util.h"
-#include "wd_util.h"
 #include "gateway.h"
-#include "https_server.h"
+#include "ssl_redir.h"
+#include "safe.h"
+#include "util.h"
 #include "wdctl_thread.h"
+#include "wd_util.h"
 #include "version.h"
 
 #define APPLE_REDIRECT_MSG  "<!DOCTYPE html>"	\
@@ -61,6 +58,9 @@
 				"</body>"	\
 				"</html>"
 
+
+extern struct evbuffer *evb_internet_offline_page, *evb_authserver_offline_page;
+extern struct redir_file_buffer *wifidog_redir_html;
 
 const char *apple_domains[] = {
 					"captive.apple.com",
@@ -157,7 +157,7 @@ http_callback_404(httpd * webserver, request * r, int error_code)
              r->request.host, r->request.path, r->request.query[0] ? "?" : "", r->request.query);
 		
     	char *url = httpdUrlEncode(tmp_url);	
-		char *redir_url = evhttpd_get_full_redir_url(mac, r->clientAddr, url);
+		char *redir_url = get_full_redir_url(mac, r->clientAddr, url);
         if (nret) {  // if get mac success              
 			t_client *clt = NULL;
             debug(LOG_DEBUG, "Got client MAC address for ip %s: %s", r->clientAddr, mac);	

@@ -59,6 +59,7 @@
 #define WD_SHELL_PATH "/bin/sh"
 #endif
 
+extern time_t started_time;
 
 /* XXX Do these need to be locked ? */
 static time_t last_online_time = 0;
