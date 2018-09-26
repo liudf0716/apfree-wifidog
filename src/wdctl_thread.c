@@ -43,9 +43,7 @@
 #include "gateway.h"
 #include "safe.h"
 
-static int create_unix_socket(const char *);
-static int bufferevent_write(int, char *, size_t);
-static void *thread_wdctl_handler(void *);
+static struct sockaddr_un *create_unix_socket(const char *);
 
 static void wdctl_status(struct bufferevent *);
 static void wdctl_stop(struct bufferevent *);
@@ -81,8 +79,6 @@ static void wdctl_del_trusted_local_maclist(struct bufferevent *, const char *);
 static void wdctl_add_untrusted_maclist(struct bufferevent *, const char *);
 static void wdctl_del_untrusted_maclist(struct bufferevent *, const char *);
 static void wdctl_add_online_client(struct bufferevent *, const char *);
-
-static int wdctl_socket_server;
 
 static struct event_base *wdctl_base;
 
@@ -128,9 +124,9 @@ static struct wdctl_command {
 };
 
 static void 
-wdctl_cmd_process(struct bufferevent *bev, char *req)
+wdctl_cmd_process(struct bufferevent *bev, const char *req)
 {
-    for (int i = 0; i < ARRAYLEN(wdctl_cmd), i++) {
+    for (int i = 0; i < ARRAYLEN(wdctl_cmd); i++) {
         if (!strncmp(wdctl_cmd[i].command, req, strlen(wdctl_cmd[i].command))) {
             if (wdctl_cmd[i].process_cmd) {
                 wdctl_cmd[i].process_cmd(bev);
@@ -148,7 +144,7 @@ create_unix_socket(const char *sock_name)
 {
     struct sockaddr_un *sa_un = malloc(sizeof(struct sockaddr_un));
     if (!sa_un) return NULL;
-    memset(sa_un, 0, sizeof(sa_un));
+    memset(sa_un, 0, sizeof(struct sockaddr_un));
 
     if (!sock_name || strlen(sock_name) > (sizeof(sa_un->sun_path) - 1)) {
         /* TODO: Die handler with logging.... */
@@ -177,7 +173,7 @@ wdctl_client_read_cb(struct bufferevent *bev, void *ctx)
 }
 
 static void
-eventcb(struct bufferevent *bev, short what, void *ctx)
+wdctl_client_event_cb(struct bufferevent *bev, short what, void *ctx)
 {
     if (what & (BEV_EVENT_EOF|BEV_EVENT_ERROR)) {
         bufferevent_free(bev);
@@ -189,7 +185,7 @@ wdctl_listen_new_client(struct evconnlistener *listener, evutil_socket_t fd,
     struct sockaddr *a, int slen, void *p)
 {
 	struct bufferevent *b_client = bufferevent_socket_new(
-        base, fd, BEV_OPT_CLOSE_ON_FREE|BEV_OPT_DEFER_CALLBACKS);
+        wdctl_base, fd, BEV_OPT_CLOSE_ON_FREE|BEV_OPT_DEFER_CALLBACKS);
     
     bufferevent_setcb(b_client, wdctl_client_read_cb, NULL, wdctl_client_event_cb, NULL);
     bufferevent_enable(b_client, EV_READ|EV_WRITE);
@@ -201,7 +197,7 @@ wdctl_listen_new_client(struct evconnlistener *listener, evutil_socket_t fd,
 void
 thread_wdctl(void *arg)
 {
-    struct sockaddr_un *su_socket = create_unix_socket((char *)arg));
+    struct sockaddr_un *su_socket = create_unix_socket((char *)arg);
     if (!su_socket) termination_handler(0);
 	
 	wdctl_base = event_base_new();
@@ -472,7 +468,7 @@ wdctl_show_roam_maclist(struct bufferevent *fd)
         bufferevent_write(fd, status, len);   /* XXX Not handling error because we'd just print the same log line. */
         free(status);
     } else {
-        write(fd, "No", 2);
+        bufferevent_write(fd, "No", 2);
     }
 }
 
@@ -535,7 +531,7 @@ wdctl_show_trusted_maclist(struct bufferevent *fd)
         bufferevent_write(fd, status, len);   /* XXX Not handling error because we'd just print the same log line. */
         free(status);
     } else 
-        write(fd, "No", 2);    
+        bufferevent_write(fd, "No", 2);    
 }
 
 void
@@ -599,7 +595,7 @@ wdctl_show_trusted_local_maclist(struct bufferevent *fd)
         bufferevent_write(fd, status, len);   /* XXX Not handling error because we'd just print the same log line. */
         free(status);
     } else 
-        write(fd, "No", 2);
+        bufferevent_write(fd, "No", 2);
 }
 
 void
@@ -656,7 +652,7 @@ wdctl_show_untrusted_maclist(struct bufferevent *fd)
         bufferevent_write(fd, status, len);   /* XXX Not handling error because we'd just print the same log line. */
         free(status);
     } else
-        write(fd, "Fail", 5);
+        bufferevent_write(fd, "No", 2);
     
 }
 

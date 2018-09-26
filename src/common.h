@@ -65,6 +65,7 @@
 #include <sys/stat.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
+#include <sys/resource.h>
 #include <sys/utsname.h>
 #include <sys/un.h>
 #include <sys/wait.h>
@@ -79,6 +80,8 @@
 #include <event2/buffer.h>
 #include <event2/util.h>
 #include <event2/keyvalq_struct.h>
+#include <event2/buffer.h>
+#include <event2/listener.h>
 
 #include <openssl/ssl.h>
 #include <openssl/err.h>
