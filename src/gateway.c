@@ -467,6 +467,24 @@ wd_init(s_config *config)
 
     debug(LOG_DEBUG, "gw_id [%s] %s = %s ", 
         config->gw_id, config->gw_interface, config->gw_address);
+
+    /*
+     * If needed, increase rlimits to allow as many connections
+     * as needed.
+     */
+    struct rlimit rlim;
+    memset(&rlim, 0, sizeof(struct rlimit));
+    if (getrlimit(RLIMIT_NOFILE, &rlim) != 0) {
+        debug(LOG_ERR, "Failed to getrlimit number of files");
+        exit(EXIT_FAILURE);
+    } else {
+        rlim.rlim_cur = 1024*1024;
+        rlim.rlim_max = 1024*1024;
+        if (setrlimit(RLIMIT_NOFILE, &rlim) != 0) {
+            debug(LOG_ERR, "Failed to set rlimit for open files. Try starting as root or requesting smaller maxconns value.");
+            exit(EXIT_FAILURE);
+        }
+    }
 }
 
 static void

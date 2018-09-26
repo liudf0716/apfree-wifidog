@@ -55,4 +55,6 @@ float get_cpu_usage();
 
 void wd_sleep(unsigned, unsigned );
 
+int setnonblock(int );
+
 #endif                          /* _UTIL_H_ */

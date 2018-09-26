@@ -99,9 +99,10 @@
 
 /** @brief Read buffer for socket read? */
 #define MAX_BUF             4096
-
 #define HTTP_IP_ADDR_LEN    17
-
 #define	DEFAULT_MAC			"FF:FF:FF:FF:FF:FF"
+#define UNSUPPORTED         "not support"
+
+#define ARRAYLEN(array)     (sizeof(array)/sizeof((array)[0]))
 
 #endif /* _COMMON_H_ */
