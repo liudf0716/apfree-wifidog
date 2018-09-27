@@ -426,12 +426,14 @@ wdctl_show_trusted_domains(struct bufferevent *fd)
     char *status = NULL;
     size_t len = 0;
 
-    status = get_trusted_domains_text();
-    len = strlen(status);
-
-    bufferevent_write(fd, status, len);   /* XXX Not handling error because we'd just print the same log line. */
-
-    free(status);
+    char *status = get_trusted_domains_text();
+    if(status) {
+        len = strlen(status);
+        bufferevent_write(fd, status, len);   /* XXX Not handling error because we'd just print the same log line. */
+        free(status);
+    } else 
+        bufferevent_write(fd, "No", 2);
+    
 }
 
 static void 
@@ -647,7 +649,7 @@ static void
 wdctl_show_untrusted_maclist(struct bufferevent *fd)
 {
     char *status = get_untrusted_maclist_text();
-    if (!status) {
+    if (status) {
         size_t len = strlen(status);
         bufferevent_write(fd, status, len);   /* XXX Not handling error because we'd just print the same log line. */
         free(status);

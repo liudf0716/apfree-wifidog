@@ -45,32 +45,31 @@
 #include <setjmp.h>
 #include <signal.h>
 #include <unistd.h>
+#include <poll.h>
 
 #include <arpa/nameser.h>
 #include <arpa/inet.h>
 #include <linux/version.h>
 #include <linux/netlink.h>
 #include <linux/if_bridge.h>
-#include <net/ethernet.h>
-#include <net/if.h>
+#include <linux/if.h>
 #include <netinet/ip.h>
 #include <netinet/in.h>
 #include <netinet/ip_icmp.h>
 #include <netinet/ether.h>
-#include <netpacket/packet.h>
 #include <sys/uio.h>
 #include <sys/time.h>
 #include <sys/types.h>
-#include <sys/stat.h>
-#include <sys/stat.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/resource.h>
 #include <sys/utsname.h>
 #include <sys/un.h>
 #include <sys/wait.h>
-#include <sys/poll.h>
 #include <sys/ioctl.h>
+#include <netpacket/packet.h>
+#include <net/ethernet.h>
+
 
 #include <event2/bufferevent.h>
 #include <event2/bufferevent_ssl.h>

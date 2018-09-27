@@ -425,19 +425,10 @@ void
 client_free_node(t_client * client)
 {
 
-    if (client->mac != NULL)
-        free(client->mac);
-
-    if (client->ip != NULL)
-        free(client->ip);
-
-    if (client->token != NULL)
-        free(client->token);
-	
-	// liudf added 20160128
-	if (client->name != NULL)
-		free(client->name);
-
+    if(client->mac) free(client->mac);
+    if(client->ip) free(client->ip);
+    if(client->token) free(client->token);
+	if (client->name) ree(client->name);
     free(client);
 }
 
@@ -445,20 +436,16 @@ client_free_node(t_client * client)
 void
 offline_client_free_node(t_offline_client *client)
 {
-	if(client->ip != NULL) free(client->ip);
-
-	if(client->mac != NULL) free(client->mac);
-
+	if(client->ip) free(client->ip);
+	if(client->mac) free(client->mac);
 	free(client);
 }
 
 int 
 offline_client_number()
 {
-	t_offline_client *ptr;
 	int number = 0;
-	
-	ptr = first_offline_client;
+	t_offline_client *ptr = first_offline_client;
 	while(NULL != ptr) {
 		ptr = ptr->next;
 		number++;
@@ -469,13 +456,12 @@ offline_client_number()
 int 
 offline_client_ageout()
 {
-	t_offline_client *ptr;
 	time_t cur_time = time(NULL);
 	int number = 0;
 	
 	debug(LOG_DEBUG, "offline_client_ageout !");
 	LOCK_OFFLINE_CLIENT_LIST();	
-	ptr = first_offline_client;
+	t_offline_client *ptr = first_offline_client;
 	while(NULL != ptr) {
 		int idle_time = cur_time - ptr->last_login;
 		if(idle_time > 60) { //if 1 minutes stay idle
