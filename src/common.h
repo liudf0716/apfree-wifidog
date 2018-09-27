@@ -52,7 +52,6 @@
 #include <arpa/inet.h>
 #include <linux/version.h>
 #include <linux/netlink.h>
-#include <linux/if.h>
 #include <netinet/ip.h>
 #include <netinet/in.h>
 #include <netinet/ip_icmp.h>
