@@ -28,7 +28,35 @@
 
 #define _GNU_SOURCE
 
-#include "common.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <syslog.h>
+#include <errno.h>
+#include <string.h>
+#include <pthread.h>
+#include <sys/socket.h>
+
+#include <unistd.h>
+#include <sys/wait.h>
+#include <sys/types.h>
+#include <sys/time.h>
+#include <netinet/in.h>
+#include <sys/ioctl.h>
+#include <arpa/inet.h>
+#include <net/if.h>
+#include <net/if_arp.h>
+#include <fcntl.h>
+#include <net/ethernet.h>
+#include <netinet/ip.h>
+#include <netinet/ip_icmp.h>
+#include <netpacket/packet.h>
+
+#include <uci.h>
+#include <json-c/json.h>
+
+#include <dirent.h>
+#include <linux/if_bridge.h>
+
 #include "gateway.h"
 #include "commandline.h"
 #include "client_list.h"
@@ -83,12 +111,9 @@ static int n_started_requests = 0;
 void
 mark_online()
 {
-    int before;
-    int after;
-
-    before = is_online();
+    int before = is_online();
     time(&last_online_time);
-    after = is_online();        /* XXX is_online() looks at last_online_time... */
+    int after = is_online();        /* XXX is_online() looks at last_online_time... */
 	
     if (before != after) {
         debug(LOG_INFO, "ONLINE status became %s", (after ? "ON" : "OFF"));
@@ -99,12 +124,9 @@ mark_online()
 void
 mark_offline_time() 
 {
-	int before;
-    int after;
-
-    before = is_online();
+    int before = is_online();
     time(&last_offline_time);
-    after = is_online();
+    int after = is_online();
 	
     if (before != after) {
         debug(LOG_INFO, "ONLINE status became %s", (after ? "ON" : "OFF"));
@@ -114,12 +136,9 @@ mark_offline_time()
 void
 mark_offline()
 {
-    int before;
-    int after;
-
-    before = is_online();
+    int before = is_online();
     time(&last_offline_time);
-    after = is_online();
+    int after = is_online();
 		  
     if (before != after) {
         debug(LOG_INFO, "ONLINE status became %s", (after ? "ON" : "OFF"));
@@ -145,12 +164,9 @@ is_online()
 void
 mark_auth_online()
 {
-    int before;
-    int after;
-
-    before = is_auth_online();
+    int before = is_auth_online();
     time(&last_auth_online_time);
-    after = is_auth_online();
+    int after = is_auth_online();
 
     if (before != after) {
         debug(LOG_INFO, "AUTH_ONLINE status became %s", (after ? "ON" : "OFF"));
@@ -378,18 +394,15 @@ get_status_text()
     return pstr_to_string(pstr);
 }
 
-//>>>> liudf added 20151225
 char *
 get_serialize_iplist()
 {
 	pstr_t *pstr = NULL;
-    s_config *config;
+    s_config *config = config_get_config();
 	t_domain_trusted *domain_trusted = NULL;
 	t_ip_trusted	*iplist = NULL;
 	int line = 0;
 
-    config = config_get_config();
-    
 	domain_trusted = config->domains_trusted;
 	if(domain_trusted == NULL)
 		return NULL;
@@ -612,11 +625,9 @@ char *
 get_trusted_domains_text(void)
 {
 	pstr_t *pstr = pstr_new();
-    s_config *config;
+    s_config *config = config_get_config();
 	t_domain_trusted *domain_trusted = NULL;
 	t_ip_trusted	*ip_trusted = NULL;
-
-    config = config_get_config();
     
 	pstr_cat(pstr, "\nTrusted domains and its ip:\n");
 

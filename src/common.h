@@ -44,6 +44,7 @@
 #include <stdarg.h>
 #include <setjmp.h>
 #include <signal.h>
+#include <stdbool.h>
 #include <unistd.h>
 #include <poll.h>
 
@@ -51,7 +52,6 @@
 #include <arpa/inet.h>
 #include <linux/version.h>
 #include <linux/netlink.h>
-#include <linux/if_bridge.h>
 #include <linux/if.h>
 #include <netinet/ip.h>
 #include <netinet/in.h>
@@ -70,7 +70,6 @@
 #include <netpacket/packet.h>
 #include <net/ethernet.h>
 
-
 #include <event2/bufferevent.h>
 #include <event2/bufferevent_ssl.h>
 #include <event2/event.h>
@@ -86,6 +85,7 @@
 #include <openssl/err.h>
 #include <openssl/rand.h>
 
+#include <libiptc/libiptc.h>
 #include <xtables.h>
 #include <json-c/json.h>
 #include <httpd.h>

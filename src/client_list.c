@@ -409,7 +409,7 @@ offline_client_list_destroy(t_offline_client *list)
 {
 	t_offline_client *next;
 
-	while(NULL != list) {
+	while(list) {
 		next = list->next;
 		offline_client_free_node(list);
 		list = next;
@@ -424,11 +424,11 @@ offline_client_list_destroy(t_offline_client *list)
 void
 client_free_node(t_client * client)
 {
-
+    if(!client) return;
     if(client->mac) free(client->mac);
     if(client->ip) free(client->ip);
     if(client->token) free(client->token);
-	if (client->name) ree(client->name);
+	if (client->name) free(client->name);
     free(client);
 }
 
@@ -436,6 +436,7 @@ client_free_node(t_client * client)
 void
 offline_client_free_node(t_offline_client *client)
 {
+    if(!client) return;
 	if(client->ip) free(client->ip);
 	if(client->mac) free(client->mac);
 	free(client);
@@ -446,7 +447,7 @@ offline_client_number()
 {
 	int number = 0;
 	t_offline_client *ptr = first_offline_client;
-	while(NULL != ptr) {
+	while(ptr) {
 		ptr = ptr->next;
 		number++;
 	}
@@ -462,7 +463,7 @@ offline_client_ageout()
 	debug(LOG_DEBUG, "offline_client_ageout !");
 	LOCK_OFFLINE_CLIENT_LIST();	
 	t_offline_client *ptr = first_offline_client;
-	while(NULL != ptr) {
+	while(ptr) {
 		int idle_time = cur_time - ptr->last_login;
 		if(idle_time > 60) { //if 1 minutes stay idle
 			t_offline_client *ptmp = ptr;
@@ -506,7 +507,7 @@ offline_client_list_remove(t_offline_client *client)
 {
 	t_offline_client *ptr = first_offline_client;
 	
-	if(ptr == NULL) {
+	if(!ptr) {
 		debug(LOG_ERR, "Node offline list empty!");
 	} else if (ptr == client) {
 		first_offline_client = ptr->next;
@@ -532,17 +533,14 @@ offline_client_list_remove(t_offline_client *client)
 void
 client_list_remove(t_client * client)
 {
-    t_client *ptr;
-
-    ptr = firstclient;
-
+    t_client *ptr = firstclient;
     if (ptr == NULL) {
         debug(LOG_ERR, "Node list empty!");
     } else if (ptr == client) {
         firstclient = ptr->next;
     } else {
         /* Loop forward until we reach our point in the list. */
-        while (ptr->next != NULL && ptr->next != client) {
+        while (ptr->next && ptr->next != client) {
             ptr = ptr->next;
         }
         /* If we reach the end before finding out element, complain. */
@@ -558,10 +556,8 @@ client_list_remove(t_client * client)
 void
 reset_client_list()
 {
-	t_client *ptr;
-
-    ptr = firstclient;
-    while (NULL != ptr) {
+    t_client *ptr = firstclient;
+    while (ptr) {
 		ptr->is_online = 0;
         ptr = ptr->next;
     }
@@ -583,7 +579,7 @@ add_online_client(const char *info)
 	const char *name	= NULL;
 	t_client *old_client = NULL;	
 
-	if(info == NULL)
+	if(!info)
 		return 1;
 	
 	client_info = json_tokener_parse(info);

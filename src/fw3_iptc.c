@@ -26,6 +26,7 @@
   @author Copyright (C) 2017 ZengFei Zhang <zhangzengfei@kunteng.org>
  */
 
+#include <arpa/inet.h>
 
 #include "common.h"
 #include "fw3_iptc.h"

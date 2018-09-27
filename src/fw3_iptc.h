@@ -29,13 +29,6 @@
 #ifndef __FW3_IPTABLES_H
 #define __FW3_IPTABLES_H
 
-#include <stdbool.h>
-#include <libiptc/libiptc.h>
-
-#include <netdb.h>
-#include <arpa/inet.h>
-#include <netinet/ether.h>
-
 /* libipt*ext.so interfaces */
 extern void init_extensions(void);
 extern void init_extensions4(void);
@@ -98,6 +91,9 @@ struct fw3_address
 
 void *
 fw3_alloc(size_t size);
+
+struct fw3_ipt_handle;
+enum fw3_table;
 
 struct fw3_ipt_handle *
 fw3_ipt_open(enum fw3_table table);

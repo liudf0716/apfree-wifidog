@@ -423,12 +423,9 @@ show_trusted_domains(void)
 static void
 wdctl_show_trusted_domains(struct bufferevent *fd)
 {
-    char *status = NULL;
-    size_t len = 0;
-
     char *status = get_trusted_domains_text();
     if(status) {
-        len = strlen(status);
+        size_t len = strlen(status);
         bufferevent_write(fd, status, len);   /* XXX Not handling error because we'd just print the same log line. */
         free(status);
     } else 

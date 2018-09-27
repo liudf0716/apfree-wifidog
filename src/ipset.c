@@ -14,6 +14,8 @@
    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <arpa/inet.h>
+
 #include "common.h"
 #include "ipset.h"
 #include "safe.h"
