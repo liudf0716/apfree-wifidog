@@ -38,7 +38,7 @@ static void parse_commandline(int, char **);
 static int connect_to_server(const char *);
 static void send_request(int, const char *);
 static void read_response(int sock);
-static void wdctl_cmd_process(int argc, char **argv, int optind)
+static void wdctl_cmd_process(int argc, char **argv, int optind);
 
 static struct wdctl_client_command {
     const char *command;
@@ -77,7 +77,7 @@ static struct wdctl_client_command {
     {"add_untrusted_mac", WDCTL_ADD_UNTRUSTED_MACLIST},
     {"del_untrusted_mac", WDCTL_DEL_UNTRUSTED_MACLIST},
     {"add_online_client", WDCTL_ADD_ONLINE_CLIENT}
-}
+};
 
 /** @internal
  * @brief Print usage
