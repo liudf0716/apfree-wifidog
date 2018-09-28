@@ -35,7 +35,6 @@
 #define WDCTL_STOP		2
 #define WDCTL_KILL		3
 #define WDCTL_RESTART	4
-//>>>> liudf added 20151225
 #define WDCTL_ADD_TRUSTED_DOMAINS		5
 #define	WDCTL_REPARSE_TRUSTED_DOMAINS	6
 #define	WDCTL_CLEAR_TRUSTED_DOMAINS		7
@@ -67,11 +66,5 @@
 #define	WDCTL_DEL_TRUSTED_LOCAL_MACLIST			33
 #define	WDCTL_SHOW_TRUSTED_LOCAL_MACLIST		34
 #define	WDCTL_CLEAR_TRUSTED_LOCAL_MACLIST		35
-//<<<< liudf added end
 
-typedef struct {
-    char *socket;
-    int command;
-    char *param;
-} wdctl_config;
 #endif

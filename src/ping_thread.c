@@ -150,7 +150,7 @@ get_ping_request(const struct sys_info *info)
              check_and_get_wifidog_uptime(info->sys_uptime),
 			 g_online_clients,
 			 offline_client_ageout(),
-			 NULL != g_ssid?g_ssid:"NULL",
+			 NULL != g_ssid?g_ssid:"null",
 			 NULL != g_version?g_version:"null",
 			 NULL != g_type?g_type:"null",
 			 NULL != g_name?g_name:"null",
@@ -209,7 +209,6 @@ get_sys_info(struct sys_info *info)
             debug(LOG_CRIT, "Failed to read uptime");
 
         fclose(fh);
-		fh = NULL;
     }
 	
 	if ((fh = fopen("/proc/meminfo", "r"))) {
@@ -223,7 +222,6 @@ get_sys_info(struct sys_info *info)
             }
         }
         fclose(fh);
-		fh = NULL;
     }
 	
 	if ((fh = fopen("/proc/loadavg", "r"))) {
@@ -231,7 +229,6 @@ get_sys_info(struct sys_info *info)
             debug(LOG_CRIT, "Failed to read loadavg");
 
         fclose(fh);
-		fh = NULL;
     }
 	
 	if ((fh = fopen("/proc/sys/net/netfilter/nf_conntrack_count", "r"))) {
@@ -265,7 +262,6 @@ get_sys_info(struct sys_info *info)
 		if ((fh = fopen("/var/sysinfo/board_type", "r"))) {
 			char name[32] = {0};
 			if (fgets(name, 31, fh)) {
-				fh = NULL;
 				trim_newline(name);
 				if(strlen(name) > 0)
 					g_type = safe_strdup(name);
@@ -278,7 +274,6 @@ get_sys_info(struct sys_info *info)
 		if ((fh = fopen("/var/sysinfo/board_name", "r"))) {
 			char name[32] = {0};
 			if (fgets(name, 31, fh)) {
-				fh = NULL;
 				trim_newline(name);
 				if(strlen(name) > 0)
 					g_name = safe_strdup(name);

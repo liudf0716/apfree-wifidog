@@ -175,7 +175,8 @@ wdctl_client_read_cb(struct bufferevent *bev, void *ctx)
 static void
 wdctl_client_event_cb(struct bufferevent *bev, short what, void *ctx)
 {
-    if (what & (BEV_EVENT_EOF|BEV_EVENT_ERROR)) {
+    if (what & (BEV_EVENT_EOF|BEV_EVENT_ERROR)) {     
+        evutil_closesocket(bufferevent_getfd(bev));
         bufferevent_free(bev);
     }
 }

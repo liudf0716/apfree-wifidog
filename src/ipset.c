@@ -118,6 +118,8 @@ void  ipset_init(void)
 {
   	if ((ipset_sock = socket(AF_NETLINK, SOCK_RAW, NETLINK_NETFILTER)) != -1 &&
         (bind(ipset_sock, (struct sockaddr *)&snl, sizeof(snl)) != -1))
+		return;
+	else
 		exit(EXIT_FAILURE);
 }
 

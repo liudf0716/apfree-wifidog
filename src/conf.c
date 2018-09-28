@@ -29,8 +29,6 @@
 
 #define _GNU_SOURCE
 
-#include <arpa/inet.h>
-
 #include "common.h"
 #include "safe.h"
 #include "debug.h"

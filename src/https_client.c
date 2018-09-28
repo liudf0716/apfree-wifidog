@@ -359,23 +359,11 @@ http_get_ex(const int sockfd, const char *req, int wait)
     debug(LOG_DEBUG, "Reading response timeout [%d]", wait);
     done = 0;
     do {		
-#ifdef	SELECT
-		fd_set readfds;
-		struct timeval timeout;
-        FD_ZERO(&readfds);
-        FD_SET(sockfd, &readfds);
-        timeout.tv_sec = wait;    
-        timeout.tv_usec = 0;
-        nfds = sockfd + 1;
-
-        nfds = select(nfds, &readfds, NULL, NULL, &timeout);
-#else
 		struct pollfd fds;
         memset(&fds, 0, sizeof(fds));
         fds.fd      = sockfd;
         fds.events   = POLLIN;
         nfds = poll(&fds, 1, wait*1000);
-#endif
         if (nfds > 0) {
             /** We don't have to use FD_ISSET() because there
 			 *  was only one fd. */

@@ -26,8 +26,6 @@
   @author Copyright (C) 2016 Dengfeng Liu <liudengfeng@kunteng.org>
  */
 
-#include <arpa/inet.h>
-
 #include "common.h"
 #include "httpd.h"
 #include "safe.h"

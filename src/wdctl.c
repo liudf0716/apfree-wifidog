@@ -31,44 +31,53 @@
 #include "wdctl.h"
 #include "util.h"
 
-static wdctl_config config;
+#define WDCTL_MSG_LENG  1024*8
 
 static void usage(void);
-static void init_config(void);
 static void parse_commandline(int, char **);
 static int connect_to_server(const char *);
-static size_t send_request(int, const char *);
-static void wdctl_status(void);
-static void wdctl_stop(void);
-static void wdctl_reset(void);
-static void wdctl_restart(void);
-//>>> liudf added 20151225
-static void wdctl_add_trusted_pan_domains(void);
-static void wdctl_del_trusted_pan_domains(void);
-static void wdctl_clear_trusted_pan_domains(void);
-static void wdctl_add_trusted_iplist(void);
-static void wdctl_del_trusted_iplist(void);
-static void wdctl_clear_trusted_iplist(void);
-static void wdctl_add_trusted_domains(void);
-static void wdctl_del_trusted_domains(void);
-static void wdctl_reparse_trusted_domains(void);
-static void wdctl_clear_trusted_domains(void);
-static void wdctl_show_trusted_domains(void);
-static void wdctl_add_domain_ip(void);
-static void wdctl_add_trusted_maclist(void);
-static void wdctl_del_trusted_maclist(void);
-static void wdctl_show_trusted_maclist(void);
-static void wdctl_clear_trusted_maclist(void);
-static void wdctl_add_untrusted_maclist(void);
-static void wdctl_del_untrusted_maclist(void);
-static void wdctl_show_untrusted_maclist(void);
-static void wdctl_clear_untrusted_maclist(void);
-static void wdctl_add_roam_maclist(void);
-static void wdctl_show_roam_maclist(void);
-static void wdctl_clear_roam_maclist(void);
-static void wdctl_user_cfg_save(void);
-static void wdctl_add_online_client(void);
-//<<< liudf added end
+static void send_request(int, const char *);
+static void read_response(int sock);
+static void wdctl_cmd_process(int argc, char **argv, int optind)
+
+static struct wdctl_client_command {
+    const char *command;
+    int cmd_type;
+} wdctl_clt_cmd [] = {
+    {"status", WDCTL_STATUS},
+    {"stop", WDCTL_STOP},
+    {"clear_trusted_pdomains", WDCTL_CLEAR_TRUSTED_PAN_DOMAINS},
+    {"show_trusted_pdomains", WDCTL_SHOW_TRUSTED_PAN_DOMAINS},
+    {"clear_trusted_iplist", WDCTL_CLEAR_TRUSTED_IPLIST},
+    {"reparse_trusted_domains", WDCTL_REPARSE_TRUSTED_DOMAINS},
+    {"clear_trusted_domains", WDCTL_CLEAR_TRUSTED_DOMAINS},
+    {"show_trusted_domains", WDCTL_SHOW_TRUSTED_DOMAINS},
+    {"show_roam_maclist", WDCTL_SHOW_ROAM_MACLIST},
+    {"clear_roam_maclist", WDCTL_CLEAR_ROAM_MACLIST},
+    {"show_trusted_maclist", WDCTL_SHOW_TRUSTED_MACLIST},
+    {"clear_trusted_maclist", WDCTL_CLEAR_TRUSTED_MACLIST},
+    {"show_trusted_local_maclist", WDCTL_SHOW_TRUSTED_LOCAL_MACLIST},
+    {"clear_trusted_local_maclist", WDCTL_CLEAR_TRUSTED_LOCAL_MACLIST},
+    {"show_untrusted_maclist", WDCTL_SHOW_UNTRUSTED_MACLIST},
+    {"clear_untrusted_maclist", WDCTL_CLEAR_UNTRUSTED_MACLIST},
+    {"user_cfg_save", WDCTL_USER_CFG_SAVE},
+    {"reset", WDCTL_KILL},
+    {"add_trusted_pdomains", WDCTL_ADD_TRUSTED_PAN_DOMAINS},
+    {"del_trusted_pdomains", WDCTL_DEL_TRUSTED_PAN_DOMAINS},
+    {"add_trusted_domains", WDCTL_ADD_TRUSTED_DOMAINS},
+    {"del_trusted_domains", WDCTL_DEL_TRUSTED_DOMAINS},
+    {"add_trusted_iplist", WDCTL_ADD_TRUSTED_IPLIST},
+    {"del_trusted_iplist", WDCTL_DEL_TRUSTED_IPLIST},
+    {"add_domain_ip", WDCTL_ADD_DOMAIN_IP},
+    {"add_roam_mac", WDCTL_ADD_ROAM_MACLIST},
+    {"add_trusted_mac", WDCTL_ADD_TRUSTED_MACLIST},
+    {"del_trusted_mac", WDCTL_DEL_TRUSTED_MACLIST},
+    {"add_trusted_local_mac", WDCTL_ADD_TRUSTED_LOCAL_MACLIST},
+    {"del_trusted_local_mac", WDCTL_DEL_TRUSTED_LOCAL_MACLIST},
+    {"add_untrusted_mac", WDCTL_ADD_UNTRUSTED_MACLIST},
+    {"del_untrusted_mac", WDCTL_DEL_UNTRUSTED_MACLIST},
+    {"add_online_client", WDCTL_ADD_ONLINE_CLIENT}
+}
 
 /** @internal
  * @brief Print usage
@@ -88,8 +97,6 @@ usage(void)
     fprintf(stdout, "  reset [mac|ip]    Reset the specified mac or ip connection\n");
     fprintf(stdout, "  status            Obtain the status of wifidog\n");
     fprintf(stdout, "  stop              Stop the running wifidog\n");
-    fprintf(stdout, "  restart           Re-start the running wifidog (without disconnecting active users!)\n");
-	//>>> liudf added 20151225
     fprintf(stdout, "  add_trusted_pdomains [domain1,domain2...]	Add trusted pan-domains\n");
     fprintf(stdout, "  del_trusted_pdomains [domain1,domain2...]	Del trusted pan-domains\n");
     fprintf(stdout, "  clear_trusted_pdomains	Clear all trusted pan-domains\n");
@@ -116,19 +123,26 @@ usage(void)
     fprintf(stdout, "  show_untrusted_mac		Show untrusted mac list\n");
     fprintf(stdout, "  user_cfg_save			User config save\n");
 	fprintf(stdout, "  add_online_client 		Add online client\n");
-	//<<< liudf added end
     fprintf(stdout, "\n");
 }
 
-/** @internal
- *
- * Init default values in config struct
- */
 static void
-init_config(void)
+wdctl_cmd_process(int argc, char **argv, int optind)
 {
-    config.socket = strdup(DEFAULT_SOCK);
-    config.command = WDCTL_UNDEF;
+    for (int i = 0; i < ARRAYLEN(wdctl_clt_cmd); i++) {
+        if (!strcmp(wdctl_clt_cmd[i].command, *(argv+optind)) {
+            config.command = wdctl_clt_cmd[i].cmd_type;
+            if ((argc - (optind + 1)) > 0) {
+                wdctl_command_action(wdctl_clt_cmd[i].command, *(argv + optind + 1));
+            } else 
+                wdctl_command_action(wdctl_clt_cmd[i].command, NULL);
+            return;
+        }
+    }
+
+    fprintf(stderr, "wdctl: Error: Invalid command \"%s\"\n", *(argv + optind));
+    usage();
+    exit(EXIT_FAILURE);
 }
 
 /** @internal
@@ -167,190 +181,18 @@ parse_commandline(int argc, char **argv)
         exit(1);
     }
 
-    if (strcmp(*(argv + optind), "status") == 0) {
-        config.command = WDCTL_STATUS;
-    } else if (strcmp(*(argv + optind), "stop") == 0) {
-        config.command = WDCTL_STOP;
-    } else if (strcmp(*(argv + optind), "reset") == 0) {
-        config.command = WDCTL_KILL;
-        if ((argc - (optind + 1)) <= 0) {
-            fprintf(stderr, "wdctl: Error: You must specify an IP " "or a Mac address to reset\n");
-            usage();
-            exit(1);
-        }
-        config.param = strdup(*(argv + optind + 1));
-    } else if (strcmp(*(argv + optind), "restart") == 0) {
-        config.command = WDCTL_RESTART;
-	//>>> liudf added 20151225
-	} else if (strcmp(*(argv + optind), "add_trusted_pdomains") == 0) {
-		config.command = WDCTL_ADD_TRUSTED_PAN_DOMAINS;
-		if ((argc - (optind + 1)) <= 0) {
-			fprintf(stderr, "wdctl: Error: You must specify trusted domains" "seperated with comma\n");
-            usage();
-            exit(1);
-		}
-        config.param = strdup(*(argv + optind + 1));
-	
-	} else if (strcmp(*(argv + optind), "del_trusted_pdomains") == 0) {
-		config.command = WDCTL_DEL_TRUSTED_PAN_DOMAINS;
-		if ((argc - (optind + 1)) <= 0) {
-			fprintf(stderr, "wdctl: Error: You must specify trusted domains" "seperated with comma\n");
-            usage();
-            exit(1);
-		}
-        config.param = strdup(*(argv + optind + 1));	
+    wdctl_cmd_parse(argc, argv, optind);
 
-	} else if (strcmp(*(argv + optind), "add_trusted_domains") == 0) {
-		config.command = WDCTL_ADD_TRUSTED_DOMAINS;
-		if ((argc - (optind + 1)) <= 0) {
-			fprintf(stderr, "wdctl: Error: You must specify trusted domains" "seperated with comma\n");
-            usage();
-            exit(1);
-		}
-        config.param = strdup(*(argv + optind + 1));
-	
-	} else if (strcmp(*(argv + optind), "del_trusted_domains") == 0) {
-		config.command = WDCTL_DEL_TRUSTED_DOMAINS;
-		if ((argc - (optind + 1)) <= 0) {
-			fprintf(stderr, "wdctl: Error: You must specify trusted domains" "seperated with comma\n");
-            usage();
-            exit(1);
-		}
-        config.param = strdup(*(argv + optind + 1));	
-
-	} else if (strcmp(*(argv + optind), "add_trusted_iplist") == 0) {
-		config.command = WDCTL_ADD_TRUSTED_IPLIST;
-		if ((argc - (optind + 1)) <= 0) {
-			fprintf(stderr, "wdctl: Error: You must specify trusted ip list" "seperated with comma\n");
-            usage();
-            exit(1);
-		}
-        config.param = strdup(*(argv + optind + 1));
-	
-	} else if (strcmp(*(argv + optind), "del_trusted_iplist") == 0) {
-		config.command = WDCTL_DEL_TRUSTED_IPLIST;
-		if ((argc - (optind + 1)) <= 0) {
-			fprintf(stderr, "wdctl: Error: You must specify trusted ip list" "seperated with comma\n");
-            usage();
-            exit(1);
-		}
-        config.param = strdup(*(argv + optind + 1));
-
-	} else if (strcmp(*(argv + optind), "clear_trusted_iplist") == 0) {
-		config.command = WDCTL_CLEAR_TRUSTED_IPLIST;	
-	} else if (strcmp(*(argv + optind), "reparse_trusted_domains") == 0) {
-		config.command = WDCTL_REPARSE_TRUSTED_DOMAINS;
-	} else if (strcmp(*(argv + optind), "clear_trusted_domains") == 0) {
-		config.command = WDCTL_CLEAR_TRUSTED_DOMAINS;
-	} else if (strcmp(*(argv + optind), "clear_trusted_pdomains") == 0) {
-		config.command = WDCTL_CLEAR_TRUSTED_PAN_DOMAINS;
-
-	} else if (strcmp(*(argv + optind), "show_trusted_domains") == 0) {
-		config.command = WDCTL_SHOW_TRUSTED_DOMAINS;
-	} else if (strcmp(*(argv + optind), "add_domain_ip") == 0) {
-		config.command = WDCTL_ADD_DOMAIN_IP;
-		if ((argc - (optind + 1)) <= 0) {
-			fprintf(stderr, "wdctl: Error: You must specify domain and its ip\n");
-            usage();
-            exit(1);
-		}
-        config.param = strdup(*(argv + optind + 1));
-	} else if (strcmp(*(argv + optind), "add_trusted_mac") == 0) {
-		config.command = WDCTL_ADD_TRUSTED_MACLIST;
-		if ((argc - (optind + 1)) <= 0) {
-			fprintf(stderr, "wdctl: Error: You must specify mac list\n");
-            usage();
-            exit(1);
-		}
-        config.param = strdup(*(argv + optind + 1));
-	
-	} else if (strcmp(*(argv + optind), "del_trusted_mac") == 0) {
-		config.command = WDCTL_DEL_TRUSTED_MACLIST;
-		if ((argc - (optind + 1)) <= 0) {
-			fprintf(stderr, "wdctl: Error: You must specify mac list\n");
-            usage();
-            exit(1);
-		}
-        config.param = strdup(*(argv + optind + 1));
-
-	} else if (strcmp(*(argv + optind), "show_trusted_mac") == 0) {
-		config.command = WDCTL_SHOW_TRUSTED_MACLIST;
-	} else if (strcmp(*(argv + optind), "clear_trusted_mac") == 0) {
-		config.command = WDCTL_CLEAR_TRUSTED_MACLIST;
-	} else if (strcmp(*(argv + optind), "add_trusted_local_mac") == 0) {
-		config.command = WDCTL_ADD_TRUSTED_LOCAL_MACLIST;
-		if ((argc - (optind + 1)) <= 0) {
-			fprintf(stderr, "wdctl: Error: You must specify mac list\n");
-            usage();
-            exit(1);
-		}
-        config.param = strdup(*(argv + optind + 1));
-	
-	} else if (strcmp(*(argv + optind), "del_trusted_local_mac") == 0) {
-		config.command = WDCTL_DEL_TRUSTED_LOCAL_MACLIST;
-		if ((argc - (optind + 1)) <= 0) {
-			fprintf(stderr, "wdctl: Error: You must specify mac list\n");
-            usage();
-            exit(1);
-		}
-        config.param = strdup(*(argv + optind + 1));
-
-	} else if (strcmp(*(argv + optind), "show_trusted_local_mac") == 0) {
-		config.command = WDCTL_SHOW_TRUSTED_LOCAL_MACLIST;
-	} else if (strcmp(*(argv + optind), "clear_trusted_local_mac") == 0) {
-		config.command = WDCTL_CLEAR_TRUSTED_LOCAL_MACLIST;
-	
-	} else if (strcmp(*(argv + optind), "add_untrusted_mac") == 0) {
-		config.command = WDCTL_ADD_UNTRUSTED_MACLIST;
-		if ((argc - (optind + 1)) <= 0) {
-			fprintf(stderr, "wdctl: Error: You must specify mac list\n");
-            usage();
-            exit(1);
-		}
-        config.param = strdup(*(argv + optind + 1));
-	
-	} else if (strcmp(*(argv + optind), "del_untrusted_mac") == 0) {
-		config.command = WDCTL_DEL_UNTRUSTED_MACLIST;
-		if ((argc - (optind + 1)) <= 0) {
-			fprintf(stderr, "wdctl: Error: You must specify mac list\n");
-            usage();
-            exit(1);
- 		}
-        config.param = strdup(*(argv + optind + 1));
-
-	} else if (strcmp(*(argv + optind), "show_untrusted_mac") == 0) {
-		config.command = WDCTL_SHOW_UNTRUSTED_MACLIST;
-	} else if (strcmp(*(argv + optind), "clear_untrusted_mac") == 0) {
-		config.command = WDCTL_CLEAR_UNTRUSTED_MACLIST;
-	} else if (strcmp(*(argv + optind), "user_cfg_save") == 0) {
-		config.command = WDCTL_USER_CFG_SAVE;
-	} else if (strcmp(*(argv + optind), "add_online_client") == 0) {
-		config.command = WDCTL_ADD_ONLINE_CLIENT;
-		if ((argc - (optind + 1)) <= 0) {
-			fprintf(stderr, "wdctl: Error: You must specify client's ip mac token\n");
-            usage();
-            exit(1);
-		}
-        config.param = strdup(*(argv + optind + 1));
-	//<<< liudf added end
-    } else {
-        fprintf(stderr, "wdctl: Error: Invalid command \"%s\"\n", *(argv + optind));
-        usage();
-        exit(1);
-    }
 }
 
 static int
 connect_to_server(const char *sock_name)
 {
-    int sock;
     struct sockaddr_un sa_un;
-
-    /* Connect to socket */
-    sock = socket(AF_UNIX, SOCK_STREAM, 0);
+    int sock = socket(AF_UNIX, SOCK_STREAM, 0);
     if (sock < 0) {
         fprintf(stdout, "wdctl: could not get socket (Error: %s)\n", strerror(errno));
-        exit(1);
+        exit(EXIT_FAILURE);
     }
     memset(&sa_un, 0, sizeof(sa_un));
     sa_un.sun_family = AF_UNIX;
@@ -358,941 +200,41 @@ connect_to_server(const char *sock_name)
 
     if (wd_connect(sock, (struct sockaddr *)&sa_un, strlen(sa_un.sun_path) + sizeof(sa_un.sun_family), 2)) {
         fprintf(stdout, "wdctl: wifidog probably not started (Error: %s)\n", strerror(errno));
-        exit(1);
+        exit(EXIT_FAILURE);
     }
 
     return sock;
 }
 
-static size_t
+static void 
 send_request(int sock, const char *request)
 {
-    size_t len;
-    ssize_t written;
+    struct pollfd fds;	
+    fds.fd      = sock;
+    fds.events   = POLLOUT;
 
-    len = 0;
-    while (len != strlen(request)) {
-        written = write(sock, (request + len), strlen(request) - len);
-        if (written == -1) {
-            fprintf(stderr, "Write to wifidog failed: %s\n", strerror(errno));
-            exit(1);
-        }
-        len += (size_t) written;
-    }
-
-    return len;
+    if (poll(&fds, 1, WDCTL_TIMEOUT) > 0 && fds.revents == POLLOUT) {
+        write(sock, buf, len);
+    } 
 }
 
-//>>> liudf added 20151225
 static void
-wdctl_command_action(const char *command)
+wdctl_command_action(const char *cmd, const char *param)
 {
-	int sock;
-    char buffer[4096] = {0};
-    char request[4096] = {0};
-    size_t len;
-    ssize_t rlen;
-	fd_set read_fds;
-	struct timeval timeout;
-	int activity = 0;
+    char request[WDCTL_MSG_LENG] = {0};	
+    int sock = connect_to_server(config.socket);
 	
- 	FD_ZERO(&read_fds);
-		
-    sock = connect_to_server(config.socket);
-	
-	FD_SET(sock, &read_fds);
-	
-	if(config.param)	
-		snprintf(request, 4096, "%s %s\r\n\r\n", command, config.param);
+	if(param)	
+		snprintf(request, WDCTL_MSG_LENG, "%s %s\r\n\r\n", cmd, param);
 	else
-		snprintf(request, 4096, "%s \r\n\r\n", command);
+		snprintf(request, WDCTL_MSG_LENG, "%s \r\n\r\n", cmd);
 
     send_request(sock, request);
-
-    len = 0;
-    memset(buffer, 0, sizeof(buffer));
-	timeout.tv_sec 	= 0;
-	timeout.tv_usec = 500;
-	activity = select(sock + 1, &read_fds, NULL, NULL, &timeout);
-	if (activity <= 0)
-		goto ERR;
-	
-	if (FD_ISSET(sock, &read_fds)) {
-		while ((len < sizeof(buffer)) && ((rlen = read(sock, (buffer + len), (sizeof(buffer) - len))) > 0)) {
-			len += (size_t) rlen;
-		}
-
-		if (len > 0) {
-			fprintf(stdout, "%s\n", buffer);
-		}
-	}
-	
-ERR:
-    shutdown(sock, 2);
-    close(sock);
-}
-
-static void
-wdctl_command(int command)
-{
-	char *action = NULL;
-	switch(command) {
-	case WDCTL_ADD_TRUSTED_MACLIST:
-		action = "add_trusted_mac";
-		break;
-	case WDCTL_DEL_TRUSTED_MACLIST:
-		action = "del_trusted_mac";	
-		break;
-	case WDCTL_CLEAR_TRUSTED_MACLIST:
-		action = "clear_trusted_mac";
-		break;
-	case WDCTL_ADD_UNTRUSTED_MACLIST:
-		action = "add_untrusted_mac";
-		break;
-	case WDCTL_DEL_UNTRUSTED_MACLIST:
-		action = "del_untrusted_mac";
-		break;
-	case WDCTL_CLEAR_UNTRUSTED_MACLIST:
-		action = "clear_untrusted_mac";
-		break;
-	case WDCTL_DEL_TRUSTED_IPLIST:
-		action = "del_trusted_iplist";
-		break;
-	case WDCTL_ADD_TRUSTED_IPLIST:
-		action = "add_trusted_iplist";
-		break;
-	case WDCTL_CLEAR_TRUSTED_IPLIST:
-		action = "clear_trusted_iplist";
-		break;
-	case WDCTL_ADD_TRUSTED_PAN_DOMAINS:
-		action = "add_trusted_pdomains";
-		break;
-	case WDCTL_DEL_TRUSTED_PAN_DOMAINS:
-		action = "del_trusted_pdomains";
-		break;
-	case WDCTL_CLEAR_TRUSTED_PAN_DOMAINS:
-		action = "clear_trusted_pdomains";
-		break;
-	case WDCTL_SHOW_TRUSTED_PAN_DOMAINS:
-		action = "show_trusted_pdomains";
-		break;
-	case WDCTL_ADD_TRUSTED_LOCAL_MACLIST:
-		action = "add_trusted_local_mac";
-		break;
-	case WDCTL_DEL_TRUSTED_LOCAL_MACLIST:
-		action = "del_trusted_local_mac";
-		break;
-	case WDCTL_CLEAR_TRUSTED_LOCAL_MACLIST:
-		action = "clear_trusted_local_mac";
-		break;
-	case WDCTL_SHOW_TRUSTED_LOCAL_MACLIST:
-		action = "show_trusted_local_mac";
-		break;
-	case WDCTL_ADD_ONLINE_CLIENT:
-		action = "add_online_client";
-		break;
-	}
-
-	if(action)
-		wdctl_command_action(action);
-}
-
-static void
-wdctl_add_trusted_iplist(void)
-{
-	wdctl_command(WDCTL_ADD_TRUSTED_IPLIST);
-}
-
-static void
-wdctl_add_trusted_local_maclist(void)
-{
-	wdctl_command(WDCTL_ADD_TRUSTED_LOCAL_MACLIST);
-}
-
-static void
-wdctl_del_trusted_local_maclist(void)
-{
-	wdctl_command(WDCTL_DEL_TRUSTED_LOCAL_MACLIST);
-}
-
-static void
-wdctl_clear_trusted_local_maclist(void)
-{
-	wdctl_command(WDCTL_CLEAR_TRUSTED_LOCAL_MACLIST);
-}
-
-static void
-wdctl_show_trusted_local_maclist(void)
-{
-	wdctl_command(WDCTL_SHOW_TRUSTED_LOCAL_MACLIST);
-}
-
-static void
-wdctl_add_trusted_pan_domains(void)
-{
-	wdctl_command(WDCTL_ADD_TRUSTED_PAN_DOMAINS);
-}
-
-static void
-wdctl_del_trusted_pan_domains(void)
-{
-	wdctl_command(WDCTL_DEL_TRUSTED_PAN_DOMAINS);
-}
-
-static void
-wdctl_clear_trusted_pan_domains(void)
-{
-	wdctl_command(WDCTL_CLEAR_TRUSTED_PAN_DOMAINS);
-}
-
-static void
-wdctl_del_trusted_iplist(void)
-{
-	wdctl_command(WDCTL_DEL_TRUSTED_IPLIST);
-}
-
-static void
-wdctl_clear_trusted_iplist(void)
-{
-	wdctl_command(WDCTL_CLEAR_TRUSTED_IPLIST);
-}
-
-static void
-wdctl_add_trusted_domains(void)
-{
-	int sock;
-    char buffer[4196] = {0};
-    char request[4096] = {0};
-    size_t len;
-    ssize_t rlen;
-
-    sock = connect_to_server(config.socket);
-
-    strncpy(request, "add_trusted_domains ", 4096);
-    strncat(request, config.param, (4096 - strlen(request) - 1));
-    strncat(request, "\r\n\r\n", (4096 - strlen(request) - 1));
-
-    send_request(sock, request);
-
-    len = 0;
-    memset(buffer, 0, sizeof(buffer));
-    while ((len < sizeof(buffer)) && ((rlen = read(sock, (buffer + len), (sizeof(buffer) - len))) > 0)) {
-        len += (size_t) rlen;
-    }
-
-    if (strcmp(buffer, "Yes") == 0) {
-        fprintf(stdout, "Connection successfully add_trusted_domains.\n");
-    } else if (strcmp(buffer, "No") == 0) {
-        fprintf(stdout, "Connection  was not active.\n");
-    } else {
-        fprintf(stderr, "wdctl: Error: WiFiDog sent an abnormal " "reply.\n");
-    }
-
-    shutdown(sock, 2);
-    close(sock);
-
-}
-
-static void
-wdctl_del_trusted_domains(void)
-{
-	int sock;
-    char buffer[4196] = {0};
-    char request[4096] = {0};
-    size_t len;
-    ssize_t rlen;
-
-    sock = connect_to_server(config.socket);
-
-    strncpy(request, "del_trusted_domains ", 4096);
-    strncat(request, config.param, (4096 - strlen(request) - 1));
-    strncat(request, "\r\n\r\n", (4096 - strlen(request) - 1));
-
-    send_request(sock, request);
-
-    len = 0;
-    memset(buffer, 0, sizeof(buffer));
-    while ((len < sizeof(buffer)) && ((rlen = read(sock, (buffer + len), (sizeof(buffer) - len))) > 0)) {
-        len += (size_t) rlen;
-    }
-
-    if (strcmp(buffer, "Yes") == 0) {
-        fprintf(stdout, "Connection successfully del_trusted_domains.\n");
-    } else if (strcmp(buffer, "No") == 0) {
-        fprintf(stdout, "Connection  was not active.\n");
-    } else {
-        fprintf(stderr, "wdctl: Error: WiFiDog sent an abnormal " "reply.\n");
-    }
-
-    shutdown(sock, 2);
-    close(sock);
-
-}
-
-static void
-wdctl_reparse_trusted_domains(void)
-{
-	int sock;
-    char buffer[4096] = {0};
-    char request[36] = {0};
-    ssize_t len;
-
-    sock = connect_to_server(config.socket);
-
-    strncpy(request, "reparse_trusted_domains\r\n\r\n", 35);
-
-    send_request(sock, request);
-
-    // -1: need some space for \0!
-    while ((len = read(sock, buffer, sizeof(buffer) - 1)) > 0) {
-        buffer[len] = '\0';
-        fprintf(stdout, "%s\n", buffer);
-    }
-
-    shutdown(sock, 2);
-    close(sock);
-
-}
-
-static void
-wdctl_clear_trusted_domains(void)
-{
-	int sock;
-    char buffer[4096] = {0};
-    char request[36] = {0};
-    ssize_t len;
-
-    sock = connect_to_server(config.socket);
-
-    strncpy(request, "clear_trusted_domains\r\n\r\n", 35);
-
-    send_request(sock, request);
-
-    // -1: need some space for \0!
-    while ((len = read(sock, buffer, sizeof(buffer) - 1)) > 0) {
-        buffer[len] = '\0';
-        fprintf(stdout, "%s\n", buffer);
-    }
-
-    shutdown(sock, 2);
-    close(sock);
-}
-
-static void
-wdctl_show_trusted_domains(void)
-{
-	int sock;
-    char buffer[4096] = {0};
-    char request[36] = {0};
-    ssize_t len;
-
-    sock = connect_to_server(config.socket);
-
-    strncpy(request, "show_trusted_domains\r\n\r\n", 35);
-
-    send_request(sock, request);
-
-    // -1: need some space for \0!
-    while ((len = read(sock, buffer, sizeof(buffer) - 1)) > 0) {
-        buffer[len] = '\0';
-        fprintf(stdout, "%s", buffer);
-    }
-
-    shutdown(sock, 2);
-    close(sock);
-}
-
-void
-wdctl_add_domain_ip(void)
-{
-    int sock;
-    char buffer[4096] = {0};
-    char request[4096] = {0};
-    size_t len;
-    ssize_t rlen;
-
-    sock = connect_to_server(config.socket);
-
-    strncpy(request, "add_domain_ip ", 4096);
-    strncat(request, config.param, (4096 - strlen(request) - 1));
-    strncat(request, "\r\n\r\n", (4096 - strlen(request) - 1));
-
-    send_request(sock, request);
-
-    len = 0;
-    memset(buffer, 0, sizeof(buffer));
-    while ((len < sizeof(buffer)) && ((rlen = read(sock, (buffer + len), (sizeof(buffer) - len))) > 0)) {
-        len += (size_t) rlen;
-    }
-
-    if (strcmp(buffer, "Yes") == 0) {
-        fprintf(stdout, "Connection %s successfully reset.\n", config.param);
-    } else if (strcmp(buffer, "No") == 0) {
-        fprintf(stdout, "Connection %s was not active.\n", config.param);
-    } else {
-        fprintf(stderr, "wdctl: Error: WiFiDog sent an abnormal " "reply.\n");
-    }
-
-    shutdown(sock, 2);
-    close(sock);
-}
-
-// roam maclist
-static void 
-wdctl_add_roam_maclist()
-{
-    int sock;
-    char buffer[4096] = {0};
-    char request[4096] = {0};
-    size_t len;
-    ssize_t rlen;
-
-    sock = connect_to_server(config.socket);
-
-    strncpy(request, "add_roam_maclist ", 4096);
-    strncat(request, config.param, (4096 - strlen(request) - 1));
-    strncat(request, "\r\n\r\n", (4096 - strlen(request) - 1));
-
-    send_request(sock, request);
-
-    len = 0;
-    memset(buffer, 0, sizeof(buffer));
-    while ((len < sizeof(buffer)) && ((rlen = read(sock, (buffer + len), (sizeof(buffer) - len))) > 0)) {
-        len += (size_t) rlen;
-    }
-
-    if (strcmp(buffer, "Yes") == 0) {
-        fprintf(stdout, "Connection set %s successfully .\n", config.param);
-    } else if (strcmp(buffer, "No") == 0) {
-        fprintf(stdout, "Connection %s was not active.\n", config.param);
-    } else {
-        fprintf(stderr, "wdctl: Error: WiFiDog sent an abnormal " "reply.\n");
-    }
-
-    shutdown(sock, 2);
-    close(sock);
-
-}
-
-static void
-wdctl_show_roam_maclist()
-{
-	int sock;
-    char buffer[4096] = {0};
-    char request[36] = {0};
-    ssize_t len;
-
-    sock = connect_to_server(config.socket);
-
-    strncpy(request, "show_roam_maclist\r\n\r\n", 35);
-
-    send_request(sock, request);
-
-    // -1: need some space for \0!
-    while ((len = read(sock, buffer, sizeof(buffer) - 1)) > 0) {
-        buffer[len] = '\0';
-        fprintf(stdout, "%s", buffer);
-    }
-
-    shutdown(sock, 2);
-    close(sock);
-}
-
-static void
-wdctl_clear_roam_maclist()
-{
-	int sock;
-    char buffer[4096] = {0};
-    char request[36] = {0};
-    ssize_t len;
-
-    sock = connect_to_server(config.socket);
-
-    strncpy(request, "clear_roam_maclist\r\n\r\n", 35);
-
-    send_request(sock, request);
-
-    // -1: need some space for \0!
-    while ((len = read(sock, buffer, sizeof(buffer) - 1)) > 0) {
-        buffer[len] = '\0';
-        fprintf(stdout, "%s\n", buffer);
-    }
-
-    shutdown(sock, 2);
-    close(sock);
-
-}
-
-// trusted maclist
-static void 
-wdctl_add_trusted_maclist()
-{
-    int sock;
-    char buffer[4096] = {0};
-    char request[4096] = {0};
-    size_t len;
-    ssize_t rlen;
-
-    sock = connect_to_server(config.socket);
-
-    strncpy(request, "add_trusted_mac ", 4096);
-    strncat(request, config.param, (4096 - strlen(request) - 1));
-    strncat(request, "\r\n\r\n", (4096 - strlen(request) - 1));
-
-    send_request(sock, request);
-
-    len = 0;
-    memset(buffer, 0, sizeof(buffer));
-    while ((len < sizeof(buffer)) && ((rlen = read(sock, (buffer + len), (sizeof(buffer) - len))) > 0)) {
-        len += (size_t) rlen;
-    }
-
-    if (strcmp(buffer, "Yes") == 0) {
-        fprintf(stdout, "Connection set %s successfully .\n", config.param);
-    } else if (strcmp(buffer, "No") == 0) {
-        fprintf(stdout, "Connection %s was not active.\n", config.param);
-    } else {
-        fprintf(stderr, "wdctl: Error: WiFiDog sent an abnormal " "reply.\n");
-    }
-
-    shutdown(sock, 2);
-    close(sock);
-
-}
-
-static void 
-wdctl_del_trusted_maclist()
-{
-	wdctl_command(WDCTL_DEL_TRUSTED_MACLIST);
-}
-
-static void
-wdctl_show_trusted_maclist()
-{
-	int sock;
-    char buffer[4096] = {0};
-    char request[36] = {0};
-    ssize_t len;
-
-    sock = connect_to_server(config.socket);
-
-    strncpy(request, "show_trusted_mac\r\n\r\n", 35);
-
-    send_request(sock, request);
-
-    // -1: need some space for \0!
-    while ((len = read(sock, buffer, sizeof(buffer) - 1)) > 0) {
-        buffer[len] = '\0';
-        fprintf(stdout, "%s", buffer);
-    }
-
-    shutdown(sock, 2);
-    close(sock);
-}
-
-static void
-wdctl_clear_trusted_maclist()
-{
-	int sock;
-    char buffer[4096] = {0};
-    char request[36] = {0};
-    ssize_t len;
-
-    sock = connect_to_server(config.socket);
-
-    strncpy(request, "clear_trusted_mac\r\n\r\n", 35);
-
-    send_request(sock, request);
-
-    // -1: need some space for \0!
-    while ((len = read(sock, buffer, sizeof(buffer) - 1)) > 0) {
-        buffer[len] = '\0';
-        fprintf(stdout, "%s\n", buffer);
-    }
-
-    shutdown(sock, 2);
-    close(sock);
-
-}
-
-// untrusted maclist
-static void
-wdctl_del_untrusted_maclist()
-{
-	wdctl_command(WDCTL_DEL_UNTRUSTED_MACLIST);
-}
-
-static void 
-wdctl_add_untrusted_maclist()
-{
-    int sock;
-    char buffer[4096] = {0};
-    char request[4096] = {0};
-    size_t len;
-    ssize_t rlen;
-
-    sock = connect_to_server(config.socket);
-
-    strncpy(request, "add_untrusted_mac ", 4096);
-    strncat(request, config.param, (4096 - strlen(request) - 1));
-    strncat(request, "\r\n\r\n", (4096 - strlen(request) - 1));
-
-    send_request(sock, request);
-
-    len = 0;
-    memset(buffer, 0, sizeof(buffer));
-    while ((len < sizeof(buffer)) && ((rlen = read(sock, (buffer + len), (sizeof(buffer) - len))) > 0)) {
-        len += (size_t) rlen;
-    }
-
-    if (strcmp(buffer, "Yes") == 0) {
-        fprintf(stdout, "Connection set %s successfully .\n", config.param);
-    } else if (strcmp(buffer, "No") == 0) {
-        fprintf(stdout, "Connection %s was not active.\n", config.param);
-    } else {
-        fprintf(stderr, "wdctl: Error: WiFiDog sent an abnormal " "reply.\n");
-    }
-
-    shutdown(sock, 2);
-    close(sock);
-
-}
-
-static void
-wdctl_show_untrusted_maclist()
-{
-	int sock;
-    char buffer[4096] = {0};
-    char request[36] = {0};
-    ssize_t len;
-
-    sock = connect_to_server(config.socket);
-
-    strncpy(request, "show_untrusted_mac\r\n\r\n", 35);
-
-    send_request(sock, request);
-
-    // -1: need some space for \0!
-    while ((len = read(sock, buffer, sizeof(buffer) - 1)) > 0) {
-        buffer[len] = '\0';
-        fprintf(stdout, "%s", buffer);
-    }
-
-    shutdown(sock, 2);
-    close(sock);
-}
-
-static void
-wdctl_clear_untrusted_maclist()
-{
-	int sock;
-    char buffer[4096] = {0};
-    char request[36] = {0};
-    ssize_t len;
-
-    sock = connect_to_server(config.socket);
-
-    strncpy(request, "clear_untrusted_mac\r\n\r\n", 35);
-
-    send_request(sock, request);
-
-    // -1: need some space for \0!
-    while ((len = read(sock, buffer, sizeof(buffer) - 1)) > 0) {
-        buffer[len] = '\0';
-        fprintf(stdout, "%s\n", buffer);
-    }
-
-    shutdown(sock, 2);
-    close(sock);
-}
-
-static void
-wdctl_user_cfg_save()
-{
-	int sock;
-    char buffer[4096] = {0};
-    char request[36] = {0};
-    ssize_t len;
-
-    sock = connect_to_server(config.socket);
-
-    strncpy(request, "user_cfg_save\r\n\r\n", 35);
-
-    send_request(sock, request);
-
-    // -1: need some space for \0!
-    while ((len = read(sock, buffer, sizeof(buffer) - 1)) > 0) {
-        buffer[len] = '\0';
-        fprintf(stdout, "%s\n", buffer);
-    }
-
-    shutdown(sock, 2);
-    close(sock);
-
-}
-
-static void
-wdctl_add_online_client(void)
-{
-	wdctl_command(WDCTL_ADD_ONLINE_CLIENT);
-}
-
-//<<< liudf added end
-
-static void
-wdctl_status(void)
-{
-    int sock;
-    char buffer[4096] = {0};
-    char request[16] = {0};
-    ssize_t len;
-
-    sock = connect_to_server(config.socket);
-
-    strncpy(request, "status\r\n\r\n", 15);
-
-    send_request(sock, request);
-
-    // -1: need some space for \0!
-    while ((len = read(sock, buffer, sizeof(buffer) - 1)) > 0) {
-        buffer[len] = '\0';
-        fprintf(stdout, "%s", buffer);
-    }
-
-    shutdown(sock, 2);
-    close(sock);
-}
-
-static void
-wdctl_stop(void)
-{
-    int sock;
-    char buffer[4096];
-    char request[16];
-    ssize_t len;
-
-    sock = connect_to_server(config.socket);
-
-    strncpy(request, "stop\r\n\r\n", 15);
-
-    send_request(sock, request);
-
-    while ((len = read(sock, buffer, sizeof(buffer) - 1)) > 0) {
-        buffer[len] = '\0';
-        fprintf(stdout, "%s", buffer);
-    }
-
-    shutdown(sock, 2);
-    close(sock);
-}
-
-void
-wdctl_reset(void)
-{
-    int sock;
-    char buffer[4096] = {0};
-    char request[64] = {0};
-    size_t len;
-    ssize_t rlen;
-
-    sock = connect_to_server(config.socket);
-
-    strncpy(request, "reset ", 64);
-    strncat(request, config.param, (64 - strlen(request) - 1));
-    strncat(request, "\r\n\r\n", (64 - strlen(request) - 1));
-
-    send_request(sock, request);
-
-    len = 0;
-    memset(buffer, 0, sizeof(buffer));
-    while ((len < sizeof(buffer)) && ((rlen = read(sock, (buffer + len), (sizeof(buffer) - len))) > 0)) {
-        len += (size_t) rlen;
-    }
-
-    if (strcmp(buffer, "Yes") == 0) {
-        fprintf(stdout, "Connection %s successfully reset.\n", config.param);
-    } else if (strcmp(buffer, "No") == 0) {
-        fprintf(stdout, "Connection %s was not active.\n", config.param);
-    } else {
-        fprintf(stderr, "wdctl: Error: WiFiDog sent an abnormal " "reply.\n");
-    }
-
-    shutdown(sock, 2);
-    close(sock);
-}
-
-static void
-wdctl_restart(void)
-{
-    int sock;
-    char buffer[4096];
-    char request[16];
-    ssize_t len;
-
-    sock = connect_to_server(config.socket);
-
-    strncpy(request, "restart\r\n\r\n", 15);
-
-    send_request(sock, request);
-
-    while ((len = read(sock, buffer, sizeof(buffer) - 1)) > 0) {
-        buffer[len] = '\0';
-        fprintf(stdout, "%s", buffer);
-    }
-
-    shutdown(sock, 2);
-    close(sock);
+    read_response(sock);
 }
 
 int
 main(int argc, char **argv)
 {
-
-    /* Init configuration */
-    init_config();
     parse_commandline(argc, argv);
-
-    switch (config.command) {
-    case WDCTL_STATUS:
-        wdctl_status();
-        break;
-
-    case WDCTL_STOP:
-        wdctl_stop();
-        break;
-
-    case WDCTL_KILL:
-        wdctl_reset();
-        break;
-
-    case WDCTL_RESTART:
-        wdctl_restart();
-        break;
-	
-	//>>> liudf added 20151225
-	case WDCTL_ADD_TRUSTED_PAN_DOMAINS:
-		wdctl_add_trusted_pan_domains();
-		break;
-	case WDCTL_DEL_TRUSTED_PAN_DOMAINS:
-		wdctl_del_trusted_pan_domains();
-		break;
-	case WDCTL_CLEAR_TRUSTED_PAN_DOMAINS:
-		wdctl_clear_trusted_pan_domains();
-		break;
-
-	case WDCTL_ADD_TRUSTED_DOMAINS:
-		wdctl_add_trusted_domains();
-		break;
-
-	case WDCTL_DEL_TRUSTED_DOMAINS:
-		wdctl_del_trusted_domains();
-		break;
-
-	case WDCTL_ADD_TRUSTED_IPLIST:
-		wdctl_add_trusted_iplist();
-		break;
-
-	case WDCTL_DEL_TRUSTED_IPLIST:
-		wdctl_del_trusted_iplist();
-		break;
-
-	case WDCTL_CLEAR_TRUSTED_IPLIST:
-		wdctl_clear_trusted_iplist();
-		break;
-	
-	case WDCTL_REPARSE_TRUSTED_DOMAINS:
-		wdctl_reparse_trusted_domains();
-		break;
-
-	case WDCTL_CLEAR_TRUSTED_DOMAINS:
-		wdctl_clear_trusted_domains();
-		break;
-
-	case WDCTL_SHOW_TRUSTED_DOMAINS:
-		wdctl_show_trusted_domains();
-		break;
-	
-	case WDCTL_ADD_DOMAIN_IP:
-		wdctl_add_domain_ip();
-		break;
-
-	case WDCTL_ADD_ROAM_MACLIST:
-		wdctl_add_roam_maclist();
-		break;
-
-	case WDCTL_SHOW_ROAM_MACLIST:
-		wdctl_show_roam_maclist();
-		break;
-
-	case WDCTL_CLEAR_ROAM_MACLIST:
-		wdctl_clear_roam_maclist();
-		break;
-	
-	case WDCTL_ADD_TRUSTED_MACLIST:
-		wdctl_add_trusted_maclist();
-		break;
-			
-	case WDCTL_DEL_TRUSTED_MACLIST:
-		wdctl_del_trusted_maclist();
-		break;
-
-	case WDCTL_SHOW_TRUSTED_MACLIST:
-		wdctl_show_trusted_maclist();
-		break;
-
-	case WDCTL_CLEAR_TRUSTED_MACLIST:
-		wdctl_clear_trusted_maclist();
-		break;
-
-	case WDCTL_ADD_TRUSTED_LOCAL_MACLIST:
-		wdctl_add_trusted_local_maclist();
-		break;
-		
-	case WDCTL_DEL_TRUSTED_LOCAL_MACLIST:
-		wdctl_del_trusted_local_maclist();
-		break;
-
-	case WDCTL_SHOW_TRUSTED_LOCAL_MACLIST:
-		wdctl_show_trusted_local_maclist();
-		break;
-
-	case WDCTL_CLEAR_TRUSTED_LOCAL_MACLIST:
-		wdctl_clear_trusted_local_maclist();
-		break;
-			
-	case WDCTL_ADD_UNTRUSTED_MACLIST:
-		wdctl_add_untrusted_maclist();
-		break;
-
-	case WDCTL_DEL_UNTRUSTED_MACLIST:
-		wdctl_del_untrusted_maclist();
-		break;
-
-	case WDCTL_SHOW_UNTRUSTED_MACLIST:
-		wdctl_show_untrusted_maclist();
-		break;
-
-	case WDCTL_CLEAR_UNTRUSTED_MACLIST:
-		wdctl_clear_untrusted_maclist();
-		break;
-	
-	case WDCTL_USER_CFG_SAVE:
-		wdctl_user_cfg_save();
-		break;
-	
-	case WDCTL_ADD_ONLINE_CLIENT:
-		wdctl_add_online_client();
-		break;
-
-	case WDCTL_ADD_WILDCARD_DOMAIN:
-		break;
-	//<<< liudf end
-
-    default:
-        /* XXX NEVER REACHED */
-        fprintf(stderr, "Oops\n");
-        exit(1);
-        break;
-    }
-    exit(0);
 }
