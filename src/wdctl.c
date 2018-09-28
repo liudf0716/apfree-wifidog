@@ -31,14 +31,19 @@
 #include "wdctl.h"
 #include "util.h"
 
+#define WDCTL_TIMEOUT   100
 #define WDCTL_MSG_LENG  1024*8
+
+static char *sk_name = NULL;
 
 static void usage(void);
 static void parse_commandline(int, char **);
-static int connect_to_server(const char *);
 static void send_request(int, const char *);
-static void read_response(int sock);
-static void wdctl_cmd_process(int argc, char **argv, int optind);
+static void read_response(int);
+static void wdctl_cmd_process(int , char **, int);
+static void wdctl_command_action(const char *, const char *);
+static int connect_to_server(const char *);
+
 
 static struct wdctl_client_command {
     const char *command;
@@ -130,7 +135,7 @@ static void
 wdctl_cmd_process(int argc, char **argv, int optind)
 {
     for (int i = 0; i < ARRAYLEN(wdctl_clt_cmd); i++) {
-        if (!strcmp(wdctl_clt_cmd[i].command, *(argv+optind)) {
+        if (!strcmp(wdctl_clt_cmd[i].command, *(argv+optind))) {
             config.command = wdctl_clt_cmd[i].cmd_type;
             if ((argc - (optind + 1)) > 0) {
                 wdctl_command_action(wdctl_clt_cmd[i].command, *(argv + optind + 1));
@@ -164,8 +169,7 @@ parse_commandline(int argc, char **argv)
 
         case 's':
             if (optarg) {
-                free(config.socket);
-                config.socket = strdup(optarg);
+                sk_name = strdup(optarg);
             }
             break;
 
@@ -181,7 +185,9 @@ parse_commandline(int argc, char **argv)
         exit(1);
     }
 
-    wdctl_cmd_parse(argc, argv, optind);
+    if (!sk_name) sk_name = strdup(DEFAULT_SOCK);
+
+    wdctl_cmd_process(argc, argv, optind);
 
 }
 
@@ -211,10 +217,10 @@ send_request(int sock, const char *request)
 {
     struct pollfd fds;	
     fds.fd      = sock;
-    fds.events   = POLLOUT;
+    fds.events  = POLLOUT;
 
     if (poll(&fds, 1, WDCTL_TIMEOUT) > 0 && fds.revents == POLLOUT) {
-        write(sock, buf, len);
+        write(sock, request, strlen(request));
     } 
 }
 
@@ -222,7 +228,7 @@ static void
 wdctl_command_action(const char *cmd, const char *param)
 {
     char request[WDCTL_MSG_LENG] = {0};	
-    int sock = connect_to_server(config.socket);
+    int sock = connect_to_server(sk_name);
 	
 	if(param)	
 		snprintf(request, WDCTL_MSG_LENG, "%s %s\r\n\r\n", cmd, param);
