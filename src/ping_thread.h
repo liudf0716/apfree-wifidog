@@ -47,9 +47,9 @@ void get_sys_info(struct sys_info *);
 
 char *get_ping_uri(const struct sys_info *);
 
-void wd_set_request_header(struct evhttp_request *req, const char *host)
+void wd_set_request_header(struct evhttp_request *, const char *);
 
 /** @brief Periodically checks on the auth server to see if it's alive. */
-void thread_ping(void *arg);
+void thread_ping(void *);
 
 #endif
