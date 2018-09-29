@@ -42,14 +42,35 @@
 #include "util.h"
 #include "wd_util.h"
 #include "https_client.h"
+#include "ping_thread.h"
+
+static void client_timeout_check_cb(evutil_socket_t, short, void *);
 
 /** Launches a thread that periodically checks if any of the connections has timed out
 @param arg Must contain a pointer to a string containing the IP adress of the client to check to check
 @todo Also pass MAC adress? 
 @todo This thread loops infinitely, need a watchdog to verify that it is still running?
 */
-void
+static void
 thread_client_timeout_check(const void *arg)
+{
+    wd_request_loop(client_timeout_check_cb);
+}
+
+static void 
+client_timeout_check_cb(evutil_socket_t fd, short event, void *arg) {
+	struct wd_request_context *request_ctx = (struct wd_request_context *)arg;
+	struct timeval tv;
+	
+	debug(LOG_DEBUG, "client_timeout_check_cb begin");
+
+	evutil_timerclear(&tv);
+	tv.tv_sec = config_get_config()->checkinterval;
+	event_add(request_ctx->ev_timeout, &tv);
+}
+
+static void
+_thread_client_timeout_check(const void *arg)
 {
     pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
     pthread_mutex_t cond_mutex = PTHREAD_MUTEX_INITIALIZER;
