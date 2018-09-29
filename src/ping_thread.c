@@ -49,15 +49,18 @@ extern time_t started_time;
 
 struct ping_request_context
 {
-	struct evhttp_connection *evcon;
-	struct evhttp_request	*req;
+	struct event_base *ping_base;
+	struct bufferevent *bev;
 	struct event *ev_timeout;
+	struct evhttp_connection *evcon;
+	struct evhttp_request *req;
 };
 
 
 static void fw_init_delay();
 static void ping_work_cb(evutil_socket_t, short, void *);
 static void process_ping_response(struct evhttp_request *, void *);
+static int make_ping_request(struct ping_request_context *);
 static void fw_init_delay();
 
 static void fw_init_delay()
@@ -88,17 +91,58 @@ wd_set_request_header(struct evhttp_request *req, const char *host)
 	evhttp_add_header(output_headers, "User-Agent", "ApFree WiFiDog");
 }
 
+static int
+make_ping_request(struct ping_request_context *ping_ctx)
+{
+	struct bufferevent *bev = ping_ctx->bev;
+	struct event_base *ping_base = ping_ctx->base;
+	struct evhttp_connection *evcon = NULL;
+	struct evhttp_request *req;
+	t_auth_serv *auth_server = get_auth_server();
+
+	if (!auth_server->authserv_use_ssl) {
+		evcon = evhttp_connection_base_bufferevent_new(ping_base, NULL, bev,
+				auth_server->authserv_hostname, auth_server->authserv_http_port);
+	} else {
+		evcon = evhttp_connection_base_bufferevent_new(ping_base, NULL, bev,
+				auth_server->authserv_hostname, auth_server->authserv_ssl_port);
+	}
+	if (!evcon) {
+		debug(LOG_ERR, "evhttp_connection_base_bufferevent_new failed");
+		return 1;
+	}
+
+	evhttp_connection_set_timeout(evcon, PING_TIMEOUT); // 2 seconds
+
+	req = evhttp_request_new(process_ping_response, NULL);
+	if (!req) {
+		debug(LOG_ERR, "evhttp_request_new failed");
+		evhttp_connection_free(evcon);
+		return 1;
+	}
+
+	wd_set_request_header(req, auth_server->authserv_hostname);
+
+	ping_ctx->evcon = evcon;
+	ping_ctx->req 	= req;
+
+	return 0;
+}
+
 static void 
 ping_work_cb(evutil_socket_t fd, short event, void *arg) {
 	struct ping_request_context *ping_ctx = (struct ping_request_context *)arg;
 	struct timeval tv;
 	struct sys_info info;
 	memset(&info, 0, sizeof(info));
+
+	if (make_ping_request(ping_ctx)) return;
 		
 	get_sys_info(&info);
-	
 	char *uri = get_ping_uri(&info);
 	if (!uri) return; // impossibe 
+	
+	debug(LOG_DEBUG, "uri is %s", uri);
 
 	evhttp_make_request(ping_ctx->evcon, ping_ctx->req, EVHTTP_REQ_GET, uri);
 	free(uri);
@@ -110,10 +154,10 @@ ping_work_cb(evutil_socket_t fd, short event, void *arg) {
 
 static void
 ping_request_context_init(struct ping_request_context *ping_ctx, 
-	struct evhttp_request *req, struct evhttp_connection *evcon, struct event *ev_timeout)
+	struct event_base *base, struct bufferevent *bev, struct event *ev_timeout)
 {
-	ping_ctx->evcon		= evcon;
-	ping_ctx->req 		= req;
+	ping_ctx->base		= base;
+	ping_ctx->bev 		= bev;
 	ping_ctx->ev_timeout	= ev_timeout;
 }
 
@@ -123,8 +167,6 @@ thread_ping(void *arg)
 	SSL_CTX *ssl_ctx = NULL;
 	SSL *ssl = NULL;
 	struct bufferevent *bev;
-	struct evhttp_connection *evcon = NULL;
-	struct evhttp_request *req;
 	struct event_base *ping_base;
 	struct event ev_timeout;
 	struct timeval tv;
@@ -154,22 +196,8 @@ thread_ping(void *arg)
 
 	bufferevent_openssl_set_allow_dirty_shutdown(bev, 1);
 
-	if (!auth_server->authserv_use_ssl) {
-		evcon = evhttp_connection_base_bufferevent_new(ping_base, NULL, bev,
-				auth_server->authserv_hostname, auth_server->authserv_http_port);
-	} else {
-		evcon = evhttp_connection_base_bufferevent_new(ping_base, NULL, bev,
-				auth_server->authserv_hostname, auth_server->authserv_ssl_port);
-	}
-	if (evcon == NULL) termination_handler(0);
-
-	evhttp_connection_set_timeout(evcon, PING_TIMEOUT); // 2 seconds
-
-	req = evhttp_request_new(process_ping_response, bev);
-	if (req == NULL) termination_handler(0);
 	
-	wd_set_request_header(req, auth_server->authserv_hostname);
-	ping_request_context_init(&ping_ctx, req, evcon, &ev_timeout);
+	ping_request_context_init(&ping_ctx, ping_base, bev, &ev_timeout);
 
 	fw_init_delay();
 
