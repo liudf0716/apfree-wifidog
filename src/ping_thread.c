@@ -56,8 +56,8 @@ struct ping_request_context
 
 
 static void fw_init_delay();
-static void ping_work_cb(evutil_socket_t, short, void *)
-static void process_ping_response(struct evhttp_request *, void *)；
+static void ping_work_cb(evutil_socket_t, short, void *);
+static void process_ping_response(struct evhttp_request *, void *);
 static void fw_init_delay();
 
 static void fw_init_delay()
@@ -98,14 +98,14 @@ ping_work_cb(evutil_socket_t fd, short event, void *arg) {
 	get_sys_info(&info);
 	
 	char *uri = get_ping_uri(&info);
-	if (!uri == NULL) return; // impossibe 
+	if (!uri) return; // impossibe 
 
 	evhttp_make_request(ping_ctx->evcon, ping_ctx->req, EVHTTP_REQ_GET, uri);
 	free(uri);
 
 	evutil_timerclear(&tv);
 	tv.tv_sec = config_get_config()->checkinterval;
-	event_add(ping_ctx.ev_timeout, &tv);
+	event_add(ping_ctx->ev_timeout, &tv);
 }
 
 static void
@@ -120,8 +120,6 @@ ping_request_context_init(struct ping_request_context *ping_ctx,
 void
 thread_ping(void *arg)
 {
-	int r;
-
 	SSL_CTX *ssl_ctx = NULL;
 	SSL *ssl = NULL;
 	struct bufferevent *bev;
