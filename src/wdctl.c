@@ -31,7 +31,7 @@
 #include "wdctl.h"
 #include "util.h"
 
-#define WDCTL_TIMEOUT   100
+#define WDCTL_TIMEOUT   1000*2
 #define WDCTL_MSG_LENG  1024*8
 
 static char *sk_name = NULL;

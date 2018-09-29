@@ -24,8 +24,7 @@
     @brief Periodically checks in with the central auth server so the auth
     server knows the gateway is still up.  Note that this is NOT how the gateway
     detects that the central server is still up.
-    @author Copyright (C) 2004 Alexandre Carmel-Veilleux <acv@miniguru.ca>
-    @author Copyright (C) 2016 Dengfeng Liu <liudengfeng@kunteng.org>
+    @author Copyright (C) 2016 Dengfeng Liu <liudengfeng@kunteng.org.cn>
 */
 
 #define _GNU_SOURCE
@@ -44,73 +43,145 @@
 #include "httpd_priv.h"
 #include "https_client.h"
 
+#define	PING_TIMEOUT	2
+
 extern time_t started_time;
 
-static void ping(void);
-static void evpings(struct evhttps_request_context *context);
+struct ping_request_context
+{
+	struct evhttp_connection *evcon;
+	struct evhttp_request	*req;
+	struct event *ev_timeout;
+};
 
-/** Launches a thread that periodically checks in with the wifidog auth server to perform heartbeat function.
-@param arg NULL
-@todo This thread loops infinitely, need a watchdog to verify that it is still running?
-*/
+static void ping(void);
+static void evpings(struct evhttps_request_context *);
+static void fw_init_delay();
+static void ping_work_cb(evutil_socket_t, short, void *)
+
+static void fw_init_delay()
+{
+	fw_set_pan_domains_trusted();
+	parse_inner_trusted_domain_list();
+	fw_set_inner_domains_trusted();
+	parse_user_trusted_domain_list();
+    fw_set_user_domains_trusted();
+	fw_set_trusted_maclist();
+	fw_set_untrusted_maclist();
+}
+
+void
+wd_set_request_header(struct evhttp_request *req, const char *host)
+{
+	struct evkeyvalq *output_headers = evhttp_request_get_output_headers(req);
+	if (host) evhttp_add_header(output_headers, "Host", host);
+	evhttp_add_header(evhttp_request_get_output_headers(req),
+		    "Content-Type", "text/html");
+	evhttp_add_header(evhttp_request_get_output_headers(req),
+		    "Cache-Control", "no-store, must-revalidate");
+	evhttp_add_header(evhttp_request_get_output_headers(req),
+		    "Expires", "0");
+	evhttp_add_header(evhttp_request_get_output_headers(req),
+		    "Pragma", "no-cache");
+	evhttp_add_header(output_headers, "Connection", "close");
+	evhttp_add_header(output_headers, "User-Agent", "ApFree WiFiDog");
+}
+
+static void 
+ping_work_cb(evutil_socket_t fd, short event, void *arg) {
+	struct ping_request_context *ping_ctx = (struct ping_request_context *)arg;
+	struct timeval tv;
+	struct sys_info info;
+	memset(&info, 0, sizeof(info));
+		
+	get_sys_info(&info);
+	
+	char *uri = get_ping_uri(&info);
+	if (!uri == NULL) return; // impossibe 
+
+	evhttp_make_request(ping_ctx->evcon, ping_ctx->req, EVHTTP_REQ_GET, uri);
+	free(uri);
+
+	evutil_timerclear(&tv);
+	tv.tv_sec = config_get_config()->checkinterval;
+	event_add(ping_ctx.ev_timeout, &tv);
+}
+
+static void
+ping_request_context_init(struct ping_request_context *ping_ctx, 
+	struct evhttp_request *req, struct evhttp_connection *evcon, struct event *ev_timeout)
+{
+	ping_ctx->evcon		= evcon;
+	ping_ctx->req 		= req;
+	ping_ctx->ev_timeout	= ev_timeout;
+}
+
 void
 thread_ping(void *arg)
 {
-    pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
-    pthread_mutex_t cond_mutex = PTHREAD_MUTEX_INITIALIZER;
-    struct timespec timeout;
+	int r;
+
+	SSL_CTX *ssl_ctx = NULL;
+	SSL *ssl = NULL;
+	struct bufferevent *bev;
+	struct evhttp_connection *evcon = NULL;
+	struct evhttp_request *req;
+	struct event_base *ping_base;
+	struct event ev_timeout;
+	struct timeval tv;
+
+	struct ping_request_context ping_ctx;
 	t_auth_serv *auth_server = get_auth_server();
-	struct evhttps_request_context *context = NULL;
-	
-	//>>> liudf added 20160411
-	// move from fw_init to here	
-	fw_set_pan_domains_trusted();
 
-	parse_inner_trusted_domain_list();
-	fw_set_inner_domains_trusted();
+	if (!RAND_poll()) termination_handler(0);
 
-	parse_user_trusted_domain_list();
-    fw_set_user_domains_trusted();
+	/* Create a new OpenSSL context */
+	ssl_ctx = SSL_CTX_new(SSLv23_method());
+	if (!ssl_ctx) termination_handler(0);
 
-	fw_set_trusted_maclist();
-	fw_set_untrusted_maclist();
-	
-	if (auth_server->authserv_use_ssl) {
-		context = evhttps_context_init();
-		if (!context) {
-			debug(LOG_ERR, "evhttps_context_init failed, process exit()");
-			exit(0);
-		}
+	ssl = SSL_new(ssl_ctx);
+	if (ssl == NULL) termination_handler(0);
+
+	ping_base = event_base_new();
+	if (!ping_base) termination_handler(0);
+
+	if (!auth_server->authserv_use_ssl) {
+		bev = bufferevent_socket_new(ping_base, -1, BEV_OPT_CLOSE_ON_FREE);
+	} else {
+		bev = bufferevent_openssl_socket_new(ping_base, -1, ssl,
+			BUFFEREVENT_SSL_CONNECTING, BEV_OPT_CLOSE_ON_FREE|BEV_OPT_DEFER_CALLBACKS);
 	}
+	if (bev == NULL) termination_handler(0);
 
-    while (1) {
-        /* Make sure we check the servers at the very begining */
-        
-		if (auth_server->authserv_use_ssl) {
-       		debug(LOG_DEBUG, "Running evpings()");
-			evpings(context);
-		} else {
-			debug(LOG_DEBUG, "Running ping()");
-			ping();
-		}
-		
-        /* Sleep for config.checkinterval seconds... */
-        timeout.tv_sec = time(NULL) + config_get_config()->checkinterval;
-        timeout.tv_nsec = 0;
+	bufferevent_openssl_set_allow_dirty_shutdown(bev, 1);
 
-        /* Mutex must be locked for pthread_cond_timedwait... */
-        pthread_mutex_lock(&cond_mutex);
-
-        /* Thread safe "sleep" */
-        pthread_cond_timedwait(&cond, &cond_mutex, &timeout);
-
-        /* No longer needs to be locked */
-        pthread_mutex_unlock(&cond_mutex);
-    }
-
-    if (auth_server->authserv_use_ssl) {
-		evhttps_context_exit(context);
+	if (!auth_server->authserv_use_ssl) {
+		evcon = evhttp_connection_base_bufferevent_new(ping_base, NULL, bev,
+				auth_server->authserv_hostname, auth_server->authserv_http_port);
+	} else {
+		evcon = evhttp_connection_base_bufferevent_new(ping_base, NULL, bev,
+				auth_server->authserv_hostname, auth_server->authserv_ssl_port);
 	}
+	if (evcon == NULL) termination_handler(0);
+
+	evhttp_connection_set_timeout(evcon, PING_TIMEOUT); // 2 seconds
+
+	req = evhttp_request_new(process_ping_response, bev);
+	if (req == NULL) termination_handler(0);
+	
+	wd_set_request_header(req, auth_server->authserv_hostname);
+	ping_request_context_init(&ping_ctx, req, evcon, &ev_timeout);
+
+	fw_init_delay();
+
+	event_assign(&ev_timeout, ping_base, -1, 0, ping_work_cb, (void*) &ping_ctx);
+	evutil_timerclear(&tv);
+	tv.tv_sec = config_get_config()->checkinterval;
+    event_add(&ev_timeout, &tv);
+
+	event_base_dispatch(ping_base);
+
+	event_del(&ev_timeout);
 }
 
 static long
@@ -120,45 +191,8 @@ check_and_get_wifidog_uptime(long sys_uptime)
     if (wifidog_uptime > sys_uptime) {
         started_time = time(NULL);
         return 0;
-    }
-    return wifidog_uptime;
-}
-
-char *
-get_ping_request(const struct sys_info *info)
-{
-	t_auth_serv *auth_server = get_auth_server();
-	char *request = NULL;
-	
-	if (!info)
-		return NULL;
-	
-	int nret = safe_asprintf(&request,
-			"GET %s%sgw_id=%s&sys_uptime=%lu&sys_memfree=%u&sys_load=%.2f&nf_conntrack_count=%lu&cpu_usage=%3.2lf%%25&wifidog_uptime=%lu&online_clients=%d&offline_clients=%d&ssid=%s&version=%s&type=%s&name=%s&channel_path=%s&wired_passed=%d HTTP/1.1\r\n"
-             "User-Agent: ApFree WiFiDog %s\r\n"
-			 "Connection: keep-alive\r\n"
-             "Host: %s\r\n"
-             "\r\n",
-             auth_server->authserv_path,
-             auth_server->authserv_ping_script_path_fragment,
-             config_get_config()->gw_id,
-             info->sys_uptime,
-             info->sys_memfree,
-             info->sys_load,
-			 info->nf_conntrack_count,
-			 info->cpu_usage,
-             check_and_get_wifidog_uptime(info->sys_uptime),
-			 g_online_clients,
-			 offline_client_ageout(),
-			 NULL != g_ssid?g_ssid:"null",
-			 NULL != g_version?g_version:"null",
-			 NULL != g_type?g_type:"null",
-			 NULL != g_name?g_name:"null",
-			 NULL != g_channel_path?g_channel_path:"null",
-             config_get_config()->wired_passed,
-             VERSION, auth_server->authserv_hostname);
-	
-	return nret>0?request:NULL;
+    } else  
+    	return wifidog_uptime;
 }
 
 char *
@@ -180,7 +214,7 @@ get_ping_uri(const struct sys_info *info)
              info->sys_load,
 			 info->nf_conntrack_count,
 			 info->cpu_usage,
-             (long unsigned int)((long unsigned int)time(NULL) - (long unsigned int)started_time),
+             check_and_get_wifidog_uptime(info->sys_uptime),
 			 g_online_clients,
 			 offline_client_ageout(),
 			 NULL != g_ssid?g_ssid:"NULL",
@@ -337,87 +371,4 @@ process_ping_response(struct evhttp_request *req, void *ctx)
     }
 }
 
-static void
-evpings(struct evhttps_request_context *context)
-{
-	struct sys_info info;
-	memset(&info, 0, sizeof(info));
-		
-	get_sys_info(&info);
-	
-	char *uri = get_ping_uri(&info);
-	if (uri == NULL)
-		return; // impossibe 
-	
-	debug(LOG_DEBUG, "ping uri is %s", uri);
-	
-	int timeout = 2; // 2s
-	evhttps_request(context, uri, timeout, process_ping_response, NULL);
-	free(uri);
-}
-/** @internal
- * This function does the actual request.
- */
-static void
-ping(void)
-{
-    char *request = NULL;
-    int sockfd;
-    static int authdown = 0;
-	
-	struct sys_info info;
-	memset(&info, 0, sizeof(info));
-	
-	get_sys_info(&info);
-	
-	/*
-     * The ping thread does not really try to see if the auth server is actually
-     * working. Merely that there is a web server listening at the port. And that
-     * is done by connect_auth_server() internally.
-     */
-    sockfd = connect_auth_server();
-    if (sockfd == -1) {
-        /*
-         * No auth servers for me to talk to
-         */
-        if (!authdown) {
-            fw_set_authdown();
-            authdown = 1;
-        }
-        return;
-    }
-	
-    /*
-     * Prep & send request
-     */
-	request = get_ping_request(&info);
-	if (request == NULL)
-		return; // impossible
-    
-    char *res = http_get(sockfd, request);
-	free(request);
-	close_auth_server();
-    if (NULL == res) {
-        debug(LOG_ERR, "There was a problem pinging the auth server!");
-        if (!authdown) {
-            fw_set_authdown();
-            authdown = 1;
-        }
-    } else if (strstr(res, "Pong") == 0) {
-        debug(LOG_WARNING, "Auth server did NOT say Pong!");
-        if (!authdown) {
-            fw_set_authdown();
-            authdown = 1;
-        }
-        free(res);
-    } else {
-        debug(LOG_DEBUG, "Auth Server Says: Pong");
-        if (authdown) {
-            fw_set_authup();
-            authdown = 0;
-        }
-        free(res);
-    }
-    return;
-}
 

@@ -32,6 +32,8 @@
 #define MINIMUM_STARTED_TIME 1041379200 /* 2003-01-01 */
 #define SSID_LENGTH         32
 
+struct evhttp_request;
+
 struct sys_info {
     unsigned long int   sys_uptime;
     unsigned int        sys_memfree;  
@@ -45,7 +47,7 @@ void get_sys_info(struct sys_info *);
 
 char *get_ping_uri(const struct sys_info *);
 
-char *get_ping_request(const struct sys_info *);
+void wd_set_request_header(struct evhttp_request *req, const char *host)
 
 /** @brief Periodically checks on the auth server to see if it's alive. */
 void thread_ping(void *arg);

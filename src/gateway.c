@@ -81,11 +81,15 @@ wd_zeroing_malloc (size_t howmuch) {
 static void 
 openssl_init (void)
 { 
-	CRYPTO_set_mem_functions (wd_zeroing_malloc, realloc, free);
-	SSL_library_init ();
-	SSL_load_error_strings ();
-	OpenSSL_add_all_algorithms ();
-
+#if (OPENSSL_VERSION_NUMBER < 0x10100000L) || \
+	(defined(LIBRESSL_VERSION_NUMBER) && LIBRESSL_VERSION_NUMBER < 0x20700000L)
+	// Initialize OpenSSL
+    CRYPTO_set_mem_functions (wd_zeroing_malloc, realloc, free);
+	SSL_library_init();
+	ERR_load_crypto_strings();
+	SSL_load_error_strings();
+	OpenSSL_add_all_algorithms();
+#endif
 	debug (LOG_DEBUG, "Using OpenSSL version \"%s\"\nand libevent version \"%s\"\n",
 		  SSLeay_version (SSLEAY_VERSION),
 		  event_get_version ());
