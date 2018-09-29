@@ -134,9 +134,12 @@ usage(void)
 static void
 wdctl_cmd_process(int argc, char **argv, int optind)
 {
+    if ((argc - optind) <= 0) {
+        goto ERR;
+    }
+
     for (int i = 0; i < ARRAYLEN(wdctl_clt_cmd); i++) {
         if (!strcmp(wdctl_clt_cmd[i].command, *(argv+optind))) {
-            config.command = wdctl_clt_cmd[i].cmd_type;
             if ((argc - (optind + 1)) > 0) {
                 wdctl_command_action(wdctl_clt_cmd[i].command, *(argv + optind + 1));
             } else 
@@ -144,7 +147,7 @@ wdctl_cmd_process(int argc, char **argv, int optind)
             return;
         }
     }
-
+ERR:
     fprintf(stderr, "wdctl: Error: Invalid command \"%s\"\n", *(argv + optind));
     usage();
     exit(EXIT_FAILURE);
@@ -178,11 +181,6 @@ parse_commandline(int argc, char **argv)
             exit(1);
             break;
         }
-    }
-
-    if ((argc - optind) <= 0) {
-        usage();
-        exit(1);
     }
 
     if (!sk_name) sk_name = strdup(DEFAULT_SOCK);
@@ -222,6 +220,22 @@ send_request(int sock, const char *request)
     if (poll(&fds, 1, WDCTL_TIMEOUT) > 0 && fds.revents == POLLOUT) {
         write(sock, request, strlen(request));
     } 
+}
+
+static void
+read_response(int sock)
+{
+    char buf[WDCTL_MSG_LENG+1] = {0};
+    struct pollfd fds;	
+    fds.fd      = sock;
+    fds.events  = POLLIN;
+
+    if (poll(&fds, 1, WDCTL_TIMEOUT) > 0 && fds.revents == POLLIN) {
+        if (read(sock, buf, WDCTL_MSG_LENG) > 0) {
+            fprintf(stdout, "%s\n", buf);
+        }
+    } 
+    close(sock);
 }
 
 static void
