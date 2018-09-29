@@ -49,7 +49,7 @@ extern time_t started_time;
 
 struct ping_request_context
 {
-	struct event_base *ping_base;
+	struct event_base *base;
 	struct bufferevent *bev;
 	struct event *ev_timeout;
 	struct evhttp_connection *evcon;
@@ -195,15 +195,12 @@ thread_ping(void *arg)
 	if (bev == NULL) termination_handler(0);
 
 	bufferevent_openssl_set_allow_dirty_shutdown(bev, 1);
-
-	
 	ping_request_context_init(&ping_ctx, ping_base, bev, &ev_timeout);
-
 	fw_init_delay();
 
 	event_assign(&ev_timeout, ping_base, -1, 0, ping_work_cb, (void*) &ping_ctx);
 	evutil_timerclear(&tv);
-	tv.tv_sec = config_get_config()->checkinterval;
+	tv.tv_sec = 1;
     event_add(&ev_timeout, &tv);
 
 	event_base_dispatch(ping_base);
