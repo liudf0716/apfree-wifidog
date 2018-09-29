@@ -58,6 +58,7 @@ struct ping_request_context
 static void fw_init_delay();
 static void ping_work_cb(evutil_socket_t, short, void *)
 static void process_ping_response(struct evhttp_request *, void *)；
+static void fw_init_delay();
 
 static void fw_init_delay()
 {
