@@ -38,8 +38,7 @@ struct bufferevent;
 struct event;
 struct evhttp_connection;
 
-struct wd_request_context
-{
+struct wd_request_context {
 	struct event_base *base;
 	struct bufferevent *bev;
 	struct event *ev_timeout;

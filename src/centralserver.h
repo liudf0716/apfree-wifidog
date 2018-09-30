@@ -62,7 +62,8 @@ typedef enum {
 
 struct auth_response_client {
     request_type_t type;
-    t_client       *client;
+    t_client	*client;
+	request		*req;
 };
 
 struct evhttp_request;

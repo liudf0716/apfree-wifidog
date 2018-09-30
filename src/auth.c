@@ -68,7 +68,7 @@ client_timeout_check_cb(evutil_socket_t fd, short event, void *arg) {
 
 	evutil_timerclear(&tv);
 	tv.tv_sec = config_get_config()->checkinterval;
-	event_add(request_ctx->ev_timeout, &tv);
+	event_add(context->ev_timeout, &tv);
 }
 
 void
@@ -89,8 +89,8 @@ ev_logout_client(void *ctx, t_client *client)
             struct auth_response_client *clt_res = safe_malloc(sizeof(struct auth_response_client));
             clt_res->type = request_type_logout;
             clt_res->client = client;
-            if (conext->data) free(context->data);     
-            context->data = authresponse_client;
+            if (context->data) free(context->data);     
+            context->data = clt_res;
             wd_make_request(context, process_auth_server_response, context);
             evhttp_make_request(context->evcon, context->req, EVHTTP_REQ_GET, uri);
             free(uri);

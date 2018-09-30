@@ -39,6 +39,7 @@
 #include "debug.h"
 #include "https_client.h"
 #include "http.h"
+#include "ping_thread.h"
 
 json_object *
 auth_server_roam_request(const char *mac)
@@ -486,9 +487,10 @@ parse_auth_server_response(t_authresponse *authresponse, struct evhttp_request *
         mark_auth_offline();
         return 0;
     }
-
+	
+	char *tmp = NULL;
     if (evbuffer_remove(evhttp_request_get_input_buffer(req), buffer, MAX_BUF-1) > 0 && 
-        (char *tmp = strstr(buffer, "Auth: "))) {
+        (tmp = strstr(buffer, "Auth: "))) {
         mark_auth_online();
         if (sscanf(tmp, "Auth: %d", (int *)&authresponse->authcode) == 1) {
             debug(LOG_INFO, "Auth server returned authentication code %d", authresponse->authcode);
@@ -503,7 +505,7 @@ parse_auth_server_response(t_authresponse *authresponse, struct evhttp_request *
 static void
 reply_counter_response(t_authresponse *authresponse, struct wd_request_context *context) {
     struct auth_response_client *clt_res = context->data;
-    t_client  *p1 = authresponse_client->client;
+    t_client  *p1 = clt_res->client;
     time_t current_time = time(NULL);
     s_config *config = config_get_config();
 
@@ -516,9 +518,7 @@ reply_counter_response(t_authresponse *authresponse, struct wd_request_context *
           "Checking client %s for timeout:  Last updated %ld (%ld seconds ago), timeout delay %ld seconds, current time %ld, ",
           p1->ip, p1->counters.last_updated, current_time - p1->counters.last_updated,
           config->checkinterval * config->clienttimeout, current_time);
-
     if (p1->counters.last_updated + (config->checkinterval * config->clienttimeout) <= current_time) {
-        /* Timing out user */
         debug(LOG_DEBUG, "%s - Inactive for more than %ld seconds, removing client and denying in firewall",
               p1->ip, config->checkinterval * config->clienttimeout);
         LOCK_CLIENT_LIST();
@@ -696,7 +696,7 @@ reply_auth_server_response(t_authresponse *authresponse, struct wd_request_conte
         break;
     case request_type_logout:
         if (clt_res->client) client_free_node(clt_res->client);
-        free(ctl_res);
+        free(clt_res);
         if (authresponse->authcode == AUTH_ERROR)
             debug(LOG_WARNING, "Auth server error when reporting logout");
         break;

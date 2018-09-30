@@ -35,6 +35,7 @@
 #include "util.h"
 #include "debug.h"
 #include "conf.h"
+#include "ping_thread.h"
 #include "firewall.h"
 #include "fw_iptables.h"
 #include "auth.h"
@@ -552,7 +553,7 @@ fw_client_process_from_authserver_response(t_authresponse *authresponse, t_clien
 }
 
 void
-ev_fw_sync_with_authserver(wd_request_context *context)
+ev_fw_sync_with_authserver(struct wd_request_context *context)
 {
 	t_client *p1 = NULL, *p2 = NULL, *worklist = NULL;
 	s_config *config = config_get_config();
