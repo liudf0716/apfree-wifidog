@@ -57,6 +57,7 @@
 #include <dirent.h>
 #include <linux/if_bridge.h>
 
+#include "wd_util.h"
 #include "gateway.h"
 #include "commandline.h"
 #include "client_list.h"
@@ -64,7 +65,6 @@
 #include "conf.h"
 #include "safe.h"
 #include "util.h"
-#include "wd_util.h"
 #include "debug.h"
 #include "pstring.h"
 #include "version.h"

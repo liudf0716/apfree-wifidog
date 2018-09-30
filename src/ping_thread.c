@@ -83,7 +83,7 @@ wd_set_request_header(struct evhttp_request *req, const char *host)
 }
 
 int
-wd_make_request(struct wd_request_context *request_ctx, void (*cb)(struct evhttp_request *, void *))
+wd_make_request(struct wd_request_context *request_ctx, void (*cb)(struct evhttp_request *, void *), void *data)
 {
 	struct bufferevent *bev = request_ctx->bev;
 	struct event_base *base = request_ctx->base;
@@ -105,7 +105,7 @@ wd_make_request(struct wd_request_context *request_ctx, void (*cb)(struct evhttp
 
 	evhttp_connection_set_timeout(evcon, PING_TIMEOUT); // 2 seconds
 
-	req = evhttp_request_new(cb, NULL);
+	req = evhttp_request_new(cb, data);
 	if (!req) {
 		debug(LOG_ERR, "evhttp_request_new failed");
 		evhttp_connection_free(evcon);
@@ -116,6 +116,8 @@ wd_make_request(struct wd_request_context *request_ctx, void (*cb)(struct evhttp
 
 	request_ctx->evcon = evcon;
 	request_ctx->req 	= req;
+	if (request_ctx->data) free(request_ctx->data);
+	request_ctx->data = NULL;
 
 	return 0;
 }
@@ -127,7 +129,7 @@ ping_work_cb(evutil_socket_t fd, short event, void *arg) {
 	struct sys_info info;
 	memset(&info, 0, sizeof(info));
 
-	if (wd_make_request(request_ctx, process_ping_response)) return;
+	if (wd_make_request(request_ctx, process_ping_response, NULL)) return;
 		
 	get_sys_info(&info);
 	char *uri = get_ping_uri(&info);

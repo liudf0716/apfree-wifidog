@@ -378,7 +378,6 @@ fw_set_trusted_mac(const char *mac)
 	debug(LOG_DEBUG, "Clear untrusted maclist");
 	iptables_fw_set_trusted_mac(mac);
 }
-//<<<<< liudf added end
 
 /** Remove the firewall rules
  * This is used when we do a clean shutdown of WiFiDog.
@@ -471,11 +470,12 @@ static void
 fw_client_operation(int operation, t_client *p1)
 {
 	switch(operation) {
-	case 1:
+	case AUTH_DENIED:
+	case AUTH_VALIDATION_FAILED:
 		fw_deny(p1);
 		debug(LOG_DEBUG, "fw_client_operation deny");
 		break;
-	case 2:
+	case AUTH_ALLOWED:
 		fw_allow(p1, FW_MARK_KNOWN);
 		debug(LOG_DEBUG, "fw_client_operation allow");
 		break;
@@ -485,31 +485,27 @@ fw_client_operation(int operation, t_client *p1)
 void
 fw_client_process_from_authserver_response(t_authresponse *authresponse, t_client *p1)
 {
-	int operation = 0; // 0: no operation; 1: deny; 2: allow;
-	t_client *tmp_c;
 	s_config *config = config_get_config();
 
 	LOCK_CLIENT_LIST();
-	tmp_c = client_list_find_by_client(p1);
-	if (NULL == tmp_c) {
+	t_client *tmp_c = client_list_find_by_client(p1);
+	if (!tmp_c) {
 		UNLOCK_CLIENT_LIST();
 		debug(LOG_NOTICE, "Client was already removed. Skipping auth processing");
 		return;	   /* Next client please */
 	}
 
-	if (config->auth_servers != NULL && tmp_c->is_online) {
+	if (config->auth_servers && tmp_c->is_online) {
 		switch (authresponse->authcode) {
 		case AUTH_DENIED:
 			debug(LOG_NOTICE, "%s - Denied. Removing client and firewall rules", tmp_c->ip);
 			client_list_delete(tmp_c);
-			operation = 1;
 			break;
 
 		case AUTH_VALIDATION_FAILED:
 			debug(LOG_NOTICE, "%s - Validation timeout, now denied. Removing client and firewall rules",
 				  tmp_c->ip);
 			client_list_delete(tmp_c);
-			operation = 1;
 			break;
 
 		case AUTH_ALLOWED:
@@ -528,8 +524,6 @@ fw_client_process_from_authserver_response(t_authresponse *authresponse, t_clien
 						  "%s - Skipped clearing counters after all, the user was previously in validation",
 						  tmp_c->ip);
 				}
-
-				operation = 2;
 			}
 			break;
 
@@ -552,9 +546,54 @@ fw_client_process_from_authserver_response(t_authresponse *authresponse, t_clien
 		}
 	}
 
-	fw_client_operation(operation, p1);
+	fw_client_operation(authresponse->authcode, p1);
 
 	UNLOCK_CLIENT_LIST();
+}
+
+void
+ev_fw_sync_with_authserver(wd_request_context *context)
+{
+	t_client *p1 = NULL, *p2 = NULL, *worklist = NULL;
+	s_config *config = config_get_config();
+
+	if (-1 == iptables_fw_counters_update()) {
+		debug(LOG_ERR, "Could not get counters from firewall!");
+		return;
+	}
+
+	LOCK_CLIENT_LIST();
+	g_online_clients = client_list_dup(&worklist);
+	UNLOCK_CLIENT_LIST();
+
+	
+
+	for (p1 = p2 = worklist; NULL != p1; p1 = p2) {
+		p2 = p1->next;	
+
+		/* Ping the client, if he responds it'll keep activity on the link.
+		 * However, if the firewall blocks it, it will not help.  The suggested
+		 * way to deal witht his is to keep the DHCP lease time extremely
+		 * short:  Shorter than config->checkinterval * config->clienttimeout */
+		icmp_ping(p1->ip);
+
+		/* Update the counters on the remote server only if we have an auth server */
+		if (config->auth_servers != NULL && p1->is_online) {
+			char *uri = get_auth_uri(REQUEST_TYPE_COUNTERS, online_client, p1);
+			if (uri) {
+				struct auth_response_client *clt_res = safe_malloc(sizeof(struct auth_response_client));
+				clt_res->type = request_type_counters;
+				clt_res->client = p1;
+				if (context->data) free(context->data);
+				context->data = clt_res;
+				wd_make_request(context, process_auth_server_response, context);
+				evhttp_make_request(context->evcon, context->req, EVHTTP_REQ_GET, uri);
+				free(uri);
+			}
+		}
+	}
+
+	client_list_destroy(worklist);
 }
 
 void

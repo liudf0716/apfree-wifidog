@@ -51,7 +51,7 @@ static void client_timeout_check_cb(evutil_socket_t, short, void *);
 @todo Also pass MAC adress? 
 @todo This thread loops infinitely, need a watchdog to verify that it is still running?
 */
-static void
+void
 thread_client_timeout_check(const void *arg)
 {
     wd_request_loop(client_timeout_check_cb);
@@ -59,86 +59,43 @@ thread_client_timeout_check(const void *arg)
 
 static void 
 client_timeout_check_cb(evutil_socket_t fd, short event, void *arg) {
-	struct wd_request_context *request_ctx = (struct wd_request_context *)arg;
+	struct wd_request_context *context = (struct wd_request_context *)arg;
 	struct timeval tv;
 	
 	debug(LOG_DEBUG, "client_timeout_check_cb begin");
+
+    ev_fw_sync_with_authserver(context);
 
 	evutil_timerclear(&tv);
 	tv.tv_sec = config_get_config()->checkinterval;
 	event_add(request_ctx->ev_timeout, &tv);
 }
 
-static void
-_thread_client_timeout_check(const void *arg)
-{
-    pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
-    pthread_mutex_t cond_mutex = PTHREAD_MUTEX_INITIALIZER;
-    struct timespec timeout;
-    t_auth_serv *auth_server = get_auth_server();
-    struct evhttps_request_context *context = NULL;
-
-    if (auth_server->authserv_use_ssl) {
-        context = evhttps_context_init();
-        if (!context) {
-            debug(LOG_ERR, "evhttps_context_init failed, process exit()");
-            exit(0);
-        }
-    }
-
-    while (1) {
-        /* Sleep for config.checkinterval seconds... */
-        timeout.tv_sec = time(NULL) + config_get_config()->checkinterval;
-        timeout.tv_nsec = 0;
-
-        /* Mutex must be locked for pthread_cond_timedwait... */
-        pthread_mutex_lock(&cond_mutex);
-
-        /* Thread safe "sleep" */
-        pthread_cond_timedwait(&cond, &cond_mutex, &timeout);
-
-        /* No longer needs to be locked */
-        pthread_mutex_unlock(&cond_mutex);
-
-        debug(LOG_DEBUG, "Running fw_counter()");
-
-        if (auth_server->authserv_use_ssl) {
-            evhttps_fw_sync_with_authserver(context);
-            evhttps_update_trusted_mac_list_status(context);
-        } else {
-            fw_sync_with_authserver(); 
-            update_trusted_mac_list_status();
-        }  
-    }
-
-    if (auth_server->authserv_use_ssl) {
-        evhttps_context_exit(context);
-    }
-}
-
 void
-evhttps_logout_client(void *ctx, t_client *client)
+ev_logout_client(void *ctx, t_client *client)
 {
-    struct evhttps_request_context *context = (struct evhttps_request_context *)ctx;
+    struct wd_request_context *context = (struct wd_request_context *)ctx;
     const s_config *config = config_get_config();
 
     fw_deny(client);
-    client_list_remove(client);
 
-    if (config->auth_servers != NULL) {
-        UNLOCK_CLIENT_LIST();
+    UNLOCK_CLIENT_LIST();
+    client_list_remove(client);
+    LOCK_CLIENT_LIST();
+
+    if (config->auth_servers != NULL) {   
         char *uri = get_auth_uri(REQUEST_TYPE_LOGOUT, online_client, client);
         if (uri) {
-            struct auth_response_client authresponse_client;
-            memset(&authresponse_client, 0, sizeof(authresponse_client));
-            authresponse_client.type = request_type_logout;
-            evhttps_request(context, uri, 2, process_auth_server_response, &authresponse_client);
+            struct auth_response_client *clt_res = safe_malloc(sizeof(struct auth_response_client));
+            clt_res->type = request_type_logout;
+            clt_res->client = client;
+            if (conext->data) free(context->data);     
+            context->data = authresponse_client;
+            wd_make_request(context, process_auth_server_response, context);
+            evhttp_make_request(context->evcon, context->req, EVHTTP_REQ_GET, uri);
             free(uri);
-        }
-        LOCK_CLIENT_LIST();
+        } 
     }
-
-    client_free_node(client);
 }
 
 /**

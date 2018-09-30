@@ -45,6 +45,7 @@ struct wd_request_context
 	struct event *ev_timeout;
 	struct evhttp_connection *evcon;
 	struct evhttp_request *req;
+    void *data;
 };
 
 struct sys_info {
@@ -65,7 +66,7 @@ void wd_set_request_header(struct evhttp_request *, const char *);
 void wd_request_context_init(struct wd_request_context *, 
                 struct event_base *, struct bufferevent *, struct event *);
 
-int wd_make_request(struct wd_request_context *, void (*cb)(struct evhttp_request *, void *));
+int wd_make_request(struct wd_request_context *, void (*cb)(struct evhttp_request *, void *), void *);
 
 void wd_request_loop(void (*callback)(evutil_socket_t, short, void *));
 

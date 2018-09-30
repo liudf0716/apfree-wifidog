@@ -128,5 +128,9 @@ void fw_client_process_from_authserver_response(t_authresponse *, t_client *p1);
 void evhttps_fw_sync_with_authserver(struct evhttps_request_context *);
 
 void evhttps_update_trusted_mac_list_status(struct evhttps_request_context *);
+
+struct wd_request_context;
+
+void ev_fw_sync_with_authserver(struct wd_request_context *request_ctx);
 //<<<< liudf added end
 #endif                          /* _FIREWALL_H_ */

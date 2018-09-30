@@ -44,13 +44,11 @@ json_object *
 auth_server_roam_request(const char *mac)
 {
 	s_config *config = config_get_config();
-    int sockfd;
     char buf[MAX_BUF] = {0};
     char *tmp = NULL, *end = NULL;
     t_auth_serv *auth_server = get_auth_server();
 
-
-    sockfd = connect_auth_server();
+    int sockfd = connect_auth_server();
 	if (sockfd <= 0) {
 		debug(LOG_ERR, "There was a problem connecting to the auth server!");		
         return NULL;
@@ -124,10 +122,8 @@ auth_server_roam_request(const char *mac)
 char * 
 get_auth_uri(const char *request_type, client_type_t type, void *data)
 {
-    char *ip    = NULL;
-    char *mac   = NULL;
-    char *name  = NULL;
-    char *safe_token    = NULL;
+    char *ip = NULL, *mac = NULL, *name = NULL;
+    char *safe_token = NULL;
     unsigned long long int incoming = 0,  outgoing = 0, incoming_delta = 0, outgoing_delta = 0;
     time_t first_login = 0;
     unsigned int online_time = 0;
@@ -147,9 +143,9 @@ get_auth_uri(const char *request_type, client_type_t type, void *data)
         outgoing = o_client->counters.outgoing;
         incoming_delta  = o_client->counters.incoming_delta;
         outgoing_delta  = o_client->counters.outgoing_delta;
+        wired = o_client->wired;
         break;
-    }
-        
+    }    
     case trusted_client:
     {
         t_trusted_mac *t_mac = (t_trusted_mac *)data;
@@ -158,7 +154,6 @@ get_auth_uri(const char *request_type, client_type_t type, void *data)
         wired = br_is_device_wired(mac);
         break;
     }
-
     default:
         return NULL;
     }
@@ -221,16 +216,14 @@ auth_server_request(t_authresponse * authresponse, const char *request_type, con
 					time_t first_login, unsigned int online_time, char *name, int wired)
 {
     s_config *config = config_get_config();
-    int sockfd;
     char buf[MAX_BUF] = {0};
-    char *tmp;
-    char *safe_token;
+    char *tmp = NULL, *safe_token = NULL;
     t_auth_serv *auth_server = get_auth_server();
 
     /* Blanket default is error. */
     authresponse->authcode = AUTH_ERROR;
 
-    sockfd = connect_auth_server();
+    int sockfd = connect_auth_server();
 	if (sockfd <= 0) {
 		debug(LOG_ERR, "There was a problem connecting to the auth server!");		
         return AUTH_ERROR;
@@ -241,7 +234,7 @@ auth_server_request(t_authresponse * authresponse, const char *request_type, con
 	 */
     safe_token = httpdUrlEncode(token);
     if(config -> deltatraffic) {
-           snprintf(buf, (sizeof(buf) - 1),
+        snprintf(buf, (sizeof(buf) - 1),
              "GET %s%sstage=%s&ip=%s&mac=%s&token=%s&incoming=%llu&outgoing=%llu&incomingdelta=%llu&outgoingdelta=%llu&first_login=%lld&online_time=%u&gw_id=%s&channel_path=%s&name=%s&wired=%d HTTP/1.1\r\n"
              "User-Agent: ApFree WiFiDog %s\r\n"
 			 "Connection: keep-alive\r\n"
@@ -263,7 +256,7 @@ auth_server_request(t_authresponse * authresponse, const char *request_type, con
 			 wired,
 			 VERSION, auth_server->authserv_hostname);
     } else {
-            snprintf(buf, (sizeof(buf) - 1),
+        snprintf(buf, (sizeof(buf) - 1),
              "GET %s%sstage=%s&ip=%s&mac=%s&token=%s&incoming=%llu&outgoing=%llu&first_login=%lld&online_time=%u&gw_id=%s&channel_path=%s&name=%s&wired=%d HTTP/1.1\r\n"
              "User-Agent: ApFree WiFiDog %s\r\n"
 			 "Connection: keep-alive\r\n"
@@ -280,7 +273,7 @@ auth_server_request(t_authresponse * authresponse, const char *request_type, con
 			 name,
 			 wired,
 			 VERSION, auth_server->authserv_hostname);
-        }
+    }
     free(safe_token);
 
     char *res = http_get(sockfd, buf);
@@ -487,58 +480,34 @@ _connect_auth_server(int level) {
 // 0, failure; 1, success
 static int
 parse_auth_server_response(t_authresponse *authresponse, struct evhttp_request *req) {
-    if (!authresponse)
-        return 0;
-
     char buffer[MAX_BUF] = {0};
 
     if (req == NULL || (req && req->response_code != 200)) {
         mark_auth_offline();
-        if (req == NULL)
-            debug(LOG_WARNING, "req is NULL, it seems request timeout");
-        else {
-            char buffer[MAX_BUF] = {0};
-
-            int nread = evbuffer_remove(evhttp_request_get_input_buffer(req),
-                    buffer, MAX_BUF-1);
-            if (nread > 0)
-                debug(LOG_WARNING, "response_code [%d] buffer is %s", 
-                    req->response_code, buffer);
-        }
         return 0;
     }
 
-    
-    char *tmp = NULL;
-
-    int nread = evbuffer_remove(evhttp_request_get_input_buffer(req),
-            buffer, MAX_BUF-1);
-    if (nread > 0)
-        debug(LOG_DEBUG, "parse_auth_server_response buffer is %s", buffer);
-    
-    if (nread <= 0) {
-        debug(LOG_ERR, "There was a problem getting response from the auth server!");
-        mark_auth_offline();
-    } else if ((tmp = strstr(buffer, "Auth: "))) {
+    if (evbuffer_remove(evhttp_request_get_input_buffer(req), buffer, MAX_BUF-1) > 0 && 
+        (char *tmp = strstr(buffer, "Auth: "))) {
         mark_auth_online();
         if (sscanf(tmp, "Auth: %d", (int *)&authresponse->authcode) == 1) {
             debug(LOG_INFO, "Auth server returned authentication code %d", authresponse->authcode);
             return 1;
         }
-    }
+    } else
+        mark_auth_offline();
     debug(LOG_WARNING, "Auth server did not return expected authentication code");
     return 0;
 }
 
 static void
-reply_counter_response(t_authresponse *authresponse, struct evhttps_request_context * context) {
-    struct auth_response_client *authresponse_client = context->data;
-    t_client    *p1 = authresponse_client->client;
-    t_client *tmp_c = NULL;
+reply_counter_response(t_authresponse *authresponse, struct wd_request_context *context) {
+    struct auth_response_client *clt_res = context->data;
+    t_client  *p1 = authresponse_client->client;
     time_t current_time = time(NULL);
     s_config *config = config_get_config();
 
-    if (p1 == NULL) {
+    if (!p1) {
         debug(LOG_DEBUG, "client is null: maybe it's trusted mac client");
         return;
     }
@@ -553,13 +522,13 @@ reply_counter_response(t_authresponse *authresponse, struct evhttps_request_cont
         debug(LOG_DEBUG, "%s - Inactive for more than %ld seconds, removing client and denying in firewall",
               p1->ip, config->checkinterval * config->clienttimeout);
         LOCK_CLIENT_LIST();
-        tmp_c = client_list_find_by_client(p1);
-        if (NULL != tmp_c) {
-            evhttps_logout_client(context, tmp_c);
+        t_client *tmp_c = client_list_find_by_client(p1);
+        UNLOCK_CLIENT_LIST();
+        if (tmp_c) {
+            ev_logout_client(context, tmp_c);
         } else {
             debug(LOG_NOTICE, "Client was already removed. Not logging out.");
-        }
-        UNLOCK_CLIENT_LIST();
+        }   
     }else {
         /*
          * This handles any change in
@@ -575,12 +544,12 @@ reply_counter_response(t_authresponse *authresponse, struct evhttps_request_cont
 }
 
 static void
-reply_login_response(t_authresponse *authresponse, struct evhttps_request_context *context) {
-    struct auth_response_client *authresponse_client = context->data;
-    t_client            *client     = authresponse_client->client;
+reply_login_response(t_authresponse *authresponse, struct wd_request_context *context) {
+    struct auth_response_client *clt_res = context->data;
+    t_client            *client     = clt_res->client;
     t_client            *tmp        = NULL;
     t_offline_client    *o_client   = NULL;
-    request     *r = authresponse_client->req;
+    request     *r = clt_res->req;
     char    *urlFragment = NULL;
     char    *token = NULL;
     httpVar *var = NULL;
@@ -718,14 +687,16 @@ reply_login_response(t_authresponse *authresponse, struct evhttps_request_contex
 }
 
 static void
-reply_auth_server_response(t_authresponse *authresponse, struct evhttps_request_context *context) {
-    struct auth_response_client *authresponse_client = context->data;
-    switch(authresponse_client->type)
+reply_auth_server_response(t_authresponse *authresponse, struct wd_request_context *context) {
+    struct auth_response_client *clt_res = context->data;
+    switch(clt_res->type)
     {
     case request_type_login:
         reply_login_response(authresponse, context);
         break;
     case request_type_logout:
+        if (clt_res->client) client_free_node(clt_res->client);
+        free(ctl_res);
         if (authresponse->authcode == AUTH_ERROR)
             debug(LOG_WARNING, "Auth server error when reporting logout");
         break;
@@ -737,9 +708,6 @@ reply_auth_server_response(t_authresponse *authresponse, struct evhttps_request_
 
 void
 process_auth_server_response(struct evhttp_request *req, void *ctx) { 
-    if (ctx == NULL)
-        return; // impossible here
-
     t_authresponse authresponse;
     if (parse_auth_server_response(&authresponse, req)) {
         reply_auth_server_response(&authresponse, ctx);
