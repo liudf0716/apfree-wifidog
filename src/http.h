@@ -40,6 +40,8 @@ void ev_http_callback_404(struct evhttp_request *, void *);
 /** @brief callback for evhttp */
 void ev_http_callback_wifidog(struct evhttp_request *, void *);
 /** @brief callback for evhttp */
+void ev_http_callback_about(struct evhttp_request *, void *);
+/** @brief callback for evhttp */
 void ev_http_callback_status(struct evhttp_request *, void *);
 /** @brief callback for evhttp */
 void ev_http_callback_auth(struct evhttp_request *, void *);
@@ -61,7 +63,7 @@ void ev_http_send_redirect_to_auth(struct evhttp_request *, const char *, const 
 /** @brief send the web browser's page which redirect to auth server by js */
 void ev_http_send_js_redirect(struct evhttp_request *, const char *);
 /** @brief reply client error of gw internet offline or auth server offline */
-void ev_http_reply_client_error(struct evhttp_request *, enum reply_client_error_type);
+int ev_http_reply_client_error(struct evhttp_request *, enum reply_client_error_type);
 /** @brief */
 void ev_http_send_apple_redirect(struct evhttp_request *, const char *);
 /** @brief send apple wisper detect request again */

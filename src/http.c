@@ -121,19 +121,18 @@ process_apple_wisper(struct evhttp_request *req, const char *mac, const char *re
 
 		if(o_client->client_type == 1 ) {
     		UNLOCK_OFFLINE_CLIENT_LIST();
-			if(interval > 20 && REQ_VERSION_BEFORE(req, 1, 1)) {
+			if(interval > 20) {
 				fw_set_mac_temporary(mac, 0);	
 				ev_http_send_apple_redirect(req, redir_url);
-			} else if(o_client->hit_counts > 2 && r->request.version == HTTP_1_0)
-				ev_http_send_apple_redirect(r, redir_url);
+			} else if(o_client->hit_counts > 2)
+				ev_http_send_apple_redirect(req, redir_url);
 			else {
 				ev_http_send_redirect(req, redir_url, "Redirect to login page");
 			}
 		} else {	
 			o_client->client_type = 1;
 			UNLOCK_OFFLINE_CLIENT_LIST();
-            evhttp_send_error(req, );
-			http_relay_wisper(r);
+            ev_http_replay_wisper(req);
 		}
         return 1;
 	} 
@@ -147,7 +146,7 @@ process_apple_wisper(struct evhttp_request *req, const char *mac, const char *re
  * @param type 1: internet not online
  *             other: auth server ont online
  */
-void
+int
 ev_http_reply_client_error(struct evhttp_request *req, enum reply_client_error_type type)
 {
     struct evbuffer *out = evbuffer_new();
@@ -163,6 +162,8 @@ ev_http_reply_client_error(struct evhttp_request *req, enum reply_client_error_t
     
     evhttp_send_reply(req, 200, "OK", out);
     evbuffer_free(out);
+
+    return 0;
 }
 
 /**
@@ -174,7 +175,7 @@ ev_http_resend(struct evhttp_request *req)
 {
     char *orig_url = wd_get_orig_url(req);
     if (!orig_url) {
-        evhttp_send_error(req, HTTP_INTERNAL_SERVER_ERROR, NULL);
+        evhttp_send_error(req, HTTP_INTERNAL, NULL);
         return;
     }
 
@@ -231,9 +232,9 @@ process_wired_device_pass(struct evhttp_request *req, const char *mac)
 void
 ev_http_callback_404(struct evhttp_request *req, void *arg)
 {
-    if (!is_online()) return ev_http_reply_client(req, INTERNET_OFFLINE);
+    if (!is_online()) return ev_http_reply_client_error(req, INTERNET_OFFLINE);
 
-    if (!is_auth_online()) return ev_http_reply_client(req, AUTHSERVER_OFFLINE);
+    if (!is_auth_online()) return ev_http_reply_client_error(req, AUTHSERVER_OFFLINE);
 
     char *remote_host;
     uint16_t port;
@@ -274,7 +275,7 @@ END:
 void
 ev_http_callback_wifidog(struct evhttp_request *req, void *arg)
 {
-    ev_send_http_page(r, "WiFiDog", "Please use the menu to navigate the features of this WiFiDog installation.");
+    ev_send_http_page(req, "WiFiDog", "Please use the menu to navigate the features of this WiFiDog installation.");
 }
 
 /**
@@ -283,7 +284,7 @@ ev_http_callback_wifidog(struct evhttp_request *req, void *arg)
 void
 ev_http_callback_about(struct evhttp_request *req, void *arg)
 {
-    ev_send_http_page(r, "About WiFiDog", "This is WiFiDog version <strong>" VERSION "</strong>");
+    ev_send_http_page(req, "About WiFiDog", "This is WiFiDog version <strong>" VERSION "</strong>");
 }
 
 /**
@@ -317,7 +318,7 @@ ev_http_send_redirect_to_auth(struct evhttp_request *req, const char *url_fragme
     t_auth_serv *auth_server = get_auth_server();
 
     safe_asprintf(&url, "%s://%s:%d%s%s",
-        auth_server->authserv_use_ssl?https:http,
+        auth_server->authserv_use_ssl?"https":"http",
         auth_server->authserv_hostname, 
         auth_server->authserv_use_ssl?auth_server->authserv_ssl_port:auth_server->authserv_http_port,
         auth_server->authserv_path, url_fragment);
@@ -359,21 +360,21 @@ ev_http_callback_auth(struct evhttp_request *req, void *arg)
         return;
     } 
 
-    const char *logout = ev_http_find_query(req, "logout");
-    char *mac = arp_get();
-    if (!mac) {
-        evhttp_send_error(req, 200, "Failed to retrieve your MAC address");
-        return;
-    }
-    
     char *remote_host;
     uint16_t port;
     evhttp_connection_get_peer(evhttp_request_get_connection(req), &remote_host, &port);
 
+    const char *logout = ev_http_find_query(req, "logout");
+    char *mac = arp_get(remote_host);
+    if (!mac) {
+        evhttp_send_error(req, 200, "Failed to retrieve your MAC address");
+        return;
+    }  
+
     int new_client = 0;
     LOCK_CLIENT_LIST();
     t_client *client = client_list_find(remote_host, mac);
-    if (!client && !(client = client_list_find_by_mac(mac)) { /* in case the same client but get differrent ip */
+    if (!client && !(client = client_list_find_by_mac(mac))) { /* in case the same client but get differrent ip */
         client = client_list_add(remote_host, mac, token);
         new_client = 1;
     } else if (!client && (client = client_list_find_by_mac(mac))) {
@@ -419,7 +420,7 @@ ev_http_callback_disconnect(struct evhttp_request *req, void *arg)
     UNLOCK_CLIENT_LIST();
 
     if (client && !strcmp(client->token, token)) {
-        ev_logout_client(req, client);
+        ev_logout_client(context, client);
     } else {
         debug(LOG_INFO, "Disconnect %s with incorrect token %s", mac, token);
         evhttp_send_error(req, HTTP_OK, "Invalid token for MAC");
@@ -439,7 +440,7 @@ ev_http_callback_temporary_pass(struct evhttp_request *req, void *arg)
 
     if (mac) {
         debug(LOG_INFO, "Temporary passed %s", mac);
-        fw_set_mac_temporary(mac->value, 0);	
+        fw_set_mac_temporary(mac, 0);	
         evhttp_send_reply(req, HTTP_OK, "OK", NULL);
         //httpdOutput(r, "startWeChatAuth();");
     } else {
@@ -580,10 +581,11 @@ ev_http_send_apple_redirect(struct evhttp_request *req, const char *redir_url)
  * 
  */
 void
-ev_http_replay_wisper()
+ev_http_replay_wisper(struct evhttp_request *)
 {
-    struct evbuffer *evb = evbuffer_new ();	
-    evbuffer_add(evb, apple_wisper);
+    struct evbuffer *evb = evbuffer_new ();
+    if (!evb) return;	
+    evbuffer_add(evb, apple_wisper, strlen(apple_wisper));
     evhttp_send_reply(req, HTTP_OK, "OK", evb);
     evbuffer_free(evb);
 } 
@@ -600,7 +602,12 @@ ev_http_find_query(struct evhttp_request *req, const char *key)
 {
     struct evhttp_uri *uri = evhttp_request_get_evhttp_uri(req);
     struct evkeyvalq query;
-    
+
+#define TAILQ_INIT(head) do {                       \
+    (head)->tqh_first = NULL;                   \
+    (head)->tqh_last = &(head)->tqh_first;              \ 
+} while (0)
+
     TAILQ_INIT(&query);
 
     if (evhttp_parse_query_str(evhttp_uri_get_query(uri), &query))

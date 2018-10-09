@@ -71,7 +71,7 @@ wd_get_redir_url_to_auth(struct evhttp_request *req, const char *mac)
     if (!orig_url) return NULL;
     char *redir_url = NULL;
     safe_asprintf(&redir_url, "%s://%s:%d%s%sgw_address=%s&gw_port=%d&gw_id=%s&channel_path=%s&ssid=%s&ip=%s&mac=%s&url=%s",
-        auth_server->authserv_use_ssl?https:http,
+        auth_server->authserv_use_ssl?"https":"http",
         auth_server->authserv_hostname,
         auth_server->authserv_use_ssl?auth_server->authserv_ssl_port:auth_server->authserv_http_port,
         config->gw_address, config->gw_port, config->gw_id, 

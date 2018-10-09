@@ -56,9 +56,9 @@ die_most_horribly_from_openssl_error (const char *func) {
  */ 
 static void
 process_ssl_request_cb (struct evhttp_request *req, void *arg) {  
-	if (!is_online()) return ev_http_reply_client(req, INTERNET_OFFLINE);
+	if (!is_online()) return ev_http_reply_client_error(req, INTERNET_OFFLINE);
 
-    if (!is_auth_online()) return ev_http_reply_client(req, AUTHSERVER_OFFLINE);
+    if (!is_auth_online()) return ev_http_reply_client_error(req, AUTHSERVER_OFFLINE);
 
     char *remote_host;
     uint16_t port;

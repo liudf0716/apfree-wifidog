@@ -268,9 +268,10 @@ client_login_request_reply(t_authresponse *authresponse,
         struct evhttp_request *req, struct wd_request_context *context)
 {
     t_client *client = (t_client *)context->data;
+    t_auth_serv *auth_server = get_auth_server();
     char *url_fragment = NULL;
 
-    switch (authresponse.authcode) {
+    switch (authresponse->authcode) {
     case AUTH_ERROR:
         /* Error talking to central server */
         debug(LOG_ERR, "Got ERROR from central server authenticating token %s from %s at %s", client->token, client->ip,
@@ -344,7 +345,7 @@ client_login_request_reply(t_authresponse *authresponse,
     default:
         debug(LOG_WARNING,
               "I don't know what the validation code %d means for token %s from %s at %s - sending error message",
-              authresponse.authcode, client->token, client->ip, client->mac);
+              authresponse->authcode, client->token, client->ip, client->mac);
 		safe_client_list_delete(client);
         
         evhttp_send_error(req, 200, "Internal Error, We can not validate your request at this time");
