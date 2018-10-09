@@ -35,6 +35,7 @@
 #include "firewall.h"
 #include "safe.h"
 #include "wd_client.h"
+#include "http.h"
 
 extern struct evbuffer *evb_internet_offline_page, *evb_authserver_offline_page;
 extern struct redir_file_buffer *wifidog_redir_html;
@@ -56,9 +57,15 @@ die_most_horribly_from_openssl_error (const char *func) {
  */ 
 static void
 process_ssl_request_cb (struct evhttp_request *req, void *arg) {  
-	if (!is_online()) return ev_http_reply_client_error(req, INTERNET_OFFLINE);
+	if (!is_online()){
+        ev_http_reply_client_error(req, INTERNET_OFFLINE);
+        return;
+    }  
 
-    if (!is_auth_online()) return ev_http_reply_client_error(req, AUTHSERVER_OFFLINE);
+    if (!is_auth_online()) {
+        ev_http_reply_client_error(req, AUTHSERVER_OFFLINE);
+        return;
+    } 
 
     char *remote_host;
     uint16_t port;

@@ -146,7 +146,7 @@ process_apple_wisper(struct evhttp_request *req, const char *mac, const char *re
  * @param type 1: internet not online
  *             other: auth server ont online
  */
-int
+void
 ev_http_reply_client_error(struct evhttp_request *req, enum reply_client_error_type type)
 {
     struct evbuffer *out = evbuffer_new();
@@ -232,9 +232,15 @@ process_wired_device_pass(struct evhttp_request *req, const char *mac)
 void
 ev_http_callback_404(struct evhttp_request *req, void *arg)
 {
-    if (!is_online()) return ev_http_reply_client_error(req, INTERNET_OFFLINE);
+    if (!is_online()){
+        ev_http_reply_client_error(req, INTERNET_OFFLINE);
+        return;
+    }  
 
-    if (!is_auth_online()) return ev_http_reply_client_error(req, AUTHSERVER_OFFLINE);
+    if (!is_auth_online()) {
+        ev_http_reply_client_error(req, AUTHSERVER_OFFLINE);
+        return;
+    } 
 
     char *remote_host;
     uint16_t port;
@@ -581,7 +587,7 @@ ev_http_send_apple_redirect(struct evhttp_request *req, const char *redir_url)
  * 
  */
 void
-ev_http_replay_wisper(struct evhttp_request *)
+ev_http_replay_wisper(struct evhttp_request *req)
 {
     struct evbuffer *evb = evbuffer_new ();
     if (!evb) return;	
@@ -600,12 +606,12 @@ ev_http_replay_wisper(struct evhttp_request *)
 const char *
 ev_http_find_query(struct evhttp_request *req, const char *key)
 {
-    struct evhttp_uri *uri = evhttp_request_get_evhttp_uri(req);
+    const struct evhttp_uri *uri = evhttp_request_get_evhttp_uri(req);
     struct evkeyvalq query;
 
-#define TAILQ_INIT(head) do {                       \
+#define TAILQ_INIT(head) do {                   \
     (head)->tqh_first = NULL;                   \
-    (head)->tqh_last = &(head)->tqh_first;              \ 
+    (head)->tqh_last = &(head)->tqh_first;      \
 } while (0)
 
     TAILQ_INIT(&query);

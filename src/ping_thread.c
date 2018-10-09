@@ -63,7 +63,7 @@ static void fw_init_delay()
 static void 
 ping_work_cb(evutil_socket_t fd, short event, void *arg) {
 	struct wd_request_context *request_ctx = (struct wd_request_context *)arg;
-	struct evhttp_request *req；
+	struct evhttp_request *req;
 	struct evhttp_connection *evcon;
 	struct sys_info info;
 	memset(&info, 0, sizeof(info));
@@ -199,7 +199,7 @@ get_sys_info(struct sys_info *info)
 		if(strlen(ssid) > 0) {
 			if(g_ssid) 
 				free(g_ssid);
-			g_ssid = _httpd_escape(ssid);
+			g_ssid = evhttp_encode_uri(ssid);
 		}
 	}
 	
@@ -255,7 +255,7 @@ process_ping_response(struct evhttp_request *req, void *ctx)
 {
 	static int authdown = 0;
 	
-	if (!req || req->response_code != 200) {
+	if (!req) {
 		mark_auth_offline();
 		if (!authdown) {		
             fw_set_authdown();

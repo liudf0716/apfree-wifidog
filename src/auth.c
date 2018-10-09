@@ -118,11 +118,11 @@ ev_authenticate_client(struct evhttp_request *req,
 
     debug(LOG_DEBUG, "client login request [%s]", uri);
 
-    struct evhttp_connection *evcon = NULL;
-    struct evhttp_request *req      = NULL;
+    struct evhttp_connection *wd_evcon = NULL;
+    struct evhttp_request *wd_req      = NULL;
     context->data = client; 
-    wd_make_request(context, evcon, req, process_auth_server_login);
-    evhttp_make_request(evcon, req, EVHTTP_REQ_GET, uri);
+    wd_make_request(context, wd_evcon, wd_req, process_auth_server_login);
+    evhttp_make_request(wd_evcon, wd_req, EVHTTP_REQ_GET, uri);
     free(uri);
 }
 

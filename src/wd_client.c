@@ -32,6 +32,7 @@
 #include "util.h"
 #include "wd_util.h"
 #include "wd_client.h"
+#include "gateway.h"
 
 /**
  * @brief get client's original url from request
@@ -45,7 +46,7 @@ char *
 wd_get_orig_url(struct evhttp_request *req)
 {
     char orig_url[MAX_BUF] = {0};
-    struct evhttp_uri *ev_uri = evhttp_request_get_evhttp_uri(req);
+    const struct evhttp_uri *ev_uri = evhttp_request_get_evhttp_uri(req);
     if (!evhttp_uri_join(evhttp_request_get_evhttp_uri(req), orig_url, MAX_BUF-1))
         return evhttp_encode_uri(orig_url);
 
@@ -69,6 +70,11 @@ wd_get_redir_url_to_auth(struct evhttp_request *req, const char *mac)
     t_auth_serv *auth_server = get_auth_server();
     char *orig_url = wd_get_orig_url(req);
     if (!orig_url) return NULL;
+
+	char *remote_host;
+    uint16_t port;
+    evhttp_connection_get_peer(evhttp_request_get_connection(req), &remote_host, &port);
+
     char *redir_url = NULL;
     safe_asprintf(&redir_url, "%s://%s:%d%s%sgw_address=%s&gw_port=%d&gw_id=%s&channel_path=%s&ssid=%s&ip=%s&mac=%s&url=%s",
         auth_server->authserv_use_ssl?"https":"http",
@@ -77,8 +83,8 @@ wd_get_redir_url_to_auth(struct evhttp_request *req, const char *mac)
         config->gw_address, config->gw_port, config->gw_id, 
         g_channel_path?g_channel_path:"null",
         g_ssid?g_ssid:"null",
-        peer_addr, mac, orig_url); 
-    free(orig_Url);
+        remote_host, mac, orig_url); 
+    free(orig_url);
     return redir_url;
 }
 
@@ -223,32 +229,4 @@ wd_make_request(struct wd_request_context *request_ctx,
 	wd_set_request_header(req, auth_server->authserv_hostname);
 
 	return 0;
-}
-
-/**
- * @brief incomplete
- * 
- */ 
-void
-wd_request(SSL_CTX *ssl_ctx, struct event_base *base, char *uri, 
-	void (*callback)(evutil_socket_t, short, void *))
-{
-	int authserv_use_ssl = get_auth_server()->authserv_use_ssl;
-	SSL *ssl = SSL_new(ssl_ctx);
-	if (!ssl) return;
-
-	struct evhttp_request *req = NULL；
-	struct evhttp_connection *evcon = NULL;
-	struct wd_request_context *request_ctx = wd_request_context_new(base, ssl, authserv_use_ssl);
-	if (!request_ctx) goto ERR;
-
-	if (wd_make_request(request_ctx, evcon, req, callback)) goto ERR;
-
-	evhttp_make_request(evcon, req, EVHTTP_REQ_GET, uri);
-	return;
-
-ERR:
-	wd_request_context_free(request_ctx);
-	if (evcon) evhttp_connection_free(evcon);
-	if (!authserv_use_ssl && ssl) SSL_free(ssl);
 }
