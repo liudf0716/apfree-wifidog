@@ -70,13 +70,9 @@ int fw_set_authdown(void);
 /** @brief Remove passthrough for clients when auth server is up */
 int fw_set_authup(void);
 
-/** @brief Refreshes the entire client list */
-void fw_sync_with_authserver(void);
-
 /** @brief Get an IP's MAC address from the ARP cache.*/
 char *arp_get(const char *);
 
-//>>>> liudf added 20151224
 /** @brief Get a Mac's ip from ARP cache*/
 char *arp_get_ip(const char *);
 
@@ -123,6 +119,7 @@ void fw_set_trusted_mac(const char *);
 
 void fw_client_process_from_authserver_response(t_authresponse *, t_client *p1);
 
+/** @brief Refreshes the entire client list */
 void ev_fw_sync_with_authserver(struct wd_request_context *request_ctx);
-//<<<< liudf added end
+
 #endif                          /* _FIREWALL_H_ */

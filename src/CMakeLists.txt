@@ -49,7 +49,7 @@ set(fw3_libs
 ADD_DEFINITIONS(-O2 -Wall --std=gnu99 -Wmissing-declarations)
 
 add_executable(wdctlx ${src_wdctl})
-add_executable(wifidog ${src_apfreewifidog})
+add_executable(wifidogx ${src_apfreewifidog})
 target_link_libraries(wifidogx ${libs} ${fw3_libs} ${CURL_LIBRARIES})
 
 install(TARGETS wifidogx wdctlx

@@ -46,8 +46,6 @@
 #include "wd_util.h"
 #include "wd_client.h"
 
-#define MAX_CON 	(1200)
-
 struct evbuffer *evb_internet_offline_page, *evb_authserver_offline_page;
 struct redir_file_buffer *wifidog_redir_html;
 time_t started_time;
@@ -66,12 +64,12 @@ static pthread_t tid_mqtt_server;
 
 
 static void *
-wd_zeroing_malloc (size_t howmuch) { 
+wd_zeroing_malloc(size_t howmuch){ 
 	return calloc (1, howmuch); 
 }
 
 static void 
-openssl_init (void)
+openssl_init(void)
 { 
     if (!RAND_poll()) return;
 
@@ -212,9 +210,9 @@ termination_handler(int s)
         debug(LOG_INFO, "Explicitly killing the wdctl thread");
 		pthread_kill(tid_wdctl, SIGKILL);
 	}
-	if (tid_https_server && self != tid_https_server) {
+	if (tid_ssl_redirect && self != tid_ssl_redirect) {
 		debug(LOG_INFO, "Explicitly killing the https_server thread");
-		pthread_kill(tid_https_server, SIGKILL);
+		pthread_kill(tid_ssl_redirect, SIGKILL);
 	}
 #ifdef _MQTT_SUPPORT_
     if (tid_mqtt_server && self != tid_mqtt_server) {
@@ -439,8 +437,6 @@ static void
 main_loop(void)
 {
     s_config *config = config_get_config();
-    request *r;
-    void **params;
 	
     wd_init(config);
 	threads_init(config);

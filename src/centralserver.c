@@ -148,7 +148,7 @@ get_auth_uri(const char *request_type, client_type_t type, void *data)
         t_client *o_client = (t_client *)data;
         ip  = o_client->ip;
         mac = o_client->mac;
-        safe_token = httpdUrlEncode(o_client->token);
+        safe_token = o_client->token;
         if (o_client->name)
             name = o_client->name;
         first_login = o_client->first_login;
@@ -222,7 +222,7 @@ parse_auth_server_response(t_authresponse *authresponse, struct evhttp_request *
 {
     char buffer[MAX_BUF] = {0};
 
-    if (req == NULL || (req && req->response_code != 200)) {
+    if (!req) {
         mark_auth_offline();
         return 0;
     }
@@ -270,7 +270,7 @@ client_login_request_reply(t_authresponse *authresponse,
     t_client *client = (t_client *)context->data;
     char *url_fragment = NULL;
 
-    switch (auth_response.authcode) {
+    switch (authresponse.authcode) {
     case AUTH_ERROR:
         /* Error talking to central server */
         debug(LOG_ERR, "Got ERROR from central server authenticating token %s from %s at %s", client->token, client->ip,
@@ -285,7 +285,7 @@ client_login_request_reply(t_authresponse *authresponse,
               client->token, client->ip, client->mac);
         fw_deny(client);
 		safe_client_list_delete(client);
-        safe_asprintf(&urlFragment, "%smessage=%s",
+        safe_asprintf(&url_fragment, "%smessage=%s",
                       auth_server->authserv_msg_script_path_fragment, GATEWAY_MESSAGE_DENIED);
         ev_http_send_redirect_to_auth(req, url_fragment, "Redirect to denied message");
         free(url_fragment);
@@ -317,12 +317,12 @@ client_login_request_reply(t_authresponse *authresponse,
         }
 		
         served_this_session++;
-		if(httpdGetVariableByName(r, "type")) {
+		if(ev_http_find_query(req, "type")) {
         	evhttp_send_error(req, 200, "weixin auth success!");
 		} else {
         	safe_asprintf(&url_fragment, "%sgw_id=%s&channel_path=%s&mac=%s&name=%s", 
 				auth_server->authserv_portal_script_path_fragment, 
-				config->gw_id,
+				config_get_config()->gw_id,
 				g_channel_path?g_channel_path:"null",
 				client->mac?client->mac:"null",
 				client->name?client->name:"null");
@@ -344,7 +344,7 @@ client_login_request_reply(t_authresponse *authresponse,
     default:
         debug(LOG_WARNING,
               "I don't know what the validation code %d means for token %s from %s at %s - sending error message",
-              auth_response.authcode, client->token, client->ip, client->mac);
+              authresponse.authcode, client->token, client->ip, client->mac);
 		safe_client_list_delete(client);
         
         evhttp_send_error(req, 200, "Internal Error, We can not validate your request at this time");
@@ -402,7 +402,7 @@ client_counter_request_reply(t_authresponse *authresponse,
             * Only run if we have an auth server
             * configured!
             */
-        fw_client_process_from_authserver_response(&authresponse, p1);
+        fw_client_process_from_authserver_response(authresponse, p1);
     }
 } 
 

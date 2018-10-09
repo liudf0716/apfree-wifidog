@@ -524,7 +524,7 @@ ev_fw_sync_with_authserver(struct wd_request_context *context)
 
 		/* Update the counters on the remote server only if we have an auth server */
 		if (config->auth_servers != NULL) {
-			char *uri = get_auth_uri(REQUEST_TYPE_COUNTERS, online_client, p1);
+			char *uri = get_auth_uri(REQUEST_TYPE_COUNTERS, ONLINE_CLIENT, p1);
 			if (!uri) continue;	
 
 			debug(LOG_DEBUG, "client's counter uri [%s]", uri);
@@ -541,83 +541,3 @@ ev_fw_sync_with_authserver(struct wd_request_context *context)
 	client_list_destroy(worklist);
 }
 
-/**Probably a misnomer, this function actually refreshes the entire client list's traffic counter, re-authenticates every client with the central server and update's the central servers traffic counters and notifies it if a client has logged-out.
- * @todo Make this function smaller and use sub-fonctions
- */
-void
-fw_sync_with_authserver(void)
-{
-	t_authresponse authresponse;
-	t_client *p1, *p2, *worklist, *tmp;
-	s_config *config = config_get_config();
-
-	if (-1 == iptables_fw_counters_update()) {
-		debug(LOG_ERR, "Could not get counters from firewall!");
-		return;
-	}
-
-	LOCK_CLIENT_LIST();
-
-	/* XXX Ideally, from a thread safety PoV, this function should build a list of client pointers,
-	 * iterate over the list and have an explicit "client still valid" check while list is locked.
-	 * That way clients can disappear during the cycle with no risk of trashing the heap or getting
-	 * a SIGSEGV.
-	 */
-	g_online_clients = client_list_dup(&worklist);
-	UNLOCK_CLIENT_LIST();
-
-	int flag = 0;
-	for (p1 = p2 = worklist; NULL != p1; p1 = p2) {
-		p2 = p1->next;
-
-		/* Ping the client, if he responds it'll keep activity on the link.
-		 * However, if the firewall blocks it, it will not help.  The suggested
-		 * way to deal witht his is to keep the DHCP lease time extremely
-		 * short:  Shorter than config->checkinterval * config->clienttimeout */
-		icmp_ping(p1->ip);
-		/* Update the counters on the remote server only if we have an auth server */
-		if (config->auth_servers != NULL && p1->is_online) {
-			auth_server_request(&authresponse, REQUEST_TYPE_COUNTERS, p1->ip, p1->mac, p1->token, p1->counters.incoming,
-								p1->counters.outgoing, p1->counters.incoming_delta, p1->counters.outgoing_delta,
-								// liudf added 20160112
-								p1->first_login, (p1->counters.last_updated - p1->first_login),
-								p1->name?p1->name:"null", p1->wired);
-			flag = 1;
-		}
-
-		time_t current_time = time(NULL);
-		debug(LOG_DEBUG,
-			  "Checking client %s for timeout:  Last updated %ld (%ld seconds ago), timeout delay %ld seconds, current time %ld, ",
-			  p1->ip, p1->counters.last_updated, current_time - p1->counters.last_updated,
-			  config->checkinterval * config->clienttimeout, current_time);
-		if (p1->counters.last_updated + (config->checkinterval * config->clienttimeout) <= current_time) {
-			/* Timing out user */
-			debug(LOG_DEBUG, "%s - Inactive for more than %ld seconds, removing client and denying in firewall",
-				  p1->ip, config->checkinterval * config->clienttimeout);
-			LOCK_CLIENT_LIST();
-			tmp = client_list_find_by_client(p1);
-			if (NULL != tmp) {
-				logout_client(tmp);
-			} else {
-				debug(LOG_NOTICE, "Client was already removed. Not logging out.");
-			}
-			UNLOCK_CLIENT_LIST();
-		} else {
-			/*
-			 * This handles any change in
-			 * the status this allows us
-			 * to change the status of a
-			 * user while he's connected
-			 *
-			 * Only run if we have an auth server
-			 * configured!
-			 */
-			fw_client_process_from_authserver_response(&authresponse, p1);
-		}
-	}
-
-	if (flag)
-		close_auth_server();
-
-	client_list_destroy(worklist);
-}

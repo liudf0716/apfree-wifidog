@@ -87,7 +87,6 @@
 #include <libiptc/libiptc.h>
 #include <xtables.h>
 #include <json-c/json.h>
-#include <httpd.h>
 #include <mosquitto.h>
 #include <uci.h>
 

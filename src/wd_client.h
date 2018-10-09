@@ -27,6 +27,8 @@
 #ifndef _WD_CLIENT_H_
 #define _WD_CLIENT_H_
 
+#include <openssl/ssl.h>
+
 #define WD_CONNECT_TIMEOUT  2 // 2 senconds timeout to connect auth server
 
 struct event_base;
@@ -48,7 +50,7 @@ void wd_request_context_free(struct wd_request_context *);
 /** @brief set wifidog request header for connectiong auth server */ 
 void wd_set_request_header(struct evhttp_request *, const char *);
 /** @brief wifidog make a request context for auth server  */
-struct wd_request_context *wd_request_context_new(struct event_base *, SSL *, struct event *)
+struct wd_request_context *wd_request_context_new(struct event_base *, SSL *, int);
 /** @brief wifidog make http request for auth server */
 int wd_make_request(struct wd_request_context *, struct evhttp_connection *, struct evhttp_request *, void (*cb)(struct evhttp_request *, void *));
 /** @brief a loop for wifidog connect auth server */
