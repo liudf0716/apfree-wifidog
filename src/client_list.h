@@ -139,6 +139,9 @@ t_client *client_list_find_by_token(const char *);
 /** @brief Deletes a client from the connections list and frees its memory*/
 void client_list_delete(t_client *);
 
+/** @brief safe client_list_delete by using lock */
+void safe_client_list_delete(t_client *);
+
 void offline_client_list_delete(t_offline_client *);
 
 /** @brief Removes a client from the connections list */

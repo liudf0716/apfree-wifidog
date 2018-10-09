@@ -41,7 +41,7 @@ typedef enum _t_fw_marks {
     FW_MARK_LOCKED = 254 /**< @brief The client has been locked out */
 } t_fw_marks;
 
-struct evhttps_request_context;
+struct wd_request_context;
 
 /** @brief Initialize the firewall */
 int fw_init(void);
@@ -121,15 +121,7 @@ void fw_set_mac_temporary(const char *, int);
 
 void fw_set_trusted_mac(const char *);
 
-void update_trusted_mac_list_status(void);
-
 void fw_client_process_from_authserver_response(t_authresponse *, t_client *p1);
-
-void evhttps_fw_sync_with_authserver(struct evhttps_request_context *);
-
-void evhttps_update_trusted_mac_list_status(struct evhttps_request_context *);
-
-struct wd_request_context;
 
 void ev_fw_sync_with_authserver(struct wd_request_context *request_ctx);
 //<<<< liudf added end

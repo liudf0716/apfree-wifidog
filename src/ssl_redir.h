@@ -29,11 +29,6 @@
 #ifndef	_SSL_REDIR_H_
 #define	_SSL_REDIR_H_
 
-void thread_https_server(void *args);
-char *get_full_redir_url(const char *mac, const char *orig_url, const char *peer_addr);
-char *evhttpd_get_full_redir_url(struct evhttp_request *req, const char *peer_addr);
-void evhttpd_gw_reply(struct evhttp_request *req,  struct evbuffer *evb);
-char *evhttp_get_request_url(struct evhttp_request *req);
-void evhttp_gw_reply_js_redirect(struct evhttp_request *req, const char *peer_addr);
+void thread_ssl_redirect(void *args);
 
 #endif

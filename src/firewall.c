@@ -30,7 +30,6 @@
 #define _GNU_SOURCE
 
 #include "common.h"
-#include "httpd.h"
 #include "safe.h"
 #include "util.h"
 #include "debug.h"
@@ -43,7 +42,7 @@
 #include "client_list.h"
 #include "commandline.h"
 #include "wd_util.h"
-#include "https_client.h"
+#include "wd_client.h"
 
 static int _fw_deny_raw(const char *, const char *, const int);
 
@@ -251,7 +250,6 @@ fw_set_authservers(void)
 	iptables_fw_set_authservers(NULL);
 }
 
-//>>>>> liudf added 20151224
 void
 fw_clear_pan_domains_trusted(void)
 {
@@ -392,81 +390,10 @@ fw_destroy(void)
 	return iptables_fw_destroy();
 }
 
-// liudf added 20160321
-void
-update_trusted_mac_status(t_trusted_mac *tmac)
-{
-	tmac->is_online = 0;
-
-	if(tmac->ip == NULL) {
-		tmac->ip = arp_get_ip(tmac->mac);
-	}
-
-	if(tmac->ip != NULL) {
-		tmac->is_online = is_device_online(tmac->ip);
-	}
-}
-
-void
-evhttps_update_trusted_mac_list_status(struct evhttps_request_context *context)
-{
-	t_trusted_mac *p1 = NULL, *tmac_list = NULL;
-	s_config *config = config_get_config();
-
-	if(trusted_mac_list_dup(&tmac_list) == 0) {
-		debug(LOG_DEBUG, "update_trusted_mac_list_status: list is empty");
-		return;
-	}
-
-	struct auth_response_client authresponse_client;
-	memset(&authresponse_client, 0, sizeof(struct auth_response_client));
-	authresponse_client.type = request_type_counters;
-
-	for(p1 = tmac_list; p1 != NULL; p1 = p1->next) {
-		update_trusted_mac_status(p1);
-		debug(LOG_DEBUG, "update_trusted_mac_list_status: %s %s %d", p1->ip, p1->mac, p1->is_online);
-		if (config->auth_servers != NULL && p1->is_online) {
-			char *uri = get_auth_uri(REQUEST_TYPE_COUNTERS, trusted_client, p1);
-			if (uri) {
-				evhttps_request(context, uri, 2, process_auth_server_response, &authresponse_client);
-				free(uri);
-			}
-		}
-
-	}
-
-	clear_dup_trusted_mac_list(tmac_list);
-}
-
-void
-update_trusted_mac_list_status(void)
-{
-	t_authresponse authresponse;
-	t_trusted_mac *p1 = NULL, *tmac_list = NULL;
-	s_config *config = config_get_config();
-
-	if(trusted_mac_list_dup(&tmac_list) == 0) {
-		debug(LOG_DEBUG, "update_trusted_mac_list_status: list is empty");
-		return;
-	}
-
-	int flag = 0;
-	for(p1 = tmac_list; p1 != NULL; p1 = p1->next) {
-		update_trusted_mac_status(p1);
-		debug(LOG_DEBUG, "update_trusted_mac_list_status: %s %s %d", p1->ip, p1->mac, p1->is_online);
-		if (config->auth_servers != NULL && p1->is_online) {
-			auth_server_request(&authresponse, REQUEST_TYPE_COUNTERS, p1->ip, p1->mac, "null", 0,
-								0, 0, 0, 0, 0, "null", br_is_device_wired(p1->mac));
-			flag = 1;
-		}
-	}
-
-	if (flag)
-		close_auth_server();
-
-	clear_dup_trusted_mac_list(tmac_list);
-}
-
+/**
+ * @brief According to auth server response, treating client's firewall rule
+ * 
+ */ 
 static void
 fw_client_operation(int operation, t_client *p1)
 {
@@ -480,9 +407,19 @@ fw_client_operation(int operation, t_client *p1)
 		fw_allow(p1, FW_MARK_KNOWN);
 		debug(LOG_DEBUG, "fw_client_operation allow");
 		break;
+	default:
+		break;
 	}
 }
 
+/**
+ * @brief According to auth server response, process client
+ * 
+ * @param authresponse Response result from auth server
+ * @param p1 The client will be process. notice the p1 is duplicate client of connection list
+ *           it can't be free here
+ *  
+ */ 
 void
 fw_client_process_from_authserver_response(t_authresponse *authresponse, t_client *p1)
 {
@@ -552,6 +489,13 @@ fw_client_process_from_authserver_response(t_authresponse *authresponse, t_clien
 	UNLOCK_CLIENT_LIST();
 }
 
+/**
+ * @brief refreshes the entire client list's traffic counter, 
+ *        and update's the central servers traffic counters 
+ * 
+ * @param context The context for request auth server
+ * 
+ */ 
 void
 ev_fw_sync_with_authserver(struct wd_request_context *context)
 {
@@ -579,69 +523,19 @@ ev_fw_sync_with_authserver(struct wd_request_context *context)
 		icmp_ping(p1->ip);
 
 		/* Update the counters on the remote server only if we have an auth server */
-		if (config->auth_servers != NULL && p1->is_online) {
+		if (config->auth_servers != NULL) {
 			char *uri = get_auth_uri(REQUEST_TYPE_COUNTERS, online_client, p1);
-			if (uri) {
-				struct auth_response_client *clt_res = safe_malloc(sizeof(struct auth_response_client));
-				clt_res->type = request_type_counters;
-				clt_res->client = p1;
-				if (context->data) free(context->data);
-				context->data = clt_res;
-				wd_make_request(context, process_auth_server_response, context);
-				evhttp_make_request(context->evcon, context->req, EVHTTP_REQ_GET, uri);
-				free(uri);
-			}
+			if (!uri) continue;	
+
+			debug(LOG_DEBUG, "client's counter uri [%s]", uri);
+
+			struct evhttp_connection *evcon = NULL;
+			struct evhttp_request *req = NULL;
+			context->data = p1;
+			if (!wd_make_request(context, evcon, req, process_auth_server_counter))
+				evhttp_make_request(evcon, req, EVHTTP_REQ_GET, uri);
+			free(uri);
 		}
-	}
-
-	client_list_destroy(worklist);
-}
-
-void
-evhttps_fw_sync_with_authserver(struct evhttps_request_context *context)
-{
-	t_client *p1, *p2, *worklist;
-	s_config *config = config_get_config();
-
-	if (-1 == iptables_fw_counters_update()) {
-		debug(LOG_ERR, "Could not get counters from firewall!");
-		return;
-	}
-
-	LOCK_CLIENT_LIST();
-
-	/* XXX Ideally, from a thread safety PoV, this function should build a list of client pointers,
-	 * iterate over the list and have an explicit "client still valid" check while list is locked.
-	 * That way clients can disappear during the cycle with no risk of trashing the heap or getting
-	 * a SIGSEGV.
-	 */
-	g_online_clients = client_list_dup(&worklist);
-	UNLOCK_CLIENT_LIST();
-
-	struct auth_response_client authresponse_client;
-	memset(&authresponse_client, 0, sizeof(struct auth_response_client));
-	authresponse_client.type = request_type_counters;
-
-	for (p1 = p2 = worklist; NULL != p1; p1 = p2) {
-		p2 = p1->next;	
-
-		/* Ping the client, if he responds it'll keep activity on the link.
-		 * However, if the firewall blocks it, it will not help.  The suggested
-		 * way to deal witht his is to keep the DHCP lease time extremely
-		 * short:  Shorter than config->checkinterval * config->clienttimeout */
-		icmp_ping(p1->ip);
-
-		/* Update the counters on the remote server only if we have an auth server */
-		if (config->auth_servers != NULL && p1->is_online) {
-			char *uri = get_auth_uri(REQUEST_TYPE_COUNTERS, online_client, p1);
-			if (uri) {
-				authresponse_client.client = p1;
-				evhttps_request(context, uri, 2, process_auth_server_response, &authresponse_client);
-				free(uri);
-			}
-		}
-
-		
 	}
 
 	client_list_destroy(worklist);

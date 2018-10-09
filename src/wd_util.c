@@ -991,30 +991,6 @@ is_device_online(const char *val)
 	return 0;
 }
 
-struct evbuffer *
-evhttp_read_file(const char *filename, struct evbuffer *evb)
-{
-	int fd;
-	struct stat stat_info;
-	
-	fd = open(filename, O_RDONLY);
-	if (fd == -1) {
-		debug(LOG_CRIT, "Failed to open HTML message file %s: %s", strerror(errno), 
-			filename);
-		return NULL;
-	}
-	
-	if (fstat(fd, &stat_info) == -1) {
-		debug(LOG_CRIT, "Failed to stat HTML message file: %s", strerror(errno));
-		close(fd);
-		return NULL;
-	}
-	
-	evbuffer_add_file(evb, fd, 0, stat_info.st_size);
-	close(fd);
-	return evb;
-}
-
 // if olen is not NULL, set it rlen value
 char *evb_2_string(struct evbuffer *evb, int *olen) 
 {
@@ -1031,53 +1007,59 @@ void evdns_add_trusted_domain_ip_cb(int errcode, struct evutil_addrinfo *addr, v
 {
 	struct evdns_cb_param *param = ptr;
 	t_domain_trusted *p = param->data;
-	struct event_base	*base = param->base;
+	struct event_base *base = param->base;
 	free(param);
 	
-    if (!errcode) {
-        struct evutil_addrinfo *ai;
-		char hostname[HTTP_IP_ADDR_LEN];
-        for (ai = addr; ai; ai = ai->ai_next) {           
-            const char *s = NULL;
-			
-			memset(hostname, 0, HTTP_IP_ADDR_LEN);
-            if (ai->ai_family == AF_INET) {
-                struct sockaddr_in *sin = (struct sockaddr_in *)ai->ai_addr;
-                s = evutil_inet_ntop(AF_INET, &sin->sin_addr, hostname, HTTP_IP_ADDR_LEN);
-            } else if (ai->ai_family == AF_INET6) {
-                //do nothing
-            }
-            if (s) {
-				t_ip_trusted *ipt = NULL;
-				debug(LOG_DEBUG, "parse domain (%s) ip (%s)", p->domain, s);
-				if(p->ips_trusted == NULL) {
-					ipt = (t_ip_trusted *)malloc(sizeof(t_ip_trusted));
-					memset(ipt, 0, sizeof(t_ip_trusted));
-					strncpy(ipt->ip, hostname, HTTP_IP_ADDR_LEN); 
-					ipt->next = NULL;
-					p->ips_trusted = ipt;
-				} else {
-					ipt = p->ips_trusted;
-					while(ipt) {
-						if(strcmp(ipt->ip, hostname) == 0)
-							break;
-						ipt = ipt->next;
-					}
-
-					if(ipt == NULL) {
-						ipt = (t_ip_trusted *)malloc(sizeof(t_ip_trusted));
-						memset(ipt, 0, sizeof(t_ip_trusted));
-						strncpy(ipt->ip, hostname, HTTP_IP_ADDR_LEN);
-						ipt->next = p->ips_trusted;
-						p->ips_trusted = ipt; 
-					}
-				}
-			}     
-        }   
-    } else {
+    if (errcode) {
 		debug(LOG_INFO, "parse domain %s , error: %s", p->domain, evutil_gai_strerror(errcode));
+		return;
 	}
 	
+	struct evutil_addrinfo *ai;
+	char hostname[HTTP_IP_ADDR_LEN];
+	for (ai = addr; ai; ai = ai->ai_next) {           
+		const char *s = NULL;
+		
+		memset(hostname, 0, HTTP_IP_ADDR_LEN);
+		if (ai->ai_family == AF_INET) {
+			struct sockaddr_in *sin = (struct sockaddr_in *)ai->ai_addr;
+			s = evutil_inet_ntop(AF_INET, &sin->sin_addr, hostname, HTTP_IP_ADDR_LEN);
+		} else if (ai->ai_family == AF_INET6) {
+			//do nothing
+			continue;
+		}
+
+		if (!s) {
+			continue;
+		}
+
+		t_ip_trusted *ipt = NULL;
+		debug(LOG_DEBUG, "parse domain (%s) ip (%s)", p->domain, s);
+		if(!p->ips_trusted) {
+			ipt = (t_ip_trusted *)malloc(sizeof(t_ip_trusted));
+			memset(ipt, 0, sizeof(t_ip_trusted));
+			strncpy(ipt->ip, hostname, HTTP_IP_ADDR_LEN); 
+			ipt->next = NULL;
+			p->ips_trusted = ipt;
+		} else {
+			ipt = p->ips_trusted;
+			while(ipt) {
+				if(strcmp(ipt->ip, hostname) == 0)
+					break;
+				ipt = ipt->next;
+			}
+
+			if(ipt == NULL) {
+				ipt = (t_ip_trusted *)malloc(sizeof(t_ip_trusted));
+				memset(ipt, 0, sizeof(t_ip_trusted));
+				strncpy(ipt->ip, hostname, HTTP_IP_ADDR_LEN);
+				ipt->next = p->ips_trusted;
+				p->ips_trusted = ipt; 
+			}
+		}
+		    
+	} 
+
 	if (addr)
 		evutil_freeaddrinfo(addr);
     
@@ -1088,25 +1070,21 @@ void evdns_add_trusted_domain_ip_cb(int errcode, struct evutil_addrinfo *addr, v
 	}
 }
 
-void evdns_parse_trusted_domain_2_ip(t_domain_trusted *p)
+static void 
+thread_evdns_parse_trusted_domain_2_ip(void *arg)
 {
-	struct event_base	*base		= NULL;
-	struct evdns_base  	*dnsbase 	= NULL;
-	
-    LOCK_DOMAIN();
+	t_domain_trusted *p = arg;
     
-	base = event_base_new();
+	struct event_base *base = event_base_new();
     if (!base) {
-        UNLOCK_DOMAIN();
         return;    
     }
-	
-    dnsbase = evdns_base_new(base, 1);
+    struct evdns_base *dnsbase = evdns_base_new(base, 1);
     if (!dnsbase) {
         event_base_free(base);
-        UNLOCK_DOMAIN();
         return;
     }
+
 	evdns_base_set_option(dnsbase, "timeout", config_get_config()->dns_timeout);
     // thanks to the following article
     // http://www.wuqiong.info/archives/13/
@@ -1145,10 +1123,17 @@ void evdns_parse_trusted_domain_2_ip(t_domain_trusted *p)
 		event_base_dispatch(base);	
 	}
 	
-	UNLOCK_DOMAIN();
-	
 	evdns_base_free(dnsbase, 0);
     event_base_free(base);
+}
+
+void evdns_parse_trusted_domain_2_ip(t_domain_trusted *p)
+{ 
+	if (!p) return;
+
+	pthread_t tid_evdns_parse;
+    pthread_create(&tid_evdns_parse, NULL, (void *)thread_evdns_parse_trusted_domain_2_ip, p);
+    pthread_detach(tid_evdns_parse);
 }
 
 int
@@ -1521,4 +1506,3 @@ br_arp_get_mac(const char *i_ip, char *o_mac)
 	return arp_get_mac(config->gw_interface, i_ip, o_mac);
 }
 
-//<<<< liudf added end

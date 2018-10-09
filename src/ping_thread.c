@@ -40,10 +40,7 @@
 #include "gateway.h"
 #include "wd_util.h"
 #include "version.h"
-#include "httpd_priv.h"
-#include "https_client.h"
-
-#define	PING_TIMEOUT	2
+#include "wd_client.h"
 
 extern time_t started_time;
 
@@ -63,73 +60,15 @@ static void fw_init_delay()
 	fw_set_untrusted_maclist();
 }
 
-void
-wd_set_request_header(struct evhttp_request *req, const char *host)
-{
-	struct evkeyvalq *output_headers = evhttp_request_get_output_headers(req);
-
-	if (host) evhttp_add_header(output_headers, "Host", host);
-
-	evhttp_add_header(evhttp_request_get_output_headers(req),
-		    "Content-Type", "text/html");
-	evhttp_add_header(evhttp_request_get_output_headers(req),
-		    "Cache-Control", "no-store, must-revalidate");
-	evhttp_add_header(evhttp_request_get_output_headers(req),
-		    "Expires", "0");
-	evhttp_add_header(evhttp_request_get_output_headers(req),
-		    "Pragma", "no-cache");
-	evhttp_add_header(output_headers, "Connection", "close");
-	evhttp_add_header(output_headers, "User-Agent", "ApFree WiFiDog");
-}
-
-int
-wd_make_request(struct wd_request_context *request_ctx, void (*cb)(struct evhttp_request *, void *), void *data)
-{
-	struct bufferevent *bev = request_ctx->bev;
-	struct event_base *base = request_ctx->base;
-	struct evhttp_connection *evcon = NULL;
-	struct evhttp_request *req;
-	t_auth_serv *auth_server = get_auth_server();
-
-	if (!auth_server->authserv_use_ssl) {
-		evcon = evhttp_connection_base_bufferevent_new(base, NULL, bev,
-				auth_server->authserv_hostname, auth_server->authserv_http_port);
-	} else {
-		evcon = evhttp_connection_base_bufferevent_new(base, NULL, bev,
-				auth_server->authserv_hostname, auth_server->authserv_ssl_port);
-	}
-	if (!evcon) {
-		debug(LOG_ERR, "evhttp_connection_base_bufferevent_new failed");
-		return 1;
-	}
-
-	evhttp_connection_set_timeout(evcon, PING_TIMEOUT); // 2 seconds
-
-	req = evhttp_request_new(cb, data);
-	if (!req) {
-		debug(LOG_ERR, "evhttp_request_new failed");
-		evhttp_connection_free(evcon);
-		return 1;
-	}
-
-	wd_set_request_header(req, auth_server->authserv_hostname);
-
-	request_ctx->evcon = evcon;
-	request_ctx->req 	= req;
-	if (request_ctx->data) free(request_ctx->data);
-	request_ctx->data = NULL;
-
-	return 0;
-}
-
 static void 
 ping_work_cb(evutil_socket_t fd, short event, void *arg) {
 	struct wd_request_context *request_ctx = (struct wd_request_context *)arg;
-	struct timeval tv;
+	struct evhttp_request *req；
+	struct evhttp_connection *evcon;
 	struct sys_info info;
 	memset(&info, 0, sizeof(info));
 
-	if (wd_make_request(request_ctx, process_ping_response, NULL)) return;
+	if (wd_make_request(request_ctx, evcon, req, process_ping_response)) return;
 		
 	get_sys_info(&info);
 	char *uri = get_ping_uri(&info);
@@ -137,75 +76,19 @@ ping_work_cb(evutil_socket_t fd, short event, void *arg) {
 	
 	debug(LOG_DEBUG, "uri is %s", uri);
 
-	evhttp_make_request(request_ctx->evcon, request_ctx->req, EVHTTP_REQ_GET, uri);
+	evhttp_make_request(evcon, req, EVHTTP_REQ_GET, uri);
 	free(uri);
-
-	evutil_timerclear(&tv);
-	tv.tv_sec = config_get_config()->checkinterval;
-	event_add(request_ctx->ev_timeout, &tv);
 }
 
-void
-wd_request_context_init(struct wd_request_context *request_ctx, 
-	struct event_base *base, struct bufferevent *bev, struct event *ev_timeout)
-{
-	request_ctx->base		= base;
-	request_ctx->bev 		= bev;
-	request_ctx->ev_timeout	= ev_timeout;
-}
-
+/**
+ * @brief ping process
+ * 
+ */
 void
 thread_ping(void *arg)
 {
 	fw_init_delay();
-
 	wd_request_loop(ping_work_cb);
-}
-
-void
-wd_request_loop(void (*callback)(evutil_socket_t, short, void *))
-{
-	SSL_CTX *ssl_ctx = NULL;
-	SSL *ssl = NULL;
-	struct bufferevent *bev;
-	struct event_base *base;
-	struct event ev_timeout;
-	struct timeval tv;
-
-	struct wd_request_context request_ctx;
-	t_auth_serv *auth_server = get_auth_server();
-
-	if (!RAND_poll()) termination_handler(0);
-
-	/* Create a new OpenSSL context */
-	ssl_ctx = SSL_CTX_new(SSLv23_method());
-	if (!ssl_ctx) termination_handler(0);
-
-	ssl = SSL_new(ssl_ctx);
-	if (ssl == NULL) termination_handler(0);
-
-	base = event_base_new();
-	if (!base) termination_handler(0);
-
-	if (!auth_server->authserv_use_ssl) {
-		bev = bufferevent_socket_new(base, -1, BEV_OPT_CLOSE_ON_FREE);
-	} else {
-		bev = bufferevent_openssl_socket_new(base, -1, ssl,
-			BUFFEREVENT_SSL_CONNECTING, BEV_OPT_CLOSE_ON_FREE|BEV_OPT_DEFER_CALLBACKS);
-	}
-	if (bev == NULL) termination_handler(0);
-
-	bufferevent_openssl_set_allow_dirty_shutdown(bev, 1);
-	wd_request_context_init(&request_ctx, base, bev, &ev_timeout);
-	
-	event_assign(&ev_timeout, base, -1, 0, callback, (void*) &request_ctx);
-	evutil_timerclear(&tv);
-	tv.tv_sec = 1;
-    event_add(&ev_timeout, &tv);
-
-	event_base_dispatch(base);
-
-	event_del(&ev_timeout);
 }
 
 static long
@@ -219,6 +102,13 @@ check_and_get_wifidog_uptime(long sys_uptime)
     	return wifidog_uptime;
 }
 
+/**
+ * @brief get ping uri
+ * 
+ * @param info The system info structure
+ * @return NULL fail or ping uri
+ * 
+ */ 
 char *
 get_ping_uri(const struct sys_info *info)
 {
@@ -251,6 +141,12 @@ get_ping_uri(const struct sys_info *info)
 	return nret>0?uri:NULL;
 }
 
+/**
+ * @brief get system info to info param
+ * 
+ * @param info Out param to store system info
+ * 
+ */ 
 void
 get_sys_info(struct sys_info *info)
 {

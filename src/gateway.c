@@ -28,7 +28,6 @@
  */
 
 #include "common.h"
-#include "httpd.h"
 #include "safe.h"
 #include "debug.h"
 #include "conf.h"
@@ -40,13 +39,12 @@
 #include "client_list.h"
 #include "wdctl_thread.h"
 #include "ping_thread.h"
-#include "httpd_thread.h"
 #include "util.h"
-#include "thread_pool.h"
 #include "ipset.h"
 #include "ssl_redir.h"
 #include "mqtt_thread.h"
 #include "wd_util.h"
+#include "wd_client.h"
 
 #define MAX_CON 	(1200)
 
@@ -61,16 +59,10 @@ time_t started_time;
 static pthread_t tid_fw_counter;
 static pthread_t tid_ping;
 static pthread_t tid_wdctl;
-static pthread_t tid_https_server;
+static pthread_t tid_ssl_redirect;
 #ifdef _MQTT_SUPPORT_
 static pthread_t tid_mqtt_server;
 #endif
-static threadpool_t *pool; 
-
-
-
-/* The internal web server */
-httpd * webserver;
 
 
 static void *
@@ -81,6 +73,8 @@ wd_zeroing_malloc (size_t howmuch) {
 static void 
 openssl_init (void)
 { 
+    if (!RAND_poll()) return;
+
 #if (OPENSSL_VERSION_NUMBER < 0x10100000L) || \
 	(defined(LIBRESSL_VERSION_NUMBER) && LIBRESSL_VERSION_NUMBER < 0x20700000L)
 	// Initialize OpenSSL
@@ -101,11 +95,8 @@ wd_msg_init()
 	s_config *config = config_get_config();	
 	
 	evb_internet_offline_page 	= evbuffer_new();
-	if (!evb_internet_offline_page)
-		exit(EXIT_FAILURE);
-	
 	evb_authserver_offline_page	= evbuffer_new();
-	if (!evb_authserver_offline_page)
+	if (!evb_internet_offline_page || !evb_authserver_offline_page)
 		exit(EXIT_FAILURE);
 	
 	if ( !evhttp_read_file(config->internet_offline_file, evb_internet_offline_page) || 
@@ -116,27 +107,25 @@ wd_msg_init()
 }
 
 static void
-wd_redir_init(void)
+wd_redir_file_init(void)
 {
-	s_config *config = config_get_config();	
-	struct evbuffer *evb_front = NULL;
-	struct evbuffer *evb_rear = NULL;
+	s_config *config = config_get_config();
 	char	front_file[128] = {0};
 	char	rear_file[128] = {0};
 	
 	
 	wifidog_redir_html = (struct redir_file_buffer *)safe_malloc(sizeof(struct redir_file_buffer));
 	
-	evb_front 	= evbuffer_new();
-	evb_rear	= evbuffer_new();
+	struct evbuffer *evb_front 	= evbuffer_new();
+	struct evbuffer *evb_rear	= evbuffer_new();
 	if (evb_front == NULL || evb_rear == NULL)  {
 		exit(EXIT_FAILURE);
 	}
 	
 	snprintf(front_file, 128, "%s.front", config->htmlredirfile);
 	snprintf(rear_file, 128, "%s.rear", config->htmlredirfile);
-	if (!evhttp_read_file(front_file, evb_front) || 
-		!evhttp_read_file(rear_file, evb_rear)) {
+	if (!ev_http_read_html_file(front_file, evb_front) || 
+		!ev_http_read_html_file(rear_file, evb_rear)) {
 		exit(EXIT_FAILURE);
 	}
 	
@@ -166,142 +155,6 @@ append_x_restartargv(void)
     safe_asprintf(&(restartargv[i++]), "%d", getpid());
 }
 
-/* @internal
- * @brief During gateway restart, connects to the parent process via the internal socket
- * Downloads from it the active client list
- */
-static void
-get_clients_from_parent(void)
-{ 
-    struct sockaddr_un sa_un;
-    s_config *config = config_get_config();
-    char linebuffer[MAX_BUF] = { 0 };
-    char *running1 = NULL;
-    char *running2 = NULL;
-    char *token1 = NULL;
-    char *token2 = NULL;
-    char *command = NULL;
-    char *key = NULL;
-    char *value = NULL;
-    t_client *client = NULL;
-    char onechar;
-    int sock;
-    int len = 0;
-
-
-    debug(LOG_INFO, "Connecting to parent to download clients");
-
-    /* Connect to socket */
-    sock = socket(AF_UNIX, SOCK_STREAM, 0);
-    /* XXX An attempt to quieten coverity warning about the subsequent connect call:
-     * Coverity says: "sock is apssed to parameter that cannot be negative"
-     * Although connect expects a signed int, coverity probably tells us that it shouldn't
-     * be negative */
-    if (sock < 0) {
-        debug(LOG_ERR, "Could not open socket (%s) - client list not downloaded", strerror(errno));
-        return;
-    }
-    memset(&sa_un, 0, sizeof(sa_un));
-    sa_un.sun_family = AF_UNIX;
-    strncpy(sa_un.sun_path, config->internal_sock, (sizeof(sa_un.sun_path) - 1));
-
-    if (connect(sock, (struct sockaddr *)&sa_un, strlen(sa_un.sun_path) + sizeof(sa_un.sun_family))) {
-        debug(LOG_ERR, "Failed to connect to parent (%s) - client list not downloaded", strerror(errno));
-        close(sock);
-        return;
-    }
-
-    debug(LOG_INFO, "Connected to parent.  Downloading clients");
-
-    LOCK_CLIENT_LIST();
-    /* Get line by line */
-    while (read(sock, &onechar, 1) == 1) {
-        if (onechar == '\n') {
-            /* End of line */
-            onechar = '\0';
-        }
-        linebuffer[len++] = onechar;
-
-        if (!onechar) {
-            /* We have a complete entry in linebuffer - parse it */
-            debug(LOG_DEBUG, "Received from parent: [%s]", linebuffer);
-            running1 = linebuffer;
-            while ((token1 = strsep(&running1, "|")) != NULL) {
-                if (!command) {
-                    /* The first token is the command */
-                    command = token1;
-                } else {
-                    /* Token1 has something like "foo=bar" */
-                    running2 = token1;
-                    key = value = NULL;
-                    while ((token2 = strsep(&running2, "=")) != NULL) {
-                        if (!key) {
-                            key = token2;
-                        } else if (!value) {
-                            value = token2;
-                        }
-                    }
-                }
-
-                if (strcmp(command, "CLIENT") == 0) {
-                    /* This line has info about a client in the client list */
-                    if (NULL == client) {
-                        /* Create a new client struct */
-                        client = client_get_new();
-                    }
-                }
-
-                /* XXX client check to shut up clang... */
-                if (key && value && client) {
-                    if (strcmp(command, "CLIENT") == 0) {
-                        /* Assign the key into the appropriate slot in the connection structure */
-                        if (strcmp(key, "ip") == 0) {
-                            client->ip = safe_strdup(value);
-                        } else if (strcmp(key, "mac") == 0) {
-                            client->mac = safe_strdup(value);
-                        } else if (strcmp(key, "token") == 0) {
-                            client->token = safe_strdup(value);
-                        } else if (strcmp(key, "fw_connection_state") == 0) {
-                            client->fw_connection_state = atoi(value);
-                        } else if (strcmp(key, "fd") == 0) {
-                            client->fd = atoi(value);
-                        } else if (strcmp(key, "counters_incoming") == 0) {
-                            client->counters.incoming_history = (unsigned long long)atoll(value);
-                            client->counters.incoming = client->counters.incoming_history;
-                            client->counters.incoming_delta = 0;
-                        } else if (strcmp(key, "counters_outgoing") == 0) {
-                            client->counters.outgoing_history = (unsigned long long)atoll(value);
-                            client->counters.outgoing = client->counters.outgoing_history;
-                            client->counters.outgoing_delta = 0;
-                        } else if (strcmp(key, "counters_last_updated") == 0) {
-                            client->counters.last_updated = atol(value);
-                        } else {
-                            debug(LOG_NOTICE, "I don't know how to inherit key [%s] value [%s] from parent", key,
-                                  value);
-                        }
-                    }
-                }
-            }
-
-            /* End of parsing this command */
-            if (client) {
-                client_list_insert_client(client);
-            }
-
-            /* Clean up */
-            command = NULL;
-            memset(linebuffer, 0, sizeof(linebuffer));
-            len = 0;
-            client = NULL;
-        }
-    }
-
-    UNLOCK_CLIENT_LIST();
-    debug(LOG_INFO, "Client list downloaded successfully from parent");
-
-    close(sock);
-}
-
 /**@internal
  * @brief Handles SIGCHLD signals to avoid zombie processes
  *
@@ -316,7 +169,6 @@ sigchld_handler(int s)
     pid_t rc;
 
     debug(LOG_DEBUG, "Handler for SIGCHLD called. Trying to reap a child");
-	
 	do {
     	rc = waitpid(-1, &status, WNOHANG);
 	} while(rc != (pid_t)0 && rc != (pid_t)-1);
@@ -370,9 +222,6 @@ termination_handler(int s)
         pthread_kill(tid_mqtt_server, SIGKILL);
     }
 #endif
-	if(pool != NULL) {
-		threadpool_destroy(pool, 0);
-	}
 
     debug(LOG_NOTICE, "Exiting...");
     exit(s == 0 ? EXIT_FAILURE : EXIT_SUCCESS);
@@ -436,7 +285,7 @@ wd_init(s_config *config)
 {
     // read wifidog msg file to memory
     wd_msg_init();    
-    wd_redir_init();
+    wd_redir_file_init();
     openssl_init();              /* Initialize OpenSSL */
     ipset_init();
 	
@@ -489,12 +338,8 @@ wd_init(s_config *config)
             exit(EXIT_FAILURE);
         }
     }
-}
 
-static void
-firewall_init()
-{
-    /* Reset the firewall (if WiFiDog crashed) */
+     /* Reset the firewall (if WiFiDog crashed) */
     fw_destroy();
     /* Then initialize it */
     if (!fw_init()) {
@@ -504,43 +349,17 @@ firewall_init()
 }
 
 static void
-webserver_init(s_config *config)
-{
-    /* Initializes the web server */
-    debug(LOG_NOTICE, "Creating web server on %s:%d", config->gw_address, config->gw_port);
-    if ((webserver = httpdCreate(config->gw_address, config->gw_port)) == NULL) {
-        debug(LOG_ERR, "Could not create web server: %s", strerror(errno));
-        exit(EXIT_FAILURE);
-    }
-    register_fd_cleanup_on_fork(webserver->serverSock);
-
-
-    httpdAddCContent(webserver, "/", "wifidog", 0, NULL, http_callback_wifidog);
-    httpdAddCContent(webserver, "/wifidog", "", 0, NULL, http_callback_wifidog);
-    httpdAddCContent(webserver, "/wifidog", "about", 0, NULL, http_callback_about);
-    httpdAddCContent(webserver, "/wifidog", "status", 0, NULL, http_callback_status);
-    httpdAddCContent(webserver, "/wifidog", "auth", 0, NULL, http_callback_auth);
-    httpdAddCContent(webserver, "/wifidog", "disconnect", 0, NULL, http_callback_disconnect);
-    
-    // liudf added 20160421
-    // added temporary pass api
-    httpdAddCContent(webserver, "/wifidog", "temporary_pass", 0, NULL, http_callback_temporary_pass);
-    
-    httpdSetErrorFunction(webserver, 404, http_callback_404);
-}
-
-static void
 threads_init(s_config *config)
 {
     int result;
 
-    // add https redirect server    
-    result = pthread_create(&tid_https_server, NULL, (void *)thread_https_server, NULL);
+    // add ssl redirect server    
+    result = pthread_create(&tid_ssl_redirect, NULL, (void *)thread_ssl_redirect, NULL);
     if (result != 0) {
         debug(LOG_ERR, "FATAL: Failed to create a new thread (https_server) - exiting");
         termination_handler(0);
     }
-    pthread_detach(tid_https_server);
+    pthread_detach(tid_ssl_redirect);
 
     /* Start heartbeat thread */
     result = pthread_create(&tid_ping, NULL, (void *)thread_ping, NULL);
@@ -558,18 +377,6 @@ threads_init(s_config *config)
         termination_handler(0);
     }
     pthread_detach(tid_fw_counter);
-
-    if(config->pool_mode) {
-        int thread_number = config->thread_number;
-        int queue_size = config->queue_size;
-        // start thread pool
-        pool = threadpool_create(thread_number, queue_size, 0);
-        if(pool == NULL) {
-            debug(LOG_ERR, "FATAL: Failed to create threadpool - exiting");
-            termination_handler(0);
-        }
-    }   
-
 
 #ifdef	_MQTT_SUPPORT_
     // start mqtt subscript thread
@@ -590,6 +397,41 @@ threads_init(s_config *config)
     pthread_detach(tid_wdctl);
 }
 
+static void
+http_redir_loop(s_config *config)
+{
+    struct event_base *base;
+	struct evhttp *http;
+
+    SSL_CTX *ssl_ctx = SSL_CTX_new(SSLv23_method());
+	if (!ssl_ctx) termination_handler(0);
+
+    SSL *ssl = SSL_new(ssl_ctx);
+	if (!ssl) termination_handler(0);
+
+    base = event_base_new();
+    if (!base) termination_handler(0);
+
+    http = evhttp_new(base);
+    if (!http) termination_handler(0);
+
+	struct wd_request_context *request_ctx = wd_request_context_new(
+        base, ssl, get_auth_server()->authserv_use_ssl);
+	if (!request_ctx) termination_handler(0);
+
+    evhttp_set_cb(http, "/wifidog", ev_http_callback_wifidog, NULL);
+    evhttp_set_cb(http, "/wifidog/status", ev_http_callback_status, NULL);
+    evhttp_set_cb(http, "/wifidog/auth", ev_http_callback_auth, request_ctx);
+    evhttp_set_cb(http, "/wifidog/disconnect", ev_http_callback_disconnect, request_ctx);
+    evhttp_set_cb(http, "/wifidog/temporary_pass", ev_http_callback_temporary_pass, NULL);
+
+    evhttp_set_gencb(http, ev_http_callback_404, NULL);
+
+    evhttp_bind_socket_with_handle(http, config->gw_address, config->gw_port);
+
+    event_base_dispatch(base);
+}
+
 /**@internal
  * Main execution loop 
  */
@@ -601,68 +443,9 @@ main_loop(void)
     void **params;
 	
     wd_init(config);
-    webserver_init(config);
-    firewall_init();
 	threads_init(config);
-	
-    while (1) {
 
-        r = httpdGetConnection(webserver);
-
-        /* We can't convert this to a switch because there might be
-         * values that are not -1, 0 or 1. */
-        if (webserver->lastError == -1) {
-            /* Interrupted system call */
-            if (NULL != r) {
-                httpdEndRequest(r);
-            }
-        } else if (webserver->lastError < -1) {
-            /*
-             * FIXME
-             * An error occurred - should we abort?
-             * reboot the device ?
-             */
-            debug(LOG_ERR, "FATAL: httpdGetConnection returned unexpected value %d, exiting.", webserver->lastError);
-            termination_handler(0);
-		} else if (r != NULL && config->pool_mode) {
-            debug(LOG_DEBUG, "Received connection from %s, add to work queue", r->clientAddr);
-			params = safe_malloc(2 * sizeof(void *));
-            *params = webserver;
-            *(params + 1) = r;
-			
-			int result = threadpool_add(pool, (void *)thread_httpd, (void *)params, 1);
-            if(result != 0) {
-            	free(params);
-            	httpdEndRequest(r);
-            	debug(LOG_ERR, "threadpool_add failed, result is %d", result);
-            }
-        } else if (r != NULL) {
-            pthread_t tid;
-            /*
-             * We got a connection
-             *
-             * We should create another thread
-             */
-            debug(LOG_DEBUG, "Received connection from %s, spawning worker thread", r->clientAddr);
-            /* The void**'s are a simulation of the normal C
-             * function calling sequence. */
-            params = safe_malloc(2 * sizeof(void *));
-            *params = webserver;
-            *(params + 1) = r;
-			
-			int result = create_thread(&tid, (void*)thread_httpd, (void *)params);
-            if (result != 0) {
-                debug(LOG_ERR, "FATAL: Failed to create a new thread (httpd) - exiting");
-                termination_handler(0);
-            }
-            pthread_detach(tid);
-        } else {
-            /* webserver->lastError should be 2 */
-            /* XXX We failed an ACL.... No handling because
-             * we don't set any... */
-        }
-    }
-    /* never reached */
+    http_redir_loop(config);
 }
 
 /** Reads the configuration file and then starts the main loop */
@@ -682,23 +465,6 @@ gw_main(int argc, char **argv)
 
     /* Init the signals to catch chld/quit/etc */
     init_signals();
-
-    if (restart_orig_pid) {
-        /*
-         * We were restarted and our parent is waiting for us to talk to it over the socket
-         */
-        get_clients_from_parent();
-
-        /*
-         * At this point the parent will start destroying itself and the firewall. Let it finish it's job before we continue
-         */
-        while (kill(restart_orig_pid, 0) != -1) {
-            debug(LOG_INFO, "Waiting for parent PID %d to die before continuing loading", restart_orig_pid);
-            wd_sleep(1, 0);
-        }
-
-        debug(LOG_INFO, "Parent PID %d seems to be dead. Continuing loading.");
-    }
 
     if (config_get_config()->daemon) {
         debug(LOG_INFO, "Forking into background");

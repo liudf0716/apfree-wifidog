@@ -488,13 +488,24 @@ offline_client_ageout()
  * @param client Points to the client to be deleted
  */
 void
-client_list_delete(t_client * client)
+client_list_delete(t_client *client)
 {
     client_list_remove(client);
     client_free_node(client);
 }
 
-// liudf added 20160216
+/**
+ * @brief safe delete client from the connections list
+ * 
+ */ 
+void
+safe_client_list_delete(t_client *client)
+{
+    LOCK_CLIENT_LIST();
+    client_list_delete(client);
+    UNLOCK_CLIENT_LIST();
+}
+
 void
 offline_client_list_delete(t_offline_client *client)
 {
@@ -608,7 +619,7 @@ add_online_client(const char *info)
        is_valid_ip(ip) && 
        !is_trusted_mac(mac) &&
        !is_untrusted_mac(mac) && 
-       (roam_client != NULL || (roam_client = auth_server_roam_request(mac)) != NULL)) {
+       (roam_client != NULL || (roam_client = make_roam_request(mac)) != NULL)) {
 
 		LOCK_CLIENT_LIST();
 		old_client = client_list_find_by_mac(mac);

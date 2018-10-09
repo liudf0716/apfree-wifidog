@@ -1,4 +1,3 @@
-/* vim: set sw=4 ts=4 sts=4 et : */
 /********************************************************************\
  * This program is free software; you can redistribute it and/or    *
  * modify it under the terms of the GNU General Public License as   *
@@ -20,32 +19,39 @@
 \********************************************************************/
 
 /* $Id$ */
-/** @file ping_thread.h
-    @brief WiFiDog heartbeat thread
-    @author Copyright (C) 2004 Alexandre Carmel-Veilleux <acv@miniguru.ca>
-    @author Copyright (C) 2016 Dengfeng Liu <liudengfeng@kunteng.org>
+/** @file wd_client.h
+    @brief Wifidog client functions
+    @author Copyright (C) 2018 Dengfeng Liu <liudengfeng@kunteng.org.cn>
 */
 
-#ifndef _PING_THREAD_H_
-#define _PING_THREAD_H_
+#ifndef _WD_CLIENT_H_
+#define _WD_CLIENT_H_
 
-#define MINIMUM_STARTED_TIME 1041379200 /* 2003-01-01 */
-#define SSID_LENGTH         32
+#define WD_CONNECT_TIMEOUT  2 // 2 senconds timeout to connect auth server
 
-struct sys_info {
-    unsigned long int   sys_uptime;
-    unsigned int        sys_memfree;  
-    unsigned long int   nf_conntrack_count;
-    unsigned long int   wifidog_uptime;
-    float   sys_load;
-    float   cpu_usage;
+struct event_base;
+struct bufferevent;
+
+struct wd_request_context {
+    SSL *ssl;
+	struct event_base *base;
+	struct bufferevent *bev;
+    void *data;
 };
 
-/** @brief get system info */
-void get_sys_info(struct sys_info *);
-/** @brief get ping uri */
-char *get_ping_uri(const struct sys_info *);
-/** @brief Periodically checks on the auth server to see if it's alive. */
-void thread_ping(void *);
+/** @brief get client's encoded original url */
+char *wd_get_orig_url(struct evhttp_request *);
+/** @brief wifidog get full redirect url to auth server */
+char *wd_get_redir_url_to_auth(struct evhttp_request *, const char *);
+/** @brief free wifidog request context*/
+void wd_request_context_free(struct wd_request_context *);
+/** @brief set wifidog request header for connectiong auth server */ 
+void wd_set_request_header(struct evhttp_request *, const char *);
+/** @brief wifidog make a request context for auth server  */
+struct wd_request_context *wd_request_context_new(struct event_base *, SSL *, struct event *)
+/** @brief wifidog make http request for auth server */
+int wd_make_request(struct wd_request_context *, struct evhttp_connection *, struct evhttp_request *, void (*cb)(struct evhttp_request *, void *));
+/** @brief a loop for wifidog connect auth server */
+void wd_request_loop(void (*callback)(evutil_socket_t, short, void *));
 
 #endif

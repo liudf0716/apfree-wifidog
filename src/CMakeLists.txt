@@ -16,12 +16,10 @@ set(src_apfreewifidog
 	wdctl_thread.c 
 	ping_thread.c 
 	safe.c 
-	httpd_thread.c 
 	pstring.c 
-	thread_pool.c 
 	ipset.c 
 	ssl_redir.c
-	https_client.c
+	wd_client.c
 	wd_util.c 
 	mqtt_thread.c
 )
@@ -30,7 +28,6 @@ set(src_apfreewifidog
 set(src_wdctl wdctl.c util.c debug.c)
 
 set(libs 
-	httpd
 	pthread 
 	m
 	z
@@ -49,15 +46,13 @@ set(fw3_libs
 	iptext4
 	xtables)
 
-ADD_DEFINITIONS(-O2 -g -Wall --std=gnu99 -Wmissing-declarations)
+ADD_DEFINITIONS(-O2 -Wall --std=gnu99 -Wmissing-declarations)
 
-include_directories(../libhttpd/)
-
-add_executable(wdctl ${src_wdctl})
+add_executable(wdctlx ${src_wdctl})
 add_executable(wifidog ${src_apfreewifidog})
-target_link_libraries(wifidog ${libs} ${fw3_libs} ${CURL_LIBRARIES})
+target_link_libraries(wifidogx ${libs} ${fw3_libs} ${CURL_LIBRARIES})
 
-install(TARGETS wifidog wdctl
+install(TARGETS wifidogx wdctlx
 		RUNTIME DESTINATION bin
 )
 

@@ -31,8 +31,6 @@
 
 #include <json-c/json.h>
 
-#include "auth.h"
-
 /** @brief Ask the central server to login a client */
 #define REQUEST_TYPE_LOGIN     "login"
 /** @brief Notify the the central server of a client logout */
@@ -50,53 +48,22 @@
 #define GATEWAY_MESSAGE_ACCOUNT_LOGGED_OUT     "logged-out"
 
 typedef enum {
-    online_client,
-    trusted_client
+    ONLINE_CLIENT,
+    TRUSTED_CLIENT
 } client_type_t;
-
-typedef enum {
-    request_type_login,
-    request_type_logout,
-    request_type_counters
-} request_type_t;
-
-struct auth_response_client {
-    request_type_t type;
-    t_client	*client;
-	request		*req;
-};
 
 struct evhttp_request;
 
-json_object *auth_server_roam_request(const char *mac);
-
-/** @brief Initiates a transaction with the auth server */
-t_authcode auth_server_request(t_authresponse * authresponse,
-                 const char *request_type,
-                 const char *ip,
-                 const char *mac,
-                 const char *token, unsigned long long int incoming, unsigned long long int outgoing, 
-							   unsigned long long int incoming_delta, unsigned long long int outgoing_delta,
-							   //>>> liudf added 20160112
-							   time_t first_login, unsigned int online_time, char *name, int wired);
-
-/** @brief Tries really hard to connect to an auth server.  Returns a connected file descriptor or -1 on error */
-int connect_auth_server(void);
-
-/** @brief Helper function called by connect_auth_server() to do the actual work including recursion - DO NOT CALL DIRECTLY */
-int _connect_auth_server(int level);
-
-/** @brief close  auth server connected socket*/
-void _close_auth_server();
-
-/** @brief thread-safe close auth server connected socket*/
-void close_auth_server();
-
-/**@brief thread-safe to decrease authserv_fd_ref, not close connection really*/
-void decrease_authserv_fd_ref();
-
+/** @brief wifidog make roam quest to auth server */
+json_object *make_roam_request(const char *mac);
+/** @brief get client's auth uri */
 char *get_auth_uri(const char *, client_type_t , void *);
 
-void process_auth_server_response(struct evhttp_request *, void *);
+/** @brief process wifidog's client logout response */
+void process_auth_server_logout(struct evhttp_request *, void *);
+/** @brief process wifidog's client login response */
+void process_auth_server_login(struct evhttp_request *, void *);
+/** @brief process wifidog's client counter response */
+void process_auth_server_counter(struct evhttp_request *, void *);
 
 #endif                          /* _CENTRALSERVER_H_ */

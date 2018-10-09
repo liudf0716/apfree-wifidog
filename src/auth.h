@@ -28,9 +28,6 @@
 #ifndef _AUTH_H_
 #define _AUTH_H_
 
-#include <json-c/json.h>
-
-#include "httpd.h"
 #include "client_list.h"
 
 /**
@@ -55,14 +52,12 @@ typedef struct _t_authresponse {
     t_authcode authcode; /**< Authentication code returned by the server */
 } t_authresponse;
 
+struct wd_request_context;
+
 /** @brief Logout a client and report to auth server. */
-void logout_client(t_client *);
-
-
-void ev_logout_client(void *, t_client *);
-
+void ev_logout_client(struct wd_request_context *, t_client *);
 /** @brief Authenticate a single client against the central server */
-void authenticate_client(request *);
+void ev_authenticate_client(struct evhttp_request *, struct wd_request_context *, t_client *);
 
 /** @brief Periodically check if connections expired */
 void thread_client_timeout_check(const void *arg);

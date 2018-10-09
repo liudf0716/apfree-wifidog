@@ -31,8 +31,8 @@
 /* Note that libcs other than GLIBC also use this macro to enable vasprintf */
 #define _GNU_SOURCE
 
-#include "auth.h"
 #include "common.h"
+#include "auth.h"
 #include "conf.h"
 #include "centralserver.h"
 #include "client_list.h"
@@ -46,6 +46,7 @@
 #include "wdctl_thread.h"
 #include "wd_util.h"
 #include "version.h"
+#include "wd_client.h"
 
 #define APPLE_REDIRECT_MSG  "<!DOCTYPE html>"	\
 				"<html>"						\
@@ -78,10 +79,12 @@ const char *apple_wisper = "<!DOCTYPE html>"
 				"</html>";
 
 static int
-_is_apple_captive(const char *domain)
+is_apple_captive(const char *domain)
 {
+    if (!domain) return 0;
+
 	int i = 0;
-	while(apple_domains[i] != NULL) {
+	while(apple_domains[i]) {
 		if(strcmp(domain, apple_domains[i++]) == 0)
 			return 1;
 	}
@@ -89,17 +92,26 @@ _is_apple_captive(const char *domain)
 	return 0;
 }
 
+/**
+ * @brief Treat apple wisper protocol
+ * 
+ * @return 1 end the http request or 0 continue it
+ */
 static int
-_special_process(request *r, const char *mac, const char *redir_url)
+process_apple_wisper(struct evhttp_request *req, const char *mac, const char *redir_url)
 {
-	t_offline_client *o_client = NULL;
+    t_offline_client *o_client = NULL;
 
-	if(_is_apple_captive(r->request.host)) {
+	if(is_apple_captive(evhttp_request_get_host(req))) {
 		int interval = 0;
+        char *remote_host;
+        uint16_t port;
+        evhttp_connection_get_peer(evhttp_request_get_connection(req), &remote_host, &port);
+
 		LOCK_OFFLINE_CLIENT_LIST();
     	o_client = offline_client_list_find_by_mac(mac);
     	if(o_client == NULL) {
-    		o_client = offline_client_list_add(r->clientAddr, mac);
+    		o_client = offline_client_list_add(remote_host, mac);
     	} else {
 			o_client->last_login = time(NULL);
 			interval = o_client->last_login - o_client->first_login;
@@ -109,364 +121,498 @@ _special_process(request *r, const char *mac, const char *redir_url)
 
 		if(o_client->client_type == 1 ) {
     		UNLOCK_OFFLINE_CLIENT_LIST();
-			if(interval > 20 && r->request.version == HTTP_1_0) {
+			if(interval > 20 && REQ_VERSION_BEFORE(req, 1, 1)) {
 				fw_set_mac_temporary(mac, 0);	
-				http_send_apple_redirect(r, redir_url);
+				ev_http_send_apple_redirect(req, redir_url);
 			} else if(o_client->hit_counts > 2 && r->request.version == HTTP_1_0)
-				http_send_apple_redirect(r, redir_url);
+				ev_http_send_apple_redirect(r, redir_url);
 			else {
-				http_send_redirect(r, redir_url, "Redirect to login page");
+				ev_http_send_redirect(req, redir_url, "Redirect to login page");
 			}
 		} else {	
 			o_client->client_type = 1;
 			UNLOCK_OFFLINE_CLIENT_LIST();
+            evhttp_send_error(req, );
 			http_relay_wisper(r);
 		}
-		return 1;
+        return 1;
 	} 
-
-	return 0;
+    return 0;
 }
 
-/** The 404 handler is also responsible for redirecting to the auth server */
+/**
+ * @brief reply client error of gw internet offline or auth server offline
+ * 
+ * @param req  The http request
+ * @param type 1: internet not online
+ *             other: auth server ont online
+ */
 void
-http_callback_404(httpd * webserver, request * r, int error_code)
-{  	
-    if (!is_online()) {
-		char *msg = evb_2_string(evb_internet_offline_page, NULL);
-        send_http_page_direct(r, msg);
-		free(msg);
-        debug(LOG_DEBUG, "Sent %s an apology since I am not online - no point sending them to auth server",
-              r->clientAddr);
-    } else if (!is_auth_online()) {
-		char *msg = evb_2_string(evb_authserver_offline_page, NULL);
-        send_http_page_direct(r, msg);
-		free(msg);
-        debug(LOG_DEBUG, "Sent %s an apology since auth server not online - no point sending them to auth server",
-              r->clientAddr);
-    } else {
-		/* Re-direct them to auth server */
-		const s_config *config = config_get_config();
-		char tmp_url[MAX_BUF] = {0}, mac[MAC_LENGTH] = {0};
-        int nret = br_arp_get_mac(r->clientAddr, mac);  
-		if (nret == 0) {
-            strncpy(mac, "ff:ff:ff:ff:ff:ff", MAC_LENGTH-1);
-        }
-		
-		snprintf(tmp_url, MAX_BUF, "http://%s%s%s%s",
-             r->request.host, r->request.path, r->request.query[0] ? "?" : "", r->request.query);
-		
-    	char *url = httpdUrlEncode(tmp_url);	
-		char *redir_url = get_full_redir_url(mac, r->clientAddr, url);
-        if (nret) {  // if get mac success              
-			t_client *clt = NULL;
-            debug(LOG_DEBUG, "Got client MAC address for ip %s: %s", r->clientAddr, mac);	
-			
-			//>>> liudf 20160106 added
-			if(config->bypass_apple_cna != 0)
-				if(_special_process(r, mac, redir_url)) {
-					goto end_process;
-				}
-			
-			// if device has login; but after long time reconnected router, its ip changed
-			LOCK_CLIENT_LIST();
-			clt = client_list_find_by_mac(mac);
-			if(clt && strcmp(clt->ip, r->clientAddr) != 0) {
-				fw_deny(clt);
-				free(clt->ip);
-				clt->ip = safe_strdup(r->clientAddr);
-				fw_allow(clt, FW_MARK_KNOWN);
-				UNLOCK_CLIENT_LIST();
-                debug(LOG_INFO, "client has login, replace it with new ip");
-				http_send_redirect(r, tmp_url, "device has login");
-            	goto end_process;
-			}
-			UNLOCK_CLIENT_LIST();
-
-            if (config->wired_passed && br_is_device_wired(mac)) {
-                debug(LOG_DEBUG, "wired_passed: add %s to trusted mac", mac);
-                if (!is_trusted_mac(mac))
-                    add_trusted_maclist(mac);
-                http_send_redirect(r, tmp_url, "device was wired");
-                goto end_process;
-            }
-        }
-		
-        debug(LOG_DEBUG, "Captured %s requesting [%s] and re-directing them to login page", r->clientAddr, tmp_url);
-		if(config->js_filter)
-			http_send_js_redirect(r, redir_url);
-		else
-			http_send_redirect(r, redir_url, "Redirect to login page");
-		
-end_process:
-		if (redir_url) free(redir_url);
-		if (url) free(url);
+ev_http_reply_client_error(struct evhttp_request *req, enum reply_client_error_type type)
+{
+    struct evbuffer *out = evbuffer_new();
+    switch(type) {
+    case INTERNET_OFFLINE:
+        evbuffer_add_buffer_reference(out, evb_internet_offline_page);
+        break;
+    case AUTHSERVER_OFFLINE:
+    default:
+        evbuffer_add_buffer_reference(out, evb_authserver_offline_page);
+        break;
     }
+    
+    evhttp_send_reply(req, 200, "OK", out);
+    evbuffer_free(out);
 }
 
+/**
+ * @brief reply client to resend its request
+ * 
+ */ 
 void
-http_callback_wifidog(httpd * webserver, request * r)
+ev_http_resend(struct evhttp_request *req)
 {
-    send_http_page(r, "WiFiDog", "Please use the menu to navigate the features of this WiFiDog installation.");
-}
-
-void
-http_callback_about(httpd * webserver, request * r)
-{
-    send_http_page(r, "About WiFiDog", "This is WiFiDog version <strong>" VERSION "</strong>");
-}
-
-void
-http_callback_status(httpd * webserver, request * r)
-{
-    const s_config *config = config_get_config();
-    char *status = NULL, *buf = NULL;
-
-    if (config->httpdusername &&
-        (strcmp(config->httpdusername, r->request.authUser) ||
-         strcmp(config->httpdpassword, r->request.authPassword))) {
-        debug(LOG_INFO, "Status page requested, forcing authentication");
-        httpdForceAuthenticate(r, config->httpdrealm);
+    char *orig_url = wd_get_orig_url(req);
+    if (!orig_url) {
+        evhttp_send_error(req, HTTP_INTERNAL_SERVER_ERROR, NULL);
         return;
     }
 
-    status = get_status_text();
-    safe_asprintf(&buf, "<pre>%s</pre>", status);
-    send_http_page(r, "WiFiDog Status", buf);
-    free(buf);
-    free(status);
+    ev_http_send_redirect(req, orig_url, "resend its request");
+    free(orig_url);
 }
 
-/** @brief Convenience function to redirect the web browser to the auth server
- * @param r The request
- * @param urlFragment The end of the auth server URL to redirect to (the part after path)
- * @param text The text to include in the redirect header ant the mnual redirect title */
-void
-http_send_redirect_to_auth(request * r, const char *urlFragment, const char *text)
+/**
+ * @brief If the client already login but get different ip after reconnect gateway device
+ * 
+ * @return 1 end the http request or 0 continue the request
+ */ 
+static int
+process_already_login_client(struct evhttp_request *req, const char *mac)
 {
-    char *protocol = NULL, *url = NULL;
-    int port = 80;
+    int flag = 0;
+    char *remote_host;
+    uint16_t port;
+    evhttp_connection_get_peer(evhttp_request_get_connection(req), &remote_host, &port);
+
+    LOCK_CLIENT_LIST();
+    t_client *clt = client_list_find_by_mac(mac);
+    if(clt && strcmp(clt->ip, remote_host) != 0) { // the same client get different ip
+        fw_deny(clt);
+        free(clt->ip);
+        clt->ip = safe_strdup(remote_host);
+        fw_allow(clt, FW_MARK_KNOWN);
+        debug(LOG_INFO, "client has login, replace it with new ip");
+        flag = 1;
+    }
+    UNLOCK_CLIENT_LIST();
+
+    if (flag) ev_http_resend(req);
+    return flag;
+}
+
+static int
+process_wired_device_pass(struct evhttp_request *req, const char *mac)
+{
+    if (br_is_device_wired(mac)) {
+        debug(LOG_DEBUG, "wired_passed: add %s to trusted mac", mac);
+        if (!is_trusted_mac(mac))
+            add_trusted_maclist(mac);
+        ev_http_resend(req);
+        return 1;
+    }
+    return 0;
+}
+
+/**
+ * @brief The 404 handler is also responsible for redirecting to the auth server
+ * 
+ */
+void
+ev_http_callback_404(struct evhttp_request *req, void *arg)
+{
+    if (!is_online()) return ev_http_reply_client(req, INTERNET_OFFLINE);
+
+    if (!is_auth_online()) return ev_http_reply_client(req, AUTHSERVER_OFFLINE);
+
+    char *remote_host;
+    uint16_t port;
+    evhttp_connection_get_peer(evhttp_request_get_connection(req), &remote_host, &port);
+
+    char mac[MAC_LENGTH] = {0};
+    if(!br_arp_get_mac(remote_host, mac)) {
+        evhttp_send_error(req, 200, "Cant get client's mac by its ip");
+        return;
+    }
+
+    if (process_already_login_client(req, mac)) return;
+
+    const s_config *config = config_get_config();
+    if (config->wired_passed && process_wired_device_pass(req, mac)) return;
+
+    char *redir_url = wd_get_redir_url_to_auth(req, mac);
+    if (!redir_url) {
+        evhttp_send_error(req, 200, "Cant get client's redirect to auth server's url");
+        return;
+    }
+    
+    if(config->bypass_apple_cna && process_apple_wisper(req, mac, redir_url))
+        goto END;
+
+    if(config->js_filter)
+        ev_http_send_js_redirect(req, redir_url);
+    else
+        ev_http_send_redirect(req, redir_url, "Redirect to login page");
+
+END:
+    free(redir_url);
+}
+
+/**
+ * 
+ */ 
+void
+ev_http_callback_wifidog(struct evhttp_request *req, void *arg)
+{
+    ev_send_http_page(r, "WiFiDog", "Please use the menu to navigate the features of this WiFiDog installation.");
+}
+
+/**
+ * 
+ */ 
+void
+ev_http_callback_about(struct evhttp_request *req, void *arg)
+{
+    ev_send_http_page(r, "About WiFiDog", "This is WiFiDog version <strong>" VERSION "</strong>");
+}
+
+/**
+ * @brief Client's status request
+ * 
+ */ 
+void
+ev_http_callback_status(struct evhttp_request *req, void *arg)
+{
+    char *status = get_status_text();
+    struct evbuffer *buffer = evbuffer_new();
+
+    evbuffer_add_printf(buffer, "<html><body><pre>%s</pre></body></html>", status);
+    evhttp_send_reply(req, HTTP_OK, "OK", buffer);
+
+    free(status);
+    evbuffer_free(buffer);
+}
+
+/**
+ * @brief Convenience function to redirect the web browser to the auth server
+ * 
+ * @param req The request
+ * @param url_fragment The end of the auth server URL to redirect to (the part after path)
+ * @param text The text to include in the redirect header ant the mnual redirect title
+ */
+void
+ev_http_send_redirect_to_auth(struct evhttp_request *req, const char *url_fragment, const char *text)
+{
+    char *url;
     t_auth_serv *auth_server = get_auth_server();
 
-    if (auth_server->authserv_use_ssl) {
-        protocol = "https";
-        port = auth_server->authserv_ssl_port;
-    } else {
-        protocol = "http";
-        port = auth_server->authserv_http_port;
-    }
-
     safe_asprintf(&url, "%s://%s:%d%s%s",
-                  protocol, auth_server->authserv_hostname, port, auth_server->authserv_path, urlFragment);
-    http_send_redirect(r, url, text);
-    free(url);
-}
+        auth_server->authserv_use_ssl?https:http,
+        auth_server->authserv_hostname, 
+        auth_server->authserv_use_ssl?auth_server->authserv_ssl_port:auth_server->authserv_http_port,
+        auth_server->authserv_path, url_fragment);
 
-/** @brief Sends a redirect to the web browser 
- * @param r The request
+    ev_http_send_redirect(req, url, text);
+} 
+
+/**
+ * @brief Sends a redirect to the browser
+ * @param req The http request
  * @param url The url to redirect to
- * @param text The text to include in the redirect header and the manual redirect link title.  NULL is acceptable */
+ * @param text The text to include in the redirect header and the manual redirect link title.  NULL is acceptable
+ */ 
 void
-http_send_redirect(request * r, const char *url, const char *text)
+ev_http_send_redirect(struct evhttp_request * req, const char *url, const char *text)
 {
-    char *message = NULL, *header = NULL, *response = NULL;
-    /* Re-direct them to auth server */
-    debug(LOG_DEBUG, "Redirecting client browser to %s", url);
-    safe_asprintf(&header, "Location: %s", url);
-    safe_asprintf(&response, "307 %s\r\n", text ? text : "Redirecting");
-    httpdSetResponse(r, response);
-    httpdAddHeader(r, header);
-    free(response);
-    free(header);
-
-    safe_asprintf(&message, "<html><body>Please <a href='%s'>click here</a>.</body></html>", url);
-    httpdOutputDirect(r, message);
-    free(message);
+    struct evbuffer *evb = evbuffer_new();
+    struct evkeyvalq *header = evhttp_request_get_output_headers(req);
+    evhttp_add_header(header, "Location", url);
+    evbuffer_add_printf(evb, "<html><body>Please <a href='%s'>click here</a>.</body></html>", url);
+    evhttp_send_reply(req, 307, text, evb);
+    evbuffer_free(evb);
 }
 
-void
-http_callback_auth(httpd * webserver, request * r)
+/**
+ * @brief process client's login and logout request
+ * 
+ * @param req Client's http request
+ * @param arg Auth server's request context
+ * 
+ */ 
+void 
+ev_http_callback_auth(struct evhttp_request *req, void *arg)
 {
-    httpVar *token = httpdGetVariableByName(r, "token"); 
-    if (token) {
-        httpVar *logout = httpdGetVariableByName(r, "logout");
-        char *mac;
-        /* They supplied variable "token" */
-        if (!(mac = arp_get(r->clientAddr))) {
-            /* We could not get their MAC address */
-            debug(LOG_ERR, "Failed to retrieve MAC address for ip %s", r->clientAddr);
-            send_http_page(r, "WiFiDog Error", "Failed to retrieve your MAC address");
-        } else {
-            t_client *client;
-            /* We have their MAC address */
-            LOCK_CLIENT_LIST();
+    struct wd_request_context *context = (struct wd_request_context *)arg;
+    const char *token = ev_http_find_query(req, "token");
+    if (!token) {
+        evhttp_send_error(req, 200, "Invalid token");
+        return;
+    } 
 
-            if ((client = client_list_find(r->clientAddr, mac)) == NULL) {
-                debug(LOG_DEBUG, "New client for %s", r->clientAddr);
-                client_list_add(r->clientAddr, mac, token->value);
-            } else if (logout) {
-                logout_client(client);
-            } else {
-                debug(LOG_DEBUG, "Client for %s is already in the client list", client->ip);
-            }
-
-            UNLOCK_CLIENT_LIST();
-            if (!logout) { /* applies for case 1 and 3 from above if */
-                authenticate_client(r);
-            }
-            free(mac);
-        }
-    } else {
-        /* They did not supply variable "token" */
-        send_http_page(r, "WiFiDog error", "Invalid token");
-    }
-}
-
-void
-http_callback_disconnect(httpd * webserver, request * r)
-{
-    const s_config *config = config_get_config();
-    /* XXX How do you change the status code for the response?? */
-    httpVar *token = httpdGetVariableByName(r, "token");
-    httpVar *mac = httpdGetVariableByName(r, "mac");
-
-    if (config->httpdusername &&
-        (strcmp(config->httpdusername, r->request.authUser) ||
-         strcmp(config->httpdpassword, r->request.authPassword))) {
-        debug(LOG_INFO, "Disconnect requested, forcing authentication");
-        httpdForceAuthenticate(r, config->httpdrealm);
+    const char *logout = ev_http_find_query(req, "logout");
+    char *mac = arp_get();
+    if (!mac) {
+        evhttp_send_error(req, 200, "Failed to retrieve your MAC address");
         return;
     }
+    
+    char *remote_host;
+    uint16_t port;
+    evhttp_connection_get_peer(evhttp_request_get_connection(req), &remote_host, &port);
 
-    if (token && mac) {
-        t_client *client;
+    int new_client = 0;
+    LOCK_CLIENT_LIST();
+    t_client *client = client_list_find(remote_host, mac);
+    if (!client && !(client = client_list_find_by_mac(mac)) { /* in case the same client but get differrent ip */
+        client = client_list_add(remote_host, mac, token);
+        new_client = 1;
+    } else if (!client && (client = client_list_find_by_mac(mac))) {
+        fw_deny(client);
+        free(client->ip);
+        free(client->token);
+        client->ip = safe_strdup(remote_host);
+        client->token = safe_strdup(token);
+    }
+    UNLOCK_CLIENT_LIST();
+    free(mac);
 
-        LOCK_CLIENT_LIST();
-        client = client_list_find_by_mac(mac->value);
+    if (!new_client && logout) {
+        ev_logout_client(context, client);
+    } else if (!logout){
+        ev_authenticate_client(req, context, client);
+    }
+   
+}
 
-        if (!client || strcmp(client->token, token->value)) {
-            UNLOCK_CLIENT_LIST();
-            debug(LOG_INFO, "Disconnect %s with incorrect token %s", mac->value, token->value);
-            httpdOutput(r, "Invalid token for MAC");
-            return;
-        }
+/**
+ * @brief process client's disconnect request
+ * 
+ * @param req Client's http request
+ * @param arg useless
+ * 
+ */ 
+void 
+ev_http_callback_disconnect(struct evhttp_request *req, void *arg)
+{
+    struct wd_request_context *context = (struct wd_request_context *)arg;
+    const char *token = ev_http_find_query(req, "token");
+    const char *mac = ev_http_find_query(req, "mac");
 
-        /* TODO: get current firewall counters */
-        logout_client(client);
-        UNLOCK_CLIENT_LIST();
-
-    } else {
+    if (!token || !mac) {
         debug(LOG_INFO, "Disconnect called without both token and MAC given");
-        httpdOutput(r, "Both the token and MAC need to be specified");
+        evhttp_send_error(req, HTTP_OK, "Both the token and MAC need to be specified");
         return;
     }
 
-    return;
+    LOCK_CLIENT_LIST();
+    t_client *client = client_list_find_by_mac(mac);
+    UNLOCK_CLIENT_LIST();
+
+    if (client && !strcmp(client->token, token)) {
+        ev_logout_client(req, client);
+    } else {
+        debug(LOG_INFO, "Disconnect %s with incorrect token %s", mac, token);
+        evhttp_send_error(req, HTTP_OK, "Invalid token for MAC");
+    }
 }
 
-// liudf added 20160421
-void
-http_callback_temporary_pass(httpd * webserver, request * r)
-{	
-    const s_config *config = config_get_config();
-    httpVar *mac = httpdGetVariableByName(r, "mac");
-	
-	if (config->httpdusername &&
-        (strcmp(config->httpdusername, r->request.authUser) ||
-         strcmp(config->httpdpassword, r->request.authPassword))) {
-        debug(LOG_INFO, "Disconnect requested, forcing authentication");
-        httpdForceAuthenticate(r, config->httpdrealm);
-        return;
-    }
+/**
+ * @brief Temporaray allow client to access internet a minute
+ * 
+ * @param req Client http request
+ * 
+ */
+void 
+ev_http_callback_temporary_pass(struct evhttp_request *req, void *arg)
+{
+    const char *mac = ev_http_find_query(req, "mac");
 
-	if(mac) {
-        debug(LOG_INFO, "Temporary passed %s", mac->value);
-		fw_set_mac_temporary(mac->value, 0);	
-        httpdOutput(r, "startWeChatAuth();");
-	} else {
+    if (mac) {
+        debug(LOG_INFO, "Temporary passed %s", mac);
+        fw_set_mac_temporary(mac->value, 0);	
+        evhttp_send_reply(req, HTTP_OK, "OK", NULL);
+        //httpdOutput(r, "startWeChatAuth();");
+    } else {
         debug(LOG_INFO, "Temporary pass called without  MAC given");
-        httpdOutput(r, "MAC need to be specified");
-        return;
+        evhttp_send_error(req, HTTP_OK, "MAC need to be specified");
     }
+} 
 
-	return;
+/**
+ * @brief read html file to evbuffer
+ * 
+ * @param filename The html file
+ * @param evb The html file read into evb
+ * @return NULL failed or evb
+ * 
+ */ 
+struct evbuffer *
+ev_http_read_html_file(const char *filename, struct evbuffer *evb)
+{
+	if (!evb) return NULL;
+	
+	int fd = open(filename, O_RDONLY);
+	if (fd == -1) {
+		debug(LOG_CRIT, "Failed to open HTML message file %s: %s", strerror(errno), 
+			filename);
+		return NULL;
+	}
+	
+	if (evbuffer_add_file(evb, fd, 0, -1)) {
+		debug(LOG_CRIT, "Failed to read HTML message file %s: %s", strerror(errno), 
+			filename);
+		close(fd);
+		return NULL;
+	}
+
+	close(fd);
+	return evb;
 }
 
+/**
+ * @brief Send html file to client; 
+ * 
+ * @param req The http request
+ * @param title Replace $title of the html file with it
+ * @param message Replace $message of the html file with it
+ * @todo need more complex process engine
+ */ 
 void
-send_http_page(request * r, const char *title, const char *message)
+ev_send_http_page(struct evhttp_request *req, const char *title, const char *message)
 {
     s_config *config = config_get_config();
-    char *buffer;
-    struct stat stat_info;
-    int fd;
-    ssize_t written;
-
-    fd = open(config->htmlmsgfile, O_RDONLY);
+    int fd = open(config->htmlmsgfile, O_RDONLY);
     if (fd == -1) {
         debug(LOG_CRIT, "Failed to open HTML message file %s: %s", config->htmlmsgfile, strerror(errno));
+        evhttp_send_error(req, HTTP_NOCONTENT, NULL);
         return;
     }
 
-    if (fstat(fd, &stat_info) == -1) {
-        debug(LOG_CRIT, "Failed to stat HTML message file: %s", strerror(errno));
+    struct evbuffer *buffer = evbuffer_new();
+    if (!buffer) {
+        debug(LOG_CRIT, "Failed to evbuffer_new");
         close(fd);
+        evhttp_send_error(req, HTTP_INTERNAL, "Failed to evbuffer_new");
         return;
     }
-    // Cast from long to unsigned int
-    buffer = (char *)safe_malloc((size_t) stat_info.st_size + 1);
-    written = read(fd, buffer, (size_t) stat_info.st_size);
-    if (written == -1) {
-        debug(LOG_CRIT, "Failed to read HTML message file: %s", strerror(errno));
-        free(buffer);
+
+    if (evbuffer_add_file(buffer, fd, 0, -1)) {
+        debug(LOG_CRIT, "Failed to read HTML message file");
         close(fd);
+        evbuffer_free(buffer);
+        evhttp_send_error(req, HTTP_INTERNAL, NULL);
         return;
     }
     close(fd);
 
-    buffer[written] = 0;
-    httpdAddVariable(r, "title", title);
-    httpdAddVariable(r, "message", message);
-    httpdAddVariable(r, "nodeID", config->gw_id);
-    httpdOutput(r, buffer);
-    free(buffer);
+    evhttp_send_reply(req, HTTP_OK, "OK", buffer);
+    evbuffer_free(buffer);
 }
 
-void
-http_send_js_redirect(request *r, const char *redir_url)
+/** 
+ * @brief send the web browser's page which will redirect to auth server by its js 
+ * 
+ * @param req The http request
+ * @param url The redirect url by js
+ */
+void 
+ev_http_send_js_redirect(struct evhttp_request *req, const char *redir_url)
 {
-	struct evbuffer *evb = evbuffer_new ();	
+    struct evbuffer *evb = evbuffer_new ();	
 	struct evbuffer *evb_redir_url = evbuffer_new();
+
+    if (!evb || !evb_redir_url) {
+        evhttp_send_error(req, HTTP_INTERNAL, "Failed to evbuffer_new");
+        goto ERR;
+    }
 	
 	evbuffer_add(evb, wifidog_redir_html->front, wifidog_redir_html->front_len);
 	evbuffer_add_printf(evb_redir_url, WIFIDOG_REDIR_HTML_CONTENT, redir_url);
 	evbuffer_add_buffer(evb, evb_redir_url);
 	evbuffer_add(evb, wifidog_redir_html->rear, wifidog_redir_html->rear_len);
-	
-	int html_length = 0;
-	char *redirect_html = evb_2_string(evb, &html_length);
-	
-	httpdOutputLengthDirect(r, redirect_html, html_length);
-	
-	free(redirect_html);
-	evbuffer_free(evb);
-	evbuffer_free(evb_redir_url);
+
+    evhttp_add_header(evhttp_request_get_output_headers(req),
+		    "Content-Type", "text/html");
+	evhttp_add_header(evhttp_request_get_output_headers(req),
+		    "Cache-Control", "no-store, must-revalidate");
+	evhttp_add_header(evhttp_request_get_output_headers(req),
+		    "Expires", "0");
+	evhttp_add_header(evhttp_request_get_output_headers(req),
+		    "Pragma", "no-cache");
+	evhttp_add_header(evhttp_request_get_output_headers(req),
+		    "Connection", "close");
+
+    evhttp_send_reply(req, 200, "OK", evb);
+
+ERR:
+    if (evb) evbuffer_free(evb);
+	if (evb_redir_url) evbuffer_free(evb_redir_url);
 }
 
+/**
+ * @brief tell apple device to redirect to redir_url
+ * 
+ * @param req The http request
+ * @param redir_url redirect url of response
+ * 
+ */ 
 void
-http_send_apple_redirect(request *r, const char *redir_url)
+ev_http_send_apple_redirect(struct evhttp_request *req, const char *redir_url)
 {
-   	httpdPrintf(r, APPLE_REDIRECT_MSG, redir_url);
+    struct evbuffer *evb = evbuffer_new();	
+    evbuffer_add_printf(evb, APPLE_REDIRECT_MSG, redir_url);
+    evhttp_send_reply(req, HTTP_OK, "OK", evb);
+    evbuffer_free(evb);
 }
 
+/**
+ * @brief replay apple wisper detect request
+ * 
+ */
 void
-http_relay_wisper(request *r)
+ev_http_replay_wisper()
 {
-	httpdOutputDirect(r, apple_wisper);
-}
+    struct evbuffer *evb = evbuffer_new ();	
+    evbuffer_add(evb, apple_wisper);
+    evhttp_send_reply(req, HTTP_OK, "OK", evb);
+    evbuffer_free(evb);
+} 
 
-void 
-send_http_page_direct(request *r,  char *msg) 
+/**
+ * @brief get query's value according to key
+ * 
+ * @param req The http request
+ * @param key The key to search
+ * @return NULL or key's value, the return value need to be free by caller
+ */
+const char *
+ev_http_find_query(struct evhttp_request *req, const char *key)
 {
-	httpdOutputDirect(r, msg);
-}
+    struct evhttp_uri *uri = evhttp_request_get_evhttp_uri(req);
+    struct evkeyvalq query;
+    
+    TAILQ_INIT(&query);
 
+    if (evhttp_parse_query_str(evhttp_uri_get_query(uri), &query))
+        return NULL;
+    
+    const char *r_val = NULL;
+    const char *val = evhttp_find_header(&query, key);
+    if (val) {
+        r_val = safe_strdup(val);
+    }
+
+    evhttp_clear_headers(&query);
+
+    return r_val;
+}
