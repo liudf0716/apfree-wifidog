@@ -162,8 +162,6 @@ ev_http_reply_client_error(struct evhttp_request *req, enum reply_client_error_t
     
     evhttp_send_reply(req, 200, "OK", out);
     evbuffer_free(out);
-
-    return 0;
 }
 
 /**

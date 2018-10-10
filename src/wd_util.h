@@ -132,8 +132,6 @@ void evdns_parse_trusted_domain_2_ip(t_domain_trusted *p);
 
 void evdns_add_trusted_domain_ip_cb(int errcode, struct evutil_addrinfo *addr, void *ptr);
 
-struct evbuffer *evhttp_read_file(const char *, struct evbuffer *);
-
 char *evb_2_string(struct evbuffer *, int *);
 
 int uci_get_value(const char *, const char *, char *, int);

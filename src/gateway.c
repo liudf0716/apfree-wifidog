@@ -97,8 +97,8 @@ wd_msg_init()
 	if (!evb_internet_offline_page || !evb_authserver_offline_page)
 		exit(EXIT_FAILURE);
 	
-	if ( !evhttp_read_file(config->internet_offline_file, evb_internet_offline_page) || 
-		 !evhttp_read_file(config->authserver_offline_file, evb_authserver_offline_page)) {
+	if ( !ev_http_read_html_file(config->internet_offline_file, evb_internet_offline_page) || 
+		 !ev_http_read_html_file(config->authserver_offline_file, evb_authserver_offline_page)) {
 		debug(LOG_ERR, "wd_msg_init failed, exiting...");
 		exit(EXIT_FAILURE);
 	}

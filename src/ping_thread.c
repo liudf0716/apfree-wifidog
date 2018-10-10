@@ -63,8 +63,8 @@ static void fw_init_delay()
 static void 
 ping_work_cb(evutil_socket_t fd, short event, void *arg) {
 	struct wd_request_context *request_ctx = (struct wd_request_context *)arg;
-	struct evhttp_request *req;
-	struct evhttp_connection *evcon;
+	struct evhttp_request *req = NULL;
+	struct evhttp_connection *evcon = NULL;
 	struct sys_info info;
 	memset(&info, 0, sizeof(info));
 
