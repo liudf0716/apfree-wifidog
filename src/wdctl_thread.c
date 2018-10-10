@@ -254,7 +254,7 @@ wdctl_reset(struct bufferevent *fd, const char *arg)
     UNLOCK_CLIENT_LIST();
 
     /* deny.... */
-    ev_logout_client(node);
+    // ev_logout_client(node);
     bufferevent_write(fd, "Yes", 3);
 }
 
