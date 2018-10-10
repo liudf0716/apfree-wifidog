@@ -149,14 +149,22 @@ process_apple_wisper(struct evhttp_request *req, const char *mac, const char *re
 void
 ev_http_reply_client_error(struct evhttp_request *req, enum reply_client_error_type type)
 {
+    static char *internet_offline = NULL, *authserver_offline = NULL;
+    static int internet_offline_len = 0, authserver_offline_len = 0;
     struct evbuffer *out = evbuffer_new();
     switch(type) {
     case INTERNET_OFFLINE:
-        evbuffer_add_buffer_reference(out, evb_internet_offline_page);
+        if (!internet_offline) {
+            internet_offline = evb_2_string(evb_internet_offline_page, &internet_offline_len);
+        }
+        evbuffer_add(out, internet_offline, internet_offline_len);
         break;
     case AUTHSERVER_OFFLINE:
     default:
-        evbuffer_add_buffer_reference(out, evb_authserver_offline_page);
+        if (!authserver_offline) {
+            authserver_offline = evb_2_string(evb_authserver_offline_page, &authserver_offline_len);
+        }
+        evbuffer_add(out, authserver_offline, authserver_offline_len);
         break;
     }
     
@@ -255,7 +263,7 @@ ev_http_callback_404(struct evhttp_request *req, void *arg)
     const s_config *config = config_get_config();
     if (config->wired_passed && process_wired_device_pass(req, mac)) return;
 
-    char *redir_url = wd_get_redir_url_to_auth(req, mac);
+    char *redir_url = wd_get_redir_url_to_auth(req, mac, remote_host);
     if (!redir_url) {
         evhttp_send_error(req, 200, "Cant get client's redirect to auth server's url");
         return;

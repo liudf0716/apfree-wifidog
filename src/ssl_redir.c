@@ -77,7 +77,7 @@ process_ssl_request_cb (struct evhttp_request *req, void *arg) {
         return;
     }
 
-	char *redir_url = wd_get_redir_url_to_auth(req, mac);
+	char *redir_url = wd_get_redir_url_to_auth(req, mac, remote_host);
     if (!redir_url) {
         evhttp_send_error(req, 200, "Cant get client's redirect to auth server's url");
         return;

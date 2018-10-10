@@ -368,7 +368,6 @@ add_trusted_domains(const char *arg)
 {
     parse_user_trusted_domain_string(arg);
     parse_user_trusted_domain_list();
-    fw_refresh_user_domains_trusted();  
 }
 
 static void
@@ -395,8 +394,7 @@ wdctl_del_trusted_domains(struct bufferevent *fd, const char *arg)
 static void
 wdctl_reparse_trusted_domains(struct bufferevent *fd)
 {
-	parse_user_trusted_domain_list();
-	fw_refresh_user_domains_trusted();	
+	parse_user_trusted_domain_list();	
     bufferevent_write(fd, "Yes", 3);
 }
 

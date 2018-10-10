@@ -2021,32 +2021,31 @@ err:
 	return;
 }
 
+/**
+ * @brief parse trusted domains and set its ip in thread
+ * @param which The INNER_TRUSTED_DOMAIN or USER_TRUSTED_DOMAIN
+ * 
+ */ 
 void
 parse_common_trusted_domain_list(trusted_domain_t which)
 {
-	t_domain_trusted *p = NULL;
-
-	if(which == INNER_TRUSTED_DOMAIN)
-		p = config.inner_domains_trusted;
-	else if (which == USER_TRUSTED_DOMAIN)
-		p = config.domains_trusted;
-	else
-		return;
-
-	evdns_parse_trusted_domain_2_ip(p);
+	evdns_parse_trusted_domain_2_ip(which);
 }
 
-void parse_user_trusted_domain_list()
+void 
+parse_user_trusted_domain_list()
 {
 	parse_common_trusted_domain_list(USER_TRUSTED_DOMAIN);
 }
 
-void parse_inner_trusted_domain_list()
+void 
+parse_inner_trusted_domain_list()
 {
 	parse_common_trusted_domain_list(INNER_TRUSTED_DOMAIN);
 }
 
-static t_domain_trusted * del_domain_ip_common(const char *domain, trusted_domain_t which)
+static t_domain_trusted * 
+del_domain_ip_common(const char *domain, trusted_domain_t which)
 {
 	t_domain_trusted *p = NULL;
 	LOCK_DOMAIN();

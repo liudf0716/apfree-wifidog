@@ -46,7 +46,7 @@ char *
 wd_get_orig_url(struct evhttp_request *req)
 {
     char orig_url[MAX_BUF] = {0};
-    if (!evhttp_uri_join(evhttp_request_get_evhttp_uri(req), orig_url, MAX_BUF-1))
+    if (evhttp_uri_join(evhttp_request_get_evhttp_uri(req), orig_url, MAX_BUF-1))
         return evhttp_encode_uri(orig_url);
 
     return NULL;
@@ -57,28 +57,25 @@ wd_get_orig_url(struct evhttp_request *req)
  * 
  * @param req The http request
  * @param mac Client's mac 
- * @param peer_addr Client's ip address
- * @param orig_url Client's original visit url
+ * @param remote_host Client's ip address
  * @return return redirect url which need to be free by caller
  * 
  */ 
 char *
-wd_get_redir_url_to_auth(struct evhttp_request *req, const char *mac)
+wd_get_redir_url_to_auth(struct evhttp_request *req, const char *mac, const char *remote_host)
 {
     s_config *config = config_get_config();
     t_auth_serv *auth_server = get_auth_server();
     char *orig_url = wd_get_orig_url(req);
     if (!orig_url) return NULL;
 
-	char *remote_host;
-    uint16_t port;
-    evhttp_connection_get_peer(evhttp_request_get_connection(req), &remote_host, &port);
-
     char *redir_url = NULL;
     safe_asprintf(&redir_url, "%s://%s:%d%s%sgw_address=%s&gw_port=%d&gw_id=%s&channel_path=%s&ssid=%s&ip=%s&mac=%s&url=%s",
         auth_server->authserv_use_ssl?"https":"http",
         auth_server->authserv_hostname,
         auth_server->authserv_use_ssl?auth_server->authserv_ssl_port:auth_server->authserv_http_port,
+		auth_server->authserv_path,
+		auth_server->authserv_login_script_path_fragment,
         config->gw_address, config->gw_port, config->gw_id, 
         g_channel_path?g_channel_path:"null",
         g_ssid?g_ssid:"null",

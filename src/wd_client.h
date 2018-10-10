@@ -44,7 +44,7 @@ struct wd_request_context {
 /** @brief get client's encoded original url */
 char *wd_get_orig_url(struct evhttp_request *);
 /** @brief wifidog get full redirect url to auth server */
-char *wd_get_redir_url_to_auth(struct evhttp_request *, const char *);
+char *wd_get_redir_url_to_auth(struct evhttp_request *, const char *, const char *;
 /** @brief free wifidog request context*/
 void wd_request_context_free(struct wd_request_context *);
 /** @brief set wifidog request header for connectiong auth server */ 

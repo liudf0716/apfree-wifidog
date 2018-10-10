@@ -278,6 +278,10 @@ fw_clear_inner_domains_trusted(void)
 	iptables_fw_clear_inner_domains_trusted();
 }
 
+/**
+ * @brief set inner trusted domains
+ * 
+ */ 
 void
 fw_set_inner_domains_trusted(void)
 {

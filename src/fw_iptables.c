@@ -482,6 +482,10 @@ iptables_fw_clear_inner_domains_trusted(void)
 	iptables_flush_ipset(CHAIN_INNER_DOMAIN_TRUSTED);
 }
 
+/**
+ * @brief set wifidog inner trusted domains's ip
+ * 
+ */ 
 void
 iptables_fw_set_inner_domains_trusted(void)
 {
