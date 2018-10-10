@@ -197,7 +197,7 @@ wd_set_request_header(struct evhttp_request *req, const char *host)
  */
 int
 wd_make_request(struct wd_request_context *request_ctx, 
-	struct evhttp_connection *evcon, struct evhttp_request *req,
+	struct evhttp_connection **evcon, struct evhttp_request **req,
 	void (*cb)(struct evhttp_request *, void *))
 {
 	struct bufferevent *bev = request_ctx->bev;
@@ -205,27 +205,27 @@ wd_make_request(struct wd_request_context *request_ctx,
 	t_auth_serv *auth_server = get_auth_server();
 
 	if (!auth_server->authserv_use_ssl) {
-		evcon = evhttp_connection_base_bufferevent_new(base, NULL, bev,
+		*evcon = evhttp_connection_base_bufferevent_new(base, NULL, bev,
 				auth_server->authserv_hostname, auth_server->authserv_http_port);
 	} else {
-		evcon = evhttp_connection_base_bufferevent_new(base, NULL, bev,
+		*evcon = evhttp_connection_base_bufferevent_new(base, NULL, bev,
 				auth_server->authserv_hostname, auth_server->authserv_ssl_port);
 	}
-	if (!evcon) {
+	if (!*evcon) {
 		debug(LOG_ERR, "evhttp_connection_base_bufferevent_new failed");
 		return 1;
 	}
 
-	evhttp_connection_set_timeout(evcon, WD_CONNECT_TIMEOUT); // 2 seconds
+	evhttp_connection_set_timeout(*evcon, WD_CONNECT_TIMEOUT); // 2 seconds
 
-	req = evhttp_request_new(cb, request_ctx);
-	if (!req) {
+	*req = evhttp_request_new(cb, request_ctx);
+	if (!*req) {
 		debug(LOG_ERR, "evhttp_request_new failed");
-		evhttp_connection_free(evcon);
+		evhttp_connection_free(*evcon);
 		return 1;
 	}
 
-	wd_set_request_header(req, auth_server->authserv_hostname);
+	wd_set_request_header(*req, auth_server->authserv_hostname);
 
 	return 0;
 }

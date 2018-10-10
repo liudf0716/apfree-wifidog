@@ -532,7 +532,7 @@ ev_fw_sync_with_authserver(struct wd_request_context *context)
 			struct evhttp_connection *evcon = NULL;
 			struct evhttp_request *req = NULL;
 			context->data = p1;
-			if (!wd_make_request(context, evcon, req, process_auth_server_counter))
+			if (!wd_make_request(context, &evcon, &req, process_auth_server_counter))
 				evhttp_make_request(evcon, req, EVHTTP_REQ_GET, uri);
 			free(uri);
 		}

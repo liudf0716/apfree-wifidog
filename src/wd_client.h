@@ -52,7 +52,7 @@ void wd_set_request_header(struct evhttp_request *, const char *);
 /** @brief wifidog make a request context for auth server  */
 struct wd_request_context *wd_request_context_new(struct event_base *, SSL *, int);
 /** @brief wifidog make http request for auth server */
-int wd_make_request(struct wd_request_context *, struct evhttp_connection *, struct evhttp_request *, void (*cb)(struct evhttp_request *, void *));
+int wd_make_request(struct wd_request_context *, struct evhttp_connection **, struct evhttp_request **, void (*cb)(struct evhttp_request *, void *));
 /** @brief a loop for wifidog connect auth server */
 void wd_request_loop(void (*callback)(evutil_socket_t, short, void *));
 

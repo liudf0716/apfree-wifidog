@@ -94,7 +94,7 @@ ev_logout_client(struct wd_request_context *context, t_client *client)
 
     struct evhttp_connection *evcon = NULL;
     struct evhttp_request *req      = NULL; 
-    wd_make_request(context, evcon, req, process_auth_server_logout);
+    wd_make_request(context, &evcon, &req, process_auth_server_logout);
     evhttp_make_request(evcon, req, EVHTTP_REQ_GET, uri);
     free(uri);
 }
@@ -121,7 +121,7 @@ ev_authenticate_client(struct evhttp_request *req,
     struct evhttp_connection *wd_evcon = NULL;
     struct evhttp_request *wd_req      = NULL;
     context->data = client; 
-    wd_make_request(context, wd_evcon, wd_req, process_auth_server_login);
+    wd_make_request(context, &wd_evcon, &wd_req, process_auth_server_login);
     evhttp_make_request(wd_evcon, wd_req, EVHTTP_REQ_GET, uri);
     free(uri);
 }

@@ -68,7 +68,7 @@ ping_work_cb(evutil_socket_t fd, short event, void *arg) {
 	struct sys_info info;
 	memset(&info, 0, sizeof(info));
 
-	if (wd_make_request(request_ctx, evcon, req, process_ping_response)) return;
+	if (wd_make_request(request_ctx, &evcon, &req, process_ping_response)) return;
 		
 	get_sys_info(&info);
 	char *uri = get_ping_uri(&info);
