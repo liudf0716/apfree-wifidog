@@ -38,7 +38,6 @@
 #define CHAIN_TO_ROUTER "WiFiDog_$ID$_Router"
 #define CHAIN_INCOMING  "WiFiDog_$ID$_Incoming"
 #define CHAIN_AUTHSERVERS "WiFiDog_$ID$_AuthServers"
-//>>> liudf added 20151223 
 #define	DNSMASQ_CONF_D	"/tmp/dnsmasq.d"
 #define CHAIN_IPSET_TDOMAIN	"WiFiDog_IPSET_TDomains"
 #define CHAIN_DOMAIN_TRUSTED "WiFiDog_$ID$_TDomains"
@@ -46,7 +45,6 @@
 #define	CHAIN_ROAM			"WiFiDog_$ID$_Roam"
 #define	CHAIN_UNTRUSTED		"WiFiDog_$ID$_Untrusted"
 #define	CHAIN_TO_PASS		"WiFiDog_$ID$_Pass"
-//<<< liudf added end
 #define CHAIN_GLOBAL  "WiFiDog_$ID$_Global"
 #define CHAIN_VALIDATE  "WiFiDog_$ID$_Validate"
 #define CHAIN_KNOWN     "WiFiDog_$ID$_Known"
@@ -94,8 +92,6 @@ int iptables_fw_auth_reachable(void);
 /** @brief All counters in the client list */
 int iptables_fw_counters_update(void);
 
-//>>>> liudf added 20151224
-
 /** @brief Clear domain_trusted chain; parse domain name then add its ips to chain */
 void iptables_fw_refresh_user_domains_trusted(void);
 
@@ -142,5 +138,5 @@ void update_trusted_mac_status(t_trusted_mac *tmac);
 void __get_client_name(t_client *client);
 
 int add_mac_to_ipset(const char *name, const char *mac, int timeout);
-//<<< liudf added end
+
 #endif                          /* _IPTABLES_H_ */

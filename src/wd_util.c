@@ -67,6 +67,7 @@
 #include "util.h"
 #include "debug.h"
 #include "pstring.h"
+#include "firewall.h"
 #include "version.h"
 
 #define LOCK_GHBN() do { \
@@ -1073,14 +1074,16 @@ void evdns_add_trusted_domain_ip_cb(int errcode, struct evutil_addrinfo *addr, v
 static void 
 thread_evdns_parse_trusted_domain_2_ip(void *arg)
 {
-	trusted_domain_t which = *arg;
+	trusted_domain_t which = *(trusted_domain_t *)arg;
+	s_config *config = config_get_config();
 	t_domain_trusted *p = NULL;
+	free(arg);
 
-	if(which == INNER_TRUSTED_DOMAIN)
-		p = config.inner_domains_trusted;
+	if(*which == INNER_TRUSTED_DOMAIN)
+		p = config->inner_domains_trusted;
 	else if (which == USER_TRUSTED_DOMAIN)
-		p = config.domains_trusted;
-	else
+		p = config->domains_trusted;
+	else 
 		return;
     
 	struct event_base *base = event_base_new();
@@ -1144,7 +1147,9 @@ thread_evdns_parse_trusted_domain_2_ip(void *arg)
 void evdns_parse_trusted_domain_2_ip(trusted_domain_t which)
 { 
 	pthread_t tid_evdns_parse;
-    pthread_create(&tid_evdns_parse, NULL, (void *)thread_evdns_parse_trusted_domain_2_ip, &which);
+	trusted_domain_t *type = malloc(sizeof(trusted_domain_t));
+	*type = which;
+    pthread_create(&tid_evdns_parse, NULL, (void *)thread_evdns_parse_trusted_domain_2_ip, type);
     pthread_detach(tid_evdns_parse);
 }
 

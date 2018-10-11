@@ -148,6 +148,7 @@ offline_client_list_insert_client(t_offline_client *client)
  * @param mac MAC address
  * @param token Token
  * @return Pointer to the client we just created
+ * 
  */
 t_client *
 client_list_add(const char *ip, const char *mac, const char *token)

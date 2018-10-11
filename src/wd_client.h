@@ -33,18 +33,20 @@
 
 struct event_base;
 struct bufferevent;
+struct evhttp_request;
 
 struct wd_request_context {
     SSL *ssl;
 	struct event_base *base;
 	struct bufferevent *bev;
+    struct evhttp_request *clt_req;
     void *data;
 };
 
 /** @brief get client's encoded original url */
 char *wd_get_orig_url(struct evhttp_request *);
 /** @brief wifidog get full redirect url to auth server */
-char *wd_get_redir_url_to_auth(struct evhttp_request *, const char *, const char *;
+char *wd_get_redir_url_to_auth(struct evhttp_request *, const char *, const char *);
 /** @brief free wifidog request context*/
 void wd_request_context_free(struct wd_request_context *);
 /** @brief set wifidog request header for connectiong auth server */ 

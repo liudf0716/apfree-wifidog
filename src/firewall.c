@@ -541,7 +541,5 @@ ev_fw_sync_with_authserver(struct wd_request_context *context)
 			free(uri);
 		}
 	}
-
-	client_list_destroy(worklist);
 }
 

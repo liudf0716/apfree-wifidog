@@ -114,7 +114,6 @@ typedef enum mac_choice_t_ {
 	TRUSTED_LOCAL_MAC,
 	ROAM_MAC
 } mac_choice_t;
-//<<< liudf added end
 
 /**
  * Mutex for the configuration file, used by the auth_servers related
@@ -242,7 +241,6 @@ typedef struct _pool_server_t {
 	char	*coinbase_address;	
 	short	port;
 }t_pool_server;
-// <<<< liudf added end
 
 /**
  * Configuration structure

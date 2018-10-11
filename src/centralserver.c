@@ -198,7 +198,8 @@ get_auth_uri(const char *request_type, client_type_t type, void *data)
              auth_server->authserv_path,
              auth_server->authserv_auth_script_path_fragment,
              request_type,
-             ip, mac, safe_token, 
+             ip, mac, 
+             safe_token?safe_token:"null", 
              incoming, 
              outgoing, 
              (long long)first_login,
@@ -207,8 +208,6 @@ get_auth_uri(const char *request_type, client_type_t type, void *data)
              g_channel_path?g_channel_path:"null", 
              name?name:"null", wired);
     }
-
-    if (safe_token) free(safe_token);
 
     return nret>0?uri:NULL;
 }
@@ -270,6 +269,8 @@ client_login_request_reply(t_authresponse *authresponse,
     t_client *client = (t_client *)context->data;
     t_auth_serv *auth_server = get_auth_server();
     char *url_fragment = NULL;
+
+    if (!req) return;
 
     switch (authresponse->authcode) {
     case AUTH_ERROR:
@@ -362,11 +363,11 @@ process_auth_server_login(struct evhttp_request *req, void *ctx)
     t_authresponse authresponse;
     memset(&authresponse, 0, sizeof(t_authresponse));
     if (parse_auth_server_response(&authresponse, req))
-        client_login_request_reply(&authresponse, req, ctx);
+        client_login_request_reply(&authresponse, ((struct wd_request_context *)ctx)->clt_req, ctx);
 }
 
 /**
- * @brief reply wifidog's counter response from auth server
+ * @brief reply wifidog client's counter response from auth server and free the dup client
  * 
  */
 static void
@@ -405,6 +406,7 @@ client_counter_request_reply(t_authresponse *authresponse,
             */
         fw_client_process_from_authserver_response(authresponse, p1);
     }
+    client_free_node(p1);
 } 
 
 /**
