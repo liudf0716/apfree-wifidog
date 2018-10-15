@@ -1060,12 +1060,6 @@ void evdns_add_trusted_domain_ip_cb(int errcode, struct evutil_addrinfo *addr, v
 
 	if (addr)
 		evutil_freeaddrinfo(addr);
-    
-    if (--n_pending_requests <= 0 && n_started_requests ==  0) {
-		debug(LOG_INFO, "parse domain end, end event_loop [%d]", n_pending_requests);
-        event_base_loopexit(base, NULL);
-		n_pending_requests = 0;
-	}
 }
 
 static void 
@@ -1126,7 +1120,7 @@ thread_evdns_parse_trusted_domain_2_ip(void *arg)
 	}
 	
 	
-	debug(LOG_INFO, "parse domain end, begin event_loop [%d]", n_pending_requests); 
+	debug(LOG_INFO, "parse domain end, begin event_loop "); 
 	event_base_dispatch(base);	
 
 	// after parse domains' ip, refresh the rule

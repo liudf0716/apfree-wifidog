@@ -116,12 +116,12 @@ get_roam_request_uri(s_config *config, t_auth_serv *auth_server, const char *mac
  * 
  */ 
 void 
-make_roam_request(struct wd_request_context *context, struct roam_request_info *roam)
+make_roam_request(struct wd_request_context *context, struct roam_req_info *roam)
 {
-    char *uri = get_roam_request_uri(config_get_config(), get_auth_server(), mac);
+    char *uri = get_roam_request_uri(config_get_config(), get_auth_server(), roam->mac);
     if (uri) {
         free(roam);
-        return NULL;
+        return;
     }
 
     struct evhttp_connection *evcon = NULL;
@@ -130,7 +130,6 @@ make_roam_request(struct wd_request_context *context, struct roam_request_info *
     wd_make_request(context, &evcon, &req, process_auth_server_roam);
     evhttp_make_request(evcon, req, EVHTTP_REQ_GET, uri);
     free(uri);
-    return NULL;
 }
 
 /**

@@ -54,9 +54,10 @@ typedef enum {
 
 struct evhttp_request;
 struct wd_request_context;
+struct roam_req_info;
 
 /** @brief wifidog make roam quest to auth server */
-void make_roam_request(struct wd_request_context *, struct roam_request_info *);
+void make_roam_request(struct wd_request_context *, struct roam_req_info *);
 /** @brief get client's auth uri */
 char *get_auth_uri(const char *, client_type_t , void *);
 

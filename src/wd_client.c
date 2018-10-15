@@ -47,7 +47,7 @@ wd_get_orig_url(struct evhttp_request *req)
 {
     char orig_uri[MAX_BUF] = {0};
 	struct evhttp_uri *uri = evhttp_request_get_evhttp_uri(req);
-    if (evhttp_uri_join(uri, orig_uri, MAX_BUF-1)) {
+    if (!evhttp_uri_join(uri, orig_uri, MAX_BUF-1)) {
 		return NULL;
 	} else if (evhttp_uri_get_host(uri)) {
 		return evhttp_encode_uri(orig_uri);

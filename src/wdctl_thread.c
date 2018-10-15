@@ -41,6 +41,7 @@
 #include "commandline.h"
 #include "gateway.h"
 #include "safe.h"
+#include "wd_client.h"
 
 static struct sockaddr_un *create_unix_socket(const char *);
 
@@ -186,7 +187,7 @@ wdctl_listen_new_client(struct evconnlistener *listener, evutil_socket_t fd,
     struct sockaddr *a, int slen, void *p)
 {
 	struct bufferevent *b_client = bufferevent_socket_new(
-        wdctl_base, fd, BEV_OPT_CLOSE_ON_FREE|BEV_OPT_DEFER_CALLBACKS);
+        request_ctx->base, fd, BEV_OPT_CLOSE_ON_FREE|BEV_OPT_DEFER_CALLBACKS);
     
     bufferevent_setcb(b_client, wdctl_client_read_cb, NULL, wdctl_client_event_cb, NULL);
     bufferevent_enable(b_client, EV_READ|EV_WRITE);
@@ -221,7 +222,7 @@ thread_wdctl(void *arg)
 
     event_base_dispatch(wdctl_base);
 
-    terminate_handler(1);
+    termination_handler(1);
 }
 
 static void
@@ -756,19 +757,19 @@ wdctl_add_online_client(struct bufferevent *fd, const char *args)
         goto OUT;
     }
 
-    char *mac 	= json_object_get_string(mac_jo);
-	char *ip	= json_object_get_string(ip_jo);
-	char *name	= json_object_get_string(name_jo);
+    const char *mac  = json_object_get_string(mac_jo);
+    const char *ip	 = json_object_get_string(ip_jo);
+	const char *name = json_object_get_string(name_jo);
     if (!is_valid_mac(mac) || !is_valid_ip(ip) || !is_trusted_mac(mac) || !is_untrusted_mac(mac))
         goto OUT;
 
     struct roam_req_info *roam = safe_malloc(sizeof(struct roam_req_info));
     memcpy(roam->ip, ip, strlen(ip));
-    memcpy(roam->mac, mac, strlen(mac);)
+    memcpy(roam->mac, mac, strlen(mac));
     make_roam_request(request_ctx, roam);
     
 OUT:
-    if (client_info) jsons_object_put(client_info);
+    if (client_info) json_object_put(client_info);
     bufferevent_write(fd, "Yes", 2);
 }
 

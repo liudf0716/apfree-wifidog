@@ -248,7 +248,7 @@ ev_http_callback_404(struct evhttp_request *req, void *arg)
 
     char mac[MAC_LENGTH] = {0};
     if(!br_arp_get_mac(remote_host, mac)) {
-        evhttp_send_error(req, 200, "Cant get client's mac by its ip [%s]", remote_host);
+        evhttp_send_error(req, 200, "Cant get client's mac by its ip");
         return;
     }
 
