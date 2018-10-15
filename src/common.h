@@ -100,6 +100,7 @@
 /** @brief Read buffer for socket read? */
 #define MAX_BUF             4096
 #define HTTP_IP_ADDR_LEN    17
+#define HTTP_MAC_LEN        18
 #define	DEFAULT_MAC			"ff:ff:ff:ff:ff:ff"
 #define UNSUPPORTED         "not support"
 
@@ -107,7 +108,7 @@
 
 struct roam_req_info {
     char ip[HTTP_IP_ADDR_LEN];
-    char mac[MAC_LENGTH];
+    char mac[HTTP_MAC_LEN];
 };
 
 #endif /* _COMMON_H_ */

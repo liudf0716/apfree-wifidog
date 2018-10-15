@@ -55,7 +55,7 @@ process_auth_server_roam(struct evhttp_request *req, void *ctx)
     if (!req) {
         mark_auth_offline();
         free(roam);
-        return 0;
+        return;
     }
 	
     char buffer[MAX_BUF] = {0};
@@ -106,6 +106,7 @@ get_roam_request_uri(s_config *config, t_auth_serv *auth_server, const char *mac
         config->gw_id,
 		mac,
 		g_channel_path?g_channel_path:"null");
+    return roam_uri;
 }
 
 /**
@@ -115,7 +116,7 @@ get_roam_request_uri(s_config *config, t_auth_serv *auth_server, const char *mac
  * 
  */ 
 void 
-make_roam_request(struct wd_request_context *context, struct roam_info *roam)
+make_roam_request(struct wd_request_context *context, struct roam_request_info *roam)
 {
     char *uri = get_roam_request_uri(config_get_config(), get_auth_server(), mac);
     if (uri) {
@@ -132,86 +133,10 @@ make_roam_request(struct wd_request_context *context, struct roam_info *roam)
     return NULL;
 }
 
-json_object *
-make_roam_request(const char *mac)
-{
-	s_config *config = config_get_config();
-    char buf[MAX_BUF] = {0};
-    char *tmp = NULL, *end = NULL;
-    t_auth_serv *auth_server = get_auth_server();
-
-    int sockfd = connect_auth_server();
-	if (sockfd <= 0) {
-		debug(LOG_ERR, "There was a problem connecting to the auth server!");		
-        return NULL;
-	}
-
-     /**
-	 * TODO: XXX change the PHP so we can harmonize stage as request_type
-	 * everywhere.
-	 */
-	snprintf(buf, sizeof(buf),
-		"GET %sroam?gw_id=%s&mac=%s&channel_path=%s HTTP/1.1\r\n"
-        "User-Agent: ApFree WiFiDog %s\r\n"
-		"Connection: close\r\n"
-        "Host: %s\r\n"
-        "\r\n",
-        auth_server->authserv_path,
-        config->gw_id,
-		mac,
-		g_channel_path?g_channel_path:"null",
-		VERSION, auth_server->authserv_hostname);
-
-    char *res = http_get_ex(sockfd, buf, 2);
-
-	close_auth_server();
-    if (NULL == res) {
-        debug(LOG_ERR, "There was a problem talking to the auth server!");		
-        return NULL;
-    }
-
-    if ((tmp = strstr(res, "{\"")) && (end = strrchr(res, '}'))) {
-		*(end+1) = '\0';
-		debug(LOG_DEBUG, "tmp is [%s]", tmp);
-		json_object *roam_info = json_tokener_parse(tmp);
-		if(roam_info == NULL) {
-        	debug(LOG_ERR, "error parse json info %s!", tmp);
-			free(res);
-			return NULL;
-		}
-        
-        const char *is_roam = NULL;
-        json_object *roam_jo = NULL;
-        if ( ! json_object_object_get_ex(roam_info, "roam", &roam_jo)) {
-            free(res);
-            json_object_put(roam_info);
-            return NULL;
-        }
-		is_roam = json_object_get_string(roam_jo);
-		if(is_roam && strcmp(is_roam, "yes") == 0) {
-			json_object *client = NULL;
-            if( ! json_object_object_get_ex(roam_info, "client", &client)) {
-                free(res);
-                json_object_put(roam_info);
-                return NULL;
-            }
-            json_object *client_dup = json_tokener_parse(json_object_to_json_string(client));
-            debug(LOG_INFO, "roam client is %s!", json_object_to_json_string(client));
-            free(res);
-            json_object_put(roam_info);
-            return client_dup;
-		}
-
-		free(res);
-        json_object_put(roam_info);
-		return NULL;
-    }
-
-    free(res);
-    return NULL;
-}
-
-
+/**
+ * @brief get client's auth request uri according to its type
+ * 
+ */ 
 char * 
 get_auth_uri(const char *request_type, client_type_t type, void *data)
 {

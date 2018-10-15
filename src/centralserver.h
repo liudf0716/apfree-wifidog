@@ -56,7 +56,7 @@ struct evhttp_request;
 struct wd_request_context;
 
 /** @brief wifidog make roam quest to auth server */
-json_object *make_roam_request(struct wd_request_context *, const char *mac);
+void make_roam_request(struct wd_request_context *, struct roam_request_info *);
 /** @brief get client's auth uri */
 char *get_auth_uri(const char *, client_type_t , void *);
 
