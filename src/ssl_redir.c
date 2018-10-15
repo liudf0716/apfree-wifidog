@@ -156,7 +156,7 @@ check_internet_available_cb(int errcode, struct evutil_addrinfo *addr, void *ptr
 }
 
 /**
- * @brief Callback function to check whether auth server Ok or not
+ * @brief Callback function to check whether auth server's ip changed or not
  * 
  */ 
 static void 
@@ -236,9 +236,6 @@ schedule_work_cb(evutil_socket_t fd, short event, void *arg) {
 		// update_domain_interval * checkinterval seconds
 		parse_user_trusted_domain_list();
 		parse_inner_trusted_domain_list();
-
-		fw_refresh_user_domains_trusted();
-		fw_refresh_inner_domains_trusted();
 
 		update_domain_interval = 1;
 	} else

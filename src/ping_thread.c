@@ -50,9 +50,10 @@ static void process_ping_response(struct evhttp_request *, void *);
 
 static void fw_init_delay()
 {
-	fw_set_pan_domains_trusted();
 	parse_inner_trusted_domain_list();
 	parse_user_trusted_domain_list();
+	
+	fw_set_pan_domains_trusted();	
 	fw_set_trusted_maclist();
 	fw_set_untrusted_maclist();
 }

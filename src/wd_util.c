@@ -106,9 +106,6 @@ struct evdns_cb_param {
 	void	*data;
 };
 
-static int n_pending_requests = 0;
-static int n_started_requests = 0;
-
 void
 mark_online()
 {
@@ -1079,18 +1076,23 @@ thread_evdns_parse_trusted_domain_2_ip(void *arg)
 	t_domain_trusted *p = NULL;
 	free(arg);
 
-	if(*which == INNER_TRUSTED_DOMAIN)
+	if(which == INNER_TRUSTED_DOMAIN)
 		p = config->inner_domains_trusted;
 	else if (which == USER_TRUSTED_DOMAIN)
 		p = config->domains_trusted;
 	else 
 		return;
-    
+
+	if (!p) {
+		debug(LOG_DEBUG, "parsed domain list is empty");
+		return;
+	}
+
 	struct event_base *base = event_base_new();
     if (!base) {
         return;    
     }
-    struct evdns_base *dnsbase = evdns_base_new(base, 1);
+    struct evdns_base *dnsbase = evdns_base_new(base, EVDNS_BASE_DISABLE_WHEN_INACTIVE);
     if (!dnsbase) {
         event_base_free(base);
         return;
@@ -1106,17 +1108,12 @@ thread_evdns_parse_trusted_domain_2_ip(void *arg)
     evdns_base_nameserver_ip_add(dnsbase, "114.114.114.114");//114DNS
 	
 	struct evutil_addrinfo hints;
-	n_pending_requests = 0;
-	n_started_requests = 0;
 	while(p && p->domain) {		
 		memset(&hints, 0, sizeof(hints));
 		hints.ai_family = AF_UNSPEC;
 		hints.ai_flags = EVUTIL_AI_CANONNAME;
 		hints.ai_socktype = SOCK_STREAM;
 		hints.ai_protocol = IPPROTO_TCP;
-		
-		n_pending_requests++;
-		n_started_requests = 1; // in case some invalid domain parse
 		
 		struct evdns_cb_param *param = malloc(sizeof(struct evdns_cb_param));
 		memset(param, 0, sizeof(struct evdns_cb_param));
@@ -1128,17 +1125,16 @@ thread_evdns_parse_trusted_domain_2_ip(void *arg)
 		p = p->next;
 	}
 	
-	if (n_started_requests && n_pending_requests > 0) {
-        n_started_requests = 0;
-        debug(LOG_INFO, "parse domain end, begin event_loop [%d]", n_pending_requests); 
-		event_base_dispatch(base);	
+	
+	debug(LOG_INFO, "parse domain end, begin event_loop [%d]", n_pending_requests); 
+	event_base_dispatch(base);	
 
-		// after parse domains' ip, setting it
-		if(which == INNER_TRUSTED_DOMAIN)
-			fw_refresh_inner_domains_trusted();
-		else if (which == USER_TRUSTED_DOMAIN)
-			fw_refresh_user_domains_trusted();
-	}
+	// after parse domains' ip, refresh the rule
+	if(which == INNER_TRUSTED_DOMAIN)
+		fw_refresh_inner_domains_trusted();
+	else if (which == USER_TRUSTED_DOMAIN)
+		fw_refresh_user_domains_trusted();
+	
 	
 	evdns_base_free(dnsbase, 0);
     event_base_free(base);

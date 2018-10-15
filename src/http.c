@@ -98,15 +98,12 @@ is_apple_captive(const char *domain)
  * @return 1 end the http request or 0 continue it
  */
 static int
-process_apple_wisper(struct evhttp_request *req, const char *mac, const char *redir_url)
+process_apple_wisper(struct evhttp_request *req, const char *mac, const char *remote_host, const char *redir_url)
 {
     t_offline_client *o_client = NULL;
 
 	if(is_apple_captive(evhttp_request_get_host(req))) {
 		int interval = 0;
-        char *remote_host;
-        uint16_t port;
-        evhttp_connection_get_peer(evhttp_request_get_connection(req), &remote_host, &port);
 
 		LOCK_OFFLINE_CLIENT_LIST();
     	o_client = offline_client_list_find_by_mac(mac);
@@ -195,12 +192,9 @@ ev_http_resend(struct evhttp_request *req)
  * @return 1 end the http request or 0 continue the request
  */ 
 static int
-process_already_login_client(struct evhttp_request *req, const char *mac)
+process_already_login_client(struct evhttp_request *req, const char *mac, const char *remote_host)
 {
     int flag = 0;
-    char *remote_host;
-    uint16_t port;
-    evhttp_connection_get_peer(evhttp_request_get_connection(req), &remote_host, &port);
 
     LOCK_CLIENT_LIST();
     t_client *clt = client_list_find_by_mac(mac);
@@ -254,11 +248,11 @@ ev_http_callback_404(struct evhttp_request *req, void *arg)
 
     char mac[MAC_LENGTH] = {0};
     if(!br_arp_get_mac(remote_host, mac)) {
-        evhttp_send_error(req, 200, "Cant get client's mac by its ip");
+        evhttp_send_error(req, 200, "Cant get client's mac by its ip [%s]", remote_host);
         return;
     }
 
-    if (process_already_login_client(req, mac)) return;
+    if (process_already_login_client(req, mac, remote_host)) return;
 
     const s_config *config = config_get_config();
     if (config->wired_passed && process_wired_device_pass(req, mac)) return;
@@ -269,7 +263,7 @@ ev_http_callback_404(struct evhttp_request *req, void *arg)
         return;
     }
     
-    if(config->bypass_apple_cna && process_apple_wisper(req, mac, redir_url))
+    if(config->bypass_apple_cna && process_apple_wisper(req, mac, remote_host, redir_url))
         goto END;
 
     if(config->js_filter)

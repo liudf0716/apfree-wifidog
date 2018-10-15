@@ -45,11 +45,19 @@
 char *
 wd_get_orig_url(struct evhttp_request *req)
 {
-    char orig_url[MAX_BUF] = {0};
-    if (evhttp_uri_join(evhttp_request_get_evhttp_uri(req), orig_url, MAX_BUF-1))
-        return evhttp_encode_uri(orig_url);
+    char orig_uri[MAX_BUF] = {0};
+	struct evhttp_uri *uri = evhttp_request_get_evhttp_uri(req);
+    if (evhttp_uri_join(uri, orig_uri, MAX_BUF-1)) {
+		return NULL;
+	} else if (evhttp_uri_get_host(uri)) {
+		return evhttp_encode_uri(orig_uri);
+	}
 
-    return NULL;
+	char *orig_url = NULL, *ret_url = NULL;
+	safe_asprintf(&orig_url, "http://%s%s", evhttp_request_get_host(req), orig_uri);
+	ret_url = evhttp_encode_uri(orig_url);
+	free(orig_url);
+	return ret_url;
 }
 
 /**
@@ -121,6 +129,8 @@ wd_request_context_new(struct event_base *base, SSL *ssl, int authserv_use_ssl)
 	context->base 	= base;
 	context->ssl 	= ssl;
 	context->bev	= bev;
+
+	return context;
 }
 
 /**
@@ -149,6 +159,9 @@ wd_request_loop(void (*callback)(evutil_socket_t, short, void *))
 
 	struct event evtimer;
 	struct timeval tv;
+
+	// execute callback before shedule it
+	if (callback) callback(-1, EV_PERSIST, request_ctx);
 
 	event_assign(&evtimer, base, -1, EV_PERSIST, callback, (void*)request_ctx);
 	evutil_timerclear(&tv);

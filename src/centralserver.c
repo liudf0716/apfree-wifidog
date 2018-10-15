@@ -41,19 +41,97 @@
 #include "ping_thread.h"
 
 /**
- * @brief wifidog make roam quest to auth server
+ * @brief process auth server's roam request
+ * The response json like this:
+ * {"roam":"yes|no", "client":{"token":"client_token", "first_login":"first login time"}} 
  * 
- * @param 
- * @return 
+ * @param ctx The wifidog's request context, need to free its data member
  * 
  */ 
-json_object *
-make_roam_request(const char *mac)
+static void
+process_auth_server_roam(struct evhttp_request *req, void *ctx)
 {
+    struct roam_req_info *roam = ((struct wd_request_context *)ctx)->data;
+    if (!req) {
+        mark_auth_offline();
+        free(roam);
+        return 0;
+    }
+	
+    char buffer[MAX_BUF] = {0};
+    if (evbuffer_remove(evhttp_request_get_input_buffer(req), buffer, MAX_BUF-1) > 0 ) {
+        mark_auth_online();
+    } else {
+        mark_auth_offline();
+        free(roam);
+        return;
+    }
+
+    json_object *roam_info = json_tokener_parse(buffer);
+    if(roam_info == NULL) {
+        debug(LOG_ERR, "error parse json info %s!", buffer);
+        free(roam);
+        return ;
+    }
+
+    json_object *roam_jo = NULL;
+    if ( !json_object_object_get_ex(roam_info, "roam", &roam_jo)) {
+        json_object_put(roam_info);
+        free(roam);
+        return ;
+    }
+    
+    const char *is_roam = json_object_get_string(roam_jo);
+    if(is_roam && strcmp(is_roam, "yes") == 0) {
+        json_object *client = NULL;
+        if( !json_object_object_get_ex(roam_info, "client", &client)) {
+            add_online_client(roam->ip, roam->mac, client);
+        }
+    }
+
+    json_object_put(roam_info);
+    free(roam);
+}
+
+/**
+ * @brief get roam request uri
+ * 
+ */ 
+static char *
+get_roam_request_uri(s_config *config, t_auth_serv *auth_server, const char *mac)
+{
+    char *roam_uri = NULL;
+    safe_asprintf(&roam_uri, "%sroam?gw_id=%s&mac=%s&channel_path=%s", 
+        auth_server->authserv_path,
+        config->gw_id,
+		mac,
+		g_channel_path?g_channel_path:"null");
+}
+
+/**
+ * @brief wifidog make roam quest to auth server
+ * 
+ * @param roam The roam request data, need to be free 
+ * 
+ */ 
+void 
+make_roam_request(struct wd_request_context *context, struct roam_info *roam)
+{
+    char *uri = get_roam_request_uri(config_get_config(), get_auth_server(), mac);
+    if (uri) {
+        free(roam);
+        return NULL;
+    }
+
+    struct evhttp_connection *evcon = NULL;
+    struct evhttp_request *req      = NULL;
+    context->data = roam; 
+    wd_make_request(context, &evcon, &req, process_auth_server_roam);
+    evhttp_make_request(evcon, req, EVHTTP_REQ_GET, uri);
+    free(uri);
     return NULL;
 }
 
-#if 0
 json_object *
 make_roam_request(const char *mac)
 {
@@ -132,7 +210,7 @@ make_roam_request(const char *mac)
     free(res);
     return NULL;
 }
-#endif
+
 
 char * 
 get_auth_uri(const char *request_type, client_type_t type, void *data)

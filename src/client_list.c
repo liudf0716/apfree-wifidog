@@ -455,6 +455,10 @@ offline_client_number()
 	return number;
 }
 
+/**
+ * @brief safely remove and delete ageout clients from offline clients list
+ * 
+ */ 
 int 
 offline_client_ageout()
 {
@@ -507,6 +511,10 @@ safe_client_list_delete(t_client *client)
     UNLOCK_CLIENT_LIST();
 }
 
+/**
+ * @brief unsafely remove client from offline clients list and free the client
+ * 
+ */ 
 void
 offline_client_list_delete(t_offline_client *client)
 {
@@ -514,6 +522,10 @@ offline_client_list_delete(t_offline_client *client)
 	offline_client_free_node(client);
 }
 
+/**
+ * @brief unsafely remove client from offline clients list
+ * 
+ */ 
 void
 offline_client_list_remove(t_offline_client *client)
 {
@@ -564,7 +576,10 @@ client_list_remove(t_client * client)
     }
 }
 
-// liudf 20160216 added
+/**
+ * @brief set all connected clients to offline status
+ * 
+ */ 
 void
 reset_client_list()
 {
@@ -576,101 +591,56 @@ reset_client_list()
 }
 
 /*
- * Function: add_online_client
- * Returns:
- *   0 - success
- *   1 - failed
+ * brief: according to auth server's roam response, safely adding client to connect list
+ * The roam_client  json like this:
+ * {"token":"client_token", "first_login":"first login time"}
+ * 
+ * @param roam_client The response json data from auth server
+ * 
  */
-int 
-add_online_client(const char *info)
+void  
+add_online_client(const char *ip, const char *mac, json_object *roam_client)
 {
-	json_object *client_info = NULL;
-	json_object *roam_client = NULL;
-	const char *mac 	= NULL;
-	const char *ip		= NULL;
-	const char *name	= NULL;
-	t_client *old_client = NULL;	
-
-	if(!info)
-		return 1;
 	
-	client_info = json_tokener_parse(info);
-	if(is_error(client_info) || json_object_get_type(client_info) != json_type_object){
-        return 1;
+    LOCK_CLIENT_LIST();
+
+    t_client *old_client = client_list_find_by_mac(mac);
+    if(!old_client) { // no such client in connect list
+        json_object *token_jo 		= NULL;
+        json_object *first_login_jo = NULL;
+        const char *token 		= NULL;
+        const char *first_login	= NULL;
+
+        if (!json_object_object_get_ex(roam_client, "token", &token_jo)) {
+            UNLOCK_CLIENT_LIST();
+            return;
+        } else 
+            token = json_object_get_string(token_jo);
+
+        if (!json_object_object_get_ex(roam_client, "first_login", &first_login_jo)) {
+            UNLOCK_CLIENT_LIST();
+            return;
+        } else
+            first_login = json_object_get_string(first_login_jo);
+
+        if(token) {
+            t_client *client = client_list_add(ip, mac, token);
+            client->wired = 0;
+
+            if (first_login) {
+                client->first_login = (time_t)atol(first_login);
+            } else {
+                client->first_login = time(NULL);
+            }
+            fw_allow(client, FW_MARK_KNOWN);
+        }
+    } else if (strcmp(old_client->ip, ip) != 0) { // The client has logined; but its ip changed
+        fw_deny(old_client);
+        free(old_client->ip);
+        old_client->ip = safe_strdup(ip);
+        fw_allow(old_client, FW_MARK_KNOWN);
     }
 
-    int ret = 1;
-	int roam_client_need_free = 0;
-	json_object *mac_jo = NULL;
-    json_object *ip_jo 	= NULL;
-    json_object *name_jo = NULL;
+    UNLOCK_CLIENT_LIST();
 
-    if(!json_object_object_get_ex(client_info, "mac", &mac_jo) || 
-	   !json_object_object_get_ex(client_info, "ip", &ip_jo) || 
-	   !json_object_object_get_ex(client_info, "name", &name_jo)) {
-        goto OUT;
-    }
-
-    roam_client_need_free = json_object_object_get_ex(client_info, "client", &roam_client)?0:1;
-	mac 	= json_object_get_string(mac_jo);
-	ip		= json_object_get_string(ip_jo);
-	name	= json_object_get_string(name_jo);
-
-	if(is_valid_mac(mac) &&  
-       is_valid_ip(ip) && 
-       !is_trusted_mac(mac) &&
-       !is_untrusted_mac(mac) && 
-       (roam_client != NULL || (roam_client = make_roam_request(mac)) != NULL)) {
-
-		LOCK_CLIENT_LIST();
-		old_client = client_list_find_by_mac(mac);
-		if(!old_client) {
-            json_object *token_jo 		= NULL;
-            json_object *first_login_jo = NULL;
-			const char *token 		= NULL;
-			const char *first_login	= NULL;
-
-            if (!json_object_object_get_ex(roam_client, "token", &token_jo)) {
-                UNLOCK_CLIENT_LIST();
-                goto OUT;
-            } else 
-				token = json_object_get_string(token_jo);
-
-            if (!json_object_object_get_ex(roam_client, "first_login", &first_login_jo)) {
-                UNLOCK_CLIENT_LIST();
-                goto OUT;
-            } else
-				first_login = json_object_get_string(first_login_jo);
-
-			if(token) {
-				t_client *client = client_list_add(ip, mac, token);
-				client->wired = 0;
-				if (name) {
-					client->name = safe_strdup(name);
-                }
-
-				if (first_login) {
-					client->first_login = (time_t)atol(first_login);
-                } else {
-					client->first_login = time(NULL);
-                }
-				fw_allow(client, FW_MARK_KNOWN);
-			}
-		} else if (strcmp(old_client->ip, ip) != 0) { // has login; but ip changed
-			fw_deny(old_client);
-			free(old_client->ip);
-			old_client->ip = safe_strdup(ip);
-			fw_allow(old_client, FW_MARK_KNOWN);
-		}
-
-		UNLOCK_CLIENT_LIST();
-        ret = 0;
-	}
-
-OUT:
-    if(!is_error(roam_client) && roam_client_need_free){
-        json_object_put(roam_client);
-    }
-    json_object_put(client_info);
-	return ret;	
 }

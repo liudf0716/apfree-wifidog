@@ -105,4 +105,9 @@
 
 #define ARRAYLEN(array)     (sizeof(array)/sizeof((array)[0]))
 
+struct roam_req_info {
+    char ip[HTTP_IP_ADDR_LEN];
+    char mac[MAC_LENGTH];
+};
+
 #endif /* _COMMON_H_ */

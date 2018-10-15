@@ -79,7 +79,7 @@ static void wdctl_add_untrusted_maclist(struct bufferevent *, const char *);
 static void wdctl_del_untrusted_maclist(struct bufferevent *, const char *);
 static void wdctl_add_online_client(struct bufferevent *, const char *);
 
-static struct event_base *wdctl_base;
+static struct wd_request_context *request_ctx;
 
 static struct wdctl_command {
     const char *command;
@@ -167,7 +167,8 @@ wdctl_client_read_cb(struct bufferevent *bev, void *ctx)
     
     if (nbytes > 0) {
         const char *buf = (char *)evbuffer_pullup(input, nbytes);
-        wdctl_cmd_process(bev, buf);
+        if (buf)
+            wdctl_cmd_process(bev, buf);
     }
 }
 
@@ -200,8 +201,18 @@ thread_wdctl(void *arg)
     struct sockaddr_un *su_socket = create_unix_socket((char *)arg);
     if (!su_socket) termination_handler(0);
 	
-	wdctl_base = event_base_new();
+	struct event_base *wdctl_base = event_base_new();
     if (!wdctl_base) termination_handler(0);
+
+    SSL_CTX *ssl_ctx = SSL_CTX_new(SSLv23_method());
+	if (!ssl_ctx) termination_handler(0);
+
+    SSL *ssl = SSL_new(ssl_ctx);
+	if (!ssl) termination_handler(0);
+
+    request_ctx = wd_request_context_new(
+        wdctl_base, ssl, get_auth_server()->authserv_use_ssl);
+	if (!request_ctx) termination_handler(0);
 
     struct evconnlistener *listener = evconnlistener_new_bind(wdctl_base, wdctl_listen_new_client, NULL,
 	    LEV_OPT_CLOSE_ON_FREE|LEV_OPT_CLOSE_ON_EXEC|LEV_OPT_REUSEABLE,
@@ -210,9 +221,7 @@ thread_wdctl(void *arg)
 
     event_base_dispatch(wdctl_base);
 
-    free(su_socket);
-	evconnlistener_free(listener);
-	event_base_free(wdctl_base);
+    terminate_handler(1);
 }
 
 static void
@@ -254,7 +263,7 @@ wdctl_reset(struct bufferevent *fd, const char *arg)
     UNLOCK_CLIENT_LIST();
 
     /* deny.... */
-    // ev_logout_client(node);
+    ev_logout_client(request_ctx, node);
     bufferevent_write(fd, "Yes", 3);
 }
 
@@ -723,12 +732,43 @@ wdctl_user_cfg_save(struct bufferevent *fd)
     bufferevent_write(fd, "Yes", 3);
 }
 
+/**
+ * @brief this interface should be called by dnsmasq by its new event
+ * 
+ * @args It's json of client's request like this:
+ * {"mac":"device_mac", "ip":"device_ip", "name":"device_name"}
+ * 
+ */ 
 static void
 wdctl_add_online_client(struct bufferevent *fd, const char *args)
 {  
-	if(!add_online_client(args))
-    	bufferevent_write(fd, "Yes", 3);
-	else
-		bufferevent_write(fd, "No", 2);
+    json_object *client_info = json_tokener_parse(args);
+	if(is_error(client_info) || json_object_get_type(client_info) != json_type_object) { 
+        goto OUT;
+    }
+
+    json_object *mac_jo = NULL;
+    json_object *ip_jo 	= NULL;
+    json_object *name_jo = NULL;
+    if(!json_object_object_get_ex(client_info, "mac", &mac_jo) || 
+	   !json_object_object_get_ex(client_info, "ip", &ip_jo) || 
+	   !json_object_object_get_ex(client_info, "name", &name_jo)) { 
+        goto OUT;
+    }
+
+    char *mac 	= json_object_get_string(mac_jo);
+	char *ip	= json_object_get_string(ip_jo);
+	char *name	= json_object_get_string(name_jo);
+    if (!is_valid_mac(mac) || !is_valid_ip(ip) || !is_trusted_mac(mac) || !is_untrusted_mac(mac))
+        goto OUT;
+
+    struct roam_req_info *roam = safe_malloc(sizeof(struct roam_req_info));
+    memcpy(roam->ip, ip, strlen(ip));
+    memcpy(roam->mac, mac, strlen(mac);)
+    make_roam_request(request_ctx, roam);
+    
+OUT:
+    if (client_info) jsons_object_put(client_info);
+    bufferevent_write(fd, "Yes", 2);
 }
 

@@ -82,6 +82,8 @@ typedef struct _t_offline_client {
 	
 } t_offline_client;
 
+struct wd_request_context;
+
 /** @brief Get a new client struct, not added to the list yet */
 t_client *client_get_new(void);
 
@@ -160,7 +162,7 @@ int offline_client_ageout();
 
 void reset_client_list();
 
-int add_online_client(const char *);
+void add_online_client(const char *ip, const char *mac, json_object *roam_client);
 
 #define LOCK_OFFLINE_CLIENT_LIST() do { \
 	debug(LOG_DEBUG, "Locking offline client list"); \
