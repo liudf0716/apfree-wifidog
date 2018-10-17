@@ -241,15 +241,16 @@ read_response(int sock)
 static void
 wdctl_command_action(const char *cmd, const char *param)
 {
-    char request[WDCTL_MSG_LENG] = {0};	
+    char *request = NULL;	
     int sock = connect_to_server(sk_name);
 	
 	if(param)	
-		snprintf(request, WDCTL_MSG_LENG, "%s %s\r\n\r\n", cmd, param);
+		safe_aprintf(&request, WDCTL_MSG_LENG, "%s %s", cmd, param);
 	else
-		snprintf(request, WDCTL_MSG_LENG, "%s \r\n\r\n", cmd);
+		safe_aprintf(&request, WDCTL_MSG_LENG, "%s", cmd);
 
     send_request(sock, request);
+    free(request));
     read_response(sock);
 }
 

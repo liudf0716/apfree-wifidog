@@ -255,9 +255,9 @@ wdctl_reset(struct bufferevent *fd, const char *arg)
     /* We get the node or return... */
     if ((node = client_list_find_by_ip(arg)) != NULL) ;
     else if ((node = client_list_find_by_mac(arg)) != NULL) ;
-    else {
-        debug(LOG_DEBUG, "Client not found.");
+    else { 
         UNLOCK_CLIENT_LIST();
+        debug(LOG_DEBUG, "Client not found.");
         bufferevent_write(fd, "No", 2);   /* Error handling in fucntion sufficient. */
         return;
     }
