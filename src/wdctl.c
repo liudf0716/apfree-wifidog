@@ -137,13 +137,13 @@ wdctl_cmd_process(int argc, char **argv, int optind)
         }
 
         if (!strcmp(wdctl_clt_cmd[i].command, *(argv+optind))) {
-            if ((argc - (optind + 1)) > 0) {
-                if (wdctl_clt_cmd[i].cmd_args)
-                    wdctl_command_action(wdctl_clt_cmd[i].command, *(argv + optind + 1));
-                else
-                    goto ERR;
-            } else 
+            if ((argc - (optind + 1)) > 0 && wdctl_clt_cmd[i].cmd_args) {
+                wdctl_command_action(wdctl_clt_cmd[i].command, *(argv + optind + 1));
+            } else if ((argc - (optind + 1)) == 0 && !wdctl_clt_cmd[i].cmd_args)
                 wdctl_command_action(wdctl_clt_cmd[i].command, NULL);
+            else
+                goto ERR;
+
             return;
         }
     }
@@ -224,6 +224,34 @@ send_request(int sock, const char *request)
     } 
 }
 
+/**
+ * @brief execute command sending from wdctl_thread after process wdctlx's command
+ * usually it execute 'dnsmasq restart', this feature depends openwrt system 
+ *      
+ */ 
+static void
+execute_post_cmd(char *raw_cmd)
+{
+    size_t nlen = strlen(raw_cmd);
+    if (nlen < 3) goto ERR;
+
+    char *cmd = NULL;
+    if (raw_cmd[0] == '[' && raw_cmd[nlen-1] == ']') {
+        raw_cmd[nlen-1] = '\0';
+        cmd = raw_cmd + 1;
+        system(cmd);
+        fprintf(stdout, "execut shell [%s] success", cmd);
+        return;
+    }
+
+ERR:
+    fprintf(stdout, "[%s] is illegal post command", raw_cmd);
+}
+
+/**
+ * @brief read reponse from wdctl_thread
+ * 
+ */ 
 static void
 read_response(int sock)
 {
@@ -234,7 +262,10 @@ read_response(int sock)
 
     if (poll(&fds, 1, WDCTL_TIMEOUT) > 0 && fds.revents == POLLIN) {
         if (read(sock, buf, WDCTL_MSG_LENG) > 0) {
-            fprintf(stdout, "%s\n", buf);
+            if (!strncmp(buf, "CMD", 3)) {
+                execut_post_cmd(buf+3);
+            } else
+                fprintf(stdout, "%s\n", buf);
         }
     } 
     close(sock);
@@ -253,6 +284,7 @@ wdctl_command_action(const char *cmd, const char *param)
 
     send_request(sock, request);
     free(request);
+    
     read_response(sock);
 }
 

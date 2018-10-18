@@ -95,45 +95,55 @@ is_apple_captive(const char *domain)
 /**
  * @brief Treat apple wisper protocol
  * 
+ * @param req The client http request
+ * @param mac The client's mac
+ * @param remote_host The client's ip address
+ * @param redir_url The client redirect url
+ * @param mode 2 not allow show apple device's captive page, 
+ *             1 show apple's captive page and ok button appear
  * @return 1 end the http request or 0 continue it
+ * 
  */
 static int
-process_apple_wisper(struct evhttp_request *req, const char *mac, const char *remote_host, const char *redir_url)
+process_apple_wisper(struct evhttp_request *req, const char *mac, const char *remote_host, const char *redir_url, const int mode)
 {
-    t_offline_client *o_client = NULL;
+	if(!is_apple_captive(evhttp_request_get_host(req))) return 0;
 
-	if(is_apple_captive(evhttp_request_get_host(req))) {
-		int interval = 0;
-
-		LOCK_OFFLINE_CLIENT_LIST();
-    	o_client = offline_client_list_find_by_mac(mac);
-    	if(o_client == NULL) {
-    		o_client = offline_client_list_add(remote_host, mac);
-    	} else {
-			o_client->last_login = time(NULL);
-			interval = o_client->last_login - o_client->first_login;
-		}
-    	
-		o_client->hit_counts++;
-
-		if(o_client->client_type == 1 ) {
-    		UNLOCK_OFFLINE_CLIENT_LIST();
-			if(interval > 20) {
-				fw_set_mac_temporary(mac, 0);	
-				ev_http_send_apple_redirect(req, redir_url);
-			} else if(o_client->hit_counts > 2)
-				ev_http_send_apple_redirect(req, redir_url);
-			else {
-				ev_http_send_redirect(req, redir_url, "Redirect to login page");
-			}
-		} else {	
-			o_client->client_type = 1;
-			UNLOCK_OFFLINE_CLIENT_LIST();
-            ev_http_replay_wisper(req);
-		}
+    if (mode == 2) { // not allow apple show its default captive page
+        ev_http_send_apple_redirect(req, redir_url);
         return 1;
-	} 
-    return 0;
+    }
+
+    int interval = 0;
+    LOCK_OFFLINE_CLIENT_LIST();
+
+    t_offline_client *o_client = offline_client_list_find_by_mac(mac);
+    if(o_client == NULL) {
+        o_client = offline_client_list_add(remote_host, mac);
+    } else {
+        o_client->last_login = time(NULL);
+        interval = o_client->last_login - o_client->first_login;
+    }
+    
+    o_client->hit_counts++;
+
+    if(o_client->client_type == 1 ) {
+        UNLOCK_OFFLINE_CLIENT_LIST();
+        if(interval > 20) {
+            fw_set_mac_temporary(mac, 0);	
+            ev_http_send_apple_redirect(req, redir_url);
+        } else if(o_client->hit_counts > 2)
+            ev_http_send_apple_redirect(req, redir_url);
+        else {
+            ev_http_send_redirect(req, redir_url, "Redirect to login page");
+        }
+    } else {	
+        o_client->client_type = 1;
+        UNLOCK_OFFLINE_CLIENT_LIST();
+        ev_http_replay_wisper(req);
+    }
+    return 1;
+	
 }
 
 /**
@@ -263,7 +273,7 @@ ev_http_callback_404(struct evhttp_request *req, void *arg)
         return;
     }
     
-    if(config->bypass_apple_cna && process_apple_wisper(req, mac, remote_host, redir_url))
+    if(config->bypass_apple_cna && process_apple_wisper(req, mac, remote_host, redir_url, config->bypass_apple_cna))
         goto END;
 
     if(config->js_filter)
