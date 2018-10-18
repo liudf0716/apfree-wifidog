@@ -288,14 +288,11 @@ typedef struct {
         like /proc/net/arp */
     t_popular_server *popular_servers; /**< @brief list of popular servers */
 	
-	// liudf 20161116 added
 	t_https_server	*https_server;
 	t_http_server 	*http_server;	
 	t_mqtt_server	*mqtt_server;
 	t_pool_server	*pool_server;
 
-	// liudf 20151223 added
-	// trusted domain
 	t_domain_trusted *pan_domains_trusted; /** pan-domain trusted list*/
 	t_domain_trusted *domains_trusted; /** domains list, seperate with comma*/
 	t_domain_trusted *inner_domains_trusted; /** inner domains list, user cannot configure*/

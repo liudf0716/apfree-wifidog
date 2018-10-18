@@ -165,12 +165,16 @@ wdctl_client_read_cb(struct bufferevent *bev, void *ctx)
 {
     struct evbuffer *input = bufferevent_get_input(bev);
     size_t nbytes =  evbuffer_get_length(input);
-    
-    if (nbytes > 0) {
-        const char *buf = (char *)evbuffer_pullup(input, nbytes);
-        if (buf)
-            wdctl_cmd_process(bev, buf);
+    if (!nbytes) return;
+
+    char *buf = malloc(nbytes+1);
+    if (!buf) return;
+    memset(buf, 0, nbytes+1);
+
+    if (evbuffer_remove(input, buf, nbytes) > 0) {
+        wdctl_cmd_process(bev, buf);
     }
+    free(buf);
 }
 
 static void
