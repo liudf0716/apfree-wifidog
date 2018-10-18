@@ -110,13 +110,13 @@ list_all_method()
         else if(COMMAND_EQUAL("add_online_client"))
             fprintf(stdout, "%s %s {\"ip\":\"192.168.1.211\", \"mac\":\"aa:bb:cc:dd:ee:ff\", \"name\":\"apfree\"}\n", progname, cmd);
         else if (COMMAND_EQUAL("add_trusted_domains"))
-            fprintf(stdout, "%s %s www.kunteng.org.cn,captive.apple.com,www.baidu.com,www.qq.com,www.alibaba.com,aaa,bbb", progname, cmd);
+            fprintf(stdout, "%s %s www.kunteng.org.cn,captive.apple.com,www.baidu.com,www.qq.com,www.alibaba.com,aaa,bbb\n", progname, cmd);
         else if (COMMAND_EQUAL("add_trusted_pdomains"))
-            fprintf(stdout, "%s %s kunteng.org.cn,apple.com,baidu.com,qq.com,aa,bb", progname, cmd);
+            fprintf(stdout, "%s %s kunteng.org.cn,apple.com,baidu.com,qq.com,aa,bb\n", progname, cmd);
         else if (COMMAND_EQUAL("add_trusted_mac"))
-            fprintf(stdout, "%s %s aa:bb:cc:11:22:33,11:22:33:aa:bb:cc:dd,22.22.22:aa:aa:aa", progname, cmd);
+            fprintf(stdout, "%s %s aa:bb:cc:11:22:33,11:22:33:aa:bb:cc:dd,22.22.22:aa:aa:aa\n", progname, cmd);
         else if (COMMAND_EQUAL("add_trusted_iplist"))
-            fprintf(stdout, "%s %s 192.168.1.2,192.168.1.3,192.168.1.4", progname, cmd);
+            fprintf(stdout, "%s %s 192.168.1.2,192.168.1.3,192.168.1.4\n", progname, cmd);
         else
             fprintf(stdout, "%s %s \n", progname, cmd);
     }

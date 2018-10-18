@@ -61,7 +61,7 @@ usage(void)
     fprintf(stdout, "  -f            Run in foreground\n");
     fprintf(stdout, "  -d <level>    Debug level\n");
     fprintf(stdout, "  -s            Log to syslog\n");
-    fprintf(stdout, "  -w <path>     Wdctl socket path\n");
+    fprintf(stdout, "  -w <path>     Wdctlx socket path\n");
     fprintf(stdout, "  -h            Print usage\n");
     fprintf(stdout, "  -v            Print version information\n");
     fprintf(stdout,
