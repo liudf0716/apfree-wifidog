@@ -35,6 +35,7 @@
 #define WDCTL_MSG_LENG  1024*8
 
 static char *sk_name = NULL;
+char *progname = NULL;
 
 static void usage(void);
 static void parse_commandline(int, char **);
@@ -54,7 +55,6 @@ static struct wdctl_client_command {
     {"clear_trusted_pdomains", NULL, "clear trusted pan-domain"},
     {"show_trusted_pdomains", NULL, "show trusted pan-domain"},
     {"clear_trusted_iplist", NULL, "clear trusted iplist"},
-    {"reparse_trusted_domains", NULL, "reparse trusted domain's ip and add new parsed ip"},
     {"clear_trusted_domains", NULL, "clear trusted domain and it's ip"},
     {"show_trusted_domains", NULL, "show trusted domains and its ip"},
     {"show_trusted_mac", NULL, "show trusted mac list"},
@@ -67,11 +67,12 @@ static struct wdctl_client_command {
     {"del_trusted_iplist", "ip1,ip2...", "del one or more trsuted ip list like ip1,ip2..."},
     {"add_trusted_mac", "mac1,mac2...", "add one or more trusted mac list like mac1,mac2..."},
     {"del_trusted_mac", "mac1,mac2...", "del one or more trusted mac list like mac1,mac2..."},
+    {"reparse_trusted_domains", NULL, "reparse trusted domain's ip and add new parsed ip"},
     {"add_online_client", "{\"ip\":\"ipaddress\", \"mac\":\"devMac\", \"name\":\"devName\"}", "add client to connected list "},
     {"user_cfg_save", NULL, "save all rule to config file"},
     {"reset", "ip|mac", "logout connected client by its ip or mac"},
     {"stop", NULL, "stop apfree wifidog"},
-    {"help", NULL, "list all method"},
+    {"demo", NULL, "give some demonstration of method"},
 };
 
 /** 
@@ -83,7 +84,7 @@ static struct wdctl_client_command {
 static void
 usage(void)
 {
-    fprintf(stdout, "Usage: wdctlx [options] command [arguments]\n");
+    fprintf(stdout, "Usage: %s [options] command [arguments]\n", progname);
     fprintf(stdout, "\n");
     fprintf(stdout, "options:\n");
     fprintf(stdout, "  -s <path>         Path to the socket\n");
@@ -101,23 +102,23 @@ static void
 list_all_method()
 {
 #define COMMAND_EQUAL(CMD) !strcmp(cmd,CMD)
-    char *cmd = NULL;
+    const char *cmd = NULL;
     for (int i = 0; i < ARRAYLEN(wdctl_clt_cmd); i++) {
         cmd = wdctl_clt_cmd[i].command;
         if (COMMAND_EQUAL("list"))
             continue;
         else if(COMMAND_EQUAL("add_online_client"))
-            fprintf(stdout, "%s {\"ip\":\"192.168.1.211\", \"mac\":\"aa:bb:cc:dd:ee:ff\", \"name\":\"apfree\"}\n", cmd);
+            fprintf(stdout, "%s %s {\"ip\":\"192.168.1.211\", \"mac\":\"aa:bb:cc:dd:ee:ff\", \"name\":\"apfree\"}\n", progname, cmd);
         else if (COMMAND_EQUAL("add_trusted_domains"))
-            fpintf(stdout, "%s www.kunteng.org.cn,captive.apple.com,www.baidu.com,www.qq.com,www.alibaba.com,aaa,bbb", cmd);
+            fprintf(stdout, "%s %s www.kunteng.org.cn,captive.apple.com,www.baidu.com,www.qq.com,www.alibaba.com,aaa,bbb", progname, cmd);
         else if (COMMAND_EQUAL("add_trusted_pdomains"))
-            fprintf(stdout, "%s kunteng.org.cn,apple.com,baidu.com,qq.com,aa,bb", cmd);
+            fprintf(stdout, "%s %s kunteng.org.cn,apple.com,baidu.com,qq.com,aa,bb", progname, cmd);
         else if (COMMAND_EQUAL("add_trusted_mac"))
-            fprintf(stdout, "%s aa:bb:cc:11:22:33,11:22:33:aa:bb:cc:dd,22.22.22:aa:aa:aa", cmd);
+            fprintf(stdout, "%s %s aa:bb:cc:11:22:33,11:22:33:aa:bb:cc:dd,22.22.22:aa:aa:aa", progname, cmd);
         else if (COMMAND_EQUAL("add_trusted_iplist"))
-            fprintf(stdout, "%s 192.168.1.2,192.168.1.3,192.168.1.4", cmd);
+            fprintf(stdout, "%s %s 192.168.1.2,192.168.1.3,192.168.1.4", progname, cmd);
         else
-            fprintf(stdout, "%s \n", cmd);
+            fprintf(stdout, "%s %s \n", progname, cmd);
     }
 #undef COMMAND_EQUAL
 }
@@ -130,7 +131,7 @@ wdctl_cmd_process(int argc, char **argv, int optind)
     }
 
     for (int i = 0; i < ARRAYLEN(wdctl_clt_cmd); i++) {
-        if (!strcmp(wdctl_clt_cmd[i].command, "help")) {
+        if (!strcmp(wdctl_clt_cmd[i].command, "demo")) {
             list_all_method();
             return;
         }
@@ -161,6 +162,8 @@ parse_commandline(int argc, char **argv)
 {
     extern int optind;
     int c;
+
+    progname = argv[0];
 
     while (-1 != (c = getopt(argc, argv, "s:h"))) {
         switch (c) {
