@@ -263,7 +263,7 @@ read_response(int sock)
     if (poll(&fds, 1, WDCTL_TIMEOUT) > 0 && fds.revents == POLLIN) {
         if (read(sock, buf, WDCTL_MSG_LENG) > 0) {
             if (!strncmp(buf, "CMD", 3)) {
-                execut_post_cmd(buf+3);
+                execute_post_cmd(buf+3);
             } else
                 fprintf(stdout, "%s\n", buf);
         }
@@ -284,7 +284,7 @@ wdctl_command_action(const char *cmd, const char *param)
 
     send_request(sock, request);
     free(request);
-    
+
     read_response(sock);
 }
 
