@@ -83,7 +83,7 @@ config wifidog
 
 > auth_server_hostname was apfree-wifidog auth server, it can be domain or ip; wifidog.kunteng.org.cn is a free auth server we provided, it was also open source 
 
-> apple_cna 1 apple captive detect deceive; 2 apple captive detect deceive to not allow portal page appear
+> apple_cna 1 apple captive detect deceive; 2 apple captive detect deceive to  disallow portal page appear
 
 > wired_passed means whether LAN access devices need to auth or not, value 1 means no need to auth 
 
