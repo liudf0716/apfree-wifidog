@@ -52,7 +52,6 @@ static s_config config;
  * functions. */
 pthread_mutex_t config_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-// liudf added 20160409
 // Mutex for trusted domains; used by domains parese releated
 pthread_mutex_t domains_mutex = PTHREAD_MUTEX_INITIALIZER;
 
@@ -100,12 +99,6 @@ typedef enum {
 	oPopularServers,
 	oHtmlMessageFile,
 	oProxyPort,
-	oSSLPeerVerification,
-	oSSLCertPath,
-	oSSLAllowedCipherList,
-	oSSLUseSNI,
-
-	// >>>>liudf added 20151224
 	oTrustedPanDomains,
 	oTrustedDomains,
 	oInnerTrustedDomains,
@@ -122,14 +115,7 @@ typedef enum {
 	oWorkMode,
 	oUpdateDomainInterval,
 	oTrustedLocalMACList,
-	
-	oMinerPool,
-	oPoolServer,
-	oPoolServerPort,
-	oCoinbaseAddress,
-	// <<< liudf added end
 	oAppleCNA,
-
 	oMQTT,
 	oMQTTServer,
 	oMQTTServerPort,
@@ -152,11 +138,6 @@ static const struct {
 	"gatewayaddress", oGatewayAddress}, {
 	"gatewayport", oGatewayPort}, {
 	"authserver", oAuthServer}, {
-	"httpdmaxconn", oHTTPDMaxConn}, {
-	"httpdname", oHTTPDName}, {
-	"httpdrealm", oHTTPDRealm}, {
-	"httpdusername", oHTTPDUsername}, {
-	"httpdpassword", oHTTPDPassword}, {
 	"clienttimeout", oClientTimeout}, {
 	"checkinterval", oCheckInterval}, {
 	"syslogfacility", oSyslogFacility}, {
@@ -178,12 +159,6 @@ static const struct {
 	"popularservers", oPopularServers}, {
 	"htmlmessagefile", oHtmlMessageFile}, {
 	"proxyport", oProxyPort}, {
-	"sslpeerverification", oSSLPeerVerification}, {
-	"sslcertpath", oSSLCertPath}, {
-	"sslallowedcipherlist", oSSLAllowedCipherList}, {
-	"sslusesni", oSSLUseSNI}, {
-
-	//>>>>> liudf added 20151224
 	"trustedPanDomains", oTrustedPanDomains}, {
 	"trustedDomains", oTrustedDomains}, {
 	"untrustedmaclist", oUntrustedMACList}, {
@@ -199,11 +174,6 @@ static const struct {
 	"workMode", oWorkMode}, {
 	"updateDomainInterval", oUpdateDomainInterval}, {
 	"trustedlocalmaclist", oTrustedLocalMACList}, {
-	"minerpool", oMinerPool}, {
-	"poolServer", oPoolServer}, {
-	"poolServerPort", oPoolServerPort}, {
-	"coinbaseAddress", oCoinbaseAddress}, {
-	// <<<< liudf added end
 	"bypassAppleCNA", oAppleCNA}, {
 
 	"mqtt", oMQTT}, {
@@ -216,7 +186,6 @@ static void config_notnull(const void *, const char *);
 static int parse_boolean_value(char *);
 static void parse_auth_server(FILE *, const char *, int *);
 static void parse_mqtt_server(FILE *, const char *, int *);
-static void parse_miner_pool(FILE *, const char *, int *);
 static int _parse_firewall_rule(const char *, char *);
 static void parse_firewall_ruleset(const char *, FILE *, const char *, int *);
 static void parse_popular_servers(const char *);
@@ -240,19 +209,15 @@ void
 config_init(void)
 {
 	debug(LOG_DEBUG, "Setting default config parameters");
+
 	config.configfile = safe_strdup(DEFAULT_CONFIGFILE);
 	config.htmlmsgfile = safe_strdup(DEFAULT_HTMLMSGFILE);
-	config.httpdmaxconn = DEFAULT_HTTPDMAXCONN;
 	config.external_interface = NULL;
 	config.gw_id = DEFAULT_GATEWAYID;
 	config.gw_interface = NULL;
 	config.gw_address = NULL;
 	config.gw_port = DEFAULT_GATEWAYPORT;
 	config.auth_servers = NULL;
-	config.httpdname = NULL;
-	config.httpdrealm = DEFAULT_HTTPDNAME;
-	config.httpdusername = NULL;
-	config.httpdpassword = NULL;
 	config.clienttimeout = DEFAULT_CLIENTTIMEOUT;
 	config.checkinterval = DEFAULT_CHECKINTERVAL;
 	config.daemon = -1;
@@ -263,17 +228,12 @@ config_init(void)
 	config.trustedmaclist = NULL;
 	config.popular_servers = NULL;
 	config.proxy_port = 0;
-	config.ssl_certs = safe_strdup(DEFAULT_AUTHSERVSSLCERTPATH);
-	config.ssl_verify = DEFAULT_AUTHSERVSSLPEERVER;
 	config.deltatraffic = DEFAULT_DELTATRAFFIC;
-	config.ssl_cipher_list = NULL;
-	config.arp_table_path = safe_strdup(DEFAULT_ARPTABLE);
-	config.ssl_use_sni = DEFAULT_AUTHSERVSSLSNI;
-	
+	config.arp_table_path = safe_strdup(DEFAULT_ARPTABLE);	
 	config.htmlredirfile 			= safe_strdup(DEFAULT_REDIRECTFILE);
 	config.internet_offline_file	= safe_strdup(DEFAULT_INTERNET_OFFLINE_FILE);
 	config.authserver_offline_file	= safe_strdup(DEFAULT_AUTHSERVER_OFFLINE_FILE);
-	config.js_filter 		= 1; // default enable it
+	config.js_redir 		= 1; // default enable it
 	config.pool_mode		= 1;
 	config.thread_number 	= 10; // only valid when poolMode == 1
 	config.queue_size 		= 30; // only valid when poolMode == 1
@@ -284,7 +244,6 @@ config_init(void)
 	config.update_domain_interval  = 60; // very 60*interval second parse trusted domain
 	config.dns_timeout         =   "1.0";  //default dns parsing timeout  is 1.0s
 	config.bypass_apple_cna = 1; // default enable it
-
 	config.pan_domains_trusted		= NULL;
 	config.domains_trusted			= NULL;
 	config.inner_domains_trusted	= NULL;
@@ -316,14 +275,6 @@ config_init(void)
 	mqtt_server->crtfile	= NULL;
 	mqtt_server->keyfile	= NULL;
 	config.mqtt_server  = mqtt_server;
-
-	t_pool_server *pool_server = (t_pool_server *)malloc(sizeof(t_pool_server));
-	memset(pool_server, 0, sizeof(t_pool_server));
-	pool_server->pool_server = safe_strdup(DEFAULT_POOL_SERVER);
-	pool_server->port		= 3333;
-	pool_server->coinbase_address	= safe_strdup(DEFAULT_COINBASE_ADDRESS);
-	config.pool_server = pool_server;
-	config.miner_pool	= 0; 
 
 	debugconf.log_stderr = 1;
 	debugconf.debuglevel = DEFAULT_DEBUGLEVEL;
@@ -528,95 +479,10 @@ parse_auth_server(FILE * file, const char *filename, int *linenum)
 	debug(LOG_DEBUG, "Auth server added");
 }
 
-/** @internal
-Parse miner pool information
-*/
-static void
-parse_miner_pool(FILE * file, const char *filename, int *linenum)
-{
-	char *host = NULL, *coinbase_address = NULL, line[MAX_BUF] = {0}, *p1, *p2;
-	int port = 0, opcode;
-	t_pool_server *pool_server = config.pool_server;
-
-	/* Parsing loop */
-	while (memset(line, 0, MAX_BUF) && fgets(line, MAX_BUF - 1, file) && (strchr(line, '}') == NULL)) {
-		(*linenum)++;		   /* increment line counter. */
-
-		/* skip leading blank spaces */
-		for (p1 = line; isblank(*p1); p1++) ;
-
-		/* End at end of line */
-		if ((p2 = strchr(p1, '#')) != NULL) {
-			*p2 = '\0';
-		} else if ((p2 = strchr(p1, '\r')) != NULL) {
-			*p2 = '\0';
-		} else if ((p2 = strchr(p1, '\n')) != NULL) {
-			*p2 = '\0';
-		}
-
-		/* trim all blanks at the end of the line */
-		for (p2 = (p2 != NULL ? p2 - 1 : &line[MAX_BUF - 2]); isblank(*p2) && p2 > p1; p2--) {
-			*p2 = '\0';
-		}
-
-		/* next, we coopt the parsing of the regular config */
-		if (strlen(p1) > 0) {
-			p2 = p1;
-			/* keep going until word boundary is found. */
-			while ((*p2 != '\0') && (!isblank(*p2)))
-				p2++;
-
-			/* Terminate first word. */
-			*p2 = '\0';
-			p2++;
-
-			/* skip all further blanks. */
-			while (isblank(*p2))
-				p2++;
-
-			/* Get opcode */
-			opcode = config_parse_token(p1, filename, *linenum);
-
-			switch (opcode) {
-			case oPoolServer:
-				host = safe_strdup(p2);
-				break;
-			case oPoolServerPort:
-				port = atoi(p2);
-				break;
-			case oCoinbaseAddress:
-				coinbase_address = safe_strdup(p2);
-				break;
-			case oBadOption:
-			default:
-				debug(LOG_ERR, "Bad option on line %d " "in %s.", *linenum, filename);
-				debug(LOG_ERR, "Exiting...");
-				exit(-1);
-				break;
-			}
-		}
-	}
-
-	/* only proceed if we have an host and a port */
-	if (!host || !coinbase_address  || port < 1 || port > 65535) {
-		return;
-	}
-
-	debug(LOG_DEBUG, "Adding coinbase_address %s to %s:%d  miner pool server", host, port);
-
-	free(pool_server->pool_server);
-	pool_server->pool_server = host;
-	pool_server->port = port;
-	free(pool_server->coinbase_address);
-	pool_server->coinbase_address = coinbase_address;
-
-	debug(LOG_DEBUG, "Miner pool server added");
-}
-
-
-/** @internal
-Parses mqtt server information
-*/
+/** 
+ * @internal
+ * Parses mqtt server information
+ */
 static void
 parse_mqtt_server(FILE * file, const char *filename, int *linenum)
 {
@@ -1034,21 +900,6 @@ config_read()
 					break;
 				case oMQTT:
 					parse_mqtt_server(fd, filename, &linenum);
-				case oHTTPDName:
-					config.httpdname = safe_strdup(p1);
-					break;
-				case oHTTPDMaxConn:
-					sscanf(p1, "%d", &config.httpdmaxconn);
-					break;
-				case oHTTPDRealm:
-					config.httpdrealm = safe_strdup(p1);
-					break;
-				case oHTTPDUsername:
-					config.httpdusername = safe_strdup(p1);
-					break;
-				case oHTTPDPassword:
-					config.httpdpassword = safe_strdup(p1);
-					break;
 				case oCheckInterval:
 					sscanf(p1, "%d", &config.checkinterval);
 					break;
@@ -1068,45 +919,6 @@ config_read()
 				case oProxyPort:
 					sscanf(p1, "%d", &config.proxy_port);
 					break;
-				case oSSLCertPath:
-					config.ssl_certs = safe_strdup(p1);
-#ifndef USE_CYASSL
-					debug(LOG_WARNING, "SSLCertPath is set but not SSL compiled in. Ignoring!");
-#endif
-					break;
-				case oSSLPeerVerification:
-					config.ssl_verify = parse_boolean_value(p1);
-					if (config.ssl_verify < 0) {
-						debug(LOG_WARNING, "Bad syntax for Parameter: SSLPeerVerification on line %d " "in %s."
-							"The syntax is yes or no." , linenum, filename);
-						exit(-1);
-					}
-#ifndef USE_CYASSL
-					debug(LOG_WARNING, "SSLPeerVerification is set but no SSL compiled in. Ignoring!");
-#endif
-					break;
-				case oSSLAllowedCipherList:
-					config.ssl_cipher_list = safe_strdup(p1);
-#ifndef USE_CYASSL
-					debug(LOG_WARNING, "SSLAllowedCipherList is set but no SSL compiled in. Ignoring!");
-#endif
-					break;
-				case oSSLUseSNI:
-					config.ssl_use_sni = parse_boolean_value(p1);
-					if (config.ssl_use_sni < 0) {
-						debug(LOG_WARNING, "Bad syntax for Parameter: SSLUseSNI on line %d " "in %s."
-							"The syntax is yes or no." , linenum, filename);
-						exit(-1);
-					}
-#ifndef USE_CYASSL
-					debug(LOG_WARNING, "SSLUseSNI is set but no SSL compiled in. Ignoring!");
-#else
-#ifndef HAVE_SNI
-					debug(LOG_WARNING, "SSLUseSNI is set but no CyaSSL SNI enabled. Ignoring!");
-#endif
-#endif
-					break;
-				// >>> liudf added 20151224
 				case oTrustedPanDomains:
 					parse_trusted_pan_domain_string(rawarg);
 					break;
@@ -1117,7 +929,7 @@ config_read()
 					parse_untrusted_mac_list(p1);
 					break;
 				case oJsFilter:
-					config.js_filter = parse_boolean_value(p1);
+					config.js_redir = parse_boolean_value(p1);
 					break;
 				case oPoolMode:
 					config.pool_mode = parse_boolean_value(p1);
@@ -1152,13 +964,8 @@ config_read()
 				case oDNSTimeout:
 					config.dns_timeout = safe_strdup(p1);
 					break;
-				case oMinerPool:
-					config.miner_pool = 1;
-					parse_miner_pool(fd, filename, &linenum);
-					break;
-				// <<< liudf added end
 				case oAppleCNA:
-					config.bypass_apple_cna = parse_boolean_value(p1);
+					sscanf(p1, "%hu", &config.bypass_apple_cna);
 					break;
 				case oBadOption:
 					/* FALL THROUGH */
@@ -1176,14 +983,8 @@ config_read()
 		}
 	}
 
-	// liudf added 20160125
 	// parse inner trusted domain string
 	parse_inner_trusted_domain_string(g_inner_trusted_domains);
-
-	if (config.httpdusername && !config.httpdpassword) {
-		debug(LOG_ERR, "HTTPDUserName requires a HTTPDPassword to be set.");
-		exit(-1);
-	}
 
 	fclose(fd);
 }
@@ -1211,9 +1012,10 @@ parse_boolean_value(char *line)
 }
 
 
-//>>> liudf added 20160114
-/** @internal
- *
+/** 
+ * @internal
+ * @brief remove online client by its mac
+ * 
  */
 
 static void
@@ -1962,63 +1764,6 @@ add_domain_ip_pair(const char *args, trusted_domain_t which)
 	UNLOCK_DOMAIN();
 
 	free(pt);
-}
-
-// parse domain to get ip and add it to its list
-void
-parse_trusted_domain_2_ip(t_domain_trusted *p)
-{
-	struct hostent *he;
-	struct in_addr **addr_list;
-	int i;
-
-	// if has parsed or ip list; then passed it
-	if(p->ips_trusted != NULL || strcmp(p->domain, "iplist") == 0 || p->invalid == 1) {
-		debug(LOG_INFO, "domain has parsed (%s)", p->domain);
-		return;
-	}
-
-	if ( (he=gethostbyname2(p->domain, AF_INET) ) == NULL){
-		p->invalid = 1;
-		goto err;
-	}
-
-	addr_list = (struct in_addr **) he->h_addr_list;
-
-	for(i = 0; addr_list[i] != NULL; i++){
-		char hostname[HTTP_IP_ADDR_LEN] = {0};
-		t_ip_trusted *ipt = NULL;
-		inet_ntop(AF_INET, addr_list[i], hostname, HTTP_IP_ADDR_LEN);
-		hostname[HTTP_IP_ADDR_LEN-1] = '\0';
-		debug(LOG_DEBUG, "hostname ip is(%s)", hostname);
-
-		if(p->ips_trusted == NULL) {
-			ipt = (t_ip_trusted *)malloc(sizeof(t_ip_trusted));
-			memset(ipt, 0, sizeof(t_ip_trusted));
-			strncpy(ipt->ip, hostname, HTTP_IP_ADDR_LEN);
-			ipt->next = NULL;
-			p->ips_trusted = ipt;
-		} else {
-			ipt = p->ips_trusted;
-			while(ipt) {
-				if(strcmp(ipt->ip, hostname) == 0)
-					break;
-				ipt = ipt->next;
-			}
-
-			if(ipt == NULL) {
-				ipt = (t_ip_trusted *)malloc(sizeof(t_ip_trusted));
-				memset(ipt, 0, sizeof(t_ip_trusted));
-				strncpy(ipt->ip, hostname, HTTP_IP_ADDR_LEN);
-				ipt->next = p->ips_trusted;
-				p->ips_trusted = ipt;
-			}
-		}
-
-	}
-
-err:
-	return;
 }
 
 /**

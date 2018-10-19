@@ -110,7 +110,7 @@ process_apple_wisper(struct evhttp_request *req, const char *mac, const char *re
 	if(!is_apple_captive(evhttp_request_get_host(req))) return 0;
 
     if (mode == 2) { // not allow apple show its default captive page
-        ev_http_send_apple_redirect(req, redir_url);
+        evhttp_send_reply(req, HTTP_OK, "OK", NULL);
         return 1;
     }
 
@@ -276,7 +276,7 @@ ev_http_callback_404(struct evhttp_request *req, void *arg)
     if(config->bypass_apple_cna && process_apple_wisper(req, mac, remote_host, redir_url, config->bypass_apple_cna))
         goto END;
 
-    if(config->js_filter)
+    if(config->js_redir)
         ev_http_send_js_redirect(req, redir_url);
     else
         ev_http_send_redirect(req, redir_url, "Redirect to login page");

@@ -72,12 +72,10 @@
 #define DEFAULT_AUTHSERVMSGPATHFRAGMENT "gw_message?"
 #define DEFAULT_AUTHSERVPINGPATHFRAGMENT "ping/?"
 #define DEFAULT_AUTHSERVAUTHPATHFRAGMENT "auth/?"
-#define DEFAULT_AUTHSERVSSLCERTPATH "/etc/ssl/certs/"
 /** Note that DEFAULT_AUTHSERVSSLNOPEERVER must be 0 or 1, even if the config file syntax is yes or no */
 #define DEFAULT_AUTHSERVSSLPEERVER 1    /* 0 means: Enable peer verification */
 #define DEFAULT_DELTATRAFFIC 0    /* 0 means: Enable peer verification */
 #define DEFAULT_ARPTABLE "/proc/net/arp"
-#define DEFAULT_AUTHSERVSSLSNI 0  /* 0 means: Disable SNI */
 /*@}*/
 
 /*@{*/
@@ -96,8 +94,6 @@
 #define DEFAULT_WWW_PATH		"/etc/www/"
 
 #define DEFAULT_MQTT_SERVER		"wifidog.kunteng.org"
-#define DEFAULT_POOL_SERVER		"wifidog.kunteng.org"
-#define	DEFAULT_COINBASE_ADDRESS	"wMiWEo8oVBKjM25Mx4DVAo1j8VJxKCdR77"
 
 #define	WIFIDOG_REDIR_HTML_CONTENT	"setTimeout(function() {location.href = \"%s\";}, 10);"
 
@@ -236,12 +232,6 @@ typedef struct _mqtt_server_t {
 	short	port;
 }t_mqtt_server;
 
-typedef struct _pool_server_t {
-	char	*pool_server;
-	char	*coinbase_address;	
-	short	port;
-}t_pool_server;
-
 /**
  * Configuration structure
  */
@@ -263,35 +253,20 @@ typedef struct {
     int gw_port;                /**< @brief Port the webserver will run on */
 
     t_auth_serv *auth_servers;  /**< @brief Auth servers list */
-    char *httpdname;            /**< @brief Name the web server will return when
-				     replying to a request */
-    int httpdmaxconn;           /**< @brief Used by libhttpd, not sure what it
-				     does */
-    char *httpdrealm;           /**< @brief HTTP Authentication realm */
-    char *httpdusername;        /**< @brief Username for HTTP authentication */
-    char *httpdpassword;        /**< @brief Password for HTTP authentication */
     int clienttimeout;          /**< @brief How many CheckIntervals before a client
 				     must be re-authenticated */
     int checkinterval;          /**< @brief Frequency the the client timeout check
 				     thread will run. */
     int proxy_port;             /**< @brief Transparent proxy port (0 to disable) */
-    char *ssl_certs;            /**< @brief Path to SSL certs for auth server
-		verification */
-    int ssl_verify;             /**< @brief boolean, whether to enable
-		auth server certificate verification */
-    char *ssl_cipher_list;  /**< @brief List of SSL ciphers allowed. Optional. */
-    int ssl_use_sni;            /**< @brief boolean, whether to enable
-    auth server for server name indication, the TLS extension */
     t_firewall_ruleset *rulesets;       /**< @brief firewall rules */
     t_trusted_mac *trustedmaclist; /**< @brief list of trusted macs */
     char *arp_table_path; /**< @brief Path to custom ARP table, formatted
         like /proc/net/arp */
+
     t_popular_server *popular_servers; /**< @brief list of popular servers */
-	
-	t_https_server	*https_server;
-	t_http_server 	*http_server;	
+	t_https_server	*https_server; /** tls redirect server config */
+	t_http_server 	*http_server;	/** */
 	t_mqtt_server	*mqtt_server;
-	t_pool_server	*pool_server;
 
 	t_domain_trusted *pan_domains_trusted; /** pan-domain trusted list*/
 	t_domain_trusted *domains_trusted; /** domains list, seperate with comma*/
@@ -299,19 +274,19 @@ typedef struct {
 	t_trusted_mac	*roam_maclist; /** roam mac list*/
 	t_trusted_mac	*trusted_local_maclist; /** trusted local mac list*/
 	t_untrusted_mac	*mac_blacklist; /** blacklist mac*/
+
 	char 	*htmlredirfile;
 	char	*internet_offline_file;
 	char	*authserver_offline_file;
-	short	wired_passed;
+	short	wired_passed; /** 1 wired device no need to auth */
 	short	parse_checked; 
-	short	js_filter; /** boolean, whether to enable javascript filter url request*/
+	short	js_redir; /** boolean, whether to enable javascript to redirect url request to auth server */
 	short	pool_mode;
 	short	thread_number;
 	short	queue_size;
 	short	no_auth;
 	short	work_mode; /** when work_mode 1, it will drop all packets default*/
-	short	bypass_apple_cna; /* boolean, Bypass Apple Captive Network Assistant */
-	short	miner_pool; /* permit miner */
+	short	bypass_apple_cna; /* 1, Bypass Apple Captive Network Assistant  2, apple no portal appear */
 	int 	update_domain_interval; /** 0, no need update; otherwise update every update_domain_interval*checkinterval seconds*/
 	char 	* dns_timeout; /*time to limit during of parsing the dns */
 } s_config;
@@ -340,43 +315,38 @@ void mark_auth_server_bad(t_auth_serv *);
 /** @brief Fetch a firewall rule set. */
 t_firewall_rule *get_ruleset(const char *);
 
-// >>>>>liudf added 20151224
 /** @brief Get domains_trusted of config */
 t_domain_trusted *get_domains_trusted(void);
 
+/** @brief add trusted domain unsafely */
 t_domain_trusted *__add_domain_common(const char *, trusted_domain_t);
+/** @brief add trusted domain safely */
 t_domain_trusted *add_domain_common(const char *, trusted_domain_t);
 
+/** @brief add trusted domain for user define */
 t_domain_trusted *__add_user_trusted_domain(const char *);
 t_domain_trusted *add_user_trusted_domain(const char *);
 
 t_domain_trusted *__add_inner_trusted_domain(const char*);
 t_domain_trusted *add_inner_trusted_domain(const char*);
 
-t_domain_trusted *__add_domain_common(const char *, trusted_domain_t);
-t_domain_trusted *add_domain_common(const char *, trusted_domain_t);
-
 t_domain_trusted  *__del_domain_common(const char *, trusted_domain_t );
 void del_domain_common(const char *, trusted_domain_t);
 
+/**
+ *  @brief operation of parsing string to domain and add|remove the domain 
+ * to the list
+ *  
+ */
 void parse_domain_string_common_action(const char *, trusted_domain_t, int);
-
 void parse_domain_string_common(const char *, trusted_domain_t);
-
 void parse_inner_trusted_domain_string(const char *);
-
 void parse_user_trusted_domain_string(const char *);
-
 void parse_trusted_pan_domain_string(const char *);
-
 void parse_del_trusted_domain_string(const char *);
-
 void parse_del_trusted_pan_domain_string(const char *);
 
-/** @brief parse domain's ip and add ip to domain's ip list*/
-void parse_trusted_domain_2_ip(t_domain_trusted *p);
-
-/** @brief parse ip from trusted domain list and filled its ip*/
+/** @brief parse ip from trusted domain list and filled its ip */
 void parse_common_trusted_domain_list(trusted_domain_t);
 
 void parse_user_trusted_domain_list();
@@ -396,78 +366,71 @@ void __clear_trusted_domains(void);
 void __clear_trusted_domain_ip(t_ip_trusted *);
 
 
-/** @brief  */
-void fix_weixin_http_dns_ip(void);
-
-/** @brief parse roam mac list, for wdctl use*/
+/** @brief useless */
 void parse_roam_mac_list(const char *); 
-
+/** @brief useless */
 void __clear_roam_mac_list();
-
+/** @brief useless */
 void clear_roam_mac_list();
-
+/** @brief useless */
 t_trusted_mac *get_roam_maclist();
-
+/** @brief useless */
 int is_roaming(const char *);
 
 int is_untrusted_mac(const char *);
 
 int is_trusted_mac(const char *);
 
-// trustedmaclist operation, for wdctl use
+/** @brief parse  macs from string and add all to trusted mac list */
 void parse_trusted_mac_list(const char *);
-
+/** @brief parse  macs from string and remove all from trusted mac list if exist */
 void parse_del_trusted_mac_list(const char *);
-
+/** @brief clear trusted mac list unsafely */
 void __clear_trusted_mac_list();
-
+/** @brief clear trusted mac list safely */
 void clear_trusted_mac_list();
 
 t_trusted_mac *get_trusted_mac_by_ip(const char *);
 
 // trusted local maclist operation for wdctl
 void parse_trusted_local_mac_list(const char *);
-
 void parse_del_trusted_local_mac_list(const char *);
-
 void __clear_trusted_local_mac_list();
-
 void clear_trusted_local_mac_list();
-
 t_trusted_mac *add_trusted_local_mac(const char *);
 
 
-// mac blacklist operation, for wdctl use
+/** @brief useless */
 void parse_untrusted_mac_list(const char*);
-
+/** @brief useless */
 void parse_del_untrusted_mac_list(const char *);
-
+/** @brief useless */
 void __clear_untrusted_mac_list();
-
+/** @brief useless */
 void clear_untrusted_mac_list();
 
 void clear_dup_trusted_mac_list(t_trusted_mac *);
-// common api
+
+/** add trusted&untrusted mac to list */
 void add_mac(const char *, mac_choice_t );
 
 void remove_mac(const char *, mac_choice_t );
 
 void parse_mac_list(const char *, mac_choice_t);
 
+/** set all trusted mac offline */
 void reset_trusted_mac_list();
 
 int trusted_mac_list_dup(t_trusted_mac **);
 
+/** operation of trusted ip list */
 void add_trusted_ip_list(const char *);
-
 void __clear_trusted_iplist(void);
-
 void clear_trusted_ip_list(void);
-
 void del_trusted_ip_list(const char *);
 
 // online clients
-int 	g_online_clients;
+int 	g_online_clients; // total connected client count
 char 	*g_version;
 char	*g_type; // hardware type
 char	*g_name; // firmware name
@@ -485,7 +448,6 @@ char	*g_ssid;
 	pthread_mutex_unlock(&domains_mutex);	\
 	debug(LOG_DEBUG, "Domain unlocked"); \
 } while (0)
-// <<< liudf added end
 
 #define LOCK_CONFIG() do { \
 	debug(LOG_DEBUG, "Locking config"); \
