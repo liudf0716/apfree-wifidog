@@ -25,7 +25,7 @@ set(src_apfreewifidog
 )
 
 
-set(src_wdctl wdctl.c util.c debug.c)
+set(src_wdctlx wdctl.c util.c debug.c)
 
 set(libs 
 	pthread 
@@ -48,7 +48,7 @@ set(fw3_libs
 
 ADD_DEFINITIONS(-O2 -Wall --std=gnu99 -Wmissing-declarations)
 
-add_executable(wdctlx ${src_wdctl})
+add_executable(wdctlx ${src_wdctlx})
 add_executable(wifidogx ${src_apfreewifidog})
 target_link_libraries(wifidogx ${libs} ${fw3_libs} ${CURL_LIBRARIES})
 

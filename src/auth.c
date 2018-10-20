@@ -83,15 +83,14 @@ ev_logout_client(struct wd_request_context *context, t_client *client)
     
     fw_deny(client);
 
-    UNLOCK_CLIENT_LIST();
-    client_list_remove(client);
     LOCK_CLIENT_LIST();
+    client_list_remove(client);
+    UNLOCK_CLIENT_LIST();
 
     char *uri = get_auth_uri(REQUEST_TYPE_LOGOUT, ONLINE_CLIENT, client);
-    if (!uri) return;
-
     client_free_node(client);
-
+    if (!uri) return;
+    
     struct evhttp_connection *evcon = NULL;
     struct evhttp_request *req      = NULL; 
     wd_make_request(context, &evcon, &req, process_auth_server_logout);

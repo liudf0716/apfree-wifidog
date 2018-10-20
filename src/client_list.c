@@ -195,7 +195,8 @@ offline_client_list_add(const char *ip, const char *mac)
 	return curclient;
 }
 
-/** Duplicate the whole client list to process in a thread safe way
+/** 
+ * @brief Duplicate the whole client list to process in a thread safe way
  * MUTEX MUST BE HELD.
  * @param dest pointer TO A POINTER to a t_client (i.e.: t_client **ptr)
  * @return int Number of clients copied

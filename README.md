@@ -74,18 +74,16 @@ config wifidog
     option  auth_server_port    8001
     option  auth_server_path    '/wifidog/'
     option  check_interval      60
-    option  client_timeout      72000
-    option  httpd_max_conn      200
-    option  pool_mode           1
+    option  client_timeout      5
+    option  apple_cna           1
     option  thread_number       5
-    option  queue_size          20
     option  wired_passed        0
     option  enable      0
 ```
 
 > auth_server_hostname was apfree-wifidog auth server, it can be domain or ip; wifidog.kunteng.org.cn is a free auth server we provided, it was also open source 
 
-> pool_mode means whether to support thread pool, default supporting it cause this mode is more efficient according to our testing, u can tune thread_number and queue_size to adapt your environment, but we suggest using default value
+> apple_cna 1 apple captive detect deceive; 2 apple captive detect deceive to  disallow portal page appear
 
 > wired_passed means whether LAN access devices need to auth or not, value 1 means no need to auth 
 

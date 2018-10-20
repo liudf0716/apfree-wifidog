@@ -36,6 +36,7 @@
  * Holds an argv that could be passed to exec*() if we restart ourselves
  */
 char ** restartargv = NULL;
+char *progname = NULL;
 
 /**
  * A flag to denote whether we were restarted via a parent wifidog, or started normally
@@ -53,14 +54,14 @@ static void usage(void);
 static void
 usage(void)
 {
-    fprintf(stdout, "Usage: wifidog [options]\n");
+    fprintf(stdout, "Usage: %s [options]\n", progname);
     fprintf(stdout, "\n");
     fprintf(stdout, "options:\n");
     fprintf(stdout, "  -c [filename] Use this config file\n");
     fprintf(stdout, "  -f            Run in foreground\n");
     fprintf(stdout, "  -d <level>    Debug level\n");
     fprintf(stdout, "  -s            Log to syslog\n");
-    fprintf(stdout, "  -w <path>     Wdctl socket path\n");
+    fprintf(stdout, "  -w <path>     Wdctlx socket path\n");
     fprintf(stdout, "  -h            Print usage\n");
     fprintf(stdout, "  -v            Print version information\n");
     fprintf(stdout,
@@ -79,14 +80,15 @@ parse_commandline(int argc, char **argv)
 {
     int c;
     int skiponrestart;
-    int i;
+    int i = 0;
 
     s_config *config = config_get_config();
 
     //MAGIC 3: Our own -x, the pid, and NULL :
     restartargv = safe_malloc((size_t) (argc + 3) * sizeof(char *));
-    i = 0;
     restartargv[i++] = safe_strdup(argv[0]);
+    progname = restartargv[0];
+
 
     while (-1 != (c = getopt(argc, argv, "c:hfd:sw:vx:i:a:"))) {
 

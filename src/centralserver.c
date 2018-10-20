@@ -221,13 +221,12 @@ get_auth_uri(const char *request_type, client_type_t type, void *data)
 static int
 parse_auth_server_response(t_authresponse *authresponse, struct evhttp_request *req) 
 {
-    char buffer[MAX_BUF] = {0};
-
     if (!req) {
         mark_auth_offline();
         return 0;
     }
 	
+    char buffer[MAX_BUF] = {0};
 	char *tmp = NULL;
     if (evbuffer_remove(evhttp_request_get_input_buffer(req), buffer, MAX_BUF-1) > 0 && 
         (tmp = strstr(buffer, "Auth: "))) {

@@ -95,14 +95,14 @@ static struct wdctl_command {
     {"reparse_trusted_domains", wdctl_reparse_trusted_domains, NULL},
     {"clear_trusted_domains", wdctl_clear_trusted_domains, NULL},
     {"show_trusted_domains", wdctl_show_trusted_domains, NULL},
-    {"show_roam_maclist", wdctl_show_roam_maclist, NULL},
-    {"clear_roam_maclist", wdctl_clear_roam_maclist, NULL},
-    {"show_trusted_maclist", wdctl_show_trusted_maclist, NULL},
-    {"clear_trusted_maclist", wdctl_clear_trusted_maclist, NULL},
-    {"show_trusted_local_maclist", wdctl_show_trusted_local_maclist, NULL},
-    {"clear_trusted_local_maclist", wdctl_clear_trusted_local_maclist, NULL},
-    {"show_untrusted_maclist", wdctl_show_untrusted_maclist, NULL},
-    {"clear_untrusted_maclist", wdctl_clear_untrusted_maclist, NULL},
+    {"show_roam_mac", wdctl_show_roam_maclist, NULL},
+    {"clear_roam_mac", wdctl_clear_roam_maclist, NULL},
+    {"show_trusted_mac", wdctl_show_trusted_maclist, NULL},
+    {"clear_trusted_mac", wdctl_clear_trusted_maclist, NULL},
+    {"show_trusted_local_mac", wdctl_show_trusted_local_maclist, NULL},
+    {"clear_trusted_local_mac", wdctl_clear_trusted_local_maclist, NULL},
+    {"show_untrusted_mac", wdctl_show_untrusted_maclist, NULL},
+    {"clear_untrusted_mac", wdctl_clear_untrusted_maclist, NULL},
     {"user_cfg_save", wdctl_user_cfg_save, NULL},
     // has parameter
     {"reset", NULL, wdctl_reset},
@@ -165,12 +165,16 @@ wdctl_client_read_cb(struct bufferevent *bev, void *ctx)
 {
     struct evbuffer *input = bufferevent_get_input(bev);
     size_t nbytes =  evbuffer_get_length(input);
-    
-    if (nbytes > 0) {
-        const char *buf = (char *)evbuffer_pullup(input, nbytes);
-        if (buf)
-            wdctl_cmd_process(bev, buf);
+    if (!nbytes) return;
+
+    char *buf = malloc(nbytes+1);
+    if (!buf) return;
+    memset(buf, 0, nbytes+1);
+
+    if (evbuffer_remove(input, buf, nbytes) > 0) {
+        wdctl_cmd_process(bev, buf);
     }
+    free(buf);
 }
 
 static void
@@ -255,9 +259,9 @@ wdctl_reset(struct bufferevent *fd, const char *arg)
     /* We get the node or return... */
     if ((node = client_list_find_by_ip(arg)) != NULL) ;
     else if ((node = client_list_find_by_mac(arg)) != NULL) ;
-    else {
-        debug(LOG_DEBUG, "Client not found.");
+    else { 
         UNLOCK_CLIENT_LIST();
+        debug(LOG_DEBUG, "Client not found.");
         bufferevent_write(fd, "No", 2);   /* Error handling in fucntion sufficient. */
         return;
     }
@@ -279,7 +283,8 @@ static void
 wdctl_add_trusted_pan_domains(struct bufferevent *fd, const char *arg)
 {
     add_trusted_pdomains(arg);
-    bufferevent_write(fd, "Yes", 3);
+    char *post_cmd = "CMD[/etc/init.d/dnsmasq restart]";
+    bufferevent_write(fd, post_cmd, strlen(post_cmd));
 }
 
 void 
@@ -295,7 +300,8 @@ static void
 wdctl_del_trusted_pan_domains(struct bufferevent *fd, const char *arg)
 {
     del_trusted_pdomains(arg);
-    bufferevent_write(fd, "Yes", 3);
+    char *post_cmd = "CMD[/etc/init.d/dnsmasq restart]";
+    bufferevent_write(fd, post_cmd, strlen(post_cmd));
 }
 
 void 
@@ -309,7 +315,8 @@ static void
 wdctl_clear_trusted_pan_domains(struct bufferevent *fd)
 {
 	clear_trusted_pdomains();
-    bufferevent_write(fd, "Yes", 3);
+    char *post_cmd = "CMD[/etc/init.d/dnsmasq restart]";
+    bufferevent_write(fd, post_cmd, strlen(post_cmd));
 }
 
 char *
@@ -520,7 +527,6 @@ wdctl_add_trusted_maclist(struct bufferevent *fd, const char *args)
 {
 	add_trusted_maclist(args);
     bufferevent_write(fd, "Yes", 3);
-
 }
 
 char *
@@ -677,6 +683,11 @@ wdctl_clear_untrusted_maclist(struct bufferevent *fd)
     bufferevent_write(fd, "Yes", 3);
 }
 
+/**
+ * @brief save apfree wifidog' rule to /etc/config/wifidogx by uci 
+ * this feature depends on openwrt system
+ * 
+ */ 
 void
 user_cfg_save(void)
 {   
@@ -690,39 +701,39 @@ user_cfg_save(void)
     const char *trusted_pan_domains 	= get_serialize_trusted_pan_domains();
 
     if(trusted_pan_domains) {
-        uci_set_value("wifidog", "wifidog", "trusted_pan_domains", trusted_pan_domains);
+        uci_set_value("wifidogx", "wifidog", "trusted_pan_domains", trusted_pan_domains);
     } else {
-        uci_del_value("wifidog", "wifidog", "trusted_pan_domains");
+        uci_del_value("wifidogx", "wifidog", "trusted_pan_domains");
     }
     
     if(trusted_domains) {
-        uci_set_value("wifidog", "wifidog", "trusted_domains", trusted_domains);
+        uci_set_value("wifidogx", "wifidog", "trusted_domains", trusted_domains);
     } else {
-        uci_del_value("wifidog", "wifidog", "trusted_domains");
+        uci_del_value("wifidogx", "wifidog", "trusted_domains");
     }
     
     if(trusted_iplist) {
-        uci_set_value("wifidog", "wifidog", "trusted_iplist", trusted_iplist);
+        uci_set_value("wifidogx", "wifidog", "trusted_iplist", trusted_iplist);
     } else {
-        uci_del_value("wifidog", "wifidog", "trusted_iplist");
+        uci_del_value("wifidogx", "wifidog", "trusted_iplist");
     }
     
     if(trusted_maclist) {
-        uci_set_value("wifidog", "wifidog", "trusted_maclist", trusted_maclist);
+        uci_set_value("wifidogx", "wifidog", "trusted_maclist", trusted_maclist);
     } else {
-        uci_del_value("wifidog", "wifidog", "trusted_maclist");
+        uci_del_value("wifidogx", "wifidog", "trusted_maclist");
     }
     
 	if(trusted_local_maclist) {
-        uci_set_value("wifidog", "wifidog", "trusted_local_maclist", trusted_local_maclist);
+        uci_set_value("wifidogx", "wifidog", "trusted_local_maclist", trusted_local_maclist);
     } else {
-        uci_del_value("wifidog", "wifidog", "trusted_local_maclist");
+        uci_del_value("wifidogx", "wifidog", "trusted_local_maclist");
     }
 	
     if(untrusted_maclist) {
-        uci_set_value("wifidog", "wifidog", "untrusted_maclist", untrusted_maclist);
+        uci_set_value("wifidogx", "wifidog", "untrusted_maclist", untrusted_maclist);
     } else {
-        uci_del_value("wifidog", "wifidog", "untrusted_maclist");
+        uci_del_value("wifidogx", "wifidog", "untrusted_maclist");
     }
 }
 

@@ -1005,7 +1005,6 @@ void evdns_add_trusted_domain_ip_cb(int errcode, struct evutil_addrinfo *addr, v
 {
 	struct evdns_cb_param *param = ptr;
 	t_domain_trusted *p = param->data;
-	struct event_base *base = param->base;
 	free(param);
 	
     if (errcode) {

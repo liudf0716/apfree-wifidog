@@ -35,6 +35,7 @@
 #define WDCTL_MSG_LENG  1024*8
 
 static char *sk_name = NULL;
+char *progname = NULL;
 
 static void usage(void);
 static void parse_commandline(int, char **);
@@ -46,45 +47,36 @@ static int connect_to_server(const char *);
 
 
 static struct wdctl_client_command {
-    const char *command;
-    int cmd_type;
+    const char *command; // command name
+    const char *cmd_args; // comand args demo
+    const char *cmd_description; // help
 } wdctl_clt_cmd [] = {
-    {"status", WDCTL_STATUS},
-    {"stop", WDCTL_STOP},
-    {"clear_trusted_pdomains", WDCTL_CLEAR_TRUSTED_PAN_DOMAINS},
-    {"show_trusted_pdomains", WDCTL_SHOW_TRUSTED_PAN_DOMAINS},
-    {"clear_trusted_iplist", WDCTL_CLEAR_TRUSTED_IPLIST},
-    {"reparse_trusted_domains", WDCTL_REPARSE_TRUSTED_DOMAINS},
-    {"clear_trusted_domains", WDCTL_CLEAR_TRUSTED_DOMAINS},
-    {"show_trusted_domains", WDCTL_SHOW_TRUSTED_DOMAINS},
-    {"show_roam_maclist", WDCTL_SHOW_ROAM_MACLIST},
-    {"clear_roam_maclist", WDCTL_CLEAR_ROAM_MACLIST},
-    {"show_trusted_maclist", WDCTL_SHOW_TRUSTED_MACLIST},
-    {"clear_trusted_maclist", WDCTL_CLEAR_TRUSTED_MACLIST},
-    {"show_trusted_local_maclist", WDCTL_SHOW_TRUSTED_LOCAL_MACLIST},
-    {"clear_trusted_local_maclist", WDCTL_CLEAR_TRUSTED_LOCAL_MACLIST},
-    {"show_untrusted_maclist", WDCTL_SHOW_UNTRUSTED_MACLIST},
-    {"clear_untrusted_maclist", WDCTL_CLEAR_UNTRUSTED_MACLIST},
-    {"user_cfg_save", WDCTL_USER_CFG_SAVE},
-    {"reset", WDCTL_KILL},
-    {"add_trusted_pdomains", WDCTL_ADD_TRUSTED_PAN_DOMAINS},
-    {"del_trusted_pdomains", WDCTL_DEL_TRUSTED_PAN_DOMAINS},
-    {"add_trusted_domains", WDCTL_ADD_TRUSTED_DOMAINS},
-    {"del_trusted_domains", WDCTL_DEL_TRUSTED_DOMAINS},
-    {"add_trusted_iplist", WDCTL_ADD_TRUSTED_IPLIST},
-    {"del_trusted_iplist", WDCTL_DEL_TRUSTED_IPLIST},
-    {"add_domain_ip", WDCTL_ADD_DOMAIN_IP},
-    {"add_roam_mac", WDCTL_ADD_ROAM_MACLIST},
-    {"add_trusted_mac", WDCTL_ADD_TRUSTED_MACLIST},
-    {"del_trusted_mac", WDCTL_DEL_TRUSTED_MACLIST},
-    {"add_trusted_local_mac", WDCTL_ADD_TRUSTED_LOCAL_MACLIST},
-    {"del_trusted_local_mac", WDCTL_DEL_TRUSTED_LOCAL_MACLIST},
-    {"add_untrusted_mac", WDCTL_ADD_UNTRUSTED_MACLIST},
-    {"del_untrusted_mac", WDCTL_DEL_UNTRUSTED_MACLIST},
-    {"add_online_client", WDCTL_ADD_ONLINE_CLIENT}
+    {"status", NULL, "get apfree wifidog status"},
+    {"clear_trusted_pdomains", NULL, "clear trusted pan-domain"},
+    {"show_trusted_pdomains", NULL, "show trusted pan-domain"},
+    {"clear_trusted_iplist", NULL, "clear trusted iplist"},
+    {"clear_trusted_domains", NULL, "clear trusted domain and it's ip"},
+    {"show_trusted_domains", NULL, "show trusted domains and its ip"},
+    {"show_trusted_mac", NULL, "show trusted mac list"},
+    {"clear_trusted_mac", NULL, "clear trusted mac list"},
+    {"add_trusted_pdomains", "pan-domain1,pan-domain2...", "add one or more trusted pan-domain like kunteng.org.cn,qq.com..."},
+    {"del_trusted_pdomains", "pan-domain1,pan-domain2...", "del one or more trusted pan-domain list like kunteng.org.cn,qq.com..."},
+    {"add_trusted_domains", "domain1,domain2...", "add trusted domain list like www.kunteng.org.cn,www.qq.com..."},
+    {"del_trusted_domains", "domain1,domain2...", "del trusted domain list like www.kunteng.org.cn,www.qq.com...."},
+    {"add_trusted_iplist", "ip1,ip2...", "add one or more trusted ip list like ip1,ip2..."},
+    {"del_trusted_iplist", "ip1,ip2...", "del one or more trsuted ip list like ip1,ip2..."},
+    {"add_trusted_mac", "mac1,mac2...", "add one or more trusted mac list like mac1,mac2..."},
+    {"del_trusted_mac", "mac1,mac2...", "del one or more trusted mac list like mac1,mac2..."},
+    {"reparse_trusted_domains", NULL, "reparse trusted domain's ip and add new parsed ip"},
+    {"add_online_client", "{\"ip\":\"ipaddress\", \"mac\":\"devMac\", \"name\":\"devName\"}", "add client to connected list "},
+    {"user_cfg_save", NULL, "save all rule to config file"},
+    {"reset", "ip|mac", "logout connected client by its ip or mac"},
+    {"stop", NULL, "stop apfree wifidog"},
+    {"demo", NULL, "give some demonstration of method"},
 };
 
-/** @internal
+/** 
+ * @internal
  * @brief Print usage
  *
  * Prints usage, called when wdctl is run with -h or with an unknown option
@@ -92,43 +84,43 @@ static struct wdctl_client_command {
 static void
 usage(void)
 {
-    fprintf(stdout, "Usage: wdctl [options] command [arguments]\n");
+    fprintf(stdout, "Usage: %s [options] command [arguments]\n", progname);
     fprintf(stdout, "\n");
     fprintf(stdout, "options:\n");
     fprintf(stdout, "  -s <path>         Path to the socket\n");
     fprintf(stdout, "  -h                Print usage\n");
     fprintf(stdout, "\n");
-    fprintf(stdout, "commands:\n");
-    fprintf(stdout, "  reset [mac|ip]    Reset the specified mac or ip connection\n");
-    fprintf(stdout, "  status            Obtain the status of wifidog\n");
-    fprintf(stdout, "  stop              Stop the running wifidog\n");
-    fprintf(stdout, "  add_trusted_pdomains [domain1,domain2...]	Add trusted pan-domains\n");
-    fprintf(stdout, "  del_trusted_pdomains [domain1,domain2...]	Del trusted pan-domains\n");
-    fprintf(stdout, "  clear_trusted_pdomains	Clear all trusted pan-domains\n");
-    fprintf(stdout, "  add_trusted_domains [domain1,domain2...]	Add trusted domains\n");
-    fprintf(stdout, "  del_trusted_domains [domain1,domain2...]		Del trusted domains\n");
-    fprintf(stdout, "  clear_trusted_domains	Clear all trusted domains\n");
-    fprintf(stdout, "  reparse_trusted_domains	Reparse trusted domains ip\n");
-    fprintf(stdout, "  add_trusted_iplist [ip1,ip2...]		Add trusted ip list\n");
-    //fprintf(stdout, "  del_trusted_iplist [ip1,ip2...]		Del trusted ip list\n");
-    fprintf(stdout, "  clear_trusted_iplist		Clear trusted ip list\n");
-    fprintf(stdout, "  show_trusted_domains 	Show all trusted domains and its ip\n");
-    fprintf(stdout, "  add_domain_ip [domain:ip] 	Add domain and its ip\n");
-    fprintf(stdout, "  add_trusted_mac [mac1,mac2...]			Add trusted mac list\n");
-    fprintf(stdout, "  del_trusted_mac [mac1,mac2...]			Del trusted mac list\n");
-    fprintf(stdout, "  clear_trusted_mac		Clear trusted mac list\n");
-    fprintf(stdout, "  show_trusted_mac			Show trusted mac list\n");
-	fprintf(stdout, "  add_trusted_local_mac [mac1,mac2...]			Add trusted local mac list\n");
-    fprintf(stdout, "  del_trusted_local_mac [mac1,mac2...]			Del trusted local mac list\n");
-    fprintf(stdout, "  clear_trusted_local_mac			Clear trusted local mac list\n");
-    fprintf(stdout, "  show_trusted_local_mac			Show trusted local mac list\n");
-    fprintf(stdout, "  add_untrusted_mac [mac1,mac2...]		Add untrusted mac list\n");
-    fprintf(stdout, "  del_untrusted_mac [mac1,mac2...]		Del untrusted mac list\n");
-	fprintf(stdout, "  clear_untrusted_mac		Clear untrusted mac list\n");
-    fprintf(stdout, "  show_untrusted_mac		Show untrusted mac list\n");
-    fprintf(stdout, "  user_cfg_save			User config save\n");
-	fprintf(stdout, "  add_online_client 		Add online client\n");
-    fprintf(stdout, "\n");
+    fprintf(stdout, "commands arg\t description:\n");
+    for (int i = 0; i < ARRAYLEN(wdctl_clt_cmd); i++) {
+        fprintf(stdout, " %s %s\t %s \n", wdctl_clt_cmd[i].command, 
+            wdctl_clt_cmd[i].cmd_args?wdctl_clt_cmd[i].cmd_args:"", 
+            wdctl_clt_cmd[i].cmd_description);
+    }
+}
+
+static void
+list_all_method()
+{
+#define COMMAND_EQUAL(CMD) !strcmp(cmd,CMD)
+    const char *cmd = NULL;
+    for (int i = 0; i < ARRAYLEN(wdctl_clt_cmd); i++) {
+        cmd = wdctl_clt_cmd[i].command;
+        if (COMMAND_EQUAL("list"))
+            continue;
+        else if(COMMAND_EQUAL("add_online_client"))
+            fprintf(stdout, "%s %s {\"ip\":\"192.168.1.211\", \"mac\":\"aa:bb:cc:dd:ee:ff\", \"name\":\"apfree\"}\n", progname, cmd);
+        else if (COMMAND_EQUAL("add_trusted_domains"))
+            fprintf(stdout, "%s %s www.kunteng.org.cn,captive.apple.com,www.baidu.com,www.qq.com,www.alibaba.com,aaa,bbb\n", progname, cmd);
+        else if (COMMAND_EQUAL("add_trusted_pdomains"))
+            fprintf(stdout, "%s %s kunteng.org.cn,apple.com,baidu.com,qq.com,aa,bb\n", progname, cmd);
+        else if (COMMAND_EQUAL("add_trusted_mac"))
+            fprintf(stdout, "%s %s aa:bb:cc:11:22:33,11:22:33:aa:bb:cc:dd,22.22.22:aa:aa:aa\n", progname, cmd);
+        else if (COMMAND_EQUAL("add_trusted_iplist"))
+            fprintf(stdout, "%s %s 192.168.1.2,192.168.1.3,192.168.1.4\n", progname, cmd);
+        else
+            fprintf(stdout, "%s %s \n", progname, cmd);
+    }
+#undef COMMAND_EQUAL
 }
 
 static void
@@ -139,16 +131,24 @@ wdctl_cmd_process(int argc, char **argv, int optind)
     }
 
     for (int i = 0; i < ARRAYLEN(wdctl_clt_cmd); i++) {
+        if (!strcmp(wdctl_clt_cmd[i].command, "demo")) {
+            list_all_method();
+            return;
+        }
+
         if (!strcmp(wdctl_clt_cmd[i].command, *(argv+optind))) {
-            if ((argc - (optind + 1)) > 0) {
+            if ((argc - (optind + 1)) > 0 && wdctl_clt_cmd[i].cmd_args) {
                 wdctl_command_action(wdctl_clt_cmd[i].command, *(argv + optind + 1));
-            } else 
+            } else if ((argc - (optind + 1)) == 0 && !wdctl_clt_cmd[i].cmd_args)
                 wdctl_command_action(wdctl_clt_cmd[i].command, NULL);
+            else
+                goto ERR;
+
             return;
         }
     }
 ERR:
-    fprintf(stderr, "wdctl: Error: Invalid command \"%s\"\n", *(argv + optind));
+    fprintf(stderr, "wdctlx: Error: Invalid command \"%s\"\n", *(argv + optind));
     usage();
     exit(EXIT_FAILURE);
 }
@@ -162,6 +162,8 @@ parse_commandline(int argc, char **argv)
 {
     extern int optind;
     int c;
+
+    progname = argv[0];
 
     while (-1 != (c = getopt(argc, argv, "s:h"))) {
         switch (c) {
@@ -222,6 +224,34 @@ send_request(int sock, const char *request)
     } 
 }
 
+/**
+ * @brief execute command sending from wdctl_thread after process wdctlx's command
+ * usually it execute 'dnsmasq restart', this feature depends openwrt system 
+ *      
+ */ 
+static void
+execute_post_cmd(char *raw_cmd)
+{
+    size_t nlen = strlen(raw_cmd);
+    if (nlen < 3) goto ERR;
+
+    char *cmd = NULL;
+    if (raw_cmd[0] == '[' && raw_cmd[nlen-1] == ']') {
+        raw_cmd[nlen-1] = '\0';
+        cmd = raw_cmd + 1;
+        system(cmd);
+        fprintf(stdout, "execut shell [%s] success", cmd);
+        return;
+    }
+
+ERR:
+    fprintf(stdout, "[%s] is illegal post command", raw_cmd);
+}
+
+/**
+ * @brief read reponse from wdctl_thread
+ * 
+ */ 
 static void
 read_response(int sock)
 {
@@ -232,7 +262,10 @@ read_response(int sock)
 
     if (poll(&fds, 1, WDCTL_TIMEOUT) > 0 && fds.revents == POLLIN) {
         if (read(sock, buf, WDCTL_MSG_LENG) > 0) {
-            fprintf(stdout, "%s\n", buf);
+            if (!strncmp(buf, "CMD", 3)) {
+                execute_post_cmd(buf+3);
+            } else
+                fprintf(stdout, "%s\n", buf);
         }
     } 
     close(sock);
@@ -241,15 +274,17 @@ read_response(int sock)
 static void
 wdctl_command_action(const char *cmd, const char *param)
 {
-    char request[WDCTL_MSG_LENG] = {0};	
+    char *request = NULL;	
     int sock = connect_to_server(sk_name);
 	
 	if(param)	
-		snprintf(request, WDCTL_MSG_LENG, "%s %s\r\n\r\n", cmd, param);
+		asprintf(&request, "%s %s", cmd, param);
 	else
-		snprintf(request, WDCTL_MSG_LENG, "%s \r\n\r\n", cmd);
+		asprintf(&request, "%s", cmd);
 
     send_request(sock, request);
+    free(request);
+
     read_response(sock);
 }
 
