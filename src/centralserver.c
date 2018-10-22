@@ -57,6 +57,8 @@ process_auth_server_roam(struct evhttp_request *req, void *ctx)
         free(roam);
         return;
     }
+
+    debug(LOG_DEBUG, "process auth server roam response");
 	
     char buffer[MAX_BUF] = {0};
     if (evbuffer_remove(evhttp_request_get_input_buffer(req), buffer, MAX_BUF-1) > 0 ) {
@@ -123,6 +125,8 @@ make_roam_request(struct wd_request_context *context, struct roam_req_info *roam
         free(roam);
         return;
     }
+
+    debug(LOG_DEBUG, "roam request uri [%s]", uri);
 
     struct evhttp_connection *evcon = NULL;
     struct evhttp_request *req      = NULL;

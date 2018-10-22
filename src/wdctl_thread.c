@@ -781,6 +781,6 @@ wdctl_add_online_client(struct bufferevent *fd, const char *args)
     
 OUT:
     if (client_info) json_object_put(client_info);
-    bufferevent_write(fd, "Yes", 2);
+    bufferevent_write(fd, "Yes", 3);
 }
 
