@@ -121,7 +121,7 @@ void
 make_roam_request(struct wd_request_context *context, struct roam_req_info *roam)
 {
     char *uri = get_roam_request_uri(config_get_config(), get_auth_server(), roam->mac);
-    if (uri) {
+    if (!uri) {
         free(roam);
         return;
     }

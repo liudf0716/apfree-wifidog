@@ -771,7 +771,7 @@ wdctl_add_online_client(struct bufferevent *fd, const char *args)
     const char *mac  = json_object_get_string(mac_jo);
     const char *ip	 = json_object_get_string(ip_jo);
 	const char *name = json_object_get_string(name_jo);
-    if (!is_valid_mac(mac) || !is_valid_ip(ip) || !is_trusted_mac(mac) || !is_untrusted_mac(mac))
+    if (!is_valid_mac(mac) || !is_valid_ip(ip) || !is_trusted_mac(mac))
         goto OUT;
 
     struct roam_req_info *roam = safe_malloc(sizeof(struct roam_req_info));
