@@ -81,7 +81,7 @@ config wifidog
     option  enable      0
 ```
 
-> auth_server_hostname was apfree-wifidog auth server, it can be domain or ip; wifidog.kunteng.org.cn is a free auth server we provided, it was also open source 
+> auth_server_hostname was apfree-wifidog auth server, it can be domain or ip; wifidog.kunteng.org.cn is a free auth server we provided, it was also [open source](https://github.com/wificoin-project/wwas) 
 
 > apple_cna 1 apple captive detect deceive; 2 apple captive detect deceive to  disallow portal page appear
 
