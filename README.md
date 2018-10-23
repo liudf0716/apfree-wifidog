@@ -71,7 +71,7 @@ The default apfree-wifidog UCI configuration file like this:
 config wifidog
     option  gateway_interface   'br-lan'
     option  auth_server_hostname    'wifidog.kunteng.org.cn'
-    option  auth_server_port    8001
+    option  auth_server_port    443
     option  auth_server_path    '/wifidog/'
     option  check_interval      60
     option  client_timeout      5
@@ -150,7 +150,10 @@ Feel free to create issues or pull-requests if you have any problems.
 **Please read [CONTRIBUTING.md](https://github.com/liudf0716/apfree_wifidog/blob/master/CONTRIBUTING.md) before pushing any changes.**
 
 
-### apfree wifidog qq group： [331230369](https://jq.qq.com/?_wv=1027&k=4ADDSev)
+### contact us 
+
+QQ group： [331230369](https://jq.qq.com/?_wv=1027&k=4ADDSev)
+telegram:  [apfreewifidog](https://t.me/joinchat/H6i5BEY5fUyltcVah1WlNg)
 
 ## donate
 ### wfc: [weiKbu9DYg26gH2zucSHJHgH5KsuuZd3wW](https://wfc.xyblock.net/#/wifiPortal/donate)
