@@ -62,6 +62,8 @@ static pthread_t tid_ssl_redirect;
 static pthread_t tid_mqtt_server;
 #endif
 
+static int signals[] = { SIGTERM, SIGQUIT, SIGHUP, SIGINT, SIGPIPE, SIGCHLD, SIGUSR1 };
+static struct event *sev[sizeof(signals)/sizeof(int)];
 
 static void *
 wd_zeroing_malloc(size_t howmuch){ 
@@ -225,59 +227,51 @@ termination_handler(int s)
     exit(s == 0 ? EXIT_FAILURE : EXIT_SUCCESS);
 }
 
-/** @internal 
- * Registers all the signal handlers
+/*
+ * Signal handler for SIGTERM, SIGQUIT, SIGINT, SIGHUP, SIGPIPE and SIGUSR1.
  */
 static void
-init_signals(void)
+wd_signal_cb(evutil_socket_t fd, short what, void *arg)
 {
-    struct sigaction sa;
-
-    debug(LOG_DEBUG, "Initializing signal handlers");
-
-    sa.sa_handler = sigchld_handler;
-    sigemptyset(&sa.sa_mask);
-    sa.sa_flags = SA_RESTART;
-    if (sigaction(SIGCHLD, &sa, NULL) == -1) {
-        debug(LOG_ERR, "sigaction(): %s", strerror(errno));
-        exit(EXIT_FAILURE);
-    }
-
-    /* Trap SIGPIPE */
-    /* This is done so that when libhttpd does a socket operation on
-     * a disconnected socket (i.e.: Broken Pipes) we catch the signal
-     * and do nothing. The alternative is to exit. SIGPIPE are harmless
-     * if not desirable.
-     */
-    sa.sa_handler = SIG_IGN;
-    if (sigaction(SIGPIPE, &sa, NULL) == -1) {
-        debug(LOG_ERR, "sigaction(): %s", strerror(errno));
-        exit(EXIT_FAILURE);
-    }
-
-    sa.sa_handler = termination_handler;
-    sigemptyset(&sa.sa_mask);
-    sa.sa_flags = SA_RESTART;
-
-    /* Trap SIGTERM */
-    if (sigaction(SIGTERM, &sa, NULL) == -1) {
-        debug(LOG_ERR, "sigaction(): %s", strerror(errno));
-        exit(EXIT_FAILURE);
-    }
-
-    /* Trap SIGQUIT */
-    if (sigaction(SIGQUIT, &sa, NULL) == -1) {
-        debug(LOG_ERR, "sigaction(): %s", strerror(errno));
-        exit(EXIT_FAILURE);
-    }
-
-    /* Trap SIGINT */
-    if (sigaction(SIGINT, &sa, NULL) == -1) {
-        debug(LOG_ERR, "sigaction(): %s", strerror(errno));
-        exit(EXIT_FAILURE);
-    }
+	struct event_base *evbase = arg;
+	
+	switch(fd) {
+	case SIGTERM:
+	case SIGQUIT:
+	case SIGINT:
+	case SIGHUP:
+		event_base_loopbreak(evbase);
+		termination_handler();
+		break;
+	case SIGCHLD:
+		sigchld_handler();
+		break;
+	case SIGUSR1:
+		debug(LOG_INFO, "Received SIGUSER1; ignore.");
+		break;
+	case SIGPIPE:
+		debug(LOG_INFO, "Warning: Received SIGPIPE; ignoring.\n");
+		break;
+	default:
+		debug(LOG_INFO, "Warning: Received unexpected signal %i\n", fd);
+		break;
+	}
 }
 
+static void
+wd_signals_init(struct event_base *evbase)
+{
+	for (size_t i = 0; i < (sizeof(signals) / sizeof(int)); i++) {
+		sev[i] = evsignal_new(evbase, signals[i], wd_signal_cb, evbase);
+		if (ctx->sev[i])
+			evsignal_add(sev[i], NULL);
+	}
+}
+
+
+/**
+ * @brief wifidog init
+ */
 static void
 wd_init(s_config *config)
 {
@@ -416,7 +410,9 @@ http_redir_loop(s_config *config)
 	struct wd_request_context *request_ctx = wd_request_context_new(
         base, ssl, get_auth_server()->authserv_use_ssl);
 	if (!request_ctx) termination_handler(0);
-
+	
+	wd_signals_init(base);
+	
     evhttp_set_cb(http, "/wifidog", ev_http_callback_wifidog, NULL);
     evhttp_set_cb(http, "/wifidog/status", ev_http_callback_status, NULL);
     evhttp_set_cb(http, "/wifidog/auth", ev_http_callback_auth, request_ctx);
@@ -458,9 +454,6 @@ gw_main(int argc, char **argv)
 
     /* Initializes the linked list of connected clients */
     client_list_init();
-
-    /* Init the signals to catch chld/quit/etc */
-    init_signals();
 
     if (config_get_config()->daemon) {
         debug(LOG_INFO, "Forking into background");
