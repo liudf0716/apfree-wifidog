@@ -7,7 +7,6 @@
 [![Release Version][7]][8]
 [![OpenWRT][11]][12]
 [![KunTeng][13]][14]
-[![Build][15]][16]
 
 
 [1]: https://img.shields.io/badge/license-GPLV3-brightgreen.svg?style=plastic
