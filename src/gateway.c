@@ -241,10 +241,10 @@ wd_signal_cb(evutil_socket_t fd, short what, void *arg)
 	case SIGINT:
 	case SIGHUP:
 		event_base_loopbreak(evbase);
-		termination_handler();
+		termination_handler(1);
 		break;
 	case SIGCHLD:
-		sigchld_handler();
+		sigchld_handler(0);
 		break;
 	case SIGUSR1:
 		debug(LOG_INFO, "Received SIGUSER1; ignore.");
@@ -263,7 +263,7 @@ wd_signals_init(struct event_base *evbase)
 {
 	for (size_t i = 0; i < (sizeof(signals) / sizeof(int)); i++) {
 		sev[i] = evsignal_new(evbase, signals[i], wd_signal_cb, evbase);
-		if (ctx->sev[i])
+		if (sev[i])
 			evsignal_add(sev[i], NULL);
 	}
 }
