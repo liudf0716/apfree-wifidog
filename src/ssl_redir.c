@@ -280,6 +280,8 @@ ssl_redirect_loop (char *gw_ip,  t_https_server *https_server) {
 	// This is the magic that lets evhttp use SSL.
 	evhttp_set_bevcb (http, ssl_bevcb, ctx);
  
+	evhttp_set_cb(http, "/wifidog/temporary_pass", ev_http_callback_temporary_pass, NULL);
+
 	// This is the callback that gets called when a request comes in.
 	evhttp_set_gencb (http, process_ssl_request_cb, NULL);
 

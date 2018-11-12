@@ -390,6 +390,20 @@ threads_init(s_config *config)
 }
 
 static void
+wd_debug_base(const struct event_base *ev_base)
+{
+	debug(LOG_DEBUG, "Using libevent backend '%s'\n",
+	               event_base_get_method(ev_base));
+
+	enum event_method_feature f;
+	f = event_base_get_features(ev_base);
+	debug(LOG_DEBUG, "Event base supports: edge %s, O(1) %s, anyfd %s\n",
+	               ((f & EV_FEATURE_ET) ? "yes" : "no"),
+	               ((f & EV_FEATURE_O1) ? "yes" : "no"),
+	               ((f & EV_FEATURE_FDS) ? "yes" : "no"));
+}
+
+static void
 http_redir_loop(s_config *config)
 {
     struct event_base *base;
@@ -403,6 +417,8 @@ http_redir_loop(s_config *config)
 
     base = event_base_new();
     if (!base) termination_handler(0);
+
+    wd_debug_base(base);
 
     http = evhttp_new(base);
     if (!http) termination_handler(0);

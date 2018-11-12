@@ -54,8 +54,8 @@ static void fw_init_delay()
 	parse_user_trusted_domain_list();
 	
 	fw_set_pan_domains_trusted();	
+	execute("/etc/init.d/dnsmasq restart", 0);
 	fw_set_trusted_maclist();
-	fw_set_untrusted_maclist();
 }
 
 static void 
