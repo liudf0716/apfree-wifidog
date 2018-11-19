@@ -271,6 +271,24 @@ client_dup(const t_client * src)
     return new;
 }
 
+/**
+ * @brief find client by client's id
+ * 
+ */ 
+t_client *
+client_list_find_by_client_id(unsigned long long id)
+{
+    t_client *c = firstclient;
+
+    while (NULL != c) {
+        if (c->id == id) {
+            return c;
+        }
+        c = c->next;
+    }
+    return NULL;
+}
+
 /** Find a client in the list from a client struct, matching operates by id.
  * This is useful from a copy of client to find the original.
  * @param client Client to find

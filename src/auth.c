@@ -79,7 +79,7 @@ client_timeout_check_cb(evutil_socket_t fd, short event, void *arg) {
 void
 ev_logout_client(struct wd_request_context *context, t_client *client)
 {
-    if (!client) return;
+    assert(!client);
     
     fw_deny(client);
 

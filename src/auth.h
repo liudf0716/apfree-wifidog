@@ -50,6 +50,7 @@ typedef enum {
  */
 typedef struct _t_authresponse {
     t_authcode authcode; /**< Authentication code returned by the server */
+    unsigned long long client_id;
 } t_authresponse;
 
 struct wd_request_context;

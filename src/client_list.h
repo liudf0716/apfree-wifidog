@@ -126,6 +126,8 @@ t_client *client_list_find(const char *, const char *);
 /** @brief Find a client in the list from a client struct, matching operates by id. */
 t_client *client_list_find_by_client(t_client *);
 
+t_client *client_list_find_by_client_id(unsigned long long);
+
 /** @brief Finds a client only by its IP */
 t_client *client_list_find_by_ip(const char *); /* needed by fw_iptables.c, auth.c 
                                                  * and wdctl_thread.c */

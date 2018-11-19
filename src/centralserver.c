@@ -137,6 +137,26 @@ make_roam_request(struct wd_request_context *context, struct roam_req_info *roam
 }
 
 /**
+ * @brief get auth counter v2 uri
+ * @return need to be free by the caller
+ * 
+ */ 
+char *
+get_auth_counter_v2_uri()
+{
+    s_config *config = config_get_config();
+    t_auth_serv *auth_server = get_auth_server();
+    char *uri = NULL;
+    safe_asprintf(&uri, "%s%sstage=%s",
+             auth_server->authserv_path,
+             auth_server->authserv_auth_script_path_fragment,
+             REQUEST_TYPE_COUNTERS_V2);
+    assert(uri != NULL);
+    debug(LOG_DEBUG, "auth counter v2 uri is [%s]", uri);
+    return uri;
+}
+
+/**
  * @brief get client's auth request uri according to its type
  * 
  */ 
@@ -163,6 +183,7 @@ get_auth_uri(const char *request_type, client_type_t type, void *data)
         incoming_delta  = o_client->counters.incoming_delta;
         outgoing_delta  = o_client->counters.outgoing_delta;
         wired = o_client->wired;
+        online_time = time() - first_login;
         break;
     }    
     case TRUSTED_CLIENT:
@@ -426,3 +447,114 @@ process_auth_server_counter(struct evhttp_request *req, void *ctx)
     if (parse_auth_server_response(&authresponse, req))
         client_counter_request_reply(&authresponse, req, ctx);
 } 
+
+/**
+ * @intern
+ * @brief read api response from wifidog auth server, need to be free by caller
+ *  
+ */
+static char *
+read_api_response(struct evhttp_request *req)
+{
+    struct evbuffer *in = evhttp_request_get_input_buffer(req);
+    size_t len = evbuffer_get_length(in);
+    char *res = calloc(1, len+1);
+    if (res) {
+        memcpy(res, evbuffer_pullup(in, len), len);
+    }
+    evbuffer_drain(in, len);
+
+    return res;
+}
+
+/**
+ * @brief reply wifidog client's counter response from auth server and free the dup client
+ * 
+ */
+static void
+client_counter_request_reply_v2(t_authresponse *authresponse, 
+        struct evhttp_request *req, struct wd_request_context *context)
+{
+    s_config *config = config_get_config();
+    LOCK_CLIENT_LIST();
+    t_client *p1 = client_list_find_by_client_id(authresponse->client_id);
+    if (!p1) {
+        UNLOCK_CLIENT_LIST();
+        return;
+    }
+
+    time_t current_time = time(NULL);
+    debug(LOG_DEBUG,
+            "Checking client %s for timeout:  Last updated %ld (%ld seconds ago), timeout delay %ld seconds, current time %ld, ",
+            p1->ip, p1->counters.last_updated, current_time - p1->counters.last_updated,
+            config->checkinterval * config->clienttimeout, current_time);
+    if (p1->counters.last_updated + (config->checkinterval * config->clienttimeout) <= current_time) {
+        UNLOCK_CLIENT_LIST();
+        /* Timing out user */
+        debug(LOG_DEBUG, "%s - Inactive for more than %ld seconds, removing client and denying in firewall",
+                p1->ip, config->checkinterval * config->clienttimeout);
+        ev_logout_client(context, p1);
+        
+    } else {
+        UNLOCK_CLIENT_LIST();
+        /*
+            * This handles any change in
+            * the status this allows us
+            * to change the status of a
+            * user while he's connected
+            *
+            * Only run if we have an auth server
+            * configured!
+            */
+        fw_client_process_from_authserver_response(authresponse, p1);
+    }
+} 
+
+/**
+ * @brief v2 of process_auth_server_counter
+ * 
+ * auth response is {gw_id:"gw_id",auth_op:[{"id":clt_id,"auth_code":authcode}, ....]}
+ * 
+ */ 
+void
+process_auth_server_counter_v2(struct evhttp_request *req, void *ctx)
+{
+    if (!req) {
+        mark_auth_offline();
+        return;
+    }
+	
+    char *buff = read_api_response(req);
+    if (!buff) return;
+
+    debug(LOG_DEBUG, "Auth response [%s]", buff);
+
+    json_object *j_result = json_tokener_parse(buff);
+    if (!j_result) {
+        goto ERR;
+    }
+
+    json_object *j_auth_op = json_object_object_get(j_result, "auth_op");
+    if (!j_auth_op) {
+        goto ERR;
+    }
+    assert(jso_object_get_type(j_auth_op) == json_type_array);
+
+    for(int idx = 0; idx < json_object_array_length(j_auth_op), idx++) {
+        json_object *j_op = json_object_array_get_idx(j_auth_op, idx);
+        assert(j_op != NULL);
+        json_object *j_id = json_object_object_get(j_op, "id");
+        json_object *j_auth_code = json_object_object_get(j_op, "auth_code");
+        assert(j_id !== NULL && j_auth_code != NULL);
+        int id = json_object_get_int(j_id);
+        int auth_code = json_object_get_int(j_auth_code);
+        t_authresponse authresponse;
+        authresponse.client_id = id;
+        authresponse.authcode = auth_code;
+        client_counter_request_reply_v2(&authresponse, req, ctx);
+    }
+    
+ERR:
+    if (j_result) json_object_put(j_result);
+    free(buff);
+}

@@ -494,6 +494,77 @@ fw_client_process_from_authserver_response(t_authresponse *authresponse, t_clien
 }
 
 /**
+ * @brief send clients counter info to auth server by json  
+ * 
+ * {"gw_id":"gw_id", clients:[
+ * {"id":id,"ip":"ipaddress","mac":"macaddress","token":"tokenvalue","channel_path":channelPath,
+ * "name":"clientname","incoming":incoming,"outgoing":outgoing,"first_login":first_login,
+ * "is_online":is_online,"wired":is_wired_device}, ....]}
+ * 
+ */ 
+void
+ev_fw_sync_with_authserver_v2(struct wd_request_context *context)
+{
+	t_client *p1 = NULL, *p2 = NULL, *worklist = NULL;
+	s_config *config = config_get_config();
+
+	if (-1 == iptables_fw_counters_update()) {
+		debug(LOG_ERR, "Could not get counters from firewall!");
+		return;
+	}
+
+	LOCK_CLIENT_LIST();
+	g_online_clients = client_list_dup(&worklist);
+	UNLOCK_CLIENT_LIST();
+
+	json_object *clients_info = json_object_new_object();
+	json_object_object_add(clients_info, "gw_id", json_object_new_int(config->gw_id));
+	json_object *client_array = json_object_new_array();
+	for (p1 = p2 = worklist; NULL != p1; p1 = p2) {
+		json_object *clt = json_object_new_object();
+		p2 = p1->next;	
+
+		/* Ping the client, if he responds it'll keep activity on the link.
+		 * However, if the firewall blocks it, it will not help.  The suggested
+		 * way to deal witht his is to keep the DHCP lease time extremely
+		 * short:  Shorter than config->checkinterval * config->clienttimeout */
+		icmp_ping(p1->ip);
+
+		json_object_object_add(clt, "id", json_object_new_int(p1->id));
+		json_object_object_add(clt, "ip", json_object_new_string(clt->ip));
+		json_object_object_add(clt, "mac", json_object_new_string(clt->mac));
+		json_object_object_add(clt, "token", json_object_new_string(clt->token));
+		json_object_object_add(clt, "name", json_object_new_string(clt->name?clt->name:"null"));
+		json_object_object_add(clt, "incomming", json_object_new_int(clt->counters.incoming));
+		json_object_object_add(clt, "outgoing", json_object_new_int(clt->counters.outgoing));
+		json_object_object_add(clt, "first_login", json_object_new_int(clt->first_login));
+		json_object_object_add(clt, "is_online", json_object_new_boolean(clt->is_online));
+		json_object_object_add(clt, "wired", json_object_new_boolean(clt->wired));
+		json_object_array_add(client_array, clt);
+
+		client_free_node(p1);
+	}
+	json_object_object_add(clients_info, "clients", client_array);
+
+	/* Update the counters on the remote server only if we have an auth server */
+	if (config->auth_servers != NULL) {
+		char *uri = get_auth_counter_v2_uri();
+
+		struct evhttp_connection *evcon = NULL;
+		struct evhttp_request *req = NULL;
+		if (!wd_make_request(context, &evcon, &req, process_auth_server_counter_v2)) {
+			char *param = json_object_to_json_string(clients_info);
+			evhttp_add_header(evhttp_request_get_output_headers(req), "Content-Type", "application/json");
+        	evhttp_add_header(evhttp_request_get_output_headers(req), "Content-Length", length);
+			evbuffer_add_printf(evhttp_request_get_output_buffer(req), "%s", param);
+			evhttp_make_request(evcon, req, EVHTTP_REQ_POST, uri);
+		}	
+		free(uri);
+	}
+	json_object_put(clients_info);
+}
+
+/**
  * @brief refreshes the entire client list's traffic counter, 
  *        and update's the central servers traffic counters 
  * 

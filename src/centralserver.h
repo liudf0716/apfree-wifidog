@@ -37,6 +37,8 @@
 #define REQUEST_TYPE_LOGOUT    "logout"
 /** @brief Update the central server's traffic counters */
 #define REQUEST_TYPE_COUNTERS  "counters"
+/** @brief New version of updating the central server's traffic counters*/
+#define REQUEST_TYPE_COUNTERS_V2    "counters_v2"
 
 /** @brief Sent when the user's token is denied by the central server */
 #define GATEWAY_MESSAGE_DENIED     "denied"
@@ -67,5 +69,9 @@ void process_auth_server_logout(struct evhttp_request *, void *);
 void process_auth_server_login(struct evhttp_request *, void *);
 /** @brief process wifidog's client counter response */
 void process_auth_server_counter(struct evhttp_request *, void *);
+/** @brief process v2 of wifidog's client counter response */
+void process_auth_server_counter_v2(struct evhttp_request *, void *);
+/** @brief get auth counter v2 uri*/
+char *get_auth_counter_v2_uri(void);
 
 #endif                          /* _CENTRALSERVER_H_ */

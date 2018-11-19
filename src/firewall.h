@@ -120,6 +120,9 @@ void fw_set_trusted_mac(const char *);
 void fw_client_process_from_authserver_response(t_authresponse *, t_client *p1);
 
 /** @brief Refreshes the entire client list */
-void ev_fw_sync_with_authserver(struct wd_request_context *request_ctx);
+void ev_fw_sync_with_authserver(struct wd_request_context *);
+
+/** @brief  */
+void ev_fw_sync_with_authserver_v2(struct wd_request_context *);
 
 #endif                          /* _FIREWALL_H_ */
