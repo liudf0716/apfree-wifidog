@@ -518,7 +518,7 @@ ev_fw_sync_with_authserver_v2(struct wd_request_context *context)
 	UNLOCK_CLIENT_LIST();
 
 	json_object *clients_info = json_object_new_object();
-	json_object_object_add(clients_info, "gw_id", json_object_new_int(config->gw_id));
+	json_object_object_add(clients_info, "gw_id", json_object_new_string(config->gw_id));
 	json_object *client_array = json_object_new_array();
 	for (p1 = p2 = worklist; NULL != p1; p1 = p2) {
 		json_object *clt = json_object_new_object();
@@ -531,15 +531,15 @@ ev_fw_sync_with_authserver_v2(struct wd_request_context *context)
 		icmp_ping(p1->ip);
 
 		json_object_object_add(clt, "id", json_object_new_int(p1->id));
-		json_object_object_add(clt, "ip", json_object_new_string(clt->ip));
-		json_object_object_add(clt, "mac", json_object_new_string(clt->mac));
-		json_object_object_add(clt, "token", json_object_new_string(clt->token));
-		json_object_object_add(clt, "name", json_object_new_string(clt->name?clt->name:"null"));
-		json_object_object_add(clt, "incomming", json_object_new_int(clt->counters.incoming));
-		json_object_object_add(clt, "outgoing", json_object_new_int(clt->counters.outgoing));
-		json_object_object_add(clt, "first_login", json_object_new_int(clt->first_login));
-		json_object_object_add(clt, "is_online", json_object_new_boolean(clt->is_online));
-		json_object_object_add(clt, "wired", json_object_new_boolean(clt->wired));
+		json_object_object_add(clt, "ip", json_object_new_string(p1->ip));
+		json_object_object_add(clt, "mac", json_object_new_string(p1->mac));
+		json_object_object_add(clt, "token", json_object_new_string(p1->token));
+		json_object_object_add(clt, "name", json_object_new_string(p1->name?p1->name:"null"));
+		json_object_object_add(clt, "incomming", json_object_new_int(p1->counters.incoming));
+		json_object_object_add(clt, "outgoing", json_object_new_int(p1->counters.outgoing));
+		json_object_object_add(clt, "first_login", json_object_new_int(p1->first_login));
+		json_object_object_add(clt, "is_online", json_object_new_boolean(p1->is_online));
+		json_object_object_add(clt, "wired", json_object_new_boolean(p1->wired));
 		json_object_array_add(client_array, clt);
 
 		client_free_node(p1);
@@ -554,8 +554,9 @@ ev_fw_sync_with_authserver_v2(struct wd_request_context *context)
 		struct evhttp_request *req = NULL;
 		if (!wd_make_request(context, &evcon, &req, process_auth_server_counter_v2)) {
 			char *param = json_object_to_json_string(clients_info);
+			assert(param != NULL);
 			evhttp_add_header(evhttp_request_get_output_headers(req), "Content-Type", "application/json");
-        	evhttp_add_header(evhttp_request_get_output_headers(req), "Content-Length", length);
+        	evhttp_add_header(evhttp_request_get_output_headers(req), "Content-Length", strlen(param));
 			evbuffer_add_printf(evhttp_request_get_output_buffer(req), "%s", param);
 			evhttp_make_request(evcon, req, EVHTTP_REQ_POST, uri);
 		}	
