@@ -112,7 +112,7 @@ struct roam_req_info {
     char mac[HTTP_MAC_LEN];
 };
 
-ifndef is_error
+#ifndef is_error
 #define is_error(name)  (name == NULL)
 #endif
 
