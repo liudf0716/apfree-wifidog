@@ -437,6 +437,8 @@ fw_client_process_from_authserver_response(t_authresponse *authresponse, t_clien
 		return;	   /* Next client please */
 	}
 
+	fw_client_operation(authresponse->authcode, p1);
+
 	if (config->auth_servers && tmp_c->is_online) {
 		switch (authresponse->authcode) {
 		case AUTH_DENIED:
@@ -487,8 +489,6 @@ fw_client_process_from_authserver_response(t_authresponse *authresponse, t_clien
 			break;
 		}
 	}
-
-	fw_client_operation(authresponse->authcode, p1);
 
 	UNLOCK_CLIENT_LIST();
 }
