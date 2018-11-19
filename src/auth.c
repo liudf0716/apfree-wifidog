@@ -61,7 +61,11 @@ client_timeout_check_cb(evutil_socket_t fd, short event, void *arg) {
 	struct wd_request_context *context = (struct wd_request_context *)arg;
 	
 	debug(LOG_DEBUG, "client_timeout_check_cb begin");
+#ifdef AUTHSERVER_V2
+    ev_fw_sync_with_authserver_v2(context);
+#else
     ev_fw_sync_with_authserver(context);
+#endif
 }
 
 /**
