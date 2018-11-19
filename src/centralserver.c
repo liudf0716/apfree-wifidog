@@ -183,7 +183,7 @@ get_auth_uri(const char *request_type, client_type_t type, void *data)
         incoming_delta  = o_client->counters.incoming_delta;
         outgoing_delta  = o_client->counters.outgoing_delta;
         wired = o_client->wired;
-        online_time = time() - first_login;
+        online_time = time(0) - first_login;
         break;
     }    
     case TRUSTED_CLIENT:
@@ -540,12 +540,12 @@ process_auth_server_counter_v2(struct evhttp_request *req, void *ctx)
     }
     assert(jso_object_get_type(j_auth_op) == json_type_array);
 
-    for(int idx = 0; idx < json_object_array_length(j_auth_op), idx++) {
+    for(int idx = 0; idx < json_object_array_length(j_auth_op); idx++) {
         json_object *j_op = json_object_array_get_idx(j_auth_op, idx);
         assert(j_op != NULL);
         json_object *j_id = json_object_object_get(j_op, "id");
         json_object *j_auth_code = json_object_object_get(j_op, "auth_code");
-        assert(j_id !== NULL && j_auth_code != NULL);
+        assert(j_id != NULL && j_auth_code != NULL);
         int id = json_object_get_int(j_id);
         int auth_code = json_object_get_int(j_auth_code);
         t_authresponse authresponse;
