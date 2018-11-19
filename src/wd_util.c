@@ -355,7 +355,7 @@ get_status_text()
 
     client_list_destroy(sublist);
 
-    pstr_append_sprintf(pstr, "%d client " " %d active .\n", count, active_count);
+    pstr_append_sprintf(pstr, "%d client " " %d active .\n", count-1, active_count);
 
 	LOCK_OFFLINE_CLIENT_LIST();
     pstr_append_sprintf(pstr, "%d clients " "unconnected.\n", offline_client_number());
