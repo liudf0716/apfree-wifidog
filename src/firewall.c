@@ -437,18 +437,19 @@ fw_client_process_from_authserver_response(t_authresponse *authresponse, t_clien
 		return;	   /* Next client please */
 	}
 
-	fw_client_operation(authresponse->authcode, p1);
-
-	if (config->auth_servers && tmp_c->is_online) {
+	
+	if (config->auth_servers) {
 		switch (authresponse->authcode) {
 		case AUTH_DENIED:
 			debug(LOG_NOTICE, "%s - Denied. Removing client and firewall rules", tmp_c->ip);
+			fw_client_operation(authresponse->authcode, tmp_c);
 			client_list_delete(tmp_c);
 			break;
 
 		case AUTH_VALIDATION_FAILED:
 			debug(LOG_NOTICE, "%s - Validation timeout, now denied. Removing client and firewall rules",
 				  tmp_c->ip);
+			fw_client_operation(authresponse->authcode, tmp_c);
 			client_list_delete(tmp_c);
 			break;
 
