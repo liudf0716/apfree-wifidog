@@ -558,7 +558,7 @@ ev_fw_sync_with_authserver_v2(struct wd_request_context *context)
 			char len[8] = {0};
 			snprintf(len, 8, "%u", strlen(param));
 			evhttp_add_header(evhttp_request_get_output_headers(req), "Content-Type", "application/json");
-        	evhttp_add_header(evhttp_request_get_output_headers(req), "Content-Length", len;
+        	evhttp_add_header(evhttp_request_get_output_headers(req), "Content-Length", len);
 			evbuffer_add_printf(evhttp_request_get_output_buffer(req), "%s", param);
 			evhttp_make_request(evcon, req, EVHTTP_REQ_POST, uri);
 		}	
