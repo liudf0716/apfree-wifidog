@@ -47,6 +47,7 @@
 #include <stdbool.h>
 #include <unistd.h>
 #include <poll.h>
+#include <assert.h>
 
 #include <arpa/nameser.h>
 #include <arpa/inet.h>
@@ -110,5 +111,9 @@ struct roam_req_info {
     char ip[HTTP_IP_ADDR_LEN];
     char mac[HTTP_MAC_LEN];
 };
+
+ifndef is_error
+#define is_error(name)  (name == NULL)
+#endif
 
 #endif /* _COMMON_H_ */

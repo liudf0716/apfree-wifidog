@@ -144,7 +144,6 @@ make_roam_request(struct wd_request_context *context, struct roam_req_info *roam
 char *
 get_auth_counter_v2_uri()
 {
-    s_config *config = config_get_config();
     t_auth_serv *auth_server = get_auth_server();
     char *uri = NULL;
     safe_asprintf(&uri, "%s%sstage=%s",
@@ -538,7 +537,7 @@ process_auth_server_counter_v2(struct evhttp_request *req, void *ctx)
     if (!j_auth_op) {
         goto ERR;
     }
-    assert(jso_object_get_type(j_auth_op) == json_type_array);
+    assert(json_object_get_type(j_auth_op) == json_type_array);
 
     for(int idx = 0; idx < json_object_array_length(j_auth_op); idx++) {
         json_object *j_op = json_object_array_get_idx(j_auth_op, idx);
