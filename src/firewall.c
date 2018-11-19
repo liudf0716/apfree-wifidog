@@ -523,7 +523,7 @@ ev_fw_sync_with_authserver_v2(struct wd_request_context *context)
 	for (p1 = p2 = worklist; NULL != p1; p1 = p2) {
 		json_object *clt = json_object_new_object();
 		p2 = p1->next;	
-
+		int online_time = time(0) - p1->first_login;
 		/* Ping the client, if he responds it'll keep activity on the link.
 		 * However, if the firewall blocks it, it will not help.  The suggested
 		 * way to deal witht his is to keep the DHCP lease time extremely
@@ -535,9 +535,10 @@ ev_fw_sync_with_authserver_v2(struct wd_request_context *context)
 		json_object_object_add(clt, "mac", json_object_new_string(p1->mac));
 		json_object_object_add(clt, "token", json_object_new_string(p1->token));
 		json_object_object_add(clt, "name", json_object_new_string(p1->name?p1->name:"null"));
-		json_object_object_add(clt, "incomming", json_object_new_int(p1->counters.incoming));
+		json_object_object_add(clt, "incoming", json_object_new_int(p1->counters.incoming));
 		json_object_object_add(clt, "outgoing", json_object_new_int(p1->counters.outgoing));
 		json_object_object_add(clt, "first_login", json_object_new_int(p1->first_login));
+		json_object_object_add(clt, "online_time", json_object_new_int(online_time));
 		json_object_object_add(clt, "is_online", json_object_new_boolean(p1->is_online));
 		json_object_object_add(clt, "wired", json_object_new_boolean(p1->wired));
 		json_object_array_add(client_array, clt);
