@@ -116,6 +116,7 @@ struct roam_req_info {
 #define is_error(name)  (name == NULL)
 #endif
 
+// if disable AUTHSERVER_V2, comment it
 #define AUTHSERVER_V2
 
 #endif /* _COMMON_H_ */
