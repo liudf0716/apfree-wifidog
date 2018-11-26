@@ -273,7 +273,7 @@ ev_http_callback_404(struct evhttp_request *req, void *arg)
         return;
     }
     
-    if(config->bypass_apple_cna && process_apple_wisper(req, mac, remote_host, redir_url, config->bypass_apple_cna))
+    if(!config->bypass_apple_cna && process_apple_wisper(req, mac, remote_host, redir_url, config->bypass_apple_cna))
         goto END;
 
     if(config->js_redir)
