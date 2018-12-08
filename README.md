@@ -15,7 +15,7 @@
 [4]: https://github.com/liudf0716/apfree_wifidog/pulls
 [5]: https://img.shields.io/badge/Issues-welcome-brightgreen.svg?style=plastic
 [6]: https://github.com/liudf0716/apfree_wifidog/issues/new
-[7]: https://img.shields.io/badge/release-3.10.1696-red.svg?style=plastic
+[7]: https://img.shields.io/badge/release-3.11.1716-red.svg?style=plastic
 [8]: https://github.com/liudf0716/apfree_wifidog/releases
 [11]: https://img.shields.io/badge/Platform-%20OpenWRT%7C%20LEDE%20-brightgreen.svg?style=plastic
 [12]: https://github.com/KunTengRom/kunteng-lede-17.01.4
@@ -55,7 +55,15 @@ u don't need to modify your wifidog authentication server to adapt apfree-wifido
 
 ## How to added apfree-wifidog into Openwrt package 
 
-Please go to [package_apfree_wifidog](https://github.com/KunTengRom/package_apfree_wifidog)
+```
+cd your_openwrt_sdk_dir
+mkdir -p packages/net/apfree-wifidog
+cp -r apfree_wifidog_openwrt/* packages/net/apfree-wifidog
+make menuconfig
+select apfree-wifidog
+```
+
+Please go to [package_apfree_wifidog]()https://github.com/KunTengRom/package_apfree_wifidog
 
 
 --------
