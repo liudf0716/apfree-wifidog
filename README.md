@@ -134,6 +134,10 @@ or when u start `/etc/init.d/wifidogx start`, it will generate it automatically
 
 apfree wifidog's official auth server is [wwas](https://github.com/wificoin-project/wificoin-wifidog-auth-server), which support wfc pay and weixin auth-mode and more auth-way will be support.
 
+### demo pic
+
+<img src="https://github.com/wificoin-project/wwas/blob/master/portal.jpg" width="365" height="619"/> <img src="https://github.com/wificoin-project/wwas/blob/master/sms.jpg" width="365" height="619"/>
+
 ### demo video
 
 http://www.iqiyi.com/w_19s09zie6t.html
