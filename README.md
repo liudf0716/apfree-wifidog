@@ -160,5 +160,6 @@ telegram:  [apfreewifidog](https://t.me/joinchat/H6i5BEY5fUyltcVah1WlNg)
 ## donate
 ### wfc: [weiKbu9DYg26gH2zucSHJHgH5KsuuZd3wW](https://wfc.xyblock.net/#/wifiPortal/donate)
 
+支付宝首页搜索 582806648 领红包支持本项目
 
 ---
