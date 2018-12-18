@@ -37,19 +37,28 @@ In fact, the title should be why we choose apfree-wifidog, the reason was the fo
 
 >  Stable
 
-apfree-wifidog was widely used in tens of thousands device, which were running in business scene. In order to improve its stable, we rewrite all iptables rule by api instead of fork call, which will easily cause deadlock in multithread-fork running environment
+apfree-wifidog was widely used in tens of thousands device, which were running in business scene. In order to improve its stable, we rewrite all iptables rule by api instead of fork call, which will easily cause deadlock in multithread-fork running environment. we also re-write the code and replace libhttpd (which unmaitained for years) with libevent
 
-> Efficent
+> Performance
 
 apfree-wifidog's http request-response is more quick, u can find statistic data in our test document
 
+> HTTPs redirect
+
+apfree-wifidog support https redirect, in current internet environment, captive portal solution without supporting https redirect will become unsuitable gradually
+
+
 > More features
 
-apfree-wifidog support https redirect, mac temporary-pass, ip,domain,pan-domain,white-mac,black-mac rule and etc. all these rules can be applied without restarting wifidog
+apfree-wifidog support mac temporary-pass, ip,domain,pan-domain,white-mac,black-mac rule and etc. all these rules can be applied without restarting wifidog
 
-> Compitable with wifidog authentication server
+> MQTT support
 
-u don't need to modify your wifidog authentication server to adapt apfree-wifidog
+by enable mqtt support, u can remotely deliver such as trusted ip, domian and pan-domain rules to apfree wifidog 
+
+> Compitable with wifidog protocol
+
+u don't need to modify your wifidog authentication server to adapt apfree-wifidog; if u have pression on server-side, apfree wifidog's improved protocol can greatly relieve it, which disabled by default
 
 ----
 
