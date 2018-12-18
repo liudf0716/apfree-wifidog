@@ -63,7 +63,7 @@ make menuconfig
 select apfree-wifidog
 ```
 
-Please go to [package_apfree_wifidog]()https://github.com/KunTengRom/package_apfree_wifidog
+Please go to [package_apfree_wifidog](https://github.com/KunTengRom/package_apfree_wifidog)
 
 
 --------
