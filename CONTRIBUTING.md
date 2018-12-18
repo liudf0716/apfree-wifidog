@@ -26,8 +26,10 @@ If you want to contribute to [apfree wifidog](https://github.com/liudf0716/apfre
 
 6. Commit and push your changes, then make a pull request from Github.
 
-    git commit --signoff  
-    git push -f
+    ```
+    git commit -a -s
+    git push origin apfree_wifidog-1-fix
+    ```
     
 7. Awaiting review, if accepted, merged!
 
