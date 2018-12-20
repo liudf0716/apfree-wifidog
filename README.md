@@ -6,7 +6,7 @@
 [![Issue Welcome][5]][6]
 [![Release Version][7]][8]
 [![OpenWRT][11]][12]
-[![KunTeng][13]][14]
+[![Join the QQ Group][15]][16]
 
 
 [1]: https://img.shields.io/badge/license-GPLV3-brightgreen.svg?style=plastic
@@ -20,9 +20,9 @@
 [11]: https://img.shields.io/badge/Platform-%20OpenWRT%7C%20LEDE%20-brightgreen.svg?style=plastic
 [12]: https://github.com/KunTengRom/kunteng-lede-17.01.4
 [13]: https://img.shields.io/badge/KunTeng-Inside-blue.svg?style=plastic
-[14]: http://rom.kunteng.org.cn
-[15]: https://travis-ci.org/liudf0716/apfree_wifidog.svg?branch=master
-[16]: https://travis-ci.org/liudf0716/apfree_wifidog
+[14]: https://www.kunteng.org.cn
+[15]: https://img.shields.io/badge/chat-qq%20group-brightgreen.svg
+[16]: https://jq.qq.com/?_wv=1027&k=4ADDSev
 
 ## ApFree WiFiDog: A high performance captive portal solution for HTTP(s)
 
@@ -169,6 +169,5 @@ telegram:  [apfreewifidog](https://t.me/joinchat/H6i5BEY5fUyltcVah1WlNg)
 ## donate
 ### wfc: [weiKbu9DYg26gH2zucSHJHgH5KsuuZd3wW](https://wfc.xyblock.net/#/wifiPortal/donate)
 
-支付宝首页搜索 582806648 领红包支持本项目
 
 ---
