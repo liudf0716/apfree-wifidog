@@ -37,11 +37,12 @@ In fact, the title should be why we choose apfree-wifidog, the reason was the fo
 
 >  Stable
 
-apfree-wifidog was widely used in tens of thousands device, which were running in business scene. In order to improve its stable, we rewrite all iptables rule by api instead of fork call, which will easily cause deadlock in multithread-fork running environment. we also re-write the code and replace libhttpd (which unmaitained for years) with libevent
+apfree-wifidog was widely used in tens of thousands openwrt device, which has run in business scene. In order to improve its stable, we rewrite all iptables rule by api instead of fork call, which will easily cause deadlock in multithread-fork running environment. we also re-write the code and replace libhttpd (which unmaitained for years) with libevent2
 
 > Performance
 
-to support HTTP, apfree-wifidog replace libhttpd with libevent2, which is more stable and better performance; in multithread evironment, fork will bring much trouble, apfree-wifidog replace iptables command with api call by libipt
+cause libevent2 support epoll, apfree-wifidog has better performance than original wifidog, there are some benchmark data in 
+benchmark directory to prove it
 
 > HTTPs redirect
 
