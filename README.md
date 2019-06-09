@@ -17,8 +17,8 @@
 [6]: https://github.com/liudf0716/apfree_wifidog/issues/new
 [7]: https://img.shields.io/badge/release-3.11.1716-red.svg?style=plastic
 [8]: https://github.com/liudf0716/apfree_wifidog/releases
-[11]: https://img.shields.io/badge/Platform-%20OpenWRT%7C%20LEDE%20-brightgreen.svg?style=plastic
-[12]: https://github.com/KunTengRom/kunteng-lede-17.01.4
+[11]: https://img.shields.io/badge/Platform-%20OpenWRT%20-brightgreen.svg?style=plastic
+[12]: https://github.com/openwrt
 [13]: https://img.shields.io/badge/KunTeng-Inside-blue.svg?style=plastic
 [14]: https://www.kunteng.org.cn
 [15]: https://img.shields.io/badge/chat-qq%20group-brightgreen.svg
@@ -26,7 +26,7 @@
 
 ## ApFree WiFiDog: A high performance captive portal solution for HTTP(s)
 
-ApFree WiFiDog is a high performance captive portal solution for HTTP(s), which mainly used in ([LEDE](https://github.com/lede-project/source)&[Openwrt](https://github.com/openwrt/openwrt)) platform. 
+ApFree WiFiDog is a high performance captive portal solution for HTTP(s), which mainly used in [Openwrt](https://github.com/openwrt/openwrt) platform. 
 
 
 **[中文介绍](https://github.com/liudf0716/apfree_wifidog/blob/master/README_ZH.md)**
@@ -37,11 +37,12 @@ In fact, the title should be why we choose apfree-wifidog, the reason was the fo
 
 >  Stable
 
-apfree-wifidog was widely used in tens of thousands device, which were running in business scene. In order to improve its stable, we rewrite all iptables rule by api instead of fork call, which will easily cause deadlock in multithread-fork running environment. we also re-write the code and replace libhttpd (which unmaitained for years) with libevent
+apfree-wifidog was widely used in tens of thousands openwrt device, which has run in business scene. In order to improve its stable, we rewrite all iptables rule by api instead of fork call, which will easily cause deadlock in multithread-fork running environment. we also re-write the code and replace libhttpd (which unmaitained for years) with libevent2
 
 > Performance
 
-apfree-wifidog's http request-response is more quick, u can find statistic data in our test document
+cause libevent2 support epoll, apfree-wifidog has better performance than original wifidog, there are some benchmark data in 
+benchmark directory to prove it
 
 > HTTPs redirect
 
