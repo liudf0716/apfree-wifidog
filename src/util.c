@@ -205,27 +205,6 @@ is_valid_mac(const char *mac)
 	return (i == 12 && (s == 5 || s == 0));
 }
 
-/*
- * 0, FALSE; 1, TRUE
- */
-int 
-is_socket_valid(int sockfd)
-{
-	int err = 0;
-	unsigned errlen = sizeof(err);
-	if (getsockopt(sockfd, SOL_SOCKET, SO_ERROR, &err, &errlen) == -1) {
-		debug(LOG_INFO, "getsockopt(SO_ERROR): %s", strerror(errno));
-		return 0;
-	}
-
-	if (err) {
-		debug(LOG_INFO, "getsockopt(SO_ERROR): %s", strerror(errno));
-		return 0;
-	}
-
-	return 1;
-}
-
 // when sockfd is block, set timeout for connect
 int 
 wd_connect(int sockfd, const struct sockaddr *their_addr, socklen_t addrlen, int timeout)
@@ -363,20 +342,4 @@ wd_sleep(unsigned int s, unsigned int u){
 	timeout.tv_usec = u;
 
 	select(0, NULL, NULL, NULL, &timeout);
-}
-
-/*
- * sucess: 0
- */
-int
-setnonblock(int fd)
-{
-	int flags = fcntl(fd, F_GETFL);
-	if (flags < 0)
-		return flags;
-	flags |= O_NONBLOCK;
-	if (fcntl(fd, F_SETFL, flags) < 0)
-		return -1;
-
-	return 0;
 }

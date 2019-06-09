@@ -47,14 +47,10 @@ int is_valid_ip(const char *);
 
 int is_valid_mac(const char *);
 
-int is_socket_valid(int );
-
 int wd_connect(int, const struct sockaddr *, socklen_t, int);
 
 float get_cpu_usage();
 
 void wd_sleep(unsigned, unsigned );
-
-int setnonblock(int );
 
 #endif                          /* _UTIL_H_ */
