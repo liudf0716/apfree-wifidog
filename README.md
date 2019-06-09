@@ -26,7 +26,7 @@
 
 ## ApFree WiFiDog: A high performance captive portal solution for HTTP(s)
 
-ApFree WiFiDog is a high performance captive portal solution for HTTP(s), which mainly used in [Openwrt](https://github.com/openwrt/openwrt)platform. 
+ApFree WiFiDog is a high performance captive portal solution for HTTP(s), which mainly used in [Openwrt](https://github.com/openwrt/openwrt) platform. 
 
 
 **[中文介绍](https://github.com/liudf0716/apfree_wifidog/blob/master/README_ZH.md)**
@@ -41,7 +41,7 @@ apfree-wifidog was widely used in tens of thousands device, which were running i
 
 > Performance
 
-apfree-wifidog's http request-response is more quick, u can find statistic data in our test document
+to support HTTP, apfree-wifidog replace libhttpd with libevent2, which is more stable and better performance; in multithread evironment, fork will bring much trouble, apfree-wifidog replace iptables command with api call by libipt
 
 > HTTPs redirect
 
