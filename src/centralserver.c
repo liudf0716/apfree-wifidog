@@ -23,7 +23,7 @@
 /** @file centralserver.c
   @brief Functions to talk to the central server (auth/send stats/get rules/etc...)
   @author Copyright (C) 2004 Philippe April <papril777@yahoo.com>
-  @author Copyright (C) 2016 Dengfeng Liu <liudengfeng@kunteng.org>
+  @author Copyright (C) 2016 Dengfeng Liu <liudf0716@gmail.com>
  */
 
 #include "common.h"

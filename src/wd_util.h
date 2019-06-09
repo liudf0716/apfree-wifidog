@@ -22,7 +22,7 @@
 /** @file wd_util.h
   @brief Misc utility functions
   @author Copyright (C) 2015 Alexandre Carmel-Veilleux <acv@miniguru.ca>
-  @author Copyright (C) 2016 Dengfeng Liu <liudengfeng@kunteng.org>
+  @author Copyright (C) 2016 Dengfeng Liu <liudf0716@gmail.com>
 */
 
 #ifndef _WD_UTIL_H_

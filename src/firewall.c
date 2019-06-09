@@ -24,7 +24,7 @@
   @brief Firewall update functions
   @author Copyright (C) 2004 Philippe April <papril777@yahoo.com>
   2006 Benoit Grégoire, Technologies Coeus inc. <bock@step.polymtl.ca>
-  @author Copyright (C) 2016 Dengfeng Liu <liudengfeng@kunteng.org>
+  @author Copyright (C) 2016 Dengfeng Liu <liudf0716@gmail.com>
  */
 
 #define _GNU_SOURCE

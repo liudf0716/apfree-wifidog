@@ -21,7 +21,7 @@
 /* $Id$ */
 /** @file wd_client.h
     @brief Wifidog client functions
-    @author Copyright (C) 2018 Dengfeng Liu <liudengfeng@kunteng.org.cn>
+    @author Copyright (C) 2018 Dengfeng Liu <liudf0716@gmail.com.cn>
 */
 
 #ifndef _WD_CLIENT_H_

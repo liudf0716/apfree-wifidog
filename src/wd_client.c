@@ -23,7 +23,7 @@
 /** 
  * @file wd_client.c
    @brief WIFIDOG CLIENT functions
-   @author Copyright (C) 2016 Dengfeng Liu <liudengfeng@kunteng.org.cn>
+   @author Copyright (C) 2016 Dengfeng Liu <liudf0716@gmail.com.cn>
  */
 #include "common.h"
 #include "debug.h"

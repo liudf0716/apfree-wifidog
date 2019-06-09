@@ -22,7 +22,7 @@
 /* $Id$ */
 /** @file https_server.h
   @brief 
-  @author Copyright (C) 2016 Dengfeng Liu <liudengfeng@kunteng.org>
+  @author Copyright (C) 2016 Dengfeng Liu <liudf0716@gmail.com>
   
   */
 

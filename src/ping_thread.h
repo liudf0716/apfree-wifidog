@@ -23,7 +23,7 @@
 /** @file ping_thread.h
     @brief WiFiDog heartbeat thread
     @author Copyright (C) 2004 Alexandre Carmel-Veilleux <acv@miniguru.ca>
-    @author Copyright (C) 2016 Dengfeng Liu <liudengfeng@kunteng.org>
+    @author Copyright (C) 2016 Dengfeng Liu <liudf0716@gmail.com>
 */
 
 #ifndef _PING_THREAD_H_

@@ -24,7 +24,7 @@
     @brief Periodically checks in with the central auth server so the auth
     server knows the gateway is still up.  Note that this is NOT how the gateway
     detects that the central server is still up.
-    @author Copyright (C) 2016 Dengfeng Liu <liudengfeng@kunteng.org.cn>
+    @author Copyright (C) 2016 Dengfeng Liu <liudf0716@gmail.com.cn>
 */
 
 #define _GNU_SOURCE

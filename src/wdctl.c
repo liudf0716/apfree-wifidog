@@ -22,7 +22,7 @@
 /** @file wdctl.c
     @brief Monitoring and control of wifidog, client part
     @author Copyright (C) 2004 Alexandre Carmel-Veilleux <acv@acv.ca>
-	@author Copyright (C) 2016 Dengfeng Liu <liudengfeng@kunteng.org>
+	@author Copyright (C) 2016 Dengfeng Liu <liudf0716@gmail.com>
 */
 
 #define _GNU_SOURCE

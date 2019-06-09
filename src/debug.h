@@ -22,7 +22,7 @@
 /** @file debug.h
     @brief Debug output routines
     @author Copyright (C) 2004 Philippe April <papril777@yahoo.com>
-    @author Copyright (C) 2016 Dengfeng Liu <liudengfeng@kunteng.org>
+    @author Copyright (C) 2016 Dengfeng Liu <liudf0716@gmail.com>
 */
 
 #ifndef _WIFIDOG_DEBUG_H_

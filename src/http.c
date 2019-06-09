@@ -25,7 +25,7 @@
   @author Copyright (C) 2004 Philippe April <papril777@yahoo.com>
   @author Copyright (C) 2007 Benoit Grégoire
   @author Copyright (C) 2007 David Bird <david@coova.com>
-  @author Copyright (C) 2016 Dengfeng Liu <liudengfeng@kunteng.org>
+  @author Copyright (C) 2016 Dengfeng Liu <liudf0716@gmail.com>
 
  */
 /* Note that libcs other than GLIBC also use this macro to enable vasprintf */
