@@ -208,7 +208,7 @@ process_already_login_client(struct evhttp_request *req, const char *mac, const 
 	
     int flag = 0;
 	
-    LOCK_CLIENT_LIST
+    LOCK_CLIENT_LIST();
     t_client *clt = client_list_find_by_mac(mac);
     if (clt && strcmp(clt->ip, remote_host) != 0) { // the same client get different ip
         fw_deny(clt);
@@ -256,9 +256,10 @@ ev_http_callback_404(struct evhttp_request *req, void *arg)
         return;
     } 
 
-    char *remote_host;
+    char *remote_host = NULL;
     uint16_t port;
     evhttp_connection_get_peer(evhttp_request_get_connection(req), &remote_host, &port);
+	if (remote_host == NULL) return;
 
     char mac[MAC_LENGTH] = {0};
     if (!br_arp_get_mac(remote_host, mac)) {
@@ -534,8 +535,8 @@ ev_send_http_page(struct evhttp_request *req, const char *title, const char *mes
         evhttp_send_error(req, HTTP_INTERNAL, NULL);
         return;
     }
+	
     close(fd);
-
     evhttp_send_reply(req, HTTP_OK, "OK", buffer);
     evbuffer_free(buffer);
 }
