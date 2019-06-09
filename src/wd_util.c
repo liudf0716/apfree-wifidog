@@ -194,7 +194,7 @@ mark_auth_offline()
 int
 is_auth_online()
 {
-    if (!is_online()) {
+	if (!is_online()) {
         /* If we're not online auth is definately not online :) */
         return (0);
     } else if (last_auth_online_time == 0
@@ -211,7 +211,7 @@ char *
 mqtt_get_status_text()
 {
 	time_t uptime = 0;
-    unsigned int days = 0, hours = 0, minutes = 0, seconds = 0;
+	unsigned int days = 0, hours = 0, minutes = 0, seconds = 0;
 	struct json_object *jstatus = json_object_new_object();
 	struct sys_info info;
 	memset(&info, 0, sizeof(info));
@@ -224,66 +224,67 @@ mqtt_get_status_text()
 	json_object_object_add(jstatus, "cpu_usage", json_object_new_double(info.cpu_usage));
 	json_object_object_add(jstatus, "sys_load", json_object_new_double(info.sys_load));
 	json_object_object_add(jstatus, "boad_type", 
-		json_object_new_string(g_type?g_type:"null"));
+	json_object_new_string(g_type?g_type:"null"));
 	json_object_object_add(jstatus, "boad_name", 
-		json_object_new_string(g_name?g_name:"null"));
+	json_object_new_string(g_name?g_name:"null"));
 
 	uptime = time(NULL) - started_time;
-    days = (unsigned int)uptime / (24 * 60 * 60);
-    uptime -= days * (24 * 60 * 60);
-    hours = (unsigned int)uptime / (60 * 60);
-    uptime -= hours * (60 * 60);
-    minutes = (unsigned int)uptime / 60;
-    uptime -= minutes * 60;
-    seconds = (unsigned int)uptime;
-    char wifidog_uptime[128] = {0};
-    snprintf(wifidog_uptime, 128, "%dD %dH %dM %dS", days, hours, minutes, seconds);
+	days = (unsigned int)uptime / (24 * 60 * 60);
+	uptime -= days * (24 * 60 * 60);
+	hours = (unsigned int)uptime / (60 * 60);
+	uptime -= hours * (60 * 60);
+	minutes = (unsigned int)uptime / 60;
+	uptime -= minutes * 60;
+	seconds = (unsigned int)uptime;
+	char wifidog_uptime[128] = {0};
+	snprintf(wifidog_uptime, 128, "%dD %dH %dM %dS", days, hours, minutes, seconds);
 
-    json_object_object_add(jstatus, "wifidog_version", json_object_new_string(VERSION));
-    json_object_object_add(jstatus, "wifidog_uptime", json_object_new_string(wifidog_uptime));
-    json_object_object_add(jstatus, "auth_server", json_object_new_int(is_auth_online()));
+	json_object_object_add(jstatus, "wifidog_version", json_object_new_string(VERSION));
+	json_object_object_add(jstatus, "wifidog_uptime", json_object_new_string(wifidog_uptime));
+	json_object_object_add(jstatus, "auth_server", json_object_new_int(is_auth_online()));
     
-    t_client *sublist = NULL, *current = NULL;
+	t_client *sublist = NULL, *current = NULL;
 
-    LOCK_CLIENT_LIST();
-    int count = client_list_dup(&sublist);
-    UNLOCK_CLIENT_LIST();
-    json_object_object_add(jstatus, "online_client_count", json_object_new_int(count));
+	LOCK_CLIENT_LIST();
+	int count = client_list_dup(&sublist);
+	UNLOCK_CLIENT_LIST();
+	json_object_object_add(jstatus, "online_client_count", json_object_new_int(count));
 
-    current = sublist;
+	current = sublist;
 
 	int active_count = 0;
 	struct json_object *jclients = NULL;
-    while (current != NULL) {
-    	if (!jclients)
-    		jclients = json_object_new_array();
-    	struct json_object *jclient = json_object_new_object();
-    	json_object_object_add(jclient, "status", json_object_new_int(current->is_online));
-    	json_object_object_add(jclient, "ip", json_object_new_string(current->ip));
-    	json_object_object_add(jclient, "mac", json_object_new_string(current->mac));
-    	json_object_object_add(jclient, "token", json_object_new_string(current->token));
-    	json_object_object_add(jclient, "name", 
-    		json_object_new_string(current->name != NULL?current->name:"null"));
-    	json_object_object_add(jclient, "first_login", json_object_new_int64(current->first_login));
-    	json_object_object_add(jclient, "downloaded", 
-    		json_object_new_int64(current->counters.incoming));
-    	json_object_object_add(jclient, "uploaded",
-    		json_object_new_int64(current->counters.outgoing));
+	while (current != NULL) {
+		if (!jclients)
+			jclients = json_object_new_array();
+		struct json_object *jclient = json_object_new_object();
+		json_object_object_add(jclient, "status", json_object_new_int(current->is_online));
+		json_object_object_add(jclient, "ip", json_object_new_string(current->ip));
+		json_object_object_add(jclient, "mac", json_object_new_string(current->mac));
+		json_object_object_add(jclient, "token", json_object_new_string(current->token));
+		json_object_object_add(jclient, "name", 
+			json_object_new_string(current->name != NULL?current->name:"null"));
+		json_object_object_add(jclient, "first_login", json_object_new_int64(current->first_login));
+		json_object_object_add(jclient, "downloaded", 
+			json_object_new_int64(current->counters.incoming));
+		json_object_object_add(jclient, "uploaded",
+			json_object_new_int64(current->counters.outgoing));
 
-       json_object_array_add(jclients, jclient);
+		json_object_array_add(jclients, jclient);
 
 		if(current->is_online)
 			active_count++;
-        current = current->next;
-    }
-    client_list_destroy(sublist);
-    if (jclients)
-    	json_object_object_add(jstatus, "clients", jclients);
+		current = current->next;
+	}
 
-    json_object_object_add(jstatus, "active_client_count", json_object_new_int(active_count));
-    char *retStr = safe_strdup(json_object_to_json_string(jstatus));
-    json_object_put(jstatus);
-    return retStr;
+	client_list_destroy(sublist);
+	if (jclients)
+		json_object_object_add(jstatus, "clients", jclients);
+
+	json_object_object_add(jstatus, "active_client_count", json_object_new_int(active_count));
+	char *retStr = safe_strdup(json_object_to_json_string(jstatus));
+	json_object_put(jstatus);
+	return retStr;
 }
 
 /*
@@ -292,148 +293,147 @@ mqtt_get_status_text()
 char *
 get_status_text()
 {
-    pstr_t *pstr = pstr_new();
-    s_config *config;
-    t_auth_serv *auth_server;
-    t_client *sublist, *current;
-    int count, active_count;
-    time_t uptime = 0;
-    unsigned int days = 0, hours = 0, minutes = 0, seconds = 0;
-    t_trusted_mac *p;
+	pstr_t *pstr = pstr_new();
+	s_config *config;
+	t_auth_serv *auth_server;
+	t_client *sublist, *current;
+	int count, active_count;
+	time_t uptime = 0;
+	unsigned int days = 0, hours = 0, minutes = 0, seconds = 0;
+	t_trusted_mac *p;
 	t_offline_client *oc_list;
 
-    pstr_cat(pstr, "WiFiDog status\n\n");
+	pstr_cat(pstr, "WiFiDog status\n\n");
 
-    uptime = time(NULL) - started_time;
-    days = (unsigned int)uptime / (24 * 60 * 60);
-    uptime -= days * (24 * 60 * 60);
-    hours = (unsigned int)uptime / (60 * 60);
-    uptime -= hours * (60 * 60);
-    minutes = (unsigned int)uptime / 60;
-    uptime -= minutes * 60;
-    seconds = (unsigned int)uptime;
+	uptime = time(NULL) - started_time;
+	days = (unsigned int)uptime / (24 * 60 * 60);
+	uptime -= days * (24 * 60 * 60);
+	hours = (unsigned int)uptime / (60 * 60);
+	uptime -= hours * (60 * 60);
+	minutes = (unsigned int)uptime / 60;
+	uptime -= minutes * 60;
+	seconds = (unsigned int)uptime;
 
-    pstr_cat(pstr, "Version: " VERSION "\n");
-    pstr_append_sprintf(pstr, "Uptime: %ud %uh %um %us\n", days, hours, minutes, seconds);
-    pstr_cat(pstr, "Has been restarted: ");
+	pstr_cat(pstr, "Version: " VERSION "\n");
+	pstr_append_sprintf(pstr, "Uptime: %ud %uh %um %us\n", days, hours, minutes, seconds);
+	pstr_cat(pstr, "Has been restarted: ");
 
-    if (restart_orig_pid) {
-        pstr_append_sprintf(pstr, "yes (from PID %d)\n", restart_orig_pid);
-    } else {
-        pstr_cat(pstr, "no\n");
-    }
+	if (restart_orig_pid) {
+		pstr_append_sprintf(pstr, "yes (from PID %d)\n", restart_orig_pid);
+	} else {
+		pstr_cat(pstr, "no\n");
+	}
 
-    pstr_append_sprintf(pstr, "Internet Connectivity: %s\n", (is_online()? "yes" : "no"));
-    pstr_append_sprintf(pstr, "Auth server reachable: %s\n", (is_auth_online()? "yes" : "no"));
-    pstr_append_sprintf(pstr, "Clients served this session: %lu\n\n", served_this_session);
+	pstr_append_sprintf(pstr, "Internet Connectivity: %s\n", (is_online()? "yes" : "no"));
+	pstr_append_sprintf(pstr, "Auth server reachable: %s\n", (is_auth_online()? "yes" : "no"));
+	pstr_append_sprintf(pstr, "Clients served this session: %lu\n\n", served_this_session);
 
-    LOCK_CLIENT_LIST();
+	LOCK_CLIENT_LIST();
 
-    count = client_list_dup(&sublist);
+	count = client_list_dup(&sublist);
 
-    UNLOCK_CLIENT_LIST();
+	UNLOCK_CLIENT_LIST();
 
-    current = sublist;
+	current = sublist;
 
-    pstr_append_sprintf(pstr, "%d clients " "connected.\n", count);
+	pstr_append_sprintf(pstr, "%d clients " "connected.\n", count);
 
-    count = 1;
+	count = 1;
 	active_count = 0;
-    while (current != NULL) {
-        pstr_append_sprintf(pstr, "\nClient %d status [%d]\n", count, current->is_online);
-        pstr_append_sprintf(pstr, "  IP: %s MAC: %s\n", current->ip, current->mac);
-        pstr_append_sprintf(pstr, "  Token: %s\n", current->token);
-        pstr_append_sprintf(pstr, "  First Login: %lld\n", (long long)current->first_login);
-        pstr_append_sprintf(pstr, "  Name: %s\n", current->name != NULL?current->name:"null");
-        pstr_append_sprintf(pstr, "  Downloaded: %llu\n  Uploaded: %llu\n", current->counters.incoming,
-                            current->counters.outgoing);
-        count++;
+	while (current != NULL) {
+		pstr_append_sprintf(pstr, "\nClient %d status [%d]\n", count, current->is_online);
+		pstr_append_sprintf(pstr, "  IP: %s MAC: %s\n", current->ip, current->mac);
+		pstr_append_sprintf(pstr, "  Token: %s\n", current->token);
+		pstr_append_sprintf(pstr, "  First Login: %lld\n", (long long)current->first_login);
+		pstr_append_sprintf(pstr, "  Name: %s\n", current->name != NULL?current->name:"null");
+		pstr_append_sprintf(pstr, "  Downloaded: %llu\n  Uploaded: %llu\n", current->counters.incoming,
+			current->counters.outgoing);
+		count++;
 		if(current->is_online)
 			active_count++;
-        current = current->next;
-    }
+		current = current->next;
+	}
 
-    client_list_destroy(sublist);
+	client_list_destroy(sublist);
 
-    pstr_append_sprintf(pstr, "%d client " " %d active .\n", count-1, active_count);
+	pstr_append_sprintf(pstr, "%d client " " %d active .\n", count-1, active_count);
 
 	LOCK_OFFLINE_CLIENT_LIST();
-    pstr_append_sprintf(pstr, "%d clients " "unconnected.\n", offline_client_number());
+	pstr_append_sprintf(pstr, "%d clients " "unconnected.\n", offline_client_number());
 	oc_list = client_get_first_offline_client();
 	while(oc_list != NULL) {	
-        pstr_append_sprintf(pstr, "  IP: %s MAC: %s Last Login: %lld Hit Counts: %d Client Type: %d Temp Passed: %d\n", 
+		pstr_append_sprintf(pstr, "  IP: %s MAC: %s Last Login: %lld Hit Counts: %d Client Type: %d Temp Passed: %d\n", 
 			oc_list->ip, oc_list->mac, (long long)oc_list->last_login, 
 			oc_list->hit_counts, oc_list->client_type, oc_list->temp_passed);
 		oc_list = oc_list->next;
 	}
 	UNLOCK_OFFLINE_CLIENT_LIST();
 
-    config = config_get_config();
+	config = config_get_config();
 
-    LOCK_CONFIG();
+	LOCK_CONFIG();
 
-    if (config->trustedmaclist != NULL) {
-        pstr_cat(pstr, "\nTrusted MAC addresses:\n");
+	if (config->trustedmaclist != NULL) {
+		pstr_cat(pstr, "\nTrusted MAC addresses:\n");
 
-        for (p = config->trustedmaclist; p != NULL; p = p->next) {
-            pstr_append_sprintf(pstr, "  %s\n", p->mac);
-        }
-    }
+		for (p = config->trustedmaclist; p != NULL; p = p->next) {
+			pstr_append_sprintf(pstr, "  %s\n", p->mac);
+		}
+	}
 
-    pstr_cat(pstr, "\nAuthentication servers:\n");
+	pstr_cat(pstr, "\nAuthentication servers:\n");
 
+	for (auth_server = config->auth_servers; auth_server != NULL; auth_server = auth_server->next) {
+		pstr_append_sprintf(pstr, "  Host: %s (%s)\n", auth_server->authserv_hostname, auth_server->last_ip);
+	}
 
-    for (auth_server = config->auth_servers; auth_server != NULL; auth_server = auth_server->next) {
-        pstr_append_sprintf(pstr, "  Host: %s (%s)\n", auth_server->authserv_hostname, auth_server->last_ip);
-    }
+	UNLOCK_CONFIG();
 
-    UNLOCK_CONFIG();
-
-    return pstr_to_string(pstr);
+	return pstr_to_string(pstr);
 }
 
 char *
 get_serialize_iplist()
 {
-	pstr_t *pstr = NULL;
-    s_config *config = config_get_config();
-	t_domain_trusted *domain_trusted = NULL;
-	t_ip_trusted	*iplist = NULL;
-	int line = 0;
+		pstr_t *pstr = NULL;
+		s_config *config = config_get_config();
+		t_domain_trusted *domain_trusted = NULL;
+		t_ip_trusted	*iplist = NULL;
+		int line = 0;
 
-	domain_trusted = config->domains_trusted;
-	if(domain_trusted == NULL)
-		return NULL;
+		domain_trusted = config->domains_trusted;
+		if(domain_trusted == NULL)
+				return NULL;
 
 
-	LOCK_DOMAIN();
-	
-	for (; domain_trusted != NULL; domain_trusted = domain_trusted->next) {
-		if(strcmp(domain_trusted->domain, "iplist") == 0) {
-			break;
+		LOCK_DOMAIN();
+
+		for (; domain_trusted != NULL; domain_trusted = domain_trusted->next) {
+				if(strcmp(domain_trusted->domain, "iplist") == 0) {
+						break;
+				}
 		}
-	}
-	
-	if(domain_trusted != NULL)	
-		iplist = domain_trusted->ips_trusted;
-	else {
-		UNLOCK_DOMAIN();
-        debug(LOG_DEBUG, "no iplist ");
-		return NULL;
-	}
 
-	pstr = pstr_new();
+		if(domain_trusted != NULL)	
+				iplist = domain_trusted->ips_trusted;
+		else {
+				UNLOCK_DOMAIN();
+				debug(LOG_DEBUG, "no iplist ");
+				return NULL;
+		}
 
-	for(; iplist != NULL; iplist = iplist->next, line++) {
-		if(line == 0)
-        	pstr_append_sprintf(pstr, "%s", iplist->ip);
-		else
-        	pstr_append_sprintf(pstr, ",%s", iplist->ip);	
-	}
+		pstr = pstr_new();
 
-	UNLOCK_DOMAIN();	
-    
-	return pstr_to_string(pstr);
+		for(; iplist != NULL; iplist = iplist->next, line++) {
+				if(line == 0)
+						pstr_append_sprintf(pstr, "%s", iplist->ip);
+				else
+						pstr_append_sprintf(pstr, ",%s", iplist->ip);	
+		}
+
+		UNLOCK_DOMAIN();	
+
+		return pstr_to_string(pstr);
 
 }
 
