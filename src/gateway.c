@@ -65,11 +65,6 @@ static pthread_t tid_mqtt_server;
 static int signals[] = { SIGTERM, SIGQUIT, SIGHUP, SIGINT, SIGPIPE, SIGCHLD, SIGUSR1 };
 static struct event *sev[sizeof(signals)/sizeof(int)];
 
-static void *
-wd_zeroing_malloc(size_t howmuch){ 
-	return calloc (1, howmuch); 
-}
-
 static void 
 openssl_init(void)
 { 
