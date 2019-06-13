@@ -37,8 +37,7 @@ set(libs
 	ssl
 	crypto
 	event
-	event_openssl
-	mosquitto)
+	event_openssl)
 
 set(fw3_libs
 	dl
