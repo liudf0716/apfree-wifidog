@@ -88,7 +88,9 @@
 #include <libiptc/libiptc.h>
 #include <xtables.h>
 #include <json-c/json.h>
-#include <mosquitto.h>
+#ifdef	_MQTT_SUPPORT_
+  #include <mosquitto.h>
+#endif
 #include <uci.h>
 
 #ifdef EVENT__HAVE_NETINET_IN_H
