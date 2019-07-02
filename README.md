@@ -65,78 +65,10 @@ u don't need to modify your wifidog authentication server to adapt apfree-wifido
 
 ## How to added apfree-wifidog into Openwrt package 
 
-```
-cd your_openwrt_sdk_dir
-mkdir -p packages/net/apfree-wifidog
-cp -r apfree_wifidog_openwrt/* packages/net/apfree-wifidog
-make menuconfig
-select apfree-wifidog
-```
-
-Please go to [package_apfree_wifidog](https://github.com/KunTengRom/package_apfree_wifidog)
+apfree-wifidog has been accepted by OpenWrt packages' master and 19.07 branch, which can be found in net directory.
 
 
 --------
-
-## Getting started
-
-before starting apfree-wifidog, we must know how to configure it. apfree-wifidog use OpenWrt standard uci config system, all your apfree-wifidog configure information stored in `/etc/confg/wifidogx`, which will be parsed by  `/etc/init.d/wifidogx` to /tmp/wifidog.conf, apfree-wifidog's real configure file is `/tmp/wifidog.conf`
-
-The default apfree-wifidog UCI configuration file like this:
-
-```
-config wifidog
-    option  gateway_interface   'br-lan'
-    option  auth_server_hostname    'wifidog.kunteng.org.cn'
-    option  auth_server_port    443
-    option  auth_server_path    '/wifidog/'
-    option  check_interval      60
-    option  client_timeout      5
-    option  apple_cna           1
-    option  thread_number       5
-    option  wired_passed        0
-    option  enable      0
-```
-
-> auth_server_hostname was apfree-wifidog auth server, it can be domain or ip; wifidog.kunteng.org.cn is a free auth server we provided, it was also [open source](https://github.com/wificoin-project/wwas) 
-
-> apple_cna 1 apple captive detect deceive; 2 apple captive detect deceive to  disallow portal page appear
-
-> wired_passed means whether LAN access devices need to auth or not, value 1 means no need to auth 
-
-> enable means whether start apfree-wifidog when we executed `/etc/init.d/wifidogx start`, if u wanted to start apfree-wifidog, you must set enable to 1 before executing `/etc/init.d/wifidogx start`
-
-### How to support https redirect
-
-In order to support https redirect, apfree-wifidog need x509 pem cert and private key, u can generate youself like this:
-
-```
-PX5G_BIN="/usr/sbin/px5g"
-OPENSSL_BIN="/usr/bin/openssl"
-APFREE_CERT="/etc/apfree.crt"
-APFREE_KEY="/etc/apfree.key"
-
-generate_keys() {
-    local days bits country state location commonname
-
-    # Prefer px5g for certificate generation (existence evaluated last)
-    local GENKEY_CMD=""
-    local UNIQUEID=$(dd if=/dev/urandom bs=1 count=4 | hexdump -e '1/1 "%02x"')
-    [ -x "$OPENSSL_BIN" ] && GENKEY_CMD="$OPENSSL_BIN req -x509 -sha256 -outform pem -nodes"
-    [ -x "$PX5G_BIN" ] && GENKEY_CMD="$PX5G_BIN selfsigned -pem"
-    [ -n "$GENKEY_CMD" ] && {
-        $GENKEY_CMD \
-            -days ${days:-730} -newkey rsa:${bits:-2048} -keyout "${APFREE_KEY}.new" -out "${APFREE_CERT}.new" \
-            -subj /C="${country:-CN}"/ST="${state:-localhost}"/L="${location:-Unknown}"/O="${commonname:-ApFreeWiFidog}$UNIQUEID"/CN="${commonname:-ApFreeWiFidog}"
-        sync
-        mv "${APFREE_KEY}.new" "${APFREE_KEY}"
-        mv "${APFREE_CERT}.new" "${APFREE_CERT}"
-    }
-}
-
-```
-
-or when u start `/etc/init.d/wifidogx start`, it will generate it automatically
 
 ### Attention! when apfree-wifidog redirect https request, u will receive certificate file is illegal warning, no need to panic, it's normal response
 
@@ -163,12 +95,8 @@ Feel free to create issues or pull-requests if you have any problems.
 
 
 ### contact us 
-
 QQ group： [331230369](https://jq.qq.com/?_wv=1027&k=4ADDSev)
-telegram:  [apfreewifidog](https://t.me/joinchat/H6i5BEY5fUyltcVah1WlNg)
 
-## donate
-### wfc: [weiKbu9DYg26gH2zucSHJHgH5KsuuZd3wW](https://wfc.xyblock.net/#/wifiPortal/donate)
 
 
 ---
