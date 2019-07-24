@@ -14,6 +14,12 @@ if(NOT OPENSSL_FOUND)
   message(FATAL_ERROR "OpenSSL not found!")
 endif(NOT OPENSSL_FOUND)
 
+find_package(JSON-C REQUIRED)
+include_directories(${JSON-C_INCLUDE_DIR})
+
+find_package(UCI REQUIRED)
+include_directories(${UCI_INCLUDE_DIR})
+
 if(LIB_INSTALL_DIR)
 else()
   set(LIB_INSTALL_DIR lib)
