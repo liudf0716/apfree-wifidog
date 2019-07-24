@@ -557,8 +557,8 @@ ev_fw_sync_with_authserver_v2(struct wd_request_context *context)
 		if (!wd_make_request(context, &evcon, &req, process_auth_server_counter_v2)) {
 			const char *param = json_object_to_json_string(clients_info);
 			assert(param != NULL);
-			char len[8] = {0};
-			snprintf(len, 8, "%lu", strlen(param));
+			char len[20] = {0};
+			snprintf(len, 20, "%lu", strlen(param));
 			evhttp_remove_header(evhttp_request_get_output_headers(req), "Content-Type");
 			evhttp_add_header(evhttp_request_get_output_headers(req), "Content-Type", "application/json");
         	evhttp_add_header(evhttp_request_get_output_headers(req), "Content-Length", len);
