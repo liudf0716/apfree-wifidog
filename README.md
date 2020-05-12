@@ -98,5 +98,8 @@ Feel free to create issues or pull-requests if you have any problems.
 QQ group： [331230369](https://jq.qq.com/?_wv=1027&k=4ADDSev)
 
 
+### ad
 
+想学习OpenWrt开发，但是摸不着门道？自学没毅力？基础太差？怕太难学不会？跟着佐大学OpenWrt开发入门培训班助你能学有所成 报名地址：[点击报名](http://forgotfun.org/2018/04/openwrt-training-2018.html
+)
 ---
