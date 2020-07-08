@@ -44,6 +44,13 @@
 
 extern time_t started_time;
 
+int g_online_clients;
+char *g_version;
+char *g_type;
+char *g_name;
+char *g_channel_path;
+char *g_ssid;
+
 static void fw_init_delay();
 static void ping_work_cb(evutil_socket_t, short, void *);
 static void process_ping_response(struct evhttp_request *, void *);
