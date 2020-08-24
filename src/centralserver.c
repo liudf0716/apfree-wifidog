@@ -86,9 +86,11 @@ process_auth_server_roam(struct evhttp_request *req, void *ctx)
     const char *is_roam = json_object_get_string(roam_jo);
     if(is_roam && strcmp(is_roam, "yes") == 0) {
         json_object *client = NULL;
-        if( !json_object_object_get_ex(roam_info, "client", &client)) {
+        if( json_object_object_get_ex(roam_info, "client", &client)) {
             add_online_client(roam->ip, roam->mac, client);
-        }
+        } else {
+			debug(LOG_ERR, "no roam client info!!!!!");
+		}
     }
 
     json_object_put(roam_info);
