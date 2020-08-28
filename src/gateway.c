@@ -65,6 +65,14 @@ static pthread_t tid_mqtt_server;
 static int signals[] = { SIGTERM, SIGQUIT, SIGHUP, SIGINT, SIGPIPE, SIGCHLD, SIGUSR1 };
 static struct event *sev[sizeof(signals)/sizeof(int)];
 
+#if (OPENSSL_VERSION_NUMBER < 0x10100000L) || \
+	(defined(LIBRESSL_VERSION_NUMBER) && LIBRESSL_VERSION_NUMBER < 0x20700000L)
+static void *
+wd_zeroing_malloc(size_t howmuch) {
+	return calloc(1, howmuch);
+}
+#endif
+
 static void 
 openssl_init(void)
 { 
