@@ -437,10 +437,10 @@ http_redir_loop(s_config *config)
 	wd_signals_init(base);
 	
     evhttp_set_cb(http, "/wifidog", ev_http_callback_wifidog, NULL);
-    evhttp_set_cb(http, "/wifidog/status", ev_http_callback_status, NULL);
+    //evhttp_set_cb(http, "/wifidog/status", ev_http_callback_status, NULL);
     evhttp_set_cb(http, "/wifidog/auth", ev_http_callback_auth, request_ctx);
-    evhttp_set_cb(http, "/wifidog/disconnect", ev_http_callback_disconnect, request_ctx);
-    evhttp_set_cb(http, "/wifidog/temporary_pass", ev_http_callback_temporary_pass, NULL);
+    //evhttp_set_cb(http, "/wifidog/disconnect", ev_http_callback_disconnect, request_ctx);
+    //evhttp_set_cb(http, "/wifidog/temporary_pass", ev_http_callback_temporary_pass, NULL);
 
     evhttp_set_gencb(http, ev_http_callback_404, NULL);
 
