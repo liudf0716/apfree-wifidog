@@ -28,9 +28,6 @@
 
 ApFree WiFiDog is a high performance captive portal solution for HTTP(s), which mainly used in [Openwrt](https://github.com/openwrt/openwrt) platform. 
 
-
-**[中文介绍](https://github.com/liudf0716/apfree_wifidog/blob/master/README_ZH.md)**
-
 ## Enhancement of apfree-wifidog 
 
 In fact, the title should be why we choose apfree-wifidog, the reason was the following: 
