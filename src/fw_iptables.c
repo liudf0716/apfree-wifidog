@@ -887,8 +887,11 @@ iptables_fw_init(void)
 	/* Insert at the beginning */
 	iptables_do_append_command(handle, "-t filter -I FORWARD -i %s -j " CHAIN_TO_INTERNET, config->gw_interface);
 
+#if	1
+	// when apfree wifidog work in bypass mode, need to comment this line
 	iptables_do_append_command(handle, "-t filter -A " CHAIN_TO_INTERNET " -m conntrack --ctstate INVALID -j DROP");
-
+#endif
+	
 	/* TCPMSS rule for PPPoE */
 	iptables_do_append_command(handle, "-t filter -A " CHAIN_TO_INTERNET
 						" -o %s -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu", ext_interface);
