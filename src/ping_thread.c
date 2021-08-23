@@ -250,9 +250,11 @@ get_sys_info(struct sys_info *info)
 	if (uci_get_value("firmwareinfo", "channel_path", channel_path, 127)) {			
 		trim_newline(channel_path);	
 		if(strlen(channel_path) > 0)
-			g_channel_path = safe_strdup(channel_path);
-		debug(LOG_DEBUG, "g_channel_path is %s", g_channel_path);
+			g_channel_path = safe_strdup(channel_path);	
+	} else {
+		g_channel_path = safe_strdup("apfree");
 	}
+	debug(LOG_DEBUG, "g_channel_path is %s", g_channel_path);
 }
 
 static void
