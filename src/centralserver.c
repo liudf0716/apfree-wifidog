@@ -554,6 +554,15 @@ process_auth_server_counter_v2(struct evhttp_request *req, void *ctx)
         authresponse.authcode = auth_code;
         client_counter_request_reply_v2(&authresponse, req, ctx);
     }
+	
+	json_object *j_client_timeout = json_object_object_get(j_result, "clientTimeout");
+	if (j_client_timeout) {
+		int clientTimeout = json_object_get_int(j_client_timeout);
+		s_config *config = config_get_config();
+		LOCK_CLIENT_LIST();
+		config->clienttimeout = clientTimeout;
+		UNLOCK_CLIENT_LIST();
+	}
     
 ERR:
     if (j_result) json_object_put(j_result);
