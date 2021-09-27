@@ -1,5 +1,9 @@
 ## Auth Server
 
+### apfree-wifidog官方认证服务器
+[apfree-wifidog官方认证服务器](https://github.com/wificoin-project/wificoin-wifidog-auth-server)
+
+
 ### 认证服务器
 
 1. [wifidog/wifidog-auth](https://github.com/wifidog/wifidog-auth)
@@ -11,8 +15,6 @@
 
 1. [Echowxsy/wx-apfree_wifidog-auth](https://github.com/Echowxsy/wx-apfree_wifidog-auth)
 
-### apfree wifidog官方认证服务器
-[apfree wifidog官方认证服务器](https://github.com/wificoin-project/wificoin-wifidog-auth-server)
 
 
 
