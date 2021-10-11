@@ -12,18 +12,35 @@ env:
 
 jobs:
   build:
-    # The CMake configure and build commands are platform agnostic and should work equally
-    # well on Windows or Mac.  You can convert this to a matrix build if you need
-    # cross-platform coverage.
-    # See: https://docs.github.com/en/free-pro-team@latest/actions/learn-github-actions/managing-complex-workflows#using-a-build-matrix
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v2
+    - name: Checkout changes
+      uses: actions/checkout@v2
 
+    - name: install libubox
+      run: |
+        git clone https://github.com/xfguo/libubox.git
+        cd libubox
+        cmake -DBUILD_LUA=off
+        sudo make install
+        
+    - name: install uci
+      run: |
+        git clone https://github.com/jkjuopperi/uci.git
+        cd uci
+        cmake -DBUILD_LUA=off
+        sudo make install
     
-      # Build your program with the given configuration
-      run: cmake --build ${{github.workspace}}/build
-
+    - name: install libevent-2.1
+      run: |
+        sudo apt-get install openssl
+        sudo apt-get install libevent-2.1-6
+        
+    - name: compile apfree-wifidog
+      run: |
+        mkdir build
+        cd build
+        cmake ..
     
       
