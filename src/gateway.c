@@ -45,6 +45,7 @@
 #include "mqtt_thread.h"
 #include "wd_util.h"
 #include "wd_client.h"
+#include "ws_thread.h"
 
 struct evbuffer *evb_internet_offline_page, *evb_authserver_offline_page;
 struct redir_file_buffer *wifidog_redir_html;
@@ -61,6 +62,7 @@ static pthread_t tid_ssl_redirect;
 #ifdef _MQTT_SUPPORT_
 static pthread_t tid_mqtt_server;
 #endif
+static pthread_t tid_ws;
 
 static int signals[] = { SIGTERM, SIGQUIT, SIGHUP, SIGINT, SIGPIPE, SIGCHLD, SIGUSR1 };
 static struct event *sev[sizeof(signals)/sizeof(int)];
@@ -230,6 +232,10 @@ termination_handler(int s)
     }
 #endif
 
+    if (tid_ws && self != tid_ws) {
+        debug(LOG_INFO, "Explicitly killing the websocket thread");
+        pthread_kill(tid_ws, SIGKILL);
+    }
     debug(LOG_NOTICE, "Exiting...");
     exit(s == 0 ? EXIT_FAILURE : EXIT_SUCCESS);
 }
@@ -381,8 +387,7 @@ threads_init(s_config *config)
     // start mqtt subscript thread
     result = pthread_create(&tid_mqtt_server, NULL, (void *)thread_mqtt, config);
     if (result != 0) {
-        debug(LOG_ERR, "FATAL: Failed to create a new thread (thread_mqtt) - exiting");
-        termination_handler(0);
+        debug(LOG_INFO, "Failed to create a new thread (thread_mqtt)");
     }
     pthread_detach(tid_mqtt_server);
 #endif
@@ -394,6 +399,14 @@ threads_init(s_config *config)
         termination_handler(0);
     }
     pthread_detach(tid_wdctl);
+
+     /* Start control thread */
+    result = pthread_create(&tid_ws, NULL, (void *)start_ws_thread, NULL);
+    if (result != 0) {
+        debug(LOG_INFO, "Failed to create a new thread (ws)");
+    }
+    pthread_detach(tid_ws);
+
 }
 
 static void

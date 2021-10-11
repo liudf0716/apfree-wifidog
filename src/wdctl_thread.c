@@ -197,9 +197,10 @@ wdctl_listen_new_client(struct evconnlistener *listener, evutil_socket_t fd,
     bufferevent_enable(b_client, EV_READ|EV_WRITE);
 }
 
-/** Launches a thread that monitors the control socket for request
-@param arg Must contain a pointer to a string containing the Unix domain socket to open
-*/
+/** 
+ * Launches a thread that monitors the control socket for request
+ *  @param arg Must contain a pointer to a string containing the Unix domain socket to open
+ */
 void
 thread_wdctl(void *arg)
 {
