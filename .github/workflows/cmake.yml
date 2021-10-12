@@ -35,12 +35,18 @@ jobs:
     - name: install libevent-2.1
       run: |
         sudo apt-get install openssl
-        sudo apt-get install libevent-2.1-6
+        git clone https://github.com/libevent/libevent.git
+        cd libevent
+        git checkout tags/release-2.1.12-stable -b 2.1.12-stable
+        ./configure
+        make
+        sudo make install
         
     - name: compile apfree-wifidog
       run: |
         mkdir build
         cd build
         cmake ..
+        make
     
       
