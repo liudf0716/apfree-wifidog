@@ -37,6 +37,7 @@ static char *fixed_accept = "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=";
 static bool upgraded = false;
 
 static void ssh_read_cb(struct bufferevent* bev, void* ctx);
+static void ws_ssh_read_cb(struct bufferevent* bev, void* ctx);
 
 static void 
 ws_send(struct evbuffer *buf, const char *msg, const size_t len)
@@ -133,7 +134,7 @@ ws_receive(struct evbuffer *buf, struct evbuffer *out){
 	evbuffer_drain(buf, header_len + payload_len);
 
 	//next frame
-	ws_receive(buf);
+	ws_receive(buf, out);
 }
 
 static void
@@ -252,7 +253,7 @@ ws_ssh_read_cb(struct bufferevent* bev, void* ctx)
 	dst = bufferevent_get_output(partner);
 
     debug (LOG_DEBUG, "send ws server ssh client data to local ssh server\n");
-    ws_read(src, dst);
+    ws_receive(src, dst);
 
 	if (evbuffer_get_length(dst) >= MAX_OUTPUT) {
         debug (LOG_INFO, "write buffer overflow");
@@ -272,19 +273,19 @@ ws_request(struct bufferevent* b_ws)
 {
 	struct evbuffer *out = bufferevent_get_output(b_ws);
     t_auth_serv *auth_server = get_auth_server();
-	evbuffer_add_printf(out, "GET %s HTTP/1.1\r\n", auth_server->ws_uri);
+	evbuffer_add_printf(out, "GET %s/%s HTTP/1.1\r\n", auth_server->authserv_path, auth_server->authserv_ws_script_path_fragment);
     if (!auth_server->authserv_use_ssl)
-	    evbuffer_add_printf(out, "Host:%s:%d\r\n",auth_server->authsvr_hostname, auth_server->authsvr_http_port);
+	    evbuffer_add_printf(out, "Host:%s:%d\r\n",auth_server->authserv_hostname, auth_server->authserv_http_port);
 	else
-        evbuffer_add_printf(out, "Host:%s:%d\r\n",auth_server->authsvr_hostname, auth_server->authsvr_ssl_port);
+        evbuffer_add_printf(out, "Host:%s:%d\r\n",auth_server->authserv_hostname, auth_server->authserv_ssl_port);
     evbuffer_add_printf(out, "Upgrade:websocket\r\n");
 	evbuffer_add_printf(out, "Connection:upgrade\r\n");
 	evbuffer_add_printf(out, "Sec-WebSocket-Key:%s\r\n", fixed_key);
 	evbuffer_add_printf(out, "Sec-WebSocket-Version:13\r\n");
     if (!auth_server->authserv_use_ssl)
-	    evbuffer_add_printf(out, "Origin:http://%s:%d\r\n",auth_server->authsvr_hostname, auth_server->authsvr_http_port); 
+	    evbuffer_add_printf(out, "Origin:http://%s:%d\r\n",auth_server->authserv_hostname, auth_server->authserv_http_port); 
     else
-        evbuffer_add_printf(out, "Origin:http://%s:%d\r\n",auth_server->authsvr_hostname, auth_server->authsvr_ssl_port);
+        evbuffer_add_printf(out, "Origin:http://%s:%d\r\n",auth_server->authserv_hostname, auth_server->authserv_ssl_port);
 	evbuffer_add_printf(out, "\r\n");
 }
 
@@ -293,8 +294,9 @@ ws_read_cb(struct bufferevent *b_ws, void *ctx)
 {
     debug (LOG_DEBUG, "ws_read_cb : upgraded is %d\n", upgraded);
     if (!upgraded) {
-        int data_len = evbuffer_get_length(b_ws);
-        unsigned char *data = evbuffer_pullup(b_ws, data_len);
+		struct evbuffer *input = bufferevent_get_input(b_ws);
+        int data_len = evbuffer_get_length(input);
+        unsigned char *data = evbuffer_pullup(input, data_len);
         if(!strstr((const char*)data, "\r\n\r\n")) {
             debug (LOG_INFO, "data end");
             return;
