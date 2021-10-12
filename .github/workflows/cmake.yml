@@ -35,7 +35,7 @@ jobs:
       run: |
           sudo apt-get update -y
           sudo apt-get install -y libjson-c-dev
-          sudo apt-get install -y automake-1.15
+          sudo apt-get install -y automake
     
     - name: install libevent2
       run: |
