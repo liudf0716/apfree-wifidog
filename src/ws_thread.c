@@ -274,18 +274,20 @@ ws_request(struct bufferevent* b_ws)
 	struct evbuffer *out = bufferevent_get_output(b_ws);
     t_auth_serv *auth_server = get_auth_server();
 	evbuffer_add_printf(out, "GET %s/%s HTTP/1.1\r\n", auth_server->authserv_path, auth_server->authserv_ws_script_path_fragment);
-    if (!auth_server->authserv_use_ssl)
+    if (!auth_server->authserv_use_ssl) {
 	    evbuffer_add_printf(out, "Host:%s:%d\r\n",auth_server->authserv_hostname, auth_server->authserv_http_port);
-	else
+	} else {
         evbuffer_add_printf(out, "Host:%s:%d\r\n",auth_server->authserv_hostname, auth_server->authserv_ssl_port);
+	}
     evbuffer_add_printf(out, "Upgrade:websocket\r\n");
 	evbuffer_add_printf(out, "Connection:upgrade\r\n");
 	evbuffer_add_printf(out, "Sec-WebSocket-Key:%s\r\n", fixed_key);
 	evbuffer_add_printf(out, "Sec-WebSocket-Version:13\r\n");
-    if (!auth_server->authserv_use_ssl)
-	    evbuffer_add_printf(out, "Origin:http://%s:%d\r\n",auth_server->authserv_hostname, auth_server->authserv_http_port); 
-    else
-        evbuffer_add_printf(out, "Origin:http://%s:%d\r\n",auth_server->authserv_hostname, auth_server->authserv_ssl_port);
+    if (!auth_server->authserv_use_ssl) {
+		evbuffer_add_printf(out, "Origin:http://%s:%d\r\n",auth_server->authserv_hostname, auth_server->authserv_http_port); 
+	} else {
+		evbuffer_add_printf(out, "Origin:http://%s:%d\r\n",auth_server->authserv_hostname, auth_server->authserv_ssl_port);
+	}
 	evbuffer_add_printf(out, "\r\n");
 }
 
