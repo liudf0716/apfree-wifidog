@@ -32,6 +32,10 @@ jobs:
         cmake -DBUILD_LUA=off
         sudo make install
     
+    - name: install other depend lib
+      run: |
+         sudo apt-get install libjson-c-dev
+    
     - name: install libevent2
       run: |
         git clone https://github.com/libevent/libevent.git
@@ -44,19 +48,23 @@ jobs:
     
     - name: install iptables lib 
       run: |
-        wget https://netfilter.org/projects/iptables/files/iptables-1.8.7.tar.bz2
-        tar jxvf iptables-1.8.7.tar.bz2
-        cd iptables-1.8.7
-        wget https://raw.githubusercontent.com/openwrt/openwrt/master/package/network/utils/iptables/patches/600-shared-libext.patch
-        patch -p0 <600-shared-libext.patch
+        wget https://netfilter.org/projects/iptables/files/iptables-1.8.3.tar.bz2
+        tar jxf iptables-1.8.3.tar.bz2
+        cd iptables-1.8.3
+        wget https://raw.githubusercontent.com/openwrt/openwrt/openwrt-19.07/package/network/utils/iptables/patches/101-remove-check-already.patch
+        patch -p0 < 101-remove-check-already.patch
+        wget https://raw.githubusercontent.com/openwrt/openwrt/openwrt-19.07/package/network/utils/iptables/patches/102-iptables-disable-modprobe.patch
+        patch -p0 < 102-iptables-disable-modprobe.patch
+        wget https://raw.githubusercontent.com/openwrt/openwrt/openwrt-19.07/package/network/utils/iptables/patches/103-optional-xml.patch
+        patch -p0 < 103-optional-xml.patch
+        wget https://raw.githubusercontent.com/openwrt/openwrt/openwrt-19.07/package/network/utils/iptables/patches/200-configurable_builtin.patch
+        patch -p0 < 200-configurable_builtin.patch
+        wget https://raw.githubusercontent.com/openwrt/openwrt/openwrt-19.07/package/network/utils/iptables/patches/600-shared-libext.patch
+        patch -p0 < 600-shared-libext.patch
         ./configure
         make
         sudo make install
-    
-    - name: install other depend lib
-      run: |
-         sudo apt-get install libjson-c-dev
-         
+           
     - name: compile apfree-wifidog
       run: |
         mkdir build
