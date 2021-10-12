@@ -61,7 +61,7 @@ jobs:
         patch -p1 < 200-configurable_builtin.patch
         wget https://raw.githubusercontent.com/openwrt/openwrt/openwrt-19.07/package/network/utils/iptables/patches/600-shared-libext.patch
         patch -p1 < 600-shared-libext.patch
-        ./configure
+        ./configure --disable-nftables
         make
         sudo make install
            
