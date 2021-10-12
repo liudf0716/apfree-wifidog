@@ -32,7 +32,7 @@ jobs:
         cmake -DBUILD_LUA=off
         sudo make install
     
-    - name: install libevent-2.1
+    - name: install libevent2
       run: |
         git clone https://github.com/libevent/libevent.git
         cd libevent
@@ -41,7 +41,10 @@ jobs:
         cmake ..
         make
         sudo make install
-        
+    - name: install json-c
+      run: |
+         sudo apt-get install libjson-c-dev
+         
     - name: compile apfree-wifidog
       run: |
         mkdir build
