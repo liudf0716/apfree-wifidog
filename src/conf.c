@@ -271,7 +271,6 @@ config_init(void)
 
 	t_mqtt_server *mqtt_server = (t_mqtt_server *)malloc(sizeof(t_mqtt_server));
 	memset(mqtt_server, 0, sizeof(t_mqtt_server));
-	mqtt_server->hostname   = safe_strdup(DEFAULT_MQTT_SERVER);
 	mqtt_server->port	   = 8883;
 	mqtt_server->cafile	 = safe_strdup(DEFAULT_CA_CRT_FILE);
 	mqtt_server->crtfile	= NULL;
@@ -338,7 +337,7 @@ parse_auth_server(FILE * file, const char *filename, int *linenum)
 	msgscriptpathfragment 		= safe_strdup(DEFAULT_AUTHSERVMSGPATHFRAGMENT);
 	pingscriptpathfragment 		= safe_strdup(DEFAULT_AUTHSERVPINGPATHFRAGMENT);
 	authscriptpathfragment 		= safe_strdup(DEFAULT_AUTHSERVAUTHPATHFRAGMENT);
-	authwsscriptpathfragment 	= safe_strdup(DEFAULT_AUTHSERVWSPATHFRAGMENT;
+	authwsscriptpathfragment 	= safe_strdup(DEFAULT_AUTHSERVWSPATHFRAGMENT);
 	
 	http_port = DEFAULT_AUTHSERVPORT;
 	ssl_port = DEFAULT_AUTHSERVSSLPORT;
