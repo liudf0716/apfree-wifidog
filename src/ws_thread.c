@@ -22,6 +22,7 @@
 #include "common.h"
 #include "ws_thread.h"
 #include "debug.h"
+#include "conf.h"
 
 #define MAX_OUTPUT (512*1024)
 #define htonll(x) ((1==htonl(1)) ? (x) : ((uint64_t)htonl((x) & 0xFFFFFFFF) << 32) | htonl((x) >> 32))
@@ -32,11 +33,13 @@ static struct evdns_base *ws_dnsbase;
 static struct bufferevent *b_sshclient;
 static char *connect_sshsvr_str = "127.0.0.1:22";
 static char *fixed_key = "dGhlIHNhbXBsZSBub25jZQ==";
-static char fixed_accept = "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=";
+static char *fixed_accept = "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=";
 static bool upgraded = false;
 
+static void ssh_read_cb(struct bufferevent* bev, void* ctx);
+
 static void 
-ws_send(evbuffer *buf, const char *msg, const size_t len)
+ws_send(struct evbuffer *buf, const char *msg, const size_t len)
 {
 	uint8_t a = 0;
 	a |= 1 << 7;  //fin
@@ -78,7 +81,7 @@ ws_send(evbuffer *buf, const char *msg, const size_t len)
 }
 
 static void 
-ws_receive(evbuffer *buf, evbuffer *out){
+ws_receive(struct evbuffer *buf, struct evbuffer *out){
 	int data_len = evbuffer_get_length(buf);
     debug (LOG_DEBUG, "ws receive data %d\n", data_len);
 	if(data_len < 2)
@@ -201,7 +204,7 @@ ws_drained_writecb(struct bufferevent *bev, void *ctx)
 }
 
 static void 
-ssh_read_cb(bufferevent* bev, void* ctx)
+ssh_read_cb(struct bufferevent* bev, void* ctx)
 {
     struct bufferevent *partner = ctx;
 	struct evbuffer *src, *dst;
@@ -234,7 +237,7 @@ ssh_read_cb(bufferevent* bev, void* ctx)
 }
 
 static void 
-ws_ssh_read_cb(bufferevent* bev, void* ctx)
+ws_ssh_read_cb(struct bufferevent* bev, void* ctx)
 {
     struct bufferevent *partner = ctx;
 	struct evbuffer *src, *dst;
@@ -265,7 +268,7 @@ ws_ssh_read_cb(bufferevent* bev, void* ctx)
 }
 
 static void 
-ws_request(bufferevent* b_ws)
+ws_request(struct bufferevent* b_ws)
 {
 	struct evbuffer *out = bufferevent_get_output(b_ws);
     t_auth_serv *auth_server = get_auth_server();
@@ -286,7 +289,7 @@ ws_request(bufferevent* b_ws)
 }
 
 static void 
-ws_read_cb(bufferevent *b_ws, void *ctx)
+ws_read_cb(struct bufferevent *b_ws, void *ctx)
 {
     debug (LOG_DEBUG, "ws_read_cb : upgraded is %d\n", upgraded);
     if (!upgraded) {
@@ -324,7 +327,7 @@ ws_read_cb(bufferevent *b_ws, void *ctx)
 }
 
 static void 
-wsevent_connection_cb(bufferevent* b_ws, short events, void *ctx){
+wsevent_connection_cb(struct bufferevent* b_ws, short events, void *ctx){
 	if(events & BEV_EVENT_CONNECTED){
         debug (LOG_DEBUG,"connect ws server and start web socket request\n");
 		ws_request(b_ws);
@@ -359,7 +362,7 @@ start_ws_thread(void *arg)
 
     event_base_free(ws_base);
 
-    return 0;
+    return;
 }
 
 /*
