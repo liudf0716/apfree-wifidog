@@ -48,6 +48,7 @@ jobs:
     
     - name: install iptables lib 
       run: |
+        sudo apt-get install automake
         wget https://netfilter.org/projects/iptables/files/iptables-1.8.3.tar.bz2
         tar jxf iptables-1.8.3.tar.bz2
         cd iptables-1.8.3
