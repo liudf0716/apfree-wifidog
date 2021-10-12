@@ -45,7 +45,6 @@ jobs:
     - name: install other depend lib
       run: |
          sudo apt-get install libjson-c-dev
-         sudo apt-get install iptables-dev
          
     - name: compile apfree-wifidog
       run: |
