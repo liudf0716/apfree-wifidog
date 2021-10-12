@@ -41,7 +41,18 @@ jobs:
         cmake ..
         make
         sudo make install
-        
+    
+    - name: install iptables lib 
+      run: |
+        wget https://netfilter.org/projects/iptables/files/iptables-1.8.7.tar.bz2
+        tar jxvf iptables-1.8.7.tar.bz2
+        cd iptables-1.8.7
+        wget https://raw.githubusercontent.com/openwrt/openwrt/master/package/network/utils/iptables/patches/600-shared-libext.patch
+        patch -p0 <600-shared-libext.patch
+        ./configure
+        make
+        sudo make install
+    
     - name: install other depend lib
       run: |
          sudo apt-get install libjson-c-dev
