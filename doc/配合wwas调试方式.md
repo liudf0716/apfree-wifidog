@@ -30,6 +30,9 @@ PARAM:
 }
 
 5. 启用web ssh接口
+
+GET
+
 http://127.0.0.1:8001/wifidog/launch/ssh
 
-7. 
+6. 
