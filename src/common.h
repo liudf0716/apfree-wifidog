@@ -70,7 +70,6 @@
 #include <netpacket/packet.h>
 #include <net/ethernet.h>
 
-#if	0
 #include <event2/bufferevent.h>
 #include <event2/bufferevent_ssl.h>
 #include <event2/event.h>
@@ -81,14 +80,6 @@
 #include <event2/keyvalq_struct.h>
 #include <event2/buffer.h>
 #include <event2/dns.h>
-#endif
-
-#include <event.h>
-#include <evdns.h>
-#include <evhttp.h>
-#include <evutil.h>
-
-#include <event2/listener.h>
 
 #include <openssl/ssl.h>
 #include <openssl/err.h>
