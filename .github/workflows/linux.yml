@@ -35,6 +35,8 @@ jobs:
       run: |
           sudo apt-get update -y
           sudo apt-get install -y libjson-c-dev
+          sudo apt-get install -y libssh2-1-dev
+          sudo apt-get install -y libevent-dev
     
     - name: install libevent2
       run: |
@@ -42,10 +44,10 @@ jobs:
         cd libevent
         git checkout tags/release-2.1.12-stable -b 2.1.12-stable
         mkdir build && cd build
-        cmake ..
-        make
-        sudo make install
-    
+        #cmake ..
+        #make
+        #sudo make install
+            
     - name: install iptables lib 
       run: | 
         wget https://netfilter.org/projects/iptables/files/iptables-1.8.6.tar.bz2
