@@ -11,7 +11,8 @@ config wifidog
 	option disabled 1
   ```
   上面的文件会在apfree-wifidog启动时，先被wifidog.init文件解析成apfree-wifidog能识别的配置文件；
-  本文档会列出一些用户对apfree wifidog配置的常用的问题龚婵可
+  
+  本文档会列出一些用户对apfree wifidog配置的常用的问题
   
   + 希望将apfree wifidog踢用户下线的时间间隔变长应该如何配置？
 
