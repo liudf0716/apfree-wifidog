@@ -13,7 +13,7 @@ config wifidog
   上面的文件会在apfree-wifidog启动时，先被wifidog.init文件解析成apfree-wifidog能识别的配置文件；
   本文档会列出一些用户对apfree wifidog配置的常用的问题龚婵可
   
-  > 希望将apfree wifidog替用户下线的时间间隔变长应该如何配置？
+  + 希望将apfree wifidog踢用户下线的时间间隔变长应该如何配置？
 
 
    apfree-wifidog会根据用户离线时长来决定是否将该用户自动踢下线，该部分功能与服务器端踢用户下线功能不一样：apfree-wifidog会定时检查用户在线的情况，当发现`check_interval * client_timeout` 秒后，
