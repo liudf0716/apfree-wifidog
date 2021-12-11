@@ -24,11 +24,11 @@
 
 #include <libssh2.h>
 
-#define	IP_LENGTH	16
+#define	IPV4_LENGTH	16
 
 struct {
 	int		m_sock;
-	char 	srv_ip[IP_LENGTH];
+	char 	srv_ip[IPV4_LENGTH];
 	short	srv_port;
 	char	ch_end;
 	char	reserve;
@@ -41,5 +41,13 @@ struct {
 struct libssh_client *new_libssh_client(char *srv_ip, short srv_port, char ch_end, char *username, char *password);
 
 void free_libssh_client(struct libssh_client *ssh_client);
+
+int ssh_client_connect(struct libssh_client *ssh_client);
+
+int ssh_client_create_channel(struct libssh_client *ssh_client, char *pty_type);
+
+char* ssh_client_channel_read(struct libssh_client *ssh_client);
+
+int ssh_client_channel_write(struct libssh_client *ssh_client, char *data, int len);
 
 #endif
