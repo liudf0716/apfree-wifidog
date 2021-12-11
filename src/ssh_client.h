@@ -22,4 +22,20 @@
 #ifndef _SSH_CLIENT_
 #define _SSH_CLIENT_
 
+#include <libssh2.h>
+
+#define	IP_LENGTH	16
+
+struct {
+	int		sock_client;
+	char 	srv_ip[IP_LENGTH];
+	short	srv_port;
+	char	ch_end;
+	char	reserve;
+	char	*username;
+	char	*password;
+	LIBSSH2_SESSION	*m_session;
+	LIBSSH2_CHANNEL	*m_channel;
+} libssh_client;
+
 #endif
