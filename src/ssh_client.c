@@ -176,8 +176,58 @@ void ssh_client_create_channel(struct libssh_client *ssh_client, char *pty_type)
 	}
 }
 
-char* ssh_client_channel_read(struct libssh_client *ssh_client)
+char* ssh_client_channel_read(struct libssh_client *ssh_client, int timeout)
 {
+	char *data = NULL;
+	LIBSSH2_POLLFD *fds = new LIBSSH2_POLLFD;
+	fds->type = LIBSSH2_POLLFD_CHANNEL;
+	fds->fd.channel = m_channel;
+	fds->events = LIBSSH2_POLLFD_POLLIN | LIBSSH2_POLLFD_POLLOUT;
+	
+	if( timeout % 50 )
+	{
+			timeout += timeout %50;
+	}
+	
+	while(timeout>0)
+	{
+			int rc = (libssh2_poll(fds, 1, 10));
+			if (rc < 1)
+			{
+					timeout -= 50;
+					usleep(50*1000);
+					continue;
+			}
+
+			if ( fds->revents & LIBSSH2_POLLFD_POLLIN )
+			{
+					char buffer[64*1024] = {0};
+					size_t n = libssh2_channel_read( m_channel, buffer, sizeof(buffer) );
+					if ( n == LIBSSH2_ERROR_EAGAIN )
+					{
+						 //fprintf(stderr, "will read again\n");
+					}
+					else if (n <= 0)
+					{
+							return data;
+					}
+					else
+					{
+							data += std::string(buffer);
+							if( "" == strend )
+							{
+									return data;
+							}
+							size_t pos = data.rfind(strend);
+							if( pos != std::string::npos && data.substr(pos, strend.size()) == strend  )
+							{
+									return data;
+							}
+					}
+			}
+			timeout -= 50;
+			usleep(50*1000);
+	}
 }
 
 int ssh_client_channel_write(struct libssh_client *ssh_client, char *data, int len)
