@@ -27,7 +27,7 @@
 #define	IP_LENGTH	16
 
 struct {
-	int		sock_client;
+	int		m_sock;
 	char 	srv_ip[IP_LENGTH];
 	short	srv_port;
 	char	ch_end;
@@ -37,5 +37,9 @@ struct {
 	LIBSSH2_SESSION	*m_session;
 	LIBSSH2_CHANNEL	*m_channel;
 } libssh_client;
+
+struct libssh_client *new_libssh_client(char *srv_ip, short srv_port, char ch_end, char *username, char *password);
+
+void free_libssh_client(struct libssh_client *ssh_client);
 
 #endif
