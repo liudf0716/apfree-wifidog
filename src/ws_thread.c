@@ -35,8 +35,6 @@ static char *fixed_key = "dGhlIHNhbXBsZSBub25jZQ==";
 static char *fixed_accept = "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=";
 static bool upgraded = false;
 
-static void ssh_read_cb(struct bufferevent* bev, void* ctx);
-static void ws_ssh_read_cb(struct bufferevent* bev, void* ctx);
 struct libssh_client *ssh_client;
 
 static void 
@@ -132,7 +130,7 @@ ws_receive(struct evbuffer *buf, struct evbuffer *output){
 		char *ssh_resp = ssh_client_channel_read(ssh_client, CHANNEL_READ_TIMTOUT);
 		if(ssh_resp) {
 			// send ssh response to ws server
-			ws_send(out, ssh_resp, strlen(ssh_resp));
+			ws_send(output, ssh_resp, strlen(ssh_resp));
 			free(ssh_resp);
 		}
     }
