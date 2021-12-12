@@ -25,6 +25,7 @@
   @author Copyright (C) 2016 Dengfeng Liu <liudf0716@gmail.com> 
  */
 
+#include "common.h"
 #include "ssh_client.h"
 
 #define	DEFAULT_SSH_PORT		22
@@ -62,7 +63,7 @@ struct libssh_client *new_libssh_client(char *srv_ip, short srv_port, char ch_en
 	if (srv_ip)
 		strncpy(ssh_client->srv_ip, srv_ip, IPV4_LENGTH-1);
 	else 
-		strcpy(ssh_client->srv_ip, "127.0.0.1", 9);
+		strcpy(ssh_client->srv_ip, "127.0.0.1");
 	ssh_client->srv_port 	= srv_port == 0?DEFAULT_SSH_PORT:srv_port;
 	ssh_client->ch_end 		= ch_end;
 	ssh_client->username	= username?strdup(username):strdup("root");
@@ -84,7 +85,7 @@ void free_libssh_client(struct libssh_client *ssh_client)
 		libssh2_session_free(ssh_client->m_session);
 	}
 	if(ssh_client->m_sock > 0) {
-		close(ssh_client-);
+		close(ssh_client->m_sock);
 	}
 	libssh2_exit();
 	free(ssh_client);
