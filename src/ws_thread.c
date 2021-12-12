@@ -23,6 +23,7 @@
 #include "ws_thread.h"
 #include "debug.h"
 #include "conf.h"
+#include "ssh_client.h"
 
 #define MAX_OUTPUT (512*1024)
 #define htonll(x) ((1==htonl(1)) ? (x) : ((uint64_t)htonl((x) & 0xFFFFFFFF) << 32) | htonl((x) >> 32))
@@ -311,19 +312,7 @@ ws_read_cb(struct bufferevent *b_ws, void *ctx)
         }
 
         // first connect ssh server
-        struct sockaddr_storage connect_sshsvr_addr;
-        int connect_sshsvr_addrlen = 0;
-        b_sshclient = bufferevent_socket_new(ws_base, -1, BEV_OPT_CLOSE_ON_FREE|BEV_OPT_DEFER_CALLBACKS);   
-        memset(&connect_sshsvr_addr, 0, sizeof(connect_sshsvr_addr));
-        connect_sshsvr_addrlen = sizeof(connect_sshsvr_addr);
-        evutil_parse_sockaddr_port(connect_sshsvr_str, (struct sockaddr*)&connect_sshsvr_addr, &connect_sshsvr_addrlen);
-        bufferevent_socket_connect(b_sshclient, (struct sockaddr*)&connect_sshsvr_addr, connect_sshsvr_addrlen);
         
-        bufferevent_setcb(b_sshclient, ssh_read_cb, NULL, eventcb, b_ws);
-        bufferevent_setcb(b_ws, ws_ssh_read_cb, NULL, eventcb, b_sshclient);
-
-        bufferevent_enable(b_sshclient, EV_READ|EV_WRITE);
-        bufferevent_enable(b_ws, EV_READ|EV_WRITE);
 
         upgraded = true;
     }
