@@ -140,7 +140,6 @@ int ssh_client_connect(struct libssh_client *ssh_client)
 	else if (auth_pw & 2)
 	{
 		 /* Or via keyboard-interactive */
-		s_password = userPwd;
 		if (libssh2_userauth_keyboard_interactive(ssh_client->m_session, ssh_client->username, &S_KbdCallback) )
 		{
 			free_libssh_client(ssh_client);
@@ -189,7 +188,8 @@ char* ssh_client_channel_read(struct libssh_client *ssh_client, int timeout)
 	
 	char *data = malloc(BUF_SIZE);
 	memset(data, 0, BUF_SIZE);
-	LIBSSH2_POLLFD *fds = new LIBSSH2_POLLFD;
+	LIBSSH2_POLLFD *fds = malloc(sizeof(LIBSSH2_POLLFD));
+	memset(fds, 0, sizeof(*fds));
 	fds->type = LIBSSH2_POLLFD_CHANNEL;
 	fds->fd.channel = ssh_client->m_channel;
 	fds->events = LIBSSH2_POLLFD_POLLIN | LIBSSH2_POLLFD_POLLOUT;
