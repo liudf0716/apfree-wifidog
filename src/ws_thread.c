@@ -145,60 +145,6 @@ ws_receive(struct evbuffer *buf, struct evbuffer *output){
 	ws_receive(buf, out);
 }
 
-static void
-close_on_finished_writecb(struct bufferevent *bev, void *ctx)
-{
-	struct evbuffer *b = bufferevent_get_output(bev);
-
-	if (evbuffer_get_length(b) == 0) {
-		bufferevent_free(bev);
-	}
-}
-
-static void
-eventcb(struct bufferevent *bev, short what, void *ctx)
-{
-	struct bufferevent *partner = ctx;
-
-	if (what & (BEV_EVENT_EOF|BEV_EVENT_ERROR)) {
-		if (what & BEV_EVENT_ERROR) {
-			if (errno)
-                debug(LOG_ERR, "connection error %s\n", strerror(errno));
-		}
-
-		if (partner) {
-			if (evbuffer_get_length(
-				    bufferevent_get_output(partner))) {
-				/* We still have to flush data from the other
-				 * side, but when that's done, close the other
-				 * side. */
-				bufferevent_setcb(partner,
-				    NULL, close_on_finished_writecb,
-				    eventcb, NULL);
-				bufferevent_disable(partner, EV_READ);
-			} else {
-				/* We have nothing left to say to the other
-				 * side; close it. */
-				bufferevent_free(partner);
-			}
-		}
-		bufferevent_free(bev);
-	}
-}
-
-static void
-ws_drained_writecb(struct bufferevent *bev, void *ctx)
-{
-	struct bufferevent *partner = ctx;
-
-	/* We were choking the other side until we drained our outbuf a bit.
-	 * Now it seems drained. */
-	bufferevent_setcb(bev, ws_ssh_read_cb, NULL, eventcb, partner);
-	bufferevent_setwatermark(bev, EV_WRITE, 0, 0);
-	if (partner)
-		bufferevent_enable(partner, EV_READ);
-}
-
 static void 
 ws_request(struct bufferevent* b_ws)
 {
@@ -247,7 +193,7 @@ ws_read_cb(struct bufferevent *b_ws, void *ctx)
 			if (ssh_resp) {
 				struct evbuffer *output = bufferevent_get_output(b_ws);
 				ws_send(output, ssh_resp, strlen(ssh_resp));
-				free(ssh_resp)
+				free(ssh_resp);
 			}
 		}
 
