@@ -23,6 +23,7 @@ set(src_apfreewifidog
 	wd_util.c 
 	mqtt_thread.c
 	ws_thread.c
+	ssh_client.c
 )
 
 
@@ -38,7 +39,8 @@ set(libs
 	ssl
 	crypto
 	event
-	event_openssl)
+	event_openssl
+	ssh2)
 
 set(fw3_libs
 	dl
