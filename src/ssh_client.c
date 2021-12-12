@@ -27,7 +27,8 @@
 
 #include "ssh_client.h"
 
-#define	DEFAULT_SSH_PORT	22
+#define	DEFAULT_SSH_PORT		22
+#define	CHANNEL_READ_TIMTOUT	3000
 
 char *s_password;
 
@@ -96,15 +97,15 @@ int ssh_client_connect(struct libssh_client *ssh_client)
 	sin.sin_addr.s_addr = inet_addr(ssh_client->srv_ip);
 	if ( connect( ssh_client->m_sock, (sockaddr*)(&sin), sizeof(sockaddr_in) ) != 0 )
 	{
-			free_libssh_client(ssh_client);
-			return 0;
+		free_libssh_client(ssh_client);
+		return 0;
 	}
 
 	m_session = libssh2_session_init();
 	if ( libssh2_session_handshake(m_session, m_sock) )
 	{
-			free_libssh_client(ssh_client);
-			return 0;
+		free_libssh_client(ssh_client);
+		return 0;
 	}
 
 	int auth_pw = 0;
@@ -112,40 +113,40 @@ int ssh_client_connect(struct libssh_client *ssh_client)
 	char *userauthlist = libssh2_userauth_list( m_session, userName.c_str(), (int)userName.size() );
 	if ( strstr( userauthlist, "password") != NULL )
 	{
-			auth_pw |= 1;
+		auth_pw |= 1;
 	}
 	if ( strstr( userauthlist, "keyboard-interactive") != NULL )
 	{
-			auth_pw |= 2;
+		auth_pw |= 2;
 	}
 	if ( strstr(userauthlist, "publickey") != NULL)
 	{
-			auth_pw |= 4;
+		auth_pw |= 4;
 	}
 
 	if (auth_pw & 1)
 	{
 		 /* We could authenticate via password */
-			if ( libssh2_userauth_password(ssh_client->m_session, ssh_client->username, ssh_client->password ) )
-			{
-					free_libssh_client(ssh_client);
-					return 0;
-			}
+		if ( libssh2_userauth_password(ssh_client->m_session, ssh_client->username, ssh_client->password ) )
+		{
+				free_libssh_client(ssh_client);
+				return 0;
+		}
 	}
 	else if (auth_pw & 2)
 	{
 		 /* Or via keyboard-interactive */
-			s_password = userPwd;
-			if (libssh2_userauth_keyboard_interactive(ssh_client->m_session, ssh_client->username, &S_KbdCallback) )
-			{
-					free_libssh_client(ssh_client);
-					return 0;
-			}
+		s_password = userPwd;
+		if (libssh2_userauth_keyboard_interactive(ssh_client->m_session, ssh_client->username, &S_KbdCallback) )
+		{
+			free_libssh_client(ssh_client);
+			return 0;
+		}
 	}
 	else
 	{
-			free_libssh_client(ssh_client);
-			return 0;
+		free_libssh_client(ssh_client);
+		return 0;
 	}
 
 	return 1;
@@ -164,72 +165,89 @@ void ssh_client_create_channel(struct libssh_client *ssh_client, char *pty_type)
 	 */
 	if ( libssh2_channel_request_pty(ssh_client->m_channel, pty_type==NULL?"vanilla":pty_type ) )
 	{
-			libssh2_channel_free(ssh_client->m_channel);
-			return;
+		libssh2_channel_free(ssh_client->m_channel);
+		return;
 	}
 
    /* Open a SHELL on that pty */
 	if ( libssh2_channel_shell(ssh_client->m_channel) )
 	{
-			libssh2_channel_free(ssh_client->m_channel);
-			return;
+		libssh2_channel_free(ssh_client->m_channel);
+		return;
 	}
+	
+	return ssh_client_channel_read(ssh_client, CHANNEL_READ_TIMTOUT);
 }
 
 char* ssh_client_channel_read(struct libssh_client *ssh_client, int timeout)
 {
-	char *data = NULL;
+#define	BUF_SIZE	64*1024
+	
+	char *data = malloc(BUF_SIZE);
+	memset(data, 0, BUF_SIZE);
 	LIBSSH2_POLLFD *fds = new LIBSSH2_POLLFD;
 	fds->type = LIBSSH2_POLLFD_CHANNEL;
-	fds->fd.channel = m_channel;
+	fds->fd.channel = ssh_client->m_channel;
 	fds->events = LIBSSH2_POLLFD_POLLIN | LIBSSH2_POLLFD_POLLOUT;
 	
 	if( timeout % 50 )
 	{
-			timeout += timeout %50;
+		timeout += timeout %50;
 	}
 	
+	int pos = 0;
 	while(timeout>0)
 	{
-			int rc = (libssh2_poll(fds, 1, 10));
-			if (rc < 1)
-			{
-					timeout -= 50;
-					usleep(50*1000);
-					continue;
-			}
-
-			if ( fds->revents & LIBSSH2_POLLFD_POLLIN )
-			{
-					char buffer[64*1024] = {0};
-					size_t n = libssh2_channel_read( m_channel, buffer, sizeof(buffer) );
-					if ( n == LIBSSH2_ERROR_EAGAIN )
-					{
-						 //fprintf(stderr, "will read again\n");
-					}
-					else if (n <= 0)
-					{
-							return data;
-					}
-					else
-					{
-							data += std::string(buffer);
-							if( "" == strend )
-							{
-									return data;
-							}
-							size_t pos = data.rfind(strend);
-							if( pos != std::string::npos && data.substr(pos, strend.size()) == strend  )
-							{
-									return data;
-							}
-					}
-			}
+		int rc = (libssh2_poll(fds, 1, 10));
+		if (rc < 1)
+		{
 			timeout -= 50;
 			usleep(50*1000);
+			continue;
+		}
+
+		if ( fds->revents & LIBSSH2_POLLFD_POLLIN )
+		{
+			char buffer[1024] = {0};
+			size_t n = libssh2_channel_read( ssh_client->m_channel, buffer, sizeof(buffer) );
+			if ( n == LIBSSH2_ERROR_EAGAIN )
+			{
+				 //fprintf(stderr, "will read again\n");
+			}
+			else if (n <= 0)
+			{
+				return data;
+			}
+			else
+			{
+				if (pos+n < BUF_SIZE) {
+					memcpy(data+pos, buffer, n);
+					pos += n;
+				} else {
+					return data;
+				}
+				if('' == ssh_client->ch_end)
+				{
+					return data;
+				}
+				if(strrchr(data, ssh_client->ch_end))
+				{
+					return data;
+				}
+			}
+		}
+		timeout -= 50;
+		usleep(50*1000);
 	}
 }
 
 int ssh_client_channel_write(struct libssh_client *ssh_client, char *data, int len)
 {
+	char *command = malloc(len+2);
+	memset(command, 0, len+2);
+	memcpy(command, data, len);
+	command[len-1] 	= '\r';
+	command[len]	= '\n';
+	
+	return libssh2_channel_write_ex(ssh_client->m_channel, 0, command, strlen(command));
 }
