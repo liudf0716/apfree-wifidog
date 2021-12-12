@@ -54,37 +54,40 @@ static void S_KbdCallback(const char *name, int name_len,
 
 struct libssh_client *new_libssh_client(char *srv_ip, short srv_port, char ch_end, char *username, char *password)
 {
-	if (!srv_ip || !usename || !password)
+	if (!password)
 		return NULL;
-	
-  struct libssh_client *ssh_client = malloc(sizeof(struct libssh_client));
-  memset(ssh_client, 0, sizeof(struct libssh_client));
-  strncpy(ssh_client->srv_ip, srv_ip, IPV4_LENGTH-1);
+
+	struct libssh_client *ssh_client = malloc(sizeof(struct libssh_client));
+	memset(ssh_client, 0, sizeof(struct libssh_client));
+	if (srv_ip)
+		strncpy(ssh_client->srv_ip, srv_ip, IPV4_LENGTH-1);
+	else 
+		strcpy(ssh_client->srv_ip, "127.0.0.1", 9);
 	ssh_client->srv_port 	= srv_port == 0?DEFAULT_SSH_PORT:srv_port;
 	ssh_client->ch_end 		= ch_end;
-	ssh_client->username	= strdup(username);
+	ssh_client->username	= username?strdup(username):strdup("root");
 	ssh_client->password	= strdup(password);
 	s_password = ssh_client->password;
 	libssh2_init(0);
-	
+
 	return ssh_client;
 }
 
 void free_libssh_client(struct libssh_client *ssh_client)
 {
-  if (!ssh_client) return;
-  if(ssh_client->username) free(ssh_client->username);
-  if(ssh_client->password) free(ssh_client->password);
-  if(ssh_client->m_channel) libssh2_channel_free(ssh_client->m_channel);
-  if(ssh_client->m_session) {
-    libssh2_session_disconnect(ssh_client->m_session, "Bye, Thank you");
-    libssh2_session_free(ssh_client->m_session);
-  }
-  if(ssh_client->m_sock > 0) {
-    close(ssh_client-);
-  }
-  libssh2_exit();
-  free(ssh_client);
+	if (!ssh_client) return;
+	if(ssh_client->username) free(ssh_client->username);
+	if(ssh_client->password) free(ssh_client->password);
+	if(ssh_client->m_channel) libssh2_channel_free(ssh_client->m_channel);
+	if(ssh_client->m_session) {
+		libssh2_session_disconnect(ssh_client->m_session, "Bye, Thank you");
+		libssh2_session_free(ssh_client->m_session);
+	}
+	if(ssh_client->m_sock > 0) {
+		close(ssh_client-);
+	}
+	libssh2_exit();
+	free(ssh_client);
 }
 
 int ssh_client_connect(struct libssh_client *ssh_client)
@@ -152,12 +155,12 @@ int ssh_client_connect(struct libssh_client *ssh_client)
 	return 1;
 }
 
-void ssh_client_create_channel(struct libssh_client *ssh_client, char *pty_type)
+char* ssh_client_create_channel(struct libssh_client *ssh_client, char *pty_type)
 {
 	// request a shell
 	ssh_client->m_channel = libssh2_channel_open_session(ssh_client->m_session);
 	if (!ssh_client->m_channel) {
-		return;
+		return NULL;
 	}
 	
 	/* Request a terminal with pty_type terminal emulation
@@ -166,14 +169,14 @@ void ssh_client_create_channel(struct libssh_client *ssh_client, char *pty_type)
 	if ( libssh2_channel_request_pty(ssh_client->m_channel, pty_type==NULL?"vanilla":pty_type ) )
 	{
 		libssh2_channel_free(ssh_client->m_channel);
-		return;
+		return NULL;
 	}
 
    /* Open a SHELL on that pty */
 	if ( libssh2_channel_shell(ssh_client->m_channel) )
 	{
 		libssh2_channel_free(ssh_client->m_channel);
-		return;
+		return NULL;
 	}
 	
 	return ssh_client_channel_read(ssh_client, CHANNEL_READ_TIMTOUT);
@@ -239,6 +242,7 @@ char* ssh_client_channel_read(struct libssh_client *ssh_client, int timeout)
 		timeout -= 50;
 		usleep(50*1000);
 	}
+	return data;
 }
 
 int ssh_client_channel_write(struct libssh_client *ssh_client, char *data, int len)
