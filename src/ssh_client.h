@@ -46,7 +46,7 @@ int ssh_client_connect(struct libssh_client *ssh_client);
 
 int ssh_client_create_channel(struct libssh_client *ssh_client, char *pty_type);
 
-char* ssh_client_channel_read(struct libssh_client *ssh_client);
+char* ssh_client_channel_read(struct libssh_client *ssh_client, int timeout);
 
 int ssh_client_channel_write(struct libssh_client *ssh_client, char *data, int len);
 
