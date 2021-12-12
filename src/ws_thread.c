@@ -39,6 +39,7 @@ static bool upgraded = false;
 
 static void ssh_read_cb(struct bufferevent* bev, void* ctx);
 static void ws_ssh_read_cb(struct bufferevent* bev, void* ctx);
+struct libssh_client *ssh_client;
 
 static void 
 ws_send(struct evbuffer *buf, const char *msg, const size_t len)
@@ -83,7 +84,7 @@ ws_send(struct evbuffer *buf, const char *msg, const size_t len)
 }
 
 static void 
-ws_receive(struct evbuffer *buf, struct evbuffer *out){
+ws_receive(struct evbuffer *buf, struct evbuffer *output){
 	int data_len = evbuffer_get_length(buf);
     debug (LOG_DEBUG, "ws receive data %d\n", data_len);
 	if(data_len < 2)
@@ -129,7 +130,13 @@ ws_receive(struct evbuffer *buf, struct evbuffer *out){
 
 	if(opcode == 0x01) {
         // redirect data to ssh client
-        evbuffer_add(out, (const char *)data+header_len, payload_len);
+        ssh_client_channel_write(ssh_client, data, payload_len);
+		char *ssh_resp = ssh_client_channel_read(ssh_client, CHANNEL_READ_TIMTOUT);
+		if(ssh_resp) {
+			// send ssh response to ws server
+			ws_send(out, ssh_resp, strlen(ssh_resp));
+			free(ssh_resp);
+		}
     }
 	
 	evbuffer_drain(buf, header_len + payload_len);
@@ -180,19 +187,6 @@ eventcb(struct bufferevent *bev, short what, void *ctx)
 }
 
 static void
-ssh_drained_writecb(struct bufferevent *bev, void *ctx)
-{
-	struct bufferevent *partner = ctx;
-
-	/* We were choking the other side until we drained our outbuf a bit.
-	 * Now it seems drained. */
-	bufferevent_setcb(bev, ssh_read_cb, NULL, eventcb, partner);
-	bufferevent_setwatermark(bev, EV_WRITE, 0, 0);
-	if (partner)
-		bufferevent_enable(partner, EV_READ);
-}
-
-static void
 ws_drained_writecb(struct bufferevent *bev, void *ctx)
 {
 	struct bufferevent *partner = ctx;
@@ -203,70 +197,6 @@ ws_drained_writecb(struct bufferevent *bev, void *ctx)
 	bufferevent_setwatermark(bev, EV_WRITE, 0, 0);
 	if (partner)
 		bufferevent_enable(partner, EV_READ);
-}
-
-static void 
-ssh_read_cb(struct bufferevent* bev, void* ctx)
-{
-    struct bufferevent *partner = ctx;
-	struct evbuffer *src, *dst;
-	size_t len;
-	src = bufferevent_get_input(bev);
-	len = evbuffer_get_length(src);
-	if (!partner) {
-        debug (LOG_INFO, "ssh_read_cb: invalid partner\n");
-		evbuffer_drain(src, len);
-		return;
-	}
-	dst = bufferevent_get_output(partner);
-
-    debug (LOG_DEBUG, "send ssh data to ws server\n");
-    // send ssh client output to ws server
-    ws_send(dst, evbuffer_pullup(src, len), len);
-    evbuffer_drain(src, len);
-
-	if (evbuffer_get_length(dst) >= MAX_OUTPUT) {
-        debug (LOG_INFO, "write buffer overflow");
-		/* We're giving the other side data faster than it can
-		 * pass it on.  Stop reading here until we have drained the
-		 * other side to MAX_OUTPUT/2 bytes. */
-		bufferevent_setcb(partner, ssh_read_cb, ssh_drained_writecb,
-		    eventcb, bev);
-		bufferevent_setwatermark(partner, EV_WRITE, MAX_OUTPUT/2,
-		    MAX_OUTPUT);
-		bufferevent_disable(bev, EV_READ);
-	}
-}
-
-static void 
-ws_ssh_read_cb(struct bufferevent* bev, void* ctx)
-{
-    struct bufferevent *partner = ctx;
-	struct evbuffer *src, *dst;
-	size_t len;
-	src = bufferevent_get_input(bev);
-	len = evbuffer_get_length(src);
-	if (!partner) {
-        debug (LOG_INFO, "ws_ssh_read_cb: invalid partner\n");
-		evbuffer_drain(src, len);
-		return;
-	}
-	dst = bufferevent_get_output(partner);
-
-    debug (LOG_DEBUG, "send ws server ssh client data to local ssh server\n");
-    ws_receive(src, dst);
-
-	if (evbuffer_get_length(dst) >= MAX_OUTPUT) {
-        debug (LOG_INFO, "write buffer overflow");
-		/* We're giving the other side data faster than it can
-		 * pass it on.  Stop reading here until we have drained the
-		 * other side to MAX_OUTPUT/2 bytes. */
-		bufferevent_setcb(partner, ws_ssh_read_cb, ws_drained_writecb,
-		    eventcb, bev);
-		bufferevent_setwatermark(partner, EV_WRITE, MAX_OUTPUT/2,
-		    MAX_OUTPUT);
-		bufferevent_disable(bev, EV_READ);
-	}
 }
 
 static void 
@@ -295,11 +225,11 @@ ws_request(struct bufferevent* b_ws)
 static void 
 ws_read_cb(struct bufferevent *b_ws, void *ctx)
 {
+	struct evbuffer *input = bufferevent_get_input(b_ws);
+	int data_len = evbuffer_get_length(input);
+	unsigned char *data = evbuffer_pullup(input, data_len);
     debug (LOG_DEBUG, "ws_read_cb : upgraded is %d\n", upgraded);
     if (!upgraded) {
-		struct evbuffer *input = bufferevent_get_input(b_ws);
-        int data_len = evbuffer_get_length(input);
-        unsigned char *data = evbuffer_pullup(input, data_len);
         if(!strstr((const char*)data, "\r\n\r\n")) {
             debug (LOG_INFO, "data end");
             return;
@@ -312,11 +242,19 @@ ws_read_cb(struct bufferevent *b_ws, void *ctx)
         }
 
         // first connect ssh server
-        
+        if (ssh_client_connect(ssh_client)) {
+			char *ssh_resp = ssh_client_create_channel(ssh_client, NULL);
+			if (ssh_resp) {
+				struct evbuffer *output = bufferevent_get_output(b_ws);
+				ws_send(output, ssh_resp, strlen(ssh_resp));
+				free(ssh_resp)
+			}
+		}
 
         upgraded = true;
-    }
-    
+    } else {
+		ws_receive(input, bufferevent_get_output(b_ws));
+	}
 }
 
 static void 
@@ -337,6 +275,7 @@ start_ws_thread(void *arg)
     t_auth_serv *auth_server = get_auth_server();
     ws_base = event_base_new();
     ws_dnsbase = evdns_base_new(ws_base, 1);
+	ssh_client = new_libssh_client(NULL, 0, '#', NULL, "password");
 
     struct bufferevent *ws_bev = bufferevent_socket_new(ws_base, -1, BEV_OPT_CLOSE_ON_FREE|BEV_OPT_DEFER_CALLBACKS);
 
