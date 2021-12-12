@@ -24,7 +24,9 @@
 
 #include <libssh2.h>
 
-#define	IPV4_LENGTH	16
+#define	IPV4_LENGTH				16
+#define	DEFAULT_SSH_PORT		22
+#define	CHANNEL_READ_TIMTOUT	3000
 
 struct {
 	int		m_sock;
