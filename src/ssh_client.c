@@ -230,7 +230,7 @@ char* ssh_client_channel_read(struct libssh_client *ssh_client, int timeout)
 				} else {
 					return data;
 				}
-				if('' == ssh_client->ch_end)
+				if(ssh_client->ch_end == ' ')
 				{
 					return data;
 				}
