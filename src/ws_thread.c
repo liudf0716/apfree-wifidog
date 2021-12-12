@@ -31,8 +31,6 @@
 
 static struct event_base *ws_base;
 static struct evdns_base *ws_dnsbase;
-static struct bufferevent *b_sshclient;
-static char *connect_sshsvr_str = "127.0.0.1:22";
 static char *fixed_key = "dGhlIHNhbXBsZSBub25jZQ==";
 static char *fixed_accept = "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=";
 static bool upgraded = false;
