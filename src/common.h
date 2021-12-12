@@ -80,6 +80,7 @@
 #include <event2/keyvalq_struct.h>
 #include <event2/buffer.h>
 #include <event2/dns.h>
+#include <event2/listener.h>
 
 #include <openssl/ssl.h>
 #include <openssl/err.h>
