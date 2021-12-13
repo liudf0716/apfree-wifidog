@@ -28,7 +28,7 @@
 #define	DEFAULT_SSH_PORT		22
 #define	CHANNEL_READ_TIMTOUT	3000
 
-struct {
+struct libssh_client {
 	int		m_sock;
 	char 	srv_ip[IPV4_LENGTH];
 	short	srv_port;
@@ -38,7 +38,7 @@ struct {
 	char	*password;
 	LIBSSH2_SESSION	*m_session;
 	LIBSSH2_CHANNEL	*m_channel;
-} libssh_client;
+};
 
 struct libssh_client *new_libssh_client(char *srv_ip, short srv_port, char ch_end, char *username, char *password);
 
