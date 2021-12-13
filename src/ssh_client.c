@@ -99,7 +99,7 @@ int ssh_client_connect(struct libssh_client *ssh_client)
 	sin.sin_family = AF_INET;
 	sin.sin_port = htons(ssh_client->srv_port);
 	sin.sin_addr.s_addr = inet_addr(ssh_client->srv_ip);
-	if ( connect( ssh_client->m_sock, (const struct sockaddr*)(&sin), sizeof(sockaddr_in) ) != 0 )
+	if ( connect( ssh_client->m_sock, (const struct sockaddr*)(&sin), sizeof(struct sockaddr_in) ) != 0 )
 	{
 		free_libssh_client(ssh_client);
 		return 0;
