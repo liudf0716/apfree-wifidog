@@ -59,7 +59,7 @@ struct libssh_client *new_libssh_client(char *srv_ip, short srv_port, char ch_en
 		return NULL;
 
 	struct libssh_client *ssh_client = malloc(sizeof(struct libssh_client));
-	memset(ssh_client, 0, sizeof(struct libssh_client));
+	memset(ssh_client, 0, sizeof(*ssh_client));
 	if (srv_ip)
 		strncpy(ssh_client->srv_ip, srv_ip, IPV4_LENGTH-1);
 	else 
@@ -95,18 +95,18 @@ int ssh_client_connect(struct libssh_client *ssh_client)
 {
 	ssh_client->m_sock = socket(AF_INET, SOCK_STREAM, 0);
 
-	sockaddr_in sin;
+	struct sockaddr_in sin;
 	sin.sin_family = AF_INET;
 	sin.sin_port = htons(ssh_client->srv_port);
 	sin.sin_addr.s_addr = inet_addr(ssh_client->srv_ip);
-	if ( connect( ssh_client->m_sock, (sockaddr*)(&sin), sizeof(sockaddr_in) ) != 0 )
+	if ( connect( ssh_client->m_sock, (const struct sockaddr*)(&sin), sizeof(sockaddr_in) ) != 0 )
 	{
 		free_libssh_client(ssh_client);
 		return 0;
 	}
 
-	m_session = libssh2_session_init();
-	if ( libssh2_session_handshake(m_session, m_sock) )
+	ssh_client->m_session = libssh2_session_init();
+	if ( libssh2_session_handshake(ssh_client->m_session, ssh_client->m_sock) )
 	{
 		free_libssh_client(ssh_client);
 		return 0;
@@ -114,7 +114,7 @@ int ssh_client_connect(struct libssh_client *ssh_client)
 
 	int auth_pw = 0;
 	char *fingerprint = libssh2_hostkey_hash(ssh_client->m_session, LIBSSH2_HOSTKEY_HASH_SHA1);
-	char *userauthlist = libssh2_userauth_list( m_session, userName.c_str(), (int)userName.size() );
+	char *userauthlist = libssh2_userauth_list( ssh_client->m_session, ssh_client->username, strlen(ssh_client->username) );
 	if ( strstr( userauthlist, "password") != NULL )
 	{
 		auth_pw |= 1;
