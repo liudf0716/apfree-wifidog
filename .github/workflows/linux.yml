@@ -39,7 +39,7 @@ jobs:
           sudo apt-get install -y libevent-dev
     
     - name: iptables version
-      run: iptables -v
+      run: iptables -V
       
     - name: install iptables lib 
       run: | 
@@ -56,7 +56,7 @@ jobs:
         sudo make install
    
     - name: iptables version
-      run: iptables -v
+      run: iptables -V
       
     - name: compile apfree-wifidog
       run: |
