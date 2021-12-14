@@ -10,6 +10,14 @@
 +targets_install := libiptext.so libiptext4.so libiptext6.so libiptext_ebt.so libiptext_arpt.so
  libext_objs := ${pfx_objs}
  libext_ebt_objs := ${pfb_objs}
+ libext_arpt_objs := ${pfa_objs}
+ libext4_objs := ${pf4_objs}
+ libext6_objs := ${pf6_objs}
+ targets += ${pfx_solibs} ${pfb_solibs} ${pf4_solibs} ${pf6_solibs} ${pfa_solibs} ${pfx_symlink_files}
+-targets_install := $(strip ${pfx_solibs} ${pfb_solibs} ${pf4_solibs} ${pf6_solibs} ${pfa_solibs})
++targets_install += $(strip ${pfx_solibs} ${pfb_solibs} ${pf4_solibs} ${pf6_solibs} ${pfa_solibs})
+ symlinks_install := ${pfx_symlink_files}
+ 
 @@ -132,7 +132,7 @@ clean:
  distclean: clean
  
