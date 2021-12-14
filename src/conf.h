@@ -46,8 +46,8 @@
 #define DEFAULT_CONFIGFILE SYSCONFDIR"/wifidog.conf"
 #define DEFAULT_HTMLMSGFILE SYSCONFDIR"/wifidog-msg.html"
 #define DEFAULT_REDIRECTFILE SYSCONFDIR"/wifidog-redir.html"
-#define	DEFAULT_INTERNET_OFFLINE_FILE	SYSCONFDIR"/etc/internet-offline.html"
-#define	DEFAULT_AUTHSERVER_OFFLINE_FILE	SYSCONFDIR"/etc/authserver-offline.html"
+#define	DEFAULT_INTERNET_OFFLINE_FILE	SYSCONFDIR"/internet-offline.html"
+#define	DEFAULT_AUTHSERVER_OFFLINE_FILE	SYSCONFDIR"/authserver-offline.html"
 #endif
 #define DEFAULT_DAEMON 1
 #define DEFAULT_DEBUGLEVEL LOG_INFO
