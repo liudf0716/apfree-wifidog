@@ -274,7 +274,12 @@ ssl_redirect_loop (char *gw_ip,  t_https_server *https_server) {
     	die_most_horribly_from_openssl_error ("EC_KEY_new_by_curve_name");
   	if (1 != SSL_CTX_set_tmp_ecdh (ctx, ecdh))
     	die_most_horribly_from_openssl_error ("SSL_CTX_set_tmp_ecdh");
-
+	
+	struct stat st;
+	if (stat(https_server->svr_crt_file, &st) || stat(https_server->svr_key_file, &st)) {
+		debug(LOG_ERR, "couldn't find crt [%s] or key file [%s]", https_server->svr_crt_file, https_server->svr_key_file);
+		exit(EXIT_FAILURE);
+	}
 	server_setup_certs (ctx, https_server->svr_crt_file, https_server->svr_key_file);
 
 	// This is the magic that lets evhttp use SSL.
