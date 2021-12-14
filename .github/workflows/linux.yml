@@ -47,6 +47,7 @@ jobs:
       run: | 
         git clone https://github.com/liudf0716/iptables-apfree-wifidog.git
         cd iptables-apfree-wifidog
+        ./autogen.sh
         ./configure --disable-nftables
         make
         sudo make install
