@@ -45,15 +45,8 @@ jobs:
       
     - name: install iptables lib 
       run: | 
-        wget https://netfilter.org/projects/iptables/files/iptables-1.8.6.tar.bz2
-        tar jxf iptables-1.8.6.tar.bz2
-        cd iptables-1.8.6
-        
-        wget https://raw.githubusercontent.com/liudf0716/apfree_wifidog/master/patches/200-configurable_builtin.patch
-        patch -p1 < 200-configurable_builtin.patch
-        wget https://raw.githubusercontent.com/liudf0716/apfree_wifidog/master/patches/600-shared-libext.patch
-        patch -p1 < 600-shared-libext.patch
-        cat extensions/GNUmakefile.in
+        git clone https://github.com/liudf0716/iptables-apfree-wifidog.git
+        cd iptables-apfree-wifidog
         ./configure --disable-nftables
         make
         sudo make install
