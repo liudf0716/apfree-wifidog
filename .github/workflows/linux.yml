@@ -38,29 +38,15 @@ jobs:
           sudo apt-get install -y libssh2-1-dev
           sudo apt-get install -y libevent-dev
     
-    - name: install libevent2
-      run: |
-        git clone https://github.com/libevent/libevent.git
-        cd libevent
-        git checkout tags/release-2.1.12-stable -b 2.1.12-stable
-        mkdir build && cd build
-        #cmake ..
-        #make
-        #sudo make install
-            
+    - name: iptables version
+      run: iptables -v
+      
     - name: install iptables lib 
       run: | 
         wget https://netfilter.org/projects/iptables/files/iptables-1.8.6.tar.bz2
         tar jxf iptables-1.8.6.tar.bz2
         cd iptables-1.8.6
-        #wget https://raw.githubusercontent.com/openwrt/openwrt/openwrt-21.02/package/network/utils/iptables/patches/010-add-set-dscpmark-support.patch
-        #patch -p1 < 010-add-set-dscpmark-support.patch
-        #wget https://raw.githubusercontent.com/openwrt/openwrt/openwrt-21.02/package/network/utils/iptables/patches/101-remove-check-already.patch
-        #patch -p1 < 101-remove-check-already.patch
-        #wget https://raw.githubusercontent.com/openwrt/openwrt/openwrt-21.02/package/network/utils/iptables/patches/102-iptables-disable-modprobe.patch
-        #patch -p1 < 102-iptables-disable-modprobe.patch
-        #wget https://raw.githubusercontent.com/openwrt/openwrt/openwrt-21.02/package/network/utils/iptables/patches/103-optional-xml.patch
-        #patch -p1 < 103-optional-xml.patch
+        
         wget https://raw.githubusercontent.com/openwrt/openwrt/openwrt-21.02/package/network/utils/iptables/patches/200-configurable_builtin.patch
         patch -p1 < 200-configurable_builtin.patch
         wget https://raw.githubusercontent.com/openwrt/openwrt/openwrt-21.02/package/network/utils/iptables/patches/600-shared-libext.patch
@@ -68,7 +54,10 @@ jobs:
         ./configure --disable-nftables
         make
         sudo make install
-           
+   
+    - name: iptables version
+      run: iptables -v
+      
     - name: compile apfree-wifidog
       run: |
         mkdir build
