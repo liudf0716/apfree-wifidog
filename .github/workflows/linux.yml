@@ -37,13 +37,8 @@ jobs:
           sudo apt-get install -y libjson-c-dev
           sudo apt-get install -y libssh2-1-dev
           sudo apt-get install -y libevent-dev
-    
-    - name: iptables version
-      run: |
-        iptables -V
-        which iptables
       
-    - name: install iptables lib 
+    - name: install iptables lib for apfree wifidog
       run: | 
         git clone https://github.com/liudf0716/iptables-apfree-wifidog.git
         cd iptables-apfree-wifidog
@@ -51,11 +46,6 @@ jobs:
         ./configure --disable-nftables
         make
         sudo make install
-   
-    - name: iptables version
-      run: |
-        iptables -V
-        which iptables
       
     - name: compile apfree-wifidog
       run: |
