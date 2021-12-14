@@ -41,7 +41,7 @@
 
 
 //>>> liudf added 20160114
-const char	*g_inner_trusted_domains;
+const char	*g_inner_trusted_domains = "";
 
 /** @internal
  * Holds the current configuration of the gateway */
