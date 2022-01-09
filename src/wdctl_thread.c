@@ -79,6 +79,7 @@ static void wdctl_del_trusted_local_maclist(struct bufferevent *, const char *);
 static void wdctl_add_untrusted_maclist(struct bufferevent *, const char *);
 static void wdctl_del_untrusted_maclist(struct bufferevent *, const char *);
 static void wdctl_add_online_client(struct bufferevent *, const char *);
+static void wdctl_add_auth_client(struct bufferevent *, const char *);
 
 static struct wd_request_context *request_ctx;
 
@@ -785,3 +786,11 @@ OUT:
     bufferevent_write(fd, "Yes", 3);
 }
 
+/**
+ *@brief add auth client for testing
+ *
+ */
+static void
+wdctl_add_auth_client(struct bufferevent *fd, const char *args)
+{
+}
