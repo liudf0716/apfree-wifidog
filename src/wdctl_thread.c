@@ -120,7 +120,8 @@ static struct wdctl_command {
     {"del_trusted_local_mac", NULL, wdctl_del_trusted_local_maclist},
     {"add_untrusted_mac", NULL, wdctl_add_untrusted_maclist},
     {"del_untrusted_mac", NULL, wdctl_del_untrusted_maclist},
-    {"add_online_client", NULL, wdctl_add_online_client}
+    {"add_online_client", NULL, wdctl_add_online_client},
+	{"add_auth_client", NULL, wdctl_add_auth_client},
 };
 
 static void 
