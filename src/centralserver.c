@@ -145,8 +145,9 @@ make_roam_request(struct wd_request_context *context, struct roam_req_info *roam
  * 
  */ 
 void 
-make_roam_request(struct wd_request_context *context, auth_req_info *auth)
+make_auth_request(struct wd_request_context *context, auth_req_info *auth)
 {
+	//TODO
 }
 
 /**
