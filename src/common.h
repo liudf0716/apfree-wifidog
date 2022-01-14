@@ -110,13 +110,6 @@
 
 #define ARRAYLEN(array)     (sizeof(array)/sizeof((array)[0]))
 
-struct roam_req_info {
-    char ip[HTTP_IP_ADDR_LEN];
-    char mac[HTTP_MAC_LEN];
-};
-
-typedef roam_req_info auth_req_info;
-
 #ifndef is_error
 #define is_error(name)  (name == NULL)
 #endif
