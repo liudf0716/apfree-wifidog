@@ -812,7 +812,7 @@ wdctl_add_auth_client(struct bufferevent *fd, const char *args)
     if (!is_valid_mac(mac) || !is_valid_ip(ip) || !is_trusted_mac(mac))
         goto OUT;
 
-    struct auth_req_info *auth = safe_malloc(sizeof(struct auth_req_info));
+    auth_req_info *auth = safe_malloc(sizeof(auth_req_info));
     memcpy(auth->ip, ip, strlen(ip));
     memcpy(auth->mac, mac, strlen(mac));
     make_auth_request(request_ctx, auth);
