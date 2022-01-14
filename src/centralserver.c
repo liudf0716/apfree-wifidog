@@ -139,6 +139,17 @@ make_roam_request(struct wd_request_context *context, struct roam_req_info *roam
 }
 
 /**
+ * @brief wifidog make auth quest to auth server
+ * 
+ * @param auth The auth request data, need to be free 
+ * 
+ */ 
+void 
+make_roam_request(struct wd_request_context *context, struct auth_req_info *auth)
+{
+}
+
+/**
  * @brief get auth counter v2 uri
  * @return need to be free by the caller
  * 
