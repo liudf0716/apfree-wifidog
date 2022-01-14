@@ -793,4 +793,31 @@ OUT:
 static void
 wdctl_add_auth_client(struct bufferevent *fd, const char *args)
 {
+	json_object *client_info = json_tokener_parse(args);
+	if(is_error(client_info) || json_object_get_type(client_info) != json_type_object) { 
+        goto OUT;
+    }
+
+    json_object *mac_jo = NULL;
+    json_object *ip_jo 	= NULL;
+    json_object *name_jo = NULL;
+    if(!json_object_object_get_ex(client_info, "mac", &mac_jo) || 
+	   !json_object_object_get_ex(client_info, "ip", &ip_jo) || 
+	   !json_object_object_get_ex(client_info, "name", &name_jo)) { 
+        goto OUT;
+    }
+
+    const char *mac  = json_object_get_string(mac_jo);
+    const char *ip	 = json_object_get_string(ip_jo);
+    if (!is_valid_mac(mac) || !is_valid_ip(ip) || !is_trusted_mac(mac))
+        goto OUT;
+
+    struct auth_req_info *auth = safe_malloc(sizeof(struct auth_req_info));
+    memcpy(auth->ip, ip, strlen(ip));
+    memcpy(auth->mac, mac, strlen(mac));
+    make_auth_request(request_ctx, auth);
+    
+OUT:
+    if (client_info) json_object_put(client_info);
+    bufferevent_write(fd, "Yes", 3);
 }
