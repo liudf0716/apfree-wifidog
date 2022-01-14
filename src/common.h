@@ -115,6 +115,8 @@ struct roam_req_info {
     char mac[HTTP_MAC_LEN];
 };
 
+typedef roam_request_info auth_request_info;
+
 #ifndef is_error
 #define is_error(name)  (name == NULL)
 #endif
