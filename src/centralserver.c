@@ -138,6 +138,52 @@ make_roam_request(struct wd_request_context *context, struct roam_req_info *roam
     free(uri);
 }
 
+static void
+process_auth_server_login2(struct evhttp_request *req, void *ctx)
+{
+	debug(LOG_DEBUG, "process auth server roam response");
+	
+    char buffer[MAX_BUF] = {0};
+    if (evbuffer_remove(evhttp_request_get_input_buffer(req), buffer, MAX_BUF-1) > 0 ) {
+	}
+	
+	json_object *json_ret = json_tokener_parse(buffer);
+	json_object *ret_code = NULL;
+	json_object_object_get_ex(json_ret, "ret_code", &ret_code)
+	int retCode = json_object_get_int(json_ret, "ret_code");
+	if (retCode != 1000) {
+		free(((struct wd_request_context *)ctx)->data);
+		return;
+	}
+	
+	json_object *order_number = NULL;
+	json_object_object_get_ex(json_ret, "order_number", &order_number);
+	char *orderNumber = json_object_get_string(json_ret, "order_number");
+	
+	// make password auth request
+	
+	
+	json_object_put(json_ret);
+}
+
+/**
+ * @brief get login2 request uri
+ * 
+ */ 
+static char *
+get_login2_request_uri(s_config *config, t_auth_serv *auth_server, const char *mac)
+{
+    char *login2_uri = NULL;
+    safe_asprintf(&login2_uri, "%slogin2?gw_id=%s&gw_address=%s&gw_port=%d&mac=%s&channel_path=%s", 
+        auth_server->authserv_path,
+        config->gw_id,
+		config->gw_address,
+		config->gw_port,
+		mac,
+		g_channel_path?g_channel_path:"null");
+    return login2_uri;
+}
+
 /**
  * @brief wifidog make auth quest to auth server
  * 
@@ -147,7 +193,15 @@ make_roam_request(struct wd_request_context *context, struct roam_req_info *roam
 void 
 make_auth_request(struct wd_request_context *context, auth_req_info *auth)
 {
-	//TODO
+	char *uri = get_login2_request_uri(config_get_config(), get_auth_server(), auth->mac);
+    debug(LOG_DEBUG, "login2 request uri [%s]", uri);
+
+    struct evhttp_connection *evcon = NULL;
+    struct evhttp_request *req      = NULL;
+    context->data = auth; 
+    wd_make_request(context, &evcon, &req, process_auth_server_login2);
+    evhttp_make_request(evcon, req, EVHTTP_REQ_GET, uri);
+    free(uri);
 }
 
 /**
