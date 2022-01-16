@@ -150,7 +150,7 @@ process_auth_server_login2(struct evhttp_request *req, void *ctx)
 	json_object *json_ret = json_tokener_parse(buffer);
 	json_object *ret_code = NULL;
 	json_object_object_get_ex(json_ret, "ret_code", &ret_code)
-	int retCode = json_object_get_int(json_ret, "ret_code");
+	int retCode = json_object_get_int(ret_code);
 	if (retCode != 1000) {
 		free(((struct wd_request_context *)ctx)->data);
 		return;
@@ -158,7 +158,7 @@ process_auth_server_login2(struct evhttp_request *req, void *ctx)
 	
 	json_object *order_number = NULL;
 	json_object_object_get_ex(json_ret, "order_number", &order_number);
-	char *orderNumber = json_object_get_string(json_ret, "order_number");
+	char *orderNumber = json_object_get_string(order_number);
 	
 	// make password auth request
 	
