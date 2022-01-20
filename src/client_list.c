@@ -612,13 +612,13 @@ reset_client_list()
 /*
  * brief: according to auth server's roam response, safely adding client to connect list
  * The roam_client  json like this:
- * {"token":"client_token", "first_login":"first login time"}
+ * {"token":"client_token", "firstLogin":"first login time"}
  * 
  * @param roam_client The response json data from auth server
  * 
  */
 void  
-add_online_client(const char *ip, const char *mac, json_object *roam_client)
+add_online_client(const char *ip, const char *mac, json_object *client)
 {
 	
     LOCK_CLIENT_LIST();
@@ -628,26 +628,26 @@ add_online_client(const char *ip, const char *mac, json_object *roam_client)
         json_object *token_jo 		= NULL;
         json_object *first_login_jo = NULL;
         const char *token 		= NULL;
-        const char *first_login	= NULL;
+        const long first_login;
 
-        if (!json_object_object_get_ex(roam_client, "token", &token_jo)) {
+        if (!json_object_object_get_ex(client, "token", &token_jo)) {
             UNLOCK_CLIENT_LIST();
             return;
         } else 
             token = json_object_get_string(token_jo);
 
-        if (!json_object_object_get_ex(roam_client, "first_login", &first_login_jo)) {
+        if (!json_object_object_get_ex(client, "firstLogin", &first_login_jo)) {
             UNLOCK_CLIENT_LIST();
             return;
         } else
-            first_login = json_object_get_string(first_login_jo);
+            first_login = json_object_get_long(first_login_jo);
 
         if(token) {
             t_client *client = client_list_add(ip, mac, token);
             client->wired = 0;
 
             if (first_login) {
-                client->first_login = (time_t)atol(first_login);
+                client->first_login = first_login;
             } else {
                 client->first_login = time(NULL);
             }
