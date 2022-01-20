@@ -1,8 +1,10 @@
 cmake_minimum_required(VERSION 2.6)
-
 project(ApFreeWiFidog C)
 
+set(CMAKE_C_STANDARD 11)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/Modules/")
+
+option(APFREE_WIFIDOG_DEBUG		"Build debug" ON)
 
 find_package(LibEvent)
 if(NOT LibEvent_FOUND)
