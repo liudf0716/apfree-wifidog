@@ -52,7 +52,7 @@ if(APFREE_WIFIDOG_DEBUG)
 	message("Building debug")
 	ADD_DEFINITIONS(-ggdb -Wall --std=gnu99 -Wmissing-declarations)
 else()
-message("Buildign release")
+	message("Buildign release")
 	ADD_DEFINITIONS(-O2 -Wall --std=gnu99 -Wmissing-declarations)
 endif()
 
