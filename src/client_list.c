@@ -628,7 +628,7 @@ add_online_client(const char *ip, const char *mac, json_object *client)
         json_object *token_jo 		= NULL;
         json_object *first_login_jo = NULL;
         const char *token 		= NULL;
-        const long first_login;
+        const int first_login;
 
         if (!json_object_object_get_ex(client, "token", &token_jo)) {
             UNLOCK_CLIENT_LIST();
@@ -640,7 +640,7 @@ add_online_client(const char *ip, const char *mac, json_object *client)
             UNLOCK_CLIENT_LIST();
             return;
         } else
-            first_login = json_object_get_long(first_login_jo);
+            first_login = json_object_get_int(first_login_jo);
 
         if(token) {
             t_client *client = client_list_add(ip, mac, token);
