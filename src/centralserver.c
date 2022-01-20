@@ -177,16 +177,17 @@ process_auth_server_login2(struct evhttp_request *req, void *ctx)
  * 
  */ 
 static char *
-get_login2_request_uri(s_config *config, t_auth_serv *auth_server, const char *mac)
+get_login2_request_uri(s_config *config, t_auth_serv *auth_server, const auth_req_info *auth)
 {
     char *login2_uri = NULL;
-    safe_asprintf(&login2_uri, "%slogin2?gw_id=%s&gw_address=%s&gw_port=%d&mac=%s&channel_path=%s", 
+    safe_asprintf(&login2_uri, "%slogin2?gw_id=%s&gw_address=%s&gw_port=%d&mac=%s&channel_path=%s&cltIp=%s", 
         auth_server->authserv_path,
         config->gw_id,
 		config->gw_address,
 		config->gw_port,
-		mac,
-		g_channel_path?g_channel_path:"null");
+		auth->mac,
+		g_channel_path?g_channel_path:"null",
+		auth->ip);
     return login2_uri;
 }
 
@@ -199,7 +200,7 @@ get_login2_request_uri(s_config *config, t_auth_serv *auth_server, const char *m
 void 
 make_auth_request(struct wd_request_context *context, auth_req_info *auth)
 {
-	char *uri = get_login2_request_uri(config_get_config(), get_auth_server(), auth->mac);
+	char *uri = get_login2_request_uri(config_get_config(), get_auth_server(), auth);
     debug(LOG_DEBUG, "login2 request uri [%s]", uri);
 
     struct evhttp_connection *evcon = NULL;
