@@ -141,7 +141,7 @@ make_roam_request(struct wd_request_context *context, struct roam_req_info *roam
 static void
 process_auth_server_login2(struct evhttp_request *req, void *ctx)
 {
-	auth_req_info *auth = ((auth_req_info *)ctx)->data;
+	auth_req_info *auth = ((struct wd_request_context *)ctx)->data;
 	debug(LOG_DEBUG, "process auth server login2 response");
 	
     char buffer[MAX_BUF] = {0};
