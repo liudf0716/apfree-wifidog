@@ -141,29 +141,35 @@ make_roam_request(struct wd_request_context *context, struct roam_req_info *roam
 static void
 process_auth_server_login2(struct evhttp_request *req, void *ctx)
 {
-	debug(LOG_DEBUG, "process auth server roam response");
+	auth_req_info *auth = ((auth_req_info *)ctx)->data;
+	debug(LOG_DEBUG, "process auth server login2 response");
 	
     char buffer[MAX_BUF] = {0};
     if (evbuffer_remove(evhttp_request_get_input_buffer(req), buffer, MAX_BUF-1) > 0 ) {
+	} else {
+		free(auth);
+		return;
 	}
 	
 	json_object *json_ret = json_tokener_parse(buffer);
 	json_object *ret_code = NULL;
 	json_object_object_get_ex(json_ret, "ret_code", &ret_code);
 	int retCode = json_object_get_int(ret_code);
-	if (retCode != 1000) {
-		free(((struct wd_request_context *)ctx)->data);
+	if (retCode != 0) {
+		free(auth);
+		debug(LOG_INFO, "add test client failure: %d", retCode);
 		return;
 	}
 	
-	json_object *order_number = NULL;
-	json_object_object_get_ex(json_ret, "order_number", &order_number);
-	char *orderNumber = json_object_get_string(order_number);
-	
-	// make password auth request
-	
+	json_object *client = NULL;
+	if( json_object_object_get_ex(json_ret, "client", &client)) {
+		add_online_client(auth->ip, auth->mac, client);
+	} else {
+		debug(LOG_ERR, "no roam client info!!!!!");
+	}
 	
 	json_object_put(json_ret);
+	free(auth);
 }
 
 /**
