@@ -47,8 +47,12 @@ set(fw3_libs
 	iptext
 	iptext4
 	xtables)
-
-ADD_DEFINITIONS(-O2 -Wall --std=gnu99 -Wmissing-declarations)
+	
+if(APFREE_WIFIDOG_DEBUG)
+	ADD_DEFINITIONS(-ggdb -Wall --std=gnu99 -Wmissing-declarations)
+else()
+	ADD_DEFINITIONS(-O2 -Wall --std=gnu99 -Wmissing-declarations)
+endif()
 
 add_executable(wdctlx ${src_wdctlx})
 add_executable(wifidogx ${src_apfreewifidog})
