@@ -52,10 +52,6 @@ set(fw3_libs
 	iptext4
 	xtables)
 
-if(AW_WEBSSH)
-	ADD_DEFINITIONS("-DAPFREE_WIFIDOG_WEBSSH")
-endif()
-
 if(AW_DEBUG)
 	message("Building debug")
 	ADD_DEFINITIONS(-ggdb -Wall --std=gnu99 -Wmissing-declarations)
@@ -65,7 +61,7 @@ else()
 endif()
 
 add_executable(wdctlx ${src_wdctlx})
-#if(AW_WEBSSH)
+if(AW_WEBSSH)
 	add_executable(wifidogx ${src_apfreewifidog} ${src_webssh})
 else()
 	add_executable(wifidogx ${src_apfreewifidog})
