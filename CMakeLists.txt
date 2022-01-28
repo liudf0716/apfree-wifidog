@@ -4,7 +4,8 @@ project(ApFreeWiFidog C)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/Modules/")
 
-option(APFREE_WIFIDOG_DEBUG		"Build debug" ON)
+option(APFREE_WIFIDOG_DEBUG		"Build debug"	ON)
+option(APFREE_WIFIDOG_WEBSSH	"Build with web ssh support"	OFF)
 
 find_package(LibEvent)
 if(NOT LibEvent_FOUND)
