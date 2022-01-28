@@ -51,7 +51,11 @@ set(fw3_libs
 	iptext
 	iptext4
 	xtables)
-	
+
+if(AW_WEBSSH)
+	ADD_DEFINITIONS("-DAPFREE_WIFIDOG_WEBSSH")
+endif()
+
 if(AW_DEBUG)
 	message("Building debug")
 	ADD_DEFINITIONS(-ggdb -Wall --std=gnu99 -Wmissing-declarations)
