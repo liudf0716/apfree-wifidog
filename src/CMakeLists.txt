@@ -22,10 +22,14 @@ set(src_apfreewifidog
 	wd_client.c
 	wd_util.c 
 	mqtt_thread.c
+)
+
+if(AW_WEBSSH)
+set(src_webssh
 	ws_thread.c
 	ssh_client.c
 )
-
+endif()
 
 set(src_wdctlx wdctl.c util.c debug.c)
 
@@ -48,7 +52,7 @@ set(fw3_libs
 	iptext4
 	xtables)
 	
-if(APFREE_WIFIDOG_DEBUG)
+if(AW_DEBUG)
 	message("Building debug")
 	ADD_DEFINITIONS(-ggdb -Wall --std=gnu99 -Wmissing-declarations)
 else()
@@ -57,7 +61,11 @@ else()
 endif()
 
 add_executable(wdctlx ${src_wdctlx})
-add_executable(wifidogx ${src_apfreewifidog})
+#if(AW_WEBSSH)
+	add_executable(wifidogx ${src_apfreewifidog} ${src_webssh})
+else()
+	add_executable(wifidogx ${src_apfreewifidog})
+endif()
 target_link_libraries(wifidogx ${libs} ${fw3_libs} ${CURL_LIBRARIES})
 
 install(TARGETS wifidogx wdctlx
