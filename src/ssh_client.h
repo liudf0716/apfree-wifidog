@@ -22,6 +22,8 @@
 #ifndef _SSH_CLIENT_
 #define _SSH_CLIENT_
 
+#ifdef	APFREE_WIFIDOG_WEBSSH
+
 #include <libssh2.h>
 
 #define	IPV4_LENGTH				16
@@ -51,5 +53,7 @@ char* ssh_client_create_channel(struct libssh_client *ssh_client, char *pty_type
 char* ssh_client_channel_read(struct libssh_client *ssh_client, int timeout);
 
 int ssh_client_channel_write(struct libssh_client *ssh_client, char *data, int len);
+
+#endif
 
 #endif
