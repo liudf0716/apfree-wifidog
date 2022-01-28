@@ -22,7 +22,6 @@
 #ifndef _SSH_CLIENT_
 #define _SSH_CLIENT_
 
-#ifdef	APFREE_WIFIDOG_WEBSSH
 
 #include <libssh2.h>
 
@@ -56,4 +55,3 @@ int ssh_client_channel_write(struct libssh_client *ssh_client, char *data, int l
 
 #endif
 
-#endif
