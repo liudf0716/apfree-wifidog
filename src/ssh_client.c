@@ -25,6 +25,8 @@
   @author Copyright (C) 2016 Dengfeng Liu <liudf0716@gmail.com> 
  */
 
+#ifdef	APFREE_WIFIDOG_WEBSSH
+
 #include "common.h"
 #include "ssh_client.h"
 
@@ -256,3 +258,5 @@ int ssh_client_channel_write(struct libssh_client *ssh_client, char *data, int l
 	
 	return libssh2_channel_write_ex(ssh_client->m_channel, 0, command, strlen(command));
 }
+
+#endif
