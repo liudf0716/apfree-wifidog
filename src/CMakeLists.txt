@@ -25,10 +25,10 @@ set(src_apfreewifidog
 )
 
 if(AW_WEBSSH)
-set(src_webssh
-	ws_thread.c
-	ssh_client.c
-)
+	set(src_webssh
+		ws_thread.c
+		ssh_client.c
+	)
 endif()
 
 set(src_wdctlx wdctl.c util.c debug.c)
@@ -43,8 +43,12 @@ set(libs
 	ssl
 	crypto
 	event
-	event_openssl
-	ssh2)
+	event_openssl)
+
+if(AW_WEBSSH)
+	set(ssh2_lib
+		ssh2)
+endif()
 
 set(fw3_libs
 	dl
@@ -63,10 +67,11 @@ endif()
 add_executable(wdctlx ${src_wdctlx})
 if(AW_WEBSSH)
 	add_executable(wifidogx ${src_apfreewifidog} ${src_webssh})
+	target_link_libraries(wifidogx ${libs} ${ssh2_lib} ${fw3_libs} ${CURL_LIBRARIES})
 else()
 	add_executable(wifidogx ${src_apfreewifidog})
+	target_link_libraries(wifidogx ${libs} ${fw3_libs} ${CURL_LIBRARIES})
 endif()
-target_link_libraries(wifidogx ${libs} ${fw3_libs} ${CURL_LIBRARIES})
 
 install(TARGETS wifidogx wdctlx
 		RUNTIME DESTINATION bin
