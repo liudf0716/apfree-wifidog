@@ -42,6 +42,7 @@
 #define	IPSET_CMD_FLUSH	4
 #define IPSET_MAXNAMELEN 32
 #define IPSET_PROTOCOL 6
+#define IPSET_DIM_TWO	2
 
 #ifndef NFNETLINK_V0
 #define NFNETLINK_V0    0
