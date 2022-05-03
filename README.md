@@ -78,6 +78,24 @@ sequenceDiagram
   end
 ```
 
+```mermaid
+sequenceDiagram
+  title: apfree-wifidog漫游时序图
+	participant user as 路由器下面的用户
+	participant router as 安装了dnsmasq及apfree-wifidog的路由器
+  participant wwas as apfree-wifidog 认证服务器
+	
+	user ->> router : 用户连接到路由器上，通过dnsmasq获取到ip地址
+	router ->> wwas	: dnsmasq调用apfree-wifidog的roam接口
+	Note left of router : dnsmasq作为dhcp server提供user的mac地址、ip及名称
+	Note right of wwas : 认证服务器收到roam接口后，根据mac地址查找该用户是否已经通过了认证
+	alt 如果该用户已经通过认证
+		wwas ->> router : 将用户的token信息，ip、mac返回，并将该客户放行
+	else
+		wwas ->> router : 不做处理，后续该user走正常认证上网流程
+	end
+	
+```
 
 ## Enhancement of apfree-wifidog 
 
