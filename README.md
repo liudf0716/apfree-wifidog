@@ -28,6 +28,57 @@
 
 ApFree WiFiDog is a high performance captive portal solution for HTTP(s), which mainly used in [Openwrt](https://github.com/openwrt/openwrt) platform. 
 
+## Sequence diagram
+
+```mermaid
+sequenceDiagram
+  title: apfree-wifidog结合wwas认证服务器的短信认证流程
+	participant user as 路由器下面的用户
+	participant router as 安装了apfree-wifidog的路由器
+  participant wwas as apfree-wifidog 认证服务器
+  participant sms as 短信服务器
+  
+  user -->> router : 访问www.baidu.com
+  activate router
+  router ->> user : 拦截该访问跳转指向apfree-wifidog认证服务器wwas
+  deactivate router
+  user ->> wwas : 用户访问apfree-wifidog认证服务器wwas
+  activate wwas
+  wwas ->> user : apfree-wifidog认证服务器wwas 返回portal认证页面
+  user ->> wwas : 获取短信验证码
+  wwas ->> sms  : 调用短信服务器接口使其发送短信验证码
+  deactivate wwas
+  activate sms
+  sms ->> user  : 短信服务器发送短信验证码给用户
+  deactivate sms
+  user ->> wwas : 用户输入短信验证码验证
+  activate wwas
+  wwas ->> user : 用户通过认证后，返回运营方配置的跳转页面
+  deactivate wwas
+  
+  loop 保活过程
+    router ->> wwas  : apfree-wifidog每隔一分钟ping认证服务器wwas
+    activate router
+    activate wwas
+    wwas ->> router  : 认证服务器wwas返回pong
+    deactivate router
+    deactivate wwas
+  end
+  
+  loop apfree-wifidog counter v2过程
+    router ->> wwas : apfree-wifidog每隔一分钟将所有认证用户信息上报wwas
+    activate router
+    activate wwas
+    Note left of router  : apfree-wifidog 收集所有在线用户流量统计结果及在线时长
+    Note right of wwas   : wwas根据用户在线时长决定是否踢用户下线
+    wwas ->> router : wwas返回所有用户认证信息
+    deactivate router
+    deactivate wwas
+    Note left of router : 根据wwas返回的认证信息，决定是否踢相应用户下线
+  end
+```
+
+
 ## Enhancement of apfree-wifidog 
 
 In fact, the title should be why we choose apfree-wifidog, the reason was the following: 
