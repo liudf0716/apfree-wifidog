@@ -142,8 +142,13 @@ get_ping_uri(const struct sys_info *info)
 			 NULL != g_name?g_name:"null",
 			 NULL != g_channel_path?g_channel_path:"null",
              config_get_config()->wired_passed);
+	if (nret < 0)
+		return NULL;
 	
-	return nret>0?uri:NULL;
+	char *encode_uri = evhttp_encode_uri(uri);
+	free(uri);
+
+	return encode_uri;
 }
 
 /**
