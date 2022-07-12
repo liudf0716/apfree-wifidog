@@ -227,6 +227,8 @@ typedef struct _http_server_t {
 
 typedef struct _mqtt_server_t {
 	char 	*hostname;
+	char 	*username;
+	char 	*password;
 	char 	*cafile;
 	char 	*crtfile;
 	char 	*keyfile;

@@ -120,6 +120,8 @@ typedef enum {
 	oMQTT,
 	oMQTTServer,
 	oMQTTServerPort,
+	oMQTTUsername,
+	oMQTTPassword,
 	oDNSTimeout,
 } OpCodes;
 
@@ -181,6 +183,8 @@ static const struct {
 	"mqtt", oMQTT}, {
 	"serveraddr", oMQTTServer}, {
 	"serverport", oMQTTServerPort}, {
+	"mqttUsername", oMQTTUsername}, {
+	"mqttPassword", oMQTTPassword}, {
 	"dnstimeout",oDNSTimeout},{
     NULL, oBadOption},};
 
@@ -275,6 +279,8 @@ config_init(void)
 	mqtt_server->cafile	 = safe_strdup(DEFAULT_CA_CRT_FILE);
 	mqtt_server->crtfile	= NULL;
 	mqtt_server->keyfile	= NULL;
+	mqtt_server->username	= NULL;
+	mqtt_server->password	= NULL;
 	config.mqtt_server  = mqtt_server;
 
 	debugconf.log_stderr = 1;
@@ -498,7 +504,7 @@ parse_auth_server(FILE * file, const char *filename, int *linenum)
 static void
 parse_mqtt_server(FILE * file, const char *filename, int *linenum)
 {
-	char *host = NULL, line[MAX_BUF], *p1, *p2;
+	char *host = NULL, *username = NULL, *password = NULL, line[MAX_BUF], *p1, *p2;
 	int port = 0, opcode;
 	t_mqtt_server *mqtt_server = config.mqtt_server;
 
@@ -545,6 +551,12 @@ parse_mqtt_server(FILE * file, const char *filename, int *linenum)
 			case oMQTTServer:
 				host = safe_strdup(p2);
 				break;
+			case oMQTTUsername:
+				username = safe_strdup(p2);
+				break;
+			case oMQTTPassword:
+				password = safe_strdup(p2);
+				break;
 			case oMQTTServerPort:
 				port = atoi(p2);
 				break;
@@ -568,6 +580,8 @@ parse_mqtt_server(FILE * file, const char *filename, int *linenum)
 	free(mqtt_server->hostname);
 	mqtt_server->hostname = host;
 	mqtt_server->port = port;
+	mqtt_server->username = username;
+	mqtt_server->password = password;
 
 	debug(LOG_DEBUG, "MQTT server added");
 }
