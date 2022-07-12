@@ -369,6 +369,8 @@ void thread_mqtt(void *arg)
 	struct mosquitto *mosq = NULL;
 	char *host 	= config->mqtt_server->hostname;
 	int  port 	= config->mqtt_server->port;
+	char *username 	= config->mqtt_server->username;
+	char *password 	= config->mqtt_server->password;
 	char *cafile = config->mqtt_server->cafile;
 	int  keepalive = 60;
 	int  retval = 0;
@@ -411,6 +413,10 @@ void thread_mqtt(void *arg)
 
     mosquitto_connect_callback_set(mosq, mqtt_connect_callback);
     mosquitto_message_callback_set(mosq, mqtt_message_callback);
+
+	if (username != NULL) {
+		mosquitto_username_pw_set(mosq, username, password);
+	}
 
    	switch( retval = mosquitto_connect(mosq, host, port, keepalive) ) {
         case MOSQ_ERR_INVAL:
