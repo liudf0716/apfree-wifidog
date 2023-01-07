@@ -5,7 +5,6 @@ If you want to contribute to [apfree wifidog](https://github.com/liudf0716/apfre
 
 1. Press the fork button:
 
-    ![fork](http://oi58.tinypic.com/jj2trm.jpg)
 
 2. Clone the repository from your account with:
 
