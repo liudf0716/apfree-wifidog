@@ -9,24 +9,26 @@ If you want to contribute to [apfree wifidog](https://github.com/liudf0716/apfre
 2. Clone the repository from your account with:
 
     ```
-    git clone git@github.com:your_github_username/apfree_wifidog.git
+    git clone https://github.com/your_github_username/apfree_wifidog.git
     ```
 
 3. Create a new branch with:
 
     ```
+    cd apfree_wifidog
     git checkout -b "apfree_wifidog-1-fix"
     ```
     You can name it however you want.
 
-4. Make your changes
+4. Make your changes and test the feature you added or bug you fixed
 
 5. Don't forget to add yourself in `contributors.md`.
 
 6. Commit and push your changes, then make a pull request from Github.
 
     ```
-    git commit -a -s
+    git add file_you_changed
+    git commit -s
     git push origin apfree_wifidog-1-fix
     ```
     
