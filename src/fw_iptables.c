@@ -808,11 +808,6 @@ iptables_fw_init(void)
 	if (got_authdown_ruleset)
 		iptables_do_append_command(handle, "-t nat -N " CHAIN_AUTH_IS_DOWN);
 
-	// add this rule for mac blacklist
-	iptables_do_append_command(handle, "-t nat -A PREROUTING -i %s -j " CHAIN_UNTRUSTED, config->gw_interface);
-	iptables_do_append_command(handle, "-t nat -A " CHAIN_UNTRUSTED " -p tcp -m set --match-set " CHAIN_UNTRUSTED " src -j REDIRECT --to-ports 44444");
-	iptables_do_append_command(handle, "-t nat -A " CHAIN_UNTRUSTED " -p udp -m set --match-set " CHAIN_UNTRUSTED " src -j REDIRECT --to-ports 44444");
-
 	/* Assign links and rules to these new chains */
 	iptables_do_append_command(handle, "-t nat -A PREROUTING -i %s -j " CHAIN_OUTGOING, config->gw_interface);
 
@@ -845,6 +840,12 @@ iptables_fw_init(void)
 	iptables_do_append_command(handle, "-t nat -A " CHAIN_DOMAIN_TRUSTED " -m set --match-set " CHAIN_INNER_DOMAIN_TRUSTED " dst -j ACCEPT");
 	iptables_do_append_command(handle, "-t nat -A " CHAIN_UNKNOWN " -j " CHAIN_GLOBAL);
 	iptables_load_ruleset("nat", FWRULESET_GLOBAL, CHAIN_GLOBAL, handle);
+	
+	// add this rule for mac blacklist
+	iptables_do_append_command(handle, "-t nat -A " CHAIN_UNKNOWN " -j " CHAIN_UNTRUSTED);
+	iptables_do_append_command(handle, "-t nat -A " CHAIN_UNTRUSTED " -p tcp -m set --match-set " CHAIN_UNTRUSTED " src -j REJECT --reject-with icmp-port-unreachable");
+	iptables_do_append_command(handle, "-t nat -A " CHAIN_UNTRUSTED " -p udp -m set --match-set " CHAIN_UNTRUSTED " src -j REJECT --reject-with icmp-port-unreachable");
+
 
 	if (got_authdown_ruleset) {
 		iptables_do_append_command(handle, "-t nat -A " CHAIN_UNKNOWN " -j " CHAIN_AUTH_IS_DOWN);
