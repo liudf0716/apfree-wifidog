@@ -799,7 +799,6 @@ iptables_fw_init(void)
 	/* Create new chains */
 	iptables_do_append_command(handle, "-t nat -N " CHAIN_UNTRUSTED);
 	iptables_do_append_command(handle, "-t nat -N " CHAIN_OUTGOING);
-	iptables_do_append_command(handle, "-t nat -N " CHAIN_TO_ROUTER);
 	iptables_do_append_command(handle, "-t nat -N " CHAIN_TO_INTERNET);
 	iptables_do_append_command(handle, "-t nat -N " CHAIN_GLOBAL);
 	iptables_do_append_command(handle, "-t nat -N " CHAIN_UNKNOWN);
@@ -817,8 +816,7 @@ iptables_fw_init(void)
 	/* Assign links and rules to these new chains */
 	iptables_do_append_command(handle, "-t nat -A PREROUTING -i %s -j " CHAIN_OUTGOING, config->gw_interface);
 
-	iptables_do_append_command(handle, "-t nat -A " CHAIN_OUTGOING " -d %s -j " CHAIN_TO_ROUTER, config->gw_address);
-	iptables_do_append_command(handle, "-t nat -A " CHAIN_TO_ROUTER " -j ACCEPT");
+	iptables_do_append_command(handle, "-t nat -A " CHAIN_OUTGOING " -d %s -j ACCEPT" , config->gw_address);
 
 	iptables_do_append_command(handle, "-t nat -A " CHAIN_OUTGOING " -j " CHAIN_TO_INTERNET);
 	iptables_do_append_command(handle, "-t nat -A " CHAIN_TO_INTERNET " -j " CHAIN_TO_PASS);
@@ -997,7 +995,6 @@ iptables_fw_destroy(void)
 	iptables_do_command("-t nat -F " CHAIN_OUTGOING);
 	if (got_authdown_ruleset)
 		iptables_do_command("-t nat -F " CHAIN_AUTH_IS_DOWN);
-	iptables_do_command("-t nat -F " CHAIN_TO_ROUTER);
 	iptables_do_command("-t nat -F " CHAIN_TO_INTERNET);
 	iptables_do_command("-t nat -F " CHAIN_GLOBAL);
 	iptables_do_command("-t nat -F " CHAIN_UNKNOWN);
@@ -1008,7 +1005,6 @@ iptables_fw_destroy(void)
 	iptables_do_command("-t nat -X " CHAIN_OUTGOING);
 	if (got_authdown_ruleset)
 		iptables_do_command("-t nat -X " CHAIN_AUTH_IS_DOWN);
-	iptables_do_command("-t nat -X " CHAIN_TO_ROUTER);
 	iptables_do_command("-t nat -X " CHAIN_TO_INTERNET);
 	iptables_do_command("-t nat -X " CHAIN_GLOBAL);
 	iptables_do_command("-t nat -X " CHAIN_UNKNOWN);

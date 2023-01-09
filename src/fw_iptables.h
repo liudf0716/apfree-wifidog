@@ -35,7 +35,6 @@
 /**Iptable chain names used by WifiDog */
 #define CHAIN_OUTGOING  "WiFiDog_$ID$_Outgoing"
 #define CHAIN_TO_INTERNET "WiFiDog_$ID$_Internet"
-#define CHAIN_TO_ROUTER "WiFiDog_$ID$_Router"
 #define CHAIN_INCOMING  "WiFiDog_$ID$_Incoming"
 #define CHAIN_AUTHSERVERS "WiFiDog_$ID$_AuthServers"
 #define	DNSMASQ_CONF_D	"/tmp/dnsmasq.d"
