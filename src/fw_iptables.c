@@ -707,7 +707,6 @@ iptables_fw_init(void)
 	int gw_port = 0;
 	int gw_https_port = 0;
 	int gw_http_port = 0;
-	int proxy_port;
 	fw_quiet = 0;
 	int got_authdown_ruleset = NULL == get_ruleset(FWRULESET_AUTH_IS_DOWN) ? 0 : 1;
 
@@ -804,7 +803,6 @@ iptables_fw_init(void)
 	iptables_do_append_command(handle, "-t nat -N " CHAIN_UNKNOWN);
 	iptables_do_append_command(handle, "-t nat -N " CHAIN_AUTHSERVERS);
 	iptables_do_append_command(handle, "-t nat -N " CHAIN_DOMAIN_TRUSTED);
-	iptables_do_append_command(handle, "-t nat -N " CHAIN_TO_PASS);
 	if (got_authdown_ruleset)
 		iptables_do_append_command(handle, "-t nat -N " CHAIN_AUTH_IS_DOWN);
 
@@ -814,18 +812,7 @@ iptables_fw_init(void)
 	iptables_do_append_command(handle, "-t nat -A " CHAIN_OUTGOING " -d %s -j ACCEPT" , config->gw_address);
 
 	iptables_do_append_command(handle, "-t nat -A " CHAIN_OUTGOING " -j " CHAIN_TO_INTERNET);
-	iptables_do_append_command(handle, "-t nat -A " CHAIN_TO_INTERNET " -j " CHAIN_TO_PASS);
 
-	if ((proxy_port = config_get_config()->proxy_port) != 0) {
-		debug(LOG_DEBUG, "Proxy port set, setting proxy rule");
-
-		iptables_do_append_command(handle, "-t nat -A " CHAIN_TO_PASS
-							" -p tcp --dport 80 -m mark --mark 0x%x0000/0xff0000 -j REDIRECT --to-port %u", FW_MARK_KNOWN,
-							proxy_port);
-		iptables_do_append_command(handle, "-t nat -A " CHAIN_TO_PASS
-							" -p tcp --dport 80 -m mark --mark 0x%x0000/0xff0000 -j REDIRECT --to-port %u", FW_MARK_PROBATION,
-							proxy_port);
-	}
 
 	iptables_do_append_command(handle, "-t nat -A " CHAIN_TO_INTERNET " -m mark --mark 0x%x0000/0xff0000 -j ACCEPT", FW_MARK_KNOWN);
 	iptables_do_append_command(handle, "-t nat -A " CHAIN_TO_INTERNET " -m mark --mark 0x%x0000/0xff0000 -j ACCEPT", FW_MARK_PROBATION);
@@ -990,7 +977,6 @@ iptables_fw_destroy(void)
 	iptables_fw_destroy_mention("nat", "PREROUTING", CHAIN_UNTRUSTED, NULL);
 	iptables_fw_destroy_mention("nat", "PREROUTING", CHAIN_OUTGOING, NULL);
 	iptables_do_command("-t nat -F " CHAIN_AUTHSERVERS);
-	iptables_do_command("-t nat -F " CHAIN_TO_PASS);
 	iptables_do_command("-t nat -F " CHAIN_UNTRUSTED);
 	iptables_do_command("-t nat -F " CHAIN_DOMAIN_TRUSTED);
 	iptables_do_command("-t nat -F " CHAIN_OUTGOING);
@@ -1000,7 +986,6 @@ iptables_fw_destroy(void)
 	iptables_do_command("-t nat -F " CHAIN_GLOBAL);
 	iptables_do_command("-t nat -F " CHAIN_UNKNOWN);
 	iptables_do_command("-t nat -X " CHAIN_AUTHSERVERS);
-	iptables_do_command("-t nat -X " CHAIN_TO_PASS);
    	iptables_do_command("-t nat -X " CHAIN_UNTRUSTED);
 	iptables_do_command("-t nat -X " CHAIN_DOMAIN_TRUSTED);
 	iptables_do_command("-t nat -X " CHAIN_OUTGOING);
