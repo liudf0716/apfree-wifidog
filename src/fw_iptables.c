@@ -830,8 +830,7 @@ iptables_fw_init(void)
 	
 	// add this rule for mac blacklist
 	iptables_do_append_command(handle, "-t nat -A " CHAIN_UNKNOWN " -j " CHAIN_UNTRUSTED);
-	iptables_do_append_command(handle, "-t nat -A " CHAIN_UNTRUSTED " -p tcp -m set --match-set " CHAIN_UNTRUSTED " src -j REJECT --reject-with icmp-port-unreachable");
-	iptables_do_append_command(handle, "-t nat -A " CHAIN_UNTRUSTED " -p udp -m set --match-set " CHAIN_UNTRUSTED " src -j REJECT --reject-with icmp-port-unreachable");
+	iptables_do_append_command(handle, "-t nat -A " CHAIN_UNTRUSTED " -m set --match-set " CHAIN_UNTRUSTED " src -j REJECT --reject-with icmp-port-unreachable");
 
 
 	if (got_authdown_ruleset) {
