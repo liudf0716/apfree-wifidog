@@ -861,7 +861,6 @@ iptables_fw_init(void)
 	iptables_do_append_command(handle, "-t filter -N " CHAIN_TO_INTERNET);
 	iptables_do_append_command(handle, "-t filter -N " CHAIN_AUTHSERVERS);
 	iptables_do_append_command(handle, "-t filter -N " CHAIN_DOMAIN_TRUSTED);
-	iptables_do_append_command(handle, "-t filter -N " CHAIN_LOCKED);
 	iptables_do_append_command(handle, "-t filter -N " CHAIN_GLOBAL);
 	iptables_do_append_command(handle, "-t filter -N " CHAIN_VALIDATE);
 	iptables_do_append_command(handle, "-t filter -N " CHAIN_KNOWN);
@@ -881,8 +880,6 @@ iptables_fw_init(void)
 	iptables_do_append_command(handle, "-t filter -A " CHAIN_TO_INTERNET
 						" -o %s -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu", ext_interface);
 
-	iptables_do_append_command(handle, "-t filter -A " CHAIN_TO_INTERNET " -m mark --mark 0x%x0000/0xff0000 -j " CHAIN_LOCKED, FW_MARK_LOCKED);
-	iptables_load_ruleset("filter", FWRULESET_LOCKED_USERS, CHAIN_LOCKED, handle);
 
 	iptables_do_append_command(handle, "-t filter -A " CHAIN_TO_INTERNET " -j " CHAIN_AUTHSERVERS);
 	iptables_fw_set_authservers(handle);
@@ -1004,7 +1001,6 @@ iptables_fw_destroy(void)
 	iptables_do_command("-t filter -F " CHAIN_TO_INTERNET);
 	iptables_do_command("-t filter -F " CHAIN_AUTHSERVERS);
 	iptables_do_command("-t filter -F " CHAIN_DOMAIN_TRUSTED);
-	iptables_do_command("-t filter -F " CHAIN_LOCKED);
 	iptables_do_command("-t filter -F " CHAIN_GLOBAL);
 	iptables_do_command("-t filter -F " CHAIN_VALIDATE);
 	iptables_do_command("-t filter -F " CHAIN_KNOWN);
@@ -1014,7 +1010,6 @@ iptables_fw_destroy(void)
 	iptables_do_command("-t filter -X " CHAIN_TO_INTERNET);
 	iptables_do_command("-t filter -X " CHAIN_AUTHSERVERS);
 	iptables_do_command("-t filter -X " CHAIN_DOMAIN_TRUSTED);
-	iptables_do_command("-t filter -X " CHAIN_LOCKED);
 	iptables_do_command("-t filter -X " CHAIN_GLOBAL);
 	iptables_do_command("-t filter -X " CHAIN_VALIDATE);
 	iptables_do_command("-t filter -X " CHAIN_KNOWN);

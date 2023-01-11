@@ -48,7 +48,6 @@
 #define CHAIN_VALIDATE  "WiFiDog_$ID$_Validate"
 #define CHAIN_KNOWN     "WiFiDog_$ID$_Known"
 #define CHAIN_UNKNOWN   "WiFiDog_$ID$_Unknown"
-#define CHAIN_LOCKED    "WiFiDog_$ID$_Locked"
 #define CHAIN_TRUSTED    "WiFiDog_$ID$_Trusted"
 #define CHAIN_TRUSTED_LOCAL    "WiFiDog_$ID$_TLocal"
 #define CHAIN_AUTH_IS_DOWN "WiFiDog_$ID$_AuthIsDown"
