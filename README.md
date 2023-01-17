@@ -26,9 +26,11 @@
 
 ## ApFree WiFiDog: A high performance captive portal solution for HTTP(s)
 
-ApFree WiFiDog is a high performance captive portal solution for HTTP(s), which mainly used in [Openwrt](https://github.com/openwrt/openwrt) platform. 
+ApFree WiFiDog is an open-source, high-performance captive portal solution for HTTP(s) that can be used to authenticate users on wireless networks running on OpenWrt platform. It can handle high concurrency and high volume of traffic and supports both HTTP and HTTPS protocols. 
 
-## Sequence diagram
+## System Architecture
+
+### User authentication procedure
 
 ```mermaid
 sequenceDiagram
@@ -78,6 +80,10 @@ sequenceDiagram
   end
 ```
 
+The above diagram is a flowchart of the user authentication procedure for apfree-wifidog when used in conjunction with the wwas authentication server and SMS verification. It shows the process of a user attempting to access a website, the router intercepting the request and redirecting the user to the apfree-wifidog authentication server, the user requesting an SMS verification code, the server sending the code to the user, the user inputting the code to verify their identity, and finally being granted access to the website. The diagram also includes loops for the "keep-alive" process and the "apfree-wifidog counter v2" process which involve the router and the authentication server regularly communicating to ensure that the authentication is still valid and to collect statistics on user's online usage.
+
+### User roam procedure
+
 ```mermaid
 sequenceDiagram
   title: apfree-wifidog漫游时序图
@@ -97,70 +103,104 @@ sequenceDiagram
 	
 ```
 
-## Enhancement of apfree-wifidog 
+The above diagram is a flowchart of the user roam procedure for apfree-wifidog when the user connects to the router. It shows the process of the user connecting to the router and obtaining an IP address via dnsmasq, the router using dnsmasq to call the roam interface of apfree-wifidog, and the authentication server receiving the roam request and checking if the user has been previously authenticated by their MAC address. If the user has been previously authenticated, the authentication server returns the user's token information, IP, and MAC address to the router and grants access. If the user has not been previously authenticated, the authentication server does not take any action, and the user will go through the normal authentication process to gain access.
 
-In fact, the title should be why we choose apfree-wifidog, the reason was the following: 
+## Why choose apfree-wifidog
 
->  Stable
+1. Stable - The developers have rewritten all iptables rule using API instead of fork call, which improves the stability of the solution in multithread-fork running environments.
 
-apfree-wifidog was widely used in tens of thousands openwrt device, which has run in business scene. In order to improve its stable, we rewrite all iptables rule by api instead of fork call, which will easily cause deadlock in multithread-fork running environment. we also re-write the code and replace libhttpd (which unmaitained for years) with libevent2
+2. Performance - The use of libevent2, which supports epoll, results in better performance than the original wifidog.
 
-> Performance
+3. HTTPs redirect - The solution supports https redirect, which is becoming increasingly important in today's internet environment.
 
-cause libevent2 support epoll, apfree-wifidog has better performance than original wifidog, there are some benchmark data in 
-benchmark directory to prove it
+4. MQTT support - The solution supports MQTT, which allows for remote delivery of trusted IP, domain and pan-domain rules.
 
-> HTTPs redirect
+5. Compatible with wifidog protocol - The solution is compatible with the wifidog protocol, and can relieve pressure on the server-side if enabled.
 
-apfree-wifidog support https redirect, in current internet environment, captive portal solution without supporting https redirect will become unsuitable gradually
+6. Advanced rules management - The solution supports various rules such as MAC address based temporary pass, IP, domain, pan-domain, white-list, black-list and all of these rules can be applied without restarting the wifidog.
 
-
-> More features
-
-apfree-wifidog support mac temporary-pass, ip,domain,pan-domain,white-mac,black-mac rule and etc. all these rules can be applied without restarting wifidog
-
-> MQTT support
-
-by enable mqtt support, u can remotely deliver such as trusted ip, domian and pan-domain rules to apfree wifidog 
-
-> Compitable with wifidog protocol
-
-u don't need to modify your wifidog authentication server to adapt apfree-wifidog; if u have pression on server-side, apfree wifidog's improved protocol can greatly relieve it, which disabled by default
 
 ----
 
-## How to added apfree-wifidog into Openwrt package 
+## How to integrate apfree-wifidog into Openwrt firmware 
 
-apfree-wifidog has been accepted by OpenWrt packages' master and 19.07 branch, which can be found in net directory.
+To add apfree-wifidog to the OpenWrt firmware, you can use the following steps:
+
+1. First, make sure that your OpenWrt build environment is set up and ready to use. If you have not set up your build environment yet, please refer to the OpenWrt documentation for instructions.
+
+2. Next, update the package feeds on your OpenWrt build environment by running the following command:
+
+```
+./scripts/feeds update -a
+./scripts/feeds install -a
+```
+
+3. Now, you can search for the apfree-wifidog package by running the following command:
+
+```
+make menuconfig
+```
+And navigate to the "Networking" -> "Captive portals" and you will find apfree-wifidog as one of the option.
+
+4. Select the apfree-wifidog package.
+
+5. Save the configuration changes by exiting the menuconfig tool and return to the command prompt
+
+5. Build the OpenWrt image by running the following command:
+
+```
+make
+```
+
+This will compile the OpenWrt image with the apfree-wifidog package included.
+
+7. Once the build process is complete, you can flash the new image to your device and start using apfree-wifidog as your captive portal solution.
+
+Note: As OpenWrt is a community driven project, the package may have been moved to another location or version.
 
 
 --------
+## How to use
 
-### Attention! when apfree-wifidog redirect https request, u will receive certificate file is illegal warning, no need to panic, it's normal response
+To use apfree-wifidog, you need to first build and configure an auth server. Once you have your auth server set up, you can configure apfree-wifidog to use it by setting the auth server's IP or domain as the location of your auth server in the apfree-wifidog configuration file.
 
-### apfree-wifidog Auth server open source project
+### Build apfree-wifidog Auth server
 
-apfree wifidog's official auth server is [wwas](https://github.com/wificoin-project/wificoin-wifidog-auth-server), which support wfc pay and weixin auth-mode and more auth-way will be support.
+you can then build and configure your auth server using the official auth server provided by apfree-wifidog developers [wwas](https://github.com/liudf0716/wwas).
 
-### demo pic
+### Configure apfree-wifidog
+
+After installing apfree-wifidog on your OpenWrt device, you can configure it by editing the configuration file located at /etc/config/wifidogx. Here's an example of how you can configure apfree-wifidog using the wifidogx configuration file:
+
+```
+config wifidog
+        option gateway_interface 'br-lan' # specify the network interface for apfree-wifidog to use
+        option auth_server_hostname 'xfrpc.xyz' # set the auth server's hostname or IP address
+        option auth_server_port 443 # set the auth server's port
+        option auth_server_path '/wifidog/' # set the path to the auth server
+        option check_interval 60 # set the interval at which clients check in with the auth server
+        option client_timeout 5 # set the timeout for clients
+        option wired_passed 0 # specify whether wired clients should be passed through without authentication
+        option disabled 1 # specify whether apfree-wifidog should be enabled or disabled
+
+```
+
+When using apfree-wifidog to redirect HTTPS requests, it is important to note that the SSL certificate presented by the captive portal may be considered "illegal" or "untrusted" by the client device. This is because the certificate is generated by the captive portal and is not signed by a trusted certificate authority.
+
+This warning can be safely ignored as it is a normal response when using a captive portal solution. The client device is simply warning the user that the certificate presented by the captive portal may not be trusted. The user can proceed to access the network by choosing to proceed despite the warning.
+
+### Demo pic
 
 <img src="https://github.com/wificoin-project/wwas/blob/master/portal.jpg" width="365" height="619"/> <img src="https://github.com/wificoin-project/wwas/blob/master/sms.jpg" width="365" height="619"/>
 
-### demo video
-
-http://www.iqiyi.com/w_19s09zie6t.html
-
-**More auth server please read [AUTHSERVER.md](https://github.com/liudf0716/apfree_wifidog/blob/master/AUTHSERVER.md)**
 
 
-### How To Contribute
+## How To Contribute
 
-Feel free to create issues or pull-requests if you have any problems.
-
-**Please read [CONTRIBUTING.md](https://github.com/liudf0716/apfree_wifidog/blob/master/CONTRIBUTING.md) before pushing any changes.**
+If you would like to contribute to the development of apfree-wifidog, you are welcome to create issues or pull-requests on the project's GitHub repository. However, before submitting any changes, please make sure to read the contributing guidelines located in the [CONTRIBUTING.md](https://github.com/liudf0716/apfree_wifidog/blob/master/CONTRIBUTING.md) file to ensure that your contributions align with the project's standards and conventions.
 
 
-### contact us 
+## contact us 
 QQ group： [331230369](https://jq.qq.com/?_wv=1027&k=4ADDSev)
 
 
