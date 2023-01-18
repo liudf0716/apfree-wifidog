@@ -1,4 +1,5 @@
-![ApFreeWiFiDog](https://github.com/liudf0716/apfree_wifidog/blob/master/logo.png)
+
+![ApFreeWiFiDog](https://user-images.githubusercontent.com/1182593/213065247-9a3cb0a5-dd08-4383-b217-b141ad32e88a.png)
 
 
 [![license][1]][2]
