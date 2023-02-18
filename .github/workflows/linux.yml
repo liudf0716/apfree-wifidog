@@ -19,28 +19,29 @@ jobs:
     steps:
     - name: Checkout changes
       uses: actions/checkout@v2
-
-    - name: install libubox
-      run: |
-        git clone https://github.com/xfguo/libubox.git
-        cd libubox
-        cmake -DBUILD_LUA=off
-        sudo make install
-        
-    - name: install uci
-      run: |
-        git clone https://github.com/jkjuopperi/uci.git
-        cd uci
-        cmake -DBUILD_LUA=off
-        sudo make install
     
     - name: install other depend lib
       run: |
           sudo apt-get update -y
           sudo apt-get install -y libjson-c-dev
-          sudo apt-get install -y libssh2-1-dev
           sudo apt-get install -y libevent-dev
-      
+          sudo apt-get install -y lua5.1 lua5.1-dev
+
+    - name: install libubox
+      run: |
+        git clone https://github.com/git-openwrt-org-mirror/libubox.git
+        cd libubox
+        mkdir build && cd build && cmake ..
+        sudo make install
+        
+    - name: install uci
+      run: |
+        git clone https://github.com/git-openwrt-org-mirror/uci.git
+        cd uci
+        mkdir build && cd build && cmake ..
+        sudo make install
+    
+          
     - name: install iptables lib for apfree wifidog
       run: | 
         git clone https://github.com/liudf0716/iptables-apfree-wifidog.git
