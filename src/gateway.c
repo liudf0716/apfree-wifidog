@@ -40,7 +40,6 @@
 #include "wdctl_thread.h"
 #include "ping_thread.h"
 #include "util.h"
-#include "ipset.h"
 #include "ssl_redir.h"
 #include "mqtt_thread.h"
 #include "wd_util.h"
@@ -295,7 +294,6 @@ wd_init(s_config *config)
     wd_msg_init();    
     wd_redir_file_init();
     openssl_init();              /* Initialize OpenSSL */
-    ipset_init();
 	
     /* Set the time when wifidog started */
     if (!started_time) {

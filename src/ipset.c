@@ -119,6 +119,8 @@ static inline void add_attr(struct nlmsghdr *nlh, uint16_t type, size_t len, con
 
 void  ipset_init(void)
 {
+	if (ipset_sock != 0)
+		return;
   	if ((ipset_sock = socket(AF_NETLINK, SOCK_RAW, NETLINK_NETFILTER)) != -1 &&
         (bind(ipset_sock, (struct sockaddr *)&snl, sizeof(snl)) != -1))
 		return;
@@ -266,4 +268,3 @@ int add_to_ipset(const char *setname, const char *val, int flag)
 
 	return -1;
 }
-

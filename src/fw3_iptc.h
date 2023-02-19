@@ -29,6 +29,7 @@
 #ifndef __FW3_IPTABLES_H
 #define __FW3_IPTABLES_H
 
+
 /* libipt*ext.so interfaces */
 extern void init_extensions(void);
 extern void init_extensions4(void);
@@ -106,5 +107,6 @@ fw3_ipt_commit(struct fw3_ipt_handle *h);
 
 int
 fw3_ipt_rule_append(struct fw3_ipt_handle *handle, char *command);
+
 
 #endif

@@ -27,6 +27,8 @@
  */
 
 #include <arpa/inet.h>
+#include <libiptc/libiptc.h>
+#include <xtables.h>
 
 #include "common.h"
 #include "fw3_iptc.h"
@@ -1027,3 +1029,4 @@ fw3_ipt_rule_append(struct fw3_ipt_handle *handle, char *command)
 
 	return __fw3_ipt_rule_append(r);
 }
+

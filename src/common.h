@@ -86,8 +86,6 @@
 #include <openssl/err.h>
 #include <openssl/rand.h>
 
-#include <libiptc/libiptc.h>
-#include <xtables.h>
 #include <json-c/json.h>
 #ifdef	_MQTT_SUPPORT_
   #include <mosquitto.h>

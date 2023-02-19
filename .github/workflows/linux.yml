@@ -26,6 +26,7 @@ jobs:
           sudo apt-get install -y libjson-c-dev
           sudo apt-get install -y libevent-dev
           sudo apt-get install -y lua5.1 lua5.1-dev
+          sudo apt-get install -y nftables
 
     - name: install libubox
       run: |
@@ -41,6 +42,14 @@ jobs:
         mkdir build && cd build && cmake ..
         sudo make install
     
+    - name: compile apfree-wifidog fw4
+      run: |
+        mkdir build
+        cd build
+        cmake ..
+        make
+        ldd src/wifidogx
+        ldd src/wdctlx
           
     - name: install iptables lib for apfree wifidog
       run: | 
@@ -50,12 +59,12 @@ jobs:
         ./configure --disable-nftables
         make
         sudo make install
-      
-    - name: compile apfree-wifidog
+
+    - name: compile apfree-wifidog fw3
       run: |
-        mkdir build
         cd build
-        cmake ..
+        rm -rf *
+        cmake -DAW_FW3=ON ..
         make
     
       

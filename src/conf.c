@@ -123,6 +123,7 @@ typedef enum {
 	oMQTTUsername,
 	oMQTTPassword,
 	oDNSTimeout,
+	oFW4Enable,
 } OpCodes;
 
 /** @internal
@@ -186,6 +187,7 @@ static const struct {
 	"mqttUsername", oMQTTUsername}, {
 	"mqttPassword", oMQTTPassword}, {
 	"dnstimeout",oDNSTimeout},{
+	"fw4enable",oFW4Enable},{
     NULL, oBadOption},};
 
 static void config_notnull(const void *, const char *);
@@ -282,6 +284,8 @@ config_init(void)
 	mqtt_server->username	= NULL;
 	mqtt_server->password	= NULL;
 	config.mqtt_server  = mqtt_server;
+
+	config.fw4_enable = 1;
 
 	debugconf.log_stderr = 1;
 	debugconf.debuglevel = DEFAULT_DEBUGLEVEL;
@@ -992,6 +996,9 @@ config_read()
 					break;
 				case oAppleCNA:
 					sscanf(p1, "%hu", &config.bypass_apple_cna);
+					break;
+				case oFW4Enable:
+					config.fw4_enable = parse_boolean_value(p1);
 					break;
 				case oBadOption:
 					/* FALL THROUGH */

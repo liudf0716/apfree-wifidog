@@ -6,6 +6,7 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/Modules/")
 
 option(AW_DEBUG		"Build debug"	ON)
 option(AW_WEBSSH	"Build with web ssh support"	OFF)
+option(AW_FW3   "Build with fw3 support"	OFF)
 
 find_package(LibEvent)
 if(NOT LibEvent_FOUND)

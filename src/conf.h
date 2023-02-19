@@ -292,6 +292,7 @@ typedef struct {
 	short	bypass_apple_cna; /* 1, Bypass Apple Captive Network Assistant  2, apple no portal appear */
 	int 	update_domain_interval; /** 0, no need update; otherwise update every update_domain_interval*checkinterval seconds*/
 	char 	* dns_timeout; /*time to limit during of parsing the dns */
+	int 	fw4_enable; /* 1, enable ipv4 firewall */
 } s_config;
 
 /** @brief Get the current gateway configuration */

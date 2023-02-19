@@ -27,16 +27,14 @@
 #ifndef __FW4_NFT_H
 #define __FW4_NFT_H
 
-/**
-Used to supress the error output of the firewall during destruction */
-static int nft_fw_quiet = 0;
+#include <stdint.h>
+
 
 /** Used by iptables_fw_access to select if the client should be granted of denied access */
-typedef enum nft_access_t_ {
-    FW_ACCESS_ALLOW,
-    FW_ACCESS_DENY
-} nft_access_t;
 
-int nft_init(const char* auth_server_ip, const char *gateway_ip, const char* interface, const char* filename);
+int nft_init(const char *gateway_ip, const char* interface);
 int nft_fw_access(fw_access_t type, const char *ip, const char *mac, int tag);
+void nft_statistical_outgoing(char *outgoing, uint32_t outgoing_len);
+void nft_statistical_incoming(char *incoming, uint32_t incoming_len);
+
 #endif
