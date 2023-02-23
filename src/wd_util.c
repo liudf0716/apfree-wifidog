@@ -1517,3 +1517,31 @@ br_arp_get_mac(const char *i_ip, char *o_mac)
 	return arp_get_mac(config->gw_interface, i_ip, o_mac);
 }
 
+/**
+ * @brief generate cert for apfree-wifidog
+ * first, generate ca cert
+ * second, generate server cert
+ * the ca cert will save in filename DEFAULT_CA_CRT_FILE
+ * the server cert will save in filename config->svr_crt_file
+ * the server key will save in filename config->svr_key_file
+*/
+void
+init_apfree_wifidog_cert()
+{
+	s_config *config = config_get_config();
+	// generate ca cert
+	if (access(config->https_server->ca_crt_file, F_OK) != 0) {
+		// generate ca cert
+		char cmd[256] = {0};
+		snprintf(cmd, sizeof(cmd), "openssl req -new -x509 -days 3650 -nodes -out %s -keyout %s -subj \"/C=CN/ST=Beijing/L=Beijing/O=apfree/CN=apfree.com\"", config->https_server->ca_crt_file, DEFAULT_CA_KEY_FILE);
+		system(cmd);
+	}
+	// generate server cert
+	if (access(config->https_server->svr_crt_file, F_OK) != 0) {
+		char cmd[256] = {0};
+		snprintf(cmd, sizeof(cmd), "openssl req -new -nodes -out %s -keyout %s -subj \"/C=CN/ST=Beijing/L=Beijing/O=apfree/CN=apfree.com\"", DEFAULT_SVR_CRT_REQ_FILE, config->https_server->svr_key_file);
+		system(cmd);
+		snprintf(cmd, sizeof(cmd), "openssl x509 -req -days 3650 -in %s -CA %s -CAkey %s -set_serial 01 -out %s", DEFAULT_SVR_CRT_REQ_FILE, DEFAULT_CA_CRT_FILE, DEFAULT_CA_KEY_FILE, config->https_server->svr_crt_file);
+		system(cmd);
+	}
+}

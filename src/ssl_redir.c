@@ -334,5 +334,6 @@ ssl_redirect_loop (char *gw_ip,  t_https_server *https_server) {
 void 
 thread_ssl_redirect(void *args) {
 	s_config *config = config_get_config();
+	init_apfree_wifidog_cert();
    	ssl_redirect_loop (config->gw_address, config->https_server);
 }

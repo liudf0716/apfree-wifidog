@@ -159,4 +159,8 @@ char *get_ext_iface(void);
 int arp_get_mac(const char *dev_name, const char *i_ip, char *o_mac);
 
 int br_arp_get_mac(const char *i_ip, char *o_mac);
+
+/** @brief generate cert for apfree-wifidog */
+void init_apfree_wifidog_cert();
+
 #endif /* _WD_UTIL_H_ */

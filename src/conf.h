@@ -89,10 +89,12 @@
 #define FWRULESET_LOCKED_USERS "locked-users"
 /*@}*/
 
-#define	DEFAULT_CA_CRT_FILE		"/etc/apfree.ca"
-#define	DEFAULT_SVR_CRT_FILE	"/etc/apfree.crt"
-#define	DEFAULT_SVR_KEY_FILE	"/etc/apfree.key"
-#define DEFAULT_WWW_PATH		"/etc/www/"
+#define DEFAULT_SVR_CRT_REQ_FILE	"/tmp/apfree.csr"
+#define DEFAULT_CA_KEY_FILE			"/etc/apfree.ca.key"
+#define	DEFAULT_CA_CRT_FILE			"/etc/apfree.ca"
+#define	DEFAULT_SVR_CRT_FILE		"/etc/apfree.crt"
+#define	DEFAULT_SVR_KEY_FILE		"/etc/apfree.key"
+#define DEFAULT_WWW_PATH			"/etc/www/"
 
 
 #define	WIFIDOG_REDIR_HTML_CONTENT	"setTimeout(function() {location.href = \"%s\";}, 10);"
