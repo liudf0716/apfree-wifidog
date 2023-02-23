@@ -38,84 +38,176 @@
 #define NFT_CONF_FILENAME "/etc/fw4_apfree-wifiodg_init.conf"
 #define NFT_FILENAME_OUT "/tmp/fw4_apfree-wifiodg_init.conf.out"
 
-/* utils function */
-static int 
-replace_variables(const char* gateway_ip, const char* interface) 
+/*
+ * change the following script to char * array
+ * 
+ * `add set inet fw4 set_wifidogx_auth_servers { type ipv4_addr; }
+add set inet fw4 set_wifidogx_gateway { type ipv4_addr; }
+add set inet fw4 set_wifidogx_trust_domains { type ipv4_addr; }
+add set inet fw4 set_wifidogx_inner_trust_domains { type ipv4_addr; }
+add set inet fw4 set_wifidogx_trust_clients { type ether_addr; }
+add set inet fw4 set_wifidogx_tmp_trust_clients { type ether_addr; flags timeout; }
+
+add chain inet fw4 dstnat_wifidogx_auth_server
+add chain inet fw4 dstnat_wifidogx_wan
+add chain inet fw4 dstnat_wifidogx_outgoing
+add chain inet fw4 dstnat_wifidogx_trust_domains
+add chain inet fw4 dstnat_wifidogx_unknown
+add rule inet fw4 dstnat iifname $interface$ jump dstnat_wifidogx_outgoing
+add rule inet fw4 dstnat_wifidogx_outgoing ip daddr @set_wifidogx_gateway accept
+add rule inet fw4 dstnat_wifidogx_outgoing jump dstnat_wifidogx_wan
+add rule inet fw4 dstnat_wifidogx_wan meta mark 0x20000 accept
+add rule inet fw4 dstnat_wifidogx_wan meta mark 0x10000 accept
+add rule inet fw4 dstnat_wifidogx_wan jump dstnat_wifidogx_unknown
+add rule inet fw4 dstnat_wifidogx_unknown jump dstnat_wifidogx_auth_server
+add rule inet fw4 dstnat_wifidogx_unknown jump dstnat_wifidogx_trust_domains
+add rule inet fw4 dstnat_wifidogx_unknown tcp dport 443 redirect to  8443
+add rule inet fw4 dstnat_wifidogx_unknown tcp dport 80 redirect to  2060
+add rule inet fw4 dstnat_wifidogx_auth_server ip daddr @set_wifidogx_auth_servers accept
+add rule inet fw4 dstnat_wifidogx_trust_domains ip daddr @set_wifidogx_trust_domains accept
+add rule inet fw4 dstnat_wifidogx_trust_domains ip daddr @set_wifidogx_inner_trust_domains accept
+
+add chain inet fw4 forward_wifidogx_auth_servers
+add chain inet fw4 forward_wifidogx_wan
+add chain inet fw4 forward_wifidogx_trust_domains
+add chain inet fw4 forward_wifidogx_unknown
+add chain inet fw4 mangle_prerouting_wifidogx_outgoing
+add chain inet fw4 mangle_postrouting_wifidogx_incoming
+insert rule inet fw4 accept_to_wan jump forward_wifidogx_wan
+add rule inet fw4 forward_wifidogx_wan jump forward_wifidogx_auth_servers
+add rule inet fw4 forward_wifidogx_wan jump forward_wifidogx_trust_domains
+add rule inet fw4 forward_wifidogx_wan meta mark 0x10000 accept
+add rule inet fw4 forward_wifidogx_wan meta mark 0x20000 accept
+add rule inet fw4 forward_wifidogx_wan jump forward_wifidogx_unknown
+add rule inet fw4 forward_wifidogx_auth_servers ip daddr @set_wifidogx_auth_servers accept
+add rule inet fw4 forward_wifidogx_trust_domains ip daddr @set_wifidogx_trust_domains accept
+add rule inet fw4 forward_wifidogx_trust_domains ip daddr @set_wifidogx_inner_trust_domains accept
+add rule inet fw4 forward_wifidogx_unknown udp dport 53 accept
+add rule inet fw4 forward_wifidogx_unknown tcp dport 53 accept
+add rule inet fw4 forward_wifidogx_unknown udp dport 67 accept
+add rule inet fw4 forward_wifidogx_unknown tcp dport 67 accept
+
+add rule inet fw4 mangle_prerouting iifname $interface$ jump mangle_prerouting_wifidogx_outgoing
+add rule inet fw4 mangle_postrouting oifname $interface$ jump mangle_postrouting_wifidogx_incoming` 
+ */
+const char *nft_wifidogx_init_script[] = {
+    "add set inet fw4 set_wifidogx_auth_servers { type ipv4_addr; }",
+    "add set inet fw4 set_wifidogx_gateway { type ipv4_addr; }",
+    "add set inet fw4 set_wifidogx_trust_domains { type ipv4_addr; }",
+    "add set inet fw4 set_wifidogx_inner_trust_domains { type ipv4_addr; }",
+    "add set inet fw4 set_wifidogx_trust_clients { type ether_addr; }",
+    "add set inet fw4 set_wifidogx_tmp_trust_clients { type ether_addr; flags timeout; }",
+    "add chain inet fw4 dstnat_wifidogx_auth_server",
+    "add chain inet fw4 dstnat_wifidogx_wan",
+    "add chain inet fw4 dstnat_wifidogx_outgoing",
+    "add chain inet fw4 dstnat_wifidogx_trust_domains",
+    "add chain inet fw4 dstnat_wifidogx_unknown",
+    "add rule inet fw4 dstnat iifname $interface$ jump dstnat_wifidogx_outgoing",
+    "add rule inet fw4 dstnat_wifidogx_outgoing ip daddr @set_wifidogx_gateway accept",
+    "add rule inet fw4 dstnat_wifidogx_outgoing jump dstnat_wifidogx_wan",
+    "add rule inet fw4 dstnat_wifidogx_wan meta mark 0x20000 accept",
+    "add rule inet fw4 dstnat_wifidogx_wan meta mark 0x10000 accept",
+    "add rule inet fw4 dstnat_wifidogx_wan jump dstnat_wifidogx_unknown",
+    "add rule inet fw4 dstnat_wifidogx_unknown jump dstnat_wifidogx_auth_server",
+    "add rule inet fw4 dstnat_wifidogx_unknown jump dstnat_wifidogx_trust_domains",
+    "add rule inet fw4 dstnat_wifidogx_unknown tcp dport 443 redirect to  8443",
+    "add rule inet fw4 dstnat_wifidogx_unknown tcp dport 80 redirect to  2060",
+    "add rule inet fw4 dstnat_wifidogx_auth_server ip daddr @set_wifidogx_auth_servers accept",
+    "add rule inet fw4 dstnat_wifidogx_trust_domains ip daddr @set_wifidogx_trust_domains accept",
+    "add rule inet fw4 dstnat_wifidogx_trust_domains ip daddr @set_wifidogx_inner_trust_domains accept",
+    "add chain inet fw4 forward_wifidogx_auth_servers",
+    "add chain inet fw4 forward_wifidogx_wan",
+    "add chain inet fw4 forward_wifidogx_trust_domains",
+    "add chain inet fw4 forward_wifidogx_unknown",
+    "add chain inet fw4 mangle_prerouting_wifidogx_outgoing",
+    "add chain inet fw4 mangle_postrouting_wifidogx_incoming",
+    "insert rule inet fw4 accept_to_wan jump forward_wifidogx_wan",
+    "add rule inet fw4 forward_wifidogx_wan jump forward_wifidogx_auth_servers",
+    "add rule inet fw4 forward_wifidogx_wan jump forward_wifidogx_trust_domains",
+    "add rule inet fw4 forward_wifidogx_wan meta mark 0x10000 accept",
+    "add rule inet fw4 forward_wifidogx_wan meta mark 0x20000 accept",
+    "add rule inet fw4 forward_wifidogx_wan jump forward_wifidogx_unknown",
+    "add rule inet fw4 forward_wifidogx_auth_servers ip daddr @set_wifidogx_auth_servers accept",
+    "add rule inet fw4 forward_wifidogx_trust_domains ip daddr @set_wifidogx_trust_domains accept",
+    "add rule inet fw4 forward_wifidogx_trust_domains ip daddr @set_wifidogx_inner_trust_domains accept",
+    "add rule inet fw4 forward_wifidogx_unknown udp dport 53 accept",
+    "add rule inet fw4 forward_wifidogx_unknown tcp dport 53 accept",
+    "add rule inet fw4 forward_wifidogx_unknown udp dport 67 accept",
+    "add rule inet fw4 forward_wifidogx_unknown tcp dport 67 accept",
+    "add rule inet fw4 mangle_prerouting iifname $interface$ jump mangle_prerouting_wifidogx_outgoing",
+    "add rule inet fw4 mangle_postrouting oifname $interface$ jump mangle_postrouting_wifidogx_incoming",
+    "add element inet fw4 set_wifidogx_gateway { $gateway_ip$ }",
+};
+
+static void
+replace_str(const char *content, const char *old_str, const char *new_str, char *out, int out_len)
 {
-    // check whether the input parameters are valid
-    // is auth_server_ip valid ipv4 address?
-    if (!is_valid_ip(gateway_ip)) {
-        debug(LOG_ERR, "Invalid  gateway_ip: %s", gateway_ip);
-        return -3;
+    // find the old_str in content
+    // if found, replace the old_str with new_str
+    // and copy the result to out
+
+    char *p = strstr(content, old_str);
+    if (p == NULL) {
+        strncpy(out, content, out_len);
+        return;
     }
 
-    FILE* input_file = NULL;
+    int len = p - content;
+    strncpy(out, content, len);
+    out[len] = '\0';
+    strncat(out, new_str, strlen(new_str));
+    strncat(out, p + strlen(old_str), out_len - len - strlen(new_str));
+}
+
+// the nftables script for wifidogx
+// the script is used to configure the nftables
+// the script is generated by the function generate_nft_wifidogx_init_script
+// the function generate NFT_FILENAME_OUT file which is used to configure the nftables
+// the NFT_FILENAME_OUT file come from nft_wifidogx_init_script
+// in nft_wifidogx_init_script, the variables $interface$ is replaced by the real values
+// the real value from the input parameters
+static int
+generate_nft_wifidogx_init_script(const char* gateway_ip, const char* interface)
+{
+    // if gateway_ip is invalid ip address, return -1
+    if (is_valid_ip(gateway_ip) == 0) {
+        debug(LOG_ERR, "Invalid gateway ip address: %s", gateway_ip);
+        return -1;
+    }
+
     FILE* output_file = NULL;
-    char line[1024] = {0};
+    int i;
     char buf[1024] = {0};
-    int len;
-    
-    // if file NFT_CONF_FILENAME does not exist, return
-    if (access(NFT_CONF_FILENAME, F_OK) != 0) {
-        debug(LOG_ERR, "File %s does not exist", NFT_CONF_FILENAME);
-        return -1;
-    }
 
-    // Open the input file for reading
-    input_file = fopen(NFT_CONF_FILENAME, "r");
-    if (input_file == NULL) {
-        debug(LOG_ERR, "Failed to open file %s", NFT_CONF_FILENAME);
-        return -1;
-    }
-    
     // Open the output file for writing
     output_file = fopen(NFT_FILENAME_OUT, "w");
     if (output_file == NULL) {
-        debug(LOG_ERR, "Failed to open file %s", NFT_FILENAME_OUT);
-        fclose(input_file);
-        return -2;
+        debug(LOG_ERR, "Failed to open %s for writing", NFT_FILENAME_OUT);
+        return -1;
     }
-    
-    // Read the input file line by line
-    while (fgets(line, sizeof(line), input_file) != NULL) {
-        // Replace $auth_server_ip$ with auth_server_ip
-        strncpy(buf, line, sizeof(buf));
-        len = strlen(buf);
-        
-        // Replace $gateway_ip$ with gateway_ip
-        //len = strlen(buf);
-        for (int i = 0; i < len - strlen("$gateway_ip$"); i++) {
-            if (strncmp(buf + i, "$gateway_ip$", strlen("$gateway_ip$")) == 0) {
-                strncpy(buf + i, gateway_ip, strlen(gateway_ip));
-                strncpy(buf + i + strlen(gateway_ip), line + i + strlen("$gateway_ip$"), sizeof(buf));
-                break;
-            }
+
+    // write the nftables script to the output file
+    for (i = 0; i < sizeof(nft_wifidogx_init_script) / sizeof(nft_wifidogx_init_script[0]); i++) {
+        const char *p = nft_wifidogx_init_script[i];
+        // if p contains $gateway_ip$, replace $gateway_ip$ with the real value
+        if (strstr(p, "$gateway_ip$")) {
+            replace_str(p, "$gateway_ip$", gateway_ip, buf, sizeof(buf));
+            fprintf(output_file, "%s\n", buf);
+        } else if (strstr(p, "$interface$")) {
+            // if p contains $interface$, replace $interface$ with the real value
+            replace_str(p, "$interface$", interface, buf, sizeof(buf));
+            fprintf(output_file, "%s\n", buf);
+        } else {
+            // if p does not contain $gateway_ip$ and $interface$, write p to the output file
+            fprintf(output_file, "%s\n", p);
         }
-        
-        // Replace $interface$ with interface
-        //len = strlen(buf);
-        for (int i = 0; i < len - strlen("$interface$") ; i++) {
-            if (strncmp(buf + i, "$interface$", strlen("$interface$")) == 0) {
-                strncpy(buf + i, interface, strlen(interface));
-                strncpy(buf + i + strlen(interface), line + i + strlen("$interface$"), sizeof(buf));
-                break;
-            }
-        }
-        
-        // Write the replaced line to the output file
-        fputs(buf, output_file);
-        memset(line, 0, sizeof(line));
         memset(buf, 0, sizeof(buf));
     }
-    
-    // Close the input and output files
-    fclose(input_file);
     fclose(output_file);
-    // Return the output file
-
     return 0;
 }
 
+// the function run_cmd is used to run the nftables command
 static int 
 run_cmd(char *cmd, ...)
 {
@@ -128,7 +220,13 @@ run_cmd(char *cmd, ...)
 
     debug(LOG_DEBUG, "EXEC: %s\n", buf);
     
-    return execute(buf, 1);
+    int nret = system(buf);
+    // if nret is -1, it means the system call failed
+    if (nret == -1) {
+        debug(LOG_ERR, "system call failed");
+        return -1;
+    }
+    return nret;
 }
 /* end of utils function */
 
@@ -136,7 +234,8 @@ run_cmd(char *cmd, ...)
 static int 
 nft_do_init_script_command()
 {
-	return run_cmd("nft -f %s", NFT_FILENAME_OUT);
+	run_cmd("nft -f %s", NFT_FILENAME_OUT);
+    return 1;
 }
 
 
@@ -195,12 +294,11 @@ nft_statistical_incoming(char *incoming, uint32_t incoming_len)
 int 
 nft_init(const char *gateway_ip, const char* interface)
 {
-	// firewall_init_bak.nft don't modify it
-	// system("rm -f /conf/firewall_init.nft && cp -f /conf/firewall_init_bak.nft /conf/firewall_init.nft")
-	int ret = replace_variables(gateway_ip, interface);
+	// generate nftables wifidogx init script
+	int ret = generate_nft_wifidogx_init_script(gateway_ip, interface);
 	if (ret != 0) {
         debug(LOG_ERR, "Failed to replace variables in %s", NFT_CONF_FILENAME);
-        return -1;
+        return 0;
     }
 
 	nft_do_init_script_command();
@@ -208,7 +306,7 @@ nft_init(const char *gateway_ip, const char* interface)
     // add auth server ip to firewall
     iptables_fw_set_authservers(NULL);
 
-    return 0;
+    return 1;
 }
 
 
