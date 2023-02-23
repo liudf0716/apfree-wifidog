@@ -33,6 +33,7 @@
 #include "wd_util.h"
 #include "fw_iptables.h"
 #include "fw4_nft.h"
+#include "client_list.h"
 
 
 #define NFT_CONF_FILENAME "/etc/fw4_apfree-wifiodg_init.conf"
@@ -238,40 +239,13 @@ nft_do_init_script_command()
     return 1;
 }
 
-
-// set ip outgoing clearance
-static int 
-nft_do_outgoging_allow_command(char *mac_addr, char *ip_addr)
-{
-    return run_cmd("nft add rule inet fw4 mangle_prerouting_wifidogx_outgoing ether saddr %s ip saddr %s  counter mark set 0x20000 accept", mac_addr, ip_addr);
-}
-// set ip incoming clearance
-static int 
-nft_do_incoming_allow_command(char *ip_addr)
-{
-    return run_cmd("nft add rule inet fw4 mangle_postrouting_wifidogx_incoming ip daddr %s counter accept", ip_addr);
-}
-// set ip outgoing ban
-static int 
-nft_do_outgoging_ban_command(char *mac_addr, char *ip_addr)
-{
-    return run_cmd("nft add rule inet fw4 mangle_prerouting_wifidogx_outgoing ether saddr %s ip saddr %s  counter mark set 0x20000 drop", mac_addr, ip_addr);
-}
-// set ip incoming ban
-static int 
-nft_do_incoming_ban_command(char *ip_addr)
-{
-    return run_cmd("nft add rule inet fw4 mangle_postrouting_wifidogx_incoming ip daddr %s counter drop", ip_addr);
-}
-
-
-
 // statistical outgoing information,must free when statistical is over
 void
 nft_statistical_outgoing(char *outgoing, uint32_t outgoing_len)
 {
 	FILE *r_fp = NULL;
 	char *cmd = "nft -j list chain inet fw4 mangle_prerouting_wifidogx_outgoing";
+    debug(LOG_DEBUG, "nft -j list chain inet fw4 mangle_prerouting_wifidogx_outgoing");
 	r_fp = popen(cmd, "r");
 	fgets(outgoing, outgoing_len, r_fp);
 	pclose(r_fp);
@@ -282,6 +256,7 @@ nft_statistical_incoming(char *incoming, uint32_t incoming_len)
 {
 	FILE *r_fp = NULL;
 	char *cmd = "nft -j list chain inet fw4 mangle_postrouting_wifidogx_incoming";
+    debug(LOG_DEBUG, "nft -j list chain inet fw4 mangle_postrouting_wifidogx_incoming");
 	r_fp = popen(cmd, "r");
 	fgets(incoming, incoming_len, r_fp);
 	pclose(r_fp);
@@ -312,26 +287,56 @@ nft_init(const char *gateway_ip, const char* interface)
 
 /** Set if a specific client has access through the firewall */
 int 
-nft_fw_access(fw_access_t type, const char *ip, const char *mac, int tag)
-
+nft_fw_access(int tag)
 {
-	int rc = 0;
+#define NFT_WIFIDOGX_CLIENT_LIST "/tmp/nftables_wifidogx_client_list"
+    // the function nft_fw_access is used to set the firewall rules
+    // the rules are as the following:
+    // add rule inet fw4 mangle_prerouting_wifidogx_outgoing ether saddr ab:23:23:ab:23:23 ip saddr
+	// iterate client_list and get its ip and mac
+    // using the ip and mac to set the firewall rules
+    // the rules are as the following:
+    // add rule inet fw4 mangle_prerouting_wifidogx_outgoing ether saddr ab:23:23:ab:23:23 ip saddr 192.168.1.18 counter mark set 0x20000 accept
+    // add rule inet fw4 mangle_postrouting_wifidogx_incoming ip daddr 192.168.1.18 counter accept
+    // save the rules to the file /tmp/nftables_wifidogx_client_list
+    // afte saving the rules, run the script /tmp/nftables_wifidogx_client_list to set the rules
+    // the rules are as the following:
+    // nft -f /tmp/nftables_wifidogx_client_list
 
-	switch (type) {
-	case FW_ACCESS_ALLOW:
-		nft_do_outgoging_allow_command((char*)mac, (char*)ip);
-		nft_do_incoming_allow_command((char*)ip);
-		break;
-	case FW_ACCESS_DENY:
-		/* XXX Add looping to really clear? */
-		nft_do_outgoging_ban_command((char*)mac, (char*)ip);
-		nft_do_incoming_ban_command((char*)ip);
-		break;
-	default:
-		rc = -1;
-		break;
-	}
+    t_client *first_client = client_get_first_client();
+    if (first_client == NULL) {
+        debug(LOG_ERR, "No clients in list!");
+        return 0;
+    }
 
-	return rc;
+    // open the file /tmp/nftables_wifidogx_client_list
+    // define the file /tmp/nftables_wifidogx_client_list as NFT_WIFIDOGX_CLIENT_LIST
+    FILE *fp = fopen(NFT_WIFIDOGX_CLIENT_LIST, "w");
+    if (fp == NULL) {
+        debug(LOG_ERR, "Failed to open %s", NFT_WIFIDOGX_CLIENT_LIST);
+        return 0;
+    }
+    // flush the rules in the chain mangle_prerouting_wifidogx_outgoing
+    fprintf(fp, "nft flush chain inet fw4 mangle_prerouting_wifidogx_outgoing\n");
+    // flush the rules in the chain mangle_postrouting_wifidogx_incoming
+    fprintf(fp, "nft flush chain inet fw4 mangle_postrouting_wifidogx_incoming\n");
+    // iterate the client_list
+    t_client *current = first_client;
+    char line[256] = {0};
+    do {
+        snprintf(line, sizeof(line), "nft add rule inet fw4 mangle_prerouting_wifidogx_outgoing ether saddr %s ip saddr %s  counter mark set 0x%02x0000/0xff0000 accept\n", current->mac, current->ip, tag&0x000000ff);
+        // write the line to the file /tmp/nftables_wifidogx_client_list
+        fprintf(fp, "%s", line);
+        memset(line, 0, sizeof(line));
+        snprintf(line, sizeof(line), "nft add rule inet fw4 mangle_postrouting_wifidogx_incoming ip daddr %s counter accept\n", current->ip);
+        // write the line to the file /tmp/nftables_wifidogx_client_list
+        fprintf(fp, "%s", line);
+        memset(line, 0, sizeof(line));
+        current = current->next;
+    } while (current != NULL);
+    fclose(fp);
+
+    return 1;
 }
+
 

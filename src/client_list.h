@@ -36,8 +36,10 @@ extern pthread_mutex_t offline_client_list_mutex;
 /** Counters struct for a client's bandwidth usage (in bytes)
  */
 typedef struct _t_counters {
-    unsigned long long incoming;        /**< @brief Incoming data total*/
+    unsigned long long incoming;        /**< @brief Incoming data byte total*/
+	unsigned long long incoming_packets;        /**< @brief Incoming data packet total*/
     unsigned long long outgoing;        /**< @brief Outgoing data total*/
+	unsigned long long outgoing_packets;        /**< @brief Outgoing data packet total*/
     unsigned long long incoming_history;        /**< @brief Incoming data before wifidog restarted*/
     unsigned long long outgoing_history;        /**< @brief Outgoing data before wifidog restarted*/
     /* Delta traffic stats by t123yh */
