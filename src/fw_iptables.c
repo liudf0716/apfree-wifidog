@@ -1348,7 +1348,7 @@ fw3_access(fw_access_t type, const char *ip, const char *mac, int tag)
 static int
 fw4_access(fw_access_t type, const char *ip, const char *mac, int tag)
 {
-	return nft_fw_access(tag);
+	return nft_fw_access(type, ip, mac, tag);
 }
 
 #endif
@@ -1645,12 +1645,19 @@ fw4_counters_update()
 		nret = 1;
 		goto END_UPDATE;
 	}
+	// get the "nftables" json object which is an array of json objects
+	json_object *jobj_nftables = NULL;
+	if (!json_object_object_get_ex(jobj_outgoing, "nftables", &jobj_nftables)) {
+		debug(LOG_ERR, "fw4_counters_update(): jobj_nftables is NULL");
+		nret = 1;
+		goto END_UPDATE;
+	}
 	// the jobj_outgoing is an array of json objects
 	// iterate the array to get each json object
-	int i = 0;
-	int arraylen = json_object_array_length(jobj_outgoing);
+	int i;
+	int arraylen = json_object_array_length(jobj_nftables);
 	for(i = 0; i < arraylen; i++) {
-		json_object *jobj = json_object_array_get_idx(jobj_outgoing, i);
+		json_object *jobj = json_object_array_get_idx(jobj_nftables, i);
 		if (jobj == NULL) {
 			debug(LOG_ERR, "fw4_counters_update(): jobj is NULL");
 			continue;
@@ -1766,14 +1773,18 @@ fw4_counters_update()
 		nret = 1;
 		goto END_UPDATE;
 	}
-	
+	// get the "nftables" json object which is an array of json objects
+	if (!json_object_object_get_ex(jobj_incoming, "nftables", &jobj_nftables)) {
+		debug(LOG_ERR, "fw4_counters_update(): jobj_nftables is NULL");
+		nret = 1;
+		goto END_UPDATE;
+	}
 	// iterate the array of json objects in jobj_incoming
 	// get the json object which has the "rule" key
 	// get the json object which has the "expr" key
-	i = 0;
-	arraylen = json_object_array_length(jobj_incoming);
-	for(; i < arraylen; i++) {
-		json_object *jobj = json_object_array_get_idx(jobj_incoming, i);
+	arraylen = json_object_array_length(jobj_nftables);
+	for(i = 0; i < arraylen; i++) {
+		json_object *jobj = json_object_array_get_idx(jobj_nftables, i);
 		if (jobj == NULL) {
 			debug(LOG_INFO, "fw4_counters_update(): jobj is NULL");
 			continue;

@@ -284,10 +284,219 @@ nft_init(const char *gateway_ip, const char* interface)
     return 1;
 }
 
+/*
+ * the function is used to parse the json array object
+ * the json array object is like this:
+`
+    [
+        {
+            "match": {
+            "op": "==",
+            "left": {
+                "payload": {
+                    "protocol": "ip",
+                    "field": "daddr"
+                }
+            },
+            "right": "192.168.1.18"
+            }
+        },
+        {
+            "match": {
+            "op": "==",
+            "left": {
+                "payload": {
+                    "protocol": "ether",
+                    "field": "daddr"
+                }
+            },
+            "right": "00:00:00:00:00:00"
+        },
+        {
+            "counter": {
+            "packets": 0,
+            "bytes": 0
+            }
+        },
+        {
+        "accept": null
+        }
+    ]
+      
+`
+ * the function has three parameters:
+ * 1. the json array object
+ * 2. the ip address
+ * 3. the mac address
+ * the function will return 1 if the json array object contains the ip address and mac address
+ * the function will return 0 if the json array object does not contain the ip address and mac address
+ */
+static int
+check_nft_expr_json_array_object(json_object *jobj, const char *ip, const char *mac)
+{
+    // get the array length
+    int arraylen = json_object_array_length(jobj);
+    int i = 0;
+    int ip_flag = 0;
+    int mac_flag = 0;
+    if (mac == NULL) {
+        // do not check mac address
+        mac_flag = 1;
+    }
+    // iterate the array
+    for (i = 0; i < arraylen; i++) {
+        json_object *jobj_item = json_object_array_get_idx(jobj, i);
+        json_object *jobj_item_match = NULL;
+        if (json_object_object_get_ex(jobj_item, "match", &jobj_item_match)) {
+            // if the item contains "match", get the "match" object
+            json_object *jobj_item_match_left = NULL;
+            json_object *jobj_item_match_right = NULL;
+            if (json_object_object_get_ex(jobj_item_match, "left", &jobj_item_match_left)) {
+                // if the "match" object contains "left", get the "left" object
+                json_object *jobj_item_match_left_payload = NULL;
+                if (json_object_object_get_ex(jobj_item_match_left, "payload", &jobj_item_match_left_payload)) {
+                    // if the "left" object contains "payload", get the "payload" object
+                    json_object *jobj_item_match_left_payload_protocol = NULL;
+                    if (json_object_object_get_ex(jobj_item_match_left_payload, "protocol", &jobj_item_match_left_payload_protocol)) {
+                        // if the "payload" object contains "protocol", get the "protocol" value
+                        const char *protocol = json_object_get_string(jobj_item_match_left_payload_protocol);
+                        if (strcmp(protocol, "ether") == 0) {
+                            // if the "protocol" value is "ether", get the "right" value
+                            if (json_object_object_get_ex(jobj_item_match, "right", &jobj_item_match_right)) {
+                                const char *right = json_object_get_string(jobj_item_match_right);
+                                if (strcmp(right, mac) != 0) {
+                                    // if the "right" value is the mac address, return 1
+                                    mac_flag = 1;
+                                }
+                            }
+                        } else if (strcmp(protocol, "ip") == 0) {
+                            // if the "protocol" value is "ip", get the "right" value
+                            if (json_object_object_get_ex(jobj_item_match, "right", &jobj_item_match_right)) {
+                                const char *right = json_object_get_string(jobj_item_match_right);
+                                if (strcmp(right, ip) != 0) {
+                                    // if the "right" value is the ip address, return 1
+                                    ip_flag = 1;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // if ip_flag and mac_flag are both 1, return 1
+        if (ip_flag == 1 && mac_flag == 1) {
+            return 1;
+        } 
+    }
+    
+    return 0;
+}
+
+/*
+ * delete client from firewall
+ */
+static void
+nft_fw_del_rule_by_ip_and_mac(const char *ip, const char *mac, const char *chain)
+{
+    // iterate chain mangle_prerouting_wifidogx_outgoing, 
+    // if the rule contains the ip and mac, delete the rule
+    // first get the rule list of chain mangle_prerouting_wifidogx_outgoing
+    char cmd[256] = {0};
+    snprintf(cmd, sizeof(cmd), "nft -j list chain inet fw4 %s", chain);
+    // throught popen, get the rule list of chain mangle_prerouting_wifidogx_outgoing
+    FILE *r_fp = popen(cmd, "r");
+    if (r_fp == NULL) {
+        debug(LOG_ERR, " popen failed");
+        return;
+    }
+    char buf[4096] = {0};
+    // read the rule list of chain mangle_prerouting_wifidogx_outgoing
+    fgets(buf, sizeof(buf), r_fp);
+    pclose(r_fp);
+    // parse the rule list of chain mangle_prerouting_wifidogx_outgoing
+    // use libjson-c to parse the rule list of chain mangle_prerouting_wifidogx_outgoing
+    json_object *jobj = json_tokener_parse(buf);
+    if (jobj == NULL) {
+        debug(LOG_ERR, " jobj is NULL");
+        return;
+    }
+    // get the "nftables" json object which is an array of json objects
+	json_object *jobj_nftables = NULL;
+	if (!json_object_object_get_ex(jobj, "nftables", &jobj_nftables)) {
+		debug(LOG_ERR, " jobj_nftables is NULL");
+		goto END_DELETE_CLIENT;
+	}
+    // iterate the array of json objects to find the rule which contains the ip and mac
+    int i = 0;
+    int len = json_object_array_length(jobj_nftables);
+    for (i = 0; i < len; i++) {
+        json_object *jobj_rule = json_object_array_get_idx(jobj_nftables, i);
+        if (jobj_rule == NULL) {
+            debug(LOG_ERR, " jobj_rule is NULL");
+            continue;
+        }
+        // get the "rule" json object which is an array of json objects
+        json_object *jobj_rule_rule = NULL;
+        if (!json_object_object_get_ex(jobj_rule, "rule", &jobj_rule_rule)) {
+            debug(LOG_ERR, "jobj_rule_rule is NULL");
+            continue;
+        }
+        // get the "expr" json object which is an array of json objects
+        json_object *jobj_rule_expr = NULL;
+        if (!json_object_object_get_ex(jobj_rule, "expr", &jobj_rule_expr)) {
+            debug(LOG_ERR, "jobj_rule_expr is NULL");
+            continue;
+        }
+        // use the function check_nft_expr_json_array_object to check if the rule contains the ip and mac
+        if (check_nft_expr_json_array_object(jobj_rule_expr, ip, mac) == 1) {
+            // if the rule contains the ip and mac, get the "handle" value
+            json_object *jobj_rule_handle = NULL;
+            if (!json_object_object_get_ex(jobj_rule, "handle", &jobj_rule_handle)) {
+                debug(LOG_ERR, "jobj_rule_handle is NULL");
+                continue;
+            }
+            const char *handle = json_object_get_string(jobj_rule_handle);
+            // delete the rule
+            char cmd[256] = {0};
+            snprintf(cmd, sizeof(cmd), "nft delete rule inet fw4 %s handle %s", chain, handle);
+            run_cmd(cmd);
+        }
+    }
+
+END_DELETE_CLIENT:
+    json_object_put(jobj);
+}
 
 /** Set if a specific client has access through the firewall */
+int
+nft_fw_access(fw_access_t type, const char *ip, const char *mac, int tag)
+{
+    // according to type, if type is FW_ACCESS_ALLOW, set the firewall rules to allow the client
+    // if type is FW_ACCESS_DENY, set the firewall rules to deny the client
+
+    // the rules are as the following:
+    // add rule inet fw4 mangle_prerouting_wifidogx_outgoing ether saddr ab:23:23:ab:23:23 ip saddr
+    // add rule inet fw4 mangle_postrouting_wifidogx_incoming ether saddr ab:23:23:ab:23:23 ip saddr
+    switch(type) {
+        case FW_ACCESS_ALLOW:
+            run_cmd("nft add rule inet fw4 mangle_prerouting_wifidogx_outgoing ether saddr %s ip saddr %s counter mark set 0x20000 accept", mac, ip);
+            run_cmd("nft add rule inet fw4 mangle_postrouting_wifidogx_incoming ether saddr %s ip saddr %s counter mark set 0x20000 accept", mac, ip);
+            break;
+        case FW_ACCESS_DENY:
+            nft_fw_del_rule_by_ip_and_mac(ip, mac, "mangle_prerouting_wifidogx_outgoing");
+            nft_fw_del_rule_by_ip_and_mac(ip, NULL, "mangle_postrouting_wifidogx_incoming");
+            break;
+        default:
+            debug(LOG_ERR, "Unknown fw_access type %d", type);
+            return 1;
+    }
+    return 0;
+}
+
+/** Reload client's firewall rules */
 int 
-nft_fw_access(int tag)
+nft_fw_reload_client(int tag)
 {
 #define NFT_WIFIDOGX_CLIENT_LIST "/tmp/nftables_wifidogx_client_list"
     // the function nft_fw_access is used to set the firewall rules
@@ -306,7 +515,7 @@ nft_fw_access(int tag)
     t_client *first_client = client_get_first_client();
     if (first_client == NULL) {
         debug(LOG_ERR, "No clients in list!");
-        return 0;
+        return 1;
     }
 
     // open the file /tmp/nftables_wifidogx_client_list
@@ -314,7 +523,7 @@ nft_fw_access(int tag)
     FILE *fp = fopen(NFT_WIFIDOGX_CLIENT_LIST, "w");
     if (fp == NULL) {
         debug(LOG_ERR, "Failed to open %s", NFT_WIFIDOGX_CLIENT_LIST);
-        return 0;
+        return 1;
     }
     // flush the rules in the chain mangle_prerouting_wifidogx_outgoing
     fprintf(fp, "nft flush chain inet fw4 mangle_prerouting_wifidogx_outgoing\n");
@@ -336,7 +545,7 @@ nft_fw_access(int tag)
     } while (current != NULL);
     fclose(fp);
 
-    return 1;
+    return 0;
 }
 
 
