@@ -431,15 +431,15 @@ nft_fw_del_rule_by_ip_and_mac(const char *ip, const char *mac, const char *chain
     int i = 0;
     int len = json_object_array_length(jobj_nftables);
     for (i = 0; i < len; i++) {
-        json_object *jobj_rule = json_object_array_get_idx(jobj_nftables, i);
-        if (jobj_rule == NULL) {
-            debug(LOG_ERR, " jobj_rule is NULL");
+        json_object *jobj_item = json_object_array_get_idx(jobj_nftables, i);
+        if (jobj_item == NULL) {
+            debug(LOG_ERR, " jobj_item is NULL");
             continue;
         }
         // get the "rule" json object which is an array of json objects
-        json_object *jobj_rule_rule = NULL;
-        if (!json_object_object_get_ex(jobj_rule, "rule", &jobj_rule_rule)) {
-            debug(LOG_ERR, "jobj_rule_rule is NULL");
+        json_object *jobj_rule = NULL;
+        if (!json_object_object_get_ex(jobj_item, "rule", &jobj_rule)) {
+            debug(LOG_ERR, "jobj_rule is NULL");
             continue;
         }
         // get the "expr" json object which is an array of json objects
@@ -481,7 +481,7 @@ nft_fw_access(fw_access_t type, const char *ip, const char *mac, int tag)
     switch(type) {
         case FW_ACCESS_ALLOW:
             run_cmd("nft add rule inet fw4 mangle_prerouting_wifidogx_outgoing ether saddr %s ip saddr %s counter mark set 0x20000 accept", mac, ip);
-            run_cmd("nft add rule inet fw4 mangle_postrouting_wifidogx_incoming ether saddr %s ip saddr %s counter mark set 0x20000 accept", mac, ip);
+            run_cmd("nft add rule inet fw4 mangle_postrouting_wifidogx_incoming ip daddr %s counter mark set 0x20000 accept", ip);
             break;
         case FW_ACCESS_DENY:
             nft_fw_del_rule_by_ip_and_mac(ip, mac, "mangle_prerouting_wifidogx_outgoing");
