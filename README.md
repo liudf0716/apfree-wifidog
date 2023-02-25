@@ -21,7 +21,6 @@
 [11]: https://img.shields.io/badge/Platform-%20OpenWRT%20-brightgreen.svg?style=plastic
 [12]: https://github.com/openwrt
 [13]: https://img.shields.io/badge/KunTeng-Inside-blue.svg?style=plastic
-[14]: https://www.kunteng.org.cn
 [15]: https://img.shields.io/badge/chat-qq%20group-brightgreen.svg
 [16]: https://jq.qq.com/?_wv=1027&k=4ADDSev
 

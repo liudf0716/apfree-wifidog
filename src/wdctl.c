@@ -59,10 +59,10 @@ static struct wdctl_client_command {
     {"show_trusted_domains", NULL, "show trusted domains and its ip"},
     {"show_trusted_mac", NULL, "show trusted mac list"},
     {"clear_trusted_mac", NULL, "clear trusted mac list"},
-    {"add_trusted_pdomains", "pan-domain1,pan-domain2...", "add one or more trusted pan-domain like kunteng.org.cn,qq.com..."},
-    {"del_trusted_pdomains", "pan-domain1,pan-domain2...", "del one or more trusted pan-domain list like kunteng.org.cn,qq.com..."},
-    {"add_trusted_domains", "domain1,domain2...", "add trusted domain list like www.kunteng.org.cn,www.qq.com..."},
-    {"del_trusted_domains", "domain1,domain2...", "del trusted domain list like www.kunteng.org.cn,www.qq.com...."},
+    {"add_trusted_pdomains", "pan-domain1,pan-domain2...", "add one or more trusted pan-domain like qq.com..."},
+    {"del_trusted_pdomains", "pan-domain1,pan-domain2...", "del one or more trusted pan-domain list like qq.com..."},
+    {"add_trusted_domains", "domain1,domain2...", "add trusted domain list like www.qq.com..."},
+    {"del_trusted_domains", "domain1,domain2...", "del trusted domain list like www.qq.com...."},
     {"add_trusted_iplist", "ip1,ip2...", "add one or more trusted ip list like ip1,ip2..."},
     {"del_trusted_iplist", "ip1,ip2...", "del one or more trsuted ip list like ip1,ip2..."},
     {"add_trusted_mac", "mac1,mac2...", "add one or more trusted mac list like mac1,mac2..."},
@@ -111,9 +111,9 @@ list_all_method()
         else if(COMMAND_EQUAL("add_online_client"))
             fprintf(stdout, "%s %s {\"ip\":\"192.168.1.211\", \"mac\":\"aa:bb:cc:dd:ee:ff\", \"name\":\"apfree\"}\n", progname, cmd);
         else if (COMMAND_EQUAL("add_trusted_domains"))
-            fprintf(stdout, "%s %s www.kunteng.org.cn,captive.apple.com,www.baidu.com,www.qq.com,www.alibaba.com,aaa,bbb\n", progname, cmd);
+            fprintf(stdout, "%s %s captive.apple.com,www.baidu.com,www.qq.com,www.alibaba.com,aaa,bbb\n", progname, cmd);
         else if (COMMAND_EQUAL("add_trusted_pdomains"))
-            fprintf(stdout, "%s %s kunteng.org.cn,apple.com,baidu.com,qq.com,aa,bb\n", progname, cmd);
+            fprintf(stdout, "%s %s apple.com,baidu.com,qq.com,aa,bb\n", progname, cmd);
         else if (COMMAND_EQUAL("add_trusted_mac"))
             fprintf(stdout, "%s %s aa:bb:cc:11:22:33,11:22:33:aa:bb:cc:dd,22.22.22:aa:aa:aa\n", progname, cmd);
         else if (COMMAND_EQUAL("add_trusted_iplist"))

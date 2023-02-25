@@ -2,7 +2,7 @@
 ```
 config wifidog
 	option gateway_interface 'br-lan'
-	option auth_server_hostname 'change wifidog.kunteng.org.cn to your auth server domain or ip'
+	option auth_server_hostname 'auth server domain or ip'
 	option auth_server_port 443
 	option auth_server_path '/wifidog/'
 	option check_interval 60

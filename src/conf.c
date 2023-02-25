@@ -2324,8 +2324,6 @@ static void
 validate_popular_servers(void)
 {
 	if (config.popular_servers == NULL) {
-		add_popular_server("www.qq.com");
-		add_popular_server("www.kunteng.org");
 		add_popular_server("www.baidu.com");
 	}
 }
