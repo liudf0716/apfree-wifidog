@@ -364,7 +364,7 @@ check_nft_expr_json_array_object(json_object *jobj, const char *ip, const char *
                             // if the "protocol" value is "ether", get the "right" value
                             if (json_object_object_get_ex(jobj_item_match, "right", &jobj_item_match_right)) {
                                 const char *right = json_object_get_string(jobj_item_match_right);
-                                if (strcmp(right, mac) != 0) {
+                                if (strcmp(right, mac) == 0) {
                                     // if the "right" value is the mac address, return 1
                                     mac_flag = 1;
                                 }
@@ -373,7 +373,7 @@ check_nft_expr_json_array_object(json_object *jobj, const char *ip, const char *
                             // if the "protocol" value is "ip", get the "right" value
                             if (json_object_object_get_ex(jobj_item_match, "right", &jobj_item_match_right)) {
                                 const char *right = json_object_get_string(jobj_item_match_right);
-                                if (strcmp(right, ip) != 0) {
+                                if (strcmp(right, ip) == 0) {
                                     // if the "right" value is the ip address, return 1
                                     ip_flag = 1;
                                 }
@@ -404,6 +404,7 @@ nft_fw_del_rule_by_ip_and_mac(const char *ip, const char *mac, const char *chain
     // first get the rule list of chain mangle_prerouting_wifidogx_outgoing
     char cmd[256] = {0};
     snprintf(cmd, sizeof(cmd), "nft -j list chain inet fw4 %s", chain);
+    debug(LOG_DEBUG, " cmd: %s", cmd);
     // throught popen, get the rule list of chain mangle_prerouting_wifidogx_outgoing
     FILE *r_fp = popen(cmd, "r");
     if (r_fp == NULL) {
@@ -414,6 +415,7 @@ nft_fw_del_rule_by_ip_and_mac(const char *ip, const char *mac, const char *chain
     // read the rule list of chain mangle_prerouting_wifidogx_outgoing
     fgets(buf, sizeof(buf), r_fp);
     pclose(r_fp);
+    debug(LOG_DEBUG, " buf: %s", buf);
     // parse the rule list of chain mangle_prerouting_wifidogx_outgoing
     // use libjson-c to parse the rule list of chain mangle_prerouting_wifidogx_outgoing
     json_object *jobj = json_tokener_parse(buf);
