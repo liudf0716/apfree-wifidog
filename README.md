@@ -55,8 +55,17 @@ sequenceDiagram
   deactivate sms
   user ->> wwas : 用户输入短信验证码验证
   activate wwas
-  wwas ->> user : 用户通过认证后，返回运营方配置的跳转页面
+  wwas ->> user : 用户通过认证后，返回认证服务器给用户颁发的token及跳转请求
   deactivate wwas
+  user ->> router : 用户根据认证服务器的跳转请求，带着token访问apfree-wifidog的本地认证服务接口
+  router ->> wwas : apfree-wifidog根据用户提交的token到认证服务器端验证该token是否为认证服务器颁发
+  activate router
+  activate wwas
+  wwas ->> router : 认证服务器根据提交的token及标识用户的信息，返回认证结果
+  deactivate wwas
+  deactivate router
+  router ->> user : 根据收到的认证结果进行相应的处理流程
+  
   
   loop 保活过程
     router ->> wwas  : apfree-wifidog每隔一分钟ping认证服务器wwas

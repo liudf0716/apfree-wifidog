@@ -156,27 +156,15 @@ process_apple_wisper(struct evhttp_request *req, const char *mac, const char *re
 void
 ev_http_reply_client_error(struct evhttp_request *req, enum reply_client_error_type type)
 {
-    static char *internet_offline = NULL, *authserver_offline = NULL;
-    static int internet_offline_len = 0, authserver_offline_len = 0;
-    struct evbuffer *out = evbuffer_new();
     switch(type) {
     case INTERNET_OFFLINE:
-        if (!internet_offline) {
-            internet_offline = evb_2_string(evb_internet_offline_page, &internet_offline_len);
-        }
-        evbuffer_add(out, internet_offline, internet_offline_len);
+        evhttp_send_reply(req, 200, "OK", evb_internet_offline_page);
         break;
     case AUTHSERVER_OFFLINE:
     default:
-        if (!authserver_offline) {
-            authserver_offline = evb_2_string(evb_authserver_offline_page, &authserver_offline_len);
-        }
-        evbuffer_add(out, authserver_offline, authserver_offline_len);
+        evhttp_send_reply(req, 200, "OK", evb_authserver_offline_page);
         break;
     }
-    
-    evhttp_send_reply(req, 200, "OK", out);
-    evbuffer_free(out);
 }
 
 /**
@@ -536,7 +524,6 @@ ev_send_http_page(struct evhttp_request *req, const char *title, const char *mes
         return;
     }
 	
-    close(fd);
     evhttp_send_reply(req, HTTP_OK, "OK", buffer);
     evbuffer_free(buffer);
 }
@@ -551,16 +538,14 @@ void
 ev_http_send_js_redirect(struct evhttp_request *req, const char *redir_url)
 {
     struct evbuffer *evb = evbuffer_new ();	
-	struct evbuffer *evb_redir_url = evbuffer_new();
 
-    if (!evb || !evb_redir_url) {
+    if (!evb) {
         evhttp_send_error(req, HTTP_INTERNAL, "Failed to evbuffer_new");
-        goto ERR;
+        return;
     }
 	
 	evbuffer_add(evb, wifidog_redir_html->front, wifidog_redir_html->front_len);
-	evbuffer_add_printf(evb_redir_url, WIFIDOG_REDIR_HTML_CONTENT, redir_url);
-	evbuffer_add_buffer(evb, evb_redir_url);
+    evbuffer_add_printf(evb, WIFIDOG_REDIR_HTML_CONTENT, redir_url);
 	evbuffer_add(evb, wifidog_redir_html->rear, wifidog_redir_html->rear_len);
 
     evhttp_add_header(evhttp_request_get_output_headers(req),
@@ -576,9 +561,7 @@ ev_http_send_js_redirect(struct evhttp_request *req, const char *redir_url)
 
     evhttp_send_reply(req, 200, "OK", evb);
 
-ERR:
-    if (evb) evbuffer_free(evb);
-	if (evb_redir_url) evbuffer_free(evb_redir_url);
+    evbuffer_free(evb);
 }
 
 /**
@@ -591,7 +574,11 @@ ERR:
 void
 ev_http_send_apple_redirect(struct evhttp_request *req, const char *redir_url)
 {
-    struct evbuffer *evb = evbuffer_new();	
+    struct evbuffer *evb = evbuffer_new();
+    if (!evb) {
+        evhttp_send_error(req, HTTP_INTERNAL, "Failed to evbuffer_new");
+        return;
+    }
     evbuffer_add_printf(evb, APPLE_REDIRECT_MSG, redir_url);
     evhttp_send_reply(req, HTTP_OK, "OK", evb);
     evbuffer_free(evb);
@@ -605,7 +592,10 @@ void
 ev_http_replay_wisper(struct evhttp_request *req)
 {
     struct evbuffer *evb = evbuffer_new ();
-    if (!evb) return;	
+    if (!evb) {
+        evhttp_send_error(req, HTTP_INTERNAL, "Failed to evbuffer_new");
+        return;
+    }	
     evbuffer_add(evb, apple_wisper, strlen(apple_wisper));
     evhttp_send_reply(req, HTTP_OK, "OK", evb);
     evbuffer_free(evb);
