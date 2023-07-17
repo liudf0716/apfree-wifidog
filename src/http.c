@@ -31,6 +31,10 @@
 /* Note that libcs other than GLIBC also use this macro to enable vasprintf */
 #define _GNU_SOURCE
 
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h> 
+
 #include "common.h"
 #include "auth.h"
 #include "conf.h"
@@ -500,10 +504,18 @@ ev_http_read_html_file(const char *filename, struct evbuffer *evb)
 void
 ev_send_http_page(struct evhttp_request *req, const char *title, const char *message)
 {
+    struct stat st;
     s_config *config = config_get_config();
     int fd = open(config->htmlmsgfile, O_RDONLY);
     if (fd == -1) {
         debug(LOG_CRIT, "Failed to open HTML message file %s: %s", config->htmlmsgfile, strerror(errno));
+        evhttp_send_error(req, HTTP_NOCONTENT, NULL);
+        return;
+    }
+
+    if (fstat(fd, &st) == -1) {
+        debug(LOG_CRIT, "Failed to stat HTML message file %s: %s", config->htmlmsgfile, strerror(errno));
+        close(fd);
         evhttp_send_error(req, HTTP_NOCONTENT, NULL);
         return;
     }
@@ -516,7 +528,7 @@ ev_send_http_page(struct evhttp_request *req, const char *title, const char *mes
         return;
     }
 
-    if (evbuffer_add_file(buffer, fd, 0, -1)) {
+    if (evbuffer_add_file(buffer, fd, 0, st.st_size)) {
         debug(LOG_CRIT, "Failed to read HTML message file");
         close(fd);
         evbuffer_free(buffer);
