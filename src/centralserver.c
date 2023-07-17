@@ -139,14 +139,13 @@ make_roam_request(struct wd_request_context *context, struct roam_req_info *roam
 }
 
 static void
-process_auth_server_login2(struct evhttp_request *req, void *ctx)
+process_auth_server_login_v2(struct evhttp_request *req, void *ctx)
 {
 	auth_req_info *auth = ((struct wd_request_context *)ctx)->data;
 	debug(LOG_DEBUG, "process auth server login2 response");
 	
     char buffer[MAX_BUF] = {0};
-    if (evbuffer_remove(evhttp_request_get_input_buffer(req), buffer, MAX_BUF-1) > 0 ) {
-	} else {
+    if (evbuffer_remove(evhttp_request_get_input_buffer(req), buffer, MAX_BUF-1) <= 0 ) {
 		free(auth);
 		return;
 	}
@@ -177,7 +176,7 @@ process_auth_server_login2(struct evhttp_request *req, void *ctx)
  * 
  */ 
 static char *
-get_login2_request_uri(s_config *config, t_auth_serv *auth_server, const auth_req_info *auth)
+get_login_v2_request_uri(s_config *config, t_auth_serv *auth_server, const auth_req_info *auth)
 {
     char *login2_uri = NULL;
     safe_asprintf(&login2_uri, "%slogin2?gw_id=%s&gw_address=%s&gw_port=%d&mac=%s&channel_path=%s&cltIp=%s", 
@@ -200,14 +199,21 @@ get_login2_request_uri(s_config *config, t_auth_serv *auth_server, const auth_re
 void 
 make_auth_request(struct wd_request_context *context, auth_req_info *auth)
 {
-	char *uri = get_login2_request_uri(config_get_config(), get_auth_server(), auth);
+	char *uri = get_login_v2_request_uri(config_get_config(), get_auth_server(), auth);
+    if (!uri) {
+        free(auth);
+        return;
+    }
     debug(LOG_DEBUG, "login2 request uri [%s]", uri);
 
     struct evhttp_connection *evcon = NULL;
     struct evhttp_request *req      = NULL;
-    context->data = auth; 
-    wd_make_request(context, &evcon, &req, process_auth_server_login2);
-    evhttp_make_request(evcon, req, EVHTTP_REQ_GET, uri);
+    context->data = auth;
+    if (!wd_make_request(context, &evcon, &req, process_auth_server_login_v2)) {
+        evhttp_make_request(evcon, req, EVHTTP_REQ_GET, uri);
+    } else {
+        free(auth);
+    }
     free(uri);
 }
 
@@ -351,7 +357,18 @@ process_auth_server_logout(struct evhttp_request *req, void *ctx)
 {
     t_authresponse authresponse;
     memset(&authresponse, 0, sizeof(t_authresponse));
-    parse_auth_server_response(&authresponse, req);
+    if (parse_auth_server_response(&authresponse, req)) {
+        if (authresponse.authcode == 0) {
+            // get client from ctx
+            t_client *client = (t_client *)((struct wd_request_context *)ctx)->data;
+            fw_deny(client);
+            debug(LOG_INFO, "Client %s logged out successfully", client->ip);
+            safe_client_list_delete(client);  
+        }
+    } else {
+        debug(LOG_ERR, "parse_auth_server_response failed");
+    }
+    ((struct wd_request_context *)ctx)->data = NULL;
 }
 
 /**
@@ -367,10 +384,16 @@ client_login_request_reply(t_authresponse *authresponse,
         struct evhttp_request *req, struct wd_request_context *context)
 {
     t_client *client = (t_client *)context->data;
+    context->data = NULL;
     t_auth_serv *auth_server = get_auth_server();
     char *url_fragment = NULL;
 
-    if (!req) return;
+    if (!req) {
+        debug(LOG_ERR, "Got NULL request in client_login_request_reply");
+        evhttp_send_error(req, 200, "Internal Error, We can not validate your request at this time");
+        safe_client_list_delete(client);
+        return;
+    }
 
     switch (authresponse->authcode) {
     case AUTH_ERROR:
@@ -464,6 +487,14 @@ process_auth_server_login(struct evhttp_request *req, void *ctx)
     memset(&authresponse, 0, sizeof(t_authresponse));
     if (parse_auth_server_response(&authresponse, req))
         client_login_request_reply(&authresponse, ((struct wd_request_context *)ctx)->clt_req, ctx);
+    else {
+        // free client in ctx
+        t_client *p1 = (t_client *)((struct wd_request_context *)ctx)->data;
+        debug(LOG_ERR, "parse_auth_server_response failed, free client %s", p1->ip);
+        safe_client_list_delete(p1);
+        evhttp_send_error(((struct wd_request_context *)ctx)->clt_req, 200, 
+            "Internal Error, We can not validate your request at this time");
+    }
 }
 
 /**
@@ -476,6 +507,7 @@ client_counter_request_reply(t_authresponse *authresponse,
 {
     s_config *config = config_get_config();
     t_client *p1 = (t_client *)context->data;
+    context->data = NULL;
 
     time_t current_time = time(NULL);
     debug(LOG_DEBUG,
@@ -520,6 +552,13 @@ process_auth_server_counter(struct evhttp_request *req, void *ctx)
     memset(&authresponse, 0, sizeof(t_authresponse));
     if (parse_auth_server_response(&authresponse, req))
         client_counter_request_reply(&authresponse, req, ctx);
+    else {
+        // free client in ctx
+        t_client *p1 = (t_client *)((struct wd_request_context *)ctx)->data;
+        debug(LOG_ERR, "parse_auth_server_response failed, free client %s", p1->ip);
+        client_free_node(p1);
+        ((struct wd_request_context *)ctx)->data = NULL;
+    }
 } 
 
 /**
@@ -567,8 +606,7 @@ client_counter_request_reply_v2(t_authresponse *authresponse,
         /* Timing out user */
         debug(LOG_DEBUG, "%s - Inactive for more than %ld seconds, removing client and denying in firewall",
                 p1->ip, config->checkinterval * config->clienttimeout);
-        ev_logout_client(context, p1);
-        
+        ev_logout_client(context, p1);     
     } else {
         UNLOCK_CLIENT_LIST();
         /*

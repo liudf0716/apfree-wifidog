@@ -197,8 +197,8 @@ is_auth_online()
 	if (!is_online()) {
         /* If we're not online auth is definately not online :) */
         return (0);
-    } else if (last_auth_online_time == 0
-               || (last_auth_offline_time - last_auth_online_time) >= (config_get_config()->checkinterval * 2)) {
+    } else if ((last_auth_online_time == 0) || 
+			   (last_auth_offline_time - last_auth_online_time) >= (config_get_config()->checkinterval * 2)) {
         /* Auth is  probably offline */
         return (0);
     } else {

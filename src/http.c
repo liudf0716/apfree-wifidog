@@ -350,6 +350,10 @@ void
 ev_http_send_redirect(struct evhttp_request * req, const char *url, const char *text)
 {
     struct evbuffer *evb = evbuffer_new();
+    if (!evb) {
+        evhttp_send_error(req, 500, "Internal error");
+        return;
+    }
     struct evkeyvalq *header = evhttp_request_get_output_headers(req);
     evhttp_add_header(header, "Location", url);
     evbuffer_add_printf(evb, "<html><body>Please <a href='%s'>click here</a>.</body></html>", url);
@@ -368,7 +372,7 @@ void
 ev_http_callback_auth(struct evhttp_request *req, void *arg)
 {
     struct wd_request_context *context = (struct wd_request_context *)arg;
-    const char *token = ev_http_find_query(req, "token");
+    char *token = ev_http_find_query(req, "token");
     if (!token) {
         evhttp_send_error(req, 200, "Invalid token");
         return;
@@ -377,10 +381,9 @@ ev_http_callback_auth(struct evhttp_request *req, void *arg)
     char *remote_host;
     uint16_t port;
     evhttp_connection_get_peer(evhttp_request_get_connection(req), &remote_host, &port);
-
-    const char *logout = ev_http_find_query(req, "logout");
     char *mac = arp_get(remote_host);
     if (!mac) {
+        free(token);
         evhttp_send_error(req, 200, "Failed to retrieve your MAC address");
         return;
     }  
@@ -401,12 +404,22 @@ ev_http_callback_auth(struct evhttp_request *req, void *arg)
     UNLOCK_CLIENT_LIST();
     free(mac);
 
-    if (!new_client && logout) {
-        ev_logout_client(context, client);
-    } else if (!logout){
+    char *logout = ev_http_find_query(req, "logout");
+    if (logout) {
+        free(logout);
+        if (new_client) {
+            debug(LOG_INFO, "Logout request from %s, but client not found, impossible here!", client->ip);
+            safe_client_list_delete(client);
+            evhttp_send_error(req, 200, "Logout request from unknown client");
+        } else {
+            debug(LOG_INFO, "Logout request from %s", client->ip);
+            ev_logout_client(context, client);
+        }
+    } else {
+        debug(LOG_INFO, "Login request from %s", client->ip);
         ev_authenticate_client(req, context, client);
     }
-   
+    free(token);
 }
 
 /**
@@ -620,7 +633,7 @@ ev_http_replay_wisper(struct evhttp_request *req)
  * @param key The key to search
  * @return NULL or key's value, the return value need to be free by caller
  */
-const char *
+char *
 ev_http_find_query(struct evhttp_request *req, const char *key)
 {
     const struct evhttp_uri *uri = evhttp_request_get_evhttp_uri(req);
@@ -636,7 +649,7 @@ ev_http_find_query(struct evhttp_request *req, const char *key)
     if (evhttp_parse_query_str(evhttp_uri_get_query(uri), &query))
         return NULL;
     
-    const char *r_val = NULL;
+    char *r_val = NULL;
     const char *val = evhttp_find_header(&query, key);
     if (val) {
         r_val = safe_strdup(val);

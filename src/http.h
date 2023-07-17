@@ -70,6 +70,6 @@ void ev_http_send_apple_redirect(struct evhttp_request *, const char *);
 void ev_http_replay_wisper(struct evhttp_request *);
 
 /** @brief get query's value according to key */
-const char *ev_http_find_query(struct evhttp_request *, const char *);
+char *ev_http_find_query(struct evhttp_request *, const char *);
 
 #endif /* _HTTP_H_ */

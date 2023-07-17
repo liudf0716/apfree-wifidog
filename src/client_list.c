@@ -153,7 +153,7 @@ offline_client_list_insert_client(t_offline_client *client)
 t_client *
 client_list_add(const char *ip, const char *mac, const char *token)
 {
-    t_client *curclient;
+    t_client *curclient;  
 
     curclient = client_get_new();
 

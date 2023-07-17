@@ -839,6 +839,7 @@ iptables_fw_save_online_clients()
 	}
 
 	f_fw_allow_close();
+	client_list_destroy(sublist);
 #else
 #endif
 }

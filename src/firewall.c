@@ -428,9 +428,10 @@ void
 fw_client_process_from_authserver_response(t_authresponse *authresponse, t_client *p1)
 {
 	s_config *config = config_get_config();
+	assert(p1 != NULL);
 
 	LOCK_CLIENT_LIST();
-	t_client *tmp_c = client_list_find_by_client(p1);
+	t_client *tmp_c = client_list_find_by_client_id(p1->id);
 	if (!tmp_c) {
 		UNLOCK_CLIENT_LIST();
 		debug(LOG_NOTICE, "Client was already removed. Skipping auth processing");
@@ -606,15 +607,21 @@ ev_fw_sync_with_authserver(struct wd_request_context *context)
 		/* Update the counters on the remote server only if we have an auth server */
 		if (config->auth_servers != NULL) {
 			char *uri = get_auth_uri(REQUEST_TYPE_COUNTERS, ONLINE_CLIENT, p1);
-			if (!uri) continue;	
+			if (!uri) {
+				debug(LOG_ERR, "Could not get auth uri!");
+				client_free_node(p1);
+				continue;
+			} 
 
 			debug(LOG_DEBUG, "client's counter uri [%s]", uri);
 
 			struct evhttp_connection *evcon = NULL;
 			struct evhttp_request *req = NULL;
-			context->data = p1;
+			context->data = p1; // free p1 in process_auth_server_counter
 			if (!wd_make_request(context, &evcon, &req, process_auth_server_counter))
 				evhttp_make_request(evcon, req, EVHTTP_REQ_GET, uri);
+			else
+				client_free_node(p1);
 			free(uri);
 		}
 	}

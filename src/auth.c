@@ -71,10 +71,6 @@ client_timeout_check_cb(evutil_socket_t fd, short event, void *arg) {
 /**
  * @brief Logout a client and report to auth server.
  *
- * This function assumes it is being called with the client lock held! This
- * function remove the client from the client list and free its memory, so
- * client is no longer valid when this method returns.
- *
  * @param context Points to request context
  * @param client Points to the client to be logged out; the client will be free 
  *               in this function
@@ -84,21 +80,22 @@ void
 ev_logout_client(struct wd_request_context *context, t_client *client)
 {
     assert(client);
-    
-    fw_deny(client);
-
-    LOCK_CLIENT_LIST();
-    client_list_remove(client);
-    UNLOCK_CLIENT_LIST();
 
     char *uri = get_auth_uri(REQUEST_TYPE_LOGOUT, ONLINE_CLIENT, client);
-    client_free_node(client);
-    if (!uri) return;
-    
+    if (!uri) {
+        return;
+    }
+
     struct evhttp_connection *evcon = NULL;
-    struct evhttp_request *req      = NULL; 
-    wd_make_request(context, &evcon, &req, process_auth_server_logout);
-    evhttp_make_request(evcon, req, EVHTTP_REQ_GET, uri);
+    struct evhttp_request *req      = NULL;
+    assert(context->data == NULL);
+    context->data = client;
+    if (!wd_make_request(context, &evcon, &req, process_auth_server_logout))
+        evhttp_make_request(evcon, req, EVHTTP_REQ_GET, uri);
+    else {
+        debug(LOG_ERR, "wd_make_request failed");
+        context->data = NULL;
+    }
     free(uri);
 }
 
@@ -117,16 +114,27 @@ ev_authenticate_client(struct evhttp_request *req,
         struct wd_request_context *context, t_client *client)
 {
     char *uri = get_auth_uri(REQUEST_TYPE_LOGIN, ONLINE_CLIENT, client);
-    if (!uri) return;
+    if (!uri) {
+        debug(LOG_ERR, "get_auth_uri failed");
+        evhttp_send_error(req, HTTP_INTERNAL, "Internal Server Error");
+        safe_client_list_delete(client);
+        return;
+    }
 
     debug(LOG_DEBUG, "client login request [%s]", uri);
 
     struct evhttp_connection *wd_evcon = NULL;
     struct evhttp_request *wd_req      = NULL;
+    assert(context->data == NULL);
     context->data = client;
     context->clt_req = req; 
-    wd_make_request(context, &wd_evcon, &wd_req, process_auth_server_login);
-    evhttp_make_request(wd_evcon, wd_req, EVHTTP_REQ_GET, uri);
+    if (!wd_make_request(context, &wd_evcon, &wd_req, process_auth_server_login)) {
+        evhttp_make_request(wd_evcon, wd_req, EVHTTP_REQ_GET, uri);
+    } else {
+        debug(LOG_ERR, "wd_make_request failed");
+        evhttp_send_error(req, HTTP_INTERNAL, "Internal Server Error");
+        safe_client_list_delete(client);
+    }
     free(uri);
 }
 
