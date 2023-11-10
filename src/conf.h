@@ -295,6 +295,7 @@ typedef struct {
 	int 	update_domain_interval; /** 0, no need update; otherwise update every update_domain_interval*checkinterval seconds*/
 	char 	* dns_timeout; /*time to limit during of parsing the dns */
 	int 	fw4_enable; /* 1, enable ipv4 firewall */
+	char 	*dhcp_cpi_uri; /* dhcp cpi uri */
 } s_config;
 
 /** @brief Get the current gateway configuration */

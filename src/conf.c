@@ -124,6 +124,7 @@ typedef enum {
 	oMQTTPassword,
 	oDNSTimeout,
 	oFW4Enable,
+	oDhcpOptionCpi,
 } OpCodes;
 
 /** @internal
@@ -188,6 +189,7 @@ static const struct {
 	"mqttPassword", oMQTTPassword}, {
 	"dnstimeout",oDNSTimeout},{
 	"fw4enable",oFW4Enable},{
+	"dhcpoptioncpi",oDhcpOptionCpi},{
     NULL, oBadOption},};
 
 static void config_notnull(const void *, const char *);
@@ -999,6 +1001,9 @@ config_read()
 					break;
 				case oFW4Enable:
 					config.fw4_enable = parse_boolean_value(p1);
+					break;
+				case oDhcpOptionCpi:
+					config.dhcp_cpi_uri = safe_strdup(p1);
 					break;
 				case oBadOption:
 					/* FALL THROUGH */
