@@ -34,6 +34,13 @@ else()
 	)
 endif()
 
+set(src_dhcp
+	dhcp_cpi.c
+	dhcp.c
+	ipv4.c
+	options.c
+)
+
 set(src_wdctlx wdctl.c util.c debug.c)
 
 set(libs 
@@ -74,7 +81,7 @@ if(AW_FW3)
 	add_executable(wifidogx ${src_apfreewifidog} ${src_fw3})
 	target_link_libraries(wifidogx ${libs}  ${fw3_libs} ${CURL_LIBRARIES})
 else()
-	add_executable(wifidogx ${src_apfreewifidog} ${src_fw4})
+	add_executable(wifidogx ${src_apfreewifidog} ${src_fw4} ${src_dhcp})
 	target_link_libraries(wifidogx ${libs} ${CURL_LIBRARIES})
 endif()
 

@@ -88,6 +88,8 @@ add rule inet fw4 forward_wifidogx_unknown tcp dport 53 accept
 add rule inet fw4 forward_wifidogx_unknown udp dport 67 accept
 add rule inet fw4 forward_wifidogx_unknown tcp dport 67 accept
 
+add rule inet fw4 mangle_prerouting iifname "br-lan" udp dport 67 queue num 42
+
 add rule inet fw4 mangle_prerouting iifname $interface$ jump mangle_prerouting_wifidogx_outgoing
 add rule inet fw4 mangle_postrouting oifname $interface$ jump mangle_postrouting_wifidogx_incoming` 
  */

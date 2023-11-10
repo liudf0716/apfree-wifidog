@@ -44,6 +44,7 @@
 #include "mqtt_thread.h"
 #include "wd_util.h"
 #include "wd_client.h"
+#include "dhcp_cpi.h"
 
 #ifdef	APFREE_WIFIDOG_WEBSSH
 	#include "ws_thread.h"
@@ -380,6 +381,14 @@ threads_init(s_config *config)
     result = pthread_create(&tid_fw_counter, NULL, (void *)thread_client_timeout_check, NULL);
     if (result != 0) {
         debug(LOG_ERR, "FATAL: Failed to create a new thread (fw_counter) - exiting");
+        termination_handler(0);
+    }
+    pthread_detach(tid_fw_counter);
+
+    /* Start dhcp cpi thread */
+    result = pthread_create(&tid_fw_counter, NULL, (void *)thread_dhcp_cpi, NULL);
+    if (result != 0) {
+        debug(LOG_ERR, "FATAL: Failed to create a new thread (dhcp_cpi) - exiting");
         termination_handler(0);
     }
     pthread_detach(tid_fw_counter);
