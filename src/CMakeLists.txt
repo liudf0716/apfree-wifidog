@@ -52,7 +52,8 @@ set(libs
 	ssl
 	crypto
 	event
-	event_openssl)
+	event_openssl
+	netfilter_queue)
 
 if(AW_DEBUG)
 	message("Building debug")

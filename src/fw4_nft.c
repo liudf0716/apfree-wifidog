@@ -34,6 +34,7 @@
 #include "fw_iptables.h"
 #include "fw4_nft.h"
 #include "client_list.h"
+#include "conf.h"
 
 
 #define NFT_CONF_FILENAME "/etc/fw4_apfree-wifiodg_init.conf"
@@ -98,6 +99,7 @@ const char *nft_wifidogx_init_script[] = {
     "add set inet fw4 set_wifidogx_gateway { type ipv4_addr; }",
     "add set inet fw4 set_wifidogx_trust_domains { type ipv4_addr; }",
     "add set inet fw4 set_wifidogx_inner_trust_domains { type ipv4_addr; }",
+    "add set inet fw4 set_wifidogx_bypass_clients { type ipv4_net; }",
     "add set inet fw4 set_wifidogx_trust_clients { type ether_addr; }",
     "add set inet fw4 set_wifidogx_tmp_trust_clients { type ether_addr; flags timeout; }",
     "add chain inet fw4 dstnat_wifidogx_auth_server",
@@ -108,6 +110,9 @@ const char *nft_wifidogx_init_script[] = {
     "add rule inet fw4 dstnat iifname $interface$ jump dstnat_wifidogx_outgoing",
     "add rule inet fw4 dstnat_wifidogx_outgoing ip daddr @set_wifidogx_gateway accept",
     "add rule inet fw4 dstnat_wifidogx_outgoing jump dstnat_wifidogx_wan",
+    "add rule inet fw4 dstnat_wifidogx_wan ether saddr @set_wifidogx_tmp_trust_clients accept",
+    "add rule inet fw4 dstnat_wifidogx_wan ether saddr @set_wifidogx_trust_clients accept",
+    "add rule inet fw4 dstnat_wifidogx_wan ip saddr @set_wifidogx_bypass_clients accept",
     "add rule inet fw4 dstnat_wifidogx_wan meta mark 0x20000 accept",
     "add rule inet fw4 dstnat_wifidogx_wan meta mark 0x10000 accept",
     "add rule inet fw4 dstnat_wifidogx_wan jump dstnat_wifidogx_unknown",
@@ -127,6 +132,9 @@ const char *nft_wifidogx_init_script[] = {
     "insert rule inet fw4 accept_to_wan jump forward_wifidogx_wan",
     "add rule inet fw4 forward_wifidogx_wan jump forward_wifidogx_auth_servers",
     "add rule inet fw4 forward_wifidogx_wan jump forward_wifidogx_trust_domains",
+    "add rule inet fw4 forward_wifidogx_wan ether saddr @set_wifidogx_tmp_trust_clients accept",
+    "add rule inet fw4 forward_wifidogx_wan ether saddr @set_wifidogx_trust_clients accept",
+    "add rule inet fw4 forward_wifidogx_wan ip saddr @set_wifidogx_bypass_clients accept",
     "add rule inet fw4 forward_wifidogx_wan meta mark 0x10000 accept",
     "add rule inet fw4 forward_wifidogx_wan meta mark 0x20000 accept",
     "add rule inet fw4 forward_wifidogx_wan jump forward_wifidogx_unknown",
@@ -137,6 +145,7 @@ const char *nft_wifidogx_init_script[] = {
     "add rule inet fw4 forward_wifidogx_unknown tcp dport 53 accept",
     "add rule inet fw4 forward_wifidogx_unknown udp dport 67 accept",
     "add rule inet fw4 forward_wifidogx_unknown tcp dport 67 accept",
+    "add rule inet fw4 mangle_prerouting iifname $interface$ jump mangle_prerouting_wifidogx_dhcp_cpi", 
     "add rule inet fw4 mangle_prerouting iifname $interface$ jump mangle_prerouting_wifidogx_outgoing",
     "add rule inet fw4 mangle_postrouting oifname $interface$ jump mangle_postrouting_wifidogx_incoming",
     "add element inet fw4 set_wifidogx_gateway { $gateway_ip$ }",
@@ -241,6 +250,32 @@ nft_do_init_script_command()
     return 1;
 }
 
+static void
+nft_set_dhcp_cpi()
+{
+    // add rule inet fw4 mangle_prerouting iifname $interface$ udp dport 67 queue num 42
+    char cmd[256] = {0};
+    snprintf(cmd, sizeof(cmd), "nft add rule inet fw4 mangle_prerouting_wifidogx_dhcp_cpi udp dport 67 queue num 42");
+    debug (LOG_DEBUG, "cmd: %s", cmd);
+    int nret = system(cmd);
+    if (nret == -1) {
+        debug(LOG_ERR, "system call [%s] failed", cmd);
+    }
+}
+
+static void
+nft_set_bypass_auth(const char *gateway_ip)
+{
+    // add gateway_ip to set_wifidogx_bypass_clients
+    char cmd[256] = {0};
+    snprintf(cmd, sizeof(cmd), "nft add element inet fw4 set_wifidogx_bypass_clients { %s/24 }", gateway_ip);
+    debug (LOG_DEBUG, "cmd: %s", cmd);
+    int nret = system(cmd);
+    if (nret == -1) {
+        debug(LOG_ERR, "system call [%s] failed", cmd);
+    }
+}
+
 // statistical outgoing information,must free when statistical is over
 void
 nft_statistical_outgoing(char *outgoing, uint32_t outgoing_len)
@@ -271,6 +306,7 @@ nft_statistical_incoming(char *incoming, uint32_t incoming_len)
 int 
 nft_init(const char *gateway_ip, const char* interface)
 {
+    s_config *config = config_get_config();
 	// generate nftables wifidogx init script
 	int ret = generate_nft_wifidogx_init_script(gateway_ip, interface);
 	if (ret != 0) {
@@ -282,6 +318,12 @@ nft_init(const char *gateway_ip, const char* interface)
 
     // add auth server ip to firewall
     iptables_fw_set_authservers(NULL);
+
+    if (config->dhcp_cpi_enable)
+        nft_set_dhcp_cpi();
+
+    if (config->bypass_auth_enable)
+        nft_set_bypass_auth(gateway_ip);
 
     return 1;
 }

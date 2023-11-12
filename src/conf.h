@@ -296,6 +296,8 @@ typedef struct {
 	char 	* dns_timeout; /*time to limit during of parsing the dns */
 	int 	fw4_enable; /* 1, enable ipv4 firewall */
 	char 	*dhcp_cpi_uri; /* dhcp cpi uri */
+	short 	dhcp_cpi_enable; /* 1, enable dhcp cpi */
+	short	bypass_auth_enable; /* 1, bypass auth */
 } s_config;
 
 /** @brief Get the current gateway configuration */

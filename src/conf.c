@@ -125,6 +125,8 @@ typedef enum {
 	oDNSTimeout,
 	oFW4Enable,
 	oDhcpOptionCpi,
+	oDhcpOptionCpiEnable,
+	oBypassAuthEnable,
 } OpCodes;
 
 /** @internal
@@ -190,6 +192,8 @@ static const struct {
 	"dnstimeout",oDNSTimeout},{
 	"fw4enable",oFW4Enable},{
 	"dhcpoptioncpi",oDhcpOptionCpi},{
+	"dhcpoptioncpienable",oDhcpOptionCpiEnable},{
+	"bypassauthenable",oBypassAuthEnable},{
     NULL, oBadOption},};
 
 static void config_notnull(const void *, const char *);
@@ -288,6 +292,8 @@ config_init(void)
 	config.mqtt_server  = mqtt_server;
 
 	config.fw4_enable = 1;
+	config.bypass_auth_enable = 1;
+	config.dhcp_cpi_enable = 1;
 
 	debugconf.log_stderr = 1;
 	debugconf.debuglevel = DEFAULT_DEBUGLEVEL;
@@ -1004,6 +1010,12 @@ config_read()
 					break;
 				case oDhcpOptionCpi:
 					config.dhcp_cpi_uri = safe_strdup(p1);
+					break;
+				case oDhcpOptionCpiEnable:
+					config.dhcp_cpi_enable = parse_boolean_value(p1);
+					break;
+				case oBypassAuthEnable:
+					config.bypass_auth_enable = parse_boolean_value(p1);
 					break;
 				case oBadOption:
 					/* FALL THROUGH */
