@@ -847,7 +847,7 @@ iptables_fw_save_online_clients()
 #ifdef AW_FW3
 
 static int 
-fw3_int(void)
+fw3_init(void)
 {
 	const s_config *config;
 	char *ext_interface = NULL;
@@ -1093,7 +1093,7 @@ iptables_fw_init(void)
 {
 	// if define AW_FW3, then fw3_init
 #ifdef AW_FW3
-	return fw3_int();
+	return fw3_init();
 #else
 	return fw4_init();
 #endif

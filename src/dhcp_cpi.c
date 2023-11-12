@@ -21,9 +21,6 @@
 #include "options.h"
 #include "dhcp_cpi.h"
 
-#define MIN_BOOTP_SIZE  300
-#define DHCPOPT_CPI     114
-
 #pragma pack(1)
 struct Packet
 {
@@ -32,16 +29,6 @@ struct Packet
     struct BootP bootp;
 };
 #pragma pack()
-
-enum MangleResult
-{
-    Mangle_OK = 0,
-    Mangle_mallocFail,
-    Mangle_optExists,
-};
-
-/* Somewhat arbitrary, feel free to change */
-#define MAX_PACKET_SIZE 2048
 
 static int inspectPacket(struct nfq_q_handle *queue, struct nfgenmsg *pktInfo, 
 		struct nfq_data *pktData, void *userData);
@@ -165,7 +152,7 @@ static enum MangleResult
 manglePacket(const uint8_t *origData, size_t origDataSize,
              uint8_t **newData, size_t *newDataSize)
 {
-    s_config *config = get_config();
+    s_config *config = config_get_config();
     const struct Packet *origPacket = (const struct Packet *)origData;
     size_t ipHdrSize = ipv4_headerLen(&origPacket->ipHeader);
     size_t udpHdrSize = sizeof(struct UDPHeader);
@@ -230,7 +217,7 @@ static enum MangleResult mangleOptions(const uint8_t *origData, size_t origDataS
     size_t origOffset = offsetof(struct Packet, bootp) + sizeof(struct BootP);
     size_t newOffset = origOffset;
     size_t padCount = 0;
-    s_config *config = get_config();
+    s_config *config = config_get_config();
 
     while (origOffset < origDataSize)
     {
