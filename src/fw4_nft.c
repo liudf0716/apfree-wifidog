@@ -127,6 +127,7 @@ const char *nft_wifidogx_init_script[] = {
     "add chain inet fw4 forward_wifidogx_wan",
     "add chain inet fw4 forward_wifidogx_trust_domains",
     "add chain inet fw4 forward_wifidogx_unknown",
+    "add chain inet fw4 mangle_prerouting_wifidogx_dhcp_cpi",
     "add chain inet fw4 mangle_prerouting_wifidogx_outgoing",
     "add chain inet fw4 mangle_postrouting_wifidogx_incoming",
     "insert rule inet fw4 accept_to_wan jump forward_wifidogx_wan",
