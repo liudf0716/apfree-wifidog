@@ -46,6 +46,8 @@ inspectPacket(struct nfq_q_handle *queue, struct nfgenmsg *pktInfo,
 {
     (void)pktInfo;
     (void)userData;
+    
+    debug (LOG_DEBUG, "inspectPacket called");
 
     uint8_t *packet;
     ssize_t size = nfq_get_payload(pktData, &packet);
@@ -252,24 +254,37 @@ static enum MangleResult mangleOptions(const uint8_t *origData, size_t origDataS
 void thread_dhcp_cpi(const void *arg)
 {
     struct nfq_handle *nfq = nfq_open();
-    if (!nfq)
-    {
+    if (!nfq) {
         debug(LOG_ERR, "nfq_open() failed");
         return;
     }
-    nfq_unbind_pf(nfq, AF_INET);
-    nfq_bind_pf(nfq, AF_INET);
-    struct nfq_q_handle *qh = nfq_create_queue(nfq, 0, &inspectPacket, NULL);
-    if (!qh)
-    {
-        debug(LOG_ERR, "nfq_create_queue() failed");
+
+    if (nfq_unbind_pf(nfq, AF_INET) < 0) {
+        debug (LOG_ERR, " nfq_unbind_pf failed");
+        nfq_close(nfq);
         return;
     }
+
+    if (nfq_bind_pf(nfq, AF_INET) < 0) {
+        debug (LOG_ERR, "nfq_bind_pf failed");
+        nfq_close(nfq);
+        return;
+    }
+
+    struct nfq_q_handle *qh = nfq_create_queue(nfq, 1024, &inspectPacket, NULL);
+    if (!qh) {
+        debug(LOG_ERR, "nfq_create_queue() failed");
+        nfq_close(nfq);
+        return;
+    }
+    
+    debug(LOG_DEBUG, "start dhcp cpi thread");
     nfq_set_mode(qh, NFQNL_COPY_PACKET, 0xffff);
     int fd = nfq_fd(nfq);
+    char buf[4096] __attribute__((aligned));
     while (1)
     {
-        char buf[4096] __attribute__((aligned));
+        memset (buf, 0, sizeof(buf));
         int rv = recv(fd, buf, sizeof(buf), 0);
         if (rv < 0)
         {
