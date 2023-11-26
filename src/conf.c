@@ -292,8 +292,8 @@ config_init(void)
 	config.mqtt_server  = mqtt_server;
 
 	config.fw4_enable = 1;
-	config.bypass_auth_enable = 1;
-	config.dhcp_cpi_enable = 1;
+	config.bypass_auth_enable = 0;
+	config.dhcp_cpi_enable = 0;
 
 	debugconf.log_stderr = 1;
 	debugconf.debuglevel = DEFAULT_DEBUGLEVEL;
