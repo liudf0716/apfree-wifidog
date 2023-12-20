@@ -361,6 +361,22 @@ ev_http_send_redirect(struct evhttp_request * req, const char *url, const char *
     evbuffer_free(evb);
 }
 
+static void
+ev_http_respond_options(struct evhttp_request *req)
+{
+    struct evbuffer *evb = evbuffer_new();
+    if (!evb) {
+        evhttp_send_error(req, 500, "Internal error");
+        return;
+    }
+    evhttp_add_header(evhttp_request_get_output_headers(req), "Access-Control-Allow-Origin", "*");
+    evhttp_add_header(evhttp_request_get_output_headers(req), "Access-Control-Allow-Headers", "*");
+    evhttp_add_header(evhttp_request_get_output_headers(req), "Access-Control-Allow-Methods", "GET,POST,OPTIONS,DELETE,PUT");
+    evbuffer_add_printf(evb, "options success");
+    evhttp_send_reply(req, 204, "options success", evb);
+    evbuffer_free(evb);
+}
+
 /**
  * @brief process client's login and logout request
  * 
@@ -372,6 +388,15 @@ void
 ev_http_callback_auth(struct evhttp_request *req, void *arg)
 {
     struct wd_request_context *context = (struct wd_request_context *)arg;
+
+    if (evhttp_request_get_command(req) == EVHTTP_REQ_OPTIONS) {
+        ev_http_respond_options(req);
+        return;
+    }
+
+	evhttp_add_header(evhttp_request_get_output_headers(req), "Access-Control-Allow-Origin", "*");
+    evhttp_add_header(evhttp_request_get_output_headers(req), "Access-Control-Allow-Methods", "GET,POST,OPTIONS,DELETE,PUT");
+	
     char *token = ev_http_find_query(req, "token");
     if (!token) {
         evhttp_send_error(req, 200, "Invalid token");
@@ -436,6 +461,9 @@ ev_http_callback_disconnect(struct evhttp_request *req, void *arg)
     const char *token = ev_http_find_query(req, "token");
     const char *mac = ev_http_find_query(req, "mac");
 
+	evhttp_add_header(evhttp_request_get_output_headers(req), "Access-Control-Allow-Origin", "*");
+    evhttp_add_header(evhttp_request_get_output_headers(req), "Access-Control-Allow-Methods", "GET,POST,OPTIONS,DELETE,PUT");
+	
     if (!token || !mac) {
         debug(LOG_INFO, "Disconnect called without both token and MAC given");
         evhttp_send_error(req, HTTP_OK, "Both the token and MAC need to be specified");
@@ -464,7 +492,10 @@ void
 ev_http_callback_temporary_pass(struct evhttp_request *req, void *arg)
 {
     const char *mac = ev_http_find_query(req, "mac");
-
+	
+	evhttp_add_header(evhttp_request_get_output_headers(req), "Access-Control-Allow-Origin", "*");
+    evhttp_add_header(evhttp_request_get_output_headers(req), "Access-Control-Allow-Methods", "GET,POST,OPTIONS,DELETE,PUT");
+	
     if (mac) {
         debug(LOG_INFO, "Temporary passed %s", mac);
         fw_set_mac_temporary(mac, 0);	

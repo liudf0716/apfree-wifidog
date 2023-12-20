@@ -79,7 +79,7 @@ endif()
 
 add_executable(wdctlx ${src_wdctlx})
 if(AW_FW3)
-	add_executable(wifidogx ${src_apfreewifidog} ${src_fw3})
+	add_executable(wifidogx ${src_apfreewifidog} ${src_fw3} ${src_dhcp})
 	target_link_libraries(wifidogx ${libs}  ${fw3_libs} ${CURL_LIBRARIES})
 else()
 	add_executable(wifidogx ${src_apfreewifidog} ${src_fw4} ${src_dhcp})

@@ -455,6 +455,11 @@ http_redir_loop(s_config *config)
     http = evhttp_new(base);
     if (!http) termination_handler(0);
 
+	evhttp_set_allowed_methods(http,
+            EVHTTP_REQ_GET |
+            EVHTTP_REQ_POST |
+            EVHTTP_REQ_OPTIONS);
+	
 	struct wd_request_context *request_ctx = wd_request_context_new(
         base, ssl, get_auth_server()->authserv_use_ssl);
 	if (!request_ctx) termination_handler(0);
@@ -465,7 +470,7 @@ http_redir_loop(s_config *config)
     //evhttp_set_cb(http, "/wifidog/status", ev_http_callback_status, NULL);
     evhttp_set_cb(http, "/wifidog/auth", ev_http_callback_auth, request_ctx);
     //evhttp_set_cb(http, "/wifidog/disconnect", ev_http_callback_disconnect, request_ctx);
-    //evhttp_set_cb(http, "/wifidog/temporary_pass", ev_http_callback_temporary_pass, NULL);
+    evhttp_set_cb(http, "/wifidog/temporary_pass", ev_http_callback_temporary_pass, NULL);
 
     evhttp_set_gencb(http, ev_http_callback_404, NULL);
 

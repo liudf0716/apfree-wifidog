@@ -259,7 +259,11 @@ ssl_redirect_loop (char *gw_ip,  t_https_server *https_server) {
 		debug (LOG_ERR, "couldn't create evhttp. Exiting.\n");
       	exit(EXIT_FAILURE);
     }
- 
+ 	evhttp_set_allowed_methods(http,
+            EVHTTP_REQ_GET |
+            EVHTTP_REQ_POST |
+            EVHTTP_REQ_OPTIONS);
+	
  	SSL_CTX *ctx = SSL_CTX_new (SSLv23_server_method ());
   	SSL_CTX_set_options (ctx,
                        SSL_OP_SINGLE_DH_USE |
