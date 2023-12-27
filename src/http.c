@@ -491,6 +491,11 @@ ev_http_callback_disconnect(struct evhttp_request *req, void *arg)
 void 
 ev_http_callback_temporary_pass(struct evhttp_request *req, void *arg)
 {
+    if (evhttp_request_get_command(req) == EVHTTP_REQ_OPTIONS) {
+        ev_http_respond_options(req);
+        return;
+    }
+    
     const char *mac = ev_http_find_query(req, "mac");
 	
 	evhttp_add_header(evhttp_request_get_output_headers(req), "Access-Control-Allow-Origin", "*");

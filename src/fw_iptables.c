@@ -727,6 +727,11 @@ iptables_fw_set_mac_temporary(const char *mac, int which)
 		ipset_do_command("add " CHAIN_UNTRUSTED " %s timeout 60 ", mac);
 	}
 #else
+	if(which == 0) { // trusted
+		nftables_do_command("add element inet fw4 set_wifidogx_tmp_trust_clients { %s }", mac);
+	} else if(which == 1) { // untrusted
+		// TODO
+	}
 #endif
 }
 

@@ -101,7 +101,7 @@ const char *nft_wifidogx_init_script[] = {
     "add set inet fw4 set_wifidogx_inner_trust_domains { type ipv4_addr; }",
     "add set inet fw4 set_wifidogx_bypass_clients { type ipv4_addr; flags interval; }",
     "add set inet fw4 set_wifidogx_trust_clients { type ether_addr; }",
-    "add set inet fw4 set_wifidogx_tmp_trust_clients { type ether_addr; flags timeout; }",
+    "add set inet fw4 set_wifidogx_tmp_trust_clients { type ether_addr; timeout 5m; }",
     "add chain inet fw4 dstnat_wifidogx_auth_server",
     "add chain inet fw4 dstnat_wifidogx_wan",
     "add chain inet fw4 dstnat_wifidogx_outgoing",
