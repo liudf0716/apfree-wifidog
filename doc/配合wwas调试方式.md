@@ -2,14 +2,14 @@
 
 GET
 
-http://localhost:8001/wifidog/login?gw_address=192.168.1.1&gw_port=1080&gw_id=ABCDEF112233&channel_path=wificoin&ssid=apfree&ip=192.168.1.2&mac=223344556677&url=asdf
+http://localhost:8001/wifidog/login?gw_address=192.168.1.1&gw_port=1080&gw_id=ABCDEF112233&channel_path=apfree&ssid=apfree&ip=192.168.1.2&mac=223344556677&url=asdf
 
 
 2. 调试ping接口
 
 GET
 
-http://localhost:8001/wifidog/ping?gw_id=ABCDEF112233&sys_uptime=1000&sys_memfree=10&sys_load=0.23&nf_conntrack_count=100&cpu_usage=32%&wifidog_uptime=100&online_clients=2&offline_clients=1&ssid=apfree&version=1.23&channel_path=wificoin&wired_passed=0
+http://localhost:8001/wifidog/ping?gw_id=ABCDEF112233&sys_uptime=1000&sys_memfree=10&sys_load=0.23&nf_conntrack_count=100&cpu_usage=32%&wifidog_uptime=100&online_clients=2&offline_clients=1&ssid=apfree&version=1.23&channel_path=apfree&wired_passed=0
 
 3. 调试counterV2接口
 
@@ -29,10 +29,5 @@ PARAM:
   ]
 }
 
-5. 启用web ssh接口
-
-GET
-
-http://127.0.0.1:8001/wifidog/launch/ssh
 
 6. 
