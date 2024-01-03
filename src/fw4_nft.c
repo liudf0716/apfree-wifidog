@@ -285,6 +285,10 @@ nft_statistical_outgoing(char *outgoing, uint32_t outgoing_len)
 	char *cmd = "nft -j list chain inet fw4 mangle_prerouting_wifidogx_outgoing";
     debug(LOG_DEBUG, "nft -j list chain inet fw4 mangle_prerouting_wifidogx_outgoing");
 	r_fp = popen(cmd, "r");
+    if (r_fp == NULL) {
+        debug(LOG_ERR, "popen failed");
+        return;
+    }
 	fgets(outgoing, outgoing_len, r_fp);
 	pclose(r_fp);
 }
@@ -296,6 +300,10 @@ nft_statistical_incoming(char *incoming, uint32_t incoming_len)
 	char *cmd = "nft -j list chain inet fw4 mangle_postrouting_wifidogx_incoming";
     debug(LOG_DEBUG, "nft -j list chain inet fw4 mangle_postrouting_wifidogx_incoming");
 	r_fp = popen(cmd, "r");
+    if (r_fp == NULL) {
+        debug(LOG_ERR, "popen failed");
+        return;
+    }
 	fgets(incoming, incoming_len, r_fp);
 	pclose(r_fp);
 }
