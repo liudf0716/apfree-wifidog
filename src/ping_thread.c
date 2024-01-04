@@ -124,7 +124,7 @@ get_ping_uri(const struct sys_info *info)
 		return NULL;
 	
 	int nret = safe_asprintf(&uri, 
-			"%s%sgw_id=%s&sys_uptime=%lu&sys_memfree=%u&sys_load=%.2f&nf_conntrack_count=%lu&cpu_usage=%3.2lf&wifidog_uptime=%lu&online_clients=%d&offline_clients=%d&ssid=%s&version=%s&type=%s&name=%s&channel_path=%s&wired_passed=%d",
+			"%s%sgw_id=%s&sys_uptime=%lu&sys_memfree=%u&sys_load=%.2f&nf_conntrack_count=%lu&cpu_usage=%3.2lf&wifidog_uptime=%lu&online_clients=%d&offline_clients=%d&ssid=%s&fm_version=%s&type=%s&name=%s&channel_path=%s&wired_passed=%d&aw_version=%s",
 			 auth_server->authserv_path,
              auth_server->authserv_ping_script_path_fragment,
              config_get_config()->gw_id,
@@ -141,7 +141,8 @@ get_ping_uri(const struct sys_info *info)
 			 NULL != g_type?g_type:"null",
 			 NULL != g_name?g_name:"null",
 			 NULL != g_channel_path?g_channel_path:"null",
-             config_get_config()->wired_passed);
+             config_get_config()->wired_passed,
+			 VERSION);
 	if (nret < 0)
 		return NULL;
 
