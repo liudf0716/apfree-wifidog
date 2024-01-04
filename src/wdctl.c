@@ -52,15 +52,19 @@ static struct wdctl_client_command {
     const char *cmd_description; // help
 } wdctl_clt_cmd [] = {
     {"status", NULL, "get apfree wifidog status"},
+#ifdef AW_FW3
     {"clear_trusted_pdomains", NULL, "clear trusted pan-domain"},
     {"show_trusted_pdomains", NULL, "show trusted pan-domain"},
+#endif
     {"clear_trusted_iplist", NULL, "clear trusted iplist"},
     {"clear_trusted_domains", NULL, "clear trusted domain and it's ip"},
     {"show_trusted_domains", NULL, "show trusted domains and its ip"},
     {"show_trusted_mac", NULL, "show trusted mac list"},
     {"clear_trusted_mac", NULL, "clear trusted mac list"},
+#ifdef AW_FW3
     {"add_trusted_pdomains", "pan-domain1,pan-domain2...", "add one or more trusted pan-domain like qq.com..."},
     {"del_trusted_pdomains", "pan-domain1,pan-domain2...", "del one or more trusted pan-domain list like qq.com..."},
+#endif
     {"add_trusted_domains", "domain1,domain2...", "add trusted domain list like www.qq.com..."},
     {"del_trusted_domains", "domain1,domain2...", "del trusted domain list like www.qq.com...."},
     {"add_trusted_iplist", "ip1,ip2...", "add one or more trusted ip list like ip1,ip2..."},

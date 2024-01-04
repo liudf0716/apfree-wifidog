@@ -795,6 +795,7 @@ wdctl_add_auth_client(struct bufferevent *fd, const char *args)
 {
 	json_object *client_info = json_tokener_parse(args);
 	if(is_error(client_info) || json_object_get_type(client_info) != json_type_object) { 
+        debug(LOG_ERR, "json_tokener_parse failed: args is %s", args);
         goto OUT;
     }
 
@@ -804,13 +805,16 @@ wdctl_add_auth_client(struct bufferevent *fd, const char *args)
     if(!json_object_object_get_ex(client_info, "mac", &mac_jo) || 
 	   !json_object_object_get_ex(client_info, "ip", &ip_jo) || 
 	   !json_object_object_get_ex(client_info, "name", &name_jo)) { 
+        debug(LOG_ERR, "json_object_object_get_ex failed");
         goto OUT;
     }
 
     const char *mac  = json_object_get_string(mac_jo);
     const char *ip	 = json_object_get_string(ip_jo);
-    if (!is_valid_mac(mac) || !is_valid_ip(ip) || !is_trusted_mac(mac))
+    if (!is_valid_mac(mac) || !is_valid_ip(ip) || !is_trusted_mac(mac)) {
+        debug(LOG_ERR, "is_valid_mac or is_valid_ip or is_trusted_mac failed");
         goto OUT;
+    }
 
     auth_req_info *auth = safe_malloc(sizeof(auth_req_info));
     memcpy(auth->ip, ip, strlen(ip));

@@ -1003,9 +1003,7 @@ char *evb_2_string(struct evbuffer *evb, int *olen)
 
 void evdns_add_trusted_domain_ip_cb(int errcode, struct evutil_addrinfo *addr, void *ptr)
 {
-	struct evdns_cb_param *param = ptr;
-	t_domain_trusted *p = param->data;
-	free(param);
+	t_domain_trusted *p = ptr;
 	
     if (errcode) {
 		debug(LOG_INFO, "parse domain %s , error: %s", p->domain, evutil_gai_strerror(errcode));
@@ -1101,6 +1099,7 @@ thread_evdns_parse_trusted_domain_2_ip(void *arg)
     evdns_base_nameserver_ip_add(dnsbase, "114.114.114.114");//114DNS
 	
 	struct evutil_addrinfo hints;
+	LOCK_DOMAIN();
 	while(p && p->domain) {		
 		memset(&hints, 0, sizeof(hints));
 		hints.ai_family = AF_UNSPEC;
@@ -1108,16 +1107,15 @@ thread_evdns_parse_trusted_domain_2_ip(void *arg)
 		hints.ai_socktype = SOCK_STREAM;
 		hints.ai_protocol = IPPROTO_TCP;
 		
-		struct evdns_cb_param *param = malloc(sizeof(struct evdns_cb_param));
-		memset(param, 0, sizeof(struct evdns_cb_param));
-		param->base = base;
-		param->data = p;
+		// if add domains and delete domain immediately, it will cause core dump
+		// don't know how to avoid it, so just ignore it
+		// TODO: need to find a better way to avoid it
 		evdns_getaddrinfo( dnsbase, p->domain, NULL ,
-			  &hints, evdns_add_trusted_domain_ip_cb, param);
+			  &hints, evdns_add_trusted_domain_ip_cb, p);
 		
 		p = p->next;
 	}
-	
+	UNLOCK_DOMAIN();
 	
 	debug(LOG_INFO, "parse domain end, begin event_loop "); 
 	event_base_dispatch(base);	
@@ -1133,7 +1131,8 @@ thread_evdns_parse_trusted_domain_2_ip(void *arg)
     event_base_free(base);
 }
 
-void evdns_parse_trusted_domain_2_ip(trusted_domain_t which)
+void 
+evdns_parse_trusted_domain_2_ip(trusted_domain_t which)
 { 
 	pthread_t tid_evdns_parse;
 	trusted_domain_t *type = malloc(sizeof(trusted_domain_t));

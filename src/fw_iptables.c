@@ -413,14 +413,12 @@ iptables_fw_clear_authservers(void)
 	iptables_do_command("-t filter -F " CHAIN_AUTHSERVERS);
 	iptables_do_command("-t nat -F " CHAIN_AUTHSERVERS);
 #else
+	nftables_do_command("flush set inet fw4 set_wifidogx_auth_servers");
 #endif
 }
 
-
-#ifdef AW_FW3
-
-static void
-fw3_set_authservers(void *handle)
+void
+iptables_fw_set_authservers(void *handle)
 {
 	const s_config *config;
 	t_auth_serv *auth_server;
@@ -430,54 +428,25 @@ fw3_set_authservers(void *handle)
 	for (auth_server = config->auth_servers; auth_server != NULL; auth_server = auth_server->next) {
 		if (auth_server->last_ip && strcmp(auth_server->last_ip, "0.0.0.0") != 0) {
 			debug(LOG_DEBUG, "the last ip: %s", auth_server->last_ip);
+#ifdef AW_FW3
 			if (handle) {
 				iptables_do_append_command(handle, "-A " CHAIN_AUTHSERVERS " -d %s -j ACCEPT", auth_server->last_ip);
 			} else {
 				iptables_do_command("-t filter -A " CHAIN_AUTHSERVERS " -d %s -j ACCEPT", auth_server->last_ip);
 				iptables_do_command("-t nat -A " CHAIN_AUTHSERVERS " -d %s -j ACCEPT", auth_server->last_ip);
 			}
-		}
-	}
-}
-
 #else
-
-static void
-fw4_set_authservers(void *handle)
-{
-	// add auth_server->last_ip to nftables set set_wifidogx_auth_servers
-	const s_config *config;
-	t_auth_serv *auth_server;
-
-	config = config_get_config();
-	for (auth_server = config->auth_servers; auth_server != NULL; auth_server = auth_server->next) {
-		if (auth_server->last_ip && strcmp(auth_server->last_ip, "0.0.0.0") != 0) {
-			debug(LOG_DEBUG, "the last ip: %s", auth_server->last_ip);
 			nftables_do_command("add element inet fw4 set_wifidogx_auth_servers { %s }", auth_server->last_ip);
+#endif
 		}
 	}
-}
-
-#endif
-
-void
-iptables_fw_set_authservers(void *handle)
-{
-#ifdef AW_FW3
-	fw3_set_authservers(handle);
-#else
-	fw4_set_authservers(handle);
-#endif
 }
 
 void
 iptables_fw_refresh_user_domains_trusted(void)
 {
-#ifdef AW_FW3
 	iptables_fw_clear_user_domains_trusted();
 	iptables_fw_set_user_domains_trusted();
-#else
-#endif
 }
 
 void
@@ -486,13 +455,13 @@ iptables_fw_clear_user_domains_trusted(void)
 #ifdef AW_FW3
 	iptables_flush_ipset(CHAIN_DOMAIN_TRUSTED);
 #else
+	nftables_do_command("flush set inet fw4 set_wifidogx_trust_domains");
 #endif
 }
 
 void
 iptables_fw_set_user_domains_trusted(void)
 {
-#ifdef AW_FW3
 	const s_config *config;
 	t_domain_trusted *domain_trusted = NULL;
 
@@ -503,13 +472,15 @@ iptables_fw_set_user_domains_trusted(void)
 	for (domain_trusted = config->domains_trusted; domain_trusted != NULL; domain_trusted = domain_trusted->next) {
 		t_ip_trusted *ip_trusted = NULL;
 		for(ip_trusted = domain_trusted->ips_trusted; ip_trusted != NULL; ip_trusted = ip_trusted->next) {
+#ifdef AW_FW3
 			add_ip_to_ipset(CHAIN_DOMAIN_TRUSTED, ip_trusted->ip, 0);
+#else
+			nftables_do_command("add element inet fw4 set_wifidogx_trust_domains { %s }", ip_trusted->ip);
+#endif
 		}
 	}
 
 	UNLOCK_DOMAIN();
-#else
-#endif
 }
 
 // set inner trusted domains
@@ -567,11 +538,8 @@ iptables_fw_set_ipset_domains_trusted(void)
 void
 iptables_fw_refresh_inner_domains_trusted(void)
 {
-#ifdef AW_FW3
 	iptables_fw_clear_inner_domains_trusted();
 	iptables_fw_set_inner_domains_trusted();
-#else
-#endif
 }
 
 void
@@ -580,6 +548,7 @@ iptables_fw_clear_inner_domains_trusted(void)
 #ifdef AW_FW3
 	iptables_flush_ipset(CHAIN_INNER_DOMAIN_TRUSTED);
 #else
+	nftables_do_command("flush set inet fw4 set_wifidogx_inner_trust_domains");
 #endif
 }
 
@@ -590,7 +559,6 @@ iptables_fw_clear_inner_domains_trusted(void)
 void
 iptables_fw_set_inner_domains_trusted(void)
 {
-#ifdef AW_FW3
 	const s_config *config;
 	t_domain_trusted *domain_trusted = NULL;
 
@@ -601,13 +569,15 @@ iptables_fw_set_inner_domains_trusted(void)
 	for (domain_trusted = config->inner_domains_trusted; domain_trusted != NULL; domain_trusted = domain_trusted->next) {
 		t_ip_trusted *ip_trusted = NULL;
 		for(ip_trusted = domain_trusted->ips_trusted; ip_trusted != NULL; ip_trusted = ip_trusted->next) {
+#ifdef AW_FW3
 			add_ip_to_ipset(CHAIN_INNER_DOMAIN_TRUSTED, ip_trusted->ip, 0);
+#else
+			nftables_do_command("add element inet fw4 set_wifidogx_inner_trust_domains { %s }", ip_trusted->ip);
+#endif
 		}
 	}
 
 	UNLOCK_DOMAIN();
-#else
-#endif
 }
 
 
@@ -635,13 +605,13 @@ iptables_fw_clear_trusted_maclist(void)
 #ifdef AW_FW3
 	iptables_flush_ipset(CHAIN_TRUSTED);
 #else
+	nftables_do_command("flush set inet fw4 set_wifidogx_trust_clients");
 #endif
 }
 
 void
 iptables_fw_set_trusted_maclist(void)
 {
-#ifdef AW_FW3
 	const s_config *config;
 	t_trusted_mac *p = NULL;
 
@@ -649,10 +619,12 @@ iptables_fw_set_trusted_maclist(void)
 
 	LOCK_CONFIG();
 	for (p = config->trustedmaclist; p != NULL; p = p->next)
+#ifdef AW_FW3
 		ipset_do_command("add " CHAIN_TRUSTED " %s", p->mac);
-	UNLOCK_CONFIG();
 #else
+		nftables_do_command("add element inet fw4 set_wifidogx_trust_clients { %s }", p->mac);
 #endif
+	UNLOCK_CONFIG();
 }
 
 void

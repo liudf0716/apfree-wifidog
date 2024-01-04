@@ -192,7 +192,7 @@ wd_set_request_header(struct evhttp_request *req, const char *host)
 	evhttp_add_header(evhttp_request_get_output_headers(req),
 		    "Pragma", "no-cache");
 	evhttp_add_header(output_headers, "Connection", "close");
-	evhttp_add_header(output_headers, "User-Agent", "ApFree WiFiDog");
+	evhttp_add_header(output_headers, "User-Agent", "ApFree-WiFiDog");
 }
 
 /**
