@@ -1,0 +1,10 @@
+#!/bin/bash
+
+sudo nft delete table inet fw4
+
+sudo nft add table inet fw4
+
+sudo nft add chain inet fw4 mangle_prerouting
+sudo nft add chain inet fw4 mangle_postrouting
+sudo nft add chain inet fw4 accept_to_wan
+sudo nft add chain inet fw4 dstnat
