@@ -497,13 +497,17 @@ ev_http_callback_temporary_pass(struct evhttp_request *req, void *arg)
     }
     
     const char *mac = ev_http_find_query(req, "mac");
+    const char *timeout = ev_http_find_query(req, "timeout");
+    if (!timeout) timeout = "0"; // default 5 minutes
 	
 	evhttp_add_header(evhttp_request_get_output_headers(req), "Access-Control-Allow-Origin", "*");
     evhttp_add_header(evhttp_request_get_output_headers(req), "Access-Control-Allow-Methods", "GET,POST,OPTIONS,DELETE,PUT");
 	
     if (mac) {
-        debug(LOG_INFO, "Temporary passed %s", mac);
-        fw_set_mac_temporary(mac, 0);	
+        debug(LOG_INFO, "Temporary passed %s timeout %s", mac, timeout);
+        int ntimeout = atoi(timeout);
+        if (ntimeout < 0) ntimeout = 0;
+        fw_set_mac_temporary(mac, ntimeout);	
         evhttp_send_reply(req, HTTP_OK, "OK", NULL);
     } else {
         debug(LOG_INFO, "Temporary pass called without  MAC given");
