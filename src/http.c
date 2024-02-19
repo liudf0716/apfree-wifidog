@@ -403,12 +403,28 @@ ev_http_callback_auth(struct evhttp_request *req, void *arg)
         return;
     } 
 
-    char *remote_host;
-    uint16_t port;
-    evhttp_connection_get_peer(evhttp_request_get_connection(req), &remote_host, &port);
-    char *mac = arp_get(remote_host);
-    if (!mac) {
+    char *remote_host = NULL;
+    char *mac = NULL;
+    // get remote_host and mac from request if possible
+    // which support auth server side to permit client to login/logout
+    remote_host = ev_http_find_query(req, "client_ip");
+    mac = ev_http_find_query(req, "client_mac");
+    if (!remote_host || !mac) {
+        char *remote_ip = NULL;
+        uint16_t port;
+        if (mac) free(mac);
+        if (remote_host) free(remote_host);
+        mac = NULL;
+        remote_host = NULL;
+        evhttp_connection_get_peer(evhttp_request_get_connection(req), &remote_ip, &port);
+        remote_host = safe_strdup(remote_ip);
+        mac = arp_get(remote_host);
+    }
+    
+    if (!mac || !remote_host) {
         free(token);
+        if (mac) free(mac);
+        if (remote_host) free(remote_host);
         evhttp_send_error(req, 200, "Failed to retrieve your MAC address");
         return;
     }  
@@ -428,6 +444,7 @@ ev_http_callback_auth(struct evhttp_request *req, void *arg)
     }
     UNLOCK_CLIENT_LIST();
     free(mac);
+    free(remote_host);
 
     char *logout = ev_http_find_query(req, "logout");
     if (logout) {
