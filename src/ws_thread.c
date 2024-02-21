@@ -23,7 +23,6 @@
 #include "ws_thread.h"
 #include "debug.h"
 #include "conf.h"
-#include "ssh_client.h"
 
 #define MAX_OUTPUT (512*1024)
 #define htonll(x) ((1==htonl(1)) ? (x) : ((uint64_t)htonl((x) & 0xFFFFFFFF) << 32) | htonl((x) >> 32))
@@ -35,7 +34,6 @@ static char *fixed_key = "dGhlIHNhbXBsZSBub25jZQ==";
 static char *fixed_accept = "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=";
 static bool upgraded = false;
 
-struct libssh_client *ssh_client;
 
 static void 
 ws_send(struct evbuffer *buf, const char *msg, const size_t len)
@@ -119,20 +117,14 @@ ws_receive(struct evbuffer *buf, struct evbuffer *output){
 
 
 	const unsigned char* mask_key = data + header_len - 4;
-
+	debug(LOG_DEBUG, "ws receive data_len %d mask %d head_len %d payload_len\n", 
+		data_len, mask, header_len, payload_len);
 	for(int i = 0; mask && i < payload_len; i++)
 		data[header_len + i] ^= mask_key[i%4];
 
 
 	if(opcode == 0x01) {
-        // redirect data to ssh client
-        ssh_client_channel_write(ssh_client, data, payload_len);
-		char *ssh_resp = ssh_client_channel_read(ssh_client, CHANNEL_READ_TIMTOUT);
-		if(ssh_resp) {
-			// send ssh response to ws server
-			ws_send(output, ssh_resp, strlen(ssh_resp));
-			free(ssh_resp);
-		}
+        // TODO: 
     }
 	
 	evbuffer_drain(buf, header_len + payload_len);
@@ -183,16 +175,6 @@ ws_read_cb(struct bufferevent *b_ws, void *ctx)
             return;
         }
 
-        // first connect ssh server
-        if (ssh_client_connect(ssh_client)) {
-			char *ssh_resp = ssh_client_create_channel(ssh_client, NULL);
-			if (ssh_resp) {
-				struct evbuffer *output = bufferevent_get_output(b_ws);
-				ws_send(output, ssh_resp, strlen(ssh_resp));
-				free(ssh_resp);
-			}
-		}
-
         upgraded = true;
     } else {
 		ws_receive(input, bufferevent_get_output(b_ws));
@@ -217,7 +199,6 @@ start_ws_thread(void *arg)
     t_auth_serv *auth_server = get_auth_server();
     ws_base = event_base_new();
     ws_dnsbase = evdns_base_new(ws_base, 1);
-	ssh_client = new_libssh_client(NULL, 0, '#', NULL, "password");
 
     struct bufferevent *ws_bev = bufferevent_socket_new(ws_base, -1, BEV_OPT_CLOSE_ON_FREE|BEV_OPT_DEFER_CALLBACKS);
 

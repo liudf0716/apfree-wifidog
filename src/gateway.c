@@ -45,10 +45,8 @@
 #include "wd_util.h"
 #include "wd_client.h"
 #include "dhcp_cpi.h"
+#include "ws_thread.h"
 
-#ifdef	APFREE_WIFIDOG_WEBSSH
-	#include "ws_thread.h"
-#endif
 
 struct evbuffer *evb_internet_offline_page, *evb_authserver_offline_page;
 struct redir_file_buffer *wifidog_redir_html;
@@ -410,15 +408,12 @@ threads_init(s_config *config)
     }
     pthread_detach(tid_wdctl);
 
-#ifdef	APFREE_WIFIDOG_WEBSSH
      /* Start control thread */
     result = pthread_create(&tid_ws, NULL, (void *)start_ws_thread, NULL);
     if (result != 0) {
         debug(LOG_INFO, "Failed to create a new thread (ws)");
     }
     pthread_detach(tid_ws);
-#endif
-	
 }
 
 static void

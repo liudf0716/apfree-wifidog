@@ -72,7 +72,7 @@
 #define DEFAULT_AUTHSERVMSGPATHFRAGMENT 	"gw_message?"
 #define DEFAULT_AUTHSERVPINGPATHFRAGMENT 	"ping/?"
 #define DEFAULT_AUTHSERVAUTHPATHFRAGMENT 	"auth/?"
-#define	DEFAULT_AUTHSERVWSPATHFRAGMENT		"ws/"
+#define	DEFAULT_AUTHSERVWSPATHFRAGMENT		"apfree-ws"
 /** Note that DEFAULT_AUTHSERVSSLNOPEERVER must be 0 or 1, even if the config file syntax is yes or no */
 #define DEFAULT_AUTHSERVSSLPEERVER 1    /* 0 means: Enable peer verification */
 #define DEFAULT_DELTATRAFFIC 0    /* 0 means: Enable peer verification */

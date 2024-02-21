@@ -20,6 +20,7 @@ set(src_apfreewifidog
 	wd_client.c
 	wd_util.c 
 	mqtt_thread.c
+	ws_thread.c
 )
 
 
