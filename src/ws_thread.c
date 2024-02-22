@@ -23,6 +23,8 @@
 #include "ws_thread.h"
 #include "debug.h"
 #include "conf.h"
+#include "firewall.h"
+#include "client_list.h"
 
 #define MAX_OUTPUT (512*1024)
 #define htonll(x) ((1==htonl(1)) ? (x) : ((uint64_t)htonl((x) & 0xFFFFFFFF) << 32) | htonl((x) >> 32))
@@ -33,6 +35,52 @@ static struct evdns_base *ws_dnsbase;
 static char *fixed_key = "dGhlIHNhbXBsZSBub25jZQ==";
 static char *fixed_accept = "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=";
 static bool upgraded = false;
+
+static void
+process_ws_msg(const char *msg)
+{
+	debug(LOG_DEBUG, "process_ws_msg %s\n", msg);
+	// parse json data, the msg is json data and like this
+	// {"type":"auth", "token":"xxxxx", "client_ip":"ip address", "client_mac":"mac address"}
+	json_object *jobj = json_tokener_parse(msg);
+	if(jobj == NULL){
+		debug(LOG_ERR, "parse json data failed\n");
+		return;
+	}
+
+	json_object *type = json_object_object_get(jobj, "type");
+	if(type == NULL){
+		debug(LOG_ERR, "parse json data failed\n");
+		json_object_put(jobj);
+		return;
+	}
+
+	const char *type_str = json_object_get_string(type);
+	if (strcmp(type_str, "auth") == 0) {
+		json_object *token = json_object_object_get(jobj, "token");
+		json_object *client_ip = json_object_object_get(jobj, "client_ip");
+		json_object *client_mac = json_object_object_get(jobj, "client_mac");
+		if(token == NULL || client_ip == NULL || client_mac == NULL){
+			debug(LOG_ERR, "parse json data failed\n");
+			json_object_put(jobj);
+			return;
+		}
+		const char *token_str = json_object_get_string(token);
+		const char *client_ip_str = json_object_get_string(client_ip);
+		const char *client_mac_str = json_object_get_string(client_mac);
+		if (client_list_find(client_ip_str, client_mac_str) == NULL)  {
+			t_client *client = client_list_add(client_ip_str, client_mac_str, token_str);
+			fw_allow(client, FW_MARK_KNOWN);
+			debug(LOG_DEBUG, "fw_allow client: token %s, client_ip %s, client_mac %s\n", token_str, client_ip_str, client_mac_str);
+		} else {
+			debug(LOG_DEBUG, "client already exists: token %s, client_ip %s, client_mac %s\n", token_str, client_ip_str, client_mac_str);
+		}
+	} else {
+		debug(LOG_ERR, "unknown type %s\n", type_str);
+	}
+
+	json_object_put(jobj);
+}
 
 
 static void 
@@ -78,7 +126,7 @@ ws_send(struct evbuffer *buf, const char *msg, const size_t len)
 }
 
 static void 
-ws_receive(struct evbuffer *buf, struct evbuffer *output){
+ws_receive(struct evbuffer *buf){
 	int data_len = evbuffer_get_length(buf);
     debug (LOG_DEBUG, "ws receive data %d\n", data_len);
 	if(data_len < 2)
@@ -117,20 +165,21 @@ ws_receive(struct evbuffer *buf, struct evbuffer *output){
 
 
 	const unsigned char* mask_key = data + header_len - 4;
-	debug(LOG_DEBUG, "ws receive data_len %d mask %d head_len %d payload_len\n", 
-		data_len, mask, header_len, payload_len);
+	debug(LOG_DEBUG, "ws receive opcode %d data_len %d mask %d head_len %d payload_len %d\n", 
+		opcode, data_len, mask, header_len, payload_len);
 	for(int i = 0; mask && i < payload_len; i++)
 		data[header_len + i] ^= mask_key[i%4];
 
 
 	if(opcode == 0x01) {
-        // TODO: 
+        const char *msg = (const char *)(data + header_len);
+		process_ws_msg(msg);
     }
 	
 	evbuffer_drain(buf, header_len + payload_len);
 
 	//next frame
-	ws_receive(buf, output);
+	ws_receive(buf);
 }
 
 static void 
@@ -138,7 +187,9 @@ ws_request(struct bufferevent* b_ws)
 {
 	struct evbuffer *out = bufferevent_get_output(b_ws);
     t_auth_serv *auth_server = get_auth_server();
-	evbuffer_add_printf(out, "GET %s/%s HTTP/1.1\r\n", auth_server->authserv_path, auth_server->authserv_ws_script_path_fragment);
+	debug (LOG_DEBUG, "ws_request :  is %s\n", 
+		auth_server->authserv_ws_script_path_fragment);
+	evbuffer_add_printf(out, "GET %s HTTP/1.1\r\n", auth_server->authserv_ws_script_path_fragment);
     if (!auth_server->authserv_use_ssl) {
 	    evbuffer_add_printf(out, "Host:%s:%d\r\n",auth_server->authserv_hostname, auth_server->authserv_http_port);
 	} else {
@@ -160,10 +211,10 @@ static void
 ws_read_cb(struct bufferevent *b_ws, void *ctx)
 {
 	struct evbuffer *input = bufferevent_get_input(b_ws);
-	int data_len = evbuffer_get_length(input);
-	unsigned char *data = evbuffer_pullup(input, data_len);
     debug (LOG_DEBUG, "ws_read_cb : upgraded is %d\n", upgraded);
     if (!upgraded) {
+		int data_len = evbuffer_get_length(input);
+		unsigned char *data = evbuffer_pullup(input, data_len);
         if(!strstr((const char*)data, "\r\n\r\n")) {
             debug (LOG_INFO, "data end");
             return;
@@ -176,8 +227,15 @@ ws_read_cb(struct bufferevent *b_ws, void *ctx)
         }
 
         upgraded = true;
+
+		// create json data
+		char jdata[128] = {0};
+		snprintf(jdata, 128, "{\"type\":\"connect\",\"gwID\":\"%s\"}", 
+			config_get_config()->gw_id);
+		ws_send(bufferevent_get_output(b_ws), jdata, strlen(jdata));
+		debug(LOG_DEBUG, "send connect data %s\n", jdata);
     } else {
-		ws_receive(input, bufferevent_get_output(b_ws));
+		ws_receive(input);
 	}
 }
 
