@@ -60,8 +60,9 @@ process_ws_msg(const char *msg)
 		json_object *token = json_object_object_get(jobj, "token");
 		json_object *client_ip = json_object_object_get(jobj, "client_ip");
 		json_object *client_mac = json_object_object_get(jobj, "client_mac");
+		json_object *client_name = json_object_object_get(jobj, "client_name");
 		if(token == NULL || client_ip == NULL || client_mac == NULL){
-			debug(LOG_ERR, "parse json data failed\n");
+			debug(LOG_ERR, "auth: parse json data failed\n");
 			json_object_put(jobj);
 			return;
 		}
@@ -71,10 +72,27 @@ process_ws_msg(const char *msg)
 		if (client_list_find(client_ip_str, client_mac_str) == NULL)  {
 			t_client *client = client_list_add(client_ip_str, client_mac_str, token_str);
 			fw_allow(client, FW_MARK_KNOWN);
+			if (client_name != NULL) {
+				client->name = strdup(json_object_get_string(client_name));
+			}
 			debug(LOG_DEBUG, "fw_allow client: token %s, client_ip %s, client_mac %s\n", token_str, client_ip_str, client_mac_str);
 		} else {
 			debug(LOG_DEBUG, "client already exists: token %s, client_ip %s, client_mac %s\n", token_str, client_ip_str, client_mac_str);
 		}
+	} else if (strcmp(type_str, "tmp_pass") == 0) {
+		json_object *client_mac = json_object_object_get(jobj, "client_mac");
+		json_object *timeout = json_object_object_get(jobj, "timeout");
+		if (client_mac == NULL) {
+			debug(LOG_ERR, "temp_pass: parse json data failed\n");
+			json_object_put(jobj);
+			return;
+		}
+		const char *client_mac_str = json_object_get_string(client_mac);
+		uint32_t timeout_value = 5*60;
+		if (timeout != NULL) {
+			timeout_value = json_object_get_int(timeout);
+		}
+		fw_set_mac_temporary(client_mac_str, timeout_value);
 	} else {
 		debug(LOG_ERR, "unknown type %s\n", type_str);
 	}
@@ -126,14 +144,15 @@ ws_send(struct evbuffer *buf, const char *msg, const size_t len)
 }
 
 static void 
-ws_receive(struct evbuffer *buf){
-	int data_len = evbuffer_get_length(buf);
+ws_receive(char *data, const size_t data_len){
     debug (LOG_DEBUG, "ws receive data %d\n", data_len);
 	if(data_len < 2)
 		return;
 
-	unsigned char* data = evbuffer_pullup(buf, data_len);
-
+	char temp[20] = {0};
+	strncpy(temp, data, data_len>=20?20:data_len);
+	debug(LOG_DEBUG, "first 3 char of data is %x %x %x\n", data[0], data[1], data[2]);
+	debug(LOG_DEBUG, "first 20 %s", temp);
 	int fin = !!(*data & 0x80);
 	int opcode = *data & 0x0F;
 	int mask = !!(*(data+1) & 0x80);
@@ -175,11 +194,6 @@ ws_receive(struct evbuffer *buf){
         const char *msg = (const char *)(data + header_len);
 		process_ws_msg(msg);
     }
-	
-	evbuffer_drain(buf, header_len + payload_len);
-
-	//next frame
-	ws_receive(buf);
 }
 
 static void 
@@ -212,9 +226,15 @@ ws_read_cb(struct bufferevent *b_ws, void *ctx)
 {
 	struct evbuffer *input = bufferevent_get_input(b_ws);
     debug (LOG_DEBUG, "ws_read_cb : upgraded is %d\n", upgraded);
+	char data[1024] = {0};
+	int pos = 0;
+	int data_len = 0;
+	while((data_len = evbuffer_get_length(input)) > 0){
+		evbuffer_remove(input, data + pos, data_len);
+		pos += data_len;
+	}
+	assert(pos < 1023);
     if (!upgraded) {
-		int data_len = evbuffer_get_length(input);
-		unsigned char *data = evbuffer_pullup(input, data_len);
         if(!strstr((const char*)data, "\r\n\r\n")) {
             debug (LOG_INFO, "data end");
             return;
@@ -235,7 +255,7 @@ ws_read_cb(struct bufferevent *b_ws, void *ctx)
 		ws_send(bufferevent_get_output(b_ws), jdata, strlen(jdata));
 		debug(LOG_DEBUG, "send connect data %s\n", jdata);
     } else {
-		ws_receive(input);
+		ws_receive(data, pos);
 	}
 }
 
