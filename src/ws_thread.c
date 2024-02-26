@@ -32,6 +32,7 @@
 
 static struct event_base *ws_base;
 static struct evdns_base *ws_dnsbase;
+static struct event *ws_heartbeat_ev;
 static char *fixed_key = "dGhlIHNhbXBsZSBub25jZQ==";
 static char *fixed_accept = "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=";
 static bool upgraded = false;
@@ -217,6 +218,18 @@ ws_request(struct bufferevent* b_ws)
 	evbuffer_add_printf(out, "\r\n");
 }
 
+static void
+ws_heartbeat_cb(evutil_socket_t fd, short event, void *arg)
+{
+	struct bufferevent *b_ws = (struct bufferevent *)arg;
+	struct evbuffer *out = bufferevent_get_output(b_ws);
+	char jdata[128] = {0};
+	snprintf(jdata, 128, "{\"type\":\"heartbeat\",\"gwID\":\"%s\"}", 
+		config_get_config()->gw_id);
+	debug(LOG_DEBUG, "ws_heartbeat_cb : send heartbeat data\n");
+	ws_send(out, jdata, strlen(jdata));
+}
+
 static void 
 ws_read_cb(struct bufferevent *b_ws, void *ctx)
 {
@@ -250,6 +263,16 @@ ws_read_cb(struct bufferevent *b_ws, void *ctx)
 			config_get_config()->gw_id);
 		ws_send(bufferevent_get_output(b_ws), jdata, strlen(jdata));
 		debug(LOG_DEBUG, "send connect data %s\n", jdata);
+
+		// add timer to send heartbeat
+		if (ws_heartbeat_ev != NULL) {
+			event_free(ws_heartbeat_ev);
+		}
+		struct timeval tv;
+		tv.tv_sec = 60;
+		tv.tv_usec = 0;
+		ws_heartbeat_ev = event_new(ws_base, -1, EV_PERSIST, ws_heartbeat_cb, b_ws);
+		event_add(ws_heartbeat_ev, &tv);
     } else {
 		ws_receive(data, pos);
 	}
@@ -265,19 +288,26 @@ wsevent_connection_cb(struct bufferevent* b_ws, short events, void *ctx){
 		debug(LOG_ERR, "ws connection error: %s\n", strerror(errno));
 		sleep(1);
 		// reconnect ws server
-		bufferevent_free(b_ws);
+		if (b_ws != NULL) {
+			bufferevent_free(b_ws);
+		}
 		b_ws = bufferevent_socket_new(ws_base, -1, BEV_OPT_CLOSE_ON_FREE|BEV_OPT_DEFER_CALLBACKS);
 		bufferevent_setcb(b_ws, ws_read_cb, NULL, wsevent_connection_cb, NULL);
 		bufferevent_enable(b_ws, EV_READ|EV_WRITE);
 		t_auth_serv *auth_server = get_auth_server();
+		int ret = 0;
 		if (!auth_server->authserv_use_ssl) {
-		    bufferevent_socket_connect_hostname(b_ws, ws_dnsbase, AF_INET, 
+		    ret = bufferevent_socket_connect_hostname(b_ws, ws_dnsbase, AF_INET, 
 				auth_server->authserv_hostname, auth_server->authserv_http_port); 
 		} else {
-			bufferevent_socket_connect_hostname(b_ws, ws_dnsbase, AF_INET, 
+			ret = bufferevent_socket_connect_hostname(b_ws, ws_dnsbase, AF_INET, 
 				auth_server->authserv_hostname, auth_server->authserv_ssl_port); 
 		}
 		upgraded = false;
+		if (ret < 0) {
+			debug(LOG_ERR, "ws connection error: %s\n", strerror(errno));
+			bufferevent_free(b_ws);
+		}
 	} 
 }
 
@@ -292,21 +322,34 @@ start_ws_thread(void *arg)
     ws_dnsbase = evdns_base_new(ws_base, 1);
 
     struct bufferevent *ws_bev = bufferevent_socket_new(ws_base, -1, BEV_OPT_CLOSE_ON_FREE|BEV_OPT_DEFER_CALLBACKS);
-
+	if (ws_bev == NULL) {
+		debug(LOG_ERR, "create bufferevent failed\n");
+		goto ERR;
+	}
 	bufferevent_setcb(ws_bev, ws_read_cb, NULL, wsevent_connection_cb, NULL);
 	bufferevent_enable(ws_bev, EV_READ|EV_WRITE);
 
+	int ret = 0;
     if (!auth_server->authserv_use_ssl) {
-	    bufferevent_socket_connect_hostname(ws_bev, ws_dnsbase, AF_INET, 
+	    ret = bufferevent_socket_connect_hostname(ws_bev, ws_dnsbase, AF_INET, 
             auth_server->authserv_hostname, auth_server->authserv_http_port); 
     } else {
-        bufferevent_socket_connect_hostname(ws_bev, ws_dnsbase, AF_INET, 
+        ret = bufferevent_socket_connect_hostname(ws_bev, ws_dnsbase, AF_INET, 
             auth_server->authserv_hostname, auth_server->authserv_ssl_port); 
     }
-	
+
+	if (ret < 0) {
+		debug(LOG_ERR, "ws connection error: %s\n", strerror(errno));
+		bufferevent_free(ws_bev);
+		goto ERR;
+	}
+
 	event_base_dispatch(ws_base);
 
-    event_base_free(ws_base);
+ERR:
+	if (ws_base) event_base_free(ws_base);
+	if (ws_dnsbase) evdns_base_free(ws_dnsbase, 0);
+	if (ws_bev) bufferevent_free(ws_bev);
 
     return;
 }
