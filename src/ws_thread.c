@@ -149,10 +149,6 @@ ws_receive(char *data, const size_t data_len){
 	if(data_len < 2)
 		return;
 
-	char temp[20] = {0};
-	strncpy(temp, data, data_len>=20?20:data_len);
-	debug(LOG_DEBUG, "first 3 char of data is %x %x %x\n", data[0], data[1], data[2]);
-	debug(LOG_DEBUG, "first 20 %s", temp);
 	int fin = !!(*data & 0x80);
 	int opcode = *data & 0x0F;
 	int mask = !!(*(data+1) & 0x80);
@@ -265,7 +261,24 @@ wsevent_connection_cb(struct bufferevent* b_ws, short events, void *ctx){
         debug (LOG_DEBUG,"connect ws server and start web socket request\n");
 		ws_request(b_ws);
         return;
-	}
+	} else if(events & (BEV_EVENT_ERROR | BEV_EVENT_EOF)){
+		debug(LOG_ERR, "ws connection error: %s\n", strerror(errno));
+		sleep(1);
+		// reconnect ws server
+		bufferevent_free(b_ws);
+		b_ws = bufferevent_socket_new(ws_base, -1, BEV_OPT_CLOSE_ON_FREE|BEV_OPT_DEFER_CALLBACKS);
+		bufferevent_setcb(b_ws, ws_read_cb, NULL, wsevent_connection_cb, NULL);
+		bufferevent_enable(b_ws, EV_READ|EV_WRITE);
+		t_auth_serv *auth_server = get_auth_server();
+		if (!auth_server->authserv_use_ssl) {
+		    bufferevent_socket_connect_hostname(b_ws, ws_dnsbase, AF_INET, 
+				auth_server->authserv_hostname, auth_server->authserv_http_port); 
+		} else {
+			bufferevent_socket_connect_hostname(b_ws, ws_dnsbase, AF_INET, 
+				auth_server->authserv_hostname, auth_server->authserv_ssl_port); 
+		}
+		upgraded = false;
+	} 
 }
 
 /*

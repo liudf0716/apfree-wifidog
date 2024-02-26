@@ -260,7 +260,7 @@ void thread_dhcp_cpi(const void *arg)
     }
 
     if (nfq_unbind_pf(nfq, AF_INET) < 0) {
-        debug (LOG_ERR, " nfq_unbind_pf failed");
+        debug (LOG_ERR, " nfq_unbind_pf failed: %s", strerror(errno));
         nfq_close(nfq);
         return;
     }
