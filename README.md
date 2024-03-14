@@ -3,6 +3,7 @@
 
 <img src="https://user-images.githubusercontent.com/1182593/213065247-9a3cb0a5-dd08-4383-b217-b141ad32e88a.png" alt="fabriclogo" width="400" height="400"/>
 
+</div>
 
 [![license][1]][2]
 [![PRs Welcome][3]][4]
@@ -18,7 +19,7 @@
 [4]: https://github.com/liudf0716/apfree_wifidog/pulls
 [5]: https://img.shields.io/badge/Issues-welcome-brightgreen.svg?style=plastic
 [6]: https://github.com/liudf0716/apfree_wifidog/issues/new
-[7]: https://img.shields.io/badge/release-3.11.1716-red.svg?style=plastic
+[7]: https://img.shields.io/badge/release-7.02.1977-red.svg?style=plastic
 [8]: https://github.com/liudf0716/apfree_wifidog/releases
 [11]: https://img.shields.io/badge/Platform-%20OpenWRT%20-brightgreen.svg?style=plastic
 [12]: https://github.com/openwrt
@@ -139,46 +140,6 @@ The above diagram is a flowchart of the user roam procedure for apfree-wifidog w
 6. Advanced rules management - The solution supports various rules such as MAC address based temporary pass, IP, domain, pan-domain, white-list, black-list and all of these rules can be applied without restarting the wifidog.
 
 
-----
-
-## How to integrate apfree-wifidog into Openwrt firmware 
-
-To add apfree-wifidog to the OpenWrt firmware, you can use the following steps:
-
-1. First, make sure that your OpenWrt build environment is set up and ready to use. If you have not set up your build environment yet, please refer to the OpenWrt documentation for instructions.
-
-2. Next, update the package feeds on your OpenWrt build environment by running the following command:
-
-```
-./scripts/feeds update -a
-./scripts/feeds install -a
-```
-
-3. Now, you can search for the apfree-wifidog package by running the following command:
-
-```
-make menuconfig
-```
-And navigate to the "Networking" -> "Captive portals" and you will find apfree-wifidog as one of the option.
-
-4. Select the apfree-wifidog package.
-
-5. Save the configuration changes by exiting the menuconfig tool and return to the command prompt
-
-5. Build the OpenWrt image by running the following command:
-
-```
-make
-```
-
-This will compile the OpenWrt image with the apfree-wifidog package included.
-
-7. Once the build process is complete, you can flash the new image to your device and start using apfree-wifidog as your captive portal solution.
-
-Note: As OpenWrt is a community driven project, the package may have been moved to another location or version.
-
-
---------
 ## How to use
 
 To use apfree-wifidog, you need to first build and configure an auth server. Once you have your auth server set up, you can configure apfree-wifidog to use it by setting the auth server's IP or domain as the location of your auth server in the apfree-wifidog configuration file.
@@ -194,7 +155,7 @@ After installing apfree-wifidog on your OpenWrt device, you can configure it by 
 ```
 config wifidog
         option gateway_interface 'br-lan' # specify the network interface for apfree-wifidog to use
-        option auth_server_hostname 'xfrpc.xyz' # set the auth server's hostname or IP address
+        option auth_server_hostname 'wifidogx.online' # set the auth server's hostname or IP address
         option auth_server_port 443 # set the auth server's port
         option auth_server_path '/wifidog/' # set the path to the auth server
         option check_interval 60 # set the interval at which clients check in with the auth server
