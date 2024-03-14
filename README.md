@@ -1,5 +1,7 @@
 
-![ApFreeWiFiDog](https://user-images.githubusercontent.com/1182593/213065247-9a3cb0a5-dd08-4383-b217-b141ad32e88a.png)
+<div align="center">
+
+<img src="https://user-images.githubusercontent.com/1182593/213065247-9a3cb0a5-dd08-4383-b217-b141ad32e88a.png" alt="fabriclogo" width="400" height="400"/>
 
 
 [![license][1]][2]
@@ -27,6 +29,14 @@
 ## ApFree WiFiDog: A high performance captive portal solution for HTTP(s)
 
 ApFree WiFiDog is an open-source, high-performance captive portal solution for HTTP(s) that can be used to authenticate users on wireless networks running on OpenWrt platform. It can handle high concurrency and high volume of traffic and supports both HTTP and HTTPS protocols. 
+
+## Introduction videos
+
+<div align="center">
+<a href="https://www.bilibili.com/video/BV18m411d7Yj/?vd_source=b303f6e8e0ed18809d8752d41ab1de7d">
+	<img width="972" alt="apfree-wifidog_intro_video" src="apfree-wifidog_intr.png">
+</a>
+</div>
 
 ## System Architecture
 
