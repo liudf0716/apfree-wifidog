@@ -1641,39 +1641,20 @@ fw4_counters_update()
 	for(i = 0; i < arraylen; i++) {
 		json_object *jobj = json_object_array_get_idx(jobj_nftables, i);
 		if (jobj == NULL) {
-			debug(LOG_ERR, "fw4_counters_update(): jobj is NULL");
 			continue;
 		}
 		// get rule json object
 		json_object *jobj_rule = NULL;
 		if (!json_object_object_get_ex(jobj, "rule", &jobj_rule)) {
-			debug(LOG_ERR, "fw4_counters_update(): jobj_rule is NULL");
 			continue;
 		}
 		// get expr json object
 		// the expr json object is an array of json objects
 		json_object *jobj_expr = NULL;
 		if (!json_object_object_get_ex(jobj_rule, "expr", &jobj_expr)) {
-			debug(LOG_ERR, "fw4_counters_update(): jobj_expr is NULL");
 			continue;
 		}
-		// iterate the expr array to get each json object
-		// find the json object which has the "counter" key
-		// find the json object which has the "match" key
-		/*
-		 {
-            "match": {
-              "op": "==",
-              "left": {
-                "payload": {
-                  "protocol": "ip",
-                  "field": "saddr"
-                }
-              },
-              "right": "192.168.1.18"
-            }
-          },
-		*/
+		
 		int j = 0;
 		int expr_arraylen = json_object_array_length(jobj_expr);
 		uint64_t packets = 0, bytes = 0;
@@ -1681,7 +1662,6 @@ fw4_counters_update()
 		for (; j < expr_arraylen; j++) {
 			json_object *jobj_expr_item = json_object_array_get_idx(jobj_expr, j);
 			if (jobj_expr_item == NULL) {
-				debug(LOG_INFO, "fw4_counters_update(): jobj_expr_item is NULL");
 				continue;
 			}
 			json_object *jobj_counter = NULL;
@@ -1692,11 +1672,9 @@ fw4_counters_update()
 				json_object *jobj_packets = NULL;
 				json_object *jobj_bytes = NULL;
 				if (!json_object_object_get_ex(jobj_counter, "packets", &jobj_packets)) {
-					debug(LOG_INFO, "fw4_counters_update(): jobj_packets is NULL");
 					continue;
 				}
 				if (!json_object_object_get_ex(jobj_counter, "bytes", &jobj_bytes)) {
-					debug(LOG_INFO, "fw4_counters_update(): jobj_bytes is NULL");
 					continue;
 				}
 				packets = json_object_get_int64(jobj_packets);
@@ -1704,13 +1682,11 @@ fw4_counters_update()
 			} else if (p1 == NULL && json_object_object_get_ex(jobj_expr_item, "match", &jobj_match)) {
 				json_object *jobj_match_right = NULL;
 				if (!json_object_object_get_ex(jobj_match, "right", &jobj_match_right)) {
-					debug(LOG_INFO, "fw4_counters_update(): jobj_match_right is NULL");
 					continue;
 				}
 				// get ip or mac address
 				const char *ip_or_mac = json_object_get_string(jobj_match_right);
 				if (ip_or_mac == NULL) {
-					debug(LOG_INFO, "fw4_counters_update(): ip_or_mac is NULL");
 					continue;
 				}
 				// find client by ip or mac address
@@ -1768,28 +1744,19 @@ fw4_counters_update()
 	for(i = 0; i < arraylen; i++) {
 		json_object *jobj = json_object_array_get_idx(jobj_nftables, i);
 		if (jobj == NULL) {
-			debug(LOG_INFO, "fw4_counters_update(): jobj is NULL");
 			continue;
 		}
 		json_object *jobj_rule = NULL;
 		if (!json_object_object_get_ex(jobj, "rule", &jobj_rule)) {
-			debug(LOG_ERR, "fw4_counters_update(): jobj_rule is NULL");
 			continue;
 		}
 		// get expr json object
 		// the expr json object is an array of json objects
 		json_object *jobj_expr = NULL;
 		if (!json_object_object_get_ex(jobj_rule, "expr", &jobj_expr)) {
-			debug(LOG_ERR, "fw4_counters_update(): jobj_expr is NULL");
 			continue;
 		}
-		// iterate the array of json objects in jobj_expr
-		// get the json object which has the "counter" key
-		// get the json object which has the "match" key
-		// get the json object which has the "right" key
-		// get the ip address from the json object which has the "right" key
-		// find client by ip address
-		// get packets and bytes
+		
 		int j = 0;
 		int expr_arraylen = json_object_array_length(jobj_expr);
 		uint64_t packets = 0;
@@ -1798,7 +1765,6 @@ fw4_counters_update()
 		for(; j < expr_arraylen; j++) {
 			json_object *jobj_expr_item = json_object_array_get_idx(jobj_expr, j);
 			if (jobj_expr_item == NULL) {
-				debug(LOG_INFO, "fw4_counters_update(): jobj_expr_item is NULL");
 				continue;
 			}
 			json_object *jobj_counter = NULL;
@@ -1809,11 +1775,9 @@ fw4_counters_update()
 				json_object *jobj_packets = NULL;
 				json_object *jobj_bytes = NULL;
 				if (!json_object_object_get_ex(jobj_counter, "packets", &jobj_packets)) {
-					debug(LOG_INFO, "fw4_counters_update(): jobj_packets is NULL");
 					continue;
 				}
 				if (!json_object_object_get_ex(jobj_counter, "bytes", &jobj_bytes)) {
-					debug(LOG_INFO, "fw4_counters_update(): jobj_bytes is NULL");
 					continue;
 				}
 				packets = json_object_get_int64(jobj_packets);
@@ -1821,13 +1785,11 @@ fw4_counters_update()
 			} else if (p1 == NULL && json_object_object_get_ex(jobj_expr_item, "match", &jobj_match)) {
 				json_object *jobj_match_right = NULL;
 				if (!json_object_object_get_ex(jobj_match, "right", &jobj_match_right)) {
-					debug(LOG_INFO, "fw4_counters_update(): jobj_match_right is NULL");
 					continue;
 				}
 				// get ip address from the json object which has the "right" key
 				const char *ip = json_object_get_string(jobj_match_right);
 				if (ip == NULL || is_valid_ip(ip) == 0) {
-					debug(LOG_INFO, "fw4_counters_update(): ip is NULL");
 					continue;
 				}
 				// find client by ip address
