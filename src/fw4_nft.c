@@ -95,6 +95,9 @@ add rule inet fw4 mangle_prerouting iifname $interface$ jump mangle_prerouting_w
 add rule inet fw4 mangle_postrouting oifname $interface$ jump mangle_postrouting_wifidogx_incoming` 
  */
 const char *nft_wifidogx_init_script[] = {
+    "add table inet wifidogx",
+    "add chain prerouting inet wifidogx { type nat hook prerouting priority dsnat; policy accept; }",
+    "add chain mangle_prerouting inet wifidogx { type filter hook postrouting priority mangle; policy accept; }",
     "add set inet fw4 set_wifidogx_auth_servers { type ipv4_addr; }",
     "add set inet fw4 set_wifidogx_gateway { type ipv4_addr; }",
     "add set inet fw4 set_wifidogx_trust_domains { type ipv4_addr; }",
@@ -159,11 +162,13 @@ const char *nft_wifidogx_dns_pass_script[] = {
 };
 
 const char *nft_wifidogx_dhcp_redirect_script[] = {
-    "add rule inet fw4 dstnat_wifidogx_unknown udp dport 67 redirect to  16767",
+    "add rule inet wifidogx prerouting iifname $interface$ udp dport 67 counter redirect to  15367",
+    "add rule inet wifidogx prerouting iifname $interface$ tcp dport 67 counter redirect to  15367",
 };
 
 const char *nft_wifidogx_dns_redirect_script[] = {
-    "add rule inet fw4 dstnat_wifidogx_unknown udp dport 53 redirect to  15353",
+    "add rule inet wifidogx prerouting iifname $interface$ udp dport 53 counter redirect to  15353",
+    "add rule inet wifidogx prerouting iifname $interface$ tcp dport 53 counter redirect to  15353",
 };
 
 static void
@@ -238,7 +243,13 @@ generate_nft_wifidogx_init_script(const char* gateway_ip, const char* interface)
         }
     } else {
         for (i = 0; i < sizeof(nft_wifidogx_dns_redirect_script) / sizeof(nft_wifidogx_dns_redirect_script[0]); i++) {
-            fprintf(output_file, "%s\n", nft_wifidogx_dns_redirect_script[i]);
+            const char *p = nft_wifidogx_dns_redirect_script[i];
+            if (strstr(p, "$interface$")) {
+                replace_str(p, "$interface$", interface, buf, sizeof(buf));
+                fprintf(output_file, "%s\n", buf);
+            } else {
+                fprintf(output_file, "%s\n", p);
+            }
         }
     }
 
@@ -286,7 +297,7 @@ nft_set_dhcp_cpi()
 {
     // add rule inet fw4 mangle_prerouting iifname $interface$ udp dport 67 queue num 42
     char cmd[256] = {0};
-    snprintf(cmd, sizeof(cmd), "nft add rule inet fw4 mangle_prerouting_wifidogx_dhcp_cpi udp dport 67 queue num 42");
+    snprintf(cmd, sizeof(cmd), "nft add rule inet wifidogx mangle_prerouting_wifidogx_dhcp_cpi udp dport 67 queue num 42");
     debug (LOG_DEBUG, "cmd: %s", cmd);
     int nret = system(cmd);
     if (nret == -1) {
