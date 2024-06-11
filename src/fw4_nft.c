@@ -293,11 +293,12 @@ nft_do_init_script_command()
 }
 
 static void
-nft_set_dhcp_cpi()
+nft_set_dhcp_cpi(const char *interface)
 {
     // add rule inet fw4 mangle_prerouting iifname $interface$ udp dport 67 queue num 42
     char cmd[256] = {0};
-    snprintf(cmd, sizeof(cmd), "nft add rule inet wifidogx mangle_prerouting_wifidogx_dhcp_cpi udp dport 67 queue num 42");
+    snprintf(cmd, sizeof(cmd), 
+        "nft add rule inet wifidogx mangle_prerouting iifname %s udp dport 67 queue num 42", interface);
     debug (LOG_DEBUG, "cmd: %s", cmd);
     int nret = system(cmd);
     if (nret == -1) {
@@ -370,7 +371,7 @@ nft_init(const char *gateway_ip, const char* interface)
     iptables_fw_set_authservers(NULL);
 
     if (config->dhcp_cpi_enable)
-        nft_set_dhcp_cpi();
+        nft_set_dhcp_cpi(interface);
 
     if (config->bypass_auth_enable)
         nft_set_bypass_auth(gateway_ip);
