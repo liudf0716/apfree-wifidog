@@ -96,8 +96,8 @@ add rule inet fw4 mangle_postrouting oifname $interface$ jump mangle_postrouting
  */
 const char *nft_wifidogx_init_script[] = {
     "add table inet wifidogx",
-    "add chain prerouting inet wifidogx { type nat hook prerouting priority dsnat; policy accept; }",
-    "add chain mangle_prerouting inet wifidogx { type filter hook postrouting priority mangle; policy accept; }",
+    "add chain  inet wifidogx prerouting{ type nat hook prerouting priority 0; policy accept; }",
+    "add chain  inet wifidogx mangle_prerouting { type filter hook postrouting priority 0; policy accept; }",
     "add set inet fw4 set_wifidogx_auth_servers { type ipv4_addr; }",
     "add set inet fw4 set_wifidogx_gateway { type ipv4_addr; }",
     "add set inet fw4 set_wifidogx_trust_domains { type ipv4_addr; }",
