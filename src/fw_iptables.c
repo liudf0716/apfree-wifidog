@@ -1199,6 +1199,7 @@ fw3_destroy(void)
 static int
 fw4_destroy(void)
 {
+	execute("nft delete table inet wifidogx", 0);
 	return execute("fw4 restart", 0);
 }
 
