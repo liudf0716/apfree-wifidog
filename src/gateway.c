@@ -46,6 +46,7 @@
 #include "wd_client.h"
 #include "dhcp_cpi.h"
 #include "ws_thread.h"
+#include "dns_forward.h"
 
 
 struct evbuffer *evb_internet_offline_page, *evb_authserver_offline_page;
@@ -64,6 +65,7 @@ static pthread_t tid_ssl_redirect;
 static pthread_t tid_mqtt_server;
 #endif
 static pthread_t tid_ws;
+static pthread_t tid_dns_forward;
 
 static int signals[] = { SIGTERM, SIGQUIT, SIGHUP, SIGINT, SIGPIPE, SIGCHLD, SIGUSR1 };
 static struct event *sev[sizeof(signals)/sizeof(int)];
@@ -232,10 +234,13 @@ termination_handler(int s)
         pthread_kill(tid_mqtt_server, SIGKILL);
     }
 #endif
-
     if (tid_ws && self != tid_ws) {
         debug(LOG_INFO, "Explicitly killing the websocket thread");
         pthread_kill(tid_ws, SIGKILL);
+    }
+    if (tid_dns_forward && self != tid_dns_forward) {
+        debug(LOG_INFO, "Explicitly killing the dns_forward thread");
+        pthread_kill(tid_dns_forward, SIGKILL);
     }
     debug(LOG_NOTICE, "Exiting...");
     exit(s == 0 ? EXIT_FAILURE : EXIT_SUCCESS);
@@ -414,6 +419,15 @@ threads_init(s_config *config)
         debug(LOG_INFO, "Failed to create a new thread (ws)");
     }
     pthread_detach(tid_ws);
+
+    if (config->enable_dns_forward) {
+        result = pthread_create(&tid_dns_forward, NULL, (void *)dns_forward_thread, NULL);
+        if (result != 0) {
+            debug(LOG_ERR, "FATAL: Failed to create a new thread (dns_forward) - exiting");
+            termination_handler(0);
+        }
+        pthread_detach(tid_dns_forward);
+    }
 }
 
 static void

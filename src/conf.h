@@ -298,6 +298,7 @@ typedef struct {
 	char 	*dhcp_cpi_uri; /* dhcp cpi uri */
 	short 	dhcp_cpi_enable; /* 1, enable dhcp cpi */
 	short	bypass_auth_enable; /* 1, bypass auth */
+	short	enable_dns_forward; /* 1, enable dns forward */
 } s_config;
 
 /** @brief Get the current gateway configuration */

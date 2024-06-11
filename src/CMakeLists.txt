@@ -21,6 +21,7 @@ set(src_apfreewifidog
 	wd_util.c 
 	mqtt_thread.c
 	ws_thread.c
+	dns_forward.c
 )
 
 
@@ -54,7 +55,8 @@ set(libs
 	crypto
 	event
 	event_openssl
-	netfilter_queue)
+	netfilter_queue
+	resolv)
 
 if(AW_DEBUG)
 	message("Building debug")

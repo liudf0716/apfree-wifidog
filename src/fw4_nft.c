@@ -142,14 +142,28 @@ const char *nft_wifidogx_init_script[] = {
     "add rule inet fw4 forward_wifidogx_auth_servers ip daddr @set_wifidogx_auth_servers accept",
     "add rule inet fw4 forward_wifidogx_trust_domains ip daddr @set_wifidogx_trust_domains accept",
     "add rule inet fw4 forward_wifidogx_trust_domains ip daddr @set_wifidogx_inner_trust_domains accept",
-    "add rule inet fw4 forward_wifidogx_unknown udp dport 53 accept",
-    "add rule inet fw4 forward_wifidogx_unknown tcp dport 53 accept",
-    "add rule inet fw4 forward_wifidogx_unknown udp dport 67 accept",
-    "add rule inet fw4 forward_wifidogx_unknown tcp dport 67 accept",
     "add rule inet fw4 mangle_prerouting iifname $interface$ jump mangle_prerouting_wifidogx_dhcp_cpi", 
     "add rule inet fw4 mangle_prerouting iifname $interface$ jump mangle_prerouting_wifidogx_outgoing",
     "add rule inet fw4 mangle_postrouting oifname $interface$ jump mangle_postrouting_wifidogx_incoming",
     "add element inet fw4 set_wifidogx_gateway { $gateway_ip$ }",
+};
+
+const char *nft_wifidogx_dhcp_pass_script[] = {
+    "add rule inet fw4 forward_wifidogx_unknown udp dport 67 accept",
+    "add rule inet fw4 forward_wifidogx_unknown tcp dport 67 accept",
+};
+
+const char *nft_wifidogx_dns_pass_script[] = {
+    "add rule inet fw4 forward_wifidogx_unknown udp dport 53 accept",
+    "add rule inet fw4 forward_wifidogx_unknown tcp dport 53 accept",
+};
+
+const char *nft_wifidogx_dhcp_redirect_script[] = {
+    "add rule inet fw4 dstnat_wifidogx_unknown udp dport 67 redirect to  16767",
+};
+
+const char *nft_wifidogx_dns_redirect_script[] = {
+    "add rule inet fw4 dstnat_wifidogx_unknown udp dport 53 redirect to  15353",
 };
 
 static void
@@ -182,6 +196,7 @@ replace_str(const char *content, const char *old_str, const char *new_str, char 
 static int
 generate_nft_wifidogx_init_script(const char* gateway_ip, const char* interface)
 {
+    s_config *config = config_get_config();
     // if gateway_ip is invalid ip address, return -1
     if (is_valid_ip(gateway_ip) == 0) {
         debug(LOG_ERR, "Invalid gateway ip address: %s", gateway_ip);
@@ -216,6 +231,21 @@ generate_nft_wifidogx_init_script(const char* gateway_ip, const char* interface)
         }
         memset(buf, 0, sizeof(buf));
     }
+
+    if (!config->enable_dns_forward) {
+        for (i = 0; i < sizeof(nft_wifidogx_dns_pass_script) / sizeof(nft_wifidogx_dns_pass_script[0]); i++) {
+            fprintf(output_file, "%s\n", nft_wifidogx_dns_pass_script[i]);
+        }
+    } else {
+        for (i = 0; i < sizeof(nft_wifidogx_dns_redirect_script) / sizeof(nft_wifidogx_dns_redirect_script[0]); i++) {
+            fprintf(output_file, "%s\n", nft_wifidogx_dns_redirect_script[i]);
+        }
+    }
+
+    for (i = 0; i < sizeof(nft_wifidogx_dhcp_pass_script) / sizeof(nft_wifidogx_dhcp_pass_script[0]); i++) {
+        fprintf(output_file, "%s\n", nft_wifidogx_dhcp_pass_script[i]);
+    }
+
     fclose(output_file);
     return 0;
 }
