@@ -32,7 +32,7 @@ strrstr(const char *haystack, const char *needle)
         return NULL;
     }
 
-    for (size_t i = haystack_len - needle_len; i >= 0; i--) {
+    for (size_t i = haystack_len - needle_len; i > 0; i--) {
         if (strncmp(haystack + i, needle, needle_len) == 0) {
             result = (char *)(haystack + i);
             break;
