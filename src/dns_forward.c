@@ -111,10 +111,7 @@ process_dns_response(unsigned char *response, int response_len) {
 
     // Parse the answer section
     for (int i = 0; i < ancount; i++) {
-        char answer_name[MAX_DNS_NAME] = {0};
-        parse_name(response, &ptr, answer_name);
-        debug(LOG_DEBUG, "Answer name: %s", answer_name);
-
+        // get the type and data length
         unsigned short type = ntohs(*(unsigned short *)ptr);
         ptr += 8; // Skip class, TTL, and data length
         unsigned short data_len = ntohs(*(unsigned short *)ptr);
