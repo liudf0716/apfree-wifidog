@@ -326,7 +326,14 @@ show_trusted_pdomains()
 static void
 wdctl_show_trusted_pan_domains(struct bufferevent *fd)
 {	
-    bufferevent_write(fd, "Yes", 3);
+    char *status = get_trusted_pan_domains_text();
+    if (status) {
+        size_t len = strlen(status);
+        bufferevent_write(fd, status, len);   /* XXX Not handling error because we'd just print the same log line. */
+        free(status);
+    } else 
+        bufferevent_write(fd, "No", 2);
+
 }
 
 char *

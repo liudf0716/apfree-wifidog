@@ -644,6 +644,38 @@ get_trusted_domains_text(void)
 }
 
 char *
+get_trusted_pan_domains_text(void)
+{
+	pstr_t *pstr = pstr_new();
+	s_config *config = config_get_config();
+	t_domain_trusted *domain_trusted = NULL;
+	
+	pstr_cat(pstr, "\nTrusted wildcard domains:\n");
+
+	LOCK_DOMAIN();
+	
+	for (domain_trusted = config->pan_domains_trusted; domain_trusted != NULL; domain_trusted = domain_trusted->next) {
+		pstr_append_sprintf(pstr, " %s ", domain_trusted->domain);
+		t_ip_trusted *ip_trusted = domain_trusted->ips_trusted;
+		if(ip_trusted != NULL) {
+			pstr_cat(pstr, "with ip:\n");
+			for (; ip_trusted != NULL; ip_trusted = ip_trusted->next) {
+				// convert uip to string
+				char ip[INET_ADDRSTRLEN] = {0};
+				inet_ntop(AF_INET, &ip_trusted->uip, ip, INET_ADDRSTRLEN);
+				pstr_append_sprintf(pstr, "  %s\n", ip);
+			}
+		} else {
+			pstr_cat(pstr, "\n");
+		}
+	}
+	
+	UNLOCK_DOMAIN();
+	
+	return pstr_to_string(pstr);
+}
+
+char *
 mqtt_get_serialize_maclist(int which)
 {
 	return get_serialize_maclist(which);
