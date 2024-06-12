@@ -42,6 +42,64 @@ strrstr(const char *haystack, const char *needle)
     return result;
 };
 
+static int 
+parse_dns_response_ex(unsigned char *response, int response_len) {
+    s_config *config = config_get_config();
+    unsigned char *ptr = response + 12; // Skip the DNS header
+    int qdcount = ntohs(*(unsigned short *)(response + 4));
+    int ancount = ntohs(*(unsigned short *)(response + 6));
+
+    // Skip the question section
+    for (int i = 0; i < qdcount; i++) {
+        while (*ptr != 0) ptr++;
+        ptr += 5; // Skip null byte, type, and class
+    }
+
+    // Parse the answer section
+    for (int i = 0; i < ancount; i++) {
+        char domain[256];
+        int len = 0;
+
+        while (*ptr != 0) {
+            if (*ptr >= 192) { // Handle pointers
+                ptr += 2;
+                break;
+            }
+            memcpy(domain + len, ptr + 1, *ptr);
+            len += *ptr;
+            domain[len++] = '.';
+            ptr += *ptr + 1;
+        }
+        domain[--len] = '\0'; // Null-terminate the domain string
+        ptr++;
+
+        unsigned short type = ntohs(*(unsigned short *)ptr);
+        ptr += 2;
+        ptr += 8; // Skip class, TTL, and data length
+        unsigned short data_len = ntohs(*(unsigned short *)ptr);
+        ptr += 2;
+
+        if (type == 1 && data_len == 4) { // Type A
+            char ip[INET_ADDRSTRLEN];
+            inet_ntop(AF_INET, ptr, ip, sizeof(ip));
+            t_domain_trusted *p = config->pan_domains_trusted;
+            while (p) {
+                if (strstr(domain, p->domain)) {
+                    t_ip_trusted *ip_entry = malloc(sizeof(t_ip_trusted));
+                    strcpy(ip_entry->ip, ip);
+                    ip_entry->next = p->ips_trusted;
+                    p->ips_trusted = ip_entry;
+                    printf("Trusted domain: %s -> %s\n", domain, ip);
+                    break;
+                }
+                p = p->next;
+            }
+        }
+        ptr += data_len;
+    }
+    return 0;
+}
+
 static void 
 process_dns_response(char *response, int response_len) 
 {
@@ -55,17 +113,24 @@ process_dns_response(char *response, int response_len)
     }
 
     int msg_count = ns_msg_count(handle, ns_s_an);
+    debug(LOG_DEBUG, "DNS response contains %d answers, response_len %d", msg_count, response_len);
     for (int i = 0; i < msg_count; i++) {
         ns_rr rr;
+        int nret;
         if (ns_parserr(&handle, ns_s_an, i, &rr) < 0) {
             debug(LOG_WARNING, "ns_parserr: %s", strerror(errno));
             continue;
         }
+        debug(LOG_DEBUG, "DNS response type: %d", ns_rr_type(rr));
 
         if (ns_rr_type(rr) == ns_t_a) {
             t_domain_trusted *p = NULL;
-            char domain[NS_MAXDNAME] = {0};
-            ns_name_uncompress(ns_msg_base(handle), ns_msg_end(handle), ns_rr_name(rr), domain, sizeof(domain));
+            char domain[4096] = {0};
+            nret = ns_name_uncompress(ns_msg_base(handle), ns_msg_end(handle), ns_rr_name(rr), domain, sizeof(domain));
+            if (nret < 0) {
+                debug(LOG_WARNING, "ns_name_uncompress: %s", strerror(errno));
+                continue;
+            }
             debug(LOG_DEBUG, "Get dns response domain: %s", domain);
             for (p = config->pan_domains_trusted; p; p = p->next) {
                 // reverse match the domain, check if the domain include p->domain
