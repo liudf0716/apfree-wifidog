@@ -93,7 +93,7 @@ process_dns_response(unsigned char *response, int response_len) {
         parse_name(response, &ptr, query_name);
         ptr += 4; // Skip QTYPE and QCLASS
     }
-    debug(LOG_DEBUG, "DNS query: %s", query_name);
+    debug(LOG_DEBUG, "DNS query: %s %x %x", query_name, *ptr, *(ptr + 1));
     // find the trusted domain in the query_name
     t_domain_trusted *p = config->pan_domains_trusted;
     while (p) {
