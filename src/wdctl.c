@@ -260,13 +260,8 @@ show_command(const char *type) {
 
 static void 
 add_command(const char *type, char *values) {
-    char *token = strtok(values, ",");
-    printf("Adding to %s: ", type);
-    while (token != NULL) {
-        printf("%s ", token);
-        token = strtok(NULL, ",");
-    }
-    printf("\n");
+    printf("Adding %s values is %s\n", type, values);
+    
     // Add the logic to add the values to domain|wildcard_domain|mac
     if (strcmp(type, "domain") == 0) {
         wdctl_command_action("add_trusted_domains", values);
