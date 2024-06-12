@@ -487,52 +487,11 @@ iptables_fw_set_user_domains_trusted(void)
 void
 iptables_fw_clear_ipset_domains_trusted(void)
 {
-#ifdef AW_FW3
-	char f_ipset_name[128] = {0};
-	snprintf(f_ipset_name, 128, "%s/%s", DNSMASQ_CONF_D, CHAIN_IPSET_TDOMAIN);
-
-	remove(f_ipset_name);
-	iptables_flush_ipset(CHAIN_IPSET_TDOMAIN);
-#else
-#endif
 }
 
 void
 iptables_fw_set_ipset_domains_trusted(void)
 {
-#ifdef AW_FW3
-	const s_config *config;
-	t_domain_trusted *domain_trusted = NULL;
-	FILE *fd_ipset = NULL;
-	char f_ipset_name[128] = {0};
-	int  has_content = 0;
-
-	config = config_get_config();
-
-	mkdir(DNSMASQ_CONF_D, S_IRWXU|S_IRWXG|S_IRWXO);
-	snprintf(f_ipset_name, 128, "%s/%s", DNSMASQ_CONF_D, CHAIN_IPSET_TDOMAIN);
-	fd_ipset = fopen(f_ipset_name, "w");
-	if(fd_ipset == NULL) {
-		return;
-	}
-
-	LOCK_DOMAIN();
-
-	for (domain_trusted = config->pan_domains_trusted; domain_trusted != NULL; domain_trusted = domain_trusted->next) {
-		has_content = 1;
-		fprintf(fd_ipset, "ipset=/.%s/%s\n", domain_trusted->domain, CHAIN_IPSET_TDOMAIN);
-	}
-
-	UNLOCK_DOMAIN();
-
-	fclose(fd_ipset);
-
-	if(!has_content)
-		remove(f_ipset_name);
-
-	iptables_flush_ipset(CHAIN_IPSET_TDOMAIN);
-#else
-#endif
 }
 
 void

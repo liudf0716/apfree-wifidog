@@ -37,7 +37,6 @@
 #define CHAIN_TO_INTERNET "WiFiDog_$ID$_Internet"
 #define CHAIN_INCOMING  "WiFiDog_$ID$_Incoming"
 #define CHAIN_AUTHSERVERS "WiFiDog_$ID$_AuthServers"
-#define	DNSMASQ_CONF_D	"/tmp/dnsmasq.d"
 #define CHAIN_IPSET_TDOMAIN	"WiFiDog_IPSET_TDomains"
 #define CHAIN_DOMAIN_TRUSTED "WiFiDog_$ID$_TDomains"
 #define CHAIN_INNER_DOMAIN_TRUSTED "WiFiDog_$ID$_ITDomains"

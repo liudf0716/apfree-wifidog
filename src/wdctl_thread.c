@@ -286,8 +286,6 @@ static void
 wdctl_add_trusted_pan_domains(struct bufferevent *fd, const char *arg)
 {
     add_trusted_pdomains(arg);
-    char *post_cmd = "CMD[/etc/init.d/dnsmasq restart]";
-    bufferevent_write(fd, post_cmd, strlen(post_cmd));
 }
 
 void 
@@ -303,8 +301,6 @@ static void
 wdctl_del_trusted_pan_domains(struct bufferevent *fd, const char *arg)
 {
     del_trusted_pdomains(arg);
-    char *post_cmd = "CMD[/etc/init.d/dnsmasq restart]";
-    bufferevent_write(fd, post_cmd, strlen(post_cmd));
 }
 
 void 
@@ -318,8 +314,6 @@ static void
 wdctl_clear_trusted_pan_domains(struct bufferevent *fd)
 {
 	clear_trusted_pdomains();
-    char *post_cmd = "CMD[/etc/init.d/dnsmasq restart]";
-    bufferevent_write(fd, post_cmd, strlen(post_cmd));
 }
 
 char *

@@ -303,7 +303,6 @@ display_help() {
     printf("wdctlx help|?\n");
     printf("wdctlx stop\n");
     printf("wdctlx reset\n");
-    printf("wdctlx demo\n");
     printf("wdctlx status\n");
 }
 
