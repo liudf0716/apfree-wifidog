@@ -204,7 +204,8 @@ typedef struct _popular_server_t {
  */
 
 typedef struct _ip_trusted_t {
-	char	ip[HTTP_IP_ADDR_LEN];
+	char ip[INET_ADDRSTRLEN];
+	unsigned int uip;
 	struct _ip_trusted_t *next;
 } t_ip_trusted;
 
