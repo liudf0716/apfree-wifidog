@@ -37,34 +37,36 @@
 static char *sk_name = NULL;
 char *progname = NULL;
 
-static void usage(void);
-static void parse_commandline(int, char **);
+static void show_command(const char *type);
+static void add_command(const char *type, char *values);
+static void clear_command(const char *type);
+static void display_help();
+static void stop_command();
+static void reset_command(const char *value);
+static void status_command();
+
+
 static void send_request(int, const char *);
 static void read_response(int);
-static void wdctl_cmd_process(int , char **, int);
 static void wdctl_command_action(const char *, const char *);
 static int connect_to_server(const char *);
 
-
+#if 0
 static struct wdctl_client_command {
     const char *command; // command name
     const char *cmd_args; // comand args demo
     const char *cmd_description; // help
 } wdctl_clt_cmd [] = {
     {"status", NULL, "get apfree wifidog status"},
-#ifdef AW_FW3
     {"clear_trusted_pdomains", NULL, "clear trusted pan-domain"},
     {"show_trusted_pdomains", NULL, "show trusted pan-domain"},
-#endif
     {"clear_trusted_iplist", NULL, "clear trusted iplist"},
     {"clear_trusted_domains", NULL, "clear trusted domain and it's ip"},
     {"show_trusted_domains", NULL, "show trusted domains and its ip"},
     {"show_trusted_mac", NULL, "show trusted mac list"},
     {"clear_trusted_mac", NULL, "clear trusted mac list"},
-#ifdef AW_FW3
     {"add_trusted_pdomains", "pan-domain1,pan-domain2...", "add one or more trusted pan-domain like qq.com..."},
     {"del_trusted_pdomains", "pan-domain1,pan-domain2...", "del one or more trusted pan-domain list like qq.com..."},
-#endif
     {"add_trusted_domains", "domain1,domain2...", "add trusted domain list like www.qq.com..."},
     {"del_trusted_domains", "domain1,domain2...", "del trusted domain list like www.qq.com...."},
     {"add_trusted_iplist", "ip1,ip2...", "add one or more trusted ip list like ip1,ip2..."},
@@ -79,122 +81,7 @@ static struct wdctl_client_command {
     {"stop", NULL, "stop apfree wifidog"},
     {"demo", NULL, "give some demonstration of method"},
 };
-
-/** 
- * @internal
- * @brief Print usage
- *
- * Prints usage, called when wdctl is run with -h or with an unknown option
- */
-static void
-usage(void)
-{
-    fprintf(stdout, "Usage: %s [options] command [arguments]\n", progname);
-    fprintf(stdout, "\n");
-    fprintf(stdout, "options:\n");
-    fprintf(stdout, "  -s <path>         Path to the socket\n");
-    fprintf(stdout, "  -h                Print usage\n");
-    fprintf(stdout, "\n");
-    fprintf(stdout, "commands arg\t description:\n");
-    for (int i = 0; i < ARRAYLEN(wdctl_clt_cmd); i++) {
-        fprintf(stdout, " %s %s\t %s \n", wdctl_clt_cmd[i].command, 
-            wdctl_clt_cmd[i].cmd_args?wdctl_clt_cmd[i].cmd_args:"", 
-            wdctl_clt_cmd[i].cmd_description);
-    }
-}
-
-static void
-list_all_method()
-{
-#define COMMAND_EQUAL(CMD) !strcmp(cmd,CMD)
-    const char *cmd = NULL;
-    for (int i = 0; i < ARRAYLEN(wdctl_clt_cmd); i++) {
-        cmd = wdctl_clt_cmd[i].command;
-        if (COMMAND_EQUAL("list"))
-            continue;
-        else if(COMMAND_EQUAL("add_online_client"))
-            fprintf(stdout, "%s %s {\"ip\":\"192.168.1.211\", \"mac\":\"aa:bb:cc:dd:ee:ff\", \"name\":\"apfree\"}\n", progname, cmd);
-        else if (COMMAND_EQUAL("add_trusted_domains"))
-            fprintf(stdout, "%s %s captive.apple.com,www.baidu.com,www.qq.com,www.alibaba.com,aaa,bbb\n", progname, cmd);
-        else if (COMMAND_EQUAL("add_trusted_pdomains"))
-            fprintf(stdout, "%s %s apple.com,baidu.com,qq.com,aa,bb\n", progname, cmd);
-        else if (COMMAND_EQUAL("add_trusted_mac"))
-            fprintf(stdout, "%s %s aa:bb:cc:11:22:33,11:22:33:aa:bb:cc:dd,22.22.22:aa:aa:aa\n", progname, cmd);
-        else if (COMMAND_EQUAL("add_trusted_iplist"))
-            fprintf(stdout, "%s %s 192.168.1.2,192.168.1.3,192.168.1.4\n", progname, cmd);
-        else
-            fprintf(stdout, "%s %s \n", progname, cmd);
-    }
-#undef COMMAND_EQUAL
-}
-
-static void
-wdctl_cmd_process(int argc, char **argv, int optind)
-{
-    if ((argc - optind) <= 0) {
-        goto ERR;
-    }
-
-    for (int i = 0; i < ARRAYLEN(wdctl_clt_cmd); i++) {
-        if (!strcmp(wdctl_clt_cmd[i].command, "demo")) {
-            list_all_method();
-            return;
-        }
-
-        if (!strcmp(wdctl_clt_cmd[i].command, *(argv+optind))) {
-            if ((argc - (optind + 1)) > 0 && wdctl_clt_cmd[i].cmd_args) {
-                wdctl_command_action(wdctl_clt_cmd[i].command, *(argv + optind + 1));
-            } else if ((argc - (optind + 1)) == 0 && !wdctl_clt_cmd[i].cmd_args)
-                wdctl_command_action(wdctl_clt_cmd[i].command, NULL);
-            else
-                goto ERR;
-
-            return;
-        }
-    }
-ERR:
-    fprintf(stderr, "wdctlx: Error: Invalid command \"%s\"\n", *(argv + optind));
-    usage();
-    exit(EXIT_FAILURE);
-}
-
-/** @internal
- *
- * Uses getopt() to parse the command line and set configuration values
- */
-void
-parse_commandline(int argc, char **argv)
-{
-    extern int optind;
-    int c;
-
-    progname = argv[0];
-
-    while (-1 != (c = getopt(argc, argv, "s:h"))) {
-        switch (c) {
-        case 'h':
-            usage();
-            exit(1);
-            break;
-
-        case 's':
-            if (optarg) {
-                sk_name = strdup(optarg);
-            }
-            break;
-
-        default:
-            usage();
-            exit(1);
-            break;
-        }
-    }
-
-    if (!sk_name) sk_name = strdup(DEFAULT_SOCK);
-
-    wdctl_cmd_process(argc, argv, optind);
-
-}
+#endif
 
 static int
 connect_to_server(const char *sock_name)
@@ -207,7 +94,12 @@ connect_to_server(const char *sock_name)
     }
     memset(&sa_un, 0, sizeof(sa_un));
     sa_un.sun_family = AF_UNIX;
-    strncpy(sa_un.sun_path, sock_name, (sizeof(sa_un.sun_path) - 1));
+    if (sock_name) {
+        strncpy(sa_un.sun_path, sock_name, (sizeof(sa_un.sun_path) - 1));
+    } else {
+        strncpy(sa_un.sun_path, DEFAULT_SOCK, (sizeof(sa_un.sun_path) - 1));
+    
+    }
 
     if (wd_connect(sock, (struct sockaddr *)&sa_un, strlen(sa_un.sun_path) + sizeof(sa_un.sun_family), 2)) {
         fprintf(stdout, "wdctl: wifidog probably not started (Error: %s)\n", strerror(errno));
@@ -296,5 +188,142 @@ wdctl_command_action(const char *cmd, const char *param)
 int
 main(int argc, char **argv)
 {
-    parse_commandline(argc, argv);
+    if (argc < 2) {
+        display_help();
+        return 1;
+    }
+
+    char *command = argv[1];
+    char *type = NULL;
+    char *values = NULL;
+
+    if (strcmp(command, "show") == 0 || strcmp(command, "add") == 0 || strcmp(command, "clear") == 0) {
+        if (argc < 3) {
+            printf("Error: Missing type argument\n");
+            return 1;
+        }
+        type = argv[2];
+    }
+
+    if (strcmp(command, "add") == 0) {
+        if (argc < 4) {
+            printf("Error: Missing values argument\n");
+            return 1;
+        }
+        values = argv[3];
+    }
+
+    if (strcmp(command, "reset") == 0) {
+        if (argc < 3) {
+            printf("Error: Missing reset argument\n");
+            return 1;
+        }
+        values = argv[2];
+    }
+
+    if (strcmp(command, "show") == 0) {
+        show_command(type);
+    } else if (strcmp(command, "add") == 0) {
+        add_command(type, values);
+    } else if (strcmp(command, "clear") == 0) {
+        clear_command(type);
+    } else if (strcmp(command, "help") == 0 || strcmp(command, "?") == 0) {
+        display_help();
+    } else if (strcmp(command, "stop") == 0) {
+        stop_command();
+    } else if (strcmp(command, "reset") == 0) {
+        reset_command(values);
+    } else if (strcmp(command, "status") == 0) {
+        status_command();
+    } else {
+        printf("Unknown command. Type 'wdctlx help' or 'wdctlx ?' for help.\n");
+        return 1;
+    }
+
+    return 0;
+}
+
+static void 
+show_command(const char *type) {
+    printf("Showing %s\n", type);
+    // Add the logic to show the domain|wildcard_domain|mac
+    if (strcmp(type, "domain") == 0) {
+        wdctl_command_action("show_trusted_domains", NULL);
+    } else if (strcmp(type, "wildcard_domain") == 0) {
+        wdctl_command_action("show_trusted_pdomains", NULL);
+    } else if (strcmp(type, "mac") == 0) {
+        wdctl_command_action("show_trusted_mac", NULL);
+    } else {
+        printf("Unknown type\n");
+    }
+}
+
+static void 
+add_command(const char *type, char *values) {
+    char *token = strtok(values, ",");
+    printf("Adding to %s: ", type);
+    while (token != NULL) {
+        printf("%s ", token);
+        token = strtok(NULL, ",");
+    }
+    printf("\n");
+    // Add the logic to add the values to domain|wildcard_domain|mac
+    if (strcmp(type, "domain") == 0) {
+        wdctl_command_action("add_trusted_domains", values);
+    } else if (strcmp(type, "wildcard_domain") == 0) {
+        wdctl_command_action("add_trusted_pdomains", values);
+    } else if (strcmp(type, "mac") == 0) {
+        wdctl_command_action("add_trusted_mac", values);
+    } else {
+        printf("Unknown type\n");
+    }
+}
+
+static void 
+clear_command(const char *type) {
+    printf("Clearing %s\n", type);
+    // Add the logic to clear the domain|wildcard_domain|mac
+    if (strcmp(type, "domain") == 0) {
+        wdctl_command_action("clear_trusted_domains", NULL);
+    } else if (strcmp(type, "wildcard_domain") == 0) {
+        wdctl_command_action("clear_trusted_pdomains", NULL);
+    } else if (strcmp(type, "mac") == 0) {
+        wdctl_command_action("clear_trusted_mac", NULL);
+    } else {
+        printf("Unknown type\n");
+    }
+}
+
+static void 
+display_help() {
+    printf("Commands:\n");
+    printf("wdctlx show domain|wildcard_domain|mac\n");
+    printf("wdctlx add domain|wildcard_domain|mac value1,value2...\n");
+    printf("wdctlx clear domain|wildcard_domain|mac\n");
+    printf("wdctlx help|?\n");
+    printf("wdctlx stop\n");
+    printf("wdctlx reset\n");
+    printf("wdctlx demo\n");
+    printf("wdctlx status\n");
+}
+
+static void 
+stop_command() {
+    printf("Stopping wdctlx\n");
+    // Add the logic to stop the process
+    wdctl_command_action("stop", NULL);
+}
+
+static void 
+reset_command(const char *value) {
+    printf("Resetting wdctlx\n");
+    // Add the logic to reset the process
+    wdctl_command_action("reset", value);
+}
+
+static void 
+status_command() {
+    printf("Status: Running\n");
+    // Add the logic to show the status
+    wdctl_command_action("status", NULL);
 }
