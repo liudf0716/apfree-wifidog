@@ -123,7 +123,7 @@ typedef enum {
 	oFW4Enable,
 	oDhcpOptionCpi,
 	oEnableDhcpOptionCpi,
-	oBypassAuthEnable,
+	oEnableBypassAuth,
 	oEnableDNSForward,
 	oEnableWS,
 } OpCodes;
@@ -189,7 +189,7 @@ static const struct {
 	"fw4enable",oFW4Enable},{
 	"dhcpoptioncpi",oDhcpOptionCpi},{
 	"enabledhcpoptioncpi",oEnableDhcpOptionCpi},{
-	"bypassauthenable",oBypassAuthEnable},{
+	"enablebypassauth",oEnableBypassAuth},{
 	"enablednsforward",oEnableDNSForward},{
 	"enablews",oEnableWS},{
     NULL, oBadOption},};
@@ -287,7 +287,7 @@ config_init(void)
 	config.mqtt_server  = mqtt_server;
 
 	config.fw4_enable = 1;
-	config.bypass_auth_enable = 0;
+	config.enable_bypass_auth = 0;
 	config.enable_dhcp_cpi = 0;
 	config.enable_dns_forward = 1;
 	config.enable_ws = 1;
@@ -1002,8 +1002,8 @@ config_read()
 				case oEnableDhcpOptionCpi:
 					config.enable_dhcp_cpi = parse_boolean_value(p1);
 					break;
-				case oBypassAuthEnable:
-					config.bypass_auth_enable = parse_boolean_value(p1);
+				case oEnableBypassAuth:
+					config.enable_bypass_auth = parse_boolean_value(p1);
 					break;
 				case oEnableDNSForward:
 					config.enable_dns_forward = parse_boolean_value(p1);

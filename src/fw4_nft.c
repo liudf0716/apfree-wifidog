@@ -373,7 +373,7 @@ nft_init(const char *gateway_ip, const char* interface)
     if (config->enable_dhcp_cpi)
         nft_set_dhcp_cpi(interface);
 
-    if (config->bypass_auth_enable)
+    if (config->enable_bypass_auth)
         nft_set_bypass_auth(gateway_ip);
 
     return 1;

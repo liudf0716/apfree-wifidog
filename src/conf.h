@@ -295,7 +295,7 @@ typedef struct {
 	int 	fw4_enable; /* 1, enable ipv4 firewall */
 	char 	*dhcp_cpi_uri; /* dhcp cpi uri */
 	short 	enable_dhcp_cpi; /* 1, enable dhcp cpi */
-	short	bypass_auth_enable; /* 1, bypass auth */
+	short	enable_bypass_auth; /* 1, bypass auth */
 	short	enable_dns_forward; /* 1, enable dns forward */
 	short	enable_ws; /* 1, enable websocket */
 } s_config;
