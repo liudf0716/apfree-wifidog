@@ -18,7 +18,7 @@ struct dns_query {
     socklen_t client_len;
     char buffer[512];
     int buffer_len;
-    struct event *dnsmasq_event;
+    struct event *dns_event;
 };
 
 static char *
@@ -147,10 +147,10 @@ process_dns_response(unsigned char *response, int response_len) {
 }
 
 static void 
-dnsmasq_read_cb(evutil_socket_t fd, short event, void *arg) 
+dns_read_cb(evutil_socket_t fd, short event, void *arg) 
 {
     struct dns_query *query = (struct dns_query *)arg;
-    char response[512];
+    unsigned char response[512] = {0};
     int response_len = recv(fd, response, sizeof(response), 0);
 
     if (response_len > 0) {
@@ -167,7 +167,7 @@ dnsmasq_read_cb(evutil_socket_t fd, short event, void *arg)
     }
 
     // Clean up
-    event_free(query->dnsmasq_event);
+    event_free(query->dns_event);
     close(fd);
     free(query);
 }
@@ -178,28 +178,28 @@ read_cb(evutil_socket_t fd, short event, void *arg)
     struct event_base *base = (struct event_base *)arg;
     struct sockaddr_in client_addr;
     socklen_t client_len = sizeof(client_addr);
-    char buffer[512];
+    char buffer[512] = {0};
 
     int recv_len = recvfrom(fd, buffer, sizeof(buffer), 0, (struct sockaddr *)&client_addr, &client_len);
     if (recv_len > 0) {
         debug(LOG_DEBUG, "Received DNS request");
 
-        // Forward DNS query to dnsmasq
-        int dnsmasq_sock = socket(AF_INET, SOCK_DGRAM, 0);
-        if (dnsmasq_sock < 0) {
+        // Forward DNS query to dns server
+        int dns_sock = socket(AF_INET, SOCK_DGRAM, 0);
+        if (dns_sock < 0) {
             debug(LOG_ERR, "socket: %s", strerror(errno));
             return;
         }
 
-        struct sockaddr_in dnsmasq_addr;
-        memset(&dnsmasq_addr, 0, sizeof(dnsmasq_addr));
-        dnsmasq_addr.sin_family = AF_INET;
-        dnsmasq_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
-        dnsmasq_addr.sin_port = htons(LOCAL_DNS_PORT);
+        struct sockaddr_in dns_addr;
+        memset(&dns_addr, 0, sizeof(dns_addr));
+        dns_addr.sin_family = AF_INET;
+        dns_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
+        dns_addr.sin_port = htons(LOCAL_DNS_PORT);
 
-        if (sendto(dnsmasq_sock, buffer, recv_len, 0, (struct sockaddr *)&dnsmasq_addr, sizeof(dnsmasq_addr)) < 0) {
+        if (sendto(dns_sock, buffer, recv_len, 0, (struct sockaddr *)&dns_addr, sizeof(dns_addr)) < 0) {
             debug(LOG_ERR, "sendto: %s", strerror(errno));
-            close(dnsmasq_sock);
+            close(dns_sock);
             return;
         }
 
@@ -207,7 +207,7 @@ read_cb(evutil_socket_t fd, short event, void *arg)
         struct dns_query *query = (struct dns_query *)malloc(sizeof(struct dns_query));
         if (!query) {
             debug(LOG_ERR, "malloc: %s", strerror(errno));
-            close(dnsmasq_sock);
+            close(dns_sock);
             return;
         }
         query->client_fd = fd;
@@ -216,20 +216,20 @@ read_cb(evutil_socket_t fd, short event, void *arg)
         memcpy(query->buffer, buffer, recv_len);
         query->buffer_len = recv_len;
 
-        // Set up an event to listen for dnsmasq's response
-        query->dnsmasq_event = event_new(base, dnsmasq_sock, EV_READ | EV_PERSIST, dnsmasq_read_cb, query);
-        if (!query->dnsmasq_event) {
+        // Set up an event to listen for dns server's response
+        query->dns_event = event_new(base, dns_sock, EV_READ | EV_PERSIST, dns_read_cb, query);
+        if (!query->dns_event) {
             debug(LOG_ERR, "event_new: %s", strerror(errno));
             free(query);
-            close(dnsmasq_sock);
+            close(dns_sock);
             return;
         }
 
-        if (event_add(query->dnsmasq_event, NULL) < 0) {
+        if (event_add(query->dns_event, NULL) < 0) {
             debug(LOG_ERR, "event_add: %s", strerror(errno));
-            event_free(query->dnsmasq_event);
+            event_free(query->dns_event);
             free(query);
-            close(dnsmasq_sock);
+            close(dns_sock);
             return;
         }
     }
