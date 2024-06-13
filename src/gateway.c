@@ -388,13 +388,14 @@ threads_init(s_config *config)
     }
     pthread_detach(tid_fw_counter);
 
-    /* Start dhcp cpi thread */
-    result = pthread_create(&tid_fw_counter, NULL, (void *)thread_dhcp_cpi, NULL);
-    if (result != 0) {
-        debug(LOG_ERR, "FATAL: Failed to create a new thread (dhcp_cpi) - exiting");
-        termination_handler(0);
+    if (config->enable_dhcp_cpi) {
+        result = pthread_create(&tid_fw_counter, NULL, (void *)thread_dhcp_cpi, NULL);
+        if (result != 0) {
+            debug(LOG_ERR, "FATAL: Failed to create a new thread (dhcp_cpi) - exiting");
+            termination_handler(0);
+        }
+        pthread_detach(tid_fw_counter);
     }
-    pthread_detach(tid_fw_counter);
 
 #ifdef	_MQTT_SUPPORT_
     // start mqtt subscript thread

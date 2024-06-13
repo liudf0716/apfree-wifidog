@@ -122,7 +122,7 @@ typedef enum {
 	oDNSTimeout,
 	oFW4Enable,
 	oDhcpOptionCpi,
-	oDhcpOptionCpiEnable,
+	oEnableDhcpOptionCpi,
 	oBypassAuthEnable,
 	oEnableDNSForward,
 	oEnableWS,
@@ -188,7 +188,7 @@ static const struct {
 	"dnstimeout",oDNSTimeout},{
 	"fw4enable",oFW4Enable},{
 	"dhcpoptioncpi",oDhcpOptionCpi},{
-	"dhcpoptioncpienable",oDhcpOptionCpiEnable},{
+	"enabledhcpoptioncpi",oEnableDhcpOptionCpi},{
 	"bypassauthenable",oBypassAuthEnable},{
 	"enablednsforward",oEnableDNSForward},{
 	"enablews",oEnableWS},{
@@ -288,7 +288,7 @@ config_init(void)
 
 	config.fw4_enable = 1;
 	config.bypass_auth_enable = 0;
-	config.dhcp_cpi_enable = 0;
+	config.enable_dhcp_cpi = 0;
 	config.enable_dns_forward = 1;
 	config.enable_ws = 1;
 
@@ -999,8 +999,8 @@ config_read()
 				case oDhcpOptionCpi:
 					config.dhcp_cpi_uri = safe_strdup(p1);
 					break;
-				case oDhcpOptionCpiEnable:
-					config.dhcp_cpi_enable = parse_boolean_value(p1);
+				case oEnableDhcpOptionCpi:
+					config.enable_dhcp_cpi = parse_boolean_value(p1);
 					break;
 				case oBypassAuthEnable:
 					config.bypass_auth_enable = parse_boolean_value(p1);

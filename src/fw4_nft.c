@@ -370,7 +370,7 @@ nft_init(const char *gateway_ip, const char* interface)
     // add auth server ip to firewall
     iptables_fw_set_authservers(NULL);
 
-    if (config->dhcp_cpi_enable)
+    if (config->enable_dhcp_cpi)
         nft_set_dhcp_cpi(interface);
 
     if (config->bypass_auth_enable)
