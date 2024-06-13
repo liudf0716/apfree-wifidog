@@ -42,29 +42,29 @@ strrstr(const char *haystack, const char *needle)
     return result;
 };
 
-static void 
-parse_name(unsigned char *response, unsigned char **ptr, char *name) {
-    int jumped = 0, offset;
-    unsigned char *pos = *ptr;
-    char *name_pos = name;
+static unsigned char *
+parse_dns_query_name(unsigned char *query, char *name) {
+    unsigned char *ptr = query;
+    char *name_ptr = name;
 
-    while (*pos) {
-        if (*pos >= 192) {
-            offset = ((*pos) << 8 | *(pos + 1)) & 0x3FFF;
-            pos = response + offset;
-            jumped = 1;
-        } else {
-            int segment_len = *pos;
-            pos++;
-            memcpy(name_pos, pos, segment_len);
-            name_pos += segment_len;
-            pos += segment_len;
-            *name_pos++ = '.';
+    while (*ptr != 0) {
+        // Get the length of the next label
+        int len = *ptr++;
+
+        // Copy the label to the name
+        for (int i = 0; i < len; i++) {
+            *name_ptr++ = *ptr++;
         }
-        if (!jumped) (*ptr)++;
+
+        // Add a dot between labels
+        *name_ptr++ = '.';
     }
-    *name_pos = '\0';
-    if (!jumped) (*ptr)++;
+
+    // Replace the last dot with a null terminator
+    *--name_ptr = '\0';
+
+    // Return the pointer to the end of the query
+    return ptr + 1;
 }
 
 static int 
@@ -90,7 +90,7 @@ process_dns_response(unsigned char *response, int response_len) {
     // Skip the question section
     assert(qdcount == 1); // Only handle one question (A record)
     for (int i = 0; i < qdcount; i++) {
-        parse_name(response, &ptr, query_name);
+        ptr = parse_dns_query_name(ptr, query_name);
         ptr += 4; // Skip QTYPE and QCLASS
     }
     debug(LOG_DEBUG, "DNS query: %s %x %x", query_name, *ptr, *(ptr + 1));
@@ -111,6 +111,7 @@ process_dns_response(unsigned char *response, int response_len) {
 
     // Parse the answer section
     for (int i = 0; i < ancount; i++) {
+        ptr += 2; // Skip the name
         // get the type and data length
         unsigned short type = ntohs(*(unsigned short *)ptr);
         ptr += 8; // Skip class, TTL, and data length
