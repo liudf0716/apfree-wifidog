@@ -105,9 +105,6 @@ typedef enum {
 	oInnerTrustedDomains,
 	oUntrustedMACList,
 	oJsFilter,
-	oPoolMode,
-	oThreadNumber,
-	oQueueSize,
 	oWiredPassed,
 	oParseChecked,
 	oTrustedIpList,
@@ -173,9 +170,6 @@ static const struct {
 	"trustedDomains", oTrustedDomains}, {
 	"untrustedmaclist", oUntrustedMACList}, {
 	"jsFilter", oJsFilter}, {
-	"poolMode", oPoolMode}, {
-	"threadNumber", oThreadNumber}, {
-	"queueSize", oQueueSize}, {
 	"wiredPassed", oWiredPassed}, {
 	"parseChecked", oParseChecked}, {
 	"trustedIpList", oTrustedIpList}, {
@@ -252,9 +246,6 @@ config_init(void)
 	config.internet_offline_file	= safe_strdup(DEFAULT_INTERNET_OFFLINE_FILE);
 	config.authserver_offline_file	= safe_strdup(DEFAULT_AUTHSERVER_OFFLINE_FILE);
 	config.js_redir 		= 1; // default enable it
-	config.pool_mode		= 1;
-	config.thread_number 	= 10; // only valid when poolMode == 1
-	config.queue_size 		= 30; // only valid when poolMode == 1
 	config.wired_passed		= 1; // default wired device no need login
 	config.parse_checked	= 1; // before parse domain's ip; fping check it
 	config.no_auth 			= 0; //
@@ -974,15 +965,6 @@ config_read()
 					break;
 				case oJsFilter:
 					config.js_redir = parse_boolean_value(p1);
-					break;
-				case oPoolMode:
-					config.pool_mode = parse_boolean_value(p1);
-					break;
-				case oThreadNumber:
-					sscanf(p1, "%hd", &config.thread_number);
-					break;
-				case oQueueSize:
-					sscanf(p1, "%hd", &config.queue_size);
 					break;
 				case oWiredPassed:
 					config.wired_passed = parse_boolean_value(p1);

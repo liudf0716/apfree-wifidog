@@ -287,9 +287,6 @@ typedef struct {
 	short	wired_passed; /** 1 wired device no need to auth */
 	short	parse_checked; 
 	short	js_redir; /** boolean, whether to enable javascript to redirect url request to auth server */
-	short	pool_mode;
-	short	thread_number;
-	short	queue_size;
 	short	no_auth;
 	short	work_mode; /** when work_mode 1, it will drop all packets default*/
 	short	bypass_apple_cna; /* 1, Bypass Apple Captive Network Assistant  2, apple no portal appear */
