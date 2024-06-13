@@ -136,7 +136,7 @@ process_dns_response(unsigned char *response, int response_len) {
                 new_ip_trusted->next = p->ips_trusted;
                 p->ips_trusted = new_ip_trusted;
                 char cmd[128] = {0};
-                snprintf(cmd, sizeof(cmd), "nft add element set wifidogx_inner_trust_domains %s", ip);
+                snprintf(cmd, sizeof(cmd), "nft add element inet fw4 set_wifidogx_inner_trust_domains { %s }", ip);
                 system(cmd);
             }
         }
