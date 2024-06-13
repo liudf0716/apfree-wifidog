@@ -286,6 +286,7 @@ static void
 wdctl_add_trusted_pan_domains(struct bufferevent *fd, const char *arg)
 {
     add_trusted_pdomains(arg);
+    bufferevent_write(fd, "Yes", 3);
 }
 
 void 
