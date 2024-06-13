@@ -145,8 +145,7 @@ ws_send(struct evbuffer *buf, const char *msg, const size_t len)
 }
 
 static void 
-ws_receive(char *data, const size_t data_len){
-    debug (LOG_DEBUG, "ws receive data %d\n", data_len);
+ws_receive(unsigned char *data, const size_t data_len){
 	if(data_len < 2)
 		return;
 
@@ -157,6 +156,9 @@ ws_receive(char *data, const size_t data_len){
 
 	size_t header_len = 2 + (mask ? 4 : 0);
 	
+	debug(LOG_DEBUG, "ws receive fin %d opcode %d data_len %d mask %d head_len %d payload_len %d\n", 
+		fin, opcode, data_len, mask, header_len, payload_len);
+
 	if(payload_len < 126){
 		if(header_len > data_len)
 			return;
@@ -180,7 +182,7 @@ ws_receive(char *data, const size_t data_len){
 		return;
 
 
-	const unsigned char* mask_key = data + header_len - 4;
+	unsigned char* mask_key = data + header_len - 4;
 	debug(LOG_DEBUG, "ws receive opcode %d data_len %d mask %d head_len %d payload_len %d\n", 
 		opcode, data_len, mask, header_len, payload_len);
 	for(int i = 0; mask && i < payload_len; i++)
@@ -235,7 +237,7 @@ ws_read_cb(struct bufferevent *b_ws, void *ctx)
 {
 	struct evbuffer *input = bufferevent_get_input(b_ws);
     debug (LOG_DEBUG, "ws_read_cb : upgraded is %d\n", upgraded);
-	char data[1024] = {0};
+	unsigned char data[1024] = {0};
 	int pos = 0;
 	int data_len = 0;
 	while((data_len = evbuffer_get_length(input)) > 0){

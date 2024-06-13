@@ -218,7 +218,6 @@ static enum MangleResult mangleOptions(const uint8_t *origData, size_t origDataS
     /* Start with position of the first DHCP option: */
     size_t origOffset = offsetof(struct Packet, bootp) + sizeof(struct BootP);
     size_t newOffset = origOffset;
-    size_t padCount = 0;
     s_config *config = config_get_config();
 
     while (origOffset < origDataSize)
