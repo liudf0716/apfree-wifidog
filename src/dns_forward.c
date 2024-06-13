@@ -154,7 +154,7 @@ dnsmasq_read_cb(evutil_socket_t fd, short event, void *arg)
     int response_len = recv(fd, response, sizeof(response), 0);
 
     if (response_len > 0) {
-        debug(LOG_DEBUG, "Received DNS response from dnsmasq");
+        debug(LOG_DEBUG, "Received DNS response from local dns server");
 
         // Process DNS response for trusted domains
         process_dns_response(response, response_len);
