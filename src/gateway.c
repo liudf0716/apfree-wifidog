@@ -413,12 +413,14 @@ threads_init(s_config *config)
     }
     pthread_detach(tid_wdctl);
 
-     /* Start control thread */
-    result = pthread_create(&tid_ws, NULL, (void *)start_ws_thread, NULL);
-    if (result != 0) {
-        debug(LOG_INFO, "Failed to create a new thread (ws)");
+    if (config->enable_ws) {
+        result = pthread_create(&tid_ws, NULL, (void *)start_ws_thread, NULL);
+        if (result != 0) {
+            debug(LOG_INFO, "Failed to create a new thread (ws)");
+            termination_handler(0);
+        }
+        pthread_detach(tid_ws);
     }
-    pthread_detach(tid_ws);
 
     if (config->enable_dns_forward) {
         result = pthread_create(&tid_dns_forward, NULL, (void *)dns_forward_thread, NULL);

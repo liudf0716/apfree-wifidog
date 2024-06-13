@@ -128,6 +128,7 @@ typedef enum {
 	oDhcpOptionCpiEnable,
 	oBypassAuthEnable,
 	oEnableDNSForward,
+	oEnableWS,
 } OpCodes;
 
 /** @internal
@@ -196,6 +197,7 @@ static const struct {
 	"dhcpoptioncpienable",oDhcpOptionCpiEnable},{
 	"bypassauthenable",oBypassAuthEnable},{
 	"enablednsforward",oEnableDNSForward},{
+	"enablews",oEnableWS},{
     NULL, oBadOption},};
 
 static void config_notnull(const void *, const char *);
@@ -296,7 +298,8 @@ config_init(void)
 	config.fw4_enable = 1;
 	config.bypass_auth_enable = 0;
 	config.dhcp_cpi_enable = 0;
-	config.enable_dns_forward = 0;
+	config.enable_dns_forward = 1;
+	config.enable_ws = 1;
 
 	debugconf.log_stderr = 1;
 	debugconf.debuglevel = DEFAULT_DEBUGLEVEL;
@@ -1022,6 +1025,9 @@ config_read()
 					break;
 				case oEnableDNSForward:
 					config.enable_dns_forward = parse_boolean_value(p1);
+					break;
+				case oEnableWS:
+					config.enable_ws = parse_boolean_value(p1);
 					break;
 				case oBadOption:
 					/* FALL THROUGH */
