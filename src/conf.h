@@ -447,9 +447,9 @@ extern char	*g_channel_path;
 extern char	*g_ssid;
 
 #define	LOCK_DOMAIN() do { \
-	debug(LOG_INFO, "Locking domain"); \
+	debug(LOG_DEBUG, "Locking domain"); \
 	pthread_mutex_lock(&domains_mutex);	\
-	debug(LOG_INFO, "Domains locked"); \
+	debug(LOG_DEBUG, "Domains locked"); \
 } while (0)
 
 #define UNLOCK_DOMAIN() do { \
