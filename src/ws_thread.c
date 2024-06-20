@@ -76,6 +76,15 @@ process_ws_msg(const char *msg)
 			if (client_name != NULL) {
 				client->name = strdup(json_object_get_string(client_name));
 			}
+			client->first_login = time(NULL);
+			client->is_online = 1;
+			{
+				LOCK_OFFLINE_CLIENT_LIST();
+				t_offline_client *o_client = offline_client_list_find_by_mac(client->mac);    
+				if(o_client)
+					offline_client_list_delete(o_client);
+				UNLOCK_OFFLINE_CLIENT_LIST();
+			}
 			debug(LOG_DEBUG, "fw_allow client: token %s, client_ip %s, client_mac %s\n", token_str, client_ip_str, client_mac_str);
 		} else {
 			debug(LOG_DEBUG, "client already exists: token %s, client_ip %s, client_mac %s\n", token_str, client_ip_str, client_mac_str);
