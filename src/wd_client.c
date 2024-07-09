@@ -213,7 +213,8 @@ wd_make_request(struct wd_request_context *request_ctx,
 	struct bufferevent *bev = request_ctx->bev;
 	struct event_base *base = request_ctx->base;
 	t_auth_serv *auth_server = get_auth_server();
-
+	
+	debug(LOG_DEBUG, "auth_server->authserv_use_ssl: %d", auth_server->authserv_use_ssl);
 	if (!auth_server->authserv_use_ssl) {
 		*evcon = evhttp_connection_base_bufferevent_new(base, NULL, bev,
 				auth_server->authserv_hostname, auth_server->authserv_http_port);

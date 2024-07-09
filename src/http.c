@@ -155,18 +155,20 @@ process_apple_wisper(struct evhttp_request *req, const char *mac, const char *re
  * 
  * @param req  The http request
  * @param type 1: internet not online
- *             other: auth server ont online
+ *             other: auth server offline
  */
 void
 ev_http_reply_client_error(struct evhttp_request *req, enum reply_client_error_type type)
 {
     switch(type) {
     case INTERNET_OFFLINE:
-        evhttp_send_reply(req, 200, "OK", evb_internet_offline_page);
+        //evhttp_send_reply(req, 200, "OK", evb_internet_offline_page);
+        evhttp_send_error(req, 200, "Internet is offline");
         break;
     case AUTHSERVER_OFFLINE:
     default:
-        evhttp_send_reply(req, 200, "OK", evb_authserver_offline_page);
+        //evhttp_send_reply(req, 200, "OK", evb_authserver_offline_page);
+        evhttp_send_error(req, 200, "Auth server is offline");
         break;
     }
 }
@@ -239,11 +241,13 @@ void
 ev_http_callback_404(struct evhttp_request *req, void *arg)
 {
     if (!is_online()) {
+        debug(LOG_INFO, "Internet is offline");
         ev_http_reply_client_error(req, INTERNET_OFFLINE);
         return;
     }  
 
     if (!is_auth_online()) {
+        debug(LOG_INFO, "Auth server is offline");
         ev_http_reply_client_error(req, AUTHSERVER_OFFLINE);
         return;
     } 

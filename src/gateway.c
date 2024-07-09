@@ -477,6 +477,9 @@ http_redir_loop(s_config *config)
 	if (!request_ctx) termination_handler(0);
 	
 	wd_signals_init(base);
+    
+    setbuf(stdout, NULL);
+    setbuf(stderr, NULL);
 	
     evhttp_set_cb(http, "/wifidog", ev_http_callback_wifidog, NULL);
     //evhttp_set_cb(http, "/wifidog/status", ev_http_callback_status, NULL);
@@ -489,6 +492,9 @@ http_redir_loop(s_config *config)
     evhttp_bind_socket_with_handle(http, config->gw_address, config->gw_port);
 
     event_base_dispatch(base);
+
+    evhttp_free(http);
+    event_base_free(base);
 }
 
 /**@internal

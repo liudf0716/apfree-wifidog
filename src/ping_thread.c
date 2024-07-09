@@ -72,8 +72,11 @@ ping_work_cb(evutil_socket_t fd, short event, void *arg) {
 	struct sys_info info;
 	memset(&info, 0, sizeof(info));
 
-	if (wd_make_request(request_ctx, &evcon, &req, process_ping_response)) return;
-		
+	if (wd_make_request(request_ctx, &evcon, &req, process_ping_response)) {
+		debug(LOG_ERR, "Failed to make request to auth server");
+		return;
+	}
+
 	get_sys_info(&info);
 	char *uri = get_ping_uri(&info);
 	if (!uri) return; // impossibe 
@@ -285,7 +288,8 @@ process_ping_response(struct evhttp_request *req, void *ctx)
         }
     } else if (strstr(buffer, "Pong") == 0) {
 		mark_auth_offline();
-        debug(LOG_WARNING, "Auth server did NOT say Pong!");
+        debug(LOG_WARNING, "Auth server did NOT say Pong! the response [%s], error: %s", 
+			buffer, strerror(errno));
         if (!authdown) {
             fw_set_authdown();
             authdown = 1;
