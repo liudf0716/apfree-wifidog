@@ -37,9 +37,6 @@
 #include "wd_client.h"
 #include "http.h"
 
-extern struct evbuffer *evb_internet_offline_page, *evb_authserver_offline_page;
-extern struct redir_file_buffer *wifidog_redir_html;
-
 static struct event_base *base		= NULL;
 static struct evdns_base *dnsbase 	= NULL;
 

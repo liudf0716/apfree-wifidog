@@ -66,6 +66,7 @@
 
 extern struct evbuffer *evb_internet_offline_page, *evb_authserver_offline_page;
 extern struct redir_file_buffer *wifidog_redir_html;
+extern pthread_mutex_t g_resource_lock;
 
 const char *apple_domains[] = {
 					"captive.apple.com",
@@ -160,17 +161,24 @@ process_apple_wisper(struct evhttp_request *req, const char *mac, const char *re
 void
 ev_http_reply_client_error(struct evhttp_request *req, enum reply_client_error_type type)
 {
+    struct evbuffer *evb = evbuffer_new();
     switch(type) {
     case INTERNET_OFFLINE:
-        //evhttp_send_reply(req, 200, "OK", evb_internet_offline_page);
-        evhttp_send_error(req, 200, "Internet is offline");
+        // lock extern pthread_mutex_t g_resource_lock;
+        pthread_mutex_lock(&g_resource_lock);
+        // copy evb_internet_offline_page to evb
+        evbuffer_add(evb, evbuffer_pullup(evb_internet_offline_page, -1), evbuffer_get_length(evb_internet_offline_page));
+        pthread_mutex_unlock(&g_resource_lock);
         break;
     case AUTHSERVER_OFFLINE:
     default:
-        //evhttp_send_reply(req, 200, "OK", evb_authserver_offline_page);
-        evhttp_send_error(req, 200, "Auth server is offline");
+        pthread_mutex_lock(&g_resource_lock);
+        evbuffer_add(evb, evbuffer_pullup(evb_authserver_offline_page, -1), evbuffer_get_length(evb_authserver_offline_page));
+        pthread_mutex_unlock(&g_resource_lock);
         break;
     }
+    evhttp_send_reply(req, 200, "OK", evb);
+    evbuffer_free(evb);
 }
 
 /**
@@ -630,9 +638,11 @@ ev_http_send_js_redirect(struct evhttp_request *req, const char *redir_url)
         return;
     }
 	
-	evbuffer_add(evb, wifidog_redir_html->front, wifidog_redir_html->front_len);
+    pthread_mutex_lock(&g_resource_lock);
+    evbuffer_add(evb, wifidog_redir_html->front, wifidog_redir_html->front_len);
     evbuffer_add_printf(evb, WIFIDOG_REDIR_HTML_CONTENT, redir_url);
-	evbuffer_add(evb, wifidog_redir_html->rear, wifidog_redir_html->rear_len);
+    evbuffer_add(evb, wifidog_redir_html->rear, wifidog_redir_html->rear_len);
+    pthread_mutex_unlock(&g_resource_lock);
 
     evhttp_add_header(evhttp_request_get_output_headers(req),
 		    "Content-Type", "text/html");

@@ -48,7 +48,7 @@
 #include "ws_thread.h"
 #include "dns_forward.h"
 
-
+pthread_mutex_t g_resource_lock = PTHREAD_MUTEX_INITIALIZER;
 struct evbuffer *evb_internet_offline_page, *evb_authserver_offline_page;
 struct redir_file_buffer *wifidog_redir_html;
 time_t started_time;
