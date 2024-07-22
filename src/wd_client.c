@@ -150,6 +150,12 @@ wd_request_loop(void (*callback)(evutil_socket_t, short, void *))
 	SSL *ssl = SSL_new(ssl_ctx);
 	if (!ssl) termination_handler(0);
 
+	// authserv_hostname is the hostname of the auth server, must be domain name
+    if (!SSL_set_tlsext_host_name(ssl, get_auth_server()->authserv_hostname)) {
+        debug(LOG_ERR, "SSL_set_tlsext_host_name failed");
+        termination_handler(0);
+    }
+
 	struct event_base *base = event_base_new();
 	if (!base) termination_handler(0);
 
@@ -169,6 +175,12 @@ wd_request_loop(void (*callback)(evutil_socket_t, short, void *))
     event_add(&evtimer, &tv);
 
 	event_base_dispatch(base);
+
+	if (evtimer_initialized(&evtimer)) event_del(&evtimer);
+	if (base) event_base_free(base);
+	if (ssl) SSL_free(ssl);
+	if (ssl_ctx) SSL_CTX_free(ssl_ctx);
+	if (request_ctx) wd_request_context_free(request_ctx);
 }
 
 /**

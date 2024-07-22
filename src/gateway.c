@@ -81,24 +81,14 @@ wd_zeroing_malloc(size_t howmuch) {
 static void 
 openssl_init(void)
 { 
-    if (!RAND_poll()) return;
+    if (!RAND_poll()) {
+        debug(LOG_ERR, "Could not seed the PRNG");
+        exit(EXIT_FAILURE);
+    }
 
-#if (OPENSSL_VERSION_NUMBER < 0x10100000L) || \
-	(defined(LIBRESSL_VERSION_NUMBER) && LIBRESSL_VERSION_NUMBER < 0x20700000L)
-	// Initialize OpenSSL
-    CRYPTO_set_mem_functions (wd_zeroing_malloc, realloc, free);
-	SSL_library_init();
-	ERR_load_crypto_strings();
-	SSL_load_error_strings();
-	OpenSSL_add_all_algorithms();
-	debug (LOG_DEBUG, "Using OpenSSL version \"%s\"\nand libevent version \"%s\"\n",
-		  SSLeay_version (SSLEAY_VERSION),
-		  event_get_version ());
-#else
 	debug (LOG_DEBUG, "Using OpenSSL version \"%s\"\nand libevent version \"%s\"\n",
 		  OpenSSL_version (OPENSSL_VERSION),
 		  event_get_version ());
-#endif
 }
 
 static void
@@ -349,6 +339,7 @@ wd_init(s_config *config)
         }
     }
 
+#if 1
      /* Reset the firewall (if WiFiDog crashed) */
     fw_destroy();
     /* Then initialize it */
@@ -356,6 +347,7 @@ wd_init(s_config *config)
         debug(LOG_ERR, "FATAL: Failed to initialize firewall");
         exit(EXIT_FAILURE);
     }
+#endif
 }
 
 static void
@@ -459,6 +451,12 @@ http_redir_loop(s_config *config)
     SSL *ssl = SSL_new(ssl_ctx);
 	if (!ssl) termination_handler(0);
 
+    // authserv_hostname is the hostname of the auth server, must be domain name
+    if (!SSL_set_tlsext_host_name(ssl, get_auth_server()->authserv_hostname)) {
+        debug(LOG_ERR, "SSL_set_tlsext_host_name failed");
+        termination_handler(0);
+    }
+    
     base = event_base_new();
     if (!base) termination_handler(0);
 
@@ -495,6 +493,9 @@ http_redir_loop(s_config *config)
 
     evhttp_free(http);
     event_base_free(base);
+    
+    if (ssl_ctx) SSL_CTX_free(ssl_ctx);
+    if (ssl) SSL_free(ssl);
 }
 
 /**@internal
