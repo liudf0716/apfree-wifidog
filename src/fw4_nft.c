@@ -65,6 +65,8 @@ add rule inet fw4 dstnat_wifidogx_unknown jump dstnat_wifidogx_auth_server
 add rule inet fw4 dstnat_wifidogx_unknown jump dstnat_wifidogx_trust_domains
 add rule inet fw4 dstnat_wifidogx_unknown tcp dport 443 redirect to  8443
 add rule inet fw4 dstnat_wifidogx_unknown tcp dport 80 redirect to  2060
+add rule inet fw4 dstnat_wifidogx_unkown udp dport 80 drop
+add rule inet fw4 dstnat_wifidogx_unknown udp dport 443 drop
 add rule inet fw4 dstnat_wifidogx_auth_server ip daddr @set_wifidogx_auth_servers accept
 add rule inet fw4 dstnat_wifidogx_trust_domains ip daddr @set_wifidogx_trust_domains accept
 add rule inet fw4 dstnat_wifidogx_trust_domains ip daddr @set_wifidogx_inner_trust_domains accept
@@ -122,8 +124,9 @@ const char *nft_wifidogx_init_script[] = {
     "add rule inet fw4 dstnat_wifidogx_unknown jump dstnat_wifidogx_auth_server",
     "add rule inet fw4 dstnat_wifidogx_unknown jump dstnat_wifidogx_trust_domains",
     "add rule inet fw4 dstnat_wifidogx_unknown tcp dport 443 redirect to  8443",
-    "add rule inet fw4 dstnat_wifidogx_unknown udp dport 443 redirect to  8443",
+    "add rule inet fw4 dstnat_wifidogx_unknown udp dport 443 drop",
     "add rule inet fw4 dstnat_wifidogx_unknown tcp dport 80 redirect to  2060",
+    "add rule inet fw4 dstnat_wifidogx_unknown udp dport 80 drop",
     "add rule inet fw4 dstnat_wifidogx_auth_server ip daddr @set_wifidogx_auth_servers accept",
     "add rule inet fw4 dstnat_wifidogx_trust_domains ip daddr @set_wifidogx_trust_domains accept",
     "add rule inet fw4 dstnat_wifidogx_trust_domains ip daddr @set_wifidogx_inner_trust_domains accept",
