@@ -25,6 +25,7 @@
 #include "conf.h"
 #include "firewall.h"
 #include "client_list.h"
+#include "gateway.h"
 
 #define MAX_OUTPUT (512*1024)
 #define htonll(x) ((1==htonl(1)) ? (x) : ((uint64_t)htonl((x) & 0xFFFFFFFF) << 32) | htonl((x) >> 32))
@@ -302,7 +303,13 @@ wsevent_connection_cb(struct bufferevent* b_ws, short events, void *ctx){
 		if (b_ws != NULL) {
 			bufferevent_free(b_ws);
 		}
-		b_ws = bufferevent_socket_new(ws_base, -1, BEV_OPT_CLOSE_ON_FREE|BEV_OPT_DEFER_CALLBACKS);
+		if (get_auth_server()->authserv_use_ssl) {
+			b_ws = bufferevent_openssl_socket_new(ws_base, -1, SSL_new(SSL_CTX_new(SSLv23_method())),
+				BUFFEREVENT_SSL_CONNECTING, BEV_OPT_CLOSE_ON_FREE|BEV_OPT_DEFER_CALLBACKS);
+		} else {
+			b_ws = bufferevent_socket_new(ws_base, -1, BEV_OPT_CLOSE_ON_FREE|BEV_OPT_DEFER_CALLBACKS);
+		}
+		bufferevent_openssl_set_allow_dirty_shutdown(b_ws, 1);
 		bufferevent_setcb(b_ws, ws_read_cb, NULL, wsevent_connection_cb, NULL);
 		bufferevent_enable(b_ws, EV_READ|EV_WRITE);
 		t_auth_serv *auth_server = get_auth_server();
@@ -329,14 +336,46 @@ void
 start_ws_thread(void *arg)
 {
     t_auth_serv *auth_server = get_auth_server();
-    ws_base = event_base_new();
-    ws_dnsbase = evdns_base_new(ws_base, 1);
+	if (!RAND_poll()) termination_handler(0);
 
-    struct bufferevent *ws_bev = bufferevent_socket_new(ws_base, -1, BEV_OPT_CLOSE_ON_FREE|BEV_OPT_DEFER_CALLBACKS);
+	/* Create a new OpenSSL context */
+	SSL_CTX *ssl_ctx = SSL_CTX_new(SSLv23_method());
+	if (!ssl_ctx) termination_handler(0);
+
+	SSL *ssl = SSL_new(ssl_ctx);
+	if (!ssl) termination_handler(0);
+
+	// authserv_hostname is the hostname of the auth server, must be domain name
+    if (!SSL_set_tlsext_host_name(ssl, auth_server->authserv_hostname)) {
+        debug(LOG_ERR, "SSL_set_tlsext_host_name failed");
+        termination_handler(0);
+    }
+
+    ws_base = event_base_new();
+	if (ws_base == NULL) {
+		debug(LOG_ERR, "create event base failed\n");
+		termination_handler(0);
+	}
+    ws_dnsbase = evdns_base_new(ws_base, 1);
+	if (ws_dnsbase == NULL) {
+		debug(LOG_ERR, "create dns base failed\n");
+		termination_handler(0);
+	}
+
+    struct bufferevent *ws_bev = NULL;
+	if (auth_server->authserv_use_ssl) {
+		ws_bev = bufferevent_openssl_socket_new(ws_base, -1, ssl,
+			BUFFEREVENT_SSL_CONNECTING, BEV_OPT_CLOSE_ON_FREE|BEV_OPT_DEFER_CALLBACKS);
+	} else {
+		ws_bev = bufferevent_socket_new(ws_base, -1, BEV_OPT_CLOSE_ON_FREE|BEV_OPT_DEFER_CALLBACKS);
+	}
 	if (ws_bev == NULL) {
 		debug(LOG_ERR, "create bufferevent failed\n");
-		goto ERR;
+		termination_handler(0);
 	}
+
+	bufferevent_openssl_set_allow_dirty_shutdown(ws_bev, 1);
+
 	bufferevent_setcb(ws_bev, ws_read_cb, NULL, wsevent_connection_cb, NULL);
 	bufferevent_enable(ws_bev, EV_READ|EV_WRITE);
 
@@ -352,15 +391,16 @@ start_ws_thread(void *arg)
 	if (ret < 0) {
 		debug(LOG_ERR, "ws connection error: %s\n", strerror(errno));
 		bufferevent_free(ws_bev);
-		goto ERR;
+		termination_handler(0);
 	}
 
 	event_base_dispatch(ws_base);
 
-ERR:
 	if (ws_base) event_base_free(ws_base);
 	if (ws_dnsbase) evdns_base_free(ws_dnsbase, 0);
 	if (ws_bev) bufferevent_free(ws_bev);
+	if (ssl) SSL_free(ssl);
+	if (ssl_ctx) SSL_CTX_free(ssl_ctx);
 
     return;
 }
