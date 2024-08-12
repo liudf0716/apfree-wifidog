@@ -33,6 +33,8 @@
 
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/ioctl.h>
+#include <net/if.h>
 #include <unistd.h> 
 
 #include "common.h"
@@ -265,8 +267,31 @@ ev_http_callback_404(struct evhttp_request *req, void *arg)
     evhttp_connection_get_peer(evhttp_request_get_connection(req), &remote_host, &port);
 	if (remote_host == NULL) return;
 
+    struct bufferevent *bev = evhttp_connection_get_bufferevent(evhttp_request_get_connection(req));
+    evutil_socket_t fd = bufferevent_getfd(bev);
+    if (fd < 0) {
+        debug(LOG_ERR, "bufferevent_getfd failed: %s", strerror(errno));
+        evhttp_send_error(req, 200, "Cant get client's fd");
+        return;
+    }
+
+    struct ifreq ifr;
+    socklen_t ifr_len = sizeof(ifr);
+    memset(&ifr, 0, ifr_len);
+    if (getsockopt(fd, SOL_SOCKET, SO_BINDTODEVICE, &ifr, &ifr_len) < 0) {
+        debug(LOG_ERR, "getsockop failed: %s", strerror(errno));
+        evhttp_send_error(req, 200, "Cant get client's interface name");
+        return;
+    }
+    t_gateway_setting *gw_setting = get_gateway_setting_by_ifname(ifr.ifr_name);
+    if (!gw_setting) {
+        debug(LOG_ERR, "get_gateway_setting_by_ifname [%s] failed", ifr.ifr_name);
+        evhttp_send_error(req, 200, "Cant get gateway setting by interface name");
+        return;
+    }
+
     char mac[MAC_LENGTH] = {0};
-    if (!br_arp_get_mac(remote_host, mac)) {
+    if (!br_arp_get_mac(gw_setting, remote_host, mac)) {
         evhttp_send_error(req, 200, "Cant get client's mac by its ip");
         return;
     }
@@ -276,7 +301,7 @@ ev_http_callback_404(struct evhttp_request *req, void *arg)
     const s_config *config = config_get_config();
     if (config->wired_passed && process_wired_device_pass(req, mac)) return;
 
-    char *redir_url = wd_get_redir_url_to_auth(req, mac, remote_host);
+    char *redir_url = wd_get_redir_url_to_auth(req, gw_setting, mac, remote_host, config->gw_port, config->device_id);
     if (!redir_url) {
         evhttp_send_error(req, 200, "Cant get client's redirect to auth server's url");
         return;
@@ -415,12 +440,18 @@ ev_http_callback_auth(struct evhttp_request *req, void *arg)
         return;
     } 
 
-    char *remote_host = NULL;
-    char *mac = NULL;
-    // get remote_host and mac from request if possible
-    // which support auth server side to permit client to login/logout
-    remote_host = ev_http_find_query(req, "client_ip");
-    mac = ev_http_find_query(req, "client_mac");
+    char *remote_host = ev_http_find_query(req, "client_ip");
+    char *mac = ev_http_find_query(req, "client_mac");
+    char *gw_id = ev_http_find_query(req, "gw_id");
+    t_gateway_setting *gw_setting = get_gateway_setting_by_id(gw_id);
+    if (!gw_setting) {
+        evhttp_send_error(req, 200, "Invalid gateway id");
+        free(token);
+        if (remote_host) free(remote_host);
+        if (mac) free(mac);
+        return;
+    }
+    
     if (!remote_host || !mac) {
         char *remote_ip = NULL;
         uint16_t port;
@@ -444,15 +475,18 @@ ev_http_callback_auth(struct evhttp_request *req, void *arg)
     int new_client = 0;
     LOCK_CLIENT_LIST();
     t_client *client = client_list_find(remote_host, mac);
-    if (!client && !(client = client_list_find_by_mac(mac))) { /* in case the same client but get differrent ip */
-        client = client_list_add(remote_host, mac, token);
-        new_client = 1;
-    } else if (!client && (client = client_list_find_by_mac(mac))) {
-        fw_deny(client);
-        free(client->ip);
-        free(client->token);
-        client->ip = safe_strdup(remote_host);
-        client->token = safe_strdup(token);
+    if (!client) {
+        client = client_list_find_by_mac(mac);
+        if (!client) {
+            client = client_list_add(remote_host, mac, token, gw_setting);
+            new_client = 1;
+        } else {
+            fw_deny(client);
+            free(client->ip);
+            free(client->token);
+            client->ip = safe_strdup(remote_host);
+            client->token = safe_strdup(token);
+        }
     }
     UNLOCK_CLIENT_LIST();
     free(mac);

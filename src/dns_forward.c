@@ -122,7 +122,7 @@ process_dns_response(unsigned char *response, int response_len) {
         if (type == 1 && data_len == 4) { // Type A record
             t_ip_trusted *ip_trusted = p->ips_trusted;
             while(ip_trusted) {
-                if (ip_trusted->uip == *(unsigned int *)ptr) {
+                if (ip_trusted->ip_type == IP_TYPE_IPV4 && ip_trusted->uip.ipv4.s_addr == *(unsigned int *)ptr) {
                     break;
                 }
                 ip_trusted = ip_trusted->next;
@@ -132,11 +132,35 @@ process_dns_response(unsigned char *response, int response_len) {
                 inet_ntop(AF_INET, ptr, ip, sizeof(ip));
                 debug(LOG_DEBUG, "Trusted domain: %s -> %s", query_name, ip);
                 t_ip_trusted *new_ip_trusted = (t_ip_trusted *)malloc(sizeof(t_ip_trusted));
-                new_ip_trusted->uip = *(unsigned int *)ptr;
+                new_ip_trusted->uip.ipv4.s_addr = *(unsigned int *)ptr;
+                new_ip_trusted->ip_type = IP_TYPE_IPV4;
                 new_ip_trusted->next = p->ips_trusted;
                 p->ips_trusted = new_ip_trusted;
                 char cmd[128] = {0};
                 snprintf(cmd, sizeof(cmd), "nft add element inet fw4 set_wifidogx_inner_trust_domains { %s }", ip);
+                system(cmd);
+            }
+        } else if (type == 28 && data_len == 16) { // Type AAAA record
+            t_ip_trusted *ip_trusted = p->ips_trusted;
+            while(ip_trusted) {
+                if (ip_trusted->ip_type == IP_TYPE_IPV6 && memcmp(&ip_trusted->uip.ipv6, ptr, 16) == 0) {
+                    break;
+                }
+                ip_trusted = ip_trusted->next;
+            }
+            if (!ip_trusted) {
+                char ip[INET6_ADDRSTRLEN] = {0};
+                uint32_t ipv6[4] = {0};
+                memcpy(ipv6, ptr, 16);
+                inet_ntop(AF_INET6, ipv6, ip, sizeof(ip));
+                debug(LOG_DEBUG, "Trusted domain: %s -> %s", query_name, ip);
+                t_ip_trusted *new_ip_trusted = (t_ip_trusted *)malloc(sizeof(t_ip_trusted));
+                memcpy(&new_ip_trusted->uip.ipv6, ptr, 16);
+                new_ip_trusted->next = p->ips_trusted;
+                new_ip_trusted->ip_type = IP_TYPE_IPV6; 
+                p->ips_trusted = new_ip_trusted;
+                char cmd[128] = {0};
+                snprintf(cmd, sizeof(cmd), "nft add element inet fw4 set_wifidogx_inner_trust_domains_v6 { %s }", ip);
                 system(cmd);
             }
         }

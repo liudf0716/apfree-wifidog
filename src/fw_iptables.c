@@ -436,7 +436,12 @@ iptables_fw_set_authservers(void *handle)
 				iptables_do_command("-t nat -A " CHAIN_AUTHSERVERS " -d %s -j ACCEPT", auth_server->last_ip);
 			}
 #else
-			nftables_do_command("add element inet fw4 set_wifidogx_auth_servers { %s }", auth_server->last_ip);
+			if (is_valid_ip(auth_server->last_ip))
+				nftables_do_command("add element inet fw4 set_wifidogx_auth_servers { %s }", auth_server->last_ip);
+			else if (is_valid_ip6(auth_server->last_ip))
+				nftables_do_command("add element inet fw6 set_wifidogx_auth_servers_v6 { %s }", auth_server->last_ip);
+			else
+				debug(LOG_ERR, "Invalid IP address: %s", auth_server->last_ip);
 #endif
 		}
 	}
@@ -456,6 +461,7 @@ iptables_fw_clear_user_domains_trusted(void)
 	iptables_flush_ipset(CHAIN_DOMAIN_TRUSTED);
 #else
 	nftables_do_command("flush set inet fw4 set_wifidogx_trust_domains");
+	nftables_do_command("flush set inet fw6 set_wifidogx_trust_domains_v6");
 #endif
 }
 
@@ -508,6 +514,7 @@ iptables_fw_clear_inner_domains_trusted(void)
 	iptables_flush_ipset(CHAIN_INNER_DOMAIN_TRUSTED);
 #else
 	nftables_do_command("flush set inet fw4 set_wifidogx_inner_trust_domains");
+	nftables_do_command("flush set inet fw6 set_wifidogx_inner_trust_domains_v6");
 #endif
 }
 
@@ -531,7 +538,10 @@ iptables_fw_set_inner_domains_trusted(void)
 #ifdef AW_FW3
 			add_ip_to_ipset(CHAIN_INNER_DOMAIN_TRUSTED, ip_trusted->ip, 0);
 #else
-			nftables_do_command("add element inet fw4 set_wifidogx_inner_trust_domains { %s }", ip_trusted->ip);
+			if (ip_trusted->ip_type == IP_TYPE_IPV4)
+				nftables_do_command("add element inet fw4 set_wifidogx_inner_trust_domains { %s }", ip_trusted->ip);
+			else if (ip_trusted->ip_type == IP_TYPE_IPV6)
+				nftables_do_command("add element inet fw6 set_wifidogx_inner_trust_domains_v6 { %s }", ip_trusted->ip);
 #endif
 		}
 	}
@@ -1013,15 +1023,7 @@ fw3_init(void)
 static int
 fw4_init(void)
 {
-	const s_config *config = config_get_config();
-	char *gateway_ip = NULL;
-	char *gw_interface = NULL;
-	
-	gateway_ip = config->gw_address;
-	gw_interface = config->gw_interface;
-
-	// execute nft_init
-	return nft_init(gateway_ip, gw_interface);
+	return nft_init();
 }
 
 #endif
@@ -1158,8 +1160,32 @@ fw3_destroy(void)
 static int
 fw4_destroy(void)
 {
-	execute("nft delete table inet wifidogx", 0);
-	return execute("fw4 restart", 0);
+	FILE *fp;
+    char buffer[128];
+    int table_exists = 0;
+
+    // Check if the inet wifidogx table exists
+    fp = popen("nft list tables", "r");
+    if (fp == NULL) {
+		debug(LOG_ERR, "Failed to list tables");
+        return -1;
+    }
+
+    while (fgets(buffer, sizeof(buffer), fp) != NULL) {
+        if (strstr(buffer, "inet wifidogx") != NULL) {
+            table_exists = 1;
+            break;
+        }
+    }
+
+    pclose(fp);
+
+    // If the table exists, delete it
+    if (table_exists) {
+        execute("nft delete table inet wifidogx", 0);
+    }
+
+    return execute("fw4 restart", 0);
 }
 
 #endif
@@ -1579,8 +1605,7 @@ fw4_counters_update()
 	// get client outgoing traffic
 	char outgoing[4096] = {0};
 	nft_statistical_outgoing(outgoing, sizeof(outgoing));
-	// outgoing is json format string
-	// parse json string outgoing as jobj_outgoing
+	json_object *jobj_incoming = NULL;
 	json_object *jobj_outgoing = json_tokener_parse(outgoing);
 	if (jobj_outgoing == NULL) {
 		debug(LOG_ERR, "fw4_counters_update(): jobj_outgoing is NULL");
@@ -1683,9 +1708,7 @@ fw4_counters_update()
 	// get client outgoing traffic
 	char incoming[4096] = {0};
 	nft_statistical_incoming(incoming, sizeof(incoming));
-	// incoming is json format string
-	// parse json string incoming as jobj_incoming
-	json_object *jobj_incoming = json_tokener_parse(incoming);
+	jobj_incoming = json_tokener_parse(incoming);
 	if (jobj_incoming == NULL) {
 		debug(LOG_ERR, "fw4_counters_update(): jobj_incoming is NULL");
 		nret = 1;
@@ -1697,9 +1720,7 @@ fw4_counters_update()
 		nret = 1;
 		goto END_UPDATE;
 	}
-	// iterate the array of json objects in jobj_incoming
-	// get the json object which has the "rule" key
-	// get the json object which has the "expr" key
+	
 	arraylen = json_object_array_length(jobj_nftables);
 	for(i = 0; i < arraylen; i++) {
 		json_object *jobj = json_object_array_get_idx(jobj_nftables, i);

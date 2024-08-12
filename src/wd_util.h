@@ -150,6 +150,7 @@ struct in_addr *wd_gethostbyname(const char *);
 
 /** @brief Get IP address of an interface */
 char *get_iface_ip(const char *);
+char *get_iface_ip6(const char *);
 
 /** @brief Get MAC address of an interface */
 char *get_iface_mac(const char *);
@@ -158,9 +159,13 @@ char *get_iface_mac(const char *);
 char *get_ext_iface(void);
 
 /** 1: success; 0: error*/
-int arp_get_mac(const char *dev_name, const char *i_ip, char *o_mac);
+int arp_get_mac(const char *, const char *, char *);
 
-int br_arp_get_mac(const char *i_ip, char *o_mac);
+int br_arp_get_mac(t_gateway_setting *, const char *, char *);
+
+t_gateway_setting *get_gateway_setting_by_ifname(const char *);
+
+t_gateway_setting *get_gateway_setting_by_id(const char *);
 
 /** @brief generate cert for apfree-wifidog */
 void init_apfree_wifidog_cert();

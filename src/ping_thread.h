@@ -44,7 +44,8 @@ struct sys_info {
 /** @brief get system info */
 void get_sys_info(struct sys_info *);
 /** @brief get ping uri */
-char *get_ping_uri(const struct sys_info *);
+char *get_ping_uri(const struct sys_info *, t_gateway_setting *);
+char *get_ping_v2_uri(const struct sys_info *);
 /** @brief Periodically checks on the auth server to see if it's alive. */
 void thread_ping(void *);
 

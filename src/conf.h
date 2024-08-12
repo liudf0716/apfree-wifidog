@@ -54,6 +54,7 @@
 #define DEFAULT_HTTPDMAXCONN 10
 #define DEFAULT_GATEWAYID NULL
 #define DEFAULT_GATEWAYPORT 2060
+#define DEFAULT_GATEWAY_HTTPS_PORT 8443
 #define DEFAULT_HTTPDNAME "WiFiDog"
 #define DEFAULT_CLIENTTIMEOUT 5
 #define DEFAULT_CHECKINTERVAL 60
@@ -203,9 +204,19 @@ typedef struct _popular_server_t {
  *
  */
 
+typedef enum {
+	IP_TYPE_IPV4,
+	IP_TYPE_IPV6
+} ip_type_t;
+
 typedef struct _ip_trusted_t {
-	char ip[INET_ADDRSTRLEN];
-	unsigned int uip;
+	char ip[INET6_ADDRSTRLEN];
+	union
+	{
+		struct in_addr ipv4;
+		struct in6_addr ipv6;
+	} uip;
+	ip_type_t ip_type;
 	struct _ip_trusted_t *next;
 } t_ip_trusted;
 
@@ -220,7 +231,6 @@ typedef struct _https_server_t {
 	char	*ca_crt_file;
 	char	*svr_crt_file;
 	char	*svr_key_file;
-	short	gw_https_port;
 } t_https_server;
 
 typedef struct _http_server_t {
@@ -238,6 +248,16 @@ typedef struct _mqtt_server_t {
 	short	port;
 }t_mqtt_server;
 
+typedef struct _gateway_setting_t {
+	char *gw_id;
+	char *gw_interface;
+	char *gw_address_v4;
+	char *gw_address_v6;
+	char *gw_channel;
+	int   auth_mode;
+	struct _gateway_setting_t *next;
+} t_gateway_setting;
+
 /**
  * Configuration structure
  */
@@ -251,12 +271,11 @@ typedef struct {
     char *pidfile;            /**< @brief pid file path of wifidog */
     char *external_interface;   /**< @brief External network interface name for
 				     firewall rules */
-    char *gw_id;                /**< @brief ID of the Gateway, sent to central
-				     server */
-    char *gw_interface;         /**< @brief Interface we will accept connections on */
-    char *gw_address;           /**< @brief Internal IP address for our web
-				     server */
-    int gw_port;                /**< @brief Port the webserver will run on */
+    uint16_t gw_port;                /**< @brief Port the http webserver will run on */
+	uint16_t gw_https_port;		/**< @brief Port the https webserver will run on */
+
+	char *device_id;				/**< @brief device id */
+	t_gateway_setting *gateway_settings; /** @brief gateway settings list */
 
     t_auth_serv *auth_servers;  /**< @brief Auth servers list */
     int clienttimeout;          /**< @brief How many CheckIntervals before a client
@@ -302,6 +321,11 @@ typedef struct {
 
 /** @brief Get the current gateway configuration */
 s_config *config_get_config(void);
+
+t_gateway_setting *get_gateway_settings(void);
+
+int get_gateway_count(void);
+const char *get_device_id(void);
 
 /** @brief Initialise the conf system */
 void config_init(void);
@@ -439,12 +463,11 @@ void clear_trusted_ip_list(void);
 void del_trusted_ip_list(const char *);
 
 // online clients
-extern int 	g_online_clients; // total connected client count
+extern int 		g_online_clients; // total connected client count
 extern char 	*g_version;
-extern char	*g_type; // hardware type
-extern char	*g_name; // firmware name
-extern char	*g_channel_path;
-extern char	*g_ssid;
+extern char		*g_type; // hardware type
+extern char		*g_name; // firmware name
+extern char		*g_ssid;
 
 #define	LOCK_DOMAIN() do { \
 	debug(LOG_DEBUG, "Locking domain"); \

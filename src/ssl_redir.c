@@ -25,6 +25,10 @@
   @author Copyright (C) 2016 Dengfeng Liu <liudf0716@gmail.com.cn>
   */
 
+#include <arpa/inet.h>
+#include <sys/ioctl.h>
+#include <net/if.h>
+
 #include "common.h"
 #include "ssl_redir.h"
 #include "debug.h"
@@ -67,20 +71,53 @@ process_ssl_request_cb (struct evhttp_request *req, void *arg) {
     char *remote_host;
     uint16_t port;
     evhttp_connection_get_peer(evhttp_request_get_connection(req), &remote_host, &port);
+	if (!remote_host) {
+		evhttp_send_error(req, 200, "Cant get client's ip");
+		return;
+	}
+
+	struct bufferevent *bev = evhttp_connection_get_bufferevent(evhttp_request_get_connection(req));
+    evutil_socket_t fd = bufferevent_getfd(bev);
+    if (fd < 0) {
+        debug(LOG_ERR, "evhttp_connection_get_fd failed: %s", strerror(errno));
+        evhttp_send_error(req, 200, "Cant get client's fd");
+        return;
+    }
+
+    struct ifreq ifr;
+	socklen_t ifr_len = sizeof(ifr);
+    memset(&ifr, 0, ifr_len);
+    if (getsockopt(fd, SOL_SOCKET, SO_BINDTODEVICE, &ifr, &ifr_len) < 0) {
+        debug(LOG_ERR, "getsockop failed: %s", strerror(errno));
+        evhttp_send_error(req, 200, "Cant get client's interface name");
+        return;
+    }
+    t_gateway_setting *gw_setting = get_gateway_setting_by_ifname(ifr.ifr_name);
+    if (!gw_setting) {
+        debug(LOG_ERR, "get_gateway_setting_by_ifname failed");
+        evhttp_send_error(req, 200, "Cant get gateway setting by interface name");
+        return;
+    }
 
     char mac[MAC_LENGTH] = {0};
-    if(!br_arp_get_mac(remote_host, mac)) {
+    if(!br_arp_get_mac(gw_setting, remote_host, mac)) {
         evhttp_send_error(req, 200, "Cant get client's mac by its ip");
         return;
     }
 
-	char *redir_url = wd_get_redir_url_to_auth(req, mac, remote_host);
+	s_config *config = config_get_config();
+	char *redir_url = wd_get_redir_url_to_auth(req, gw_setting, mac, remote_host, config->gw_https_port, config->device_id);
     if (!redir_url) {
         evhttp_send_error(req, 200, "Cant get client's redirect to auth server's url");
         return;
     }
 
-	ev_http_send_js_redirect(req, redir_url);
+	if (config->js_redir)
+        ev_http_send_js_redirect(req, redir_url);
+	else
+        ev_http_send_redirect(req, redir_url, "Redirect to login page");
+
+	free(redir_url);
 }
 
 /**
@@ -190,6 +227,29 @@ check_auth_server_available_cb(int errcode, struct evutil_addrinfo *addr, void *
 				evutil_freeaddrinfo(addr);
 				break;
 			} 
+		} else if (addr->ai_family == PF_INET6) {
+			char ip[128] = {0};
+			struct sockaddr_in6 *sin6 = (struct sockaddr_in6*)addr->ai_addr;
+			evutil_inet_ntop(AF_INET6, &sin6->sin6_addr, ip, sizeof(ip)-1);
+
+			if (!auth_server->last_ip || strcmp(auth_server->last_ip, ip) != 0) {
+				/*
+					* But the IP address is different from the last one we knew
+					* Update it
+					*/
+				debug(LOG_INFO, "Updating last_ip IP of server [%s] to [%s]", 
+					auth_server->authserv_hostname, ip);
+				if (auth_server->last_ip)
+					free(auth_server->last_ip);
+				auth_server->last_ip = safe_strdup(ip);
+
+				/* Update firewall rules */
+				fw_clear_authservers();
+				fw_set_authservers();
+
+				evutil_freeaddrinfo(addr);
+				break;
+			} 
 		}
 	}
 }
@@ -240,9 +300,11 @@ schedule_work_cb(evutil_socket_t fd, short event, void *arg) {
 }
 
 static int 
-ssl_redirect_loop (char *gw_ip,  t_https_server *https_server) { 	
+ssl_redirect_loop () { 	
 	struct event timeout;
 	struct timeval tv;
+	s_config *config = config_get_config();
+	t_https_server *https_server = config->https_server;
 
   	base = event_base_new ();
   	if (! base) { 
@@ -292,13 +354,13 @@ ssl_redirect_loop (char *gw_ip,  t_https_server *https_server) {
 	evhttp_set_gencb (http, process_ssl_request_cb, NULL);
 
 	// Now we tell the evhttp what port to listen on. 
-	struct evhttp_bound_socket *handle = evhttp_bind_socket_with_handle (http, gw_ip, https_server->gw_https_port);
+	struct evhttp_bound_socket *handle = evhttp_bind_socket_with_handle (http, "0.0.0.0", config->gw_https_port);
 	if (! handle) { 
-		debug (LOG_ERR, "couldn't bind to port %d. Exiting.\n",
-               (int) https_server->gw_https_port);
+		debug (LOG_ERR, "couldn't bind ipv4 address to port %d. Exiting.\n",
+               (int) config->gw_https_port);
 		exit(EXIT_FAILURE);
     }
-    
+
 	// check whether internet available or not
 	dnsbase = evdns_base_new(base, 0);
 	if (!dnsbase) {
@@ -308,16 +370,16 @@ ssl_redirect_loop (char *gw_ip,  t_https_server *https_server) {
 		debug (LOG_ERR, "evdns_base_resolv_conf_parse failed. \n");
 		if (!dnsbase) exit(EXIT_FAILURE);
 	}
-	evdns_base_set_option(dnsbase, "timeout", config_get_config()->dns_timeout);
+	evdns_base_set_option(dnsbase, "timeout", config->dns_timeout);
 	evdns_base_set_option(dnsbase, "randomize-case:", "0");//TurnOff DNS-0x20 encoding
 	
-	t_popular_server *popular_server = config_get_config()->popular_servers;
+	t_popular_server *popular_server = config->popular_servers;
 	check_internet_available(popular_server);
 	check_auth_server_available();
 
 	event_assign(&timeout, base, -1, EV_PERSIST, schedule_work_cb, NULL);
 	evutil_timerclear(&tv);
-	tv.tv_sec = config_get_config()->checkinterval;
+	tv.tv_sec = config->checkinterval;
     event_add(&timeout, &tv);
 
 	
@@ -334,7 +396,6 @@ ssl_redirect_loop (char *gw_ip,  t_https_server *https_server) {
 
 void 
 thread_ssl_redirect(void *args) {
-	s_config *config = config_get_config();
 	init_apfree_wifidog_cert();
-   	ssl_redirect_loop (config->gw_address, config->https_server);
+   	ssl_redirect_loop ();
 }

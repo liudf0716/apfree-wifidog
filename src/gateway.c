@@ -300,26 +300,44 @@ wd_init(s_config *config)
     if (config->pidfile)
         save_pid_file(config->pidfile);
 
-    /* If we don't have the Gateway IP address, get it. Can't fail. */
-    if (!config->gw_address) {
-        if ((config->gw_address = get_iface_ip(config->gw_interface)) == NULL) {
-            debug(LOG_ERR, "Could not get IP address information of %s, exiting...", config->gw_interface);
-            exit(EXIT_FAILURE);
-        }
-        
+    t_gateway_setting *gateway_settings = config->gateway_settings;
+    if (!gateway_settings) {
+        debug(LOG_ERR, "No gateway settings found in the configuration file");
+        exit(EXIT_FAILURE);
     }
-    
-    /* If we don't have the Gateway ID, construct it from the internal MAC address.
-     * "Can't fail" so exit() if the impossible happens. */
-    if (!config->gw_id) {
-        if ((config->gw_id = get_iface_mac(config->gw_interface)) == NULL) {
-            debug(LOG_ERR, "Could not get MAC address information of %s, exiting...", config->gw_interface);
+
+    while(gateway_settings) {
+        if (!gateway_settings->gw_interface || !gateway_settings->gw_channel) {
+            debug(LOG_ERR, "Gateway settings are not complete");
             exit(EXIT_FAILURE);
         }
-    } 
+        debug(LOG_DEBUG, "gw_interface = %s, gw_channel = %s", 
+                gateway_settings->gw_interface, gateway_settings->gw_channel);
+        if (!gateway_settings->gw_address_v4) {
+            if ((gateway_settings->gw_address_v4 = get_iface_ip(gateway_settings->gw_interface)) == NULL) {
+                debug(LOG_ERR, "Could not get IP address information of %s, exiting...", gateway_settings->gw_interface);
+                exit(EXIT_FAILURE);
+            }
+        }
 
-    debug(LOG_DEBUG, "gw_id [%s] %s = %s ", 
-        config->gw_id, config->gw_interface, config->gw_address);
+        if (!gateway_settings->gw_address_v6) {
+            if ((gateway_settings->gw_address_v6 = get_iface_ip6(gateway_settings->gw_interface)) == NULL) {
+                debug(LOG_ERR, "Could not get IPv6 address information of %s, exiting...", gateway_settings->gw_interface);
+                exit(EXIT_FAILURE);
+            }
+        }
+
+        if (!gateway_settings->gw_id) {
+            if ((gateway_settings->gw_id = get_iface_mac(gateway_settings->gw_interface)) == NULL) {
+                debug(LOG_ERR, "Could not get MAC address information of %s, exiting...", gateway_settings->gw_interface);
+                exit(EXIT_FAILURE);
+            }
+        }
+
+        debug(LOG_DEBUG, "gw_id [%s] %s = %s ", 
+            gateway_settings->gw_id, gateway_settings->gw_address_v4, gateway_settings->gw_address_v6);
+        gateway_settings = gateway_settings->next;
+    }
 
     /*
      * If needed, increase rlimits to allow as many connections
@@ -487,8 +505,12 @@ http_redir_loop(s_config *config)
 
     evhttp_set_gencb(http, ev_http_callback_404, NULL);
 
-    evhttp_bind_socket_with_handle(http, config->gw_address, config->gw_port);
-
+    // bind socket to listen both ipv4 and ipv6
+    if (!evhttp_bind_socket_with_handle(http, "0.0.0.0", config->gw_port)) {
+        debug(LOG_ERR, "Failed to bind ipv4 address to port %d", config->gw_port);
+        termination_handler(0);
+    }
+    
     event_base_dispatch(base);
 
     evhttp_free(http);

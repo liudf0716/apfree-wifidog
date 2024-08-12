@@ -67,11 +67,14 @@ typedef enum {
 	oDaemon,
 	oDebugLevel,
 	oExternalInterface,
+	oGatewayPort,
+	oGatewayHttpsPort,
+	oDeltaTraffic,
+	oGatewaySetting,
+	oDeviceID,
 	oGatewayID,
 	oGatewayInterface,
-	oGatewayAddress,
-	oGatewayPort,
-	oDeltaTraffic,
+	oGatewayChannel,
 	oAuthServer,
 	oAuthServHostname,
 	oAuthServSSLAvailable,
@@ -109,7 +112,6 @@ typedef enum {
 	oParseChecked,
 	oTrustedIpList,
 	oNoAuth,
-	oGatewayHttpsPort,
 	oWorkMode,
 	oUpdateDomainInterval,
 	oTrustedLocalMACList,
@@ -139,10 +141,13 @@ static const struct {
 	"daemon", oDaemon}, {
 	"debuglevel", oDebugLevel}, {
 	"externalinterface", oExternalInterface}, {
+	"deviceid", oDeviceID}, {
 	"gatewayid", oGatewayID}, {
 	"gatewayinterface", oGatewayInterface}, {
-	"gatewayaddress", oGatewayAddress}, {
+	"gatewaychannel", oGatewayChannel}, {
 	"gatewayport", oGatewayPort}, {
+	"gatewayhttpsport", oGatewayHttpsPort}, {
+	"gatewaysetting", oGatewaySetting}, {
 	"authserver", oAuthServer}, {
 	"clienttimeout", oClientTimeout}, {
 	"checkinterval", oCheckInterval}, {
@@ -174,12 +179,10 @@ static const struct {
 	"parseChecked", oParseChecked}, {
 	"trustedIpList", oTrustedIpList}, {
 	"noAuth", oNoAuth}, {
-	"gatewayHttpsPort", oGatewayHttpsPort}, {
 	"workMode", oWorkMode}, {
 	"updateDomainInterval", oUpdateDomainInterval}, {
 	"trustedlocalmaclist", oTrustedLocalMACList}, {
 	"bypassAppleCNA", oAppleCNA}, {
-
 	"mqtt", oMQTT}, {
 	"serveraddr", oMQTTServer}, {
 	"serverport", oMQTTServerPort}, {
@@ -216,6 +219,32 @@ config_get_config(void)
 	return &config;
 }
 
+t_gateway_setting *
+get_gateway_settings(void)
+{
+	return config.gateway_settings;
+}
+
+const char *
+get_device_id(void)
+{
+	return config.device_id;
+}
+
+int
+get_gateway_count(void)
+{
+	int count = 0;
+	t_gateway_setting *tmp = config.gateway_settings;
+
+	while (tmp) {
+		count++;
+		tmp = tmp->next;
+	}
+
+	return count;
+}
+
 /** Sets the default config parameters and initialises the configuration system */
 void
 config_init(void)
@@ -224,11 +253,10 @@ config_init(void)
 
 	config.configfile = safe_strdup(DEFAULT_CONFIGFILE);
 	config.htmlmsgfile = safe_strdup(DEFAULT_HTMLMSGFILE);
-	config.external_interface = NULL;
-	config.gw_id = DEFAULT_GATEWAYID;
-	config.gw_interface = NULL;
-	config.gw_address = NULL;
+	config.external_interface = NULL;;
 	config.gw_port = DEFAULT_GATEWAYPORT;
+	config.gw_https_port = DEFAULT_GATEWAY_HTTPS_PORT;
+	config.gateway_settings = NULL;
 	config.auth_servers = NULL;
 	config.clienttimeout = DEFAULT_CLIENTTIMEOUT;
 	config.checkinterval = DEFAULT_CHECKINTERVAL;
@@ -262,7 +290,6 @@ config_init(void)
 	
 	t_https_server *https_server	= (t_https_server *)malloc(sizeof(t_https_server));
 	memset(https_server, 0, sizeof(t_https_server));
-	https_server->gw_https_port	= 8443;
 	https_server->ca_crt_file	= safe_strdup(DEFAULT_CA_CRT_FILE);
 	https_server->svr_crt_file	= safe_strdup(DEFAULT_SVR_CRT_FILE);
 	https_server->svr_key_file	= safe_strdup(DEFAULT_SVR_KEY_FILE);
@@ -324,6 +351,109 @@ config_parse_token(const char *cp, const char *filename, int linenum)
 
 	debug(LOG_ERR, "%s: line %d: Bad configuration option: %s", filename, linenum, cp);
 	return oBadOption;
+}
+
+/** @internal
+ * Parses gateway settings
+ */
+static void
+parse_gateway_settings(FILE * file, const char *filename, int *linenum)
+{
+	char line[MAX_BUF], *p1, *p2;
+	char *gw_id = NULL;
+	char *gw_interface = NULL;
+	char *gw_channel = NULL;
+	t_gateway_setting *new, *tmp;
+
+	/* Parsing loop */
+	while (memset(line, 0, MAX_BUF) && fgets(line, MAX_BUF - 1, file) && (strchr(line, '}') == NULL)) {
+		(*linenum)++;		   /* increment line counter. */
+
+		/* skip leading blank spaces */
+		for (p1 = line; isblank(*p1); p1++) ;
+
+		/* End at end of line */
+		if ((p2 = strchr(p1, '#')) != NULL) {
+			*p2 = '\0';
+		} else if ((p2 = strchr(p1, '\r')) != NULL) {
+			*p2 = '\0';
+		} else if ((p2 = strchr(p1, '\n')) != NULL) {
+			*p2 = '\0';
+		}
+
+		/* trim all blanks at the end of the line */
+		for (p2 = (p2 != NULL ? p2 - 1 : &line[MAX_BUF - 2]); isblank(*p2) && p2 > p1; p2--) {
+			*p2 = '\0';
+		}
+
+		/* next, we coopt the parsing of the regular config */
+		if (strlen(p1) > 0) {
+			p2 = p1;
+			/* keep going until word boundary is found. */
+			while ((*p2 != '\0') && (!isblank(*p2)))
+				p2++;
+
+			/* Terminate first word. */
+			*p2 = '\0';
+			p2++;
+
+			/* skip all further blanks. */
+			while (isblank(*p2))
+				p2++;
+
+			/* Get opcode */
+			int opcode = config_parse_token(p1, filename, *linenum);
+
+			switch (opcode) {
+			case oGatewayID:
+				gw_id = safe_strdup(p2);
+				break;
+			case oGatewayInterface:
+				gw_interface = safe_strdup(p2);
+				break;
+			case oGatewayChannel:
+				gw_channel = safe_strdup(p2);
+				break;
+			case oBadOption:
+			default:
+				debug(LOG_ERR, "Bad option on line %d " "in %s.", *linenum, filename);
+				debug(LOG_ERR, "Exiting...");
+				exit(-1);
+				break;
+			}
+		}
+	}
+
+	/* only proceed if we have an channel and an interface */
+	if (gw_channel == NULL || gw_interface == NULL) {
+		debug(LOG_ERR, "Missing mandatory parameters for gateway settings");
+		goto ERR;
+	}
+
+	debug(LOG_DEBUG, "Adding gateway settings: %s %s %s", gw_id?gw_id:"null", gw_interface, gw_channel);
+
+	new = safe_malloc(sizeof(t_gateway_setting));
+	new->gw_id = gw_id;
+	new->gw_interface = gw_interface;
+	new->gw_channel = gw_channel;
+	new->auth_mode  = 1;
+
+	/* If it's the first, add to config, else append to last server */
+	if (config.gateway_settings == NULL) {
+		config.gateway_settings = new;
+	} else {
+		for (tmp = config.gateway_settings; tmp->next != NULL; tmp = tmp->next) ;
+		tmp->next = new;
+	}
+
+	return;
+ERR:
+	if (gw_id)
+		free(gw_id);
+	if (gw_channel)
+		free(gw_channel);
+	if (gw_interface)
+		free(gw_interface);
 }
 
 /** @internal
@@ -906,17 +1036,14 @@ config_read()
 				case oExternalInterface:
 					config.external_interface = safe_strdup(p1);
 					break;
-				case oGatewayID:
-					config.gw_id = safe_strdup(p1);
-					break;
-				case oGatewayInterface:
-					config.gw_interface = safe_strdup(p1);
-					break;
-				case oGatewayAddress:
-					config.gw_address = safe_strdup(p1);
-					break;
 				case oGatewayPort:
-					sscanf(p1, "%d", &config.gw_port);
+					sscanf(p1, "%hu", &config.gw_port);
+					break;
+				case oGatewayHttpsPort:
+					sscanf(p1, "%hu", &config.gw_https_port);
+					break;
+				case oGatewaySetting:
+					parse_gateway_settings(fd, filename, &linenum);
 					break;
 				case oAuthServer:
 					parse_auth_server(fd, filename, &linenum);
@@ -978,9 +1105,6 @@ config_read()
 				case oNoAuth:
 					config.no_auth = parse_boolean_value(p1);
 					break;
-				case oGatewayHttpsPort:
-					sscanf(p1, "%hu", &config.https_server->gw_https_port);
-					break;
 				case oWorkMode:
 					sscanf(p1, "%hu", &config.work_mode);
 					break;
@@ -1010,6 +1134,9 @@ config_read()
 					break;
 				case oEnableWS:
 					config.enable_ws = parse_boolean_value(p1);
+					break;
+				case oDeviceID:
+					config.device_id = safe_strdup(p1);
 					break;
 				case oBadOption:
 					/* FALL THROUGH */
@@ -2318,7 +2445,8 @@ trusted_mac_list_dup(t_trusted_mac **worklist)
 void
 config_validate(void)
 {
-	config_notnull(config.gw_interface, "GatewayInterface");
+	config_notnull(config.device_id, "DeviceID");
+	config_notnull(config.gateway_settings, "GatewaySetting");
 	config_notnull(config.auth_servers, "AuthServer");
 	validate_popular_servers();
 
@@ -2336,6 +2464,7 @@ validate_popular_servers(void)
 {
 	if (config.popular_servers == NULL) {
 		add_popular_server("www.baidu.com");
+		add_popular_server("www.google.com");
 	}
 }
 
@@ -2357,7 +2486,6 @@ config_notnull(const void *parm, const char *parmname)
 t_auth_serv *
 get_auth_server(void)
 {
-
 	/* This is as good as atomic */
 	return config.auth_servers;
 }

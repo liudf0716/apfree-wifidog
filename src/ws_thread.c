@@ -26,6 +26,9 @@
 #include "firewall.h"
 #include "client_list.h"
 #include "gateway.h"
+#include "fw_iptables.h"
+#include "fw4_nft.h"
+#include "wd_util.h"
 
 #define MAX_OUTPUT (512*1024)
 #define htonll(x) ((1==htonl(1)) ? (x) : ((uint64_t)htonl((x) & 0xFFFFFFFF) << 32) | htonl((x) >> 32))
@@ -39,11 +42,126 @@ static char *fixed_accept = "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=";
 static bool upgraded = false;
 
 static void
+handle_auth_response(json_object *j_auth)
+{
+	json_object *token = json_object_object_get(j_auth, "token");
+	json_object *client_ip = json_object_object_get(j_auth, "client_ip");
+	json_object *client_mac = json_object_object_get(j_auth, "client_mac");
+	json_object *client_name = json_object_object_get(j_auth, "client_name");
+	json_object *gw_id = json_object_object_get(j_auth, "gw_id");
+	json_object *once_auth = json_object_object_get(j_auth, "once_auth");
+	if(token == NULL || client_ip == NULL || client_mac == NULL || gw_id == NULL || once_auth == NULL){
+		debug(LOG_ERR, "auth: parse json data failed\n");
+		return;
+	}
+
+	const char *gw_id_str = json_object_get_string(gw_id);
+	const bool once_auth_bool = json_object_get_boolean(once_auth);
+	if (once_auth_bool) {
+		debug(LOG_DEBUG, "auth: once_auth is true, update gw_setting's auth_mode and refresh gw rule\n");
+		t_gateway_setting *gw_setting = get_gateway_setting_by_id(gw_id_str);
+		if (gw_setting == NULL) {
+			debug(LOG_ERR, "auth: gateway %s not found\n", gw_id_str);
+			return;
+		}
+		gw_setting->auth_mode = 0;
+		nft_reload_gw();
+		return;
+	}
+
+	const char *token_str = json_object_get_string(token);
+	const char *client_ip_str = json_object_get_string(client_ip);
+	const char *client_mac_str = json_object_get_string(client_mac);
+	if (client_list_find(client_ip_str, client_mac_str) == NULL)  {
+		t_gateway_setting *gw_setting = get_gateway_setting_by_id(gw_id_str);
+		if (gw_setting == NULL) {
+			debug(LOG_ERR, "auth: gateway %s not found\n", gw_id_str);
+			return;
+		}
+		t_client *client = client_list_add(client_ip_str, client_mac_str, token_str, gw_setting);
+		fw_allow(client, FW_MARK_KNOWN);
+		if (client_name != NULL) {
+			client->name = strdup(json_object_get_string(client_name));
+		}
+		client->first_login = time(NULL);
+		client->is_online = 1;
+		{
+			LOCK_OFFLINE_CLIENT_LIST();
+			t_offline_client *o_client = offline_client_list_find_by_mac(client->mac);    
+			if(o_client)
+				offline_client_list_delete(o_client);
+			UNLOCK_OFFLINE_CLIENT_LIST();
+		}
+		debug(LOG_DEBUG, "fw_allow client: token %s, client_ip %s, client_mac %s\n", token_str, client_ip_str, client_mac_str);
+	} else {
+		debug(LOG_DEBUG, "client already exists: token %s, client_ip %s, client_mac %s\n", token_str, client_ip_str, client_mac_str);
+	}
+}
+
+static void
+handle_tmp_pass_response(json_object *j_tmp_pass)
+{
+	json_object *client_mac = json_object_object_get(j_tmp_pass, "client_mac");
+	json_object *timeout = json_object_object_get(j_tmp_pass, "timeout");
+	if(client_mac == NULL){
+		debug(LOG_ERR, "temp_pass: parse json data failed\n");
+		return;
+	}
+
+	const char *client_mac_str = json_object_get_string(client_mac);
+	uint32_t timeout_value = 5*60;
+	if (timeout != NULL) {
+		timeout_value = json_object_get_int(timeout);
+	}
+	fw_set_mac_temporary(client_mac_str, timeout_value);
+}
+
+static void
+handle_heartbeat_response(json_object *j_heartbeat)
+{
+	// heartbeat response content is {"type":"heartbeat", gateway:[{"gw_id":"gw_id", "auth_mode":1},...]}
+	json_object *gw_array = json_object_object_get(j_heartbeat, "gateway");
+	if(gw_array == NULL){
+		debug(LOG_ERR, "heartbeat: parse json data failed\n");
+		return;
+	}
+	assert(json_object_is_type(gw_array, json_type_array));
+
+	int state_changed = 0;
+	int gw_num = json_object_array_length(gw_array);
+	for(int i = 0; i < gw_num; i++){
+		json_object *gw = json_object_array_get_idx(gw_array, i);
+		json_object *gw_id = json_object_object_get(gw, "gw_id");
+		json_object *auth_mode = json_object_object_get(gw, "auth_mode");
+		if (gw_id == NULL || auth_mode == NULL) {
+			debug(LOG_ERR, "heartbeat: parse json data failed\n");
+			continue;
+		}
+		const char *gw_id_str = json_object_get_string(gw_id);
+		int auth_mode_int = json_object_get_int(auth_mode);
+		t_gateway_setting *gw_setting = get_gateway_setting_by_id(gw_id_str);
+		if (gw_setting == NULL) {
+			debug(LOG_ERR, "heartbeat: gateway %s not found\n", gw_id_str);
+			continue;
+		}
+		if (gw_setting->auth_mode != auth_mode_int) {
+			gw_setting->auth_mode = auth_mode_int;
+			debug(LOG_DEBUG, "heartbeat: gateway %s auth_mode %d\n", gw_id_str, auth_mode_int);
+			state_changed = 1;
+		}
+	}
+
+	if (state_changed) {
+		debug(LOG_DEBUG, "gateway state changed, reload firewall\n");
+		nft_reload_gw();
+	}
+
+}
+
+static void
 process_ws_msg(const char *msg)
 {
 	debug(LOG_DEBUG, "process_ws_msg %s\n", msg);
-	// parse json data, the msg is json data and like this
-	// {"type":"auth", "token":"xxxxx", "client_ip":"ip address", "client_mac":"mac address"}
 	json_object *jobj = json_tokener_parse(msg);
 	if(jobj == NULL){
 		debug(LOG_ERR, "parse json data failed\n");
@@ -58,52 +176,14 @@ process_ws_msg(const char *msg)
 	}
 
 	const char *type_str = json_object_get_string(type);
-	if (strcmp(type_str, "auth") == 0) {
-		json_object *token = json_object_object_get(jobj, "token");
-		json_object *client_ip = json_object_object_get(jobj, "client_ip");
-		json_object *client_mac = json_object_object_get(jobj, "client_mac");
-		json_object *client_name = json_object_object_get(jobj, "client_name");
-		if(token == NULL || client_ip == NULL || client_mac == NULL){
-			debug(LOG_ERR, "auth: parse json data failed\n");
-			json_object_put(jobj);
-			return;
-		}
-		const char *token_str = json_object_get_string(token);
-		const char *client_ip_str = json_object_get_string(client_ip);
-		const char *client_mac_str = json_object_get_string(client_mac);
-		if (client_list_find(client_ip_str, client_mac_str) == NULL)  {
-			t_client *client = client_list_add(client_ip_str, client_mac_str, token_str);
-			fw_allow(client, FW_MARK_KNOWN);
-			if (client_name != NULL) {
-				client->name = strdup(json_object_get_string(client_name));
-			}
-			client->first_login = time(NULL);
-			client->is_online = 1;
-			{
-				LOCK_OFFLINE_CLIENT_LIST();
-				t_offline_client *o_client = offline_client_list_find_by_mac(client->mac);    
-				if(o_client)
-					offline_client_list_delete(o_client);
-				UNLOCK_OFFLINE_CLIENT_LIST();
-			}
-			debug(LOG_DEBUG, "fw_allow client: token %s, client_ip %s, client_mac %s\n", token_str, client_ip_str, client_mac_str);
-		} else {
-			debug(LOG_DEBUG, "client already exists: token %s, client_ip %s, client_mac %s\n", token_str, client_ip_str, client_mac_str);
-		}
+	if (strcmp(type_str, "heartbeat") == 0) {
+		handle_heartbeat_response(jobj);
+	} else if (strcmp(type_str, "connect") == 0) {
+		handle_heartbeat_response(jobj);
+	} else if (strcmp(type_str, "auth") == 0) {
+		handle_auth_response(jobj);
 	} else if (strcmp(type_str, "tmp_pass") == 0) {
-		json_object *client_mac = json_object_object_get(jobj, "client_mac");
-		json_object *timeout = json_object_object_get(jobj, "timeout");
-		if (client_mac == NULL) {
-			debug(LOG_ERR, "temp_pass: parse json data failed\n");
-			json_object_put(jobj);
-			return;
-		}
-		const char *client_mac_str = json_object_get_string(client_mac);
-		uint32_t timeout_value = 5*60;
-		if (timeout != NULL) {
-			timeout_value = json_object_get_int(timeout);
-		}
-		fw_set_mac_temporary(client_mac_str, timeout_value);
+		handle_tmp_pass_response(jobj);
 	} else {
 		debug(LOG_ERR, "unknown type %s\n", type_str);
 	}
@@ -231,15 +311,39 @@ ws_request(struct bufferevent* b_ws)
 }
 
 static void
+send_msg(struct evbuffer *out, const char *type)
+{
+	t_gateway_setting *gw_settings = get_gateway_settings();
+	json_object *jobj = json_object_new_object();
+	json_object_object_add(jobj, "type", json_object_new_string(type));
+	json_object_object_add(jobj, "device_id", json_object_new_string(get_device_id()));
+	// new a json array object
+	json_object *jarray = json_object_new_array();
+	while(gw_settings) {
+		json_object *jobj_gw = json_object_new_object();
+		json_object_object_add(jobj_gw, "gw_id", json_object_new_string(gw_settings->gw_id));
+		json_object_object_add(jobj_gw, "gw_channel", json_object_new_string(gw_settings->gw_channel));
+		json_object_object_add(jobj_gw, "gw_address_v4", json_object_new_string(gw_settings->gw_address_v4));
+		json_object_object_add(jobj_gw, "gw_address_v6", json_object_new_string(gw_settings->gw_address_v6));
+		json_object_object_add(jobj_gw, "auth_mode", json_object_new_int(gw_settings->auth_mode));
+		json_object_object_add(jobj_gw, "gw_interface", json_object_new_string(gw_settings->gw_interface));
+		json_object_array_add(jarray, jobj_gw);
+		gw_settings = gw_settings->next;
+	}
+	json_object_object_add(jobj, "gateway", jarray);
+	const char *jdata = json_object_to_json_string(jobj);
+	
+	debug(LOG_DEBUG, "ws_heartbeat_cb : send heartbeat data [%s]\n", jdata);
+	ws_send(out, jdata, strlen(jdata));
+	json_object_put(jobj);
+}
+
+static void
 ws_heartbeat_cb(evutil_socket_t fd, short event, void *arg)
 {
 	struct bufferevent *b_ws = (struct bufferevent *)arg;
 	struct evbuffer *out = bufferevent_get_output(b_ws);
-	char jdata[128] = {0};
-	snprintf(jdata, 128, "{\"type\":\"heartbeat\",\"gwID\":\"%s\"}", 
-		config_get_config()->gw_id);
-	debug(LOG_DEBUG, "ws_heartbeat_cb : send heartbeat data\n");
-	ws_send(out, jdata, strlen(jdata));
+	send_msg(out, "heartbeat");
 }
 
 static void 
@@ -268,14 +372,10 @@ ws_read_cb(struct bufferevent *b_ws, void *ctx)
         }
 
         upgraded = true;
+		debug (LOG_DEBUG, "ws_read_cb : upgraded is %d\n", upgraded);
 
-		// create json data
-		char jdata[128] = {0};
-		snprintf(jdata, 128, "{\"type\":\"connect\",\"gwID\":\"%s\"}", 
-			config_get_config()->gw_id);
-		ws_send(bufferevent_get_output(b_ws), jdata, strlen(jdata));
-		debug(LOG_DEBUG, "send connect data %s\n", jdata);
-
+		send_msg(bufferevent_get_output(b_ws), "connect");
+	
 		// add timer to send heartbeat
 		if (ws_heartbeat_ev != NULL) {
 			event_free(ws_heartbeat_ev);
@@ -394,6 +494,7 @@ start_ws_thread(void *arg)
 		termination_handler(0);
 	}
 
+	debug(LOG_DEBUG, "ws thread started\n");
 	event_base_dispatch(ws_base);
 
 	if (ws_base) event_base_free(ws_base);

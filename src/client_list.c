@@ -35,6 +35,7 @@
 #include "firewall.h"
 #include "util.h"
 #include "centralserver.h"
+#include "wd_util.h"
 
 /** @internal
  * Holds a pointer to the first element of the list 
@@ -151,7 +152,7 @@ offline_client_list_insert_client(t_offline_client *client)
  * 
  */
 t_client *
-client_list_add(const char *ip, const char *mac, const char *token)
+client_list_add(const char *ip, const char *mac, const char *token, t_gateway_setting *gw_setting)
 {
     t_client *curclient;  
 
@@ -162,8 +163,9 @@ client_list_add(const char *ip, const char *mac, const char *token)
     curclient->token = safe_strdup(token);
     curclient->counters.incoming_delta = curclient->counters.outgoing_delta = 
             curclient->counters.incoming = curclient->counters.incoming_history = curclient->counters.outgoing =
-        curclient->counters.outgoing_history = 0;
+    curclient->counters.outgoing_history = 0;
     curclient->counters.last_updated = time(NULL);
+    curclient->gw_setting = gw_setting;
 
     client_list_insert_client(curclient);
 
@@ -627,8 +629,10 @@ add_online_client(const char *ip, const char *mac, json_object *client)
     if(!old_client) { // no such client in connect list
         json_object *token_jo 		= NULL;
         json_object *first_login_jo = NULL;
+        json_object *gw_id_jo 		= NULL;
         const char *token 		= NULL;
         int first_login;
+        t_gateway_setting *gw_setting = NULL;
 
         if (!json_object_object_get_ex(client, "token", &token_jo)) {
             UNLOCK_CLIENT_LIST();
@@ -642,8 +646,20 @@ add_online_client(const char *ip, const char *mac, json_object *client)
         } else
             first_login = json_object_get_int(first_login_jo);
 
-        if(token) {
-            t_client *client = client_list_add(ip, mac, token);
+        if (!json_object_object_get_ex(client, "gw_id", &gw_id_jo)) {
+            UNLOCK_CLIENT_LIST();
+            return;
+        } else {
+            gw_setting = get_gateway_setting_by_id(json_object_get_string(gw_id_jo));
+            if (!gw_setting) {
+                UNLOCK_CLIENT_LIST();
+                return;
+            }
+
+        }
+
+        if(token && gw_setting) {
+            t_client *client = client_list_add(ip, mac, token, gw_setting);
             client->wired = 0;
 
             if (first_login) {

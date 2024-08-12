@@ -29,6 +29,8 @@
 
 #define _GNU_SOURCE
 
+#include <netinet/icmp6.h>
+
 #include "util.h"
 #include "debug.h"
 #include "common.h"
@@ -36,6 +38,7 @@
 
 /** @brief FD for icmp raw socket */
 static int icmp_fd;
+static int icmp6_fd;
 
 static unsigned short rand16(void);
 
@@ -57,6 +60,17 @@ init_icmp_socket(void)
         debug(LOG_ERR, "Cannot create ICMP raw socket.");
         return 0;
     }
+
+	if ((icmp6_fd = socket(AF_INET6, SOCK_RAW, IPPROTO_ICMPV6)) == -1 ||
+		(flags = fcntl(icmp6_fd, F_GETFL, 0)) == -1 ||
+		fcntl(icmp6_fd, F_SETFL, flags | O_NONBLOCK) == -1 ||
+		setsockopt(icmp6_fd, SOL_SOCKET, SO_RCVBUF, &oneopt, sizeof(oneopt)) ||
+		setsockopt(icmp6_fd, SOL_SOCKET, SO_DONTROUTE, &zeroopt, sizeof(zeroopt)) == -1) {
+		debug(LOG_ERR, "Cannot create ICMP6 raw socket.");
+		close(icmp_fd);
+		return 0;
+	}
+
     return 1;
 }
 
@@ -66,6 +80,7 @@ close_icmp_socket(void)
 {
     debug(LOG_INFO, "Closing ICMP socket");
     close(icmp_fd);
+	close(icmp6_fd);
 }
 
 /**
@@ -117,6 +132,68 @@ icmp_ping(const char *host)
     return;
 }
 
+static unsigned short 
+checksum(void *buf, int len) {
+	unsigned short *ptr = (unsigned short *)buf;
+	unsigned int sum = 0;
+	unsigned short result;
+
+	for (sum = 0; len > 1; len -= 2) {
+		sum += *ptr++;
+	}
+
+	if (len == 1) {
+		sum += *(unsigned char *)ptr;
+	}
+
+	sum = (sum >> 16) + (sum & 0xFFFF);
+	sum += (sum >> 16);
+	result = ~sum;
+
+	return result;
+}
+
+void icmp6_ping(const char *host) 
+{
+    struct sockaddr_in6 addr;
+    struct icmp6_hdr icmp6_hdr;
+    char sendbuf[1024];
+	int opt = 2000;
+
+    // Initialize address structure
+    memset(&addr, 0, sizeof(addr));
+    addr.sin6_family = AF_INET6;
+    if (inet_pton(AF_INET6, host, &addr.sin6_addr) != 1) {
+        debug(LOG_ERR, "inet_pton failed");
+		return;
+    }
+
+    // Initialize ICMPv6 header
+    memset(&icmp6_hdr, 0, sizeof(icmp6_hdr));
+    icmp6_hdr.icmp6_type = ICMP6_ECHO_REQUEST;
+    icmp6_hdr.icmp6_code = 0;
+    icmp6_hdr.icmp6_id = getpid() & 0xFFFF;
+    icmp6_hdr.icmp6_seq = 1;
+    icmp6_hdr.icmp6_cksum = 0;
+
+    // Calculate checksum
+    memcpy(sendbuf, &icmp6_hdr, sizeof(icmp6_hdr));
+    icmp6_hdr.icmp6_cksum = checksum(sendbuf, sizeof(icmp6_hdr));
+    memcpy(sendbuf, &icmp6_hdr, sizeof(icmp6_hdr));
+
+	if (setsockopt(icmp6_fd, SOL_SOCKET, SO_RCVBUF, &opt, sizeof(opt)) == -1)
+		debug(LOG_ERR, "setsockopt(): %s", strerror(errno));
+
+    // Send ICMPv6 echo request
+    if (sendto(icmp6_fd, sendbuf, sizeof(icmp6_hdr), 0, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+        debug(LOG_ERR, "sendto failed: %s", strerror(errno));
+    }
+
+    opt = 1;
+	if (setsockopt(icmp6_fd, SOL_SOCKET, SO_RCVBUF, &opt, sizeof(opt)) == -1)
+		debug(LOG_ERR, "setsockopt(): %s", strerror(errno));
+}
+
 /** Get a 16-bit unsigned random number.
  * @return unsigned short a random number
  */
@@ -166,8 +243,7 @@ save_pid_file(const char *pf)
     return;
 }
 
-
-// liudf added 20160412
+// true: 1; false: 0
 int
 is_valid_ip(const char *ip)
 {
@@ -179,7 +255,17 @@ is_valid_ip(const char *ip)
     return result != 0;
 }
 
-// true: 1; false: 0
+int
+is_valid_ip6(const char *ip)
+{
+	if (!ip) {
+		return 0;
+	}
+	struct sockaddr_in6 sa;
+	int result = inet_pton(AF_INET6, ip, &(sa.sin6_addr));
+	return result != 0;
+}
+
 int 
 is_valid_mac(const char *mac)
 {

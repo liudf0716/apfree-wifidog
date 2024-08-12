@@ -70,24 +70,42 @@ wd_get_orig_url(struct evhttp_request *req)
  * 
  */ 
 char *
-wd_get_redir_url_to_auth(struct evhttp_request *req, const char *mac, const char *remote_host)
+wd_get_redir_url_to_auth(struct evhttp_request *req, 
+						 t_gateway_setting *gw_setting, 
+						 const char *mac, 
+						 const char *remote_host,
+						 const uint16_t gw_port,
+						 const char *device_id)
 {
-    s_config *config = config_get_config();
     t_auth_serv *auth_server = get_auth_server();
     char *orig_url = wd_get_orig_url(req);
     if (!orig_url) return NULL;
+	char *gw_address = NULL;
+	int is_ipv6 = 0;
+	if (is_valid_ip6(remote_host)) {
+		is_ipv6 = 1;
+		gw_address = gw_setting->gw_address_v6;
+	} else
+		gw_address = gw_setting->gw_address_v4;
 
     char *redir_url = NULL;
-    safe_asprintf(&redir_url, "%s://%s:%d%s%sgw_address=%s&gw_port=%d&gw_id=%s&channel_path=%s&ssid=%s&ip=%s&mac=%s&url=%s",
+    safe_asprintf(&redir_url, "%s://%s:%d%s%sgw_address=%s&is_ipv6=%d&gw_port=%d&device_id=%s&gw_id=%s&gw_channel=%s&ssid=%s&ip=%s&mac=%s&url=%s",
         auth_server->authserv_use_ssl?"https":"http",
         auth_server->authserv_hostname,
         auth_server->authserv_use_ssl?auth_server->authserv_ssl_port:auth_server->authserv_http_port,
 		auth_server->authserv_path,
 		auth_server->authserv_login_script_path_fragment,
-        config->gw_address, config->gw_port, config->gw_id, 
-        g_channel_path?g_channel_path:"null",
+        gw_address,
+		is_ipv6,
+		gw_port,
+		device_id,
+		gw_setting->gw_id, 
+        gw_setting->gw_channel?gw_setting->gw_channel:"null",
         g_ssid?g_ssid:"null",
-        remote_host, mac, orig_url); 
+        remote_host, 
+		mac, 
+		orig_url); 
+		
     free(orig_url);
     return redir_url;
 }

@@ -813,7 +813,9 @@ wdctl_add_auth_client(struct bufferevent *fd, const char *args)
 
     const char *mac  = json_object_get_string(mac_jo);
     const char *ip	 = json_object_get_string(ip_jo);
-    if (!is_valid_mac(mac) || !is_valid_ip(ip) || !is_trusted_mac(mac)) {
+    if (!is_valid_mac(mac) || 
+        !(is_valid_ip(ip) && is_valid_ip6(ip)) || 
+        !is_trusted_mac(mac)) {
         debug(LOG_ERR, "is_valid_mac or is_valid_ip or is_trusted_mac failed");
         goto OUT;
     }

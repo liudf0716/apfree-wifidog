@@ -29,6 +29,8 @@
 #ifndef _CLIENT_LIST_H_
 #define _CLIENT_LIST_H_
 
+#include "conf.h"
+
 /** Global mutex to protect access to the client list */
 extern pthread_mutex_t client_list_mutex;
 extern pthread_mutex_t offline_client_list_mutex;
@@ -43,31 +45,29 @@ typedef struct _t_counters {
     unsigned long long incoming_history;        /**< @brief Incoming data before wifidog restarted*/
     unsigned long long outgoing_history;        /**< @brief Outgoing data before wifidog restarted*/
     /* Delta traffic stats by t123yh */
-    unsigned long long incoming_delta;                    /**< @brief Incoming data after last report*/
-    unsigned long long outgoing_delta;                    /**< @brief Outgoing data after last report*/
-    time_t last_updated;        /**< @brief Last update of the counters */
+    unsigned long long incoming_delta;      /**< @brief Incoming data after last report*/
+    unsigned long long outgoing_delta;      /**< @brief Outgoing data after last report*/
+    time_t last_updated;        			/**< @brief Last update of the counters */
 } t_counters;
 
 /** Client node for the connected client linked list.
  */
 typedef struct _t_client {
     struct _t_client *next;             /**< @brief Pointer to the next client */
-    unsigned long long id;           /**< @brief Unique ID per client */
-    char *ip;                           /**< @brief Client Ip address */
+    unsigned long long id;           	/**< @brief Unique ID per client */
+    char *ip;                           /**< @brief Client address */
     char *mac;                          /**< @brief Client Mac address */
     char *token;                        /**< @brief Client token */
-    int fw_connection_state;     /**< @brief Connection state in the
-						     firewall */
-    int fd;                             /**< @brief Client HTTP socket (valid only
-					     during login before one of the
-					     _http_* function is called */
-    t_counters counters;                /**< @brief Counters for input/output of
-					     the client. */
-	//<<< liudf added 20160112	
-	time_t 	first_login;		/**< @brief first login time */
-	char	*name;			/**< @brief device name */
+    int fw_connection_state;     		/**< @brief Connection state in the firewall */
+	int fd;              				/**< @brief Client HTTP socket (valid only
+											during login before one of the
+											_http_* function is called */
+    t_counters counters;                /**< @brief Counters for input/output of the client. */
+	time_t 	first_login;				/**< @brief first login time */
+	char	*name;						/**< @brief device name */
 	short 	is_online;
-	short	wired;	/** default 0: wireless */
+	short	wired;						/** default 0: wireless */
+	t_gateway_setting *gw_setting;
 } t_client;
 
 // liudf added 20160216
@@ -112,7 +112,7 @@ void client_list_destroy(t_client *);
 void offline_client_list_destroy(t_offline_client *);
 
 /** @brief Adds a new client to the connections list */
-t_client *client_list_add(const char *, const char *, const char *);
+t_client *client_list_add(const char *, const char *, const char *, t_gateway_setting *);
 
 t_offline_client *offline_client_list_add(const char *, const char *);
 

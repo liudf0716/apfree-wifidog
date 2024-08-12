@@ -102,14 +102,14 @@ process_auth_server_roam(struct evhttp_request *req, void *ctx)
  * 
  */ 
 static char *
-get_roam_request_uri(s_config *config, t_auth_serv *auth_server, const char *mac)
+get_roam_request_uri(t_gateway_setting *gw_setting, t_auth_serv *auth_server, const char *mac)
 {
     char *roam_uri = NULL;
-    safe_asprintf(&roam_uri, "%sroam?gw_id=%s&mac=%s&channel_path=%s", 
+    safe_asprintf(&roam_uri, "%sroam?gw_id=%s&mac=%s&gw_channel=%s", 
         auth_server->authserv_path,
-        config->gw_id,
+        gw_setting->gw_id,
 		mac,
-		g_channel_path?g_channel_path:"null");
+		gw_setting->gw_channel);
     return roam_uri;
 }
 
@@ -122,7 +122,8 @@ get_roam_request_uri(s_config *config, t_auth_serv *auth_server, const char *mac
 void 
 make_roam_request(struct wd_request_context *context, struct roam_req_info *roam)
 {
-    char *uri = get_roam_request_uri(config_get_config(), get_auth_server(), roam->mac);
+    // TODO:  find valid gateway setting
+    char *uri = get_roam_request_uri(get_gateway_settings(), get_auth_server(), roam->mac);
     if (!uri) {
         free(roam);
         return;
@@ -176,16 +177,16 @@ process_auth_server_login_v2(struct evhttp_request *req, void *ctx)
  * 
  */ 
 static char *
-get_login_v2_request_uri(s_config *config, t_auth_serv *auth_server, const auth_req_info *auth)
+get_login_v2_request_uri(t_gateway_setting *gw_setting, t_auth_serv *auth_server, const auth_req_info *auth)
 {
     char *login2_uri = NULL;
-    safe_asprintf(&login2_uri, "%slogin2?gw_id=%s&gw_address=%s&gw_port=%d&mac=%s&channel_path=%s&cltIp=%s", 
+    safe_asprintf(&login2_uri, "%slogin2?gw_id=%s&gw_address=%s&gw_port=%d&mac=%s&gw_channel=%s&cltIp=%s", 
         auth_server->authserv_path,
-        config->gw_id,
-		config->gw_address,
-		config->gw_port,
+        gw_setting->gw_id,
+		gw_setting->gw_address_v4,
+		config_get_config()->gw_port,
 		auth->mac,
-		g_channel_path?g_channel_path:"null",
+		gw_setting->gw_channel,
 		auth->ip);
     return login2_uri;
 }
@@ -199,7 +200,8 @@ get_login_v2_request_uri(s_config *config, t_auth_serv *auth_server, const auth_
 void 
 make_auth_request(struct wd_request_context *context, auth_req_info *auth)
 {
-	char *uri = get_login_v2_request_uri(config_get_config(), get_auth_server(), auth);
+    // TODO:  find valid gateway setting
+	char *uri = get_login_v2_request_uri(get_gateway_settings(), get_auth_server(), auth);
     if (!uri) {
         free(auth);
         return;
@@ -247,6 +249,8 @@ get_auth_uri(const char *request_type, client_type_t type, void *data)
     unsigned long long int incoming = 0,  outgoing = 0, incoming_delta = 0, outgoing_delta = 0;
     time_t first_login = 0;
     uint32_t online_time = 0, wired = 0;
+    char *gw_id = NULL;
+    char *gw_channel = NULL;
 
     switch(type) {
     case ONLINE_CLIENT:
@@ -264,16 +268,11 @@ get_auth_uri(const char *request_type, client_type_t type, void *data)
         outgoing_delta  = o_client->counters.outgoing_delta;
         wired = o_client->wired;
         online_time = time(0) - first_login;
+        gw_id = o_client->gw_setting->gw_id;
+        gw_channel = o_client->gw_setting->gw_channel;
         break;
     }    
     case TRUSTED_CLIENT:
-    {
-        t_trusted_mac *t_mac = (t_trusted_mac *)data;
-        ip  = t_mac->ip;
-        mac = t_mac->mac;
-        wired = br_is_device_wired(mac);
-        break;
-    }
     default:
         return NULL;
     }
@@ -284,11 +283,12 @@ get_auth_uri(const char *request_type, client_type_t type, void *data)
     int nret = 0;
     if (config->deltatraffic) {
         nret = safe_asprintf(&uri, 
-             "%s%sstage=%s&ip=%s&mac=%s&token=%s&incoming=%llu&outgoing=%llu&incomingdelta=%llu&outgoingdelta=%llu&first_login=%lld&online_time=%u&gw_id=%s&channel_path=%s&name=%s&wired=%u",
+             "%s%sstage=%s&ip=%s&mac=%s&token=%s&incoming=%llu&outgoing=%llu&incomingdelta=%llu&outgoingdelta=%llu&first_login=%lld&online_time=%u&gw_id=%s&gw_channel=%s&name=%s&wired=%u",
              auth_server->authserv_path,
              auth_server->authserv_auth_script_path_fragment,
              request_type,
-             ip, mac, 
+             ip, 
+             mac, 
              safe_token?safe_token:"null", 
              incoming, 
              outgoing, 
@@ -296,24 +296,27 @@ get_auth_uri(const char *request_type, client_type_t type, void *data)
              outgoing_delta,
              (long long)first_login,
              online_time,
-             config->gw_id,
-             g_channel_path?g_channel_path:"null", 
-             name?name:"null", wired);
+             gw_id,
+             gw_channel, 
+             name?name:"null", 
+             wired);
     } else {
         nret = safe_asprintf(&uri, 
-             "%s%sstage=%s&ip=%s&mac=%s&token=%s&incoming=%llu&outgoing=%llu&first_login=%lld&online_time=%u&gw_id=%s&channel_path=%s&name=%s&wired=%u",
+             "%s%sstage=%s&ip=%s&mac=%s&token=%s&incoming=%llu&outgoing=%llu&first_login=%lld&online_time=%u&gw_id=%s&gw_channel=%s&name=%s&wired=%u",
              auth_server->authserv_path,
              auth_server->authserv_auth_script_path_fragment,
              request_type,
-             ip, mac, 
+             ip, 
+             mac, 
              safe_token?safe_token:"null", 
              incoming, 
              outgoing, 
              (long long)first_login,
              online_time,
-             config->gw_id,
-             g_channel_path?g_channel_path:"null", 
-             name?name:"null", wired);
+             gw_id,
+             gw_channel, 
+             name?name:"null", 
+             wired);
     }
 
     return nret>0?uri:NULL;
@@ -445,10 +448,11 @@ client_login_request_reply(t_authresponse *authresponse,
 		if(ev_http_find_query(req, "type")) {
         	evhttp_send_error(req, 200, "weixin auth success!");
 		} else {
-        	safe_asprintf(&url_fragment, "%sgw_id=%s&channel_path=%s&mac=%s&name=%s", 
+            assert(client->gw_setting);
+        	safe_asprintf(&url_fragment, "%sgw_id=%s&gw_channel=%s&mac=%s&name=%s", 
 				auth_server->authserv_portal_script_path_fragment, 
-				config_get_config()->gw_id,
-				g_channel_path?g_channel_path:"null",
+				client->gw_setting->gw_id,
+				client->gw_setting->gw_channel,
 				client->mac?client->mac:"null",
 				client->name?client->name:"null");
         	ev_http_send_redirect_to_auth(req, url_fragment, "Redirect to portal");
@@ -622,10 +626,46 @@ client_counter_request_reply_v2(t_authresponse *authresponse,
     }
 } 
 
+static void
+handle_json_object_from_auth_server(json_object *j_result, struct evhttp_request *req, void *ctx)
+{
+    json_object *j_gw_id = json_object_object_get(j_result, "gw_id");
+    json_object *j_auth_op = json_object_object_get(j_result, "auth_op");
+    assert(j_gw_id != NULL && j_auth_op != NULL);
+    assert(json_object_get_type(j_auth_op) == json_type_array);
+    for(int idx = 0; idx < json_object_array_length(j_auth_op); idx++) {
+        json_object *j_op = json_object_array_get_idx(j_auth_op, idx);
+        assert(j_op != NULL);
+        json_object *j_id = json_object_object_get(j_op, "id");
+        json_object *j_auth_code = json_object_object_get(j_op, "auth_code");
+        assert(j_id != NULL && j_auth_code != NULL);
+        int id = json_object_get_int(j_id);
+        int auth_code = json_object_get_int(j_auth_code);
+        t_authresponse authresponse;
+        authresponse.client_id = id;
+        authresponse.authcode = auth_code;
+        client_counter_request_reply_v2(&authresponse, req, ctx);
+    }
+}
+
+static void
+handle_json_array_from_auth_server(json_object *j_result, struct evhttp_request *req, void *ctx)
+{
+    if (json_object_get_type(j_result) != json_type_array) {
+        return;
+    }
+
+    for(int idx = 0; idx < json_object_array_length(j_result); idx++) {
+        json_object *j_op = json_object_array_get_idx(j_result, idx);
+        assert(j_op != NULL);
+        handle_json_object_from_auth_server(j_op, req, ctx);
+    }
+}
+
 /**
  * @brief v2 of process_auth_server_counter
  * 
- * auth response is {gw_id:"gw_id",auth_op:[{"id":clt_id,"auth_code":authcode}, ....]}
+ * auth response is {result:[{gw_id:"gw_id",auth_op:[{"id":clt_id,"auth_code":authcode}, ....]}, ...]}
  * 
  */ 
 void
@@ -641,41 +681,21 @@ process_auth_server_counter_v2(struct evhttp_request *req, void *ctx)
 
     debug(LOG_DEBUG, "Auth response [%s]", buff);
 
-    json_object *j_result = json_tokener_parse(buff);
-    if (!j_result) {
+    json_object *j_obj = json_tokener_parse(buff);
+    if (!j_obj) {
+        debug(LOG_ERR, "json_tokener_parse failed");
         goto ERR;
     }
 
-    json_object *j_auth_op = json_object_object_get(j_result, "auth_op");
-    if (!j_auth_op) {
+    json_object *j_result = NULL;
+    if (!json_object_object_get_ex(j_obj, "result", &j_result)) {
+        debug(LOG_ERR, "no result in json object");
         goto ERR;
     }
-    assert(json_object_get_type(j_auth_op) == json_type_array);
 
-    for(int idx = 0; idx < json_object_array_length(j_auth_op); idx++) {
-        json_object *j_op = json_object_array_get_idx(j_auth_op, idx);
-        assert(j_op != NULL);
-        json_object *j_id = json_object_object_get(j_op, "id");
-        json_object *j_auth_code = json_object_object_get(j_op, "auth_code");
-        assert(j_id != NULL && j_auth_code != NULL);
-        int id = json_object_get_int(j_id);
-        int auth_code = json_object_get_int(j_auth_code);
-        t_authresponse authresponse;
-        authresponse.client_id = id;
-        authresponse.authcode = auth_code;
-        client_counter_request_reply_v2(&authresponse, req, ctx);
-    }
+    handle_json_array_from_auth_server(j_result, req, ctx);
 	
-	json_object *j_client_timeout = json_object_object_get(j_result, "clientTimeout");
-	if (j_client_timeout) {
-		int clientTimeout = json_object_get_int(j_client_timeout);
-		s_config *config = config_get_config();
-		LOCK_CLIENT_LIST();
-		config->clienttimeout = clientTimeout;
-		UNLOCK_CLIENT_LIST();
-	}
-    
 ERR:
-    if (j_result) json_object_put(j_result);
+    if (j_obj) json_object_put(j_obj);
     free(buff);
 }

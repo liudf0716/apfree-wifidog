@@ -48,7 +48,6 @@ int g_online_clients;
 char *g_version;
 char *g_type;
 char *g_name;
-char *g_channel_path;
 char *g_ssid;
 
 static void fw_init_delay();
@@ -67,24 +66,31 @@ static void fw_init_delay()
 static void 
 ping_work_cb(evutil_socket_t fd, short event, void *arg) {
 	struct wd_request_context *request_ctx = (struct wd_request_context *)arg;
-	struct evhttp_request *req = NULL;
-	struct evhttp_connection *evcon = NULL;
+	
 	struct sys_info info;
 	memset(&info, 0, sizeof(info));
+	get_sys_info(&info);
 
-	if (wd_make_request(request_ctx, &evcon, &req, process_ping_response)) {
-		debug(LOG_ERR, "Failed to make request to auth server");
+	t_gateway_setting *gw_settings = get_gateway_settings();
+	if (!gw_settings) {
+		debug(LOG_ERR, "Failed to get gateway setting");
 		return;
 	}
 
-	get_sys_info(&info);
-	char *uri = get_ping_uri(&info);
-	if (!uri) return; // impossibe 
-	
+	char *uri = get_ping_v2_uri(&info);
+	if (!uri) return; // impossibe
 	debug(LOG_DEBUG, "uri is %s", uri);
 
+	struct evhttp_request *req = NULL;
+	struct evhttp_connection *evcon = NULL;
+	if (wd_make_request(request_ctx, &evcon, &req, process_ping_response)) {
+		debug(LOG_ERR, "Failed to make request to auth server");
+		free(uri);
+		return;
+	}
+	
 	evhttp_make_request(evcon, req, EVHTTP_REQ_GET, uri);
-	free(uri);
+	free(uri);	
 }
 
 /**
@@ -109,15 +115,8 @@ check_and_get_wifidog_uptime(long sys_uptime)
     	return wifidog_uptime;
 }
 
-/**
- * @brief get ping uri
- * 
- * @param info The system info structure
- * @return NULL fail or ping uri
- * 
- */ 
 char *
-get_ping_uri(const struct sys_info *info)
+get_ping_v2_uri(const struct sys_info *info)
 {
 	t_auth_serv *auth_server = get_auth_server();
 	char *uri = NULL;
@@ -126,10 +125,51 @@ get_ping_uri(const struct sys_info *info)
 		return NULL;
 	
 	int nret = safe_asprintf(&uri, 
-			"%s%sgw_id=%s&sys_uptime=%lu&sys_memfree=%u&sys_load=%.2f&nf_conntrack_count=%lu&cpu_usage=%3.2lf&wifidog_uptime=%lu&online_clients=%d&offline_clients=%d&ssid=%s&fm_version=%s&type=%s&name=%s&channel_path=%s&wired_passed=%d&aw_version=%s",
+			"%s%sdevice_id=%s&sys_uptime=%lu&sys_memfree=%u&sys_load=%.2f&nf_conntrack_count=%lu&cpu_usage=%3.2lf&wifidog_uptime=%lu&online_clients=%d&offline_clients=%d&ssid=%s&fm_version=%s&type=%s&name=%s&wired_passed=%d&aw_version=%s",
+			 auth_server->authserv_path,
+			 auth_server->authserv_ping_script_path_fragment,
+			 config_get_config()->device_id,
+			 info->sys_uptime,
+			 info->sys_memfree,
+			 info->sys_load,
+			 info->nf_conntrack_count,
+			 info->cpu_usage,
+			 check_and_get_wifidog_uptime(info->sys_uptime),
+			 g_online_clients,
+			 offline_client_ageout(),
+			 NULL != g_ssid?g_ssid:"NULL",
+			 NULL != g_version?g_version:"null",
+			 NULL != g_type?g_type:"null",
+			 NULL != g_name?g_name:"null",
+			 config_get_config()->wired_passed,
+			 VERSION);
+	if (nret < 0)
+		return NULL;
+
+	return uri;
+}
+
+/**
+ * @brief get ping uri
+ * 
+ * @param info The system info structure
+ * @return NULL fail or ping uri
+ * 
+ */ 
+char *
+get_ping_uri(const struct sys_info *info, t_gateway_setting *gw_setting)
+{
+	t_auth_serv *auth_server = get_auth_server();
+	char *uri = NULL;
+	
+	if (!info)
+		return NULL;
+	
+	int nret = safe_asprintf(&uri, 
+			"%s%sgw_id=%s&sys_uptime=%lu&sys_memfree=%u&sys_load=%.2f&nf_conntrack_count=%lu&cpu_usage=%3.2lf&wifidog_uptime=%lu&online_clients=%d&offline_clients=%d&ssid=%s&fm_version=%s&type=%s&name=%s&gw_channel=%s&wired_passed=%d&aw_version=%s",
 			 auth_server->authserv_path,
              auth_server->authserv_ping_script_path_fragment,
-             config_get_config()->gw_id,
+             gw_setting->gw_id,
              info->sys_uptime,
              info->sys_memfree,
              info->sys_load,
@@ -142,7 +182,7 @@ get_ping_uri(const struct sys_info *info)
 			 NULL != g_version?g_version:"null",
 			 NULL != g_type?g_type:"null",
 			 NULL != g_name?g_name:"null",
-			 NULL != g_channel_path?g_channel_path:"null",
+			 gw_setting->gw_channel,
              config_get_config()->wired_passed,
 			 VERSION);
 	if (nret < 0)
@@ -245,21 +285,6 @@ get_sys_info(struct sys_info *info)
 			fclose(fh);
 		}
 	}
-	
-	if(!g_channel_path) { 
-		free(g_channel_path);
-		g_channel_path = NULL;
-	}
-
-	char channel_path[128] = {0};
-	if (uci_get_value("firmwareinfo", "channel_path", channel_path, 127)) {			
-		trim_newline(channel_path);	
-		if(strlen(channel_path) > 0)
-			g_channel_path = safe_strdup(channel_path);	
-	} else {
-		g_channel_path = safe_strdup("apfree");
-	}
-	debug(LOG_DEBUG, "g_channel_path is %s", g_channel_path);
 }
 
 static void

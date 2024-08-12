@@ -50,6 +50,10 @@
 #include <netinet/ip.h>
 #include <netinet/ip_icmp.h>
 #include <netpacket/packet.h>
+#include <netinet/ip6.h>
+#include <netinet/icmp6.h>
+#include <netinet/if_ether.h>
+#include <ifaddrs.h>
 
 #include <uci.h>
 #include <json-c/json.h>
@@ -987,9 +991,14 @@ is_device_wired_intern(const char *mac, const char *bridge)
 int
 br_is_device_wired(const char *mac){
 	if (is_valid_mac(mac)) {
-		char *bridge = config_get_config()->gw_interface;
-		debug(LOG_DEBUG,"mac %s check in bridge %s is wired", mac, bridge);
-		return is_device_wired_intern(mac, bridge);
+		t_gateway_setting *gw = get_gateway_settings();
+		while (gw) {
+			if (is_device_wired_intern(mac, gw->gw_interface)) {
+				debug(LOG_DEBUG,"mac %s check in bridge %s is wired", mac, gw->gw_interface);
+				return 1;
+			}
+			gw = gw->next;
+		}
 	}
 
 	return 0;
@@ -1408,6 +1417,44 @@ get_iface_ip(const char *ifname)
 }
 
 char *
+get_iface_ip6(const char *ifname)
+{
+	struct ifaddrs *ifaddr, *ifa;
+    int family;
+    char host[INET6_ADDRSTRLEN] = {0};
+    char *ip6_address = NULL;
+
+    // Get the list of network interfaces
+    if (getifaddrs(&ifaddr) == -1) {
+        perror("getifaddrs");
+        return NULL;
+    }
+
+    // Loop through the list of interfaces
+    for (ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next) {
+        if (ifa->ifa_addr == NULL) {
+            continue;
+        }
+
+        family = ifa->ifa_addr->sa_family;
+
+        // We only want IPv6 addresses
+        if (family == AF_INET6) {
+            if (strcmp(ifa->ifa_name, ifname) == 0) {
+				void *addr = &((struct sockaddr_in6 *)ifa->ifa_addr)->sin6_addr;
+				if (inet_ntop(AF_INET6, addr, host, INET6_ADDRSTRLEN) != NULL) {
+					ip6_address = safe_strdup(host);
+					break;
+				}
+			}
+        }
+    }
+
+    freeifaddrs(ifaddr);
+    return ip6_address;
+}
+
+char *
 get_iface_mac(const char *ifname)
 {
     int r, s;
@@ -1496,13 +1543,92 @@ get_ext_iface(void)
     return NULL;
 }
 
+static int 
+ndp_get_mac(const char *dev_name, const char *i_ip, char *o_mac) 
+{
+    int sockfd;
+    struct sockaddr_in6 dest;
+    struct icmp6_hdr icmp6_hdr;
+    struct msghdr msg;
+    struct iovec iov;
+    char buf[1024] = {0};
+    struct in6_addr target_addr;
+    struct nd_neighbor_advert *na;
+    struct nd_opt_hdr *opt;
+    ssize_t len;
+
+    // Create raw socket for ICMPv6
+    sockfd = socket(AF_INET6, SOCK_RAW, IPPROTO_ICMPV6);
+    if (sockfd < 0) {
+		debug(LOG_ERR, "socket(): %s", strerror(errno));
+        return 0;
+    }
+
+    // Set up destination address
+    memset(&dest, 0, sizeof(dest));
+    dest.sin6_family = AF_INET6;
+    inet_pton(AF_INET6, i_ip, &dest.sin6_addr);
+
+    // Set up ICMPv6 Neighbor Solicitation header
+    memset(&icmp6_hdr, 0, sizeof(icmp6_hdr));
+    icmp6_hdr.icmp6_type = ND_NEIGHBOR_SOLICIT;
+    icmp6_hdr.icmp6_code = 0;
+    icmp6_hdr.icmp6_cksum = 0;
+
+    // Set up target address
+    inet_pton(AF_INET6, i_ip, &target_addr);
+
+    // Set up message header
+    memset(&msg, 0, sizeof(msg));
+    msg.msg_name = &dest;
+    msg.msg_namelen = sizeof(dest);
+    iov.iov_base = &icmp6_hdr;
+    iov.iov_len = sizeof(icmp6_hdr);
+    msg.msg_iov = &iov;
+    msg.msg_iovlen = 1;
+
+    // Send Neighbor Solicitation message
+    if (sendmsg(sockfd, &msg, 0) < 0) {
+		debug(LOG_ERR, "sendmsg(): %s", strerror(errno));
+        close(sockfd);
+        return 0;
+    }
+
+    // Receive Neighbor Advertisement message
+    while (1) {
+        len = recv(sockfd, buf, sizeof(buf), 0);
+        if (len < 0) {
+            perror("recv");
+            close(sockfd);
+            return 0;
+        }
+
+        // Parse Neighbor Advertisement message
+        na = (struct nd_neighbor_advert *)(buf + sizeof(struct ip6_hdr));
+        if (na->nd_na_hdr.icmp6_type == ND_NEIGHBOR_ADVERT) {
+            opt = (struct nd_opt_hdr *)(na + 1);
+            if (opt->nd_opt_type == ND_OPT_TARGET_LINKADDR) {
+                unsigned char *mac = (unsigned char *)(opt + 1);
+                snprintf(o_mac, MAC_LENGTH, "%02x:%02x:%02x:%02x:%02x:%02x",
+                         mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+                close(sockfd);
+                return 1;
+            }
+        }
+    }
+
+    close(sockfd);
+    return 0;
+}
+
 /**
  * @brief get client's mac from its ip
  * @return 0 failed or 1 success
  * 
  */ 
 int 
-arp_get_mac(const char *dev_name, const char *i_ip, char *o_mac) {
+arp_get_mac(const char *dev_name, const char *i_ip, char *o_mac) 
+{
 	int s;
     struct arpreq arpreq;
     struct sockaddr_in *sin;
@@ -1510,6 +1636,10 @@ arp_get_mac(const char *dev_name, const char *i_ip, char *o_mac) {
 	if (!dev_name || !i_ip || !o_mac)
 		return 0;
 	
+	if (is_valid_ip6(i_ip)) {
+		return ndp_get_mac(dev_name, i_ip, o_mac);
+	}
+
 	s = socket(AF_INET, SOCK_DGRAM, 0);
 	if (s <= 0) {
 		return 0;
@@ -1518,8 +1648,13 @@ arp_get_mac(const char *dev_name, const char *i_ip, char *o_mac) {
 	memset(&arpreq, 0, sizeof(arpreq));
 
     sin = (struct sockaddr_in *) &arpreq.arp_pa;
-    sin->sin_family = AF_INET;
-    sin->sin_addr.s_addr = inet_addr(i_ip);
+	if (is_valid_ip(i_ip)) {
+		sin->sin_family = AF_INET;
+		sin->sin_addr.s_addr = inet_addr(i_ip);
+	} else {
+		close(s);
+		return 0;
+	}
 
 	strcpy(arpreq.arp_dev, dev_name);
 	if (ioctl(s, SIOCGARP, &arpreq) < 0) {
@@ -1538,11 +1673,44 @@ arp_get_mac(const char *dev_name, const char *i_ip, char *o_mac) {
 }
 
 int
-br_arp_get_mac(const char *i_ip, char *o_mac)
+br_arp_get_mac(t_gateway_setting *gw_settings, const char *i_ip, char *o_mac)
 {
-	s_config *config = config_get_config();
+	if (!gw_settings || !i_ip || !o_mac)
+		return 0;
 
-	return arp_get_mac(config->gw_interface, i_ip, o_mac);
+	if (arp_get_mac(gw_settings->gw_interface, i_ip, o_mac))
+		return 1;
+	return 0;
+}
+
+t_gateway_setting *
+get_gateway_setting_by_ifname(const char *ifname)
+{
+	if (!ifname)
+		return NULL;
+
+	t_gateway_setting *gw = get_gateway_settings();
+	while (gw) {
+		if (strcmp(gw->gw_interface, ifname) == 0)
+			return gw;
+		gw = gw->next;
+	}
+	return NULL;
+}
+
+t_gateway_setting *
+get_gateway_setting_by_id(const char *gw_id)
+{
+	if (!gw_id)
+		return NULL;
+
+	t_gateway_setting *gw = get_gateway_settings();
+	while (gw) {
+		if (strcmp(gw->gw_id, gw_id) == 0)
+			return gw;
+		gw = gw->next;
+	}
+	return NULL;
 }
 
 /**
