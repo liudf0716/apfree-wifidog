@@ -1683,6 +1683,38 @@ br_arp_get_mac(t_gateway_setting *gw_settings, const char *i_ip, char *o_mac)
 	return 0;
 }
 
+int
+get_ifname_by_address(const char *address,  char *ifname)
+{
+	char command[256] = {0};
+	FILE *fp = NULL;
+
+	if (!address || !ifname)
+		return 0;
+
+	int is_ipv6 = is_valid_ip6(address);
+	if (is_ipv6) {
+		snprintf(command, sizeof(command), "ip -6 route get %s | grep dev | awk '{print $6}'", address);
+	} else {
+		snprintf(command, sizeof(command), "ip route get %s | grep dev | awk '{print $3}'", address);
+	}
+
+	fp = popen(command, "r");
+	if (!fp) {
+		debug(LOG_ERR, "popen(): %s", strerror(errno));
+		return 0;
+	}
+
+	if (fgets(ifname, IFNAMSIZ, fp) == NULL) {
+		pclose(fp);
+		return 0;
+	}
+
+	trim_newline(ifname);
+	pclose(fp);
+	return 1;
+}
+
 t_gateway_setting *
 get_gateway_setting_by_ifname(const char *ifname)
 {

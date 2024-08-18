@@ -275,17 +275,16 @@ ev_http_callback_404(struct evhttp_request *req, void *arg)
         return;
     }
 
-    struct ifreq ifr;
-    socklen_t ifr_len = sizeof(ifr);
-    memset(&ifr, 0, ifr_len);
-    if (getsockopt(fd, SOL_SOCKET, SO_BINDTODEVICE, &ifr, &ifr_len) < 0) {
-        debug(LOG_ERR, "getsockop failed: %s", strerror(errno));
+    char if_name[IFNAMSIZ] = {0};
+    if (!get_ifname_by_address(remote_host, if_name)) {
+        debug(LOG_ERR, "get_ifname_by_address [%s] failed", remote_host);
         evhttp_send_error(req, 200, "Cant get client's interface name");
         return;
     }
-    t_gateway_setting *gw_setting = get_gateway_setting_by_ifname(ifr.ifr_name);
+    if_name[IFNAMSIZ-1] = '\0';
+    t_gateway_setting *gw_setting = get_gateway_setting_by_ifname(if_name);
     if (!gw_setting) {
-        debug(LOG_ERR, "get_gateway_setting_by_ifname [%s] failed", ifr.ifr_name);
+        debug(LOG_ERR, "get_gateway_setting_by_ifname [%s] failed", if_name);
         evhttp_send_error(req, 200, "Cant get gateway setting by interface name");
         return;
     }
