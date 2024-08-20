@@ -58,13 +58,14 @@ handle_auth_response(json_object *j_auth)
 	const char *gw_id_str = json_object_get_string(gw_id);
 	const bool once_auth_bool = json_object_get_boolean(once_auth);
 	if (once_auth_bool) {
-		debug(LOG_DEBUG, "auth: once_auth is true, update gw_setting's auth_mode and refresh gw rule\n");
 		t_gateway_setting *gw_setting = get_gateway_setting_by_id(gw_id_str);
 		if (gw_setting == NULL) {
 			debug(LOG_ERR, "auth: gateway %s not found\n", gw_id_str);
 			return;
 		}
 		gw_setting->auth_mode = 0;
+		debug(LOG_DEBUG, 
+			"auth: once_auth is true, update gw_setting's auth_mode [%d] and refresh gw rule\n", gw_setting->auth_mode);
 		nft_reload_gw();
 		return;
 	}

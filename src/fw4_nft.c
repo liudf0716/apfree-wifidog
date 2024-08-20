@@ -268,6 +268,7 @@ nft_add_gw()
 
     while(gw_settings) {
         if (gw_settings->auth_mode) {
+            debug(LOG_DEBUG, "add gateway %s to auth", gw_settings->gw_interface);
             run_cmd("nft add rule inet fw4 dstnat iifname %s jump dstnat_wifidogx_outgoing", gw_settings->gw_interface);
             run_cmd("nft add rule inet fw4 mangle_prerouting iifname %s jump mangle_prerouting_wifidogx_outgoing", gw_settings->gw_interface);
             run_cmd("nft add rule inet fw4 mangle_postrouting oifname %s jump mangle_postrouting_wifidogx_incoming", gw_settings->gw_interface);
