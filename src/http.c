@@ -137,7 +137,7 @@ process_apple_wisper(struct evhttp_request *req, const char *mac, const char *re
     if(o_client->client_type == 1 ) {
         UNLOCK_OFFLINE_CLIENT_LIST();
         if(interval > 20) {
-            fw_set_mac_temporary(mac, 0);	
+            // fw_set_mac_temporary(mac, 0);	
             ev_http_send_apple_redirect(req, redir_url);
         } else if(o_client->hit_counts > 2)
             ev_http_send_apple_redirect(req, redir_url);
