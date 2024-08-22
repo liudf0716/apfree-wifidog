@@ -399,6 +399,10 @@ wsevent_connection_cb(struct bufferevent* b_ws, short events, void *ctx){
         return;
 	} else if(events & (BEV_EVENT_ERROR | BEV_EVENT_EOF)){
 		debug(LOG_ERR, "ws connection error: %s\n", strerror(errno));
+		// stop heartbeat timer
+		if (ws_heartbeat_ev != NULL) {
+			event_free(ws_heartbeat_ev);
+		}
 		sleep(1);
 		// reconnect ws server
 		if (b_ws != NULL) {
