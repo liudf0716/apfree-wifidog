@@ -85,7 +85,7 @@ process_dns_response(unsigned char *response, int response_len) {
     int qdcount = ntohs(header->qdcount);
     int ancount = ntohs(header->ancount);
     unsigned char *ptr = response + sizeof(struct dns_header); // Skip the DNS header
-    debug(LOG_DEBUG, "DNS response: qdcount=%d, ancount=%d", qdcount, ancount);
+    // debug(LOG_DEBUG, "DNS response: qdcount=%d, ancount=%d", qdcount, ancount);
 
     // Skip the question section
     assert(qdcount == 1); // Only handle one question (A record)
@@ -93,8 +93,7 @@ process_dns_response(unsigned char *response, int response_len) {
         ptr = parse_dns_query_name(ptr, query_name);
         ptr += 4; // Skip QTYPE and QCLASS
     }
-    debug(LOG_DEBUG, "DNS query: %s %x %x", query_name, *ptr, *(ptr + 1));
-    // find the trusted domain in the query_name
+    
     t_domain_trusted *p = config->pan_domains_trusted;
     while (p) {
         if (strrstr(query_name, p->domain)) {
@@ -105,7 +104,6 @@ process_dns_response(unsigned char *response, int response_len) {
     }
 
     if (!p) {
-        debug(LOG_DEBUG, "No trusted wildcard domain found in the query");
         return 0;
     }
 
@@ -118,7 +116,6 @@ process_dns_response(unsigned char *response, int response_len) {
         unsigned short data_len = ntohs(*(unsigned short *)ptr);
         ptr += 2;
 
-        debug(LOG_DEBUG, "Type: %d, Data length: %d", type, data_len);
         if (type == 1 && data_len == 4) { // Type A record
             t_ip_trusted *ip_trusted = p->ips_trusted;
             while(ip_trusted) {
@@ -178,14 +175,8 @@ dns_read_cb(evutil_socket_t fd, short event, void *arg)
     int response_len = recv(fd, response, sizeof(response), 0);
 
     if (response_len > 0) {
-        debug(LOG_DEBUG, "Received DNS response from local dns server");
-
-        // Process DNS response for trusted domains
         process_dns_response(response, response_len);
-
-        // Send the DNS response back to the client
         sendto(query->client_fd, response, response_len, 0, (struct sockaddr *)&query->client_addr, query->client_len);
-        debug(LOG_DEBUG, "Sent DNS response to client");
     } else {
         perror("recv");
     }
@@ -206,8 +197,6 @@ read_cb(evutil_socket_t fd, short event, void *arg)
 
     int recv_len = recvfrom(fd, buffer, sizeof(buffer), 0, (struct sockaddr *)&client_addr, &client_len);
     if (recv_len > 0) {
-        debug(LOG_DEBUG, "Received DNS request");
-
         // Forward DNS query to dns server
         int dns_sock = socket(AF_INET, SOCK_DGRAM, 0);
         if (dns_sock < 0) {
