@@ -373,6 +373,7 @@ ws_read_cb(struct bufferevent *b_ws, void *ctx)
 		// add timer to send heartbeat
 		if (ws_heartbeat_ev != NULL) {
 			event_free(ws_heartbeat_ev);
+			ws_heartbeat_ev = NULL;
 		}
 		struct timeval tv;
 		tv.tv_sec = 60;
