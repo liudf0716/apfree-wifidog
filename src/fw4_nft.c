@@ -208,11 +208,9 @@ run_cmd(char *cmd, ...)
 
     debug(LOG_DEBUG, "EXEC: %s\n", buf);
     
-    int nret = system(buf);
-    // if nret is -1, it means the system call failed
-    if (nret == -1) {
-        debug(LOG_ERR, "system call failed for [%s]", buf);
-        return -1;
+    int nret = execute(buf, 0);
+    if (nret != 0) {
+        debug(LOG_ERR, "Failed to execute (%d) %s", nret,  buf);
     }
     return nret;
 }
