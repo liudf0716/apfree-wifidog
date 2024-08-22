@@ -36,6 +36,7 @@
 #include "client_list.h"
 #include "conf.h"
 #include "dns_forward.h"
+#include "gateway.h"
 
 
 #define NFT_CONF_FILENAME "/etc/fw4_apfree-wifiodg_init.conf"
@@ -91,7 +92,6 @@ const char *nft_wifidogx_init_script[] = {
     "add chain inet fw4 forward_wifidogx_unknown",
     "add chain inet fw4 mangle_prerouting_wifidogx_outgoing",
     "add chain inet fw4 mangle_postrouting_wifidogx_incoming",
-    "insert rule inet fw4 accept_to_wan jump forward_wifidogx_wan",
     "add rule inet fw4 forward_wifidogx_wan jump forward_wifidogx_auth_servers",
     "add rule inet fw4 forward_wifidogx_wan jump forward_wifidogx_trust_domains",
     "add rule inet fw4 forward_wifidogx_wan ether saddr @set_wifidogx_tmp_trust_clients accept",
@@ -107,6 +107,7 @@ const char *nft_wifidogx_init_script[] = {
     "add rule inet fw4 forward_wifidogx_trust_domains ip6 daddr @set_wifidogx_trust_domains_v6 accept",
     "add rule inet fw4 forward_wifidogx_trust_domains ip daddr @set_wifidogx_inner_trust_domains accept",
     "add rule inet fw4 forward_wifidogx_trust_domains ip6 daddr @set_wifidogx_inner_trust_domains_v6 accept",
+    "insert rule inet fw4 accept_to_wan jump forward_wifidogx_wan",
 };
 
 const char *nft_wifidogx_dhcp_pass_script[] = {
@@ -145,7 +146,7 @@ replace_str(const char *content, const char *old_str, const char *new_str, char 
     strncat(out, p + strlen(old_str), out_len - len - strlen(new_str));
 }
 
-static int
+static void
 generate_nft_wifidogx_init_script()
 {
     s_config *config = config_get_config();
@@ -158,7 +159,7 @@ generate_nft_wifidogx_init_script()
     output_file = fopen(NFT_FILENAME_OUT, "w");
     if (output_file == NULL) {
         debug(LOG_ERR, "Failed to open %s for writing", NFT_FILENAME_OUT);
-        return -1;
+        termination_handler(0);
     }
 
     for (i = 0; i < sizeof(nft_wifidogx_init_script) / sizeof(nft_wifidogx_init_script[0]); i++) {
@@ -192,7 +193,6 @@ generate_nft_wifidogx_init_script()
     }
 
     fclose(output_file);
-    return 0;
 }
 
 // the function run_cmd is used to run the nftables command
@@ -217,11 +217,10 @@ run_cmd(char *cmd, ...)
 /* end of utils function */
 
 // run nft script
-static int 
+static void 
 nft_do_init_script_command()
 {
 	run_cmd("nft -f %s", NFT_FILENAME_OUT);
-    return 1;
 }
 
 // statistical outgoing information,must free when statistical is over
@@ -328,12 +327,7 @@ nft_reload_gw()
 int 
 nft_init()
 {
-	int ret = generate_nft_wifidogx_init_script();
-	if (ret != 0) {
-        debug(LOG_ERR, "Failed to replace variables in %s", NFT_CONF_FILENAME);
-        return 0;
-    }
-
+	generate_nft_wifidogx_init_script();
 	nft_do_init_script_command();
     nft_add_gw();
     iptables_fw_set_authservers(NULL);
