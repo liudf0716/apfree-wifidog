@@ -72,12 +72,12 @@ process_dns_response(unsigned char *response, int response_len) {
     s_config *config = config_get_config();
     
     if (response_len <= sizeof(struct dns_header)) {
-        debug(LOG_WARNING, "Invalid DNS response");
+        debug(LOG_WARNING, "Invalid DNS response, response_len=%d", response_len);
         return -1;
     }
     struct dns_header *header = (struct dns_header *)response;
     if (header->qr != 1 || header->opcode != 0 || header->rcode != 0) {
-        debug(LOG_WARNING, "Invalid DNS response");
+        debug(LOG_WARNING, "Invalid DNS response, qr=%d, opcode=%d, rcode=%d", header->qr, header->opcode, header->rcode);
         return -1;
     }
 

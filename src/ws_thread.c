@@ -231,8 +231,7 @@ ws_send(struct evbuffer *buf, const char *msg, const size_t len)
 	for(int i = 0; i < len; i++){
 		m = msg[i] ^ mask_key[i%4];
 		evbuffer_add(buf, &m, 1); 
-	}	
-    debug(LOG_DEBUG, "ws send data %d\n", len);
+	}
 }
 
 static void 
@@ -246,9 +245,6 @@ ws_receive(unsigned char *data, const size_t data_len){
 	uint64_t payload_len =  *(data+1) & 0x7F;
 
 	size_t header_len = 2 + (mask ? 4 : 0);
-	
-	debug(LOG_DEBUG, "ws receive fin %d opcode %d data_len %d mask %d head_len %d payload_len %d\n", 
-		fin, opcode, data_len, mask, header_len, payload_len);
 
 	if(payload_len < 126){
 		if(header_len > data_len)
@@ -274,8 +270,6 @@ ws_receive(unsigned char *data, const size_t data_len){
 
 
 	unsigned char* mask_key = data + header_len - 4;
-	debug(LOG_DEBUG, "ws receive opcode %d data_len %d mask %d head_len %d payload_len %d\n", 
-		opcode, data_len, mask, header_len, payload_len);
 	for(int i = 0; mask && i < payload_len; i++)
 		data[header_len + i] ^= mask_key[i%4];
 
@@ -351,7 +345,6 @@ static void
 ws_read_cb(struct bufferevent *b_ws, void *ctx)
 {
 	struct evbuffer *input = bufferevent_get_input(b_ws);
-    debug (LOG_DEBUG, "ws_read_cb : upgraded is %d\n", upgraded);
 	unsigned char data[1024] = {0};
 	int pos = 0;
 	int data_len = 0;
@@ -402,8 +395,13 @@ wsevent_connection_cb(struct bufferevent* b_ws, short events, void *ctx){
 		// stop heartbeat timer
 		if (ws_heartbeat_ev != NULL) {
 			event_free(ws_heartbeat_ev);
+			ws_heartbeat_ev = NULL;
 		}
-		sleep(1);
+		// is the error is reset by peer, we should sleep longer
+		if (events & BEV_EVENT_EOF)
+			sleep(5);
+		else
+			sleep(1);
 		// reconnect ws server
 		if (b_ws != NULL) {
 			bufferevent_free(b_ws);

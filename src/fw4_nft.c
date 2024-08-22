@@ -211,7 +211,7 @@ run_cmd(char *cmd, ...)
     int nret = system(buf);
     // if nret is -1, it means the system call failed
     if (nret == -1) {
-        debug(LOG_ERR, "system call failed");
+        debug(LOG_ERR, "system call failed for [%s]", buf);
         return -1;
     }
     return nret;
