@@ -41,6 +41,8 @@ static char *fixed_key = "dGhlIHNhbXBsZSBub25jZQ==";
 static char *fixed_accept = "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=";
 static bool upgraded = false;
 
+static void ws_heartbeat_cb(evutil_socket_t fd, short event, void *arg);
+
 static void
 handle_auth_response(json_object *j_auth)
 {
@@ -160,6 +162,20 @@ handle_heartbeat_response(json_object *j_heartbeat)
 }
 
 static void
+start_ws_heartbeat(struct bufferevent *b_ws)
+{
+	if (ws_heartbeat_ev != NULL) {
+		event_free(ws_heartbeat_ev);
+		ws_heartbeat_ev = NULL;
+	}
+	struct timeval tv;
+	tv.tv_sec = 60;
+	tv.tv_usec = 0;
+	ws_heartbeat_ev = event_new(ws_base, -1, EV_PERSIST, ws_heartbeat_cb, b_ws);
+	event_add(ws_heartbeat_ev, &tv);
+}
+
+static void
 process_ws_msg(const char *msg)
 {
 	debug(LOG_DEBUG, "process_ws_msg %s\n", msg);
@@ -256,7 +272,6 @@ ws_receive(unsigned char *data, const size_t data_len){
 			return;
 
 		payload_len = ntohs(*(uint16_t*)(data+2));
-
 	}else if(payload_len == 127){
 		header_len += 8;
 		if(header_len > data_len)
@@ -268,11 +283,9 @@ ws_receive(unsigned char *data, const size_t data_len){
 	if(header_len + payload_len > data_len)
 		return;
 
-
 	unsigned char* mask_key = data + header_len - 4;
 	for(int i = 0; mask && i < payload_len; i++)
 		data[header_len + i] ^= mask_key[i%4];
-
 
 	if(opcode == 0x01) {
         const char *msg = (const char *)(data + header_len);
@@ -369,17 +382,8 @@ ws_read_cb(struct bufferevent *b_ws, void *ctx)
 		debug (LOG_DEBUG, "ws_read_cb : upgraded is %d\n", upgraded);
 
 		send_msg(bufferevent_get_output(b_ws), "connect");
-	
-		// add timer to send heartbeat
-		if (ws_heartbeat_ev != NULL) {
-			event_free(ws_heartbeat_ev);
-			ws_heartbeat_ev = NULL;
-		}
-		struct timeval tv;
-		tv.tv_sec = 60;
-		tv.tv_usec = 0;
-		ws_heartbeat_ev = event_new(ws_base, -1, EV_PERSIST, ws_heartbeat_cb, b_ws);
-		event_add(ws_heartbeat_ev, &tv);
+
+		start_ws_heartbeat(b_ws);
     } else {
 		ws_receive(data, pos);
 	}
