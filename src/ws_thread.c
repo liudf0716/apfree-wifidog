@@ -81,6 +81,7 @@ handle_auth_response(json_object *j_auth)
 			debug(LOG_ERR, "auth: gateway %s not found\n", gw_id_str);
 			return;
 		}
+		LOCK_CLIENT_LIST();
 		t_client *client = client_list_add(client_ip_str, client_mac_str, token_str, gw_setting);
 		fw_allow(client, FW_MARK_KNOWN);
 		if (client_name != NULL) {
@@ -88,6 +89,7 @@ handle_auth_response(json_object *j_auth)
 		}
 		client->first_login = time(NULL);
 		client->is_online = 1;
+		UNLOCK_CLIENT_LIST();
 		{
 			LOCK_OFFLINE_CLIENT_LIST();
 			t_offline_client *o_client = offline_client_list_find_by_mac(client->mac);    
@@ -95,7 +97,8 @@ handle_auth_response(json_object *j_auth)
 				offline_client_list_delete(o_client);
 			UNLOCK_OFFLINE_CLIENT_LIST();
 		}
-		debug(LOG_DEBUG, "fw_allow client: token %s, client_ip %s, client_mac %s\n", token_str, client_ip_str, client_mac_str);
+		debug(LOG_DEBUG, "fw_allow client: token %s, client_ip %s, client_mac %s gw_setting is %lu\n", 
+			token_str, client_ip_str, client_mac_str, client->gw_setting);
 	} else {
 		debug(LOG_DEBUG, "client already exists: token %s, client_ip %s, client_mac %s\n", token_str, client_ip_str, client_mac_str);
 	}

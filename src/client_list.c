@@ -121,10 +121,7 @@ client_list_insert_client(t_client * client)
 {
     t_client *prev_head;
 
-    pthread_mutex_lock(&client_id_mutex);
     client->id = client_id++;
-    pthread_mutex_unlock(&client_id_mutex);
-
     prev_head = firstclient;
     client->next = prev_head;
     firstclient = client;
@@ -268,6 +265,7 @@ client_dup(const t_client * src)
 	new->first_login = src->first_login;
 	new->is_online = src->is_online;
 	new->wired	= src->wired;
+    new->gw_setting = src->gw_setting;
     new->next = NULL;
 
     return new;
@@ -451,6 +449,8 @@ client_free_node(t_client * client)
     if(client->ip) free(client->ip);
     if(client->token) free(client->token);
 	if (client->name) free(client->name);
+    client->gw_setting = NULL;
+    client->next = NULL;
     free(client);
 }
 

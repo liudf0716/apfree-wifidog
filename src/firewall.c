@@ -528,6 +528,7 @@ get_gw_clients_counter(t_gateway_setting *gw_setting, t_client *worklist)
     while (gw_setting) {
         json_object *gw_obj = json_object_new_object();
         json_object_object_add(gw_obj, "gw_id", json_object_new_string(gw_setting->gw_id));
+		json_object_object_add(gw_obj, "gw_channel", json_object_new_string(gw_setting->gw_channel));
         json_object *client_array = json_object_new_array();
         if (!client_array) {
             debug(LOG_ERR, "Could not create json array");
@@ -539,8 +540,11 @@ get_gw_clients_counter(t_gateway_setting *gw_setting, t_client *worklist)
         t_client *p1 = NULL, *p2 = NULL;
         for (p1 = p2 = worklist; NULL != p1; p1 = p2) {
             p2 = p1->next;
-            if (p1->gw_setting != gw_setting)
-                continue;
+            if (p1->gw_setting && p1->gw_setting != gw_setting) {
+				debug(LOG_INFO, "client %s client gw_setting %lu not in gateway %s", 
+					p1->ip, p1->gw_setting,   gw_setting->gw_id);
+				continue;
+			}
 
             json_object *clt = json_object_new_object();
             json_object_object_add(clt, "id", json_object_new_int(p1->id));
