@@ -44,6 +44,45 @@ static bool upgraded = false;
 static void ws_heartbeat_cb(evutil_socket_t fd, short event, void *arg);
 
 static void
+handle_kickoff_response(json_object *j_auth)
+{
+	json_object *client_ip = json_object_object_get(j_auth, "client_ip");
+	json_object *client_mac = json_object_object_get(j_auth, "client_mac");
+	json_object *device_id = json_object_object_get(j_auth, "device_id");
+	json_object *gw_id = json_object_object_get(j_auth, "gw_id");
+	if(client_ip == NULL || client_mac == NULL || device_id == NULL || gw_id == NULL){
+		debug(LOG_ERR, "kickoff: parse json data failed\n");
+		return;
+	}
+
+	const char *client_ip_str = json_object_get_string(client_ip);
+	const char *client_mac_str = json_object_get_string(client_mac);
+	const char *device_id_str = json_object_get_string(device_id);
+	const char *gw_id_str = json_object_get_string(gw_id);
+	t_client *client = client_list_find(client_ip_str, client_mac_str);
+	if (client == NULL) {
+		debug(LOG_ERR, "kickoff: client %s %s not found\n", client_ip_str, client_mac_str);
+		return;
+	}
+
+	if (config_get_config()->device_id == NULL || strcmp(config_get_config()->device_id, device_id_str) != 0) {
+		debug(LOG_ERR, "kickoff: device_id %s not match\n", device_id_str);
+		return;
+	}
+
+	if (client->gw_setting == NULL || strcmp(client->gw_setting->gw_id, gw_id_str) != 0) {
+		debug(LOG_ERR, "kickoff: client %s %s gw_id %s not match\n", client_ip_str, client_mac_str, gw_id_str);
+		return;
+	}
+
+	LOCK_CLIENT_LIST();
+	fw_deny(client);
+	client_list_remove(client);
+	client_free_node(client);
+	UNLOCK_CLIENT_LIST();
+}
+
+static void
 handle_auth_response(json_object *j_auth)
 {
 	json_object *token = json_object_object_get(j_auth, "token");
@@ -202,6 +241,8 @@ process_ws_msg(const char *msg)
 		handle_heartbeat_response(jobj);
 	} else if (strcmp(type_str, "auth") == 0) {
 		handle_auth_response(jobj);
+	} else if (strcmp(type_str, "kickoff") == 0) {
+		handle_kickoff_response(jobj);
 	} else if (strcmp(type_str, "tmp_pass") == 0) {
 		handle_tmp_pass_response(jobj);
 	} else {
