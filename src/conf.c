@@ -88,6 +88,8 @@ typedef enum {
 	oAuthServPingScriptPathFragment,
 	oAuthServAuthScriptPathFragment,
 	oAuthServWsScriptPathFragment,
+	oAuthServerOfflineFile,
+	oInternetOfflineFile,
 	oHTTPDMaxConn,
 	oHTTPDName,
 	oHTTPDRealm,
@@ -165,6 +167,8 @@ static const struct {
 	"pingscriptpathfragment", oAuthServPingScriptPathFragment}, {
 	"authscriptpathfragment", oAuthServAuthScriptPathFragment}, {
 	"wsscriptpathfragment", oAuthServWsScriptPathFragment}, {
+	"authserverofflinefile", oAuthServerOfflineFile}, {
+	"internetofflinefile", oInternetOfflineFile}, {
 	"firewallruleset", oFirewallRuleSet}, {
 	"firewallrule", oFirewallRule}, {
 	"trustedmaclist", oTrustedMACList}, {
@@ -1137,6 +1141,16 @@ config_read()
 					break;
 				case oDeviceID:
 					config.device_id = safe_strdup(p1);
+					break;
+				case oAuthServerOfflineFile:
+					if (config.authserver_offline_file)
+						free(config.authserver_offline_file);
+					config.authserver_offline_file = safe_strdup(p1);
+					break;
+				case oInternetOfflineFile:
+					if (config.internet_offline_file)
+						free(config.internet_offline_file);
+					config.internet_offline_file = safe_strdup(p1);
 					break;
 				case oBadOption:
 					/* FALL THROUGH */
