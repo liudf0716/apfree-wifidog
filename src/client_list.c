@@ -50,11 +50,6 @@ static t_offline_client *first_offline_client = NULL;
  */
 static volatile unsigned long long client_id = 1;
 
-/**
- * Mutex to protect client_id and guarantee uniqueness.
- */
-static pthread_mutex_t client_id_mutex = PTHREAD_MUTEX_INITIALIZER;
-
 /** Global mutex to protect access to the client list */
 pthread_mutex_t client_list_mutex = PTHREAD_MUTEX_INITIALIZER;
 

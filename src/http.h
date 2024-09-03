@@ -72,4 +72,6 @@ void ev_http_replay_wisper(struct evhttp_request *);
 /** @brief get query's value according to key */
 char *ev_http_find_query(struct evhttp_request *, const char *);
 
+void ev_http_callback_local_auth(struct evhttp_request *, void *);
+
 #endif /* _HTTP_H_ */

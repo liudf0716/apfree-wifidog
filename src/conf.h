@@ -62,6 +62,7 @@
 #define DEFAULT_SYSLOG_FACILITY LOG_DAEMON
 #define DEFAULT_WDCTL_SOCK "/tmp/wdctl.sock"
 #define DEFAULT_INTERNAL_SOCK "/tmp/wifidog.sock"
+#define DEFAULT_LOCAL_PORTAL "http://www.wifidogx.online"
 #define DEFAULT_AUTHSERVPORT 80
 #define DEFAULT_AUTHSERVSSLPORT 443
 /** Note that DEFAULT_AUTHSERVSSLAVAILABLE must be 0 or 1, even if the config file syntax is yes or no */
@@ -303,6 +304,7 @@ typedef struct {
 	char 	*htmlredirfile;
 	char	*internet_offline_file;
 	char	*authserver_offline_file;
+	char 	*local_portal;
 	short	wired_passed; /** 1 wired device no need to auth */
 	short	parse_checked; 
 	short	js_redir; /** boolean, whether to enable javascript to redirect url request to auth server */

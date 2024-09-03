@@ -86,6 +86,7 @@ typedef enum {
 	oAuthServWsScriptPathFragment,
 	oAuthServerOfflineFile,
 	oInternetOfflineFile,
+	oLocalPortal,
 	oHTTPDMaxConn,
 	oHTTPDName,
 	oHTTPDRealm,
@@ -165,6 +166,7 @@ static const struct {
 	"wsscriptpathfragment", oAuthServWsScriptPathFragment}, {
 	"authserverofflinefile", oAuthServerOfflineFile}, {
 	"internetofflinefile", oInternetOfflineFile}, {
+	"localportal", oLocalPortal}, {
 	"firewallruleset", oFirewallRuleSet}, {
 	"firewallrule", oFirewallRule}, {
 	"trustedmaclist", oTrustedMACList}, {
@@ -273,6 +275,7 @@ config_init(void)
 	config.htmlredirfile 			= safe_strdup(DEFAULT_REDIRECTFILE);
 	config.internet_offline_file	= safe_strdup(DEFAULT_INTERNET_OFFLINE_FILE);
 	config.authserver_offline_file	= safe_strdup(DEFAULT_AUTHSERVER_OFFLINE_FILE);
+	config.local_portal				= safe_strdup(DEFAULT_LOCAL_PORTAL);
 	config.js_redir 		= 1; // default enable it
 	config.wired_passed		= 1; // default wired device no need login
 	config.parse_checked	= 1; // before parse domain's ip; fping check it
@@ -1147,6 +1150,11 @@ config_read()
 					if (config.internet_offline_file)
 						free(config.internet_offline_file);
 					config.internet_offline_file = safe_strdup(p1);
+					break;
+				case oLocalPortal:
+					if (config.local_portal)
+						free(config.local_portal);
+					config.local_portal = safe_strdup(p1);
 					break;
 				case oBadOption:
 					/* FALL THROUGH */

@@ -53,6 +53,7 @@
 #include "wd_util.h"
 #include "version.h"
 #include "wd_client.h"
+#include "fw_iptables.h"
 
 #define APPLE_REDIRECT_MSG  "<!DOCTYPE html>"	\
 				"<html>"						\
@@ -543,6 +544,44 @@ ev_http_callback_disconnect(struct evhttp_request *req, void *arg)
         evhttp_send_error(req, HTTP_OK, "Invalid token for MAC");
     }
 }
+
+/**
+ * @brief process client's local pass request
+ * 
+ * @param req Client's http request
+ * @param arg useless
+ * 
+ */
+void
+ev_http_callback_local_auth(struct evhttp_request *req, void *arg)
+{
+    s_config *config = config_get_config();
+    if (config->auth_servers) {
+        evhttp_send_error(req, HTTP_OK, "Only no auth server configured can use local pass");
+        return;
+    }
+
+    // get the ip and mac of the client
+    const char *mac = ev_http_find_query(req, "mac");
+    const char *ip = ev_http_find_query(req, "ip");
+    if (!mac || !ip) {
+        evhttp_send_error(req, HTTP_OK, "MAC and IP need to be specified");
+        goto END;
+    }
+
+    // fw_allow the client
+    LOCK_CLIENT_LIST();
+    iptables_fw_access(FW_ACCESS_ALLOW, ip, mac, 0);    
+    UNLOCK_CLIENT_LIST();
+
+    // redirect the client to the internet
+    ev_http_send_redirect(req, config->local_portal, "Redirect to internet");
+
+END:
+    if (mac) free((void *)mac);
+    if (ip) free((void *)ip);
+}
+
 
 /**
  * @brief Temporaray allow client to access internet a minute

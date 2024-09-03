@@ -478,12 +478,6 @@ END_DELETE_CLIENT:
 int
 nft_fw_access(fw_access_t type, const char *ip, const char *mac, int tag)
 {
-    // according to type, if type is FW_ACCESS_ALLOW, set the firewall rules to allow the client
-    // if type is FW_ACCESS_DENY, set the firewall rules to deny the client
-
-    // the rules are as the following:
-    // add rule inet fw4 mangle_prerouting_wifidogx_outgoing ether saddr ab:23:23:ab:23:23 ip saddr
-    // add rule inet fw4 mangle_postrouting_wifidogx_incoming ether saddr ab:23:23:ab:23:23 ip saddr
     switch(type) {
         case FW_ACCESS_ALLOW:
             run_cmd("nft add rule inet fw4 mangle_prerouting_wifidogx_outgoing ether saddr %s ip saddr %s counter mark set 0x20000 accept", mac, ip);
@@ -512,27 +506,25 @@ nft_fw_reload_client(int tag)
         return 1;
     }
 
-    // open the file /tmp/nftables_wifidogx_client_list
-    // define the file /tmp/nftables_wifidogx_client_list as NFT_WIFIDOGX_CLIENT_LIST
     FILE *fp = fopen(NFT_WIFIDOGX_CLIENT_LIST, "w");
     if (fp == NULL) {
         debug(LOG_ERR, "Failed to open %s", NFT_WIFIDOGX_CLIENT_LIST);
         return 1;
     }
-    // flush the rules in the chain mangle_prerouting_wifidogx_outgoing
     fprintf(fp, "nft flush chain inet fw4 mangle_prerouting_wifidogx_outgoing\n");
-    // flush the rules in the chain mangle_postrouting_wifidogx_incoming
     fprintf(fp, "nft flush chain inet fw4 mangle_postrouting_wifidogx_incoming\n");
-    // iterate the client_list
+    
     t_client *current = first_client;
     char line[256] = {0};
     do {
-        snprintf(line, sizeof(line), "nft add rule inet fw4 mangle_prerouting_wifidogx_outgoing ether saddr %s ip saddr %s  counter mark set 0x%02x0000/0xff0000 accept\n", current->mac, current->ip, tag&0x000000ff);
-        // write the line to the file /tmp/nftables_wifidogx_client_list
+        snprintf(line, sizeof(line), 
+            "nft add rule inet fw4 mangle_prerouting_wifidogx_outgoing ether saddr %s ip saddr %s  counter mark set 0x%02x0000/0xff0000 accept\n", 
+            current->mac, current->ip, tag&0x000000ff);
         fprintf(fp, "%s", line);
         memset(line, 0, sizeof(line));
-        snprintf(line, sizeof(line), "nft add rule inet fw4 mangle_postrouting_wifidogx_incoming ip daddr %s counter accept\n", current->ip);
-        // write the line to the file /tmp/nftables_wifidogx_client_list
+        snprintf(line, sizeof(line), 
+            "nft add rule inet fw4 mangle_postrouting_wifidogx_incoming ip daddr %s counter accept\n", 
+            current->ip);
         fprintf(fp, "%s", line);
         memset(line, 0, sizeof(line));
         current = current->next;

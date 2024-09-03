@@ -422,7 +422,7 @@ threads_init(s_config *config)
         debug(LOG_INFO, "No auth server available, not starting the following threads");
         return;
     }
-    
+
     /* Start heartbeat thread */
     result = pthread_create(&tid_ping, NULL, (void *)thread_ping, NULL);
     if (result != 0) {
@@ -510,6 +510,7 @@ http_redir_loop(s_config *config)
     evhttp_set_cb(http, "/wifidog/auth", ev_http_callback_auth, request_ctx);
     //evhttp_set_cb(http, "/wifidog/disconnect", ev_http_callback_disconnect, request_ctx);
     evhttp_set_cb(http, "/wifidog/temporary_pass", ev_http_callback_temporary_pass, NULL);
+    evhttp_set_cb(http, "/wifidog/local_auth", ev_http_callback_local_auth, NULL);
 
     evhttp_set_gencb(http, ev_http_callback_404, NULL);
 
