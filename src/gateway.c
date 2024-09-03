@@ -381,32 +381,6 @@ threads_init(s_config *config)
     }
     pthread_detach(tid_ssl_redirect);
 
-    /* Start heartbeat thread */
-    result = pthread_create(&tid_ping, NULL, (void *)thread_ping, NULL);
-    if (result != 0) {
-        debug(LOG_ERR, "FATAL: Failed to create a new thread (ping) - exiting");
-        termination_handler(0);
-    }
-    pthread_detach(tid_ping);
-    
-
-    /* Start client clean up thread */
-    result = pthread_create(&tid_fw_counter, NULL, (void *)thread_client_timeout_check, NULL);
-    if (result != 0) {
-        debug(LOG_ERR, "FATAL: Failed to create a new thread (fw_counter) - exiting");
-        termination_handler(0);
-    }
-    pthread_detach(tid_fw_counter);
-
-    if (config->enable_dhcp_cpi) {
-        result = pthread_create(&tid_fw_counter, NULL, (void *)thread_dhcp_cpi, NULL);
-        if (result != 0) {
-            debug(LOG_ERR, "FATAL: Failed to create a new thread (dhcp_cpi) - exiting");
-            termination_handler(0);
-        }
-        pthread_detach(tid_fw_counter);
-    }
-
 #ifdef	_MQTT_SUPPORT_
     // start mqtt subscript thread
     result = pthread_create(&tid_mqtt_server, NULL, (void *)thread_mqtt, config);
@@ -424,14 +398,6 @@ threads_init(s_config *config)
     }
     pthread_detach(tid_wdctl);
 
-    if (config->enable_ws) {
-        result = pthread_create(&tid_ws, NULL, (void *)start_ws_thread, NULL);
-        if (result != 0) {
-            debug(LOG_INFO, "Failed to create a new thread (ws)");
-            termination_handler(0);
-        }
-        pthread_detach(tid_ws);
-    }
 
     if (config->enable_dns_forward) {
         result = pthread_create(&tid_dns_forward, NULL, (void *)dns_forward_thread, NULL);
@@ -441,6 +407,48 @@ threads_init(s_config *config)
         }
         pthread_detach(tid_dns_forward);
     }
+
+    if (config->enable_dhcp_cpi) {
+        result = pthread_create(&tid_fw_counter, NULL, (void *)thread_dhcp_cpi, NULL);
+        if (result != 0) {
+            debug(LOG_ERR, "FATAL: Failed to create a new thread (dhcp_cpi) - exiting");
+            termination_handler(0);
+        }
+        pthread_detach(tid_fw_counter);
+    }
+
+    // if no auth server avaible, dont start the following thread
+    if (!config->auth_servers) {
+        debug(LOG_INFO, "No auth server available, not starting the following threads");
+        return;
+    }
+    
+    /* Start heartbeat thread */
+    result = pthread_create(&tid_ping, NULL, (void *)thread_ping, NULL);
+    if (result != 0) {
+        debug(LOG_ERR, "FATAL: Failed to create a new thread (ping) - exiting");
+        termination_handler(0);
+    }
+    pthread_detach(tid_ping);
+    
+    /* Start client clean up thread */
+    result = pthread_create(&tid_fw_counter, NULL, (void *)thread_client_timeout_check, NULL);
+    if (result != 0) {
+        debug(LOG_ERR, "FATAL: Failed to create a new thread (fw_counter) - exiting");
+        termination_handler(0);
+    }
+    pthread_detach(tid_fw_counter);
+
+    if (config->enable_ws) {
+        result = pthread_create(&tid_ws, NULL, (void *)start_ws_thread, NULL);
+        if (result != 0) {
+            debug(LOG_INFO, "Failed to create a new thread (ws)");
+            termination_handler(0);
+        }
+        pthread_detach(tid_ws);
+    }
+
+    
 }
 
 static void

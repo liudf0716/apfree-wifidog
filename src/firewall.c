@@ -611,7 +611,10 @@ ev_fw_sync_with_authserver_v2(struct wd_request_context *context)
 {
 	t_client *worklist = NULL;
 	t_gateway_setting *gw_settings = get_gateway_settings();
-	assert(gw_settings != NULL);
+	if (!gw_settings) {
+		debug(LOG_INFO, "no gateway settings");
+		return;
+	}
 
 	if (-1 == iptables_fw_counters_update()) {
 		debug(LOG_ERR, "Could not get counters from firewall!");

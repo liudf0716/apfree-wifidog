@@ -66,16 +66,15 @@ static void fw_init_delay()
 static void 
 ping_work_cb(evutil_socket_t fd, short event, void *arg) {
 	struct wd_request_context *request_ctx = (struct wd_request_context *)arg;
-	
+	t_gateway_setting *gw_settings = get_gateway_settings();
+	if (!gw_settings) {
+		debug(LOG_INFO, "no gateway setting");
+		return;
+	}
+
 	struct sys_info info;
 	memset(&info, 0, sizeof(info));
 	get_sys_info(&info);
-
-	t_gateway_setting *gw_settings = get_gateway_settings();
-	if (!gw_settings) {
-		debug(LOG_ERR, "Failed to get gateway setting");
-		return;
-	}
 
 	char *uri = get_ping_v2_uri(&info);
 	if (!uri) return; // impossibe
