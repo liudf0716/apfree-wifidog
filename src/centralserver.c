@@ -249,8 +249,9 @@ get_auth_uri(const char *request_type, client_type_t type, void *data)
     unsigned long long int incoming = 0,  outgoing = 0, incoming_delta = 0, outgoing_delta = 0;
     time_t first_login = 0;
     uint32_t online_time = 0, wired = 0;
-    char *gw_id = NULL;
-    char *gw_channel = NULL;
+    const char *gw_id = NULL;
+    const char *gw_channel = NULL;
+    const char *device_id = get_device_id();
 
     switch(type) {
     case ONLINE_CLIENT:
@@ -283,7 +284,7 @@ get_auth_uri(const char *request_type, client_type_t type, void *data)
     int nret = 0;
     if (config->deltatraffic) {
         nret = safe_asprintf(&uri, 
-             "%s%sstage=%s&ip=%s&mac=%s&token=%s&incoming=%llu&outgoing=%llu&incomingdelta=%llu&outgoingdelta=%llu&first_login=%lld&online_time=%u&gw_id=%s&gw_channel=%s&name=%s&wired=%u",
+             "%s%sstage=%s&ip=%s&mac=%s&token=%s&incoming=%llu&outgoing=%llu&incomingdelta=%llu&outgoingdelta=%llu&first_login=%lld&online_time=%u&gw_id=%s&gw_channel=%s&name=%s&wired=%u&device_id=%s",
              auth_server->authserv_path,
              auth_server->authserv_auth_script_path_fragment,
              request_type,
@@ -299,10 +300,11 @@ get_auth_uri(const char *request_type, client_type_t type, void *data)
              gw_id,
              gw_channel, 
              name?name:"null", 
-             wired);
+             wired,
+             device_id);
     } else {
         nret = safe_asprintf(&uri, 
-             "%s%sstage=%s&ip=%s&mac=%s&token=%s&incoming=%llu&outgoing=%llu&first_login=%lld&online_time=%u&gw_id=%s&gw_channel=%s&name=%s&wired=%u",
+             "%s%sstage=%s&ip=%s&mac=%s&token=%s&incoming=%llu&outgoing=%llu&first_login=%lld&online_time=%u&gw_id=%s&gw_channel=%s&name=%s&wired=%u&device_id=%s",
              auth_server->authserv_path,
              auth_server->authserv_auth_script_path_fragment,
              request_type,
@@ -316,7 +318,8 @@ get_auth_uri(const char *request_type, client_type_t type, void *data)
              gw_id,
              gw_channel, 
              name?name:"null", 
-             wired);
+             wired,
+             device_id);
     }
 
     return nret>0?uri:NULL;
