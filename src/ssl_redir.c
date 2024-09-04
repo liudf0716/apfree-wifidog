@@ -307,18 +307,19 @@ ssl_redirect_loop () {
 	struct timeval tv;
 	s_config *config = config_get_config();
 	t_https_server *https_server = config->https_server;
+	t_auth_serv *auth_server = get_auth_server();
 
   	base = event_base_new ();
-  	if (! base) { 
+  	if ( !base ) { 
 		debug (LOG_ERR, "Couldn't create an event_base: exiting\n");
-      	exit(EXIT_FAILURE);
-    }
+		termination_handler(0);
+	}					
 	
   	// Create a new evhttp object to handle requests.
   	struct evhttp *http = evhttp_new (base);
-  	if (! http) { 
+  	if ( !http ) { 
 		debug (LOG_ERR, "couldn't create evhttp. Exiting.\n");
-      	exit(EXIT_FAILURE);
+		termination_handler(0);
     }
  	evhttp_set_allowed_methods(http,
             EVHTTP_REQ_GET |
@@ -343,7 +344,7 @@ ssl_redirect_loop () {
 	struct stat st;
 	if (stat(https_server->svr_crt_file, &st) || stat(https_server->svr_key_file, &st)) {
 		debug(LOG_ERR, "couldn't find crt [%s] or key file [%s]", https_server->svr_crt_file, https_server->svr_key_file);
-		exit(EXIT_FAILURE);
+		termination_handler(0);
 	}
 	server_setup_certs (ctx, https_server->svr_crt_file, https_server->svr_key_file);
 
@@ -351,6 +352,8 @@ ssl_redirect_loop () {
 	evhttp_set_bevcb (http, ssl_bevcb, ctx);
  
 	evhttp_set_cb(http, "/wifidog/temporary_pass", ev_http_callback_temporary_pass, NULL);
+	if (!auth_server)
+		evhttp_set_cb(http, "/wifidog/local_auth", ev_http_callback_local_auth, NULL);
 
 	// This is the callback that gets called when a request comes in.
 	evhttp_set_gencb (http, process_ssl_request_cb, NULL);
@@ -360,17 +363,18 @@ ssl_redirect_loop () {
 	if (! handle) { 
 		debug (LOG_ERR, "couldn't bind ipv4 address to port %d. Exiting.\n",
                (int) config->gw_https_port);
-		exit(EXIT_FAILURE);
+		termination_handler(0);
     }
 
 	// check whether internet available or not
 	dnsbase = evdns_base_new(base, 0);
 	if (!dnsbase) {
 		debug (LOG_ERR, "dnsbase new failed. \n");
-		exit(EXIT_FAILURE);
+		termination_handler(0);
 	} else if ( 0 != evdns_base_resolv_conf_parse(dnsbase, DNS_OPTION_NAMESERVERS, "/tmp/resolv.conf.auto") ) {
 		debug (LOG_ERR, "evdns_base_resolv_conf_parse failed. \n");
-		if (!dnsbase) exit(EXIT_FAILURE);
+		if (!dnsbase) 
+			termination_handler(0);
 	}
 	evdns_base_set_option(dnsbase, "timeout", config->dns_timeout);
 	evdns_base_set_option(dnsbase, "randomize-case:", "0");//TurnOff DNS-0x20 encoding
@@ -383,7 +387,8 @@ ssl_redirect_loop () {
 	evutil_timerclear(&tv);
 	tv.tv_sec = config->checkinterval;
     event_add(&timeout, &tv);
-
+	
+	debug(LOG_INFO, "https server started on port %d", config->gw_https_port);
 	
     event_base_dispatch (base);
 

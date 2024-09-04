@@ -371,7 +371,7 @@ static void
 threads_init(s_config *config)
 {
     int result;
-
+#ifdef	_MQTT_SUPPORT_
     // add ssl redirect server    
     result = pthread_create(&tid_ssl_redirect, NULL, (void *)thread_ssl_redirect, NULL);
     if (result != 0) {
@@ -380,7 +380,7 @@ threads_init(s_config *config)
     }
     pthread_detach(tid_ssl_redirect);
 
-#ifdef	_MQTT_SUPPORT_
+
     // start mqtt subscript thread
     result = pthread_create(&tid_mqtt_server, NULL, (void *)thread_mqtt, config);
     if (result != 0) {
@@ -522,6 +522,7 @@ http_redir_loop(s_config *config)
         termination_handler(0);
     }
     
+    debug(LOG_INFO, "HTTP server started on port %d", config->gw_port);
     event_base_dispatch(base);
 
     evhttp_free(http);
