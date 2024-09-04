@@ -278,34 +278,11 @@ wd_signals_init(struct event_base *evbase)
 }
 
 
-/**
- * @brief wifidog init
- */
 static void
-wd_init(s_config *config)
+gateway_setting_init()
 {
-    // read wifidog msg file to memory
-    wd_msg_init();    
-    wd_redir_file_init();
-    openssl_init();              /* Initialize OpenSSL */
-	
-    /* Set the time when wifidog started */
-    if (!started_time) {
-        started_time = time(NULL);
-    } else if (started_time < MINIMUM_STARTED_TIME) {
-        started_time = time(NULL);
-    }  
-
-    /* save the pid file if needed */
-    if (config->pidfile)
-        save_pid_file(config->pidfile);
-
+    s_config *config = config_get_config();
     t_gateway_setting *gateway_settings = config->gateway_settings;
-    if (!gateway_settings) {
-        debug(LOG_ERR, "No gateway settings found in the configuration file");
-        exit(EXIT_FAILURE);
-    }
-
     while(gateway_settings) {
         if (!gateway_settings->gw_interface || !gateway_settings->gw_channel) {
             debug(LOG_ERR, "Gateway settings are not complete");
@@ -338,6 +315,29 @@ wd_init(s_config *config)
             gateway_settings->gw_id, gateway_settings->gw_address_v4, gateway_settings->gw_address_v6);
         gateway_settings = gateway_settings->next;
     }
+}
+
+/**
+ * @brief wifidog init
+ */
+static void
+wd_init(s_config *config)
+{
+    // read wifidog msg file to memory
+    wd_msg_init();    
+    wd_redir_file_init();
+    openssl_init();              /* Initialize OpenSSL */
+	
+    /* Set the time when wifidog started */
+    if (!started_time) {
+        started_time = time(NULL);
+    } else if (started_time < MINIMUM_STARTED_TIME) {
+        started_time = time(NULL);
+    }  
+
+    /* save the pid file if needed */
+    if (config->pidfile)
+        save_pid_file(config->pidfile);
 
     /*
      * If needed, increase rlimits to allow as many connections
@@ -539,6 +539,7 @@ main_loop(void)
 	
     wd_init(config);
 	threads_init(config);
+    gateway_setting_init();
 
     http_redir_loop(config);
 }
