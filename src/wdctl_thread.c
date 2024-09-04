@@ -82,6 +82,7 @@ static void wdctl_add_online_client(struct bufferevent *, const char *);
 static void wdctl_add_auth_client(struct bufferevent *, const char *);
 
 static struct wd_request_context *request_ctx;
+static const char *no_auth_response = "no auth server";
 
 static struct wdctl_command {
     const char *command;
@@ -192,8 +193,9 @@ static void
 wdctl_listen_new_client(struct evconnlistener *listener, evutil_socket_t fd,
     struct sockaddr *a, int slen, void *p)
 {
+    struct event_base *base = (struct event_base *)p;
 	struct bufferevent *b_client = bufferevent_socket_new(
-        request_ctx->base, fd, BEV_OPT_CLOSE_ON_FREE|BEV_OPT_DEFER_CALLBACKS);
+        base, fd, BEV_OPT_CLOSE_ON_FREE|BEV_OPT_DEFER_CALLBACKS);
     
     bufferevent_setcb(b_client, wdctl_client_read_cb, NULL, wdctl_client_event_cb, NULL);
     bufferevent_enable(b_client, EV_READ|EV_WRITE);
@@ -212,17 +214,19 @@ thread_wdctl(void *arg)
 	struct event_base *wdctl_base = event_base_new();
     if (!wdctl_base) termination_handler(0);
 
-    SSL_CTX *ssl_ctx = SSL_CTX_new(SSLv23_method());
-	if (!ssl_ctx) termination_handler(0);
+    if (get_auth_server()) {
+        SSL_CTX *ssl_ctx = SSL_CTX_new(SSLv23_method());
+        if (!ssl_ctx) termination_handler(0);
 
-    SSL *ssl = SSL_new(ssl_ctx);
-	if (!ssl) termination_handler(0);
+        SSL *ssl = SSL_new(ssl_ctx);
+        if (!ssl) termination_handler(0);
 
-    request_ctx = wd_request_context_new(
-        wdctl_base, ssl, get_auth_server()->authserv_use_ssl);
-	if (!request_ctx) termination_handler(0);
+        request_ctx = wd_request_context_new(
+            wdctl_base, ssl, get_auth_server()->authserv_use_ssl);
+        if (!request_ctx) termination_handler(0);
+    }
 
-    struct evconnlistener *listener = evconnlistener_new_bind(wdctl_base, wdctl_listen_new_client, NULL,
+    struct evconnlistener *listener = evconnlistener_new_bind(wdctl_base, wdctl_listen_new_client, wdctl_base,
 	    LEV_OPT_CLOSE_ON_FREE|LEV_OPT_CLOSE_ON_EXEC|LEV_OPT_REUSEABLE,
 	    -1, (struct sockaddr*)su_socket, sizeof(struct sockaddr_un));
     if (!listener) termination_handler(0);
@@ -256,6 +260,11 @@ wdctl_stop(struct bufferevent *fd)
 static void
 wdctl_reset(struct bufferevent *fd, const char *arg)
 {
+    if (!request_ctx) {
+        bufferevent_write(fd, no_auth_response, strlen(no_auth_response));
+        return;
+    }
+
     t_client *node;
 
     LOCK_CLIENT_LIST();
@@ -759,6 +768,11 @@ wdctl_user_cfg_save(struct bufferevent *fd)
 static void
 wdctl_add_online_client(struct bufferevent *fd, const char *args)
 {  
+    if (!request_ctx) {
+        bufferevent_write(fd, no_auth_response, strlen(no_auth_response));
+        return;
+    }
+
     json_object *client_info = json_tokener_parse(args);
 	if(is_error(client_info) || json_object_get_type(client_info) != json_type_object) { 
         goto OUT;
@@ -795,6 +809,11 @@ OUT:
 static void
 wdctl_add_auth_client(struct bufferevent *fd, const char *args)
 {
+    if (!request_ctx) {
+        bufferevent_write(fd, no_auth_response, strlen(no_auth_response));
+        return;
+    }
+    
 	json_object *client_info = json_tokener_parse(args);
 	if(is_error(client_info) || json_object_get_type(client_info) != json_type_object) { 
         debug(LOG_ERR, "json_tokener_parse failed: args is %s", args);
