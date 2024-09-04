@@ -259,8 +259,11 @@ check_auth_server_available_cb(int errcode, struct evutil_addrinfo *addr, void *
  */ 
 static void 
 check_auth_server_available() {
-	s_config *config = config_get_config();
-    t_auth_serv *auth_server = config->auth_servers;
+    t_auth_serv *auth_server = get_auth_server();
+	if (!auth_server) {
+		debug(LOG_INFO, "no auth server");
+		return;
+	}
     struct evutil_addrinfo hints;
     memset(&hints, 0, sizeof(hints));
 

@@ -470,17 +470,22 @@ http_redir_loop(s_config *config)
 {
     struct event_base *base;
 	struct evhttp *http;
+    t_auth_serv *auth_server = get_auth_server();
+    SSL_CTX *ssl_ctx = NULL;
+    SSL *ssl = NULL;
 
-    SSL_CTX *ssl_ctx = SSL_CTX_new(SSLv23_method());
-	if (!ssl_ctx) termination_handler(0);
+    if (auth_server) {
+        ssl_ctx = SSL_CTX_new(SSLv23_method());
+        if (!ssl_ctx) termination_handler(0);
 
-    SSL *ssl = SSL_new(ssl_ctx);
-	if (!ssl) termination_handler(0);
+        ssl = SSL_new(ssl_ctx);
+        if (!ssl) termination_handler(0);
 
-    // authserv_hostname is the hostname of the auth server, must be domain name
-    if (!SSL_set_tlsext_host_name(ssl, get_auth_server()->authserv_hostname)) {
-        debug(LOG_ERR, "SSL_set_tlsext_host_name failed");
-        termination_handler(0);
+        // authserv_hostname is the hostname of the auth server, must be domain name
+        if (!SSL_set_tlsext_host_name(ssl, auth_server->authserv_hostname)) {
+            debug(LOG_ERR, "SSL_set_tlsext_host_name failed");
+            termination_handler(0);
+        }
     }
     
     base = event_base_new();
@@ -496,25 +501,23 @@ http_redir_loop(s_config *config)
             EVHTTP_REQ_POST |
             EVHTTP_REQ_OPTIONS);
 	
-	struct wd_request_context *request_ctx = wd_request_context_new(
-        base, ssl, get_auth_server()->authserv_use_ssl);
-	if (!request_ctx) termination_handler(0);
-	
 	wd_signals_init(base);
     
     setbuf(stdout, NULL);
     setbuf(stderr, NULL);
 	
-    evhttp_set_cb(http, "/wifidog", ev_http_callback_wifidog, NULL);
-    //evhttp_set_cb(http, "/wifidog/status", ev_http_callback_status, NULL);
-    evhttp_set_cb(http, "/wifidog/auth", ev_http_callback_auth, request_ctx);
-    //evhttp_set_cb(http, "/wifidog/disconnect", ev_http_callback_disconnect, request_ctx);
-    evhttp_set_cb(http, "/wifidog/temporary_pass", ev_http_callback_temporary_pass, NULL);
-    evhttp_set_cb(http, "/wifidog/local_auth", ev_http_callback_local_auth, NULL);
-
+    if (auth_server) {
+        struct wd_request_context *request_ctx = wd_request_context_new(
+            base, ssl, get_auth_server()->authserv_use_ssl);
+        if (!request_ctx) termination_handler(0);
+        evhttp_set_cb(http, "/wifidog", ev_http_callback_wifidog, NULL);
+        evhttp_set_cb(http, "/wifidog/auth", ev_http_callback_auth, request_ctx);
+        evhttp_set_cb(http, "/wifidog/temporary_pass", ev_http_callback_temporary_pass, NULL);
+    } else {
+        evhttp_set_cb(http, "/wifidog/local_auth", ev_http_callback_local_auth, NULL);
+    }
     evhttp_set_gencb(http, ev_http_callback_404, NULL);
 
-    // bind socket to listen both ipv4 and ipv6
     if (!evhttp_bind_socket_with_handle(http, "0.0.0.0", config->gw_port)) {
         debug(LOG_ERR, "Failed to bind ipv4 address to port %d", config->gw_port);
         termination_handler(0);
