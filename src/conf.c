@@ -2464,11 +2464,6 @@ config_validate(void)
 	config_notnull(config.gateway_settings, "GatewaySetting");
 	config_notnull(config.auth_servers, "AuthServer");
 	validate_popular_servers();
-
-	if (missing_parms) {
-		debug(LOG_ERR, "Configuration is not complete, exiting...");
-		exit(-1);
-	}
 }
 
 /** @internal
