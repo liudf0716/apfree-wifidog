@@ -281,8 +281,7 @@ wd_signals_init(struct event_base *evbase)
 static void
 gateway_setting_init()
 {
-    s_config *config = config_get_config();
-    t_gateway_setting *gateway_settings = config->gateway_settings;
+    t_gateway_setting *gateway_settings = get_gateway_settings();
     while(gateway_settings) {
         if (!gateway_settings->gw_interface || !gateway_settings->gw_channel) {
             debug(LOG_ERR, "Gateway settings are not complete");
@@ -542,7 +541,6 @@ main_loop(void)
 	
     wd_init(config);
 	threads_init(config);
-    gateway_setting_init();
 
     http_redir_loop(config);
 }
@@ -558,6 +556,7 @@ gw_main(int argc, char **argv)
     /* Initialize the config */
     config_read();
     config_validate();
+    gateway_setting_init();
 
     /* Initializes the linked list of connected clients */
     client_list_init();

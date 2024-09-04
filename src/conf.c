@@ -2460,9 +2460,12 @@ trusted_mac_list_dup(t_trusted_mac **worklist)
 void
 config_validate(void)
 {
-	config_notnull(config.device_id, "DeviceID");
 	config_notnull(config.gateway_settings, "GatewaySetting");
-	config_notnull(config.auth_servers, "AuthServer");
+	if (missing_parms) {
+		debug(LOG_ERR, "Configuration is incomplete.  Exiting.");
+		exit(1);
+	}
+
 	validate_popular_servers();
 }
 
