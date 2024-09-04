@@ -64,8 +64,8 @@ handle_kickoff_response(json_object *j_auth)
 		debug(LOG_ERR, "kickoff: client %s %s not found\n", client_ip_str, client_mac_str);
 		return;
 	}
-
-	if (config_get_config()->device_id == NULL || strcmp(config_get_config()->device_id, device_id_str) != 0) {
+	
+	if (get_device_id() == NULL || strcmp(get_device_id(), device_id_str) != 0) {
 		debug(LOG_ERR, "kickoff: device_id %s not match\n", device_id_str);
 		return;
 	}

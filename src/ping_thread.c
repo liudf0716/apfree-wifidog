@@ -127,7 +127,7 @@ get_ping_v2_uri(const struct sys_info *info)
 			"%s%sdevice_id=%s&sys_uptime=%lu&sys_memfree=%u&sys_load=%.2f&nf_conntrack_count=%lu&cpu_usage=%3.2lf&wifidog_uptime=%lu&online_clients=%d&offline_clients=%d&ssid=%s&fm_version=%s&type=%s&name=%s&wired_passed=%d&aw_version=%s",
 			 auth_server->authserv_path,
 			 auth_server->authserv_ping_script_path_fragment,
-			 config_get_config()->device_id,
+			 get_device_id(),
 			 info->sys_uptime,
 			 info->sys_memfree,
 			 info->sys_load,
