@@ -70,7 +70,7 @@ process_ssl_request_cb (struct evhttp_request *req, void *arg) {
 
     char *remote_host;
     uint16_t port;
-    evhttp_connection_get_peer(evhttp_request_get_connection(req), &remote_host, &port);
+    ev_http_connection_get_peer(evhttp_request_get_connection(req), &remote_host, &port);
 	if (!remote_host) {
 		evhttp_send_error(req, 200, "Cant get client's ip");
 		return;

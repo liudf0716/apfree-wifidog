@@ -244,6 +244,34 @@ process_wired_device_pass(struct evhttp_request *req, const char *mac)
     return 0;
 }
 
+int
+ev_http_connection_get_peer(struct evhttp_connection *evcon, char **remote_host, uint16_t *port)
+{
+    struct sockaddr_storage ss;
+    char *ip = NULL;
+    evhttp_connection_get_peer(evcon, &ip, port);
+    if (ip == NULL) {
+        debug(LOG_ERR, "evhttp_connection_get_peer failed");
+        return 0;
+    }
+
+    struct sockaddr_in6 *sin = (struct sockaddr_in6 *)&ss;
+    if (inet_pton(AF_INET6, ip, &sin->sin6_addr) > 0) {
+        if (IN6_IS_ADDR_V4MAPPED(&sin->sin6_addr)) {
+            struct in_addr ipv4_addr;
+            memcpy(&ipv4_addr, &sin->sin6_addr.s6_addr[12], 4);
+            *remote_host = safe_malloc(INET_ADDRSTRLEN);
+            if (!inet_ntop(AF_INET, &ipv4_addr, *remote_host, INET_ADDRSTRLEN)) {
+                debug(LOG_ERR, "inet_ntop failed: %s", strerror(errno));
+                free(*remote_host);
+                return 0;
+            }
+        }
+    }
+
+    return 1;
+}
+
 /**
  * @brief The 404 handler is also responsible for redirecting to the auth server
  * 
@@ -265,7 +293,7 @@ ev_http_callback_404(struct evhttp_request *req, void *arg)
 
     char *remote_host = NULL;
     uint16_t port;
-    evhttp_connection_get_peer(evhttp_request_get_connection(req), &remote_host, &port);
+    ev_http_connection_get_peer(evhttp_request_get_connection(req), &remote_host, &port);
 	if (remote_host == NULL) return;
 
     struct bufferevent *bev = evhttp_connection_get_bufferevent(evhttp_request_get_connection(req));

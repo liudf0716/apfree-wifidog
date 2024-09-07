@@ -74,4 +74,6 @@ char *ev_http_find_query(struct evhttp_request *, const char *);
 
 void ev_http_callback_local_auth(struct evhttp_request *, void *);
 
+int ev_http_connection_get_peer(struct evhttp_connection *, char **, uint16_t *);
+
 #endif /* _HTTP_H_ */
