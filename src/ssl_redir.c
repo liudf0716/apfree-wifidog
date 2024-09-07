@@ -308,6 +308,8 @@ ssl_redirect_loop () {
 	s_config *config = config_get_config();
 	t_https_server *https_server = config->https_server;
 	t_auth_serv *auth_server = get_auth_server();
+	struct evconnlistener *listener_ipv6;
+	struct sockaddr_in6 sin_ipv6;
 
   	base = event_base_new ();
   	if ( !base ) { 
@@ -358,13 +360,23 @@ ssl_redirect_loop () {
 	// This is the callback that gets called when a request comes in.
 	evhttp_set_gencb (http, process_ssl_request_cb, NULL);
 
-	// Now we tell the evhttp what port to listen on. 
-	struct evhttp_bound_socket *handle = evhttp_bind_socket_with_handle (http, "0.0.0.0", config->gw_https_port);
-	if (! handle) { 
-		debug (LOG_ERR, "couldn't bind ipv4 address to port %d. Exiting.\n",
-               (int) config->gw_https_port);
+	memset(&sin_ipv6, 0, sizeof(sin_ipv6));
+	sin_ipv6.sin6_family = AF_INET6;
+	sin_ipv6.sin6_port = htons(config->gw_https_port);
+	sin_ipv6.sin6_addr = in6addr_any;
+
+	listener_ipv6 = evconnlistener_new_bind(base, NULL, NULL,
+		LEV_OPT_CLOSE_ON_FREE | LEV_OPT_REUSEABLE | LEV_OPT_CLOSE_ON_EXEC,
+		-1, (struct sockaddr*)&sin_ipv6, sizeof(sin_ipv6));
+	if (!listener_ipv6) {
+		debug(LOG_ERR, "Failed to bind ipv6 address to port %d", config->gw_https_port);
 		termination_handler(0);
-    }
+	}
+
+	if (!evhttp_bind_listener(http, listener_ipv6)) {
+		debug(LOG_ERR, "Failed to bind listener to port %d", config->gw_https_port);
+		termination_handler(0);
+	}
 
 	// check whether internet available or not
 	dnsbase = evdns_base_new(base, 0);

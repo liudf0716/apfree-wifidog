@@ -469,6 +469,8 @@ http_redir_loop(s_config *config)
 {
     struct event_base *base;
 	struct evhttp *http;
+    struct evconnlistener *listener;
+    struct sockaddr_in6 sin_ipv6;
     t_auth_serv *auth_server = get_auth_server();
     SSL_CTX *ssl_ctx = NULL;
     SSL *ssl = NULL;
@@ -517,8 +519,21 @@ http_redir_loop(s_config *config)
     }
     evhttp_set_gencb(http, ev_http_callback_404, NULL);
 
-    if (!evhttp_bind_socket_with_handle(http, "0.0.0.0", config->gw_port)) {
-        debug(LOG_ERR, "Failed to bind ipv4 address to port %d", config->gw_port);
+    memset(&sin_ipv6, 0, sizeof(sin_ipv6));
+    sin_ipv6.sin6_family = AF_INET6;
+    sin_ipv6.sin6_port = htons(config->gw_port);
+    sin_ipv6.sin6_addr = in6addr_any;
+
+    listener = evconnlistener_new_bind(base, NULL, NULL,
+                                    LEV_OPT_CLOSE_ON_FREE | LEV_OPT_REUSEABLE, -1,
+                                    (struct sockaddr*)&sin_ipv6, sizeof(sin_ipv6));
+    if (!listener) {
+        debug(LOG_ERR, "Failed to bind ipv6 address to port %d", config->gw_port);
+        termination_handler(0);
+    }
+
+    if (!evhttp_bind_listener(http, listener)) {
+        debug(LOG_ERR, "Failed to bind listener to port %d", config->gw_port);
         termination_handler(0);
     }
     
