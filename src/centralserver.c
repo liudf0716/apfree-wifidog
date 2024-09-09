@@ -180,7 +180,7 @@ static char *
 get_login_v2_request_uri(t_gateway_setting *gw_setting, t_auth_serv *auth_server, const auth_req_info *auth)
 {
     char *login2_uri = NULL;
-    safe_asprintf(&login2_uri, "%slogin2?gw_id=%s&gw_address=%s&gw_port=%d&mac=%s&gw_channel=%s&cltIp=%s", 
+    safe_asprintf(&login2_uri, "%slogin2?gw_id=%s&gw_address=%s&gw_port=%d&mac=%s&gw_channel=%s&ip=%s", 
         auth_server->authserv_path,
         gw_setting->gw_id,
 		gw_setting->gw_address_v4,
