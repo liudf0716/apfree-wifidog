@@ -329,7 +329,7 @@ ev_http_callback_404(struct evhttp_request *req, void *arg)
     const s_config *config = config_get_config();
     if (config->wired_passed && process_wired_device_pass(req, mac)) return;
 
-    char *redir_url = wd_get_redir_url_to_auth(req, gw_setting, mac, remote_host, config->gw_port, config->device_id);
+    char *redir_url = wd_get_redir_url_to_auth(req, gw_setting, mac, remote_host, config->gw_port, config->device_id, 0);
     if (!redir_url) {
         evhttp_send_error(req, 200, "Cant get client's redirect to auth server's url");
         return;

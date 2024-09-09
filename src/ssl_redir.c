@@ -105,7 +105,7 @@ process_ssl_request_cb (struct evhttp_request *req, void *arg) {
     }
 
 	s_config *config = config_get_config();
-	char *redir_url = wd_get_redir_url_to_auth(req, gw_setting, mac, remote_host, config->gw_https_port, config->device_id);
+	char *redir_url = wd_get_redir_url_to_auth(req, gw_setting, mac, remote_host, config->gw_https_port, config->device_id, 1);
     if (!redir_url) {
         evhttp_send_error(req, 200, "Cant get client's redirect to auth server's url");
         return;
