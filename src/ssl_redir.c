@@ -59,14 +59,9 @@ die_most_horribly_from_openssl_error (const char *func) {
 static void
 process_ssl_request_cb (struct evhttp_request *req, void *arg) {  
 	if (!is_online()){
-        ev_http_reply_client_error(req, INTERNET_OFFLINE);
+        ev_http_reply_client_error(req, INTERNET_OFFLINE, NULL, NULL, NULL, NULL, NULL);
         return;
     }  
-
-    if (!is_auth_online()) {
-        ev_http_reply_client_error(req, AUTHSERVER_OFFLINE);
-        return;
-    } 
 
     char *remote_host;
     uint16_t port;
@@ -103,6 +98,16 @@ process_ssl_request_cb (struct evhttp_request *req, void *arg) {
         evhttp_send_error(req, 200, "Cant get client's mac by its ip");
         return;
     }
+
+	if (!is_auth_online()) {
+		debug(LOG_INFO, "Auth server is offline");
+		char gw_https_port[8] = {0};
+		snprintf(gw_https_port, sizeof(gw_https_port), "%d", config_get_config()->gw_https_port);
+        ev_http_reply_client_error(req, AUTHSERVER_OFFLINE, 
+			gw_setting->gw_address_v4?gw_setting->gw_address_v4:gw_setting->gw_address_v6, 
+			gw_https_port, "https", remote_host, mac);
+        return;
+    } 
 
 	s_config *config = config_get_config();
 	char *redir_url = wd_get_redir_url_to_auth(req, gw_setting, mac, remote_host, config->gw_https_port, config->device_id, 1);

@@ -154,6 +154,74 @@ process_apple_wisper(struct evhttp_request *req, const char *mac, const char *re
 	
 }
 
+// define old_subs and new_subs for replace_substrings
+static char *old_subs[] = {"$GATEWAY_IP$", "$GATEWAY_PORT$", "$PROTO$", "$CLIENT_IP$", "$CLIENT_MAC$"};
+static char *new_subs[] = {NULL, NULL, NULL, NULL, NULL};
+
+static char *
+replace_substrings(const char *str, const char **old_subs, const char **new_subs, int count)
+{
+    char *result;
+    int i, j, total_new_len = 0, total_old_len = 0, occurrences = 0;
+
+    // Calculate the total length of new and old substrings
+    for (i = 0; i < count; i++) {
+        total_new_len += strlen(new_subs[i]);
+        total_old_len += strlen(old_subs[i]);
+    }
+
+    // Count occurrences of each old substring
+    for (i = 0; str[i] != '\0'; i++) {
+        for (j = 0; j < count; j++) {
+            if (strstr(&str[i], old_subs[j]) == &str[i]) {
+                occurrences++;
+                i += strlen(old_subs[j]) - 1;
+                break;
+            }
+        }
+    }
+
+    // Allocate memory for the result string
+    result = (char *)malloc(strlen(str) + occurrences * (total_new_len - total_old_len) + 1);
+    if (!result) return NULL;
+    memset(result, 0, strlen(str) + occurrences * (total_new_len - total_old_len) + 1);
+
+    i = 0;
+    while (*str) {
+        for (j = 0; j < count; j++) {
+            if (strstr(str, old_subs[j]) == str) {
+                strcpy(&result[i], new_subs[j]);
+                i += strlen(new_subs[j]);
+                str += strlen(old_subs[j]);
+                break;
+            }
+        }
+        if (j == count) {
+            result[i++] = *str++;
+        }
+    }
+    result[i] = '\0';
+    return result;
+}
+
+static struct evbuffer *
+replace_evbuffer_content(struct evbuffer *evb, const char **old_subs, const char **new_subs, int count)
+{
+    struct evbuffer *new_evb = evbuffer_new();
+    if (!new_evb) return NULL;
+
+    char *content = evbuffer_pullup(evb, -1);
+    char *new_content = replace_substrings(content, old_subs, new_subs, count);
+    if (!new_content) {
+        evbuffer_free(new_evb);
+        return NULL;
+    }
+
+    evbuffer_add(new_evb, new_content, strlen(new_content));
+    free(new_content);
+    return new_evb;
+}
+
 /**
  * @brief reply client error of gw internet offline or auth server offline
  * 
@@ -162,11 +230,13 @@ process_apple_wisper(struct evhttp_request *req, const char *mac, const char *re
  *             other: auth server offline
  */
 void
-ev_http_reply_client_error(struct evhttp_request *req, enum reply_client_error_type type)
+ev_http_reply_client_error(struct evhttp_request *req, enum reply_client_error_type type, 
+    const char *ip, const char *port, const char *proto, const char *client_ip, const char *client_mac)
 {
-    struct evbuffer *evb = evbuffer_new();
+    struct evbuffer *evb;
     switch(type) {
     case INTERNET_OFFLINE:
+        evb = evbuffer_new();
         // lock extern pthread_mutex_t g_resource_lock;
         pthread_mutex_lock(&g_resource_lock);
         // copy evb_internet_offline_page to evb
@@ -176,7 +246,12 @@ ev_http_reply_client_error(struct evhttp_request *req, enum reply_client_error_t
     case AUTHSERVER_OFFLINE:
     default:
         pthread_mutex_lock(&g_resource_lock);
-        evbuffer_add(evb, evbuffer_pullup(evb_authserver_offline_page, -1), evbuffer_get_length(evb_authserver_offline_page));
+        new_subs[0] = ip;
+        new_subs[1] = port;
+        new_subs[2] = proto;
+        new_subs[3] = client_ip;
+        new_subs[4] = client_mac;
+        evb = replace_evbuffer_content(evb_authserver_offline_page, old_subs, new_subs, 5);
         pthread_mutex_unlock(&g_resource_lock);
         break;
     }
@@ -281,15 +356,9 @@ ev_http_callback_404(struct evhttp_request *req, void *arg)
 {
     if (!is_online()) {
         debug(LOG_INFO, "Internet is offline");
-        ev_http_reply_client_error(req, INTERNET_OFFLINE);
+        ev_http_reply_client_error(req, INTERNET_OFFLINE, NULL, NULL, NULL, NULL, NULL);
         return;
-    }  
-
-    if (!is_auth_online()) {
-        debug(LOG_INFO, "Auth server is offline");
-        ev_http_reply_client_error(req, AUTHSERVER_OFFLINE);
-        return;
-    } 
+    }
 
     char *remote_host = NULL;
     uint16_t port;
@@ -323,6 +392,16 @@ ev_http_callback_404(struct evhttp_request *req, void *arg)
         evhttp_send_error(req, 200, "Cant get client's mac by its ip");
         return;
     }
+
+    if (!is_auth_online()) {
+        char gw_port[8] = {0};
+        snprintf(gw_port, sizeof(gw_port), "%d", config_get_config()->gw_port);
+        debug(LOG_INFO, "Auth server is offline");
+        ev_http_reply_client_error(req, AUTHSERVER_OFFLINE, 
+            gw_setting->gw_address_v4?gw_setting->gw_address_v4:gw_setting->gw_address_v6, 
+            gw_port, "http", remote_host, mac);
+        return;
+    } 
 
     if (process_already_login_client(req, mac, remote_host)) return;
 
