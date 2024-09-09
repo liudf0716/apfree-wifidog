@@ -310,6 +310,7 @@ ssl_redirect_loop () {
 	t_auth_serv *auth_server = get_auth_server();
 	struct evconnlistener *listener_ipv6;
 	struct sockaddr_in6 sin_ipv6;
+	
 
   	base = event_base_new ();
   	if ( !base ) { 
@@ -353,9 +354,30 @@ ssl_redirect_loop () {
 	// This is the magic that lets evhttp use SSL.
 	evhttp_set_bevcb (http, ssl_bevcb, ctx);
  
-	evhttp_set_cb(http, "/wifidog/temporary_pass", ev_http_callback_temporary_pass, NULL);
-	if (!auth_server)
+	if (auth_server) {
+		SSL_CTX *ssl_ctx = NULL;
+		SSL *ssl = NULL;
+        ssl_ctx = SSL_CTX_new(SSLv23_method());
+        if (!ssl_ctx) termination_handler(0);
+
+        ssl = SSL_new(ssl_ctx);
+        if (!ssl) termination_handler(0);
+
+        // authserv_hostname is the hostname of the auth server, must be domain name
+        if (!SSL_set_tlsext_host_name(ssl, auth_server->authserv_hostname)) {
+            debug(LOG_ERR, "SSL_set_tlsext_host_name failed");
+            termination_handler(0);
+        }
+    
+		struct wd_request_context *request_ctx = wd_request_context_new(
+            base, ssl, get_auth_server()->authserv_use_ssl);
+        if (!request_ctx) termination_handler(0);
+		evhttp_set_cb(http, "/wifidog", ev_http_callback_wifidog, NULL);
+		evhttp_set_cb(http, "/wifidog/auth", ev_http_callback_auth, request_ctx);
+		evhttp_set_cb(http, "/wifidog/temporary_pass", ev_http_callback_temporary_pass, NULL);
+	} else {
 		evhttp_set_cb(http, "/wifidog/local_auth", ev_http_callback_local_auth, NULL);
+	}
 
 	// This is the callback that gets called when a request comes in.
 	evhttp_set_gencb (http, process_ssl_request_cb, NULL);

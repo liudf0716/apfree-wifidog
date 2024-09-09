@@ -453,9 +453,10 @@ void
 ev_http_callback_auth(struct evhttp_request *req, void *arg)
 {
     struct wd_request_context *context = (struct wd_request_context *)arg;
-
+    debug(LOG_DEBUG, "ev_http_callback_auth: the request is %s", evhttp_request_get_uri(req));
     if (evhttp_request_get_command(req) == EVHTTP_REQ_OPTIONS) {
         ev_http_respond_options(req);
+        debug(LOG_INFO, "options request");
         return;
     }
 

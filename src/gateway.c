@@ -472,22 +472,6 @@ http_redir_loop(s_config *config)
     struct evconnlistener *listener;
     struct sockaddr_in6 sin_ipv6;
     t_auth_serv *auth_server = get_auth_server();
-    SSL_CTX *ssl_ctx = NULL;
-    SSL *ssl = NULL;
-
-    if (auth_server) {
-        ssl_ctx = SSL_CTX_new(SSLv23_method());
-        if (!ssl_ctx) termination_handler(0);
-
-        ssl = SSL_new(ssl_ctx);
-        if (!ssl) termination_handler(0);
-
-        // authserv_hostname is the hostname of the auth server, must be domain name
-        if (!SSL_set_tlsext_host_name(ssl, auth_server->authserv_hostname)) {
-            debug(LOG_ERR, "SSL_set_tlsext_host_name failed");
-            termination_handler(0);
-        }
-    }
     
     base = event_base_new();
     if (!base) termination_handler(0);
@@ -508,6 +492,20 @@ http_redir_loop(s_config *config)
     setbuf(stderr, NULL);
 	
     if (auth_server) {
+        SSL_CTX *ssl_ctx = NULL;
+        SSL *ssl = NULL;
+        ssl_ctx = SSL_CTX_new(SSLv23_method());
+        if (!ssl_ctx) termination_handler(0);
+
+        ssl = SSL_new(ssl_ctx);
+        if (!ssl) termination_handler(0);
+
+        // authserv_hostname is the hostname of the auth server, must be domain name
+        if (!SSL_set_tlsext_host_name(ssl, auth_server->authserv_hostname)) {
+            debug(LOG_ERR, "SSL_set_tlsext_host_name failed");
+            termination_handler(0);
+        }
+    
         struct wd_request_context *request_ctx = wd_request_context_new(
             base, ssl, get_auth_server()->authserv_use_ssl);
         if (!request_ctx) termination_handler(0);
@@ -542,9 +540,6 @@ http_redir_loop(s_config *config)
 
     evhttp_free(http);
     event_base_free(base);
-    
-    if (ssl_ctx) SSL_CTX_free(ssl_ctx);
-    if (ssl) SSL_free(ssl);
 }
 
 /**@internal
