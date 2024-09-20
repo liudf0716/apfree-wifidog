@@ -119,9 +119,23 @@ typedef enum mac_choice_t_ {
  * Mutex for the configuration file, used by the auth_servers related
  * functions. */
 extern pthread_mutex_t config_mutex;
-
-// liudf added 20160411
 extern pthread_mutex_t domains_mutex;
+
+typedef enum {
+	IP_TYPE_IPV4,
+	IP_TYPE_IPV6
+} ip_type_t;
+
+typedef struct _ip_trusted_t {
+	char ip[INET6_ADDRSTRLEN];
+	union
+	{
+		struct in_addr ipv4;
+		struct in6_addr ipv6;
+	} uip;
+	ip_type_t ip_type;
+	struct _ip_trusted_t *next;
+} t_ip_trusted;
 
 /**
  * Information about the authentication server
@@ -141,6 +155,7 @@ typedef struct _auth_serv_t {
 				     listens on */
     int authserv_use_ssl;       /**< @brief Use SSL or not */
     char *last_ip;      /**< @brief Last ip used by authserver */
+	t_ip_trusted *ips_auth_server; /** @brief ip list of auth server*/
 	int	authserv_fd;	/** @brief this support keep-alive http connection*/
 	int	authserv_fd_ref; /** @brief is this socket fd being used or not*/
 	int authserv_connect_timeout; /** @brief when connect to auth server, seconds to wait time*/
@@ -198,28 +213,6 @@ typedef struct _popular_server_t {
     char *hostname;
     struct _popular_server_t *next;
 } t_popular_server;
-
-/**
- * liudf added 20151223
- * trust domains and trust ip
- *
- */
-
-typedef enum {
-	IP_TYPE_IPV4,
-	IP_TYPE_IPV6
-} ip_type_t;
-
-typedef struct _ip_trusted_t {
-	char ip[INET6_ADDRSTRLEN];
-	union
-	{
-		struct in_addr ipv4;
-		struct in6_addr ipv6;
-	} uip;
-	ip_type_t ip_type;
-	struct _ip_trusted_t *next;
-} t_ip_trusted;
 
 typedef struct _domain_trusted_t {
 	char *domain;

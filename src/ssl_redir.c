@@ -193,6 +193,22 @@ check_internet_available_cb(int errcode, struct evutil_addrinfo *addr, void *ptr
 	}
 }
 
+static int
+is_address_exist(t_ip_trusted *ips, const char *ip, int family) {
+	t_ip_trusted *ipt = ips;
+	while(ipt) {
+		if (family == AF_INET && ipt->ip_type == IP_TYPE_IPV4) {
+			if (strcmp(ipt->ip, ip) == 0)
+				return 1;
+		} else if (family == AF_INET6 && ipt->ip_type == IP_TYPE_IPV6) {
+			if (strcmp(ipt->ip, ip) == 0)
+				return 1;
+		}
+		ipt = ipt->next;
+	}
+	return 0;
+}
+
 /**
  * @brief Callback function to check whether auth server's ip changed or not
  * 
@@ -200,6 +216,7 @@ check_internet_available_cb(int errcode, struct evutil_addrinfo *addr, void *ptr
 static void 
 check_auth_server_available_cb(int errcode, struct evutil_addrinfo *addr, void *ptr) {
 	t_auth_serv *auth_server = (t_auth_serv *)ptr;
+	t_ip_trusted *ips_auth_server = auth_server->ips_auth_server;
 	if (errcode || !addr) { 
 		debug (LOG_INFO, "dns query error : %s", evutil_gai_strerror(errcode));
 		mark_auth_offline();
@@ -209,51 +226,31 @@ check_auth_server_available_cb(int errcode, struct evutil_addrinfo *addr, void *
 
 	for (int i = 0; addr; addr = addr->ai_next, i++) {
 		if (addr->ai_family == PF_INET) {
-			char ip[128] = {0};
+			char ip[INET_ADDRSTRLEN] = {0};
 			struct sockaddr_in *sin = (struct sockaddr_in*)addr->ai_addr;
-			evutil_inet_ntop(AF_INET, &sin->sin_addr, ip, sizeof(ip)-1);
-
-			if (!auth_server->last_ip || strcmp(auth_server->last_ip, ip) != 0) {
-				/*
-					* But the IP address is different from the last one we knew
-					* Update it
-					*/
-				debug(LOG_INFO, "Updating last_ip IP of server [%s] to [%s]", 
-					auth_server->authserv_hostname, ip);
-				if (auth_server->last_ip)
-					free(auth_server->last_ip);
-				auth_server->last_ip = safe_strdup(ip);
-
-				/* Update firewall rules */
-				fw_clear_authservers();
-				fw_set_authservers();
-
-				evutil_freeaddrinfo(addr);
-				break;
-			} 
+			evutil_inet_ntop(AF_INET, &sin->sin_addr, ip, INET_ADDRSTRLEN-1);
+			if (is_address_exist(ips_auth_server, ip, AF_INET)) {
+				continue;
+			}
+			if (auth_server->last_ip) {
+				free(auth_server->last_ip);
+			}
+			auth_server->last_ip = safe_strdup(ip);
+			fw_set_authservers();
+			evutil_freeaddrinfo(addr);
 		} else if (addr->ai_family == PF_INET6) {
-			char ip[128] = {0};
+			char ip[INET6_ADDRSTRLEN] = {0};
 			struct sockaddr_in6 *sin6 = (struct sockaddr_in6*)addr->ai_addr;
-			evutil_inet_ntop(AF_INET6, &sin6->sin6_addr, ip, sizeof(ip)-1);
-
-			if (!auth_server->last_ip || strcmp(auth_server->last_ip, ip) != 0) {
-				/*
-					* But the IP address is different from the last one we knew
-					* Update it
-					*/
-				debug(LOG_INFO, "Updating last_ip IP of server [%s] to [%s]", 
-					auth_server->authserv_hostname, ip);
-				if (auth_server->last_ip)
-					free(auth_server->last_ip);
-				auth_server->last_ip = safe_strdup(ip);
-
-				/* Update firewall rules */
-				fw_clear_authservers();
-				fw_set_authservers();
-
-				evutil_freeaddrinfo(addr);
-				break;
-			} 
+			evutil_inet_ntop(AF_INET6, &sin6->sin6_addr, ip, INET6_ADDRSTRLEN-1);
+			if (is_address_exist(ips_auth_server, ip, AF_INET6)) {
+				continue;
+			}
+			if (auth_server->last_ip) {
+				free(auth_server->last_ip);
+			}
+			auth_server->last_ip = safe_strdup(ip);
+			fw_set_authservers();
+			evutil_freeaddrinfo(addr);
 		}
 	}
 }
