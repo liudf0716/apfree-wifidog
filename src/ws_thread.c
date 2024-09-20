@@ -376,7 +376,8 @@ send_msg(struct evbuffer *out, const char *type)
 		json_object_object_add(jobj_gw, "gw_id", json_object_new_string(gw_settings->gw_id));
 		json_object_object_add(jobj_gw, "gw_channel", json_object_new_string(gw_settings->gw_channel));
 		json_object_object_add(jobj_gw, "gw_address_v4", json_object_new_string(gw_settings->gw_address_v4));
-		json_object_object_add(jobj_gw, "gw_address_v6", json_object_new_string(gw_settings->gw_address_v6));
+		if (gw_settings->gw_address_v6)
+			json_object_object_add(jobj_gw, "gw_address_v6", json_object_new_string(gw_settings->gw_address_v6));
 		json_object_object_add(jobj_gw, "auth_mode", json_object_new_int(gw_settings->auth_mode));
 		json_object_object_add(jobj_gw, "gw_interface", json_object_new_string(gw_settings->gw_interface));
 		json_object_array_add(jarray, jobj_gw);

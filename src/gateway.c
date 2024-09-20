@@ -298,8 +298,7 @@ gateway_setting_init()
 
         if (!gateway_settings->gw_address_v6) {
             if ((gateway_settings->gw_address_v6 = get_iface_ip6(gateway_settings->gw_interface)) == NULL) {
-                debug(LOG_ERR, "Could not get IPv6 address information of %s, exiting...", gateway_settings->gw_interface);
-                exit(EXIT_FAILURE);
+                debug(LOG_ERR, "Could not get IPv6 address information of");
             }
         }
 
@@ -311,7 +310,8 @@ gateway_setting_init()
         }
 
         debug(LOG_DEBUG, "gw_id [%s] %s = %s ", 
-            gateway_settings->gw_id, gateway_settings->gw_address_v4, gateway_settings->gw_address_v6);
+            gateway_settings->gw_id, gateway_settings->gw_address_v4, 
+            gateway_settings->gw_address_v6?gateway_settings->gw_address_v6:"");
         gateway_settings = gateway_settings->next;
     }
 }
