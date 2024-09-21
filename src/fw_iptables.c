@@ -439,7 +439,7 @@ iptables_fw_set_authservers(void *handle)
 			if (is_valid_ip(auth_server->last_ip))
 				nftables_do_command("add element inet fw4 set_wifidogx_auth_servers { %s }", auth_server->last_ip);
 			else if (is_valid_ip6(auth_server->last_ip))
-				nftables_do_command("add element inet fw6 set_wifidogx_auth_servers_v6 { %s }", auth_server->last_ip);
+				nftables_do_command("add element inet fw4 set_wifidogx_auth_servers_v6 { %s }", auth_server->last_ip);
 			else
 				debug(LOG_ERR, "Invalid IP address: %s", auth_server->last_ip);
 #endif
@@ -461,7 +461,7 @@ iptables_fw_clear_user_domains_trusted(void)
 	iptables_flush_ipset(CHAIN_DOMAIN_TRUSTED);
 #else
 	nftables_do_command("flush set inet fw4 set_wifidogx_trust_domains");
-	nftables_do_command("flush set inet fw6 set_wifidogx_trust_domains_v6");
+	nftables_do_command("flush set inet fw4 set_wifidogx_trust_domains_v6");
 #endif
 }
 
@@ -514,7 +514,7 @@ iptables_fw_clear_inner_domains_trusted(void)
 	iptables_flush_ipset(CHAIN_INNER_DOMAIN_TRUSTED);
 #else
 	nftables_do_command("flush set inet fw4 set_wifidogx_inner_trust_domains");
-	nftables_do_command("flush set inet fw6 set_wifidogx_inner_trust_domains_v6");
+	nftables_do_command("flush set inet fw4 set_wifidogx_inner_trust_domains_v6");
 #endif
 }
 
@@ -541,7 +541,7 @@ iptables_fw_set_inner_domains_trusted(void)
 			if (ip_trusted->ip_type == IP_TYPE_IPV4)
 				nftables_do_command("add element inet fw4 set_wifidogx_inner_trust_domains { %s }", ip_trusted->ip);
 			else if (ip_trusted->ip_type == IP_TYPE_IPV6)
-				nftables_do_command("add element inet fw6 set_wifidogx_inner_trust_domains_v6 { %s }", ip_trusted->ip);
+				nftables_do_command("add element inet fw4 set_wifidogx_inner_trust_domains_v6 { %s }", ip_trusted->ip);
 #endif
 		}
 	}
