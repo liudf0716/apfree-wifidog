@@ -206,6 +206,13 @@ is_address_exist(t_ip_trusted *ips, const char *ip, int family) {
 		}
 		ipt = ipt->next;
 	}
+
+	t_ip_trusted *new_ip = (t_ip_trusted *)safe_malloc(sizeof(t_ip_trusted));
+	snprintf(new_ip->ip, (family == AF_INET)?INET_ADDRSTRLEN:INET6_ADDRSTRLEN, "%s", ip);
+	new_ip->ip_type = (family == AF_INET)?IP_TYPE_IPV4:IP_TYPE_IPV6;
+	new_ip->next = ips;
+	ips = new_ip;
+
 	return 0;
 }
 
@@ -214,17 +221,18 @@ is_address_exist(t_ip_trusted *ips, const char *ip, int family) {
  * 
  */ 
 static void 
-check_auth_server_available_cb(int errcode, struct evutil_addrinfo *addr, void *ptr) {
+check_auth_server_available_cb(int errcode, struct evutil_addrinfo *res, void *ptr) {
 	t_auth_serv *auth_server = (t_auth_serv *)ptr;
 	t_ip_trusted *ips_auth_server = auth_server->ips_auth_server;
-	if (errcode || !addr) { 
+	if (errcode || !res) { 
 		debug (LOG_INFO, "dns query error : %s", evutil_gai_strerror(errcode));
 		mark_auth_offline();
 		mark_auth_server_bad(auth_server);
 		return;
 	}
 
-	for (int i = 0; addr; addr = addr->ai_next, i++) {
+	struct evutil_addrinfo *addr = res;
+	for (; addr != NULL; addr = addr->ai_next) {
 		if (addr->ai_family == PF_INET) {
 			char ip[INET_ADDRSTRLEN] = {0};
 			struct sockaddr_in *sin = (struct sockaddr_in*)addr->ai_addr;
@@ -237,7 +245,6 @@ check_auth_server_available_cb(int errcode, struct evutil_addrinfo *addr, void *
 			}
 			auth_server->last_ip = safe_strdup(ip);
 			fw_set_authservers();
-			evutil_freeaddrinfo(addr);
 		} else if (addr->ai_family == PF_INET6) {
 			char ip[INET6_ADDRSTRLEN] = {0};
 			struct sockaddr_in6 *sin6 = (struct sockaddr_in6*)addr->ai_addr;
@@ -250,9 +257,10 @@ check_auth_server_available_cb(int errcode, struct evutil_addrinfo *addr, void *
 			}
 			auth_server->last_ip = safe_strdup(ip);
 			fw_set_authservers();
-			evutil_freeaddrinfo(addr);
 		}
 	}
+
+	evutil_freeaddrinfo(res);
 }
 
 /**
