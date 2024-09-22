@@ -127,6 +127,7 @@ typedef enum {
 	oEnableBypassAuth,
 	oEnableDNSForward,
 	oEnableWS,
+	oEnableDelConntrack,
 } OpCodes;
 
 /** @internal
@@ -197,6 +198,7 @@ static const struct {
 	"enablebypassauth",oEnableBypassAuth},{
 	"enablednsforward",oEnableDNSForward},{
 	"enablews",oEnableWS},{
+	"enabledelconntrack",oEnableDelConntrack},{
     NULL, oBadOption},};
 
 static void config_notnull(const void *, const char *);
@@ -321,6 +323,7 @@ config_init(void)
 	config.enable_dhcp_cpi = 0;
 	config.enable_dns_forward = 1;
 	config.enable_ws = 1;
+	config.enable_del_conntrack = 1;
 
 	debugconf.log_stderr = 1;
 	debugconf.debuglevel = DEFAULT_DEBUGLEVEL;
@@ -1137,6 +1140,9 @@ config_read()
 					break;
 				case oEnableWS:
 					config.enable_ws = parse_boolean_value(p1);
+					break;
+				case oEnableDelConntrack:
+					config.enable_del_conntrack = parse_boolean_value(p1);
 					break;
 				case oDeviceID:
 					config.device_id = safe_strdup(p1);
