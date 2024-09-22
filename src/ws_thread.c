@@ -357,7 +357,7 @@ ws_request(struct bufferevent* b_ws)
     if (!auth_server->authserv_use_ssl) {
 		evbuffer_add_printf(out, "Origin:http://%s:%d\r\n",auth_server->authserv_hostname, auth_server->authserv_http_port); 
 	} else {
-		evbuffer_add_printf(out, "Origin:http://%s:%d\r\n",auth_server->authserv_hostname, auth_server->authserv_ssl_port);
+		evbuffer_add_printf(out, "Origin:https://%s:%d\r\n",auth_server->authserv_hostname, auth_server->authserv_ssl_port);
 	}
 	evbuffer_add_printf(out, "\r\n");
 }
