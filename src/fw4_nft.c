@@ -403,37 +403,31 @@ check_nft_expr_json_array_object(json_object *jobj, const char *ip, const char *
 static void
 nft_fw_del_rule_by_ip_and_mac(const char *ip, const char *mac, const char *chain)
 {
-    // iterate chain mangle_prerouting_wifidogx_outgoing, 
-    // if the rule contains the ip and mac, delete the rule
-    // first get the rule list of chain mangle_prerouting_wifidogx_outgoing
     char cmd[256] = {0};
     snprintf(cmd, sizeof(cmd), "nft -j list chain inet fw4 %s", chain);
     debug(LOG_DEBUG, " cmd: %s", cmd);
-    // throught popen, get the rule list of chain mangle_prerouting_wifidogx_outgoing
     FILE *r_fp = popen(cmd, "r");
     if (r_fp == NULL) {
         debug(LOG_ERR, " popen failed");
         return;
     }
+
     char buf[4096] = {0};
-    // read the rule list of chain mangle_prerouting_wifidogx_outgoing
     fgets(buf, sizeof(buf), r_fp);
     pclose(r_fp);
     debug(LOG_DEBUG, " buf: %s", buf);
-    // parse the rule list of chain mangle_prerouting_wifidogx_outgoing
-    // use libjson-c to parse the rule list of chain mangle_prerouting_wifidogx_outgoing
     json_object *jobj = json_tokener_parse(buf);
     if (jobj == NULL) {
         debug(LOG_ERR, " jobj is NULL");
         return;
     }
-    // get the "nftables" json object which is an array of json objects
+    
 	json_object *jobj_nftables = NULL;
 	if (!json_object_object_get_ex(jobj, "nftables", &jobj_nftables)) {
 		debug(LOG_ERR, " jobj_nftables is NULL");
 		goto END_DELETE_CLIENT;
 	}
-    // iterate the array of json objects to find the rule which contains the ip and mac
+    
     int i = 0;
     int len = json_object_array_length(jobj_nftables);
     for (i = 0; i < len; i++) {
@@ -478,6 +472,7 @@ END_DELETE_CLIENT:
 int
 nft_fw_access(fw_access_t type, const char *ip, const char *mac, int tag)
 {
+    s_config *config = config_get_config();
     switch(type) {
         case FW_ACCESS_ALLOW:
             run_cmd("nft add rule inet fw4 mangle_prerouting_wifidogx_outgoing ether saddr %s ip saddr %s counter mark set 0x20000 accept", mac, ip);
@@ -486,6 +481,9 @@ nft_fw_access(fw_access_t type, const char *ip, const char *mac, int tag)
         case FW_ACCESS_DENY:
             nft_fw_del_rule_by_ip_and_mac(ip, mac, "mangle_prerouting_wifidogx_outgoing");
             nft_fw_del_rule_by_ip_and_mac(ip, NULL, "mangle_postrouting_wifidogx_incoming");
+            if (config->enable_del_conntrack) {
+                run_cmd("conntrack -D -s %s", ip);
+            }
             break;
         default:
             debug(LOG_ERR, "Unknown fw_access type %d", type);
