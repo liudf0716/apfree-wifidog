@@ -126,7 +126,11 @@ typedef enum {
 	oEnableDhcpOptionCpi,
 	oEnableBypassAuth,
 	oEnableDNSForward,
-	oEnableWS,
+	oWebSocket,
+	oWSServer,
+	oWSServerPort,
+	oWSServerPath,
+	oWSServerSSL,
 	oEnableDelConntrack,
 } OpCodes;
 
@@ -197,7 +201,11 @@ static const struct {
 	"enabledhcpoptioncpi",oEnableDhcpOptionCpi},{
 	"enablebypassauth",oEnableBypassAuth},{
 	"enablednsforward",oEnableDNSForward},{
-	"enablews",oEnableWS},{
+	"websocket",oWebSocket},{
+	"wsserver",oWSServer},{
+	"wsserverport",oWSServerPort},{
+	"wsserverpath",oWSServerPath},{
+	"wsserverssl",oWSServerSSL},{
 	"enabledelconntrack",oEnableDelConntrack},{
     NULL, oBadOption},};
 
@@ -227,6 +235,18 @@ t_gateway_setting *
 get_gateway_settings(void)
 {
 	return config.gateway_settings;
+}
+
+t_ws_server *
+get_ws_server(void)
+{
+	return config.ws_server;
+}
+
+t_mqtt_server *
+get_mqtt_server(void)
+{
+	return config.mqtt_server;
 }
 
 const char *
@@ -308,21 +328,10 @@ config_init(void)
 
 	config.http_server  = http_server;
 
-	t_mqtt_server *mqtt_server = (t_mqtt_server *)malloc(sizeof(t_mqtt_server));
-	memset(mqtt_server, 0, sizeof(t_mqtt_server));
-	mqtt_server->port	   = 8883;
-	mqtt_server->cafile	 = safe_strdup(DEFAULT_CA_CRT_FILE);
-	mqtt_server->crtfile	= NULL;
-	mqtt_server->keyfile	= NULL;
-	mqtt_server->username	= NULL;
-	mqtt_server->password	= NULL;
-	config.mqtt_server  = mqtt_server;
-
 	config.fw4_enable = 1;
 	config.enable_bypass_auth = 0;
 	config.enable_dhcp_cpi = 0;
 	config.enable_dns_forward = 1;
-	config.enable_ws = 1;
 	config.enable_del_conntrack = 1;
 
 	debugconf.log_stderr = 1;
@@ -475,7 +484,6 @@ parse_auth_server(FILE * file, const char *filename, int *linenum)
 	char	*msgscriptpathfragment = NULL;
 	char	*pingscriptpathfragment = NULL;
 	char	*authscriptpathfragment = NULL;
-	char	*authwsscriptpathfragment = NULL;
 	char line[MAX_BUF], *p1, *p2;
 	int http_port, ssl_port, ssl_available, opcode;
 	int connect_timeout;
@@ -488,7 +496,6 @@ parse_auth_server(FILE * file, const char *filename, int *linenum)
 	msgscriptpathfragment 		= safe_strdup(DEFAULT_AUTHSERVMSGPATHFRAGMENT);
 	pingscriptpathfragment 		= safe_strdup(DEFAULT_AUTHSERVPINGPATHFRAGMENT);
 	authscriptpathfragment 		= safe_strdup(DEFAULT_AUTHSERVAUTHPATHFRAGMENT);
-	authwsscriptpathfragment 	= safe_strdup(DEFAULT_AUTHSERVWSPATHFRAGMENT);
 	
 	http_port = DEFAULT_AUTHSERVPORT;
 	ssl_port = DEFAULT_AUTHSERVSSLPORT;
@@ -568,10 +575,6 @@ parse_auth_server(FILE * file, const char *filename, int *linenum)
 				free(authscriptpathfragment);
 				authscriptpathfragment = safe_strdup(p2);
 				break;
-			case oAuthServWsScriptPathFragment:
-				free(authwsscriptpathfragment);
-				authwsscriptpathfragment = safe_strdup(p2);
-				break;
 			case oAuthServSSLPort:
 				ssl_port = atoi(p2);
 				break;
@@ -600,14 +603,8 @@ parse_auth_server(FILE * file, const char *filename, int *linenum)
 
 	/* only proceed if we have an host and a path */
 	if (host == NULL) {
-		free(path);
-		free(authscriptpathfragment);
-		free(pingscriptpathfragment);
-		free(msgscriptpathfragment);
-		free(portalscriptpathfragment);
-		free(loginscriptpathfragment);
-		free(authwsscriptpathfragment);
-		return;
+		debug(LOG_ERR, "Missing mandatory parameters for auth server");
+		exit(-1);
 	}
 
 	debug(LOG_DEBUG, "Adding %s:%d (SSL: %d) %s to the auth server list", host, http_port, ssl_port, path);
@@ -625,7 +622,6 @@ parse_auth_server(FILE * file, const char *filename, int *linenum)
 	new->authserv_msg_script_path_fragment = msgscriptpathfragment;
 	new->authserv_ping_script_path_fragment = pingscriptpathfragment;
 	new->authserv_auth_script_path_fragment = authscriptpathfragment;
-	new->authserv_ws_script_path_fragment	= authwsscriptpathfragment;
 	new->authserv_http_port = http_port;
 	new->authserv_ssl_port 	= ssl_port;
 	new->authserv_fd		= -1;
@@ -651,7 +647,6 @@ parse_mqtt_server(FILE * file, const char *filename, int *linenum)
 {
 	char *host = NULL, *username = NULL, *password = NULL, line[MAX_BUF], *p1, *p2;
 	int port = 0, opcode;
-	t_mqtt_server *mqtt_server = config.mqtt_server;
 
 	/* Parsing loop */
 	while (memset(line, 0, MAX_BUF) && fgets(line, MAX_BUF - 1, file) && (strchr(line, '}') == NULL)) {
@@ -717,18 +712,112 @@ parse_mqtt_server(FILE * file, const char *filename, int *linenum)
 
 	/* only proceed if we have an host and a port */
 	if (host == NULL || port < 1 || port > 65535) {
-		return;
+		debug(LOG_ERR, "Missing mandatory parameters for mqtt server");
+		exit(-1);
 	}
-
 	debug(LOG_DEBUG, "Adding %s:%d to the mqtt server", host, port);
 
-	free(mqtt_server->hostname);
+	t_mqtt_server *mqtt_server = (t_mqtt_server *)malloc(sizeof(t_mqtt_server));
 	mqtt_server->hostname = host;
 	mqtt_server->port = port;
 	mqtt_server->username = username;
 	mqtt_server->password = password;
+	config.mqtt_server = mqtt_server;
 
 	debug(LOG_DEBUG, "MQTT server added");
+}
+
+static void
+parse_ws_server(FILE * file, const char *filename, int *linenum)
+{
+	char *host = NULL, line[MAX_BUF], *p1, *p2;
+	int port = 0, ssl = 0, opcode;
+	char *wsscriptpathfragment = NULL;
+
+	wsscriptpathfragment 	= safe_strdup(DEFAULT_WSPATHFRAGMENT);
+
+	/* Parsing loop */
+	while (memset(line, 0, MAX_BUF) && fgets(line, MAX_BUF - 1, file) && (strchr(line, '}') == NULL)) {
+		(*linenum)++;		   /* increment line counter. */
+
+		/* skip leading blank spaces */
+		for (p1 = line; isblank(*p1); p1++) ;
+
+		/* End at end of line */
+		if ((p2 = strchr(p1, '#')) != NULL) {
+			*p2 = '\0';
+		} else if ((p2 = strchr(p1, '\r')) != NULL) {
+			*p2 = '\0';
+		} else if ((p2 = strchr(p1, '\n')) != NULL) {
+			*p2 = '\0';
+		}
+
+		/* trim all blanks at the end of the line */
+		for (p2 = (p2 != NULL ? p2 - 1 : &line[MAX_BUF - 2]); isblank(*p2) && p2 > p1; p2--) {
+			*p2 = '\0';
+		}
+
+		/* next, we coopt the parsing of the regular config */
+		if (strlen(p1) > 0) {
+			p2 = p1;
+			/* keep going until word boundary is found. */
+			while ((*p2 != '\0') && (!isblank(*p2)))
+				p2++;
+
+			/* Terminate first word. */
+			*p2 = '\0';
+			p2++;
+
+			/* skip all further blanks. */
+			while (isblank(*p2))
+				p2++;
+
+			/* Get opcode */
+			opcode = config_parse_token(p1, filename, *linenum);
+
+			switch (opcode) {
+			case oWSServer:
+				host = safe_strdup(p2);
+				break;
+			case oWSServerPort:
+				port = atoi(p2);
+				break;
+			case oWSServerPath:
+				free(wsscriptpathfragment);
+				wsscriptpathfragment = safe_strdup(p2);
+				break;
+			case oWSServerSSL:
+				ssl = parse_boolean_value(p2);
+				if (ssl < 0) {
+					debug(LOG_WARNING, "Bad syntax for Parameter: WSServerSSL on line %d " "in %s."
+						"The syntax is yes or no." , *linenum, filename);
+					exit(-1);
+				}
+				break;
+			case oBadOption:
+			default:
+				debug(LOG_ERR, "Bad option on line %d " "in %s.", *linenum, filename);
+				exit(-1);
+				break;
+			}
+		}
+	}
+
+	/* only proceed if we have an host and a port */
+	if (host == NULL || port < 1 || port > 65535) {
+		debug(LOG_ERR, "Missing mandatory parameters for ws server");
+		exit(-1);
+	}
+
+	debug(LOG_DEBUG, "Adding %s:%d to the ws server", host, port);
+	t_ws_server *ws = (t_ws_server *)malloc(sizeof(t_ws_server));
+	ws->hostname = host;
+	ws->port = port;
+	ws->path = wsscriptpathfragment;
+	ws->use_ssl = ssl;
+	config.ws_server = ws;
+
+	debug(LOG_DEBUG, "WS server added");
 }
 
 /**
@@ -1068,6 +1157,9 @@ config_read()
 					break;
 				case oMQTT:
 					parse_mqtt_server(fd, filename, &linenum);
+				case oWebSocket:
+					parse_ws_server(fd, filename, &linenum);
+					break;
 				case oCheckInterval:
 					sscanf(p1, "%d", &config.checkinterval);
 					break;
@@ -1137,9 +1229,6 @@ config_read()
 					break;
 				case oEnableDNSForward:
 					config.enable_dns_forward = parse_boolean_value(p1);
-					break;
-				case oEnableWS:
-					config.enable_ws = parse_boolean_value(p1);
 					break;
 				case oEnableDelConntrack:
 					config.enable_del_conntrack = parse_boolean_value(p1);

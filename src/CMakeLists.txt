@@ -56,7 +56,8 @@ set(libs
 	event
 	event_openssl
 	netfilter_queue
-	resolv)
+	resolv
+	mosquitto)
 
 if(AW_DEBUG)
 	message("Building debug")

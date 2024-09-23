@@ -341,23 +341,22 @@ static void
 ws_request(struct bufferevent* b_ws)
 {
 	struct evbuffer *out = bufferevent_get_output(b_ws);
-    t_auth_serv *auth_server = get_auth_server();
-	debug (LOG_DEBUG, "ws_request :  is %s\n", 
-		auth_server->authserv_ws_script_path_fragment);
-	evbuffer_add_printf(out, "GET %s HTTP/1.1\r\n", auth_server->authserv_ws_script_path_fragment);
-    if (!auth_server->authserv_use_ssl) {
-	    evbuffer_add_printf(out, "Host:%s:%d\r\n",auth_server->authserv_hostname, auth_server->authserv_http_port);
+	t_ws_server *ws_server = get_ws_server();
+	debug (LOG_DEBUG, "ws_request :  is %s\n", ws_server->path);
+	evbuffer_add_printf(out, "GET %s HTTP/1.1\r\n", ws_server->path);
+    if (!ws_server->use_ssl) {
+		evbuffer_add_printf(out, "Host:%s:%d\r\n",ws_server->hostname, ws_server->port);
 	} else {
-        evbuffer_add_printf(out, "Host:%s:%d\r\n",auth_server->authserv_hostname, auth_server->authserv_ssl_port);
+		evbuffer_add_printf(out, "Host:%s:%d\r\n",ws_server->hostname, ws_server->port);
 	}
     evbuffer_add_printf(out, "Upgrade:websocket\r\n");
 	evbuffer_add_printf(out, "Connection:upgrade\r\n");
 	evbuffer_add_printf(out, "Sec-WebSocket-Key:%s\r\n", fixed_key);
 	evbuffer_add_printf(out, "Sec-WebSocket-Version:13\r\n");
-    if (!auth_server->authserv_use_ssl) {
-		evbuffer_add_printf(out, "Origin:http://%s:%d\r\n",auth_server->authserv_hostname, auth_server->authserv_http_port); 
+    if (!ws_server->use_ssl) {
+		evbuffer_add_printf(out, "Origin:http://%s:%d\r\n", ws_server->hostname, ws_server->port);
 	} else {
-		evbuffer_add_printf(out, "Origin:https://%s:%d\r\n",auth_server->authserv_hostname, auth_server->authserv_ssl_port);
+		evbuffer_add_printf(out, "Origin:https://%s:%d\r\n", ws_server->hostname, ws_server->port);
 	}
 	evbuffer_add_printf(out, "\r\n");
 }
@@ -465,15 +464,17 @@ wsevent_connection_cb(struct bufferevent* b_ws, short events, void *ctx){
 		bufferevent_openssl_set_allow_dirty_shutdown(b_ws, 1);
 		bufferevent_setcb(b_ws, ws_read_cb, NULL, wsevent_connection_cb, NULL);
 		bufferevent_enable(b_ws, EV_READ|EV_WRITE);
-		t_auth_serv *auth_server = get_auth_server();
+		
+		t_ws_server *ws_server = get_ws_server();
 		int ret = 0;
-		if (!auth_server->authserv_use_ssl) {
+		if (!ws_server->use_ssl) {
 		    ret = bufferevent_socket_connect_hostname(b_ws, ws_dnsbase, AF_INET, 
-				auth_server->authserv_hostname, auth_server->authserv_http_port); 
+													ws_server->hostname, ws_server->port);
 		} else {
 			ret = bufferevent_socket_connect_hostname(b_ws, ws_dnsbase, AF_INET, 
-				auth_server->authserv_hostname, auth_server->authserv_ssl_port); 
+													ws_server->hostname, ws_server->port);
 		}
+
 		upgraded = false;
 		if (ret < 0) {
 			debug(LOG_ERR, "ws connection error: %s\n", strerror(errno));
@@ -488,7 +489,7 @@ wsevent_connection_cb(struct bufferevent* b_ws, short events, void *ctx){
 void
 start_ws_thread(void *arg)
 {
-    t_auth_serv *auth_server = get_auth_server();
+	t_ws_server *ws_server = get_ws_server();
 	if (!RAND_poll()) termination_handler(0);
 
 	/* Create a new OpenSSL context */
@@ -499,7 +500,7 @@ start_ws_thread(void *arg)
 	if (!ssl) termination_handler(0);
 
 	// authserv_hostname is the hostname of the auth server, must be domain name
-    if (!SSL_set_tlsext_host_name(ssl, auth_server->authserv_hostname)) {
+    if (!SSL_set_tlsext_host_name(ssl, ws_server->hostname)) {
         debug(LOG_ERR, "SSL_set_tlsext_host_name failed");
         termination_handler(0);
     }
@@ -516,7 +517,7 @@ start_ws_thread(void *arg)
 	}
 
     struct bufferevent *ws_bev = NULL;
-	if (auth_server->authserv_use_ssl) {
+	if (ws_server->use_ssl) {
 		ws_bev = bufferevent_openssl_socket_new(ws_base, -1, ssl,
 			BUFFEREVENT_SSL_CONNECTING, BEV_OPT_CLOSE_ON_FREE|BEV_OPT_DEFER_CALLBACKS);
 	} else {
@@ -533,12 +534,12 @@ start_ws_thread(void *arg)
 	bufferevent_enable(ws_bev, EV_READ|EV_WRITE);
 
 	int ret = 0;
-    if (!auth_server->authserv_use_ssl) {
+    if (!ws_server->use_ssl) {
 	    ret = bufferevent_socket_connect_hostname(ws_bev, ws_dnsbase, AF_INET, 
-            auth_server->authserv_hostname, auth_server->authserv_http_port); 
+            									ws_server->hostname, ws_server->port); 
     } else {
-        ret = bufferevent_socket_connect_hostname(ws_bev, ws_dnsbase, AF_INET, 
-            auth_server->authserv_hostname, auth_server->authserv_ssl_port); 
+        ret = bufferevent_socket_connect_hostname(ws_bev, ws_dnsbase, AF_INET,
+												ws_server->hostname, ws_server->port);
     }
 
 	if (ret < 0) {

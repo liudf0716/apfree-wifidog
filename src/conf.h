@@ -74,7 +74,7 @@
 #define DEFAULT_AUTHSERVMSGPATHFRAGMENT 	"gw_message?"
 #define DEFAULT_AUTHSERVPINGPATHFRAGMENT 	"ping/?"
 #define DEFAULT_AUTHSERVAUTHPATHFRAGMENT 	"auth/?"
-#define	DEFAULT_AUTHSERVWSPATHFRAGMENT		"/ws/wifidogx"
+#define	DEFAULT_WSPATHFRAGMENT		"/ws/wifidogx"
 /** Note that DEFAULT_AUTHSERVSSLNOPEERVER must be 0 or 1, even if the config file syntax is yes or no */
 #define DEFAULT_AUTHSERVSSLPEERVER 1    /* 0 means: Enable peer verification */
 #define DEFAULT_DELTATRAFFIC 0    /* 0 means: Enable peer verification */
@@ -242,6 +242,13 @@ typedef struct _mqtt_server_t {
 	short	port;
 }t_mqtt_server;
 
+typedef struct _ws_server_t {
+	char *hostname;
+	char *path;
+	unsigned short port;
+	unsigned short use_ssl;
+} t_ws_server;
+
 typedef struct _gateway_setting_t {
 	char *gw_id;
 	char *gw_interface;
@@ -286,6 +293,7 @@ typedef struct {
 	t_https_server	*https_server; /** tls redirect server config */
 	t_http_server 	*http_server;	/** */
 	t_mqtt_server	*mqtt_server;
+	t_ws_server		*ws_server;
 
 	t_domain_trusted *pan_domains_trusted; /** pan-domain trusted list*/
 	t_domain_trusted *domains_trusted; /** domains list, seperate with comma*/
@@ -311,7 +319,6 @@ typedef struct {
 	short 	enable_dhcp_cpi; /* 1, enable dhcp cpi */
 	short	enable_bypass_auth; /* 1, bypass auth */
 	short	enable_dns_forward; /* 1, enable dns forward */
-	short	enable_ws; /* 1, enable websocket */
 	short	enable_del_conntrack; /* 1, enable delete conntrack when client offline */
 } s_config;
 
@@ -320,7 +327,12 @@ s_config *config_get_config(void);
 
 t_gateway_setting *get_gateway_settings(void);
 
+t_ws_server *get_ws_server(void);
+
+t_mqtt_server *get_mqtt_server(void);
+
 int get_gateway_count(void);
+
 const char *get_device_id(void);
 
 /** @brief Initialise the conf system */

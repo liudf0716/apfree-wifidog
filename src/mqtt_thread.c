@@ -34,10 +34,9 @@
 #include "safe.h"
 #include "wd_util.h"
 #include "centralserver.h"
+#include "client_list.h"
 
-#ifdef	_MQTT_SUPPORT_
-
-static struct wifidog_mqtt_op {
+static struct wifidogx_mqtt_op {
 	char	*operation;
 	void	(*process_mqtt_op)(void *, const char *, const char *, const int , const s_config *);
 } mqtt_op[] = {
@@ -53,7 +52,7 @@ static struct wifidog_mqtt_op {
 	{NULL, NULL}
 };
 
-static struct wifidog_mqtt_add_type {
+static struct wifidogx_mqtt_add_type {
 	char 	*type;
 	void	(*process_mqtt_set_type)(const char *args);
 } mqtt_set_type[] = {
@@ -64,7 +63,7 @@ static struct wifidog_mqtt_add_type {
 	{NULL, NULL}
 };
 
-static struct wifidog_mqtt_del_type {
+static struct wifidogx_mqtt_del_type {
 	char 	*type;
 	void	(*process_mqtt_del_type)(const char *args);
 } mqtt_del_type[] = {
@@ -75,7 +74,7 @@ static struct wifidog_mqtt_del_type {
 	{NULL, NULL}
 };
 
-static struct wifidog_mqtt_clear_type {
+static struct wifidogx_mqtt_clear_type {
 	char	*type;
 	void	(*process_mqtt_clear_type)(void);
 } mqtt_clear_type[] = {
@@ -86,7 +85,7 @@ static struct wifidog_mqtt_clear_type {
 	{NULL, NULL}
 };
 
-static struct wifidog_mqtt_show_type {
+static struct wifidogx_mqtt_show_type {
 	char	*type;
 	char 	*(*process_mqtt_show_type)(void);
 } mqtt_show_type[] = {
@@ -102,7 +101,7 @@ send_mqtt_response(struct mosquitto *mosq, const unsigned int req_id, int res_id
 {
 	char *topic = NULL;
 	char *res_data = NULL;
-	safe_asprintf(&topic, "wifidog/%s/response/%d", config->gw_id, req_id);
+	safe_asprintf(&topic, "wifidogx/%s/response/%d", get_device_id(), req_id);
 	safe_asprintf(&res_data, "{\"response\":\"%d\",\"msg\":\"%s\"}", res_id, msg==NULL?"null":msg);
 	debug(LOG_DEBUG, "send mqtt response: topic is %s msg is %s", topic, res_data);
 	mosquitto_publish(mosq, NULL, topic, strlen(res_data), res_data, 0, false);
@@ -213,28 +212,7 @@ reboot_device_op(void *mosq, const char *type, const char *value, const int req_
 void
 reset_device_op(void *mosq, const char *type, const char *value, const int req_id, const s_config *config)
 {
-	t_client *p = NULL;
 	
-	debug(LOG_DEBUG, "value is %s and type is %s received from mqtt",value,type);
- 
-	if(strcmp(type,"ip") == 0) {
-		LOCK_CLIENT_LIST();
-		p = client_list_find_by_ip(value);
-	}
-	else if(strcmp(type,"mac") == 0) {
-		LOCK_CLIENT_LIST();
-		p = client_list_find_by_mac(value);
-	}else {
-		return;
-	}	
-
-	if (p != NULL)  {
-		logout_client(p);
-		UNLOCK_CLIENT_LIST();
-		send_mqtt_response(mosq, req_id, 200, "Ok", config);
-	} else {
-		UNLOCK_CLIENT_LIST();
-	}
 }
 
 void
@@ -354,10 +332,8 @@ mqtt_message_callback(struct mosquitto *mosq, void *obj, const struct mosquitto_
 static void
 mqtt_connect_callback(struct mosquitto *mosq, void *obj, int rc)
 {
-	s_config 		*config = obj;
-
 	char *default_topic = NULL;
-	safe_asprintf(&default_topic, "wifidog/%s/request/+", config->gw_id);
+	safe_asprintf(&default_topic, "wifidogx/%s/request/+", get_device_id());
 	mosquitto_subscribe(mosq, NULL, default_topic, 0); // qos is 0
 	free(default_topic);
 }
@@ -382,7 +358,7 @@ void thread_mqtt(void *arg)
     mosquitto_lib_init();
 
      /* Create a new mosquitto client instance */
-    mosq = mosquitto_new(config->gw_id, true, config);
+    mosq = mosquitto_new(get_device_id(), true, config);
     if( mosq == NULL ) {
         switch(errno){
             case ENOMEM:
@@ -437,5 +413,3 @@ void thread_mqtt(void *arg)
     mosquitto_lib_cleanup();
 }
 
-#else
-#endif

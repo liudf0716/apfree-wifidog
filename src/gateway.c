@@ -61,9 +61,7 @@ static pthread_t tid_fw_counter;
 static pthread_t tid_ping;
 static pthread_t tid_wdctl;
 static pthread_t tid_ssl_redirect;
-#ifdef _MQTT_SUPPORT_
 static pthread_t tid_mqtt_server;
-#endif
 static pthread_t tid_ws;
 static pthread_t tid_dns_forward;
 
@@ -218,12 +216,12 @@ termination_handler(int s)
 		debug(LOG_INFO, "Explicitly killing the https_server thread");
 		pthread_kill(tid_ssl_redirect, SIGKILL);
 	}
-#ifdef _MQTT_SUPPORT_
+
     if (tid_mqtt_server && self != tid_mqtt_server) {
         debug(LOG_INFO, "Explicitly killing the mqtt_server thread");
         pthread_kill(tid_mqtt_server, SIGKILL);
     }
-#endif
+
     if (tid_ws && self != tid_ws) {
         debug(LOG_INFO, "Explicitly killing the websocket thread");
         pthread_kill(tid_ws, SIGKILL);
@@ -379,15 +377,6 @@ threads_init(s_config *config)
         termination_handler(0);
     }
     pthread_detach(tid_ssl_redirect);
-
-#ifdef	_MQTT_SUPPORT_
-    // start mqtt subscript thread
-    result = pthread_create(&tid_mqtt_server, NULL, (void *)thread_mqtt, config);
-    if (result != 0) {
-        debug(LOG_INFO, "Failed to create a new thread (thread_mqtt)");
-    }
-    pthread_detach(tid_mqtt_server);
-#endif
 	
 	 /* Start control thread */
     result = pthread_create(&tid_wdctl, NULL, (void *)thread_wdctl, (void *)safe_strdup(config->wdctl_sock));
@@ -438,7 +427,7 @@ threads_init(s_config *config)
     }
     pthread_detach(tid_fw_counter);
 
-    if (config->enable_ws) {
+    if (get_ws_server()) {
         result = pthread_create(&tid_ws, NULL, (void *)start_ws_thread, NULL);
         if (result != 0) {
             debug(LOG_INFO, "Failed to create a new thread (ws)");
@@ -447,7 +436,14 @@ threads_init(s_config *config)
         pthread_detach(tid_ws);
     }
 
-    
+    if (get_mqtt_server()) {
+        // start mqtt subscript thread
+        result = pthread_create(&tid_mqtt_server, NULL, (void *)thread_mqtt, config);
+        if (result != 0) {
+            debug(LOG_INFO, "Failed to create a new thread (thread_mqtt)");
+        }
+        pthread_detach(tid_mqtt_server);
+    }
 }
 
 static void

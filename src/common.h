@@ -87,9 +87,7 @@
 #include <openssl/rand.h>
 
 #include <json-c/json.h>
-#ifdef	_MQTT_SUPPORT_
-  #include <mosquitto.h>
-#endif
+#include <mosquitto.h>
 #include <uci.h>
 
 #ifdef EVENT__HAVE_NETINET_IN_H
