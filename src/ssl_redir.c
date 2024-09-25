@@ -28,6 +28,7 @@
 #include <arpa/inet.h>
 #include <sys/ioctl.h>
 #include <net/if.h>
+#include <netdb.h>
 
 #include "common.h"
 #include "ssl_redir.h"
@@ -194,15 +195,15 @@ check_internet_available_cb(int errcode, struct evutil_addrinfo *addr, void *ptr
 }
 
 static int
-is_address_exist(t_ip_trusted *ips, const char *ip, int family) {
-	t_ip_trusted *ipt = ips;
+is_address_exist(t_ip_trusted **ips, const char *ip, int family) {
+	t_ip_trusted *ipt = *ips;
+	int ip_len = strlen(ip);
 	while(ipt) {
-		if (family == AF_INET && ipt->ip_type == IP_TYPE_IPV4) {
-			if (strcmp(ipt->ip, ip) == 0)
-				return 1;
-		} else if (family == AF_INET6 && ipt->ip_type == IP_TYPE_IPV6) {
-			if (strcmp(ipt->ip, ip) == 0)
-				return 1;
+		int ipt_len = strlen(ipt->ip);
+		debug(LOG_INFO, "ip [%s] ipt->ip [%s]", ip, ipt->ip);
+		if (ipt_len == ip_len && !strncmp(ipt->ip, ip, ip_len)) {
+			debug(LOG_INFO, "ip [%s] already exist", ip);
+			return 1;
 		}
 		ipt = ipt->next;
 	}
@@ -210,8 +211,8 @@ is_address_exist(t_ip_trusted *ips, const char *ip, int family) {
 	t_ip_trusted *new_ip = (t_ip_trusted *)safe_malloc(sizeof(t_ip_trusted));
 	snprintf(new_ip->ip, (family == AF_INET)?INET_ADDRSTRLEN:INET6_ADDRSTRLEN, "%s", ip);
 	new_ip->ip_type = (family == AF_INET)?IP_TYPE_IPV4:IP_TYPE_IPV6;
-	new_ip->next = ips;
-	ips = new_ip;
+	new_ip->next = *ips;
+	*ips = new_ip;
 
 	return 0;
 }
@@ -223,7 +224,7 @@ is_address_exist(t_ip_trusted *ips, const char *ip, int family) {
 static void 
 check_auth_server_available_cb(int errcode, struct evutil_addrinfo *res, void *ptr) {
 	t_auth_serv *auth_server = (t_auth_serv *)ptr;
-	t_ip_trusted *ips_auth_server = auth_server->ips_auth_server;
+	t_ip_trusted **ips_auth_server = &auth_server->ips_auth_server;
 	if (errcode || !res) { 
 		debug (LOG_INFO, "dns query error : %s", evutil_gai_strerror(errcode));
 		mark_auth_offline();
