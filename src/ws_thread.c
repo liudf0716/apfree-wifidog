@@ -41,7 +41,11 @@ static char *fixed_key = "dGhlIHNhbXBsZSBub25jZQ==";
 static char *fixed_accept = "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=";
 static bool upgraded = false;
 
-static void ws_heartbeat_cb(evutil_socket_t fd, short event, void *arg);
+static SSL_CTX *ssl_ctx = NULL;
+static SSL *ssl = NULL;
+
+static void ws_heartbeat_cb(evutil_socket_t , short , void *);
+static void wsevent_connection_cb(struct bufferevent* , short , void *);
 
 static void
 handle_kickoff_response(json_object *j_auth)
@@ -433,56 +437,6 @@ ws_read_cb(struct bufferevent *b_ws, void *ctx)
 	}
 }
 
-static void 
-wsevent_connection_cb(struct bufferevent* b_ws, short events, void *ctx){
-	if(events & BEV_EVENT_CONNECTED){
-        debug (LOG_DEBUG,"connect ws server and start web socket request\n");
-		ws_request(b_ws);
-        return;
-	} else if(events & (BEV_EVENT_ERROR | BEV_EVENT_EOF)){
-		debug(LOG_ERR, "ws connection error: %s\n", strerror(errno));
-		// stop heartbeat timer
-		if (ws_heartbeat_ev != NULL) {
-			event_free(ws_heartbeat_ev);
-			ws_heartbeat_ev = NULL;
-		}
-		// is the error is reset by peer, we should sleep longer
-		if (events & BEV_EVENT_EOF)
-			sleep(5);
-		else
-			sleep(1);
-		// reconnect ws server
-		if (b_ws != NULL) {
-			bufferevent_free(b_ws);
-		}
-		if (get_auth_server()->authserv_use_ssl) {
-			b_ws = bufferevent_openssl_socket_new(ws_base, -1, SSL_new(SSL_CTX_new(SSLv23_method())),
-				BUFFEREVENT_SSL_CONNECTING, BEV_OPT_CLOSE_ON_FREE|BEV_OPT_DEFER_CALLBACKS);
-		} else {
-			b_ws = bufferevent_socket_new(ws_base, -1, BEV_OPT_CLOSE_ON_FREE|BEV_OPT_DEFER_CALLBACKS);
-		}
-		bufferevent_openssl_set_allow_dirty_shutdown(b_ws, 1);
-		bufferevent_setcb(b_ws, ws_read_cb, NULL, wsevent_connection_cb, NULL);
-		bufferevent_enable(b_ws, EV_READ|EV_WRITE);
-		
-		t_ws_server *ws_server = get_ws_server();
-		int ret = 0;
-		if (!ws_server->use_ssl) {
-		    ret = bufferevent_socket_connect_hostname(b_ws, ws_dnsbase, AF_INET, 
-													ws_server->hostname, ws_server->port);
-		} else {
-			ret = bufferevent_socket_connect_hostname(b_ws, ws_dnsbase, AF_INET, 
-													ws_server->hostname, ws_server->port);
-		}
-
-		upgraded = false;
-		if (ret < 0) {
-			debug(LOG_ERR, "ws connection error: %s\n", strerror(errno));
-			bufferevent_free(b_ws);
-		}
-	} 
-}
-
 static struct bufferevent *
 create_ws_bufferevent()
 {
@@ -490,7 +444,7 @@ create_ws_bufferevent()
     struct bufferevent *bev = NULL;
 
     if (ws_server->use_ssl) {
-        bev = bufferevent_openssl_socket_new(ws_base, -1, SSL_new(SSL_CTX_new(SSLv23_method())),
+        bev = bufferevent_openssl_socket_new(ws_base, -1, ssl,
             BUFFEREVENT_SSL_CONNECTING, BEV_OPT_CLOSE_ON_FREE|BEV_OPT_DEFER_CALLBACKS);
     } else {
         bev = bufferevent_socket_new(ws_base, -1, BEV_OPT_CLOSE_ON_FREE|BEV_OPT_DEFER_CALLBACKS);
@@ -500,10 +454,43 @@ create_ws_bufferevent()
     bufferevent_setcb(bev, ws_read_cb, NULL, wsevent_connection_cb, NULL);
     bufferevent_enable(bev, EV_READ|EV_WRITE);
 
-    struct timeval timeout = {5, 0}; // 5 seconds timeout
-    bufferevent_set_timeouts(bev, &timeout, NULL);
-
     return bev;
+}
+
+static void 
+wsevent_connection_cb(struct bufferevent* b_ws, short events, void *ctx){
+	if(events & BEV_EVENT_CONNECTED){
+        debug (LOG_DEBUG,"wsevent_connection_cb: connect ws server and start web socket request\n");
+		ws_request(b_ws);
+        return;
+	} else if(events & (BEV_EVENT_ERROR | BEV_EVENT_EOF)){
+		debug(LOG_ERR, "wsevent_connection_cb [BEV_EVENT_ERROR | BEV_EVENT_EOF] error is: %s\n", strerror(errno));
+		// stop heartbeat timer
+		if (ws_heartbeat_ev != NULL) {
+			event_free(ws_heartbeat_ev);
+			ws_heartbeat_ev = NULL;
+		}
+		// is the error is reset by peer, we should sleep longer
+		if (events & BEV_EVENT_EOF)
+			sleep(5);
+		else
+			sleep(2);
+		// reconnect ws server
+		if (b_ws != NULL) {
+			bufferevent_free(b_ws);
+		}
+		
+		b_ws = create_ws_bufferevent();
+		int ret = bufferevent_socket_connect_hostname(b_ws, ws_dnsbase, AF_INET, 
+													get_ws_server()->hostname, get_ws_server()->port);
+		upgraded = false;
+		if (ret < 0) {
+			debug(LOG_ERR, "wsevent_connection_cb: bufferevent_socket_connect_hostname error: %s\n", strerror(errno));
+			bufferevent_free(b_ws);
+		}
+	} else {
+		debug(LOG_ERR, "wsevent_connection_cb: ws connection error: %s\n", strerror(errno));
+	}
 }
 
 /*
@@ -516,10 +503,10 @@ start_ws_thread(void *arg)
 	if (!RAND_poll()) termination_handler(0);
 
 	/* Create a new OpenSSL context */
-	SSL_CTX *ssl_ctx = SSL_CTX_new(SSLv23_method());
+	ssl_ctx = SSL_CTX_new(SSLv23_method());
 	if (!ssl_ctx) termination_handler(0);
 
-	SSL *ssl = SSL_new(ssl_ctx);
+	ssl = SSL_new(ssl_ctx);
 	if (!ssl) termination_handler(0);
 
 	// authserv_hostname is the hostname of the auth server, must be domain name
@@ -546,11 +533,10 @@ start_ws_thread(void *arg)
                                                       ws_server->hostname, ws_server->port);
         upgraded = false;
         if (ret < 0) {
-            debug(LOG_ERR, "ws connection error: %s\n", strerror(errno));
+            debug(LOG_ERR, "bufferevent_socket_connect_hostname error: %s\n", strerror(errno));
             bufferevent_free(ws_bev);
             sleep(1); // Wait before retrying
         } else {
-			debug(LOG_DEBUG, "ws connection success\n");
             break; // Successfully connected
         }
     }
