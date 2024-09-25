@@ -241,7 +241,7 @@ int
 void
 fw_clear_authservers(void)
 {
-	debug(LOG_INFO, "Clearing the authservers list");
+	debug(LOG_DEBUG, "Clearing the authservers list");
 	iptables_fw_clear_authservers();
 }
 
@@ -250,7 +250,7 @@ fw_clear_authservers(void)
 void
 fw_set_authservers(void)
 {
-	debug(LOG_INFO, "Setting the authservers list");
+	debug(LOG_DEBUG, "Setting the authservers list");
 	iptables_fw_set_authservers(NULL);
 }
 
@@ -271,14 +271,14 @@ fw_set_pan_domains_trusted(void)
 void
 fw_refresh_inner_domains_trusted(void)
 {
-	debug(LOG_INFO, "Refresh inner trust domains list");
+	debug(LOG_DEBUG, "Refresh inner trust domains list");
 	iptables_fw_refresh_inner_domains_trusted();
 }
 
 void
 fw_clear_inner_domains_trusted(void)
 {
-	debug(LOG_INFO, "Clear inner trust domains list");
+	debug(LOG_DEBUG, "Clear inner trust domains list");
 	iptables_fw_clear_inner_domains_trusted();
 }
 
@@ -289,7 +289,7 @@ fw_clear_inner_domains_trusted(void)
 void
 fw_set_inner_domains_trusted(void)
 {
-	debug(LOG_INFO, "Setting inner trust domains list");
+	debug(LOG_DEBUG, "Setting inner trust domains list");
 	iptables_fw_set_inner_domains_trusted();
 }
 
@@ -297,63 +297,63 @@ fw_set_inner_domains_trusted(void)
 void
 fw_refresh_user_domains_trusted(void)
 {
-	debug(LOG_INFO, "Refresh user trust domains list");
+	debug(LOG_DEBUG, "Refresh user trust domains list");
 	iptables_fw_refresh_user_domains_trusted();
 }
 
 void
 fw_clear_user_domains_trusted(void)
 {
-	debug(LOG_INFO, "Clear user trust domains list");
+	debug(LOG_DEBUG, "Clear user trust domains list");
 	iptables_fw_clear_user_domains_trusted();
 }
 
 void
 fw_set_user_domains_trusted(void)
 {
-	debug(LOG_INFO, "Setting user trust domains list");
+	debug(LOG_DEBUG, "Setting user trust domains list");
 	iptables_fw_set_user_domains_trusted();
 }
 
 void
 fw_set_roam_mac(const char *mac)
 {
-	debug(LOG_INFO, "Set roam mac");
+	debug(LOG_DEBUG, "Set roam mac");
 	iptables_fw_set_roam_mac(mac);
 }
 
 void
 fw_clear_roam_maclist(void)
 {
-	debug(LOG_INFO, "Clear roam maclist");
+	debug(LOG_DEBUG, "Clear roam maclist");
 	iptables_fw_clear_roam_maclist();
 }
 
 void
 fw_set_trusted_maclist()
 {
-	debug(LOG_INFO, "Set trusted maclist");
+	debug(LOG_DEBUG, "Set trusted maclist");
 	iptables_fw_set_trusted_maclist();
 }
 
 void
 fw_clear_trusted_maclist()
 {
-	debug(LOG_INFO, "Clear trusted maclist");
+	debug(LOG_DEBUG, "Clear trusted maclist");
 	iptables_fw_clear_trusted_maclist();
 }
 
 void
 fw_set_trusted_local_maclist()
 {
-	debug(LOG_INFO, "Set trusted local maclist");
+	debug(LOG_DEBUG, "Set trusted local maclist");
 	iptables_fw_set_trusted_local_maclist();
 }
 
 void
 fw_clear_trusted_local_maclist()
 {
-	debug(LOG_INFO, "Clear trusted local maclist");
+	debug(LOG_DEBUG, "Clear trusted local maclist");
 	iptables_fw_clear_trusted_local_maclist();
 }
 
@@ -361,21 +361,21 @@ fw_clear_trusted_local_maclist()
 void
 fw_set_untrusted_maclist()
 {
-	debug(LOG_INFO, "Set untrusted maclist");
+	debug(LOG_DEBUG, "Set untrusted maclist");
 	iptables_fw_set_untrusted_maclist();
 }
 
 void
 fw_clear_untrusted_maclist()
 {
-	debug(LOG_INFO, "Clear untrusted maclist");
+	debug(LOG_DEBUG, "Clear untrusted maclist");
 	iptables_fw_clear_untrusted_maclist();
 }
 
 void
 fw_set_mac_temporary(const char *mac, int which)
 {
-	debug(LOG_INFO, "Set trusted||untrusted mac [%s] temporary", mac);
+	debug(LOG_DEBUG, "Set trusted||untrusted mac [%s] temporary", mac);
 	iptables_fw_set_mac_temporary(mac, which);
 }
 
