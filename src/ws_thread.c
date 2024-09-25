@@ -483,6 +483,29 @@ wsevent_connection_cb(struct bufferevent* b_ws, short events, void *ctx){
 	} 
 }
 
+static struct bufferevent *
+create_ws_bufferevent()
+{
+    t_ws_server *ws_server = get_ws_server();
+    struct bufferevent *bev = NULL;
+
+    if (ws_server->use_ssl) {
+        bev = bufferevent_openssl_socket_new(ws_base, -1, SSL_new(SSL_CTX_new(SSLv23_method())),
+            BUFFEREVENT_SSL_CONNECTING, BEV_OPT_CLOSE_ON_FREE|BEV_OPT_DEFER_CALLBACKS);
+    } else {
+        bev = bufferevent_socket_new(ws_base, -1, BEV_OPT_CLOSE_ON_FREE|BEV_OPT_DEFER_CALLBACKS);
+    }
+
+    bufferevent_openssl_set_allow_dirty_shutdown(bev, 1);
+    bufferevent_setcb(bev, ws_read_cb, NULL, wsevent_connection_cb, NULL);
+    bufferevent_enable(bev, EV_READ|EV_WRITE);
+
+    struct timeval timeout = {5, 0}; // 5 seconds timeout
+    bufferevent_set_timeouts(bev, &timeout, NULL);
+
+    return bev;
+}
+
 /*
  * launch websocket thread
  */
@@ -517,36 +540,20 @@ start_ws_thread(void *arg)
 	}
 
     struct bufferevent *ws_bev = NULL;
-	if (ws_server->use_ssl) {
-		ws_bev = bufferevent_openssl_socket_new(ws_base, -1, ssl,
-			BUFFEREVENT_SSL_CONNECTING, BEV_OPT_CLOSE_ON_FREE|BEV_OPT_DEFER_CALLBACKS);
-	} else {
-		ws_bev = bufferevent_socket_new(ws_base, -1, BEV_OPT_CLOSE_ON_FREE|BEV_OPT_DEFER_CALLBACKS);
-	}
-	if (ws_bev == NULL) {
-		debug(LOG_ERR, "create bufferevent failed\n");
-		termination_handler(0);
-	}
-
-	bufferevent_openssl_set_allow_dirty_shutdown(ws_bev, 1);
-
-	bufferevent_setcb(ws_bev, ws_read_cb, NULL, wsevent_connection_cb, NULL);
-	bufferevent_enable(ws_bev, EV_READ|EV_WRITE);
-
-	int ret = 0;
-    if (!ws_server->use_ssl) {
-	    ret = bufferevent_socket_connect_hostname(ws_bev, ws_dnsbase, AF_INET, 
-            									ws_server->hostname, ws_server->port); 
-    } else {
-        ret = bufferevent_socket_connect_hostname(ws_bev, ws_dnsbase, AF_INET,
-												ws_server->hostname, ws_server->port);
+	while (1) {
+        ws_bev = create_ws_bufferevent();
+        int ret = bufferevent_socket_connect_hostname(ws_bev, ws_dnsbase, AF_INET, 
+                                                      ws_server->hostname, ws_server->port);
+        upgraded = false;
+        if (ret < 0) {
+            debug(LOG_ERR, "ws connection error: %s\n", strerror(errno));
+            bufferevent_free(ws_bev);
+            sleep(1); // Wait before retrying
+        } else {
+			debug(LOG_DEBUG, "ws connection success\n");
+            break; // Successfully connected
+        }
     }
-
-	if (ret < 0) {
-		debug(LOG_ERR, "ws connection error: %s\n", strerror(errno));
-		bufferevent_free(ws_bev);
-		termination_handler(0);
-	}
 
 	debug(LOG_DEBUG, "ws thread started\n");
 	event_base_dispatch(ws_base);
