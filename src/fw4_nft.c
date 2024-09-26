@@ -101,6 +101,7 @@ const char *nft_wifidogx_init_script[] = {
     "add rule inet fw4 forward_wifidogx_wan meta mark 0x10000 accept",
     "add rule inet fw4 forward_wifidogx_wan meta mark 0x20000 accept",
     "add rule inet fw4 forward_wifidogx_wan jump forward_wifidogx_unknown",
+    "add rule inet fw4 forward_wifidogx_unknown jump handle_reject",
     "add rule inet fw4 forward_wifidogx_auth_servers ip daddr @set_wifidogx_auth_servers accept",
     "add rule inet fw4 forward_wifidogx_auth_servers ip6 daddr @set_wifidogx_auth_servers_v6 accept",
     "add rule inet fw4 forward_wifidogx_trust_domains ip daddr @set_wifidogx_trust_domains accept",
@@ -111,13 +112,13 @@ const char *nft_wifidogx_init_script[] = {
 };
 
 const char *nft_wifidogx_dhcp_pass_script[] = {
-    "add rule inet fw4 forward_wifidogx_unknown udp dport 67 accept",
-    "add rule inet fw4 forward_wifidogx_unknown tcp dport 67 accept",
+    "insert rule inet fw4 forward_wifidogx_unknown udp dport 67 accept",
+    "insert rule inet fw4 forward_wifidogx_unknown tcp dport 67 accept",
 };
 
 const char *nft_wifidogx_dns_pass_script[] = {
-    "add rule inet fw4 forward_wifidogx_unknown udp dport 53 accept",
-    "add rule inet fw4 forward_wifidogx_unknown tcp dport 53 accept",
+    "insert rule inet fw4 forward_wifidogx_unknown udp dport 53 accept",
+    "insert rule inet fw4 forward_wifidogx_unknown tcp dport 53 accept",
 };
 
 const char *nft_wifidogx_dhcp_redirect_script[] = {
