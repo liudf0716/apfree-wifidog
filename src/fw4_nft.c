@@ -118,7 +118,7 @@ const char *nft_wifidogx_dhcp_pass_script[] = {
 
 const char *nft_wifidogx_dns_pass_script[] = {
     "insert rule inet fw4 forward_wifidogx_unknown udp dport 53 counter accept",
-    "insert rule inet fw4 forward_wifidogx_unknown tcp dport 53 counter reject",
+    "insert rule inet fw4 forward_wifidogx_unknown tcp dport 53 counter accept",
 };
 
 const char *nft_wifidogx_dhcp_redirect_script[] = {
@@ -168,11 +168,15 @@ generate_nft_wifidogx_init_script()
         memset(buf, 0, sizeof(buf));
     }
 
-    if (!config->enable_dns_forward) {
-        for (i = 0; i < sizeof(nft_wifidogx_dns_pass_script) / sizeof(nft_wifidogx_dns_pass_script[0]); i++) {
-            fprintf(output_file, "%s\n", nft_wifidogx_dns_pass_script[i]);
-        }
-    } else {
+    for (i = 0; i < sizeof(nft_wifidogx_dns_pass_script) / sizeof(nft_wifidogx_dns_pass_script[0]); i++) {
+        fprintf(output_file, "%s\n", nft_wifidogx_dns_pass_script[i]);
+    }
+
+    for (i = 0; i < sizeof(nft_wifidogx_dhcp_pass_script) / sizeof(nft_wifidogx_dhcp_pass_script[0]); i++) {
+        fprintf(output_file, "%s\n", nft_wifidogx_dhcp_pass_script[i]);
+    }
+    
+    if (config->enable_dns_forward) {
         while(gw_settings) {
            
             for (i = 0; i < sizeof(nft_wifidogx_dns_redirect_script) / sizeof(nft_wifidogx_dns_redirect_script[0]); i++) {
@@ -189,9 +193,7 @@ generate_nft_wifidogx_init_script()
         }
     }
 
-    for (i = 0; i < sizeof(nft_wifidogx_dhcp_pass_script) / sizeof(nft_wifidogx_dhcp_pass_script[0]); i++) {
-        fprintf(output_file, "%s\n", nft_wifidogx_dhcp_pass_script[i]);
-    }
+    
 
     fclose(output_file);
 }
