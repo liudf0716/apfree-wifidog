@@ -686,3 +686,9 @@ ev_fw_sync_with_authserver(struct wd_request_context *context)
 	}
 }
 
+void 
+conntrack_flush()
+{
+	debug(LOG_DEBUG, "Flush conntrack");
+	execute("conntrack -F", 0);
+}

@@ -355,6 +355,7 @@ wd_init(s_config *config)
     }
 
 #if 1
+    conntrack_flush();
      /* Reset the firewall (if WiFiDog crashed) */
     fw_destroy();
     /* Then initialize it */

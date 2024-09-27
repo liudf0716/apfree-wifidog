@@ -125,4 +125,6 @@ void ev_fw_sync_with_authserver(struct wd_request_context *);
 /** @brief  */
 void ev_fw_sync_with_authserver_v2(struct wd_request_context *);
 
+void conntrack_flush();
+
 #endif                          /* _FIREWALL_H_ */
