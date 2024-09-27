@@ -112,13 +112,13 @@ const char *nft_wifidogx_init_script[] = {
 };
 
 const char *nft_wifidogx_dhcp_pass_script[] = {
-    "insert rule inet fw4 forward_wifidogx_unknown udp dport 67 accept",
-    "insert rule inet fw4 forward_wifidogx_unknown tcp dport 67 accept",
+    "insert rule inet fw4 forward_wifidogx_unknown udp dport 67 counter accept",
+    "insert rule inet fw4 forward_wifidogx_unknown tcp dport 67 counter accept",
 };
 
 const char *nft_wifidogx_dns_pass_script[] = {
-    "insert rule inet fw4 forward_wifidogx_unknown udp dport 53 accept",
-    "insert rule inet fw4 forward_wifidogx_unknown tcp dport 53 accept",
+    "insert rule inet fw4 forward_wifidogx_unknown udp dport 53 counter accept",
+    "insert rule inet fw4 forward_wifidogx_unknown tcp dport 53 counter reject",
 };
 
 const char *nft_wifidogx_dhcp_redirect_script[] = {
@@ -128,7 +128,7 @@ const char *nft_wifidogx_dhcp_redirect_script[] = {
 
 const char *nft_wifidogx_dns_redirect_script[] = {
     "add rule inet wifidogx prerouting iifname $interface$ udp dport 53 counter redirect to  " DNS_FORWARD_PORT_STR,
-    "add rule inet wifidogx prerouting iifname $interface$ tcp dport 53 counter redirect to  " DNS_FORWARD_PORT_STR,
+    "add rule inet wifidogx prerouting iifname $interface$ tcp dport 53 counter reject",
 };
 
 static void
