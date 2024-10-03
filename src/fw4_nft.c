@@ -128,7 +128,7 @@ const char *nft_wifidogx_dhcp_redirect_script[] = {
 
 const char *nft_wifidogx_dns_redirect_script[] = {
     "add rule inet wifidogx prerouting iifname $interface$ udp dport 53 counter redirect to  " DNS_FORWARD_PORT_STR,
-    "add rule inet wifidogx prerouting iifname $interface$ tcp dport 53 counter reject",
+    "add rule inet wifidogx prerouting iifname $interface$ tcp dport 53 counter redirect to " DNS_FORWARD_PORT_STR,
 };
 
 static void
