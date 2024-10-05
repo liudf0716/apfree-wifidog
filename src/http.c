@@ -159,7 +159,7 @@ static char *old_subs[] = {"$GATEWAY_IP$", "$GATEWAY_PORT$", "$PROTO$", "$CLIENT
 static char *new_subs[] = {NULL, NULL, NULL, NULL, NULL};
 
 static char *
-replace_substrings(const char *str, const char **old_subs, const char **new_subs, int count)
+replace_substrings(const char *str,  char **old_subs,  char **new_subs, int count)
 {
     char *result;
     int i, j, total_new_len = 0, total_old_len = 0, occurrences = 0;
@@ -205,12 +205,12 @@ replace_substrings(const char *str, const char **old_subs, const char **new_subs
 }
 
 static struct evbuffer *
-replace_evbuffer_content(struct evbuffer *evb, const char **old_subs, const char **new_subs, int count)
+replace_evbuffer_content(struct evbuffer *evb,  char **old_subs,  char **new_subs, int count)
 {
     struct evbuffer *new_evb = evbuffer_new();
     if (!new_evb) return NULL;
 
-    char *content = evbuffer_pullup(evb, -1);
+    char *content = (char *)evbuffer_pullup(evb, -1);
     char *new_content = replace_substrings(content, old_subs, new_subs, count);
     if (!new_content) {
         evbuffer_free(new_evb);
@@ -231,7 +231,7 @@ replace_evbuffer_content(struct evbuffer *evb, const char **old_subs, const char
  */
 void
 ev_http_reply_client_error(struct evhttp_request *req, enum reply_client_error_type type, 
-    const char *ip, const char *port, const char *proto, const char *client_ip, const char *client_mac)
+    char *ip, char *port, char *proto, char *client_ip, char *client_mac)
 {
     struct evbuffer *evb;
     switch(type) {

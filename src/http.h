@@ -64,7 +64,7 @@ void ev_http_send_redirect_to_auth(struct evhttp_request *, const char *, const 
 void ev_http_send_js_redirect(struct evhttp_request *, const char *);
 /** @brief reply client error of gw internet offline or auth server offline */
 void ev_http_reply_client_error(struct evhttp_request *, enum reply_client_error_type, 
-    const char *, const char *, const char *, const char *, const char *);
+     char *,  char *,  char *,  char *,  char *);
 /** @brief */
 void ev_http_send_apple_redirect(struct evhttp_request *, const char *);
 /** @brief send apple wisper detect request again */
