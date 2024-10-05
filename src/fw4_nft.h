@@ -33,7 +33,7 @@
 /** Used by iptables_fw_access to select if the client should be granted of denied access */
 
 int nft_init(void);
-int nft_fw_reload_client(int tag);
+int nft_fw_reload_client();
 int nft_fw_access(fw_access_t type, const char *ip, const char *mac, int tag);
 int nft_fw_access_host(fw_access_t type, const char *ip);
 void nft_statistical_outgoing(char *outgoing, uint32_t outgoing_len);

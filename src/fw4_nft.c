@@ -497,13 +497,13 @@ nft_fw_access(fw_access_t type, const char *ip, const char *mac, int tag)
 
 /** Reload client's firewall rules */
 int 
-nft_fw_reload_client(int tag)
+nft_fw_reload_client()
 {
 #define NFT_WIFIDOGX_CLIENT_LIST "/tmp/nftables_wifidogx_client_list"
 
     t_client *first_client = client_get_first_client();
     if (first_client == NULL) {
-        debug(LOG_ERR, "No clients in list!");
+        debug(LOG_INFO, "No clients in list!");
         return 1;
     }
 
@@ -512,27 +512,27 @@ nft_fw_reload_client(int tag)
         debug(LOG_ERR, "Failed to open %s", NFT_WIFIDOGX_CLIENT_LIST);
         return 1;
     }
-    fprintf(fp, "nft flush chain inet fw4 mangle_prerouting_wifidogx_outgoing\n");
-    fprintf(fp, "nft flush chain inet fw4 mangle_postrouting_wifidogx_incoming\n");
+    fprintf(fp, "flush chain inet fw4 mangle_prerouting_wifidogx_outgoing\n");
+    fprintf(fp, "flush chain inet fw4 mangle_postrouting_wifidogx_incoming\n");
     
     t_client *current = first_client;
     char line[256] = {0};
     do {
         snprintf(line, sizeof(line), 
-            "nft add rule inet fw4 mangle_prerouting_wifidogx_outgoing ether saddr %s ip saddr %s  counter mark set 0x%02x0000/0xff0000 accept\n", 
-            current->mac, current->ip, tag&0x000000ff);
+            "add rule inet fw4 mangle_prerouting_wifidogx_outgoing ether saddr %s ip saddr %s  counter packets %llu bytes %llu mark set 0x20000 accept\n", 
+            current->mac, current->ip, current->counters.outgoing_packets, current->counters.outgoing);
         fprintf(fp, "%s", line);
         memset(line, 0, sizeof(line));
         snprintf(line, sizeof(line), 
-            "nft add rule inet fw4 mangle_postrouting_wifidogx_incoming ip daddr %s counter accept\n", 
-            current->ip);
+            "add rule inet fw4 mangle_postrouting_wifidogx_incoming ip daddr %s counter packets %llu bytes %llu accept\n", 
+            current->ip, current->counters.incoming_packets, current->counters.incoming);
         fprintf(fp, "%s", line);
         memset(line, 0, sizeof(line));
         current = current->next;
     } while (current != NULL);
     fclose(fp);
 
+    run_cmd("nft -f %s", NFT_WIFIDOGX_CLIENT_LIST);
+
     return 0;
 }
-
-

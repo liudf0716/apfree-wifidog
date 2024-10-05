@@ -37,6 +37,7 @@
 #include "ping_thread.h"
 #include "firewall.h"
 #include "fw_iptables.h"
+#include "fw4_nft.h"
 #include "auth.h"
 #include "centralserver.h"
 #include "client_list.h"
@@ -210,9 +211,6 @@ int
  fw_init(void)
 {
 	int result = 0;
-	int new_fw_state;
-	t_client *client = NULL;
-
 	if (!init_icmp_socket()) {
 		return 0;
 	}
@@ -221,15 +219,9 @@ int
 	result = iptables_fw_init();
 
 	if (restart_orig_pid) {
-		debug(LOG_INFO, "Restoring firewall rules for clients inherited from parent");
+		debug(LOG_INFO, "Restoring firewall rules for clients");
 		LOCK_CLIENT_LIST();
-		client = client_get_first_client();
-		while (client) {
-			new_fw_state = client->fw_connection_state;
-			client->fw_connection_state = FW_MARK_NONE;
-			fw_allow(client, new_fw_state);
-			client = client->next;
-		}
+		nft_fw_reload_client();
 		UNLOCK_CLIENT_LIST();
 	}
 
@@ -541,7 +533,7 @@ get_gw_clients_counter(t_gateway_setting *gw_setting, t_client *worklist)
         for (p1 = p2 = worklist; NULL != p1; p1 = p2) {
             p2 = p1->next;
             if (p1->gw_setting && p1->gw_setting != gw_setting) {
-				debug(LOG_INFO, "client %s client gw_setting %lu not in gateway %s", 
+				debug(LOG_DEBUG, "client %s client gw_setting %lu not in gateway %s", 
 					p1->ip, p1->gw_setting,   gw_setting->gw_id);
 				continue;
 			}

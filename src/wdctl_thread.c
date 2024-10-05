@@ -47,6 +47,7 @@ static struct sockaddr_un *create_unix_socket(const char *);
 
 static void wdctl_status(struct bufferevent *);
 static void wdctl_stop(struct bufferevent *);
+static void wdctl_refresh(struct bufferevent *);
 static void wdctl_clear_trusted_pan_domains(struct bufferevent *);
 static void wdctl_show_trusted_pan_domains(struct bufferevent *);
 static void wdctl_clear_trusted_iplist(struct bufferevent *);
@@ -91,6 +92,7 @@ static struct wdctl_command {
 } wdctl_cmd[] = {
     {"status", wdctl_status, NULL},
     {"stop", wdctl_stop, NULL},
+    {"refresh", wdctl_refresh, NULL},
     {"clear_trusted_pdomains", wdctl_clear_trusted_pan_domains, NULL},
     {"show_trusted_pdomains", wdctl_show_trusted_pan_domains, NULL},
     {"clear_trusted_iplist", wdctl_clear_trusted_iplist, NULL},
@@ -255,6 +257,13 @@ wdctl_stop(struct bufferevent *fd)
 {
     pid_t pid = getpid();
     kill(pid, SIGINT);
+}
+
+static void
+wdctl_refresh(struct bufferevent *fd)
+{
+    pid_t pid = getpid();
+    kill(pid, SIGUSR1);
 }
 
 static void

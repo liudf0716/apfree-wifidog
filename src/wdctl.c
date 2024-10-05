@@ -44,44 +44,12 @@ static void display_help();
 static void stop_command();
 static void reset_command(const char *value);
 static void status_command();
-
+static void refresh_command();
 
 static void send_request(int, const char *);
 static void read_response(int);
 static void wdctl_command_action(const char *, const char *);
 static int connect_to_server(const char *);
-
-#if 0
-static struct wdctl_client_command {
-    const char *command; // command name
-    const char *cmd_args; // comand args demo
-    const char *cmd_description; // help
-} wdctl_clt_cmd [] = {
-    {"status", NULL, "get apfree wifidog status"},
-    {"clear_trusted_pdomains", NULL, "clear trusted pan-domain"},
-    {"show_trusted_pdomains", NULL, "show trusted pan-domain"},
-    {"clear_trusted_iplist", NULL, "clear trusted iplist"},
-    {"clear_trusted_domains", NULL, "clear trusted domain and it's ip"},
-    {"show_trusted_domains", NULL, "show trusted domains and its ip"},
-    {"show_trusted_mac", NULL, "show trusted mac list"},
-    {"clear_trusted_mac", NULL, "clear trusted mac list"},
-    {"add_trusted_pdomains", "pan-domain1,pan-domain2...", "add one or more trusted pan-domain like qq.com..."},
-    {"del_trusted_pdomains", "pan-domain1,pan-domain2...", "del one or more trusted pan-domain list like qq.com..."},
-    {"add_trusted_domains", "domain1,domain2...", "add trusted domain list like www.qq.com..."},
-    {"del_trusted_domains", "domain1,domain2...", "del trusted domain list like www.qq.com...."},
-    {"add_trusted_iplist", "ip1,ip2...", "add one or more trusted ip list like ip1,ip2..."},
-    {"del_trusted_iplist", "ip1,ip2...", "del one or more trsuted ip list like ip1,ip2..."},
-    {"add_trusted_mac", "mac1,mac2...", "add one or more trusted mac list like mac1,mac2..."},
-    {"del_trusted_mac", "mac1,mac2...", "del one or more trusted mac list like mac1,mac2..."},
-    {"reparse_trusted_domains", NULL, "reparse trusted domain's ip and add new parsed ip"},
-    {"add_online_client", "{\"ip\":\"ipaddress\", \"mac\":\"devMac\", \"name\":\"devName\"}", "add roam client to connected list "},
-	{"add_auth_client", "{\"ip\":\"ipaddress\", \"mac\":\"devMac\", \"name\":\"devName\"}", "add test client to connected list "},
-    {"user_cfg_save", NULL, "save all rule to config file"},
-    {"reset", "ip|mac", "logout connected client by its ip or mac"},
-    {"stop", NULL, "stop apfree wifidog"},
-    {"demo", NULL, "give some demonstration of method"},
-};
-#endif
 
 static int
 connect_to_server(const char *sock_name)
@@ -194,47 +162,41 @@ main(int argc, char **argv)
     }
 
     char *command = argv[1];
-    char *type = NULL;
-    char *values = NULL;
+    char *type = (argc > 2) ? argv[2] : NULL;
+    char *values = (argc > 3) ? argv[3] : NULL;
 
-    if (strcmp(command, "show") == 0 || strcmp(command, "add") == 0 || strcmp(command, "clear") == 0) {
-        if (argc < 3) {
+    if (strcmp(command, "show") == 0) {
+        if (!type) {
             printf("Error: Missing type argument\n");
             return 1;
         }
-        type = argv[2];
-    }
-
-    if (strcmp(command, "add") == 0) {
-        if (argc < 4) {
-            printf("Error: Missing values argument\n");
-            return 1;
-        }
-        values = argv[3];
-    }
-
-    if (strcmp(command, "reset") == 0) {
-        if (argc < 3) {
-            printf("Error: Missing reset argument\n");
-            return 1;
-        }
-        values = argv[2];
-    }
-
-    if (strcmp(command, "show") == 0) {
         show_command(type);
     } else if (strcmp(command, "add") == 0) {
+        if (!type || !values) {
+            printf("Error: Missing type or values argument\n");
+            return 1;
+        }
         add_command(type, values);
     } else if (strcmp(command, "clear") == 0) {
+        if (!type) {
+            printf("Error: Missing type argument\n");
+            return 1;
+        }
         clear_command(type);
     } else if (strcmp(command, "help") == 0 || strcmp(command, "?") == 0) {
         display_help();
     } else if (strcmp(command, "stop") == 0) {
         stop_command();
     } else if (strcmp(command, "reset") == 0) {
+        if (!values) {
+            printf("Error: Missing reset argument\n");
+            return 1;
+        }
         reset_command(values);
     } else if (strcmp(command, "status") == 0) {
         status_command();
+    } else if (strcmp(command, "refresh") == 0) {
+        refresh_command();
     } else {
         printf("Unknown command. Type 'wdctlx help' or 'wdctlx ?' for help.\n");
         return 1;
@@ -299,6 +261,7 @@ display_help() {
     printf("wdctlx stop\n");
     printf("wdctlx reset\n");
     printf("wdctlx status\n");
+    printf("wdctlx refresh\n");
 }
 
 static void 
@@ -320,4 +283,11 @@ status_command() {
     printf("Status: Running\n");
     // Add the logic to show the status
     wdctl_command_action("status", NULL);
+}
+
+static void
+refresh_command()
+{
+    printf("Refreshing wdctlx\n");
+    wdctl_command_action("refresh", NULL);
 }

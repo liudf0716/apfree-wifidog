@@ -65,7 +65,7 @@ usage(void)
     fprintf(stdout, "  -h            Print usage\n");
     fprintf(stdout, "  -v            Print version information\n");
     fprintf(stdout,
-            "  -x pid        Used internally by WiFiDog when re-starting itself *DO NOT ISSUE THIS SWITCH MANUAlLY*\n");
+            "  -x pid        Used internally by apfree wifidog when re-starting itself *DO NOT ISSUE THIS SWITCH MANUAlLY*\n");
     fprintf(stdout, "  -i <path>     Internal socket path used when re-starting self\n");
     fprintf(stdout, "  -a <path>     Path to /proc/net/arp replacement - mainly useful for debugging.\n");
     fprintf(stdout, "  -p <path>     Save pid to file\n");
@@ -132,7 +132,7 @@ parse_commandline(int argc, char **argv)
             break;
 
         case 'v':
-            fprintf(stdout, "This is WiFiDog version " VERSION "\n");
+            fprintf(stdout, "This is apfree wifidog version " VERSION "\n");
             exit(1);
             break;
 
@@ -167,7 +167,7 @@ parse_commandline(int argc, char **argv)
                 free(config->pidfile);
                 config->pidfile = safe_strdup(optarg);
             } else {
-                fprintf(stdout, "The expected PID file path to the wifidog was not supplied!\n");
+                fprintf(stdout, "The expected PID file path to the apfree wifidog was not supplied!\n");
                 exit(1);
             }
             break;

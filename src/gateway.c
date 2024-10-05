@@ -247,6 +247,7 @@ wd_signal_cb(evutil_socket_t fd, short what, void *arg)
 	case SIGQUIT:
 	case SIGINT:
 	case SIGHUP:
+        debug(LOG_INFO, "Received signal %i; exiting...", fd);
 		event_base_loopbreak(evbase);
 		termination_handler(1);
 		break;
@@ -254,7 +255,11 @@ wd_signal_cb(evutil_socket_t fd, short what, void *arg)
 		sigchld_handler(0);
 		break;
 	case SIGUSR1:
-		debug(LOG_INFO, "Received SIGUSER1; ignore.");
+		debug(LOG_INFO, "Received SIGUSER1; reload fw.");
+        fw_destroy();
+        restart_orig_pid = 1;
+        fw_init();
+        restart_orig_pid = 0;
 		break;
 	case SIGPIPE:
 		debug(LOG_INFO, "Warning: Received SIGPIPE; ignoring.\n");
@@ -354,7 +359,6 @@ wd_init(s_config *config)
         }
     }
 
-#if 1
     conntrack_flush();
      /* Reset the firewall (if WiFiDog crashed) */
     fw_destroy();
@@ -363,7 +367,6 @@ wd_init(s_config *config)
         debug(LOG_ERR, "FATAL: Failed to initialize firewall");
         exit(EXIT_FAILURE);
     }
-#endif
 }
 
 static void
