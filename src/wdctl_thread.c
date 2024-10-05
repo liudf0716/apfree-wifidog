@@ -255,6 +255,7 @@ wdctl_status(struct bufferevent *fd)
 static void
 wdctl_stop(struct bufferevent *fd)
 {
+    bufferevent_write(fd, "Yes", 3);
     pid_t pid = getpid();
     kill(pid, SIGINT);
 }
@@ -262,6 +263,7 @@ wdctl_stop(struct bufferevent *fd)
 static void
 wdctl_refresh(struct bufferevent *fd)
 {
+    bufferevent_write(fd, "Yes", 3);
     pid_t pid = getpid();
     kill(pid, SIGUSR1);
 }
