@@ -325,6 +325,34 @@ nft_reload_gw()
     nft_add_gw();
 }
 
+
+static void
+nft_set_ext_interface()
+{
+    s_config *config = config_get_config();
+    if (!config->external_interface) {
+        debug(LOG_ERR, "ext_interface is NULL");
+        return;
+    }
+
+    // get ext_interface's ip address
+    char *ip = get_iface_ip(config->external_interface);
+    if (ip == NULL) {
+        debug(LOG_ERR, "get_iface_ip [%s] failed", config->external_interface);
+        return;
+    }
+    run_cmd("nft add element inet fw4 set_wifidogx_bypass_clients { %s }", ip);
+    free(ip);
+
+    ip = get_iface_ip6(config->external_interface);
+    if (ip == NULL) {
+        debug(LOG_ERR, "get_iface_ip6 [%s] failed", config->external_interface);
+        return;
+    }
+    run_cmd("nft add element inet fw4 set_wifidogx_bypass_clients_v6 { %s }", ip);
+    free(ip);
+}
+
 /** Initialize the firewall rules
 */
 int 
@@ -333,6 +361,7 @@ nft_init()
 	generate_nft_wifidogx_init_script();
 	nft_do_init_script_command();
     nft_add_gw();
+    nft_set_ext_interface();
     iptables_fw_set_authservers(NULL);
 
     return 1;
