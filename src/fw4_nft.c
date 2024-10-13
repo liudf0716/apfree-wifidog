@@ -370,62 +370,43 @@ nft_init()
 static int
 check_nft_expr_json_array_object(json_object *jobj, const char *ip, const char *mac)
 {
-    // get the array length
     int arraylen = json_object_array_length(jobj);
-    int i = 0;
-    int ip_flag = 0;
-    int mac_flag = 0;
-    if (mac == NULL) {
-        // do not check mac address
-        mac_flag = 1;
-    }
-    // iterate the array
-    for (i = 0; i < arraylen; i++) {
+    int ip_flag = (ip == NULL) ? 1 : 0;
+    int mac_flag = (mac == NULL) ? 1 : 0;
+
+    for (int i = 0; i < arraylen; i++) {
         json_object *jobj_item = json_object_array_get_idx(jobj, i);
         json_object *jobj_item_match = NULL;
+
         if (json_object_object_get_ex(jobj_item, "match", &jobj_item_match)) {
-            // if the item contains "match", get the "match" object
             json_object *jobj_item_match_left = NULL;
             json_object *jobj_item_match_right = NULL;
-            if (json_object_object_get_ex(jobj_item_match, "left", &jobj_item_match_left)) {
-                // if the "match" object contains "left", get the "left" object
+
+            if (json_object_object_get_ex(jobj_item_match, "left", &jobj_item_match_left) &&
+                json_object_object_get_ex(jobj_item_match, "right", &jobj_item_match_right)) {
+
                 json_object *jobj_item_match_left_payload = NULL;
                 if (json_object_object_get_ex(jobj_item_match_left, "payload", &jobj_item_match_left_payload)) {
-                    // if the "left" object contains "payload", get the "payload" object
                     json_object *jobj_item_match_left_payload_protocol = NULL;
                     if (json_object_object_get_ex(jobj_item_match_left_payload, "protocol", &jobj_item_match_left_payload_protocol)) {
-                        // if the "payload" object contains "protocol", get the "protocol" value
                         const char *protocol = json_object_get_string(jobj_item_match_left_payload_protocol);
-                        if (strcmp(protocol, "ether") == 0) {
-                            // if the "protocol" value is "ether", get the "right" value
-                            if (json_object_object_get_ex(jobj_item_match, "right", &jobj_item_match_right)) {
-                                const char *right = json_object_get_string(jobj_item_match_right);
-                                if (strcmp(right, mac) == 0) {
-                                    // if the "right" value is the mac address, return 1
-                                    mac_flag = 1;
-                                }
-                            }
-                        } else if (strcmp(protocol, "ip") == 0) {
-                            // if the "protocol" value is "ip", get the "right" value
-                            if (json_object_object_get_ex(jobj_item_match, "right", &jobj_item_match_right)) {
-                                const char *right = json_object_get_string(jobj_item_match_right);
-                                if (strcmp(right, ip) == 0) {
-                                    // if the "right" value is the ip address, return 1
-                                    ip_flag = 1;
-                                }
-                            }
+                        const char *right = json_object_get_string(jobj_item_match_right);
+
+                        if (strcmp(protocol, "ether") == 0 && mac && strcmp(right, mac) == 0) {
+                            mac_flag = 1;
+                        } else if (strcmp(protocol, "ip") == 0 && ip && strcmp(right, ip) == 0) {
+                            ip_flag = 1;
                         }
                     }
                 }
             }
         }
 
-        // if ip_flag and mac_flag are both 1, return 1
-        if (ip_flag == 1 && mac_flag == 1) {
+        if (ip_flag && mac_flag) {
             return 1;
-        } 
+        }
     }
-    
+
     return 0;
 }
 
@@ -435,68 +416,72 @@ check_nft_expr_json_array_object(json_object *jobj, const char *ip, const char *
 static void
 nft_fw_del_rule_by_ip_and_mac(const char *ip, const char *mac, const char *chain)
 {
-    char cmd[256] = {0};
+    char cmd[256];
     snprintf(cmd, sizeof(cmd), "nft -j list chain inet fw4 %s", chain);
-    debug(LOG_DEBUG, " cmd: %s", cmd);
+    debug(LOG_DEBUG, "cmd: %s", cmd);
+
     FILE *r_fp = popen(cmd, "r");
     if (r_fp == NULL) {
-        debug(LOG_ERR, " popen failed");
+        debug(LOG_ERR, "popen failed");
         return;
     }
 
-    char buf[4096] = {0};
-    fgets(buf, sizeof(buf), r_fp);
-    pclose(r_fp);
-    debug(LOG_DEBUG, " buf: %s", buf);
-    json_object *jobj = json_tokener_parse(buf);
-    if (jobj == NULL) {
-        debug(LOG_ERR, " jobj is NULL");
+    char buf[4096];
+    if (fgets(buf, sizeof(buf), r_fp) == NULL) {
+        debug(LOG_ERR, "fgets failed");
+        pclose(r_fp);
         return;
     }
-    
-	json_object *jobj_nftables = NULL;
-	if (!json_object_object_get_ex(jobj, "nftables", &jobj_nftables)) {
-		debug(LOG_ERR, " jobj_nftables is NULL");
-		goto END_DELETE_CLIENT;
-	}
-    
-    int i = 0;
+    pclose(r_fp);
+
+    debug(LOG_DEBUG, "buf: %s", buf);
+
+    json_object *jobj = json_tokener_parse(buf);
+    if (jobj == NULL) {
+        debug(LOG_ERR, "json_tokener_parse failed");
+        return;
+    }
+
+    json_object *jobj_nftables;
+    if (!json_object_object_get_ex(jobj, "nftables", &jobj_nftables)) {
+        debug(LOG_ERR, "json_object_object_get_ex failed for nftables");
+        json_object_put(jobj);
+        return;
+    }
+
     int len = json_object_array_length(jobj_nftables);
-    for (i = 0; i < len; i++) {
+    for (int i = 0; i < len; i++) {
         json_object *jobj_item = json_object_array_get_idx(jobj_nftables, i);
         if (jobj_item == NULL) {
-            debug(LOG_ERR, " jobj_item is NULL");
+            debug(LOG_ERR, "json_object_array_get_idx failed for index %d", i);
             continue;
         }
-        // get the "rule" json object which is an array of json objects
-        json_object *jobj_rule = NULL;
+
+        json_object *jobj_rule;
         if (!json_object_object_get_ex(jobj_item, "rule", &jobj_rule)) {
-            debug(LOG_ERR, "jobj_rule is NULL");
+            debug(LOG_ERR, "json_object_object_get_ex failed for rule");
             continue;
         }
-        // get the "expr" json object which is an array of json objects
-        json_object *jobj_rule_expr = NULL;
+
+        json_object *jobj_rule_expr;
         if (!json_object_object_get_ex(jobj_rule, "expr", &jobj_rule_expr)) {
-            debug(LOG_ERR, "jobj_rule_expr is NULL");
+            debug(LOG_ERR, "json_object_object_get_ex failed for expr");
             continue;
         }
-        // use the function check_nft_expr_json_array_object to check if the rule contains the ip and mac
-        if (check_nft_expr_json_array_object(jobj_rule_expr, ip, mac) == 1) {
-            // if the rule contains the ip and mac, get the "handle" value
-            json_object *jobj_rule_handle = NULL;
+
+        if (check_nft_expr_json_array_object(jobj_rule_expr, ip, mac)) {
+            json_object *jobj_rule_handle;
             if (!json_object_object_get_ex(jobj_rule, "handle", &jobj_rule_handle)) {
-                debug(LOG_ERR, "jobj_rule_handle is NULL");
+                debug(LOG_ERR, "json_object_object_get_ex failed for handle");
                 continue;
             }
+
             const char *handle = json_object_get_string(jobj_rule_handle);
-            // delete the rule
-            char cmd[256] = {0};
             snprintf(cmd, sizeof(cmd), "nft delete rule inet fw4 %s handle %s", chain, handle);
             run_cmd(cmd);
         }
     }
 
-END_DELETE_CLIENT:
     json_object_put(jobj);
 }
 
