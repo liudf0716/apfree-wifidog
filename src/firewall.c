@@ -37,7 +37,7 @@
 #include "ping_thread.h"
 #include "firewall.h"
 #include "fw_iptables.h"
-#include "fw4_nft.h"
+#include "fw_nft.h"
 #include "auth.h"
 #include "centralserver.h"
 #include "client_list.h"

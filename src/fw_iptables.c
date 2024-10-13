@@ -48,7 +48,7 @@
 	#include "fw3_iptc.h"
 	#include "ipset.h"
 #else
-	#include "fw4_nft.h"
+	#include "fw_nft.h"
 #endif
 
 /**

@@ -32,7 +32,7 @@ if(AW_FW3)
 	)
 else()
 	set(src_fw4
-		fw4_nft.c
+		fw_nft.c
 	)
 endif()
 

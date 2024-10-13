@@ -20,12 +20,12 @@
  \********************************************************************/
 
 /** @internal
-  @file fw3_iptc.h
-  @brief libiptc api.
-  @author Copyright (C) 2023 helintongh <agh6399@gmail.com>
+  @file fw_nft.h
+  @brief firewall nftables functions
+  @author Copyright (C) 2024 liudengfeng <liudf0716@gmail.com>
  */
-#ifndef __FW4_NFT_H
-#define __FW4_NFT_H
+#ifndef __FW_NFT_H
+#define __FW_NFT_H
 
 #include <stdint.h>
 

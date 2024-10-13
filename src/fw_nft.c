@@ -20,9 +20,9 @@
  \********************************************************************/
 
 /** @internal
-  @file fw3_iptc.h
-  @brief libiptc api.
-  @author Copyright (C) 2023 helintongh <agh6399@gmail.com>
+  @file fw_nft.c
+  @brief firewall nftables functions
+  @author Copyright (C) 2024 liudengfeng <liudf0716@gmail.com>
  */
 #include <stdio.h>
 #include <string.h>
@@ -32,7 +32,7 @@
 #include "util.h"
 #include "wd_util.h"
 #include "fw_iptables.h"
-#include "fw4_nft.h"
+#include "fw_nft.h"
 #include "client_list.h"
 #include "conf.h"
 #include "dns_forward.h"

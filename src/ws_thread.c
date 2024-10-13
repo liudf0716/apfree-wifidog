@@ -27,7 +27,7 @@
 #include "client_list.h"
 #include "gateway.h"
 #include "fw_iptables.h"
-#include "fw4_nft.h"
+#include "fw_nft.h"
 #include "wd_util.h"
 
 #define MAX_OUTPUT (512*1024)
