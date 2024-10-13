@@ -52,12 +52,6 @@
 #define CHAIN_AUTH_IS_DOWN "WiFiDog_$ID$_AuthIsDown"
 /*@}*/
 
-/** Used by iptables_fw_access to select if the client should be granted of denied access */
-typedef enum fw_access_t_ {
-    FW_ACCESS_ALLOW,
-    FW_ACCESS_DENY
-} fw_access_t;
-
 
 /** @brief Initialize the firewall */
 int iptables_fw_init(void);
@@ -131,8 +125,6 @@ void iptables_fw_save_online_clients(void);
 void iptables_fw_set_mac_temporary(const char *, int);
 
 void update_trusted_mac_status(t_trusted_mac *tmac);
-
-void __get_client_name(t_client *client);
 
 int add_mac_to_ipset(const char *name, const char *mac, int timeout);
 

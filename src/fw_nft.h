@@ -32,14 +32,29 @@
 
 /** Used by iptables_fw_access to select if the client should be granted of denied access */
 
-int nft_init(void);
+int nft_fw_init(void);
+int nft_fw_destroy(void);
 int nft_fw_reload_client();
 int nft_fw_access(fw_access_t type, const char *ip, const char *mac, int tag);
 int nft_fw_access_host(fw_access_t type, const char *ip);
-void nft_statistical_outgoing(char *outgoing, uint32_t outgoing_len);
-void nft_statistical_incoming(char *incoming, uint32_t incoming_len);
+void nft_statistical_outgoing(char **outgoing, uint32_t *outgoing_len);
+void nft_statistical_incoming(char **incoming, uint32_t *incoming_len);
 void nft_add_gw();
 void nft_del_gw();
 void nft_reload_gw();
+int nft_fw_counters_update();
+int nft_fw_auth_unreachable(int tag);
+int nft_fw_auth_reachable();
+void nft_fw_clear_authservers();
+void nft_fw_set_authservers();
+void nft_fw_refresh_inner_domains_trusted();
+void nft_fw_clear_inner_domains_trusted();
+void nft_fw_set_inner_domains_trusted();
+void nft_fw_set_user_domains_trusted();
+void nft_fw_clear_user_domains_trusted();
+void nft_fw_refresh_user_domains_trusted();
+void nft_fw_set_trusted_maclist();
+void nft_fw_clear_trusted_maclist();
+void nft_fw_set_mac_temporary(const char *mac, int which);
 
 #endif

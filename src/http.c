@@ -53,7 +53,6 @@
 #include "wd_util.h"
 #include "version.h"
 #include "wd_client.h"
-#include "fw_iptables.h"
 
 #define APPLE_REDIRECT_MSG  "<!DOCTYPE html>"	\
 				"<html>"						\
@@ -679,7 +678,7 @@ ev_http_callback_local_auth(struct evhttp_request *req, void *arg)
 
     // fw_allow the client
     LOCK_CLIENT_LIST();
-    iptables_fw_access(FW_ACCESS_ALLOW, ip, mac, 0);    
+    fw_allow_ip_mac(ip, mac); 
     UNLOCK_CLIENT_LIST();
 
     // redirect the client to the internet

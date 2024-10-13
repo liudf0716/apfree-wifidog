@@ -34,6 +34,7 @@
 #include <event2/buffer.h>
 
 #include "conf.h"
+#include "client_list.h"
 
 /*  arp_flags and at_flags field values */
 #define ATF_INUSE   0x01    /* entry in use */
@@ -171,5 +172,7 @@ t_gateway_setting *get_gateway_setting_by_id(const char *);
 
 /** @brief generate cert for apfree-wifidog */
 void init_apfree_wifidog_cert();
+
+void __get_client_name(t_client *client);
 
 #endif /* _WD_UTIL_H_ */

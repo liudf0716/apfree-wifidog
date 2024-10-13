@@ -30,7 +30,8 @@
 #define _GNU_SOURCE
 
 #include <arpa/inet.h>
-
+#include <libiptc/libiptc.h>
+#include <xtables.h>
 
 #include "common.h"
 #include "safe.h"
@@ -41,21 +42,14 @@
 #include "util.h"
 #include "client_list.h"
 #include "wd_util.h"
+#include "fw3_iptc.h"
+#include "ipset.h"
 
-#ifdef AW_FW3
-	#include <libiptc/libiptc.h>
-	#include <xtables.h>
-	#include "fw3_iptc.h"
-	#include "ipset.h"
-#else
-	#include "fw_nft.h"
-#endif
 
 /**
 Used to supress the error output of the firewall during destruction */
 static int fw_quiet = 0;
 
-#ifdef AW_FW3
 static FILE	*f_fw_init = NULL;
 static FILE	*f_fw_destroy = NULL;
 static FILE	*f_fw_allow  = NULL;
@@ -349,47 +343,11 @@ iptables_load_ruleset(const char *table, const char *ruleset, const char *chain,
 
 	debug(LOG_DEBUG, "Ruleset %s loaded into table %s, chain %s", ruleset, table, chain);
 }
-#else
-/** @internal
- * 
-*/
-static int
-nftables_do_command(const char *format, ...)
-{
-	va_list vlist;
-	char *fmt_cmd;
-	char *cmd;
-	int rc;
 
-	va_start(vlist, format);
-	safe_vasprintf(&fmt_cmd, format, vlist);
-	va_end(vlist);
-
-	safe_asprintf(&cmd, "nft %s", fmt_cmd);
-	free(fmt_cmd);
-
-	debug(LOG_DEBUG, "Executing command: %s", cmd);
-
-	rc = execute(cmd, fw_quiet);
-
-	if (rc != 0) {
-		// If quiet, do not display the error
-		if (fw_quiet == 0)
-			debug(LOG_ERR, "nft command failed(%d): %s", rc, cmd);
-		else if (fw_quiet == 1)
-			debug(LOG_DEBUG, "nft command failed(%d): %s", rc, cmd);
-	}
-
-	free(cmd);
-
-	return rc;
-}
-#endif
 
 int
 add_mac_to_ipset(const char *name, const char *mac, int timeout)
 {
-#ifdef AW_FW3
 	char *ipset_name =  NULL;
 	if(name == NULL)
 		return -1;
@@ -401,20 +359,13 @@ add_mac_to_ipset(const char *name, const char *mac, int timeout)
 	int nret = add_to_ipset(ipset_name, mac, timeout);
 	free(ipset_name);
 	return nret;
-#else
-	return 0;
-#endif
 }
 
 void
 iptables_fw_clear_authservers(void)
 {
-#ifdef AW_FW3
 	iptables_do_command("-t filter -F " CHAIN_AUTHSERVERS);
 	iptables_do_command("-t nat -F " CHAIN_AUTHSERVERS);
-#else
-	nftables_do_command("flush set inet fw4 set_wifidogx_auth_servers");
-#endif
 }
 
 void
@@ -428,21 +379,12 @@ iptables_fw_set_authservers(void *handle)
 	for (auth_server = config->auth_servers; auth_server != NULL; auth_server = auth_server->next) {
 		if (auth_server->last_ip && strcmp(auth_server->last_ip, "0.0.0.0") != 0) {
 			debug(LOG_DEBUG, "the last ip: %s", auth_server->last_ip);
-#ifdef AW_FW3
 			if (handle) {
 				iptables_do_append_command(handle, "-A " CHAIN_AUTHSERVERS " -d %s -j ACCEPT", auth_server->last_ip);
 			} else {
 				iptables_do_command("-t filter -A " CHAIN_AUTHSERVERS " -d %s -j ACCEPT", auth_server->last_ip);
 				iptables_do_command("-t nat -A " CHAIN_AUTHSERVERS " -d %s -j ACCEPT", auth_server->last_ip);
 			}
-#else
-			if (is_valid_ip(auth_server->last_ip))
-				nftables_do_command("add element inet fw4 set_wifidogx_auth_servers { %s }", auth_server->last_ip);
-			else if (is_valid_ip6(auth_server->last_ip))
-				nftables_do_command("add element inet fw4 set_wifidogx_auth_servers_v6 { %s }", auth_server->last_ip);
-			else
-				debug(LOG_ERR, "Invalid IP address: %s", auth_server->last_ip);
-#endif
 		}
 	}
 }
@@ -457,12 +399,7 @@ iptables_fw_refresh_user_domains_trusted(void)
 void
 iptables_fw_clear_user_domains_trusted(void)
 {
-#ifdef AW_FW3
 	iptables_flush_ipset(CHAIN_DOMAIN_TRUSTED);
-#else
-	nftables_do_command("flush set inet fw4 set_wifidogx_trust_domains");
-	nftables_do_command("flush set inet fw4 set_wifidogx_trust_domains_v6");
-#endif
 }
 
 void
@@ -478,11 +415,7 @@ iptables_fw_set_user_domains_trusted(void)
 	for (domain_trusted = config->domains_trusted; domain_trusted != NULL; domain_trusted = domain_trusted->next) {
 		t_ip_trusted *ip_trusted = NULL;
 		for(ip_trusted = domain_trusted->ips_trusted; ip_trusted != NULL; ip_trusted = ip_trusted->next) {
-#ifdef AW_FW3
 			add_ip_to_ipset(CHAIN_DOMAIN_TRUSTED, ip_trusted->ip, 0);
-#else
-			nftables_do_command("add element inet fw4 set_wifidogx_trust_domains { %s }", ip_trusted->ip);
-#endif
 		}
 	}
 
@@ -510,12 +443,7 @@ iptables_fw_refresh_inner_domains_trusted(void)
 void
 iptables_fw_clear_inner_domains_trusted(void)
 {
-#ifdef AW_FW3
 	iptables_flush_ipset(CHAIN_INNER_DOMAIN_TRUSTED);
-#else
-	nftables_do_command("flush set inet fw4 set_wifidogx_inner_trust_domains");
-	nftables_do_command("flush set inet fw4 set_wifidogx_inner_trust_domains_v6");
-#endif
 }
 
 /**
@@ -535,14 +463,7 @@ iptables_fw_set_inner_domains_trusted(void)
 	for (domain_trusted = config->inner_domains_trusted; domain_trusted != NULL; domain_trusted = domain_trusted->next) {
 		t_ip_trusted *ip_trusted = NULL;
 		for(ip_trusted = domain_trusted->ips_trusted; ip_trusted != NULL; ip_trusted = ip_trusted->next) {
-#ifdef AW_FW3
 			add_ip_to_ipset(CHAIN_INNER_DOMAIN_TRUSTED, ip_trusted->ip, 0);
-#else
-			if (ip_trusted->ip_type == IP_TYPE_IPV4)
-				nftables_do_command("add element inet fw4 set_wifidogx_inner_trust_domains { %s }", ip_trusted->ip);
-			else if (ip_trusted->ip_type == IP_TYPE_IPV6)
-				nftables_do_command("add element inet fw4 set_wifidogx_inner_trust_domains_v6 { %s }", ip_trusted->ip);
-#endif
 		}
 	}
 
@@ -553,29 +474,19 @@ iptables_fw_set_inner_domains_trusted(void)
 void
 iptables_fw_clear_roam_maclist(void)
 {
-#ifdef AW_FW3
 	iptables_flush_ipset(CHAIN_ROAM);
-#else
-#endif
 }
 
 void
 iptables_fw_set_roam_mac(const char *mac)
 {
-#ifdef AW_FW3
 	ipset_do_command("add " CHAIN_ROAM " %s", mac);
-#else
-#endif
 }
 
 void
 iptables_fw_clear_trusted_maclist(void)
 {
-#ifdef AW_FW3
 	iptables_flush_ipset(CHAIN_TRUSTED);
-#else
-	nftables_do_command("flush set inet fw4 set_wifidogx_trust_clients");
-#endif
 }
 
 void
@@ -588,36 +499,25 @@ iptables_fw_set_trusted_maclist(void)
 
 	LOCK_CONFIG();
 	for (p = config->trustedmaclist; p != NULL; p = p->next)
-#ifdef AW_FW3
 		ipset_do_command("add " CHAIN_TRUSTED " %s", p->mac);
-#else
-		nftables_do_command("add element inet fw4 set_wifidogx_trust_clients { %s }", p->mac);
-#endif
 	UNLOCK_CONFIG();
 }
 
 void
 iptables_fw_set_trusted_mac(const char *mac)
 {
-#ifdef AW_FW3
 	ipset_do_command("add " CHAIN_TRUSTED " %s", mac);
-#else
-#endif
 }
 
 void
 iptables_fw_clear_trusted_local_maclist(void)
 {
-#ifdef AW_FW3
 	iptables_flush_ipset(CHAIN_TRUSTED_LOCAL);
-#else
-#endif
 }
 
 void
 iptables_fw_set_trusted_local_maclist(void)
 {
-#ifdef AW_FW3
 	const s_config *config;
 	t_trusted_mac *p = NULL;
 
@@ -627,23 +527,17 @@ iptables_fw_set_trusted_local_maclist(void)
 	for (p = config->trusted_local_maclist; p != NULL; p = p->next)
 		ipset_do_command("add " CHAIN_TRUSTED_LOCAL " %s", p->mac);
 	UNLOCK_CONFIG();
-#else
-#endif
 }
 
 void
 iptables_fw_clear_untrusted_maclist(void)
 {
-#ifdef AW_FW3
 	iptables_flush_ipset(CHAIN_UNTRUSTED);
-#else
-#endif
 }
 
 void
 iptables_fw_set_untrusted_maclist(void)
 {
-#ifdef AW_FW3
 	const s_config *config;
 	t_trusted_mac *p = NULL;
 
@@ -654,33 +548,18 @@ iptables_fw_set_untrusted_maclist(void)
 		ipset_do_command("add " CHAIN_UNTRUSTED " %s", p->mac);
 		//add_mac_to_ipset(CHAIN_UNTRUSTED, p->mac, 0);
 	UNLOCK_CONFIG();
-#else
-#endif
 }
 
 void
 iptables_fw_set_mac_temporary(const char *mac, int which)
 {
-#ifdef AW_FW3
 	if(which == 0) { // trusted
 		ipset_do_command("add " CHAIN_TRUSTED " %s timeout 60 ", mac);
 	} else if(which == 1) { // untrusted
 		ipset_do_command("add " CHAIN_UNTRUSTED " %s timeout 60 ", mac);
 	}
-#else
-	if (which == 0) {
-		nftables_do_command("add element inet fw4 set_wifidogx_tmp_trust_clients { %s }", mac);
-	} else if(which > 0) { // trusted
-		if (which > 60*5)
-			which = 60*5;
-		nftables_do_command("add element inet fw4 set_wifidogx_tmp_trust_clients { %s timeout %ds}", mac, which);
-	} else if(which < 0) { // untrusted
-		// TODO
-	}
-#endif
 }
 
-#ifdef AW_FW3
 static void
 f_fw_init_close()
 {
@@ -762,12 +641,10 @@ f_fw_allow_open()
 		fprintf(f_fw_allow, "#!/bin/sh\n");
 	}
 }
-#endif
 
 void
 iptables_fw_save_online_clients()
 {
-#ifdef AW_FW3
 	t_client *sublist, *current;
 
 	LOCK_CLIENT_LIST();
@@ -790,14 +667,12 @@ iptables_fw_save_online_clients()
 
 	f_fw_allow_close();
 	client_list_destroy(sublist);
-#else
-#endif
 }
 
-#ifdef AW_FW3
-
-static int 
-fw3_init(void)
+/** Initialize the firewall rules
+*/
+int
+iptables_fw_init(void)
 {
 	const s_config *config;
 	char *ext_interface = NULL;
@@ -1018,33 +893,14 @@ fw3_init(void)
 	return 1;
 }
 
-#else
-
-static int
-fw4_init(void)
-{
-	return nft_init();
-}
-
-#endif
-
-/** Initialize the firewall rules
-*/
-int
-iptables_fw_init(void)
-{
-	// if define AW_FW3, then fw3_init
-#ifdef AW_FW3
-	return fw3_init();
-#else
-	return fw4_init();
-#endif
-}
 
 
-#ifdef AW_FW3
-static int
-fw3_destroy(void)
+/** Remove the firewall rules
+ * This is used when we do a clean shutdown of WiFiDog and when it starts to make
+ * sure there are no rules left over
+ */
+int 
+iptables_fw_destroy(void)
 {
 	int got_authdown_ruleset = NULL == get_ruleset(FWRULESET_AUTH_IS_DOWN) ? 0 : 1;
 	fw_quiet = 1;
@@ -1155,58 +1011,6 @@ fw3_destroy(void)
 	return 1;
 }
 
-#else
-
-static int
-fw4_destroy(void)
-{
-	FILE *fp;
-    char buffer[128];
-    int table_exists = 0;
-
-    // Check if the inet wifidogx table exists
-    fp = popen("nft list tables", "r");
-    if (fp == NULL) {
-		debug(LOG_ERR, "Failed to list tables");
-        return -1;
-    }
-
-    while (fgets(buffer, sizeof(buffer), fp) != NULL) {
-        if (strstr(buffer, "inet wifidogx") != NULL) {
-            table_exists = 1;
-            break;
-        }
-    }
-
-    pclose(fp);
-
-    // If the table exists, delete it
-    if (table_exists) {
-        execute("nft delete table inet wifidogx", 0);
-    }
-
-    return execute("fw4 restart", 0);
-}
-
-#endif
-
-/** Remove the firewall rules
- * This is used when we do a clean shutdown of WiFiDog and when it starts to make
- * sure there are no rules left over
- */
-int 
-iptables_fw_destroy(void)
-{
-#ifdef AW_FW3
-	return fw3_destroy();
-#else
-	return fw4_destroy();
-#endif
-}
-
-
-
-#ifdef AW_FW3
 /*
  * Helper for iptables_fw_destroy
  * @param table The table to search
@@ -1215,7 +1019,7 @@ iptables_fw_destroy(void)
  * @param count how many times to delete the chain
  */
 static int
-__iptables_fw_destroy_mention(const char *table, const char *chain, const char *mention, void *handle, int count)
+iptables_fw_destroy_mention(const char *table, const char *chain, const char *mention, void *handle, int count)
 {
 	FILE *p = NULL;
 	char *command = NULL;
@@ -1269,23 +1073,10 @@ __iptables_fw_destroy_mention(const char *table, const char *chain, const char *
 
 	return (deleted);
 }
-#endif
 
+/** Set if a specific client has access through the firewall */
 int
-iptables_fw_destroy_mention(const char *table, const char *chain, const char *mention, void *handle)
-{
-#ifdef AW_FW3
-	return __iptables_fw_destroy_mention(table, chain, mention, handle, 20);
-#else
-	return 0;
-#endif
-}
-
-
-#ifdef AW_FW3
-
-static int
-fw3_access(fw_access_t type, const char *ip, const char *mac, int tag)
+iptables_fw_access(fw_access_t type, const char *ip, const char *mac, int tag)
 {
 	int rc;
 
@@ -1311,32 +1102,8 @@ fw3_access(fw_access_t type, const char *ip, const char *mac, int tag)
 	return rc;
 }
 
-#else
-
-static int
-fw4_access(fw_access_t type, const char *ip, const char *mac, int tag)
-{
-	return nft_fw_access(type, ip, mac, tag);
-}
-
-#endif
-
-/** Set if a specific client has access through the firewall */
 int
-iptables_fw_access(fw_access_t type, const char *ip, const char *mac, int tag)
-{
-#ifdef AW_FW3
-	return fw3_access(type, ip, mac, tag);
-#else
-	return fw4_access(type, ip, mac, tag);
-#endif
-}
-
-
-#ifdef AW_FW3
-
-static int 
-fw3_access_host(fw_access_t type, const char *host)
+iptables_fw_access_host(fw_access_t type, const char *host)
 {
 	int rc;
 
@@ -1359,33 +1126,10 @@ fw3_access_host(fw_access_t type, const char *host)
 	return rc;
 }
 
-#else
-
-static int 
-fw4_access_host(fw_access_t type, const char *host)
-{
-	return 0;
-}
-
-#endif
-
+/** Set a mark when auth server is not reachable */
 int
-iptables_fw_access_host(fw_access_t type, const char *host)
+iptables_fw_auth_unreachable(int tag) 
 {
-#ifdef AW_FW3
-	return fw3_access_host(type, host);
-#else
-	return fw4_access_host(type, host);
-#endif
-}
-
-
-#ifdef AW_FW3
-
-static int 
-fw3_auth_unreachable(int tag)
-{
-
 	int got_authdown_ruleset = NULL == get_ruleset(FWRULESET_AUTH_IS_DOWN) ? 0 : 1;
 	if (got_authdown_ruleset)
 		return iptables_do_command("-t mangle -A " CHAIN_AUTH_IS_DOWN " -j MARK --set-mark 0x%02x0000/0xff0000", tag & 0x000000ff);
@@ -1393,32 +1137,10 @@ fw3_auth_unreachable(int tag)
 		return 1;
 }
 
-#else
-
-static int
-fw4_auth_unreachable(int tag)
-{
-	return 0;
-}
-
-#endif
-
-/** Set a mark when auth server is not reachable */
+/** Remove mark when auth server is reachable again */
 int
-iptables_fw_auth_unreachable(int tag) 
+iptables_fw_auth_reachable(void)
 {
-#ifdef AW_FW3
-	return fw3_auth_unreachable(tag);
-#else
-	return fw4_auth_unreachable(tag);
-#endif
-}
-
-#ifdef AW_FW3
-static int
-fw3_auth_reachable(void)
-{
-
 	int got_authdown_ruleset = NULL == get_ruleset(FWRULESET_AUTH_IS_DOWN) ? 0 : 1;
 	if (got_authdown_ruleset)
 		return iptables_do_command("-t mangle -F " CHAIN_AUTH_IS_DOWN);
@@ -1426,55 +1148,9 @@ fw3_auth_reachable(void)
 		return 1;
 }
 
-#else
-
-static int
-fw4_auth_reachable(void)
-{
-	return 0;
-}
-
-#endif
-
-/** Remove mark when auth server is reachable again */
+/** Update the counters of all the clients in the client list */
 int
-iptables_fw_auth_reachable(void)
-{
-#ifdef AW_FW3
-	return fw3_auth_reachable();
-#else	
-	return fw4_auth_reachable();
-#endif
-}
-
-/**
- * @brief get device's name from dnsmasq's dhcp.leases file 
- */
-void
-__get_client_name(t_client *client)
-{
-	char cmd[256] = {0};
-	FILE *f_dhcp = NULL;
-
-	snprintf(cmd, 256, "cat /tmp/dhcp.leases |grep %s|cut -d' ' -f 4", client->ip);
-
-	debug(LOG_INFO, "__get_client_name [%s]", cmd);
-	if((f_dhcp = popen(cmd, "r")) != NULL) {
-		char name[32] = {0};
-		if (fgets(name, 31,  f_dhcp)) {
-			trim_newline(name);
-			client->name = safe_strdup(name);
-		}
-		pclose(f_dhcp);
-		debug(LOG_INFO, "__get_client_name [%s]", name);
-	}
-}
-
-
-#ifdef AW_FW3
-
-static int
-fw3_counters_update(void)
+iptables_fw_counters_update(void)
 {
 	FILE *output;
 	char *script, ip[16] = {0}, rc;
@@ -1590,218 +1266,4 @@ fw3_counters_update(void)
 	pclose(output);
 
 	return 1;
-
-}
-
-#else
-
-static int 
-fw4_counters_update()
-{
-	int nret = 0;
-
-	reset_client_list();
-
-	// get client outgoing traffic
-	char outgoing[4096] = {0};
-	nft_statistical_outgoing(outgoing, sizeof(outgoing));
-	json_object *jobj_incoming = NULL;
-	json_object *jobj_outgoing = json_tokener_parse(outgoing);
-	if (jobj_outgoing == NULL) {
-		debug(LOG_ERR, "fw4_counters_update(): jobj_outgoing is NULL");
-		nret = 1;
-		goto END_UPDATE;
-	}
-	// get the "nftables" json object which is an array of json objects
-	json_object *jobj_nftables = NULL;
-	if (!json_object_object_get_ex(jobj_outgoing, "nftables", &jobj_nftables)) {
-		debug(LOG_ERR, "fw4_counters_update(): jobj_nftables is NULL");
-		nret = 1;
-		goto END_UPDATE;
-	}
-	// the jobj_outgoing is an array of json objects
-	// iterate the array to get each json object
-	int i;
-	int arraylen = json_object_array_length(jobj_nftables);
-	for(i = 0; i < arraylen; i++) {
-		json_object *jobj = json_object_array_get_idx(jobj_nftables, i);
-		if (jobj == NULL) {
-			continue;
-		}
-		// get rule json object
-		json_object *jobj_rule = NULL;
-		if (!json_object_object_get_ex(jobj, "rule", &jobj_rule)) {
-			continue;
-		}
-		// get expr json object
-		// the expr json object is an array of json objects
-		json_object *jobj_expr = NULL;
-		if (!json_object_object_get_ex(jobj_rule, "expr", &jobj_expr)) {
-			continue;
-		}
-		
-		int j = 0;
-		int expr_arraylen = json_object_array_length(jobj_expr);
-		uint64_t packets = 0, bytes = 0;
-		t_client *p1 = NULL;
-		for (; j < expr_arraylen; j++) {
-			json_object *jobj_expr_item = json_object_array_get_idx(jobj_expr, j);
-			if (jobj_expr_item == NULL) {
-				continue;
-			}
-			json_object *jobj_counter = NULL;
-			json_object *jobj_match = NULL;
-			if (json_object_object_get_ex(jobj_expr_item, "counter", &jobj_counter)) {
-				// find the json object which has the "counter" key
-				// get packets and bytes
-				json_object *jobj_packets = NULL;
-				json_object *jobj_bytes = NULL;
-				if (!json_object_object_get_ex(jobj_counter, "packets", &jobj_packets)) {
-					continue;
-				}
-				if (!json_object_object_get_ex(jobj_counter, "bytes", &jobj_bytes)) {
-					continue;
-				}
-				packets = json_object_get_int64(jobj_packets);
-				bytes = json_object_get_int64(jobj_bytes);
-			} else if (p1 == NULL && json_object_object_get_ex(jobj_expr_item, "match", &jobj_match)) {
-				json_object *jobj_match_right = NULL;
-				if (!json_object_object_get_ex(jobj_match, "right", &jobj_match_right)) {
-					continue;
-				}
-				// get ip or mac address
-				const char *ip_or_mac = json_object_get_string(jobj_match_right);
-				if (ip_or_mac == NULL) {
-					continue;
-				}
-				// find client by ip or mac address
-				// check whether the ip_or_mac is ip address or mac address
-				if (is_valid_ip(ip_or_mac)) {
-					p1 = client_list_find_by_ip(ip_or_mac);
-				} else if (is_valid_mac(ip_or_mac)) {
-					p1 = client_list_find_by_mac(ip_or_mac);
-				} else {
-					debug(LOG_INFO, "fw4_counters_update(): ip_or_mac is not ip address or mac address");
-				}
-			}
-		} 
-		if (p1) {
-			if (p1->name == NULL) {
-				debug(LOG_INFO, "fw4_counters_update(): p1->name is NULL");
-				__get_client_name(p1);
-			}
-
-			if(p1->wired == -1) {
-				p1->wired = br_is_device_wired(p1->mac);
-			}
-
-			p1->counters.outgoing_history = p1->counters.outgoing;
-			p1->counters.outgoing = bytes;
-			p1->counters.outgoing_packets = packets;
-			p1->counters.last_updated = time(NULL);
-			p1->is_online = 1;
-		} else {
-			debug(LOG_INFO, "fw4_counters_update(): p1 is NULL");
-		}
-	}
-
-	// get client outgoing traffic
-	char incoming[4096] = {0};
-	nft_statistical_incoming(incoming, sizeof(incoming));
-	jobj_incoming = json_tokener_parse(incoming);
-	if (jobj_incoming == NULL) {
-		debug(LOG_ERR, "fw4_counters_update(): jobj_incoming is NULL");
-		nret = 1;
-		goto END_UPDATE;
-	}
-	// get the "nftables" json object which is an array of json objects
-	if (!json_object_object_get_ex(jobj_incoming, "nftables", &jobj_nftables)) {
-		debug(LOG_ERR, "fw4_counters_update(): jobj_nftables is NULL");
-		nret = 1;
-		goto END_UPDATE;
-	}
-	
-	arraylen = json_object_array_length(jobj_nftables);
-	for(i = 0; i < arraylen; i++) {
-		json_object *jobj = json_object_array_get_idx(jobj_nftables, i);
-		if (jobj == NULL) {
-			continue;
-		}
-		json_object *jobj_rule = NULL;
-		if (!json_object_object_get_ex(jobj, "rule", &jobj_rule)) {
-			continue;
-		}
-		// get expr json object
-		// the expr json object is an array of json objects
-		json_object *jobj_expr = NULL;
-		if (!json_object_object_get_ex(jobj_rule, "expr", &jobj_expr)) {
-			continue;
-		}
-		
-		int j = 0;
-		int expr_arraylen = json_object_array_length(jobj_expr);
-		uint64_t packets = 0;
-		uint64_t bytes = 0;
-		t_client *p1 = NULL;
-		for(; j < expr_arraylen; j++) {
-			json_object *jobj_expr_item = json_object_array_get_idx(jobj_expr, j);
-			if (jobj_expr_item == NULL) {
-				continue;
-			}
-			json_object *jobj_counter = NULL;
-			json_object *jobj_match = NULL;
-			if (json_object_object_get_ex(jobj_expr_item, "counter", &jobj_counter)) {
-				// find the json object which has the "counter" key
-				// get packets and bytes
-				json_object *jobj_packets = NULL;
-				json_object *jobj_bytes = NULL;
-				if (!json_object_object_get_ex(jobj_counter, "packets", &jobj_packets)) {
-					continue;
-				}
-				if (!json_object_object_get_ex(jobj_counter, "bytes", &jobj_bytes)) {
-					continue;
-				}
-				packets = json_object_get_int64(jobj_packets);
-				bytes = json_object_get_int64(jobj_bytes);
-			} else if (p1 == NULL && json_object_object_get_ex(jobj_expr_item, "match", &jobj_match)) {
-				json_object *jobj_match_right = NULL;
-				if (!json_object_object_get_ex(jobj_match, "right", &jobj_match_right)) {
-					continue;
-				}
-				// get ip address from the json object which has the "right" key
-				const char *ip = json_object_get_string(jobj_match_right);
-				if (ip == NULL || is_valid_ip(ip) == 0) {
-					continue;
-				}
-				// find client by ip address
-				p1 = client_list_find_by_ip(ip);
-			}
-		}
-		if (p1) {
-			p1->counters.incoming_history = p1->counters.incoming;
-			p1->counters.incoming = bytes;
-			p1->counters.incoming_packets = packets;
-		} else {
-			debug(LOG_INFO, "fw4_counters_update(): p1 is NULL");
-		}
-	}
-
-END_UPDATE:
-	// free jobj_outgoing and jobj_incoming
-	if (jobj_outgoing) json_object_put(jobj_outgoing);
-	if (jobj_incoming) json_object_put(jobj_incoming);
-	return nret;
-}
-
-#endif
-
-/** Update the counters of all the clients in the client list */
-int
-iptables_fw_counters_update(void)
-{
-#ifdef AW_FW3
-	return fw3_counters_update();
-#else
-	return fw4_counters_update();
-#endif
 }

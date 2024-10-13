@@ -715,9 +715,7 @@ wdctl_clear_untrusted_maclist(struct bufferevent *fd)
  */ 
 void
 user_cfg_save(void)
-{   
-    iptables_fw_save_online_clients();
-    
+{
     const char *trusted_maclist     	= get_serialize_maclist(TRUSTED_MAC);
 	const char *trusted_local_maclist	= get_serialize_maclist(TRUSTED_LOCAL_MAC);
     const char *untrusted_maclist   	= get_serialize_maclist(UNTRUSTED_MAC);

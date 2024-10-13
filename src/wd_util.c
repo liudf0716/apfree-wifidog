@@ -1773,3 +1773,26 @@ init_apfree_wifidog_cert()
 		system(cmd);
 	}
 }
+
+/**
+ * @brief get device's name from dnsmasq's dhcp.leases file 
+ */
+void
+__get_client_name(t_client *client)
+{
+	char cmd[256] = {0};
+	FILE *f_dhcp = NULL;
+
+	snprintf(cmd, 256, "cat /tmp/dhcp.leases |grep %s|cut -d' ' -f 4", client->ip);
+
+	debug(LOG_INFO, "__get_client_name [%s]", cmd);
+	if((f_dhcp = popen(cmd, "r")) != NULL) {
+		char name[32] = {0};
+		if (fgets(name, 31,  f_dhcp)) {
+			trim_newline(name);
+			client->name = safe_strdup(name);
+		}
+		pclose(f_dhcp);
+		debug(LOG_INFO, "__get_client_name [%s]", name);
+	}
+}

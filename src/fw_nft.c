@@ -31,17 +31,21 @@
 #include "debug.h"
 #include "util.h"
 #include "wd_util.h"
-#include "fw_iptables.h"
+#include "firewall.h"
 #include "fw_nft.h"
 #include "client_list.h"
 #include "conf.h"
 #include "dns_forward.h"
 #include "gateway.h"
+#include "safe.h"
 
 
 #define NFT_CONF_FILENAME "/etc/fw4_apfree-wifiodg_init.conf"
 #define NFT_FILENAME_OUT "/tmp/fw4_apfree-wifiodg_init.conf.out"
+#define NFT_WIFIDOGX_CLIENT_LIST "/tmp/nftables_wifidogx_client_list"
 
+static int fw_quiet = 0;
+static void nft_statistical_helper(const char *cmd, char **output, uint32_t *output_len);
 
 const char *nft_wifidogx_init_script[] = {
     "add table inet wifidogx",
@@ -226,35 +230,89 @@ nft_do_init_script_command()
 	run_cmd("nft -f %s", NFT_FILENAME_OUT);
 }
 
-// statistical outgoing information,must free when statistical is over
-void
-nft_statistical_outgoing(char *outgoing, uint32_t outgoing_len)
+/** @internal
+ * 
+*/
+static int
+nftables_do_command(const char *format, ...)
 {
-	FILE *r_fp = NULL;
-	char *cmd = "nft -j list chain inet fw4 mangle_prerouting_wifidogx_outgoing";
-    debug(LOG_DEBUG, "nft -j list chain inet fw4 mangle_prerouting_wifidogx_outgoing");
-	r_fp = popen(cmd, "r");
-    if (r_fp == NULL) {
-        debug(LOG_ERR, "popen failed");
-        return;
-    }
-	fgets(outgoing, outgoing_len, r_fp);
-	pclose(r_fp);
+	va_list vlist;
+	char *fmt_cmd;
+	char *cmd;
+	int rc;
+
+	va_start(vlist, format);
+	safe_vasprintf(&fmt_cmd, format, vlist);
+	va_end(vlist);
+
+	safe_asprintf(&cmd, "nft %s", fmt_cmd);
+	free(fmt_cmd);
+
+	debug(LOG_DEBUG, "Executing command: %s", cmd);
+
+	rc = execute(cmd, fw_quiet);
+
+	if (rc != 0) {
+		// If quiet, do not display the error
+		if (fw_quiet == 0)
+			debug(LOG_ERR, "nft command failed(%d): %s", rc, cmd);
+		else if (fw_quiet == 1)
+			debug(LOG_DEBUG, "nft command failed(%d): %s", rc, cmd);
+	}
+
+	free(cmd);
+
+	return rc;
 }
 
-void
-nft_statistical_incoming(char *incoming, uint32_t incoming_len)
+// Helper function to run nft command and read output
+static void
+nft_statistical_helper(const char *cmd, char **output, uint32_t *output_len)
 {
-	FILE *r_fp = NULL;
-	char *cmd = "nft -j list chain inet fw4 mangle_postrouting_wifidogx_incoming";
-    debug(LOG_DEBUG, "nft -j list chain inet fw4 mangle_postrouting_wifidogx_incoming");
-	r_fp = popen(cmd, "r");
+    debug(LOG_DEBUG, "%s", cmd);
+
+    FILE *r_fp = popen(cmd, "r");
     if (r_fp == NULL) {
         debug(LOG_ERR, "popen failed");
         return;
     }
-	fgets(incoming, incoming_len, r_fp);
-	pclose(r_fp);
+
+    size_t total_size = 0;
+    size_t chunk_size = 1024;
+    char *buffer = NULL;
+
+    while (1) {
+        buffer = realloc(buffer, total_size + chunk_size);
+        if (buffer == NULL) {
+            debug(LOG_ERR, "realloc failed");
+            pclose(r_fp);
+            return;
+        }
+
+        size_t bytes_read = fread(buffer + total_size, 1, chunk_size, r_fp);
+        if (bytes_read == 0) {
+            break;
+        }
+        total_size += bytes_read;
+    }
+
+    pclose(r_fp);
+    *output = buffer;
+    *output_len = total_size;
+}
+
+// statistical outgoing information, must free when statistical is over
+void
+nft_statistical_outgoing(char **outgoing, uint32_t *outgoing_len)
+{
+    nft_statistical_helper("nft -j list chain inet fw4 mangle_prerouting_wifidogx_outgoing", outgoing, outgoing_len);
+}
+
+// statistical incoming information, must free when statistical is over
+void
+nft_statistical_incoming(char **incoming, uint32_t *incoming_len)
+{
+    nft_statistical_helper("nft -j list chain inet fw4 mangle_postrouting_wifidogx_incoming", incoming, incoming_len);
 }
 
 void
@@ -356,15 +414,46 @@ nft_set_ext_interface()
 /** Initialize the firewall rules
 */
 int 
-nft_init()
+nft_fw_init()
 {
 	generate_nft_wifidogx_init_script();
 	nft_do_init_script_command();
     nft_add_gw();
     nft_set_ext_interface();
-    iptables_fw_set_authservers(NULL);
+    nft_fw_set_authservers();
 
     return 1;
+}
+
+int
+nft_fw_destroy(void)
+{
+	FILE *fp;
+    char buffer[128];
+    int table_exists = 0;
+
+    // Check if the inet wifidogx table exists
+    fp = popen("nft list tables", "r");
+    if (fp == NULL) {
+		debug(LOG_ERR, "Failed to list tables");
+        return -1;
+    }
+
+    while (fgets(buffer, sizeof(buffer), fp) != NULL) {
+        if (strstr(buffer, "inet wifidogx") != NULL) {
+            table_exists = 1;
+            break;
+        }
+    }
+
+    pclose(fp);
+
+    // If the table exists, delete it
+    if (table_exists) {
+        execute("nft delete table inet wifidogx", 0);
+    }
+
+    return execute("fw4 restart", 0);
 }
 
 static int
@@ -420,27 +509,21 @@ nft_fw_del_rule_by_ip_and_mac(const char *ip, const char *mac, const char *chain
     snprintf(cmd, sizeof(cmd), "nft -j list chain inet fw4 %s", chain);
     debug(LOG_DEBUG, "cmd: %s", cmd);
 
-    FILE *r_fp = popen(cmd, "r");
-    if (r_fp == NULL) {
-        debug(LOG_ERR, "popen failed");
+    char *buf = NULL;
+    uint32_t buf_len = 0;
+    nft_statistical_helper(cmd, &buf, &buf_len);
+    if (buf == NULL) {
+        debug(LOG_ERR, "nft_statistical_helper failed");
         return;
     }
-
-    char buf[4096];
-    if (fgets(buf, sizeof(buf), r_fp) == NULL) {
-        debug(LOG_ERR, "fgets failed");
-        pclose(r_fp);
-        return;
-    }
-    pclose(r_fp);
-
-    debug(LOG_DEBUG, "buf: %s", buf);
 
     json_object *jobj = json_tokener_parse(buf);
     if (jobj == NULL) {
         debug(LOG_ERR, "json_tokener_parse failed");
+        free(buf);
         return;
     }
+    free(buf);
 
     json_object *jobj_nftables;
     if (!json_object_object_get_ex(jobj, "nftables", &jobj_nftables)) {
@@ -492,8 +575,8 @@ nft_fw_access(fw_access_t type, const char *ip, const char *mac, int tag)
     s_config *config = config_get_config();
     switch(type) {
         case FW_ACCESS_ALLOW:
-            run_cmd("nft add rule inet fw4 mangle_prerouting_wifidogx_outgoing ether saddr %s ip saddr %s counter mark set 0x20000 accept", mac, ip);
-            run_cmd("nft add rule inet fw4 mangle_postrouting_wifidogx_incoming ip daddr %s counter mark set 0x20000 accept", ip);
+            nftables_do_command("add rule inet fw4 mangle_prerouting_wifidogx_outgoing ether saddr %s ip saddr %s counter mark set 0x20000 accept", mac, ip);
+            nftables_do_command("add rule inet fw4 mangle_postrouting_wifidogx_incoming ip daddr %s counter mark set 0x20000 accept", ip);
             break;
         case FW_ACCESS_DENY:
             nft_fw_del_rule_by_ip_and_mac(ip, mac, "mangle_prerouting_wifidogx_outgoing");
@@ -509,12 +592,16 @@ nft_fw_access(fw_access_t type, const char *ip, const char *mac, int tag)
     return 0;
 }
 
+int 
+nft_fw_access_host(fw_access_t type, const char *ip)
+{
+    return 0;
+}
+
 /** Reload client's firewall rules */
 int 
 nft_fw_reload_client()
 {
-#define NFT_WIFIDOGX_CLIENT_LIST "/tmp/nftables_wifidogx_client_list"
-
     t_client *first_client = client_get_first_client();
     if (first_client == NULL) {
         debug(LOG_INFO, "No clients in list!");
@@ -549,4 +636,279 @@ nft_fw_reload_client()
     run_cmd("nft -f %s", NFT_WIFIDOGX_CLIENT_LIST);
 
     return 0;
+}
+
+
+static void 
+update_client_counters(t_client *client, uint64_t packets, uint64_t bytes, int is_outgoing)
+{
+    if (client) {
+        if (client->name == NULL) {
+            debug(LOG_INFO, "fw4_counters_update(): client->name is NULL");
+            __get_client_name(client);
+        }
+
+        if (client->wired == -1) {
+            client->wired = br_is_device_wired(client->mac);
+        }
+
+        if (is_outgoing) {
+            client->counters.outgoing_history = client->counters.outgoing;
+            client->counters.outgoing = bytes;
+            client->counters.outgoing_packets = packets;
+        } else {
+            client->counters.incoming_history = client->counters.incoming;
+            client->counters.incoming = bytes;
+            client->counters.incoming_packets = packets;
+        }
+
+        client->counters.last_updated = time(NULL);
+        client->is_online = 1;
+    } else {
+        debug(LOG_INFO, "fw4_counters_update(): client is NULL");
+    }
+}
+
+static void
+process_nftables_expr(json_object *jobj_expr, int is_outgoing)
+{
+    uint64_t packets = 0, bytes = 0;
+    t_client *p1 = NULL;
+    int expr_arraylen = json_object_array_length(jobj_expr);
+    for (int j = 0; j < expr_arraylen; j++) {
+        json_object *jobj_expr_item = json_object_array_get_idx(jobj_expr, j);
+        if (jobj_expr_item == NULL) continue;
+
+        json_object *jobj_counter = NULL;
+        json_object *jobj_match = NULL;
+        if (json_object_object_get_ex(jobj_expr_item, "counter", &jobj_counter)) {
+            json_object *jobj_packets = NULL;
+            json_object *jobj_bytes = NULL;
+            if (json_object_object_get_ex(jobj_counter, "packets", &jobj_packets) &&
+                json_object_object_get_ex(jobj_counter, "bytes", &jobj_bytes)) {
+                packets = json_object_get_int64(jobj_packets);
+                bytes = json_object_get_int64(jobj_bytes);
+            }
+        } else if (p1 == NULL && json_object_object_get_ex(jobj_expr_item, "match", &jobj_match)) {
+            json_object *jobj_match_right = NULL;
+            if (json_object_object_get_ex(jobj_match, "right", &jobj_match_right)) {
+                const char *ip_or_mac = json_object_get_string(jobj_match_right);
+                if (ip_or_mac) {
+                    if (is_valid_ip(ip_or_mac)) {
+                        p1 = client_list_find_by_ip(ip_or_mac);
+                    } else if (is_valid_mac(ip_or_mac)) {
+                        p1 = client_list_find_by_mac(ip_or_mac);
+                    } else {
+                        debug(LOG_INFO, "process_nftables_expr(): ip_or_mac is not ip address or mac address");
+                    }
+                }
+            }
+        }
+    }
+    update_client_counters(p1, packets, bytes, is_outgoing);
+}
+
+static void 
+process_nftables_json(json_object *jobj, int is_outgoing)
+{
+    json_object *jobj_nftables = NULL;
+    if (!json_object_object_get_ex(jobj, "nftables", &jobj_nftables)) {
+        debug(LOG_ERR, "process_nftables_json(): jobj_nftables is NULL");
+        return;
+    }
+
+    int arraylen = json_object_array_length(jobj_nftables);
+    for (int i = 0; i < arraylen; i++) {
+        json_object *jobj_item = json_object_array_get_idx(jobj_nftables, i);
+        if (jobj_item == NULL) continue;
+
+        json_object *jobj_rule = NULL;
+        if (!json_object_object_get_ex(jobj_item, "rule", &jobj_rule)) continue;
+
+        json_object *jobj_expr = NULL;
+        if (!json_object_object_get_ex(jobj_rule, "expr", &jobj_expr)) continue;
+
+        process_nftables_expr(jobj_expr, is_outgoing);
+    }
+}
+
+int 
+nft_fw_counters_update()
+{
+    reset_client_list();
+
+    // get client outgoing traffic
+    char *outgoing = NULL;
+    uint32_t outgoing_len = 0;
+    nft_statistical_outgoing(&outgoing, &outgoing_len);
+    if (outgoing == NULL) {
+        debug(LOG_ERR, "nft_fw_counters_update(): outgoing is NULL");
+        return -1;
+    }
+    json_object *jobj_outgoing = json_tokener_parse(outgoing);
+    if (jobj_outgoing == NULL) {
+        free(outgoing);
+        debug(LOG_ERR, "nft_fw_counters_update(): jobj_outgoing is NULL");
+        return -1;
+    }
+    free(outgoing);
+    process_nftables_json(jobj_outgoing, 1);
+
+    // get client incoming traffic
+    char *incoming = NULL;
+    uint32_t incoming_len = 0;
+    nft_statistical_incoming(&incoming, &incoming_len);
+    if (incoming == NULL) {
+        debug(LOG_ERR, "nft_fw_counters_update(): incoming is NULL");
+        json_object_put(jobj_outgoing);
+        return -1;
+    }
+    json_object *jobj_incoming = json_tokener_parse(incoming);
+    if (jobj_incoming == NULL) {
+        debug(LOG_ERR, "nft_fw_counters_update(): jobj_incoming is NULL");
+        free(incoming);
+        json_object_put(jobj_outgoing);
+        return -1;
+    }
+    free(incoming);
+    process_nftables_json(jobj_incoming, 0);
+
+    json_object_put(jobj_outgoing);
+    json_object_put(jobj_incoming);
+
+    return 0;
+}
+
+int 
+nft_fw_auth_unreachable(int tag)
+{
+    return 0;
+}
+
+int 
+nft_fw_auth_reachable()
+{
+    return 0;
+}
+
+void
+nft_fw_clear_authservers()
+{
+    nftables_do_command("flush set inet fw4 set_wifidogx_auth_servers");
+    nftables_do_command("flush set inet fw4 set_wifidogx_auth_servers_v6");
+}
+
+
+void
+nft_fw_set_authservers()
+{
+    t_auth_serv *auth_server = get_auth_server();
+    t_ip_trusted *ips = auth_server->ips_auth_server;
+    while(ips) {
+        if (ips->ip_type == IP_TYPE_IPV4) {
+            nftables_do_command("add element inet fw4 set_wifidogx_auth_servers { %s }", ips->ip);
+        } else if (ips->ip_type == IP_TYPE_IPV6) {
+            nftables_do_command("add element inet fw4 set_wifidogx_auth_servers_v6 { %s }", ips->ip);
+        }
+        ips = ips->next;
+    }
+}
+
+void
+nft_fw_clear_inner_domains_trusted()
+{
+    nftables_do_command("flush set inet fw4 set_wifidogx_inner_trust_domains");
+    nftables_do_command("flush set inet fw4 set_wifidogx_inner_trust_domains_v6");
+}
+
+void
+nft_fw_set_inner_domains_trusted()
+{
+    const s_config *config = config_get_config();
+	t_domain_trusted *domain_trusted = NULL;
+
+	LOCK_DOMAIN();
+
+	for (domain_trusted = config->inner_domains_trusted; domain_trusted != NULL; domain_trusted = domain_trusted->next) {
+		t_ip_trusted *ip_trusted = NULL;
+		for(ip_trusted = domain_trusted->ips_trusted; ip_trusted != NULL; ip_trusted = ip_trusted->next) {
+			if (ip_trusted->ip_type == IP_TYPE_IPV4)
+				nftables_do_command("add element inet fw4 set_wifidogx_inner_trust_domains { %s }", ip_trusted->ip);
+			else if (ip_trusted->ip_type == IP_TYPE_IPV6)
+				nftables_do_command("add element inet fw4 set_wifidogx_inner_trust_domains_v6 { %s }", ip_trusted->ip);
+		}
+	}
+
+	UNLOCK_DOMAIN();
+}
+
+void
+nft_fw_refresh_inner_domains_trusted()
+{
+    nft_fw_clear_inner_domains_trusted();
+    nft_fw_set_inner_domains_trusted();
+}
+
+void
+nft_fw_set_user_domains_trusted()
+{
+    const s_config *config = config_get_config();
+	t_domain_trusted *domain_trusted = NULL;
+
+	LOCK_DOMAIN();
+
+	for (domain_trusted = config->domains_trusted; domain_trusted != NULL; domain_trusted = domain_trusted->next) {
+		t_ip_trusted *ip_trusted = NULL;
+		for(ip_trusted = domain_trusted->ips_trusted; ip_trusted != NULL; ip_trusted = ip_trusted->next) {
+			nftables_do_command("add element inet fw4 set_wifidogx_trust_domains { %s }", ip_trusted->ip);
+		}
+	}
+
+	UNLOCK_DOMAIN();
+}
+
+void
+nft_fw_clear_user_domains_trusted()
+{
+    nftables_do_command("flush set inet fw4 set_wifidogx_trust_domains");
+    nftables_do_command("flush set inet fw4 set_wifidogx_trust_domains_v6");
+}
+
+void
+nft_fw_refresh_user_domains_trusted()
+{
+    nft_fw_clear_user_domains_trusted();
+    nft_fw_set_user_domains_trusted();
+}
+
+void
+nft_fw_set_trusted_maclist()
+{
+    const s_config *config = config_get_config();
+	t_trusted_mac *p = NULL;
+
+	LOCK_CONFIG();
+	for (p = config->trustedmaclist; p != NULL; p = p->next)
+		nftables_do_command("add element inet fw4 set_wifidogx_trust_clients { %s }", p->mac);
+	UNLOCK_CONFIG();
+}
+
+void
+nft_fw_clear_trusted_maclist()
+{
+    nftables_do_command("flush set inet fw4 set_wifidogx_trust_clients");
+}
+
+void 
+nft_fw_set_mac_temporary(const char *mac, int which)
+{
+    if (which == 0) {
+		nftables_do_command("add element inet fw4 set_wifidogx_tmp_trust_clients { %s }", mac);
+	} else if(which > 0) { // trusted
+		if (which > 60*5)
+			which = 60*5;
+		nftables_do_command("add element inet fw4 set_wifidogx_tmp_trust_clients { %s timeout %ds}", mac, which);
+	} else if(which < 0) { // untrusted
+		// TODO
+	}
 }

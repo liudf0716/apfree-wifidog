@@ -31,6 +31,12 @@
 #include "client_list.h"
 #include "auth.h"
 
+/** Used by iptables_fw_access to select if the client should be granted of denied access */
+typedef enum fw_access_t_ {
+    FW_ACCESS_ALLOW,
+    FW_ACCESS_DENY
+} fw_access_t;
+
 /** Used by fw_iptables.c */
 typedef enum _t_fw_marks {
     FW_MARK_NONE = 0, /**< @brief No mark set. */
@@ -57,6 +63,9 @@ int fw_destroy(void);
 
 /** @brief Allow a user through the firewall*/
 int fw_allow(t_client *, int);
+
+/** @brief Allow ip&mac pair through the firewall*/
+int fw_allow_ip_mac(const char *ip, const char *mac);
 
 /** @brief Allow a host through the firewall*/
 int fw_allow_host(const char *);

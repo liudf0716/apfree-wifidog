@@ -5,7 +5,6 @@ set(src_apfreewifidog
 	commandline.c 
 	conf.c 
 	debug.c 
-	fw_iptables.c 
 	firewall.c 
 	centralserver.c 
 	http.c 
@@ -27,6 +26,7 @@ set(src_apfreewifidog
 
 if(AW_FW3)
 	set(src_fw3
+		fw_iptables.c 
 		fw3_iptc.c
 		ipset.c
 	)

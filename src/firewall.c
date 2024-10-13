@@ -36,14 +36,17 @@
 #include "conf.h"
 #include "ping_thread.h"
 #include "firewall.h"
-#include "fw_iptables.h"
-#include "fw_nft.h"
 #include "auth.h"
 #include "centralserver.h"
 #include "client_list.h"
 #include "commandline.h"
 #include "wd_util.h"
 #include "wd_client.h"
+#ifdef AW_FW3
+	#include "fw_iptables.h"
+#else
+	#include "fw_nft.h"
+#endif
 
 static int _fw_deny_raw(const char *, const char *, const int);
 
@@ -71,9 +74,23 @@ fw_allow(t_client * client, int new_fw_connection_state)
 	client->fw_connection_state = new_fw_connection_state;
 
 	/* Grant first */
+#ifdef AW_FW3
 	result = iptables_fw_access(FW_ACCESS_ALLOW, client->ip, client->mac, new_fw_connection_state);
+#else
+	result = nft_fw_access(FW_ACCESS_ALLOW, client->ip, client->mac, new_fw_connection_state);
+#endif
 
 	return result;
+}
+
+int
+fw_allow_ip_mac(const char *ip, const char *mac)
+{
+#ifdef AW_FW3
+	return iptables_fw_access(FW_ACCESS_ALLOW, ip, mac, FW_MARK_KNOWN);
+#else
+	return nft_fw_access(FW_ACCESS_ALLOW, ip, mac, FW_MARK_KNOWN);
+#endif
 }
 
 /**
@@ -85,8 +102,11 @@ int
 fw_allow_host(const char *host)
 {
 	debug(LOG_DEBUG, "Allowing %s", host);
-
+#ifdef AW_FW3
 	return iptables_fw_access_host(FW_ACCESS_ALLOW, host);
+#else
+	return nft_fw_access_host(FW_ACCESS_ALLOW, host);
+#endif
 }
 
 /**
@@ -116,7 +136,11 @@ fw_deny(t_client * client)
 static int
 _fw_deny_raw(const char *ip, const char *mac, const int mark)
 {
+#ifdef AW_FW3
 	return iptables_fw_access(FW_ACCESS_DENY, ip, mac, mark);
+#else
+	return nft_fw_access(FW_ACCESS_DENY, ip, mac, mark);
+#endif
 }
 
 /** Passthrough for clients when auth server is down */
@@ -124,8 +148,11 @@ int
 fw_set_authdown(void)
 {
 	debug(LOG_DEBUG, "Marking auth server down");
-
+#ifdef AW_FW3
 	return iptables_fw_auth_unreachable(FW_MARK_AUTH_IS_DOWN);
+#else
+	return nft_fw_auth_unreachable(FW_MARK_AUTH_IS_DOWN);
+#endif
 }
 
 /** Remove passthrough for clients when auth server is up */
@@ -133,8 +160,11 @@ int
 fw_set_authup(void)
 {
 	debug(LOG_DEBUG, "Marking auth server up again");
-
+#ifdef AW_FW3
 	return iptables_fw_auth_reachable();
+#else
+	return nft_fw_auth_reachable();
+#endif
 }
 
 /* XXX DCY */
@@ -208,7 +238,7 @@ arp_get_ip(const char *req_mac)
 /** Initialize the firewall rules
  */
 int
- fw_init(void)
+fw_init(void)
 {
 	int result = 0;
 	if (!init_icmp_socket()) {
@@ -216,7 +246,10 @@ int
 	}
 
 	debug(LOG_INFO, "Initializing Firewall");
+#ifdef AW_FW3
 	result = iptables_fw_init();
+#else
+	result = nft_fw_init();
 
 	if (restart_orig_pid) {
 		debug(LOG_INFO, "Restoring firewall rules for clients");
@@ -224,6 +257,7 @@ int
 		nft_fw_reload_client();
 		UNLOCK_CLIENT_LIST();
 	}
+#endif
 
 	return result;
 }
@@ -234,7 +268,11 @@ void
 fw_clear_authservers(void)
 {
 	debug(LOG_DEBUG, "Clearing the authservers list");
+#ifdef AW_FW3
 	iptables_fw_clear_authservers();
+#else
+	nft_fw_clear_authservers();
+#endif
 }
 
 /** Add the necessary firewall rules to whitelist the authservers
@@ -243,35 +281,55 @@ void
 fw_set_authservers(void)
 {
 	debug(LOG_DEBUG, "Setting the authservers list");
+#ifdef AW_FW3
 	iptables_fw_set_authservers(NULL);
+#else
+	nft_fw_set_authservers();
+#endif
 }
 
 void
 fw_clear_pan_domains_trusted(void)
 {
 	debug(LOG_DEBUG, "Clear pan trust domains list");
+#ifdef AW_FW3
 	iptables_fw_clear_ipset_domains_trusted();
+#else
+	//nft_fw_clear_ipset_domains_trusted();
+#endif
 }
 
 void
 fw_set_pan_domains_trusted(void)
 {
 	debug(LOG_DEBUG, "Set pan trust domains list");
+#ifdef AW_FW3
 	iptables_fw_set_ipset_domains_trusted();
+#else
+	//nft_fw_set_ipset_domains_trusted();
+#endif
 }
 
 void
 fw_refresh_inner_domains_trusted(void)
 {
 	debug(LOG_DEBUG, "Refresh inner trust domains list");
+#ifdef AW_FW3
 	iptables_fw_refresh_inner_domains_trusted();
+#else
+	nft_fw_refresh_inner_domains_trusted();
+#endif
 }
 
 void
 fw_clear_inner_domains_trusted(void)
 {
 	debug(LOG_DEBUG, "Clear inner trust domains list");
+#ifdef AW_FW3
 	iptables_fw_clear_inner_domains_trusted();
+#else
+	nft_fw_clear_inner_domains_trusted();
+#endif
 }
 
 /**
@@ -282,7 +340,11 @@ void
 fw_set_inner_domains_trusted(void)
 {
 	debug(LOG_DEBUG, "Setting inner trust domains list");
+#ifdef AW_FW3
 	iptables_fw_set_inner_domains_trusted();
+#else
+	nft_fw_set_inner_domains_trusted();
+#endif
 }
 
 
@@ -290,63 +352,99 @@ void
 fw_refresh_user_domains_trusted(void)
 {
 	debug(LOG_DEBUG, "Refresh user trust domains list");
+#ifdef AW_FW3
 	iptables_fw_refresh_user_domains_trusted();
+#else
+	nft_fw_refresh_user_domains_trusted();
+#endif
 }
 
 void
 fw_clear_user_domains_trusted(void)
 {
 	debug(LOG_DEBUG, "Clear user trust domains list");
+#ifdef AW_FW3
 	iptables_fw_clear_user_domains_trusted();
+#else
+	nft_fw_clear_user_domains_trusted();
+#endif
 }
 
 void
 fw_set_user_domains_trusted(void)
 {
 	debug(LOG_DEBUG, "Setting user trust domains list");
+#ifdef AW_FW3
 	iptables_fw_set_user_domains_trusted();
+#else
+	nft_fw_set_user_domains_trusted();
+#endif
 }
 
 void
 fw_set_roam_mac(const char *mac)
 {
 	debug(LOG_DEBUG, "Set roam mac");
+#ifdef AW_FW3
 	iptables_fw_set_roam_mac(mac);
+#else
+	//nft_fw_set_roam_mac(mac);
+#endif
 }
 
 void
 fw_clear_roam_maclist(void)
 {
 	debug(LOG_DEBUG, "Clear roam maclist");
+#ifdef AW_FW3
 	iptables_fw_clear_roam_maclist();
+#else
+	//nft_fw_clear_roam_maclist();
+#endif
 }
 
 void
 fw_set_trusted_maclist()
 {
 	debug(LOG_DEBUG, "Set trusted maclist");
+#ifdef AW_FW3
 	iptables_fw_set_trusted_maclist();
+#else
+	nft_fw_set_trusted_maclist();
+#endif
 }
 
 void
 fw_clear_trusted_maclist()
 {
 	debug(LOG_DEBUG, "Clear trusted maclist");
+#ifdef AW_FW3
 	iptables_fw_clear_trusted_maclist();
+#else
+	nft_fw_clear_trusted_maclist();
+#endif
 }
 
 void
 fw_set_trusted_local_maclist()
 {
 	debug(LOG_DEBUG, "Set trusted local maclist");
+#ifdef AW_FW3
 	iptables_fw_set_trusted_local_maclist();
+#else
+	//nft_fw_set_trusted_local_maclist();
+#endif
 }
 
 void
 fw_clear_trusted_local_maclist()
 {
 	debug(LOG_DEBUG, "Clear trusted local maclist");
+#ifdef AW_FW3
 	iptables_fw_clear_trusted_local_maclist();
+#else
+	//nft_fw_clear_trusted_local_maclist();
+#endif
 }
 
 
@@ -354,28 +452,44 @@ void
 fw_set_untrusted_maclist()
 {
 	debug(LOG_DEBUG, "Set untrusted maclist");
+#ifdef AW_FW3
 	iptables_fw_set_untrusted_maclist();
+#else
+	//nft_fw_set_untrusted_maclist();
+#endif
 }
 
 void
 fw_clear_untrusted_maclist()
 {
 	debug(LOG_DEBUG, "Clear untrusted maclist");
+#ifdef AW_FW3
 	iptables_fw_clear_untrusted_maclist();
+#else
+	//nft_fw_clear_untrusted_maclist();
+#endif
 }
 
 void
 fw_set_mac_temporary(const char *mac, int which)
 {
 	debug(LOG_DEBUG, "Set trusted||untrusted mac [%s] temporary", mac);
+#ifdef AW_FW3
 	iptables_fw_set_mac_temporary(mac, which);
+#else
+	nft_fw_set_mac_temporary(mac, which);
+#endif
 }
 
 void
 fw_set_trusted_mac(const char *mac)
 {
 	debug(LOG_DEBUG, "Clear untrusted maclist");
+#ifdef AW_FW3
 	iptables_fw_set_trusted_mac(mac);
+#else
+	//nft_fw_set_trusted_mac(mac);
+#endif
 }
 
 /** Remove the firewall rules
@@ -387,7 +501,11 @@ fw_destroy(void)
 {
 	close_icmp_socket();
 	debug(LOG_DEBUG, "Removing Firewall rules");
+#ifdef AW_FW3
 	return iptables_fw_destroy();
+#else
+	return nft_fw_destroy();	
+#endif
 }
 
 /**
@@ -591,7 +709,6 @@ sync_gw_clients_counter(struct wd_request_context *context, t_gateway_setting *g
 		free((void *)param);
 	}
 	free(uri);
-	
 }
 
 /**
@@ -607,8 +724,13 @@ ev_fw_sync_with_authserver_v2(struct wd_request_context *context)
 		debug(LOG_INFO, "no gateway settings");
 		return;
 	}
-
-	if (-1 == iptables_fw_counters_update()) {
+	
+#ifdef AW_FW3
+	if (-1 == iptables_fw_counters_update()) 
+#else 
+	if (-1 == nft_fw_counters_update()) 
+#endif
+	{
 		debug(LOG_ERR, "Could not get counters from firewall!");
 		return;
 	}
@@ -635,7 +757,12 @@ ev_fw_sync_with_authserver(struct wd_request_context *context)
 	t_client *p1 = NULL, *p2 = NULL, *worklist = NULL;
 	s_config *config = config_get_config();
 
-	if (-1 == iptables_fw_counters_update()) {
+#ifdef AW_FW3
+	if (-1 == iptables_fw_counters_update()) 
+#else
+	if (-1 == nft_fw_counters_update()) 
+#endif
+	{
 		debug(LOG_ERR, "Could not get counters from firewall!");
 		return;
 	}
