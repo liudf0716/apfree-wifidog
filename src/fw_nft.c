@@ -803,6 +803,10 @@ void
 nft_fw_set_authservers()
 {
     t_auth_serv *auth_server = get_auth_server();
+    if (auth_server == NULL) {
+        debug(LOG_INFO, "auth_server is NULL, maybe local auth mode");
+        return;
+    }
     t_ip_trusted *ips = auth_server->ips_auth_server;
     while(ips) {
         if (ips->ip_type == IP_TYPE_IPV4) {
