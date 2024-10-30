@@ -244,6 +244,8 @@ ev_http_reply_client_error(struct evhttp_request *req, enum reply_client_error_t
         break;
     case AUTHSERVER_OFFLINE:
     default:
+        debug(LOG_DEBUG, "auth server offline -- ip: %s, port: %s, proto: %s, client_ip: %s, client_mac: %s", 
+            ip, port, proto, client_ip, client_mac);
         pthread_mutex_lock(&g_resource_lock);
         new_subs[0] = ip;
         new_subs[1] = port;
@@ -254,6 +256,7 @@ ev_http_reply_client_error(struct evhttp_request *req, enum reply_client_error_t
         pthread_mutex_unlock(&g_resource_lock);
         break;
     }
+    debug(LOG_DEBUG, "reply client error");
     evhttp_send_reply(req, 200, "OK", evb);
     evbuffer_free(evb);
 }
