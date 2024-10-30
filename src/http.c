@@ -155,51 +155,57 @@ process_apple_wisper(struct evhttp_request *req, const char *mac, const char *re
 
 // define old_subs and new_subs for replace_substrings
 static char *old_subs[] = {"$GATEWAY_IP$", "$GATEWAY_PORT$", "$PROTO$", "$CLIENT_IP$", "$CLIENT_MAC$"};
-static char *new_subs[] = {NULL, NULL, NULL, NULL, NULL};
 
 static char *
-replace_substrings(const char *str,  char **old_subs,  char **new_subs, int count)
+replace_substrings(const char *str, char **old_subs, char **new_subs, int count)
 {
-    char *result;
-    int i, j, total_new_len = 0, total_old_len = 0, occurrences = 0;
+    size_t total_length = 0;
+    const char *p = str;
+    int i;
 
-    // Calculate the total length of new and old substrings
-    for (i = 0; i < count; i++) {
-        total_new_len += strlen(new_subs[i]);
-        total_old_len += strlen(old_subs[i]);
-    }
-
-    // Count occurrences of each old substring
-    for (i = 0; str[i] != '\0'; i++) {
-        for (j = 0; j < count; j++) {
-            if (strstr(&str[i], old_subs[j]) == &str[i]) {
-                occurrences++;
-                i += strlen(old_subs[j]) - 1;
+    // First pass: Calculate required length
+    while (*p) {
+        int replaced = 0;
+        for (i = 0; i < count; i++) {
+            size_t old_len = strlen(old_subs[i]);
+            if (strncmp(p, old_subs[i], old_len) == 0) {
+                total_length += strlen(new_subs[i]);
+                p += old_len;
+                replaced = 1;
                 break;
             }
         }
+        if (!replaced) {
+            total_length++;
+            p++;
+        }
     }
 
-    // Allocate memory for the result string
-    result = (char *)malloc(strlen(str) + occurrences * (total_new_len - total_old_len) + 1);
+    // Allocate memory
+    char *result = malloc(total_length + 1);
     if (!result) return NULL;
-    memset(result, 0, strlen(str) + occurrences * (total_new_len - total_old_len) + 1);
 
-    i = 0;
-    while (*str) {
-        for (j = 0; j < count; j++) {
-            if (strstr(str, old_subs[j]) == str) {
-                strcpy(&result[i], new_subs[j]);
-                i += strlen(new_subs[j]);
-                str += strlen(old_subs[j]);
+    // Second pass: Build the new string
+    p = str;
+    char *r = result;
+    while (*p) {
+        int replaced = 0;
+        for (i = 0; i < count; i++) {
+            size_t old_len = strlen(old_subs[i]);
+            if (strncmp(p, old_subs[i], old_len) == 0) {
+                size_t new_len = strlen(new_subs[i]);
+                memcpy(r, new_subs[i], new_len);
+                r += new_len;
+                p += old_len;
+                replaced = 1;
                 break;
             }
         }
-        if (j == count) {
-            result[i++] = *str++;
+        if (!replaced) {
+            *r++ = *p++;
         }
     }
-    result[i] = '\0';
+    *r = '\0';
     return result;
 }
 
@@ -246,12 +252,14 @@ ev_http_reply_client_error(struct evhttp_request *req, enum reply_client_error_t
     default:
         debug(LOG_DEBUG, "auth server offline -- ip: %s, port: %s, proto: %s, client_ip: %s, client_mac: %s", 
             ip, port, proto, client_ip, client_mac);
+        char *new_subs[5] = {
+                        ip?ip:"", 
+                        port?port:"", 
+                        proto?proto:"", 
+                        client_ip?client_ip:"", 
+                        client_mac?client_mac:""
+                    };
         pthread_mutex_lock(&g_resource_lock);
-        new_subs[0] = ip;
-        new_subs[1] = port;
-        new_subs[2] = proto;
-        new_subs[3] = client_ip;
-        new_subs[4] = client_mac;
         evb = replace_evbuffer_content(evb_authserver_offline_page, old_subs, new_subs, 5);
         pthread_mutex_unlock(&g_resource_lock);
         break;
