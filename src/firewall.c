@@ -657,14 +657,14 @@ get_gw_clients_counter(t_gateway_setting *gw_setting, t_client *worklist)
 			}
 
             json_object *clt = json_object_new_object();
-            json_object_object_add(clt, "id", json_object_new_int(p1->id));
+            json_object_object_add(clt, "id", json_object_new_int64(p1->id));
             json_object_object_add(clt, "ip", json_object_new_string(p1->ip));
             json_object_object_add(clt, "mac", json_object_new_string(p1->mac));
             json_object_object_add(clt, "token", json_object_new_string(p1->token));
             json_object_object_add(clt, "name", json_object_new_string(p1->name ? p1->name : "null"));
-            json_object_object_add(clt, "incoming", json_object_new_int(p1->counters.incoming));
-            json_object_object_add(clt, "outgoing", json_object_new_int(p1->counters.outgoing));
-            json_object_object_add(clt, "first_login", json_object_new_int(p1->first_login));
+            json_object_object_add(clt, "incoming", json_object_new_int64(p1->counters.incoming));
+            json_object_object_add(clt, "outgoing", json_object_new_int64(p1->counters.outgoing));
+            json_object_object_add(clt, "first_login", json_object_new_int64(p1->first_login));
             json_object_object_add(clt, "is_online", json_object_new_boolean(p1->is_online));
             json_object_object_add(clt, "wired", json_object_new_boolean(p1->wired));
             json_object_array_add(client_array, clt);
