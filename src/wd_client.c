@@ -43,7 +43,7 @@
  * 
  */ 
 char *
-wd_get_orig_url(struct evhttp_request *req)
+wd_get_orig_url(struct evhttp_request *req, int is_ssl)
 {
     // Get the URI object from the request
     struct evhttp_uri *uri = evhttp_request_get_evhttp_uri(req);
@@ -65,8 +65,11 @@ wd_get_orig_url(struct evhttp_request *req)
 
     // Determine the scheme if not specified
     if (!scheme) {
-        debug(LOG_INFO, "No scheme in URI");
-		return NULL;
+        if (is_ssl) {
+			scheme = "https";
+		} else {
+			scheme = "http";
+		}
     }
 
     // Get the host from the request if not in the URI
@@ -118,8 +121,9 @@ wd_get_redir_url_to_auth(struct evhttp_request *req,
 						 int is_ssl)
 {
     t_auth_serv *auth_server = get_auth_server();
-    char *orig_url = wd_get_orig_url(req);
-    if (!orig_url) return NULL;
+    char *orig_url = wd_get_orig_url(req, is_ssl);
+    if (!orig_url) 
+		orig_url= safe_strdup("null");
 	char *gw_address = NULL;
 	int is_ipv6 = 0;
 	if (is_valid_ip6(remote_host)) {

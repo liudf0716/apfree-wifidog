@@ -276,7 +276,7 @@ ev_http_reply_client_error(struct evhttp_request *req, enum reply_client_error_t
 void
 ev_http_resend(struct evhttp_request *req)
 {
-    char *orig_url = wd_get_orig_url(req);
+    char *orig_url = wd_get_orig_url(req, 0);
     if (!orig_url) {
         evhttp_send_error(req, HTTP_INTERNAL, NULL);
         return;
