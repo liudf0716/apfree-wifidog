@@ -262,7 +262,10 @@ get_auth_uri(const char *request_type, client_type_t type, void *data)
         safe_token = o_client->token;
         if (o_client->name)
             name = o_client->name;
-        first_login = o_client->first_login;
+        if (!o_client->first_login)
+            first_login = time(0);
+        else
+            first_login = o_client->first_login;
         incoming = o_client->counters.incoming;
         outgoing = o_client->counters.outgoing;
         incoming_delta  = o_client->counters.incoming_delta;
