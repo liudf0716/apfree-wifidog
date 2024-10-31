@@ -45,19 +45,58 @@
 char *
 wd_get_orig_url(struct evhttp_request *req)
 {
-    char orig_uri[MAX_BUF] = {0};
-	struct evhttp_uri *uri = (struct evhttp_uri *)evhttp_request_get_evhttp_uri(req);
-    if (!evhttp_uri_join(uri, orig_uri, MAX_BUF-1)) {
-		return NULL;
-	} else if (evhttp_uri_get_host(uri)) {
-		return evhttp_encode_uri(orig_uri);
-	}
+    // Get the URI object from the request
+    struct evhttp_uri *uri = evhttp_request_get_evhttp_uri(req);
+    if (!uri) {
+        return NULL;
+    }
 
-	char *orig_url = NULL, *ret_url = NULL;
-	safe_asprintf(&orig_url, "http://%s%s", evhttp_request_get_host(req), orig_uri);
-	ret_url = evhttp_encode_uri(orig_url);
-	free(orig_url);
-	return ret_url;
+    // Reconstruct the path and query components
+    char path[4096] = {0};
+    if (evhttp_uri_join(uri, path, sizeof(path) - 1) == -1) {
+        return NULL;
+    }
+	debug(LOG_DEBUG, "path: %s", path);
+	
+    // Get the scheme, host, and port from the URI
+    const char *scheme = evhttp_uri_get_scheme(uri);
+    const char *host = evhttp_uri_get_host(uri);
+    int port = evhttp_uri_get_port(uri);
+
+    // Determine the scheme if not specified
+    if (!scheme) {
+        debug(LOG_INFO, "No scheme in URI");
+		return NULL;
+    }
+
+    // Get the host from the request if not in the URI
+    if (!host) {
+        host = evhttp_request_get_host(req);
+        if (!host) {
+			debug(LOG_INFO, "No host in URI or request");
+            return NULL;
+        }
+    }
+
+    // Build the full URL
+    char *full_url = NULL;
+    if (port > 0 && port != 80 && port != 443) {
+        safe_asprintf(&full_url, "%s://%s:%d%s", scheme, host, port, path);
+    } else {
+        safe_asprintf(&full_url, "%s://%s%s", scheme, host, path);
+    }
+
+    if (!full_url) {
+		debug(LOG_INFO, "Failed to build full URL");
+        return NULL;
+    }
+	debug(LOG_DEBUG, "full_url: %s", full_url);
+
+    // Encode the URL
+    char *encoded_url = evhttp_encode_uri(full_url);
+    free(full_url);
+
+    return encoded_url;
 }
 
 /**
