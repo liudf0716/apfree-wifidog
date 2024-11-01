@@ -1,4 +1,3 @@
-[English Version](README.md) | [中文版本](README-zh.md)
 
 <div align="center">
     <img src="https://user-images.githubusercontent.com/1182593/213065247-9a3cb0a5-dd08-4383-b217-b141ad32e88a.png" alt="ApFree WiFiDog Logo" width="400" height="400"/>
@@ -10,6 +9,8 @@
 [![Release Version](https://img.shields.io/badge/release-7.10.2082-red.svg?style=plastic)](https://github.com/liudf0716/apfree_wifidog/releases) 
 [![OpenWRT](https://img.shields.io/badge/Platform-%20OpenWRT%20-brightgreen.svg?style=plastic)](https://github.com/openwrt) 
 [![Join the QQ Group](https://img.shields.io/badge/chat-qq%20group-brightgreen.svg)](https://jq.qq.com/?_wv=1027&k=4ADDSev)
+
+[English Version](README.md) | [中文版本](README-zh.md)
 
 ## ApFree WiFiDog: A High-Performance Captive Portal Solution for HTTP(S)
 
