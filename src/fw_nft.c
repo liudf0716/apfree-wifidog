@@ -808,6 +808,10 @@ nft_fw_set_authservers()
         return;
     }
     t_ip_trusted *ips = auth_server->ips_auth_server;
+    if (ips == NULL) {
+        debug(LOG_INFO, "auth_server->ips_auth_server is NULL");
+        return;
+    }
     while(ips) {
         if (ips->ip_type == IP_TYPE_IPV4) {
             nftables_do_command("add element inet fw4 set_wifidogx_auth_servers { %s }", ips->ip);
