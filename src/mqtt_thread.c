@@ -218,57 +218,52 @@ reset_device_op(void *mosq, const char *type, const char *value, const int req_i
 void
 set_auth_server_op(void *mosq, const char *type, const char *value, const int req_id, const s_config *config)
 {
-	char * hostname = config->auth_servers->authserv_hostname;
-	char * path = config->auth_servers->authserv_path;
-	char * tmp_host_name = NULL;
-	char * tmp_http_port = NULL;
-	char * tmp_path = NULL;
+	char *hostname = config->auth_servers->authserv_hostname;
+	char *path = config->auth_servers->authserv_path;
+	const char *tmp_host_name = NULL;
+	const char *tmp_http_port = NULL;
+	const char *tmp_path = NULL;
 		
 	debug(LOG_DEBUG, "value is %s\n", value);
 	json_object *json_request = json_tokener_parse(value);
 	if (is_error(json_request)) {
 		debug(LOG_INFO, "user request is not valid");
+		send_mqtt_response(mosq, req_id, 400, "Invalid JSON request", config);
 		return;
 	}
 
-	json_object * jo_host_name = json_object_object_get(json_request, "hostname");
-	if(jo_host_name == NULL) {
-		debug(LOG_DEBUG, "parse host_name is null");
-	} else {
+	json_object *jo_host_name = json_object_object_get(json_request, "hostname");
+	if (jo_host_name != NULL) {
 		tmp_host_name = json_object_get_string(jo_host_name);
 	}
 
-	json_object * jo_http_port = json_object_object_get(json_request, "port");
-	if(jo_http_port == NULL) {
-		debug(LOG_DEBUG, "parse http_port is null");
-	} else {
+	json_object *jo_http_port = json_object_object_get(json_request, "port");
+	if (jo_http_port != NULL) {
 		tmp_http_port = json_object_get_string(jo_http_port);
 	}
 
-	json_object * jo_path = json_object_object_get(json_request, "path");
-	if(jo_path == NULL) {
-		debug(LOG_DEBUG, "parse auth server path is null");
-	} else {
+	json_object *jo_path = json_object_object_get(json_request, "path");
+	if (jo_path != NULL) {
 		tmp_path = json_object_get_string(jo_path);
 	}
 
-	debug(LOG_DEBUG, "tmp_host_name is %s, tmp_http_port is %s, tmp_path is %s", tmp_host_name, tmp_http_port,tmp_path);
+	debug(LOG_DEBUG, "tmp_host_name is %s, tmp_http_port is %s, tmp_path is %s", tmp_host_name, tmp_http_port, tmp_path);
 
 	LOCK_CONFIG();
-	if((tmp_host_name != NULL) && (strcmp(hostname,tmp_host_name) != 0)) {
+	if (tmp_host_name != NULL && strcmp(hostname, tmp_host_name) != 0) {
 		free(hostname);
 		config->auth_servers->authserv_hostname = safe_strdup(tmp_host_name);
-        uci_set_value("wifidog", "wifidog", "auth_server_hostname", config->auth_servers->authserv_hostname);
+		uci_set_value("wifidogx", "wifidog", "auth_server_hostname", config->auth_servers->authserv_hostname);
 	}
-	if((tmp_path != NULL) && (strcmp(path,tmp_host_name) != 0)) {
+	if (tmp_path != NULL && strcmp(path, tmp_path) != 0) {
 		free(path);
 		config->auth_servers->authserv_path = safe_strdup(tmp_path);
-        uci_set_value("wifidog", "wifidog", "auth_server_path", config->auth_servers->authserv_path);
+		uci_set_value("wifidogx", "wifidog", "auth_server_path", config->auth_servers->authserv_path);
 	}
-	if(NULL != tmp_http_port) {
+	if (tmp_http_port != NULL) {
 		config->auth_servers->authserv_http_port = atoi(tmp_http_port);
-        uci_set_value("wifidog", "wifidog", "auth_server_port", tmp_http_port);
-    }
+		uci_set_value("wifidogx", "wifidog", "auth_server_port", tmp_http_port);
+	}
 	UNLOCK_CONFIG();
 	
 	json_object_put(json_request);
