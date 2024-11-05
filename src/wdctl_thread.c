@@ -45,7 +45,7 @@
 
 static struct sockaddr_un *create_unix_socket(const char *);
 
-static void wdctl_status(struct bufferevent *);
+static void wdctl_status(struct bufferevent *, const char *);
 static void wdctl_stop(struct bufferevent *);
 static void wdctl_refresh(struct bufferevent *);
 static void wdctl_clear_trusted_pan_domains(struct bufferevent *);
@@ -90,7 +90,7 @@ static struct wdctl_command {
     void (*process_cmd)(struct bufferevent *bev);
     void (*process_param_cmd)(struct bufferevent *bev, const char *param);
 } wdctl_cmd[] = {
-    {"status", wdctl_status, NULL},
+    {"status", NULL, wdctl_status},
     {"stop", wdctl_stop, NULL},
     {"refresh", wdctl_refresh, NULL},
     {"clear_trusted_pdomains", wdctl_clear_trusted_pan_domains, NULL},
@@ -239,15 +239,38 @@ thread_wdctl(void *arg)
 }
 
 static void
-wdctl_status(struct bufferevent *fd)
+wdctl_status(struct bufferevent *fd, const char *arg)
 {
-    char *status = get_status_text();
+    const char *type = arg;
+    if (!type) {
+        char *status = get_status_text();
+        if (status) {
+            size_t len = strlen(status);
+            bufferevent_write(fd, status, len);   /* XXX Not handling error because we'd just print the same log line. */
+            free(status);
+        } else 
+            bufferevent_write(fd, "No", 2); 
+
+        return;
+    }
+
+    char *status = NULL;
+
+    if (!strcmp(type, "client")) {
+        status = get_client_status_json();
+    } else if (!strcmp(type, "auth")) {
+        status = get_auth_status_json();
+    } else if (!strcmp(type, "wifidogx")) {
+        status = get_wifidogx_json();
+    }
+
     if (status) {
         size_t len = strlen(status);
-        bufferevent_write(fd, status, len);   /* XXX Not handling error because we'd just print the same log line. */
+        bufferevent_write(fd, status, len);
         free(status);
-    } else 
-        bufferevent_write(fd, "No", 2);  
+    } else {
+        bufferevent_write(fd, "{}", 2);
+    }
 }
 
 /** A bit of an hack, self kills.... */

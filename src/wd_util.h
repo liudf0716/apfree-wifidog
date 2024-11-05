@@ -90,6 +90,9 @@ int is_auth_online(void);
 
 /** @brief Creates a human-readable paragraph of the status of wifidog */
 char *get_status_text(void);
+char *get_client_status_json(void);
+char *get_auth_status_json(void);
+char *get_wifidogx_json(void);
 
 char *mqtt_get_serialize_maclist(int);
 

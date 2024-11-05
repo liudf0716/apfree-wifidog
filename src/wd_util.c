@@ -397,6 +397,96 @@ get_status_text()
 }
 
 char *
+get_client_status_json()
+{
+	struct json_object *jstatus = json_object_new_object();
+	t_client *sublist = NULL, *current = NULL;
+	int count = 0, active_count = 0;
+
+	LOCK_CLIENT_LIST();
+	count = client_list_dup(&sublist);
+	UNLOCK_CLIENT_LIST();
+
+	current = sublist;
+	struct json_object *jclients = NULL;
+	while (current != NULL) {
+		if (!jclients)
+			jclients = json_object_new_array();
+		struct json_object *jclient = json_object_new_object();
+		json_object_object_add(jclient, "status", json_object_new_int(current->is_online));
+		json_object_object_add(jclient, "ip", json_object_new_string(current->ip));
+		json_object_object_add(jclient, "mac", json_object_new_string(current->mac));
+		json_object_object_add(jclient, "token", json_object_new_string(current->token));
+		json_object_object_add(jclient, "name", 
+			json_object_new_string(current->name != NULL?current->name:"null"));
+		json_object_object_add(jclient, "first_login", json_object_new_int64(current->first_login));
+		json_object_object_add(jclient, "online_time", 
+			json_object_new_int64(time(NULL) - current->first_login));
+		json_object_object_add(jclient, "downloaded", 
+			json_object_new_int64(current->counters.incoming));
+		json_object_object_add(jclient, "uploaded",
+			json_object_new_int64(current->counters.outgoing));
+
+		json_object_array_add(jclients, jclient);
+
+		if(current->is_online)
+			active_count++;
+		current = current->next;
+	}
+
+	client_list_destroy(sublist);
+	if (jclients)
+		json_object_object_add(jstatus, "clients", jclients);
+
+	json_object_object_add(jstatus, "online_client_count", json_object_new_int(count));
+	json_object_object_add(jstatus, "active_client_count", json_object_new_int(active_count));
+	char *retStr = safe_strdup(json_object_to_json_string(jstatus));
+	json_object_put(jstatus);
+	return retStr;
+}
+
+char *
+get_auth_status_json()
+{
+	struct json_object *jstatus = json_object_new_object();
+	t_auth_serv *auth_server;
+	s_config *config = config_get_config();
+
+	json_object_object_add(jstatus, "auth_online", json_object_new_int(is_auth_online()));
+
+	struct json_object *jauth_servers = json_object_new_array();
+	for (auth_server = config->auth_servers; auth_server != NULL; auth_server = auth_server->next) {
+		struct json_object *jauth_server = json_object_new_object();
+		json_object_object_add(jauth_server, "host", json_object_new_string(auth_server->authserv_hostname));
+		json_object_object_add(jauth_server, "ip", json_object_new_string(auth_server->last_ip));
+		json_object_array_add(jauth_servers, jauth_server);
+	}
+
+	json_object_object_add(jstatus, "auth_servers", jauth_servers);
+	char *retStr = safe_strdup(json_object_to_json_string(jstatus));
+	json_object_put(jstatus);
+	return retStr;
+}
+
+char *
+get_wifidogx_json()
+{
+	struct json_object *jstatus = json_object_new_object();
+	// wifidogx's uptime
+	time_t uptime = time(NULL) - started_time;
+
+	json_object_object_add(jstatus, "uptime", json_object_new_int64(uptime));
+	json_object_object_add(jstatus, "is_internet_connected", json_object_new_int(is_online()));
+	json_object_object_add(jstatus, "is_auth_server_connected", json_object_new_int(is_auth_online()));
+	json_object_object_add(jstatus, "wifidogx_version", json_object_new_string(VERSION));
+
+	char *retStr = safe_strdup(json_object_to_json_string(jstatus));
+	json_object_put(jstatus);
+	return retStr;
+}
+
+
+char *
 get_serialize_iplist()
 {
 		pstr_t *pstr = NULL;

@@ -43,7 +43,7 @@ static void clear_command(const char *type);
 static void display_help();
 static void stop_command();
 static void reset_command(const char *value);
-static void status_command();
+static void status_command(const char *type);
 static void refresh_command();
 
 static void send_request(int, const char *);
@@ -194,7 +194,11 @@ main(int argc, char **argv)
         }
         reset_command(values);
     } else if (strcmp(command, "status") == 0) {
-        status_command();
+        if (type) {
+            status_command(type);
+        } else {
+            status_command(NULL);
+        }
     } else if (strcmp(command, "refresh") == 0) {
         refresh_command();
     } else {
@@ -261,7 +265,7 @@ display_help() {
     printf("wdctlx stop\n");
     printf("wdctlx reset\n");
     printf("wdctlx status\n");
-    printf("wdctlx refresh\n");
+    printf("wdctlx refresh [type]\n");
 }
 
 static void 
@@ -279,14 +283,18 @@ reset_command(const char *value) {
 }
 
 static void 
-status_command() {
-    printf("Status: Running\n");
-    // Add the logic to show the status
-    wdctl_command_action("status", NULL);
+status_command(const char *type) {
+    if (type) {
+        wdctl_command_action("status", type);
+    } else {
+        printf("Status: Running\n");
+        // Add the logic to show the status
+        wdctl_command_action("status", NULL);
+    }
 }
 
 static void
-refresh_command()
+refresh_command(const char *type)
 {
     printf("Refreshing wdctlx\n");
     wdctl_command_action("refresh", NULL);
