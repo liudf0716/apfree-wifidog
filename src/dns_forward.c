@@ -21,149 +21,210 @@ struct dns_query {
     struct event *dns_event;
 };
 
+
+static int parse_dns_header(unsigned char *response, int response_len, struct dns_header **header);
+static int parse_dns_question(unsigned char **ptr, char *query_name, int qdcount);
+static int is_trusted_domain(const char *query_name, t_domain_trusted **trusted_domain);
+static int process_dns_answers(unsigned char **ptr, int ancount, t_domain_trusted *trusted_domain);
+static int add_trusted_ip(t_domain_trusted *trusted_domain, uint16_t type, unsigned char *addr_ptr);
+
 static char *
-strrstr(const char *haystack, const char *needle) 
-{
-    // Find the last occurrence of the substring needle in the string haystack
+safe_strrstr(const char *haystack, const char *needle) {
+    if (!haystack || !needle) return NULL;
     char *result = NULL;
     size_t needle_len = strlen(needle);
     size_t haystack_len = strlen(haystack);
-    if (needle_len > haystack_len) {
+
+    if (needle_len == 0 || haystack_len < needle_len) {
         return NULL;
     }
 
-    for (size_t i = haystack_len - needle_len; i > 0; i--) {
-        if (strncmp(haystack + i, needle, needle_len) == 0) {
-            result = (char *)(haystack + i);
+    for (const char *p = haystack + haystack_len - needle_len; p >= haystack; p--) {
+        if (strncmp(p, needle, needle_len) == 0) {
+            result = (char *)p;
             break;
         }
     }
-
     return result;
-};
+}
 
 static unsigned char *
 parse_dns_query_name(unsigned char *query, char *name) {
     unsigned char *ptr = query;
     char *name_ptr = name;
+    int len = 0;
 
-    while (*ptr != 0) {
-        // Get the length of the next label
-        int len = *ptr++;
-
-        // Copy the label to the name
-        for (int i = 0; i < len; i++) {
-            *name_ptr++ = *ptr++;
+    while ((len = *ptr++)) {
+        if (len & 0xC0) {
+            // Compression not handled
+            return NULL;
         }
-
-        // Add a dot between labels
+        memcpy(name_ptr, ptr, len);
+        name_ptr += len;
+        ptr += len;
         *name_ptr++ = '.';
     }
-
-    // Replace the last dot with a null terminator
-    *--name_ptr = '\0';
-
-    // Return the pointer to the end of the query
-    return ptr + 1;
+    *--name_ptr = '\0'; // Remove the last dot
+    return ptr;
 }
 
 static int 
 process_dns_response(unsigned char *response, int response_len) {
-    s_config *config = config_get_config();
-    
+    struct dns_header *header = NULL;
+    unsigned char *ptr = response + sizeof(struct dns_header);
+    char query_name[MAX_DNS_NAME] = {0};
+    t_domain_trusted *trusted_domain = NULL;
+    int qdcount, ancount;
+
+    if (parse_dns_header(response, response_len, &header) != 0)
+        return -1;
+
+    qdcount = ntohs(header->qdcount);
+    ancount = ntohs(header->ancount);
+
+    if (parse_dns_question(&ptr, query_name, qdcount) != 0)
+        return -1;
+
+    if (!is_trusted_domain(query_name, &trusted_domain))
+        return 0; // Not a trusted domain
+
+    if (process_dns_answers(&ptr, ancount, trusted_domain) != 0)
+        return -1;
+
+    return 0;
+}
+
+static int 
+parse_dns_header(unsigned char *response, int response_len, struct dns_header **header) {
     if (response_len <= sizeof(struct dns_header)) {
         debug(LOG_WARNING, "Invalid DNS response, response_len=%d", response_len);
         return -1;
     }
-    struct dns_header *header = (struct dns_header *)response;
-    if (header->qr != 1 || header->opcode != 0 || header->rcode != 0) {
-        debug(LOG_WARNING, "Invalid DNS response, qr=%d, opcode=%d, rcode=%d", header->qr, header->opcode, header->rcode);
+    *header = (struct dns_header *)response;
+    if ((*header)->qr != 1 || (*header)->opcode != 0 || (*header)->rcode != 0) {
+        debug(LOG_WARNING, "Invalid DNS response, qr=%d, opcode=%d, rcode=%d",
+              (*header)->qr, (*header)->opcode, (*header)->rcode);
         return -1;
     }
+    return 0;
+}
 
-    char query_name[MAX_DNS_NAME] = {0};
-    int qdcount = ntohs(header->qdcount);
-    int ancount = ntohs(header->ancount);
-    unsigned char *ptr = response + sizeof(struct dns_header); // Skip the DNS header
-    // debug(LOG_DEBUG, "DNS response: qdcount=%d, ancount=%d", qdcount, ancount);
-
-    // Skip the question section
-    assert(qdcount == 1); // Only handle one question (A record)
-    for (int i = 0; i < qdcount; i++) {
-        ptr = parse_dns_query_name(ptr, query_name);
-        ptr += 4; // Skip QTYPE and QCLASS
+static int 
+parse_dns_question(unsigned char **ptr, char *query_name, int qdcount) {
+    if (qdcount != 1) {
+        debug(LOG_WARNING, "Unsupported qdcount=%d", qdcount);
+        return -1;
     }
-    
+    for (int i = 0; i < qdcount; i++) {
+        *ptr = parse_dns_query_name(*ptr, query_name);
+        if (!*ptr) {
+            debug(LOG_WARNING, "Failed to parse DNS query name");
+            return -1;
+        }
+        *ptr += 4; // Skip QTYPE and QCLASS
+    }
+    return 0;
+}
+
+static int 
+is_trusted_domain(const char *query_name, t_domain_trusted **trusted_domain) {
+    s_config *config = config_get_config();
     t_domain_trusted *p = config->pan_domains_trusted;
     while (p) {
-        if (strrstr(query_name, p->domain)) {
-            debug(LOG_DEBUG, "Find trusted wildcard domain: %s", p->domain);
-            break;
+        if (safe_strrstr(query_name, p->domain)) {
+            debug(LOG_DEBUG, "Found trusted wildcard domain: %s", p->domain);
+            *trusted_domain = p;
+            return 1;
         }
         p = p->next;
     }
+    return 0;
+}
 
-    if (!p) {
-        return 0;
-    }
-
-    // Parse the answer section
+static int 
+process_dns_answers(unsigned char **ptr, int ancount, t_domain_trusted *trusted_domain) {
     for (int i = 0; i < ancount; i++) {
-        ptr += 2; // Skip the name
-        // get the type and data length
-        unsigned short type = ntohs(*(unsigned short *)ptr);
-        ptr += 8; // Skip class, TTL, and data length
-        unsigned short data_len = ntohs(*(unsigned short *)ptr);
-        ptr += 2;
+        // Skip the name
+        if ((**ptr & 0xC0) == 0xC0) {
+            *ptr += 2; // Compressed name pointer
+        } else {
+            while (**ptr) {
+                *ptr += (**ptr) + 1;
+            }
+            (*ptr)++;
+        }
 
-        if (type == 1 && data_len == 4) { // Type A record
-            t_ip_trusted *ip_trusted = p->ips_trusted;
-            while(ip_trusted) {
-                if (ip_trusted->ip_type == IP_TYPE_IPV4 && ip_trusted->uip.ipv4.s_addr == *(unsigned int *)ptr) {
-                    break;
-                }
-                ip_trusted = ip_trusted->next;
-            }
-            if (!ip_trusted) {
-                char ip[INET_ADDRSTRLEN] = {0};
-                inet_ntop(AF_INET, ptr, ip, sizeof(ip));
-                debug(LOG_DEBUG, "Trusted domain: %s -> %s", query_name, ip);
-                t_ip_trusted *new_ip_trusted = (t_ip_trusted *)malloc(sizeof(t_ip_trusted));
-                new_ip_trusted->uip.ipv4.s_addr = *(unsigned int *)ptr;
-                new_ip_trusted->ip_type = IP_TYPE_IPV4;
-                new_ip_trusted->next = p->ips_trusted;
-                p->ips_trusted = new_ip_trusted;
-                char cmd[128] = {0};
-                snprintf(cmd, sizeof(cmd), "nft add element inet fw4 set_wifidogx_inner_trust_domains { %s }", ip);
-                system(cmd);
-            }
-        } else if (type == 28 && data_len == 16) { // Type AAAA record
-            t_ip_trusted *ip_trusted = p->ips_trusted;
-            while(ip_trusted) {
-                if (ip_trusted->ip_type == IP_TYPE_IPV6 && memcmp(&ip_trusted->uip.ipv6, ptr, 16) == 0) {
-                    break;
-                }
-                ip_trusted = ip_trusted->next;
-            }
-            if (!ip_trusted) {
-                char ip[INET6_ADDRSTRLEN] = {0};
-                uint32_t ipv6[4] = {0};
-                memcpy(ipv6, ptr, 16);
-                inet_ntop(AF_INET6, ipv6, ip, sizeof(ip));
-                debug(LOG_DEBUG, "Trusted domain: %s -> %s", query_name, ip);
-                t_ip_trusted *new_ip_trusted = (t_ip_trusted *)malloc(sizeof(t_ip_trusted));
-                memcpy(&new_ip_trusted->uip.ipv6, ptr, 16);
-                new_ip_trusted->next = p->ips_trusted;
-                new_ip_trusted->ip_type = IP_TYPE_IPV6; 
-                p->ips_trusted = new_ip_trusted;
-                char cmd[128] = {0};
-                snprintf(cmd, sizeof(cmd), "nft add element inet fw4 set_wifidogx_inner_trust_domains_v6 { %s }", ip);
-                system(cmd);
+        // Read TYPE and CLASS
+        uint16_t type = ntohs(*(uint16_t *)(*ptr));
+        *ptr += 2;
+        *ptr += 2; // Skip CLASS
+        *ptr += 4; // Skip TTL
+        uint16_t data_len = ntohs(*(uint16_t *)(*ptr));
+        *ptr += 2;
+
+        if ((type == 1 && data_len == 4) || (type == 28 && data_len == 16)) {
+            // A or AAAA record
+            unsigned char *addr_ptr = *ptr;
+            *ptr += data_len;
+
+            if (add_trusted_ip(trusted_domain, type, addr_ptr) != 0)
+                return -1;
+        } else {
+            // Skip data
+            *ptr += data_len;
+        }
+    }
+    return 0;
+}
+
+static int 
+add_trusted_ip(t_domain_trusted *trusted_domain, uint16_t type, unsigned char *addr_ptr) {
+    t_ip_trusted *ip_trusted = trusted_domain->ips_trusted;
+    int found = 0;
+    while (ip_trusted) {
+        if (ip_trusted->ip_type == (type == 1 ? IP_TYPE_IPV4 : IP_TYPE_IPV6)) {
+            if ((type == 1 && ip_trusted->uip.ipv4.s_addr == *(uint32_t *)addr_ptr) ||
+                (type == 28 && memcmp(&ip_trusted->uip.ipv6, addr_ptr, 16) == 0)) {
+                found = 1;
+                break;
             }
         }
-        ptr += data_len;
+        ip_trusted = ip_trusted->next;
     }
 
+    if (!found) {
+        char ip_str[INET6_ADDRSTRLEN] = {0};
+        if (type == 1) {
+            inet_ntop(AF_INET, addr_ptr, ip_str, sizeof(ip_str));
+        } else {
+            inet_ntop(AF_INET6, addr_ptr, ip_str, sizeof(ip_str));
+        }
+        debug(LOG_DEBUG, "Trusted domain: %s -> %s", trusted_domain->domain, ip_str);
+
+        t_ip_trusted *new_ip_trusted = (t_ip_trusted *)malloc(sizeof(t_ip_trusted));
+        if (!new_ip_trusted) {
+            debug(LOG_ERR, "Memory allocation failed");
+            return -1;
+        }
+        if (type == 1) {
+            new_ip_trusted->ip_type = IP_TYPE_IPV4;
+            memcpy(&new_ip_trusted->uip.ipv4, addr_ptr, 4);
+        } else {
+            new_ip_trusted->ip_type = IP_TYPE_IPV6;
+            memcpy(&new_ip_trusted->uip.ipv6, addr_ptr, 16);
+        }
+        new_ip_trusted->next = trusted_domain->ips_trusted;
+        trusted_domain->ips_trusted = new_ip_trusted;
+
+        // Add to nftables
+        char cmd[256] = {0};
+        if (type == 1) {
+            snprintf(cmd, sizeof(cmd), "nft add element inet fw4 set_wifidogx_inner_trust_domains { %s }", ip_str);
+        } else {
+            snprintf(cmd, sizeof(cmd), "nft add element inet fw4 set_wifidogx_inner_trust_domains_v6 { %s }", ip_str);
+        }
+        system(cmd);
+    }
     return 0;
 }
 
@@ -178,7 +239,7 @@ dns_read_cb(evutil_socket_t fd, short event, void *arg)
         process_dns_response(response, response_len);
         sendto(query->client_fd, response, response_len, 0, (struct sockaddr *)&query->client_addr, query->client_len);
     } else {
-        perror("recv");
+        debug(LOG_ERR, "DNS response recv failed: %s", strerror(errno));
     }
 
     // Clean up
