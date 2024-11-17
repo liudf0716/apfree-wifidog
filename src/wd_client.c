@@ -86,56 +86,84 @@ wd_get_orig_url(struct evhttp_request *req, int is_ssl)
 }
 
 /**
- * @brief wifidog get full redirect url to auth server
+ * @brief Constructs the full redirect URL for authenticating a client with the auth server
  * 
- * @param req The http request
- * @param mac Client's mac 
- * @param remote_host Client's ip address
- * @return return redirect url which need to be free by caller
- * 
- */ 
+ * @param req The HTTP request from the client
+ * @param gw_setting Gateway settings containing configuration values
+ * @param mac Client's MAC address
+ * @param remote_host Client's IP address (can be IPv4 or IPv6)
+ * @param gw_port Gateway port number
+ * @param device_id Unique device identifier
+ * @param is_ssl Flag indicating if connection is SSL/TLS (1) or not (0)
+ * @return char* The complete redirect URL that must be freed by caller, or NULL on failure
+ *
+ * This function builds the complete URL to redirect clients to the authentication server.
+ * It includes all necessary parameters like:
+ * - Gateway address (IPv4 or IPv6)
+ * - Gateway port, ID and channel
+ * - Client IP and MAC
+ * - Original requested URL
+ * - SSID information
+ * - Protocol (http/https)
+ */
 char *
 wd_get_redir_url_to_auth(struct evhttp_request *req, 
 						 t_gateway_setting *gw_setting, 
-						 const char *mac, 
+						 const char *mac,
 						 const char *remote_host,
 						 const uint16_t gw_port,
 						 const char *device_id,
 						 int is_ssl)
 {
-    t_auth_serv *auth_server = get_auth_server();
-    char *orig_url = wd_get_orig_url(req, is_ssl);
-    if (!orig_url) 
-		orig_url= safe_strdup("null");
-	char *gw_address = NULL;
-	int is_ipv6 = 0;
-	if (is_valid_ip6(remote_host)) {
-		is_ipv6 = 1;
-		gw_address = gw_setting->gw_address_v6;
-	} else
-		gw_address = gw_setting->gw_address_v4;
+	t_auth_serv *auth_server = get_auth_server();
+	char *orig_url = wd_get_orig_url(req, is_ssl);
+	char *gw_address;
+	char *redir_url = NULL;
+	int is_ipv6 = is_valid_ip6(remote_host);
 
-    char *redir_url = NULL;
-    safe_asprintf(&redir_url, "%s://%s:%d%s%sgw_address=%s&is_ipv6=%d&gw_port=%d&device_id=%s&gw_id=%s&gw_channel=%s&ssid=%s&ip=%s&mac=%s&protocol=%s&url=%s",
-        auth_server->authserv_use_ssl?"https":"http",
-        auth_server->authserv_hostname,
-        auth_server->authserv_use_ssl?auth_server->authserv_ssl_port:auth_server->authserv_http_port,
+	// Use fallback value if original URL extraction fails
+	if (!orig_url) {
+		orig_url = safe_strdup("null");
+	}
+
+	// Select appropriate gateway address based on IP version
+	gw_address = is_ipv6 ? gw_setting->gw_address_v6 : gw_setting->gw_address_v4;
+
+	// Build the complete redirect URL with all parameters
+	safe_asprintf(&redir_url, 
+		"%s://%s:%d%s%s"  // Auth server base URL
+		"gw_address=%s"    // Gateway address
+		"&is_ipv6=%d"      // IPv6 flag
+		"&gw_port=%d"      // Gateway port
+		"&device_id=%s"    // Device ID
+		"&gw_id=%s"        // Gateway ID
+		"&gw_channel=%s"   // Gateway channel
+		"&ssid=%s"         // SSID
+		"&ip=%s"           // Client IP
+		"&mac=%s"          // Client MAC
+		"&protocol=%s"     // Protocol
+		"&url=%s",         // Original URL
+		// Parameter values
+		auth_server->authserv_use_ssl ? "https" : "http",
+		auth_server->authserv_hostname,
+		auth_server->authserv_use_ssl ? auth_server->authserv_ssl_port : auth_server->authserv_http_port,
 		auth_server->authserv_path,
 		auth_server->authserv_login_script_path_fragment,
-        gw_address,
+		gw_address,
 		is_ipv6,
 		gw_port,
 		device_id,
-		gw_setting->gw_id, 
-        gw_setting->gw_channel?gw_setting->gw_channel:"null",
-        g_ssid?g_ssid:"null",
-        remote_host, 
-		mac, 
-		is_ssl?"https":"http",
-		orig_url); 
-		
-    free(orig_url);
-    return redir_url;
+		gw_setting->gw_id,
+		gw_setting->gw_channel ? gw_setting->gw_channel : "null",
+		g_ssid ? g_ssid : "null",
+		remote_host,
+		mac,
+		is_ssl ? "https" : "http",
+		orig_url
+	);
+
+	free(orig_url);
+	return redir_url;
 }
 
 /**
