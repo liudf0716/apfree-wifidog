@@ -192,138 +192,207 @@ handle_heartbeat_response(json_object *j_heartbeat)
 
 }
 
+/**
+ * Start or restart the WebSocket heartbeat timer
+ *
+ * This function sets up a periodic timer to send heartbeat messages to the WebSocket
+ * server every 60 seconds. It will:
+ * - Clean up any existing heartbeat timer
+ * - Create a new persistent timer event 
+ * - Associate the timer with the WebSocket bufferevent
+ *
+ * The heartbeat helps:
+ * - Keep the WebSocket connection alive
+ * - Synchronize gateway states with the server
+ * - Detect connection failures
+ *
+ * @param b_ws The WebSocket bufferevent to associate with the heartbeat
+ */
 static void
 start_ws_heartbeat(struct bufferevent *b_ws)
 {
+	// Clean up existing timer if any
 	if (ws_heartbeat_ev != NULL) {
 		event_free(ws_heartbeat_ev);
 		ws_heartbeat_ev = NULL;
 	}
-	struct timeval tv;
-	tv.tv_sec = 60;
-	tv.tv_usec = 0;
+
+	// Set 60 second interval
+	struct timeval tv = {
+		.tv_sec = 60,
+		.tv_usec = 0
+	};
+
+	// Create persistent timer event
 	ws_heartbeat_ev = event_new(ws_base, -1, EV_PERSIST, ws_heartbeat_cb, b_ws);
-	event_add(ws_heartbeat_ev, &tv);
+	if (ws_heartbeat_ev) {
+		event_add(ws_heartbeat_ev, &tv);
+	}
 }
 
+/**
+ * Process incoming WebSocket messages
+ *
+ * Parses and handles JSON messages received over WebSocket. Supported message types:
+ * - heartbeat: Gateway status updates
+ * - connect: Initial connection response
+ * - auth: Client authentication response
+ * - kickoff: Client disconnection request
+ * - tmp_pass: Temporary client access grant
+ *
+ * @param msg The JSON message string to process
+ */
 static void
 process_ws_msg(const char *msg)
 {
-	debug(LOG_DEBUG, "process_ws_msg %s\n", msg);
+	debug(LOG_DEBUG, "Processing WebSocket message: %s", msg);
+
+	// Parse JSON message
 	json_object *jobj = json_tokener_parse(msg);
-	if(jobj == NULL){
-		debug(LOG_ERR, "parse json data failed\n");
+	if (!jobj) {
+		debug(LOG_ERR, "Failed to parse JSON message");
 		return;
 	}
 
+	// Extract message type
 	json_object *type = json_object_object_get(jobj, "type");
-	if(type == NULL){
-		debug(LOG_ERR, "parse json data failed\n");
+	if (!type) {
+		debug(LOG_ERR, "Missing message type in JSON");
 		json_object_put(jobj);
 		return;
 	}
 
+	// Route message to appropriate handler based on type
 	const char *type_str = json_object_get_string(type);
-	if (strcmp(type_str, "heartbeat") == 0) {
+	if (!strcmp(type_str, "heartbeat") || !strcmp(type_str, "connect")) {
 		handle_heartbeat_response(jobj);
-	} else if (strcmp(type_str, "connect") == 0) {
-		handle_heartbeat_response(jobj);
-	} else if (strcmp(type_str, "auth") == 0) {
+	} else if (!strcmp(type_str, "auth")) {
 		handle_auth_response(jobj);
-	} else if (strcmp(type_str, "kickoff") == 0) {
+	} else if (!strcmp(type_str, "kickoff")) {
 		handle_kickoff_response(jobj);
-	} else if (strcmp(type_str, "tmp_pass") == 0) {
+	} else if (!strcmp(type_str, "tmp_pass")) {
 		handle_tmp_pass_response(jobj);
 	} else {
-		debug(LOG_ERR, "unknown type %s\n", type_str);
+		debug(LOG_ERR, "Unknown message type: %s", type_str);
 	}
 
 	json_object_put(jobj);
 }
 
 
+/**
+ * Send a WebSocket frame to the server
+ *
+ * Constructs and sends a WebSocket frame according to RFC 6455 with:
+ * - FIN and opcode bits
+ * - Payload length field (7/16/64 bits)
+ * - Masking key and masked payload
+ *
+ * @param buf Output evbuffer to write the frame to
+ * @param msg Message payload to send
+ * @param len Length of the message payload
+ */
 static void 
 ws_send(struct evbuffer *buf, const char *msg, const size_t len)
 {
-	uint8_t a = 0;
-	a |= 1 << 7;  //fin
-	a |= 1; //text frame
-	
-	uint8_t b = 0;
-	b |= 1 << 7; //mask
-	
-	uint16_t c = 0;
-	uint64_t d = 0;
+	// Frame header byte 1: FIN=1, RSV1-3=0, Opcode=0x1 (text)
+	uint8_t header1 = 0x81; // 1000 0001
 
-	//payload len
-	if(len < 126){
-		b |= len; 
-	}
-	else if(len < (1 << 16)){
-		b |= 126;
-		c = htons(len);
-	}else{
-		b |= 127;
-		d = htonll(len);
+	// Frame header byte 2: MASK=1, with payload length
+	uint8_t header2 = 0x80; // Set mask bit
+	uint16_t len16;
+	uint64_t len64;
+
+	// Set payload length field
+	if (len < 126) {
+		header2 |= len;
+	} else if (len < 65536) {
+		header2 |= 126;
+		len16 = htons(len);
+	} else {
+		header2 |= 127;
+		len64 = htonll(len);
 	}
 
-	evbuffer_add(buf, &a, 1);
-	evbuffer_add(buf, &b, 1);
+	// Write frame headers
+	evbuffer_add(buf, &header1, 1);
+	evbuffer_add(buf, &header2, 1);
 
-	if(c) evbuffer_add(buf, &c, sizeof(c));
-	else if(d) evbuffer_add(buf, &d, sizeof(d));
+	// Write extended payload length if needed
+	if (len >= 126 && len < 65536) {
+		evbuffer_add(buf, &len16, sizeof(len16));
+	} else if (len >= 65536) {
+		evbuffer_add(buf, &len64, sizeof(len64));
+	}
 
-	uint8_t mask_key[4] = {1, 2, 3, 4};  //should be random
-	evbuffer_add(buf, &mask_key, 4);
+	// Add masking key and masked payload
+	uint8_t mask_key[4] = {1, 2, 3, 4};
+	evbuffer_add(buf, mask_key, 4);
 
-	uint8_t m;
-	for(int i = 0; i < len; i++){
-		m = msg[i] ^ mask_key[i%4];
-		evbuffer_add(buf, &m, 1); 
+	// Mask and write payload
+	uint8_t masked_byte;
+	for (size_t i = 0; i < len; i++) {
+		masked_byte = msg[i] ^ mask_key[i % 4];
+		evbuffer_add(buf, &masked_byte, 1);
 	}
 }
 
+/**
+ * Process received WebSocket frame
+ *
+ * Parses and handles an incoming WebSocket frame according to RFC 6455:
+ * - Validates frame header and length fields
+ * - Handles message fragmentation
+ * - Unmasks payload if masked
+ * - Processes text frame payloads
+ *
+ * @param data Raw frame data buffer
+ * @param data_len Length of data buffer
+ */
 static void 
-ws_receive(unsigned char *data, const size_t data_len){
-	if(data_len < 2)
+ws_receive(unsigned char *data, const size_t data_len)
+{
+	if (data_len < 2) {
 		return;
-
-	int fin = !!(*data & 0x80);
-	int opcode = *data & 0x0F;
-	int mask = !!(*(data+1) & 0x80);
-	uint64_t payload_len =  *(data+1) & 0x7F;
-
-	size_t header_len = 2 + (mask ? 4 : 0);
-
-	if(payload_len < 126){
-		if(header_len > data_len)
-			return;
-
-	}else if(payload_len == 126){
-		header_len += 2;
-		if(header_len > data_len)
-			return;
-
-		payload_len = ntohs(*(uint16_t*)(data+2));
-	}else if(payload_len == 127){
-		header_len += 8;
-		if(header_len > data_len)
-			return;
-
-		payload_len = ntohll(*(uint64_t*)(data+2));
 	}
 
-	if(header_len + payload_len > data_len)
+	// Parse frame header
+	const uint8_t opcode = data[0] & 0x0F;
+	const bool masked = !!(data[1] & 0x80);
+	uint64_t payload_len = data[1] & 0x7F;
+
+	// Calculate total header length
+	size_t header_len = 2 + (masked ? 4 : 0);
+
+	// Handle extended payload lengths
+	if (payload_len == 126) {
+		header_len += 2;
+		if (header_len > data_len) return;
+		payload_len = ntohs(*(uint16_t*)(data + 2));
+	} else if (payload_len == 127) {
+		header_len += 8;
+		if (header_len > data_len) return;
+		payload_len = ntohll(*(uint64_t*)(data + 2));
+	}
+
+	// Validate total message length
+	if (header_len + payload_len > data_len) {
 		return;
+	}
 
-	unsigned char* mask_key = data + header_len - 4;
-	for(int i = 0; mask && i < payload_len; i++)
-		data[header_len + i] ^= mask_key[i%4];
+	// Unmask payload if needed
+	if (masked) {
+		unsigned char *mask_key = data + header_len - 4;
+		for (uint64_t i = 0; i < payload_len; i++) {
+			data[header_len + i] ^= mask_key[i % 4];
+		}
+	}
 
-	if(opcode == 0x01) {
-        const char *msg = (const char *)(data + header_len);
+	// Process text frames
+	if (opcode == 0x01) {
+		const char *msg = (const char *)(data + header_len);
 		process_ws_msg(msg);
-    }
+	}
 }
 
 /**
