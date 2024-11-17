@@ -43,7 +43,7 @@ wd_get_orig_url(struct evhttp_request *req, int is_ssl)
 	}
 
 	// Reconstruct path and query
-	if (evhttp_uri_join((struct evhttp_uri *)uri, path, sizeof(path) - 1) == -1) {
+	if (!evhttp_uri_join((struct evhttp_uri *)uri, path, sizeof(path) - 1)) {
 		debug(LOG_DEBUG, "Failed to join URI components");
 		return NULL;
 	}
