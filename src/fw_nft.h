@@ -46,4 +46,6 @@ void nft_fw_refresh_user_domains_trusted();
 void nft_fw_set_trusted_maclist();
 void nft_fw_clear_trusted_maclist();
 
+void nft_fw_set_inner_domains_trusted();
+
 #endif
