@@ -229,53 +229,99 @@ wd_request_context_new(struct event_base *base, SSL *ssl, int authserv_use_ssl)
 }
 
 /**
- * @brief   wifidog loop for connecting auth server periodically
+ * @brief Initialize and run a periodic event loop for auth server communication
  * 
- * @param callback The function will be invoked every interval seconds during the loop
- */ 
+ * @param callback Function to be called periodically during the event loop
+ *                 Signature: void (*callback)(evutil_socket_t, short, void *)
+ *
+ * This function:
+ * 1. Sets up SSL/TLS context and configuration for secure connections
+ * 2. Initializes libevent base and request context
+ * 3. Creates a timer event to periodically execute the callback
+ * 4. Runs the event loop until program termination
+ * 
+ * The callback function is executed:
+ * - Once immediately before starting the event loop
+ * - Every checkinterval seconds thereafter (configured in wifidog.conf)
+ *
+ * @note This function will terminate the program if critical initialization fails
+ */
 void
 wd_request_loop(void (*callback)(evutil_socket_t, short, void *))
-{	
-	if (!RAND_poll()) termination_handler(0);
-
-	/* Create a new OpenSSL context */
-	SSL_CTX *ssl_ctx = SSL_CTX_new(SSLv23_method());
-	if (!ssl_ctx) termination_handler(0);
-
-	SSL *ssl = SSL_new(ssl_ctx);
-	if (!ssl) termination_handler(0);
-
-	// authserv_hostname is the hostname of the auth server, must be domain name
-    if (!SSL_set_tlsext_host_name(ssl, get_auth_server()->authserv_hostname)) {
-        debug(LOG_ERR, "SSL_set_tlsext_host_name failed");
-        termination_handler(0);
-    }
-
-	struct event_base *base = event_base_new();
-	if (!base) termination_handler(0);
-
-	struct wd_request_context *request_ctx = wd_request_context_new(
-		base, ssl, get_auth_server()->authserv_use_ssl);
-	if (!request_ctx) termination_handler(0);
-
+{
+	SSL_CTX *ssl_ctx = NULL;
+	SSL *ssl = NULL;
+	struct event_base *base = NULL;
+	struct wd_request_context *request_ctx = NULL;
 	struct event evtimer;
 	struct timeval tv;
+	t_auth_serv *auth_server = get_auth_server();
 
-	// execute callback before shedule it
-	if (callback) callback(-1, EV_PERSIST, request_ctx);
+	// Initialize OpenSSL random number generator
+	if (!RAND_poll()) {
+		debug(LOG_ERR, "Failed to initialize RAND");
+		goto cleanup;
+	}
 
+	// Initialize SSL context and configuration
+	ssl_ctx = SSL_CTX_new(SSLv23_method());
+	if (!ssl_ctx) {
+		debug(LOG_ERR, "Failed to create SSL context");
+		goto cleanup;
+	}
+
+	ssl = SSL_new(ssl_ctx);
+	if (!ssl) {
+		debug(LOG_ERR, "Failed to create SSL connection");
+		goto cleanup;
+	}
+
+	// Set Server Name Indication (SNI) for SSL connections
+	if (!SSL_set_tlsext_host_name(ssl, auth_server->authserv_hostname)) {
+		debug(LOG_ERR, "Failed to set SSL hostname");
+		goto cleanup;
+	}
+
+	// Initialize libevent base
+	base = event_base_new();
+	if (!base) {
+		debug(LOG_ERR, "Failed to create event base");
+		goto cleanup;
+	}
+
+	// Create request context
+	request_ctx = wd_request_context_new(base, ssl, auth_server->authserv_use_ssl);
+	if (!request_ctx) {
+		debug(LOG_ERR, "Failed to create request context");
+		goto cleanup;
+	}
+
+	// Execute callback immediately before starting event loop
+	if (callback) {
+		callback(-1, EV_PERSIST, request_ctx);
+	}
+
+	// Set up periodic timer event
 	event_assign(&evtimer, base, -1, EV_PERSIST, callback, (void*)request_ctx);
 	evutil_timerclear(&tv);
 	tv.tv_sec = config_get_config()->checkinterval;
-    event_add(&evtimer, &tv);
+	event_add(&evtimer, &tv);
 
+	// Run event loop
 	event_base_dispatch(base);
 
-	if (evtimer_initialized(&evtimer)) event_del(&evtimer);
+	// Cleanup
+	if (evtimer_initialized(&evtimer)) {
+		event_del(&evtimer);
+	}
+
+cleanup:
 	if (base) event_base_free(base);
 	if (ssl) SSL_free(ssl);
 	if (ssl_ctx) SSL_CTX_free(ssl_ctx);
 	if (request_ctx) wd_request_context_free(request_ctx);
+	
+	termination_handler(0);
 }
 
 /**
