@@ -442,40 +442,63 @@ create_ws_bufferevent()
     return bev;
 }
 
+/**
+ * WebSocket connection event callback
+ *
+ * Handles WebSocket connection events including:
+ * - Successful connection and handshake initiation
+ * - Connection errors and EOF 
+ * - Automatic reconnection on failure
+ *
+ * @param b_ws The WebSocket bufferevent
+ * @param events The triggered event flags
+ * @param ctx User-provided context (unused)
+ */
 static void 
-wsevent_connection_cb(struct bufferevent* b_ws, short events, void *ctx){
-	if(events & BEV_EVENT_CONNECTED){
-        debug (LOG_DEBUG,"wsevent_connection_cb: connect ws server and start web socket request\n");
+wsevent_connection_cb(struct bufferevent* b_ws, short events, void *ctx)
+{
+	// Handle successful connection
+	if (events & BEV_EVENT_CONNECTED) {
+		debug(LOG_DEBUG, "Connected to WebSocket server, initiating handshake");
 		ws_request(b_ws);
-        return;
-	} else if(events & (BEV_EVENT_ERROR | BEV_EVENT_EOF)){
-		debug(LOG_ERR, "wsevent_connection_cb [BEV_EVENT_ERROR | BEV_EVENT_EOF] error is: %s\n", strerror(errno));
-		// stop heartbeat timer
-		if (ws_heartbeat_ev != NULL) {
+		return;
+	}
+
+	// Handle connection errors and EOF
+	if (events & (BEV_EVENT_ERROR | BEV_EVENT_EOF)) {
+		debug(LOG_ERR, "WebSocket connection error: %s", strerror(errno));
+
+		// Stop heartbeat timer
+		if (ws_heartbeat_ev) {
 			event_free(ws_heartbeat_ev);
 			ws_heartbeat_ev = NULL;
 		}
-		// is the error is reset by peer, we should sleep longer
-		if (events & BEV_EVENT_EOF)
-			sleep(5);
-		else
-			sleep(2);
-		// reconnect ws server
-		if (b_ws != NULL) {
+
+		// Add delay before reconnect attempt
+		// Longer delay on EOF (reset by peer)
+		sleep((events & BEV_EVENT_EOF) ? 5 : 2);
+
+		// Clean up existing connection
+		if (b_ws) {
 			bufferevent_free(b_ws);
 		}
-		
+
+		// Attempt reconnection
 		b_ws = create_ws_bufferevent();
-		int ret = bufferevent_socket_connect_hostname(b_ws, ws_dnsbase, AF_INET, 
-													get_ws_server()->hostname, get_ws_server()->port);
 		upgraded = false;
+
+		int ret = bufferevent_socket_connect_hostname(b_ws, ws_dnsbase, AF_INET,
+													get_ws_server()->hostname,
+													get_ws_server()->port);
 		if (ret < 0) {
-			debug(LOG_ERR, "wsevent_connection_cb: bufferevent_socket_connect_hostname error: %s\n", strerror(errno));
+			debug(LOG_ERR, "Reconnection failed: %s", strerror(errno));
 			bufferevent_free(b_ws);
 		}
-	} else {
-		debug(LOG_ERR, "wsevent_connection_cb: ws connection error: %s\n", strerror(errno));
+		return;
 	}
+
+	// Handle other unexpected events
+	debug(LOG_ERR, "Unexpected WebSocket event: %s", strerror(errno));
 }
 
 /**
