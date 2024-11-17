@@ -14,71 +14,75 @@
 #include "gateway.h"
 
 /**
- * @brief get client's original url from request
+ * @brief Extract and encode the original URL from an HTTP request
  * 
- * @param req Client's http request
- * @return client's original encoded url which need to be free by caller
- *         failed return NULL
- * 
- */ 
+ * @param req The HTTP request to extract URL from
+ * @param is_ssl Flag indicating if the connection is SSL/TLS (1) or not (0)
+ * @return char* The encoded URL string that must be freed by caller, or NULL on failure
+ *
+ * This function reconstructs the original URL that the client requested by:
+ * 1. Extracting the URI components (path, query, etc.)
+ * 2. Getting the scheme (http/https), host and port
+ * 3. Building the full URL
+ * 4. URL-encoding the result
+ */
 char *
-wd_get_orig_url(struct evhttp_request *req, int is_ssl)
+wd_get_orig_url(struct evhttp_request *req, int is_ssl) 
 {
-    // Get the URI object from the request
-    struct evhttp_uri *uri = evhttp_request_get_evhttp_uri(req);
-    if (!uri) {
-        return NULL;
-    }
+	const struct evhttp_uri *uri;
+	const char *scheme, *host;
+	char path[4096] = {0};
+	int port;
+	char *full_url = NULL;
+	char *encoded_url = NULL;
 
-    // Reconstruct the path and query components
-    char path[4096] = {0};
-    if (evhttp_uri_join(uri, path, sizeof(path) - 1) == -1) {
-        return NULL;
-    }
-	debug(LOG_DEBUG, "path: %s", path);
-	
-    // Get the scheme, host, and port from the URI
-    const char *scheme = evhttp_uri_get_scheme(uri);
-    const char *host = evhttp_uri_get_host(uri);
-    int port = evhttp_uri_get_port(uri);
+	// Get URI from request
+	if (!(uri = evhttp_request_get_evhttp_uri(req))) {
+		debug(LOG_DEBUG, "Failed to get URI from request");
+		return NULL;
+	}
 
-    // Determine the scheme if not specified
-    if (!scheme) {
-        if (is_ssl) {
-			scheme = "https";
-		} else {
-			scheme = "http";
-		}
-    }
+	// Reconstruct path and query
+	if (evhttp_uri_join((struct evhttp_uri *)uri, path, sizeof(path) - 1) == -1) {
+		debug(LOG_DEBUG, "Failed to join URI components");
+		return NULL;
+	}
+	debug(LOG_DEBUG, "Path: %s", path);
 
-    // Get the host from the request if not in the URI
-    if (!host) {
-        host = evhttp_request_get_host(req);
-        if (!host) {
-			debug(LOG_INFO, "No host in URI or request");
-            return NULL;
-        }
-    }
+	// Get URI components
+	scheme = evhttp_uri_get_scheme(uri);
+	host = evhttp_uri_get_host(uri);
+	port = evhttp_uri_get_port(uri);
 
-    // Build the full URL
-    char *full_url = NULL;
-    if (port > 0 && port != 80 && port != 443) {
-        safe_asprintf(&full_url, "%s://%s:%d%s", scheme, host, port, path);
-    } else {
-        safe_asprintf(&full_url, "%s://%s%s", scheme, host, path);
-    }
+	// Use default scheme based on SSL flag if not specified
+	if (!scheme) {
+		scheme = is_ssl ? "https" : "http";
+	}
 
-    if (!full_url) {
-		debug(LOG_INFO, "Failed to build full URL");
-        return NULL;
-    }
-	debug(LOG_DEBUG, "full_url: %s", full_url);
+	// Fall back to request host header if URI has no host
+	if (!host && !(host = evhttp_request_get_host(req))) {
+		debug(LOG_DEBUG, "No host found in URI or request");
+		return NULL;
+	}
 
-    // Encode the URL
-    char *encoded_url = evhttp_encode_uri(full_url);
-    free(full_url);
+	// Build full URL, including port if non-standard
+	if (port > 0 && port != 80 && port != 443) {
+		safe_asprintf(&full_url, "%s://%s:%d%s", scheme, host, port, path);
+	} else {
+		safe_asprintf(&full_url, "%s://%s%s", scheme, host, path);
+	}
 
-    return encoded_url;
+	if (!full_url) {
+		debug(LOG_DEBUG, "Failed to build full URL");
+		return NULL;
+	}
+	debug(LOG_DEBUG, "Full URL: %s", full_url);
+
+	// URL-encode the full URL
+	encoded_url = evhttp_encode_uri(full_url);
+	free(full_url);
+
+	return encoded_url;
 }
 
 /**
