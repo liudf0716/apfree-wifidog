@@ -350,35 +350,72 @@ ws_request(struct bufferevent* b_ws)
 	evbuffer_add_printf(out, "\r\n");
 }
 
+/**
+ * Send a message to the WebSocket server
+ * 
+ * Constructs and sends a JSON message containing:
+ * - Message type (heartbeat/connect)
+ * - Device ID
+ * - Array of gateway configurations including:
+ *   - Gateway ID, channel, IPv4/IPv6 addresses
+ *   - Authentication mode and interface
+ *
+ * @param out The output evbuffer to write the message to
+ * @param type The message type ("heartbeat" or "connect")
+ */
 static void
 send_msg(struct evbuffer *out, const char *type)
 {
+	// Create root JSON object with type and device ID
+	json_object *root = json_object_new_object();
+	json_object_object_add(root, "type", json_object_new_string(type));
+	json_object_object_add(root, "device_id", json_object_new_string(get_device_id()));
+
+	// Create gateway array
+	json_object *gw_array = json_object_new_array();
 	t_gateway_setting *gw_settings = get_gateway_settings();
-	json_object *jobj = json_object_new_object();
-	json_object_object_add(jobj, "type", json_object_new_string(type));
-	json_object_object_add(jobj, "device_id", json_object_new_string(get_device_id()));
-	// new a json array object
-	json_object *jarray = json_object_new_array();
+
+	// Add each gateway's configuration
 	while(gw_settings) {
-		json_object *jobj_gw = json_object_new_object();
-		json_object_object_add(jobj_gw, "gw_id", json_object_new_string(gw_settings->gw_id));
-		json_object_object_add(jobj_gw, "gw_channel", json_object_new_string(gw_settings->gw_channel));
-		json_object_object_add(jobj_gw, "gw_address_v4", json_object_new_string(gw_settings->gw_address_v4));
-		if (gw_settings->gw_address_v6)
-			json_object_object_add(jobj_gw, "gw_address_v6", json_object_new_string(gw_settings->gw_address_v6));
-		json_object_object_add(jobj_gw, "auth_mode", json_object_new_int(gw_settings->auth_mode));
-		json_object_object_add(jobj_gw, "gw_interface", json_object_new_string(gw_settings->gw_interface));
-		json_object_array_add(jarray, jobj_gw);
+		json_object *gw = json_object_new_object();
+		
+		// Add required gateway fields
+		json_object_object_add(gw, "gw_id", json_object_new_string(gw_settings->gw_id));
+		json_object_object_add(gw, "gw_channel", json_object_new_string(gw_settings->gw_channel));
+		json_object_object_add(gw, "gw_address_v4", json_object_new_string(gw_settings->gw_address_v4));
+		json_object_object_add(gw, "auth_mode", json_object_new_int(gw_settings->auth_mode));
+		json_object_object_add(gw, "gw_interface", json_object_new_string(gw_settings->gw_interface));
+
+		// Add IPv6 address if available
+		if (gw_settings->gw_address_v6) {
+			json_object_object_add(gw, "gw_address_v6", 
+				json_object_new_string(gw_settings->gw_address_v6));
+		}
+
+		json_object_array_add(gw_array, gw);
 		gw_settings = gw_settings->next;
 	}
-	json_object_object_add(jobj, "gateway", jarray);
-	const char *jdata = json_object_to_json_string(jobj);
+
+	json_object_object_add(root, "gateway", gw_array);
+
+	// Send formatted JSON message
+	const char *json_str = json_object_to_json_string(root);
+	debug(LOG_DEBUG, "Sending %s message: %s", type, json_str);
 	
-	debug(LOG_DEBUG, "ws_heartbeat_cb : send heartbeat data [%s]\n", jdata);
-	ws_send(out, jdata, strlen(jdata));
-	json_object_put(jobj);
+	ws_send(out, json_str, strlen(json_str));
+	json_object_put(root);
 }
 
+/**
+ * Periodic heartbeat callback
+ *
+ * Called every 60 seconds to send a heartbeat message to the server
+ * to maintain the WebSocket connection and sync gateway states.
+ *
+ * @param fd Unused socket descriptor
+ * @param event Unused event flags
+ * @param arg Pointer to the WebSocket bufferevent
+ */
 static void
 ws_heartbeat_cb(evutil_socket_t fd, short event, void *arg)
 {
