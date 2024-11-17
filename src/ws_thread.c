@@ -150,46 +150,78 @@ handle_tmp_pass_response(json_object *j_tmp_pass)
 	fw_set_mac_temporary(client_mac_str, timeout_value);
 }
 
+/**
+ * Handle heartbeat response from WebSocket server
+ *
+ * Processes heartbeat response messages containing gateway status updates.
+ * The response JSON format is:
+ * {
+ *   "type": "heartbeat",
+ *   "gateway": [
+ *     {
+ *       "gw_id": "<gateway_id>",
+ *       "auth_mode": <mode_number>
+ *     },
+ *     ...
+ *   ]
+ * }
+ *
+ * Updates local gateway settings and reloads firewall rules if any
+ * authentication modes have changed.
+ *
+ * @param j_heartbeat JSON object containing the heartbeat response
+ */
 static void
 handle_heartbeat_response(json_object *j_heartbeat)
 {
-	// heartbeat response content is {"type":"heartbeat", gateway:[{"gw_id":"gw_id", "auth_mode":1},...]}
+	// Extract gateway array from response
 	json_object *gw_array = json_object_object_get(j_heartbeat, "gateway");
-	if(gw_array == NULL){
-		debug(LOG_ERR, "heartbeat: parse json data failed\n");
+	if (!gw_array || !json_object_is_type(gw_array, json_type_array)) {
+		debug(LOG_ERR, "Heartbeat: Invalid or missing gateway array");
 		return;
 	}
-	assert(json_object_is_type(gw_array, json_type_array));
 
-	int state_changed = 0;
-	int gw_num = json_object_array_length(gw_array);
-	for(int i = 0; i < gw_num; i++){
+	// Track if any gateway states changed
+	bool state_changed = false;
+	
+	// Process each gateway in the array
+	int gw_count = json_object_array_length(gw_array);
+	for (int i = 0; i < gw_count; i++) {
 		json_object *gw = json_object_array_get_idx(gw_array, i);
 		json_object *gw_id = json_object_object_get(gw, "gw_id");
 		json_object *auth_mode = json_object_object_get(gw, "auth_mode");
-		if (gw_id == NULL || auth_mode == NULL) {
-			debug(LOG_ERR, "heartbeat: parse json data failed\n");
+
+		// Validate required fields exist
+		if (!gw_id || !auth_mode) {
+			debug(LOG_ERR, "Heartbeat: Missing required gateway fields");
 			continue;
 		}
+
+		// Get gateway values
 		const char *gw_id_str = json_object_get_string(gw_id);
-		int auth_mode_int = json_object_get_int(auth_mode);
+		int new_auth_mode = json_object_get_int(auth_mode);
+
+		// Find matching local gateway
 		t_gateway_setting *gw_setting = get_gateway_setting_by_id(gw_id_str);
-		if (gw_setting == NULL) {
-			debug(LOG_ERR, "heartbeat: gateway %s not found\n", gw_id_str);
+		if (!gw_setting) {
+			debug(LOG_ERR, "Heartbeat: Gateway %s not found", gw_id_str);
 			continue;
 		}
-		if (gw_setting->auth_mode != auth_mode_int) {
-			gw_setting->auth_mode = auth_mode_int;
-			debug(LOG_DEBUG, "heartbeat: gateway %s auth_mode %d\n", gw_id_str, auth_mode_int);
-			state_changed = 1;
+
+		// Update auth mode if changed
+		if (gw_setting->auth_mode != new_auth_mode) {
+			debug(LOG_DEBUG, "Heartbeat: Gateway %s auth mode changed to %d", 
+				  gw_id_str, new_auth_mode);
+			gw_setting->auth_mode = new_auth_mode;
+			state_changed = true;
 		}
 	}
 
+	// Reload firewall if any states changed
 	if (state_changed) {
-		debug(LOG_DEBUG, "gateway state changed, reload firewall\n");
+		debug(LOG_DEBUG, "Gateway states changed, reloading firewall rules");
 		nft_reload_gw();
 	}
-
 }
 
 /**
