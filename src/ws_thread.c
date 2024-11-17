@@ -478,71 +478,92 @@ wsevent_connection_cb(struct bufferevent* b_ws, short events, void *ctx){
 	}
 }
 
-/*
- * launch websocket thread
+/**
+ * Initialize and start the WebSocket client thread
+ * 
+ * This function:
+ * - Sets up SSL/TLS context and connection
+ * - Creates libevent bases for events and DNS
+ * - Establishes WebSocket connection to server
+ * - Runs the event loop
+ *
+ * @param arg Unused argument (required by thread API)
  */
 void
-start_ws_thread(void *arg)
+start_ws_thread(void *arg) 
 {
 	t_ws_server *ws_server = get_ws_server();
-	if (!RAND_poll()) termination_handler(0);
 
-	/* Create a new OpenSSL context */
+	// Initialize SSL
+	if (!RAND_poll()) {
+		termination_handler(0);
+	}
+
 	ssl_ctx = SSL_CTX_new(SSLv23_method());
-	if (!ssl_ctx) termination_handler(0);
+	if (!ssl_ctx) {
+		termination_handler(0);
+	}
 
 	ssl = SSL_new(ssl_ctx);
-	if (!ssl) termination_handler(0);
+	if (!ssl) {
+		termination_handler(0);
+	}
 
-	// authserv_hostname is the hostname of the auth server, must be domain name
-    if (!SSL_set_tlsext_host_name(ssl, ws_server->hostname)) {
-        debug(LOG_ERR, "SSL_set_tlsext_host_name failed");
-        termination_handler(0);
-    }
+	// Set SSL SNI hostname
+	if (!SSL_set_tlsext_host_name(ssl, ws_server->hostname)) {
+		debug(LOG_ERR, "SSL_set_tlsext_host_name failed");
+		termination_handler(0);
+	}
 
-    ws_base = event_base_new();
+	// Setup event bases
+	ws_base = event_base_new();
 	if (ws_base == NULL) {
-		debug(LOG_ERR, "create event base failed\n");
+		debug(LOG_ERR, "Failed to create event base");
 		termination_handler(0);
 	}
-    ws_dnsbase = evdns_base_new(ws_base, 1);
+
+	ws_dnsbase = evdns_base_new(ws_base, 1);
 	if (ws_dnsbase == NULL) {
-		debug(LOG_ERR, "create dns base failed\n");
+		debug(LOG_ERR, "Failed to create DNS base");
 		termination_handler(0);
 	}
 
-    struct bufferevent *ws_bev = NULL;
+	// Connect to WebSocket server with retry
+	struct bufferevent *ws_bev = NULL;
 	while (1) {
-        ws_bev = create_ws_bufferevent();
-        int ret = bufferevent_socket_connect_hostname(ws_bev, ws_dnsbase, AF_INET, 
-                                                      ws_server->hostname, ws_server->port);
-        upgraded = false;
-        if (ret < 0) {
-            debug(LOG_ERR, "bufferevent_socket_connect_hostname error: %s\n", strerror(errno));
-            bufferevent_free(ws_bev);
-            sleep(1); // Wait before retrying
-        } else {
-            break; // Successfully connected
-        }
-    }
+		ws_bev = create_ws_bufferevent();
+		int ret = bufferevent_socket_connect_hostname(ws_bev, ws_dnsbase, AF_INET,
+													ws_server->hostname, 
+													ws_server->port);
+		upgraded = false;
+		
+		if (ret < 0) {
+			debug(LOG_ERR, "Connection failed: %s", strerror(errno));
+			bufferevent_free(ws_bev);
+			sleep(1);
+		} else {
+			break;
+		}
+	}
 
-	debug(LOG_DEBUG, "ws thread started\n");
+	debug(LOG_DEBUG, "WebSocket thread started");
 	event_base_dispatch(ws_base);
 
+	// Cleanup
 	if (ws_base) event_base_free(ws_base);
 	if (ws_dnsbase) evdns_base_free(ws_dnsbase, 0);
 	if (ws_bev) bufferevent_free(ws_bev);
 	if (ssl) SSL_free(ssl);
 	if (ssl_ctx) SSL_CTX_free(ssl_ctx);
-
-    return;
 }
 
-/*
- * stop ws thread
+/**
+ * Stop the WebSocket client thread
+ * 
+ * Forces the event loop to exit, triggering cleanup
  */
 void
 stop_ws_thread()
 {
-    event_base_loopexit(ws_base, NULL);
+	event_base_loopexit(ws_base, NULL);
 }
