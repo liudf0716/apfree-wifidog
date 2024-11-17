@@ -325,27 +325,37 @@ cleanup:
 }
 
 /**
- * @brief Set wifidog request header when connection auth server
+ * @brief Sets standard HTTP headers for requests to the auth server
  * 
- * @param req The http request
- * @param host The auth server's host
- */ 
+ * @param req The HTTP request to modify
+ * @param host The auth server's hostname
+ * 
+ * This function sets the following headers:
+ * - Host: Authentication server hostname
+ * - Content-Type: text/html
+ * - Cache control headers to prevent caching
+ * - Connection: close
+ * - User-Agent: ApFree-WiFiDog
+ */
 void
 wd_set_request_header(struct evhttp_request *req, const char *host)
 {
-	struct evkeyvalq *output_headers = evhttp_request_get_output_headers(req);
+	// Get the output headers collection once
+	struct evkeyvalq *headers = evhttp_request_get_output_headers(req);
+	if (!headers || !host) return;
 
-	evhttp_add_header(output_headers, "Host", host);
-	evhttp_add_header(evhttp_request_get_output_headers(req),
-		    "Content-Type", "text/html");
-	evhttp_add_header(evhttp_request_get_output_headers(req),
-		    "Cache-Control", "no-store, must-revalidate");
-	evhttp_add_header(evhttp_request_get_output_headers(req),
-		    "Expires", "0");
-	evhttp_add_header(evhttp_request_get_output_headers(req),
-		    "Pragma", "no-cache");
-	evhttp_add_header(output_headers, "Connection", "close");
-	evhttp_add_header(output_headers, "User-Agent", "ApFree-WiFiDog");
+	// Set required headers
+	evhttp_add_header(headers, "Host", host);
+	evhttp_add_header(headers, "Content-Type", "text/html");
+	
+	// Disable caching
+	evhttp_add_header(headers, "Cache-Control", "no-store, must-revalidate");
+	evhttp_add_header(headers, "Expires", "0");
+	evhttp_add_header(headers, "Pragma", "no-cache");
+	
+	// Connection management
+	evhttp_add_header(headers, "Connection", "close");
+	evhttp_add_header(headers, "User-Agent", "ApFree-WiFiDog");
 }
 
 /**
