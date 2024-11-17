@@ -422,24 +422,51 @@ ws_read_cb(struct bufferevent *b_ws, void *ctx)
 	}
 }
 
+/**
+ * Create and configure a new bufferevent for WebSocket connection
+ *
+ * This function creates a new bufferevent for either plain TCP or SSL/TLS
+ * WebSocket connections based on server configuration. It:
+ * - Creates bufferevent with appropriate SSL settings if needed
+ * - Configures callbacks for reading and connection events
+ * - Enables read/write operations
+ *
+ * @return struct bufferevent* Configured bufferevent ready for connection,
+ *         or NULL on allocation failure
+ */
 static struct bufferevent *
-create_ws_bufferevent()
+create_ws_bufferevent(void)
 {
-    t_ws_server *ws_server = get_ws_server();
-    struct bufferevent *bev = NULL;
+	t_ws_server *ws_server = get_ws_server();
+	struct bufferevent *bev = NULL;
 
-    if (ws_server->use_ssl) {
-        bev = bufferevent_openssl_socket_new(ws_base, -1, ssl,
-            BUFFEREVENT_SSL_CONNECTING, BEV_OPT_CLOSE_ON_FREE|BEV_OPT_DEFER_CALLBACKS);
-    } else {
-        bev = bufferevent_socket_new(ws_base, -1, BEV_OPT_CLOSE_ON_FREE|BEV_OPT_DEFER_CALLBACKS);
-    }
+	// Create bufferevent with SSL if needed
+	if (ws_server->use_ssl) {
+		bev = bufferevent_openssl_socket_new(
+			ws_base,
+			-1,
+			ssl,
+			BUFFEREVENT_SSL_CONNECTING,
+			BEV_OPT_CLOSE_ON_FREE | BEV_OPT_DEFER_CALLBACKS
+		);
+	} else {
+		bev = bufferevent_socket_new(
+			ws_base,
+			-1,
+			BEV_OPT_CLOSE_ON_FREE | BEV_OPT_DEFER_CALLBACKS
+		);
+	}
 
-    bufferevent_openssl_set_allow_dirty_shutdown(bev, 1);
-    bufferevent_setcb(bev, ws_read_cb, NULL, wsevent_connection_cb, NULL);
-    bufferevent_enable(bev, EV_READ|EV_WRITE);
+	if (!bev) {
+		return NULL;
+	}
 
-    return bev;
+	// Configure bufferevent settings
+	bufferevent_openssl_set_allow_dirty_shutdown(bev, 1);
+	bufferevent_setcb(bev, ws_read_cb, NULL, wsevent_connection_cb, NULL);
+	bufferevent_enable(bev, EV_READ | EV_WRITE);
+
+	return bev;
 }
 
 /**
