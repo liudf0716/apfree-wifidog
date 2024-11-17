@@ -32,43 +32,75 @@ static SSL *ssl = NULL;
 static void ws_heartbeat_cb(evutil_socket_t , short , void *);
 static void wsevent_connection_cb(struct bufferevent* , short , void *);
 
+/**
+ * Handle client kickoff response from WebSocket server
+ *
+ * Processes client disconnection requests with format:
+ * {
+ *   "client_ip": "<ip_address>",
+ *   "client_mac": "<mac_address>",
+ *   "device_id": "<device_id>", 
+ *   "gw_id": "<gateway_id>"
+ * }
+ *
+ * Validates the request and removes the client by:
+ * 1. Verifying all required fields are present
+ * 2. Checking client exists in local database
+ * 3. Validating device ID and gateway ID match
+ * 4. Removing firewall rules and client entry
+ *
+ * @param j_auth JSON object containing the kickoff request
+ */
 static void
 handle_kickoff_response(json_object *j_auth)
 {
+	// Extract and validate required fields
 	json_object *client_ip = json_object_object_get(j_auth, "client_ip");
 	json_object *client_mac = json_object_object_get(j_auth, "client_mac");
 	json_object *device_id = json_object_object_get(j_auth, "device_id");
 	json_object *gw_id = json_object_object_get(j_auth, "gw_id");
-	if(client_ip == NULL || client_mac == NULL || device_id == NULL || gw_id == NULL){
-		debug(LOG_ERR, "kickoff: parse json data failed\n");
+
+	if (!client_ip || !client_mac || !device_id || !gw_id) {
+		debug(LOG_ERR, "Kickoff: Missing required fields in request");
 		return;
 	}
 
+	// Get field values
 	const char *client_ip_str = json_object_get_string(client_ip);
 	const char *client_mac_str = json_object_get_string(client_mac);
 	const char *device_id_str = json_object_get_string(device_id);
 	const char *gw_id_str = json_object_get_string(gw_id);
+
+	// Find target client
 	t_client *client = client_list_find(client_ip_str, client_mac_str);
-	if (client == NULL) {
-		debug(LOG_ERR, "kickoff: client %s %s not found\n", client_ip_str, client_mac_str);
-		return;
-	}
-	
-	if (get_device_id() == NULL || strcmp(get_device_id(), device_id_str) != 0) {
-		debug(LOG_ERR, "kickoff: device_id %s not match\n", device_id_str);
+	if (!client) {
+		debug(LOG_ERR, "Kickoff: Client %s (%s) not found", 
+			  client_mac_str, client_ip_str);
 		return;
 	}
 
-	if (client->gw_setting == NULL || strcmp(client->gw_setting->gw_id, gw_id_str) != 0) {
-		debug(LOG_ERR, "kickoff: client %s %s gw_id %s not match\n", client_ip_str, client_mac_str, gw_id_str);
+	// Validate device ID matches
+	const char *local_device_id = get_device_id();
+	if (!local_device_id || strcmp(local_device_id, device_id_str) != 0) {
+		debug(LOG_ERR, "Kickoff: Device ID mismatch - expected %s", device_id_str);
 		return;
 	}
 
+	// Validate gateway ID matches
+	if (!client->gw_setting || strcmp(client->gw_setting->gw_id, gw_id_str) != 0) {
+		debug(LOG_ERR, "Kickoff: Gateway mismatch for client %s - expected %s",
+			  client_mac_str, gw_id_str);
+		return;
+	}
+
+	// Remove client
 	LOCK_CLIENT_LIST();
 	fw_deny(client);
 	client_list_remove(client);
 	client_free_node(client);
 	UNLOCK_CLIENT_LIST();
+
+	debug(LOG_DEBUG, "Kicked off client %s (%s)", client_mac_str, client_ip_str);
 }
 
 /**
