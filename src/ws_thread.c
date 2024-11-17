@@ -326,28 +326,43 @@ ws_receive(unsigned char *data, const size_t data_len){
     }
 }
 
+/**
+ * Send WebSocket upgrade request to server
+ *
+ * Constructs and sends the initial HTTP upgrade request to establish
+ * a WebSocket connection. The request includes:
+ * - HTTP GET request with WebSocket path
+ * - Required WebSocket headers (Upgrade, Connection, Key, Version)
+ * - Host and Origin headers based on server configuration
+ *
+ * @param b_ws Bufferevent for the WebSocket connection
+ */
 static void 
 ws_request(struct bufferevent* b_ws)
 {
 	struct evbuffer *out = bufferevent_get_output(b_ws);
 	t_ws_server *ws_server = get_ws_server();
-	debug (LOG_DEBUG, "ws_request :  is %s\n", ws_server->path);
-	evbuffer_add_printf(out, "GET %s HTTP/1.1\r\n", ws_server->path);
-    if (!ws_server->use_ssl) {
-		evbuffer_add_printf(out, "Host:%s:%d\r\n",ws_server->hostname, ws_server->port);
-	} else {
-		evbuffer_add_printf(out, "Host:%s:%d\r\n",ws_server->hostname, ws_server->port);
-	}
-    evbuffer_add_printf(out, "Upgrade:websocket\r\n");
-	evbuffer_add_printf(out, "Connection:upgrade\r\n");
-	evbuffer_add_printf(out, "Sec-WebSocket-Key:%s\r\n", fixed_key);
-	evbuffer_add_printf(out, "Sec-WebSocket-Version:13\r\n");
-    if (!ws_server->use_ssl) {
-		evbuffer_add_printf(out, "Origin:http://%s:%d\r\n", ws_server->hostname, ws_server->port);
-	} else {
-		evbuffer_add_printf(out, "Origin:https://%s:%d\r\n", ws_server->hostname, ws_server->port);
-	}
-	evbuffer_add_printf(out, "\r\n");
+	
+	debug(LOG_DEBUG, "Sending WebSocket upgrade request to path: %s", ws_server->path);
+
+	// Build HTTP request headers
+	const char *scheme = ws_server->use_ssl ? "https" : "http";
+	
+	// Required WebSocket headers
+	evbuffer_add_printf(out, 
+		"GET %s HTTP/1.1\r\n"
+		"Host: %s:%d\r\n"
+		"Upgrade: websocket\r\n"
+		"Connection: upgrade\r\n"
+		"Sec-WebSocket-Key: %s\r\n"
+		"Sec-WebSocket-Version: 13\r\n"
+		"Origin: %s://%s:%d\r\n"
+		"\r\n",
+		ws_server->path,
+		ws_server->hostname, ws_server->port,
+		fixed_key,
+		scheme, ws_server->hostname, ws_server->port
+	);
 }
 
 /**
