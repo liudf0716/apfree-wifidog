@@ -71,65 +71,93 @@ handle_kickoff_response(json_object *j_auth)
 	UNLOCK_CLIENT_LIST();
 }
 
+/**
+ * Handle authentication response from WebSocket server
+ *
+ * Processes client authentication responses with format:
+ * {
+ *   "token": "<auth_token>",
+ *   "client_ip": "<ip_address>",
+ *   "client_mac": "<mac_address>", 
+ *   "client_name": "<name>",         // Optional
+ *   "gw_id": "<gateway_id>",
+ *   "once_auth": <boolean>
+ * }
+ *
+ * Handles two cases:
+ * 1. Once-auth: Updates gateway auth mode to 0 and reloads firewall
+ * 2. Regular auth: Adds client to allowed list with firewall rules
+ *
+ * @param j_auth JSON object containing the auth response
+ */
 static void
 handle_auth_response(json_object *j_auth)
 {
+	// Extract required fields
 	json_object *token = json_object_object_get(j_auth, "token");
 	json_object *client_ip = json_object_object_get(j_auth, "client_ip");
 	json_object *client_mac = json_object_object_get(j_auth, "client_mac");
-	json_object *client_name = json_object_object_get(j_auth, "client_name");
 	json_object *gw_id = json_object_object_get(j_auth, "gw_id");
 	json_object *once_auth = json_object_object_get(j_auth, "once_auth");
-	if(token == NULL || client_ip == NULL || client_mac == NULL || gw_id == NULL || once_auth == NULL){
-		debug(LOG_ERR, "auth: parse json data failed\n");
+	json_object *client_name = json_object_object_get(j_auth, "client_name");
+
+	// Validate required fields
+	if (!token || !client_ip || !client_mac || !gw_id || !once_auth) {
+		debug(LOG_ERR, "Auth: Missing required fields in JSON response");
 		return;
 	}
 
 	const char *gw_id_str = json_object_get_string(gw_id);
-	const bool once_auth_bool = json_object_get_boolean(once_auth);
-	if (once_auth_bool) {
-		t_gateway_setting *gw_setting = get_gateway_setting_by_id(gw_id_str);
-		if (gw_setting == NULL) {
-			debug(LOG_ERR, "auth: gateway %s not found\n", gw_id_str);
-			return;
-		}
+	t_gateway_setting *gw_setting = get_gateway_setting_by_id(gw_id_str);
+	if (!gw_setting) {
+		debug(LOG_ERR, "Auth: Gateway %s not found", gw_id_str);
+		return;
+	}
+
+	// Handle once-auth mode
+	if (json_object_get_boolean(once_auth)) {
 		gw_setting->auth_mode = 0;
-		debug(LOG_DEBUG, 
-			"auth: once_auth is true, update gw_setting's auth_mode [%d] and refresh gw rule\n", gw_setting->auth_mode);
+		debug(LOG_DEBUG, "Auth: Once-auth enabled, setting gateway %s auth mode to 0", gw_id_str);
 		nft_reload_gw();
 		return;
 	}
 
-	const char *token_str = json_object_get_string(token);
+	// Handle regular authentication
 	const char *client_ip_str = json_object_get_string(client_ip);
 	const char *client_mac_str = json_object_get_string(client_mac);
-	if (client_list_find(client_ip_str, client_mac_str) == NULL)  {
-		t_gateway_setting *gw_setting = get_gateway_setting_by_id(gw_id_str);
-		if (gw_setting == NULL) {
-			debug(LOG_ERR, "auth: gateway %s not found\n", gw_id_str);
-			return;
-		}
-		LOCK_CLIENT_LIST();
-		t_client *client = client_list_add(client_ip_str, client_mac_str, token_str, gw_setting);
-		fw_allow(client, FW_MARK_KNOWN);
-		if (client_name != NULL) {
-			client->name = strdup(json_object_get_string(client_name));
-		}
-		client->first_login = time(NULL);
-		client->is_online = 1;
-		UNLOCK_CLIENT_LIST();
-		{
-			LOCK_OFFLINE_CLIENT_LIST();
-			t_offline_client *o_client = offline_client_list_find_by_mac(client->mac);    
-			if(o_client)
-				offline_client_list_delete(o_client);
-			UNLOCK_OFFLINE_CLIENT_LIST();
-		}
-		debug(LOG_DEBUG, "fw_allow client: token %s, client_ip %s, client_mac %s gw_setting is %lu\n", 
-			token_str, client_ip_str, client_mac_str, client->gw_setting);
-	} else {
-		debug(LOG_DEBUG, "client already exists: token %s, client_ip %s, client_mac %s\n", token_str, client_ip_str, client_mac_str);
+	const char *token_str = json_object_get_string(token);
+
+	// Skip if client already exists
+	if (client_list_find(client_ip_str, client_mac_str)) {
+		debug(LOG_DEBUG, "Auth: Client %s (%s) already authenticated", 
+			  client_mac_str, client_ip_str);
+		return;
 	}
+
+	// Add new client with firewall rules
+	LOCK_CLIENT_LIST();
+	t_client *client = client_list_add(client_ip_str, client_mac_str, token_str, gw_setting);
+	fw_allow(client, FW_MARK_KNOWN);
+
+	// Set optional client name if provided
+	if (client_name) {
+		client->name = strdup(json_object_get_string(client_name));
+	}
+
+	client->first_login = time(NULL);
+	client->is_online = 1;
+	UNLOCK_CLIENT_LIST();
+
+	// Remove from offline list if present
+	LOCK_OFFLINE_CLIENT_LIST();
+	t_offline_client *o_client = offline_client_list_find_by_mac(client->mac);
+	if (o_client) {
+		offline_client_list_delete(o_client);
+	}
+	UNLOCK_OFFLINE_CLIENT_LIST();
+
+	debug(LOG_DEBUG, "Auth: Added client %s (%s) with token %s",
+		  client_mac_str, client_ip_str, token_str);
 }
 
 /**
