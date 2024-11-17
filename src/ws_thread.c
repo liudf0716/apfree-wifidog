@@ -15,22 +15,59 @@
 #include "fw_nft.h"
 #include "wd_util.h"
 
+/**
+ * Maximum size of WebSocket output buffer in bytes
+ */
 #define MAX_OUTPUT (512*1024)
+
+/**
+ * Network byte order conversion for 64-bit integers
+ * Handles both big and little endian architectures
+ */
 #define htonll(x) ((1==htonl(1)) ? (x) : ((uint64_t)htonl((x) & 0xFFFFFFFF) << 32) | htonl((x) >> 32))
 #define ntohll(x) htonll(x)
 
-static struct event_base *ws_base;
-static struct evdns_base *ws_dnsbase;
-static struct event *ws_heartbeat_ev;
-static char *fixed_key = "dGhlIHNhbXBsZSBub25jZQ==";
-static char *fixed_accept = "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=";
-static bool upgraded = false;
+/**
+ * Global WebSocket connection state
+ */
+static struct {
+	struct event_base *base;      /* Main event loop base */
+	struct evdns_base *dnsbase;   /* DNS resolver base */
+	struct event *heartbeat_ev;   /* Heartbeat timer event */
+	bool upgraded;                /* WebSocket upgrade completed flag */
+} ws_state = {
+	.base = NULL,
+	.dnsbase = NULL, 
+	.heartbeat_ev = NULL,
+	.upgraded = false
+};
 
-static SSL_CTX *ssl_ctx = NULL;
-static SSL *ssl = NULL;
+/**
+ * SSL/TLS connection state
+ */
+static struct {
+	SSL_CTX *ctx;                /* SSL context */
+	SSL *ssl;                    /* SSL connection */
+} ssl_state = {
+	.ctx = NULL,
+	.ssl = NULL
+};
 
-static void ws_heartbeat_cb(evutil_socket_t , short , void *);
-static void wsevent_connection_cb(struct bufferevent* , short , void *);
+/**
+ * WebSocket handshake constants
+ * Fixed values used for testing/development
+ * TODO: Generate random key and accept token for production
+ */
+static const char *WS_KEY = "dGhlIHNhbXBsZSBub25jZQ==";
+static const char *WS_ACCEPT = "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=";
+
+/* Forward declarations for callback functions */
+static void ws_heartbeat_cb(evutil_socket_t fd, short events, void *arg);
+static void wsevent_connection_cb(struct bufferevent *bev, short events, void *ctx);
+static void handle_auth_response(json_object *j_auth);
+static void handle_kickoff_response(json_object *j_auth);
+static void cleanup_connection(struct bufferevent *bev);
+static void reconnect_websocket(void);
 
 /**
  * Handle client kickoff response from WebSocket server
@@ -325,9 +362,9 @@ static void
 start_ws_heartbeat(struct bufferevent *b_ws)
 {
 	// Clean up existing timer if any
-	if (ws_heartbeat_ev != NULL) {
-		event_free(ws_heartbeat_ev);
-		ws_heartbeat_ev = NULL;
+	if (ws_state.heartbeat_ev != NULL) {
+		event_free(ws_state.heartbeat_ev);
+		ws_state.heartbeat_ev = NULL;
 	}
 
 	// Set 60 second interval
@@ -337,9 +374,9 @@ start_ws_heartbeat(struct bufferevent *b_ws)
 	};
 
 	// Create persistent timer event
-	ws_heartbeat_ev = event_new(ws_base, -1, EV_PERSIST, ws_heartbeat_cb, b_ws);
-	if (ws_heartbeat_ev) {
-		event_add(ws_heartbeat_ev, &tv);
+	ws_state.heartbeat_ev = event_new(ws_state.base, -1, EV_PERSIST, ws_heartbeat_cb, b_ws);
+	if (ws_state.heartbeat_ev) {
+		event_add(ws_state.heartbeat_ev, &tv);
 	}
 }
 
@@ -542,7 +579,7 @@ ws_request(struct bufferevent* b_ws)
 		"\r\n",
 		ws_server->path,
 		ws_server->hostname, ws_server->port,
-		fixed_key,
+		WS_KEY,
 		scheme, ws_server->hostname, ws_server->port
 	);
 }
@@ -651,7 +688,7 @@ ws_read_cb(struct bufferevent *b_ws, void *ctx)
 	}
 
 	// Handle HTTP upgrade handshake
-	if (!upgraded) {
+	if (!ws_state.upgraded) {
 		// Wait for complete HTTP response
 		if (!strstr((const char*)data, "\r\n\r\n")) {
 			debug(LOG_DEBUG, "Incomplete HTTP response");
@@ -660,13 +697,13 @@ ws_read_cb(struct bufferevent *b_ws, void *ctx)
 
 		// Verify upgrade response
 		if (strncmp((const char*)data, "HTTP/1.1 101", strlen("HTTP/1.1 101")) != 0 
-			|| !strstr((const char*)data, fixed_accept)) {
+			|| !strstr((const char*)data, WS_ACCEPT)) {
 			debug(LOG_ERR, "Invalid WebSocket upgrade response");
 			return;
 		}
 
 		debug(LOG_DEBUG, "WebSocket upgrade successful");
-		upgraded = true;
+		ws_state.upgraded = true;
 
 		// Send initial connect message
 		struct evbuffer *output = bufferevent_get_output(b_ws);
@@ -696,34 +733,54 @@ ws_read_cb(struct bufferevent *b_ws, void *ctx)
 static struct bufferevent *
 create_ws_bufferevent(void)
 {
-	t_ws_server *ws_server = get_ws_server();
 	struct bufferevent *bev = NULL;
+	t_ws_server *ws_server = get_ws_server();
+	if (!ws_server) {
+		debug(LOG_ERR, "No WebSocket server configuration available");
+		return NULL;
+	}
 
-	// Create bufferevent with SSL if needed
+	// Set common bufferevent options
+	int options = BEV_OPT_CLOSE_ON_FREE | BEV_OPT_DEFER_CALLBACKS;
+
+	// Create appropriate bufferevent based on SSL setting
 	if (ws_server->use_ssl) {
+		if (!ssl_state.ssl) {
+			debug(LOG_ERR, "SSL context not initialized");
+			return NULL;
+		}
+		
 		bev = bufferevent_openssl_socket_new(
-			ws_base,
+			ws_state.base,
 			-1,
-			ssl,
+			ssl_state.ssl,
 			BUFFEREVENT_SSL_CONNECTING,
-			BEV_OPT_CLOSE_ON_FREE | BEV_OPT_DEFER_CALLBACKS
+			options
 		);
 	} else {
 		bev = bufferevent_socket_new(
-			ws_base,
-			-1,
-			BEV_OPT_CLOSE_ON_FREE | BEV_OPT_DEFER_CALLBACKS
+			ws_state.base,
+			-1, 
+			options
 		);
 	}
 
 	if (!bev) {
+		debug(LOG_ERR, "Failed to create bufferevent");
 		return NULL;
 	}
 
-	// Configure bufferevent settings
-	bufferevent_openssl_set_allow_dirty_shutdown(bev, 1);
+	// Configure SSL settings if needed
+	if (ws_server->use_ssl) {
+		bufferevent_openssl_set_allow_dirty_shutdown(bev, 1);
+	}
+
+	// Set callbacks and enable read/write
 	bufferevent_setcb(bev, ws_read_cb, NULL, wsevent_connection_cb, NULL);
 	bufferevent_enable(bev, EV_READ | EV_WRITE);
+
+	debug(LOG_DEBUG, "Created bufferevent for %s connection", 
+		  ws_server->use_ssl ? "SSL" : "plain");
 
 	return bev;
 }
@@ -743,127 +800,255 @@ create_ws_bufferevent(void)
 static void 
 wsevent_connection_cb(struct bufferevent* b_ws, short events, void *ctx)
 {
-	// Handle successful connection
 	if (events & BEV_EVENT_CONNECTED) {
+		// Connection succeeded - initiate WebSocket handshake
 		debug(LOG_DEBUG, "Connected to WebSocket server, initiating handshake");
 		ws_request(b_ws);
 		return;
 	}
 
-	// Handle connection errors and EOF
+	// Handle connection failure cases
 	if (events & (BEV_EVENT_ERROR | BEV_EVENT_EOF)) {
-		debug(LOG_ERR, "WebSocket connection error: %s", strerror(errno));
-
-		// Stop heartbeat timer
-		if (ws_heartbeat_ev) {
-			event_free(ws_heartbeat_ev);
-			ws_heartbeat_ev = NULL;
+		// Get specific error details
+		int err = bufferevent_socket_get_dns_error(b_ws);
+		if (err) {
+			debug(LOG_ERR, "WebSocket DNS error: %s", evutil_gai_strerror(err));
+		} else {
+			debug(LOG_ERR, "WebSocket connection error: %s", evutil_socket_error_to_string(errno));
 		}
 
-		// Add delay before reconnect attempt
-		// Longer delay on EOF (reset by peer)
-		sleep((events & BEV_EVENT_EOF) ? 5 : 2);
+		// Clean up existing connection state
+		cleanup_connection(b_ws);
 
-		// Clean up existing connection
-		if (b_ws) {
-			bufferevent_free(b_ws);
-		}
+		// Calculate reconnect delay - longer for EOF
+		int delay = (events & BEV_EVENT_EOF) ? 5 : 2;
+		debug(LOG_DEBUG, "Waiting %d seconds before reconnect attempt", delay);
+		sleep(delay);
 
 		// Attempt reconnection
-		b_ws = create_ws_bufferevent();
-		upgraded = false;
-
-		int ret = bufferevent_socket_connect_hostname(b_ws, ws_dnsbase, AF_INET,
-													get_ws_server()->hostname,
-													get_ws_server()->port);
-		if (ret < 0) {
-			debug(LOG_ERR, "Reconnection failed: %s", strerror(errno));
-			bufferevent_free(b_ws);
-		}
+		reconnect_websocket();
 		return;
 	}
 
-	// Handle other unexpected events
-	debug(LOG_ERR, "Unexpected WebSocket event: %s", strerror(errno));
+	debug(LOG_ERR, "Unexpected WebSocket event: 0x%x", events);
 }
 
 /**
- * Initialize and start the WebSocket client thread
+ * @brief Static helper function used within the WebSocket thread context
  * 
- * This function:
- * - Sets up SSL/TLS context and connection
- * - Creates libevent bases for events and DNS
- * - Establishes WebSocket connection to server
- * - Runs the event loop
+ * This function is a private implementation detail of the WebSocket thread handling.
+ * The actual purpose and behavior should be documented based on the function's
+ * specific implementation.
  *
- * @param arg Unused argument (required by thread API)
+ * @note This is a static function and is not accessible outside of the ws_thread.c file
  */
-void
-start_ws_thread(void *arg) 
+static void
+cleanup_connection(struct bufferevent *bev)
+{
+	// Stop heartbeat timer
+	if (ws_state.heartbeat_ev) {
+		event_free(ws_state.heartbeat_ev);
+		ws_state.heartbeat_ev = NULL;
+	}
+
+	// Reset connection state
+	ws_state.upgraded = false;
+
+	// Free the bufferevent
+	if (bev) {
+		bufferevent_free(bev);
+	}
+}
+
+/**
+ * @brief Marks function as static, indicating private scope within the source file
+ * 
+ * This function is defined in ws_thread.c and is only accessible within that
+ * translation unit. The 'static' keyword prevents external linkage.
+ */
+static void 
+reconnect_websocket(void)
+{
+	struct bufferevent *bev = create_ws_bufferevent();
+	if (!bev) {
+		debug(LOG_ERR, "Failed to create new bufferevent for reconnection");
+		return;
+	}
+
+	t_ws_server *server = get_ws_server();
+	int ret = bufferevent_socket_connect_hostname(
+		bev,
+		ws_state.dnsbase,
+		AF_INET, 
+		server->hostname,
+		server->port
+	);
+
+	if (ret < 0) {
+		debug(LOG_ERR, "Reconnection failed: %s", evutil_socket_error_to_string(errno));
+		bufferevent_free(bev);
+	} else {
+		debug(LOG_DEBUG, "Reconnection attempt initiated");
+	}
+}
+
+/**
+ * @brief Function prefix for a static function definition
+ * @return Returns an integer value indicating the operation status
+ * @note This is a static function and its scope is limited to the current file
+ */
+static int 
+setup_ssl(const char *hostname)
+{
+	if (!RAND_poll()) {
+		debug(LOG_ERR, "RAND_poll() failed");
+		return -1;
+	}
+
+	ssl_state.ctx = SSL_CTX_new(SSLv23_method());
+	if (!ssl_state.ctx) {
+		debug(LOG_ERR, "SSL_CTX_new() failed");
+		return -1;
+	}
+
+	ssl_state.ssl = SSL_new(ssl_state.ctx);
+	if (!ssl_state.ssl) {
+		debug(LOG_ERR, "SSL_new() failed");
+		SSL_CTX_free(ssl_state.ctx);
+		return -1;
+	}
+
+	if (!SSL_set_tlsext_host_name(ssl_state.ssl, hostname)) {
+		debug(LOG_ERR, "SSL_set_tlsext_host_name failed");
+		SSL_free(ssl_state.ssl);
+		SSL_CTX_free(ssl_state.ctx);
+		return -1;
+	}
+
+	return 0;
+}
+
+/**
+ * @brief Static helper function for WebSocket operations
+ * @return Returns an integer status code:
+ *         - Positive value on success
+ *         - Zero or negative value on failure
+ * 
+ * @note This function is for internal use only within ws_thread.c
+ */
+static int 
+setup_event_bases(void)
+{
+	ws_state.base = event_base_new();
+	if (!ws_state.base) {
+		debug(LOG_ERR, "Failed to create event base");
+		return -1;
+	}
+
+	ws_state.dnsbase = evdns_base_new(ws_state.base, 1);
+	if (!ws_state.dnsbase) {
+		debug(LOG_ERR, "Failed to create DNS base");
+		event_base_free(ws_state.base);
+		return -1;
+	}
+
+	return 0;
+}
+
+/**
+ * @brief Function prototype for a static function
+ * @details This function is file-scoped (static) and returns an integer value
+ * @return Returns an integer status code
+ */
+static int 
+connect_ws_server(t_ws_server *ws_server)
+{
+	struct bufferevent *ws_bev = NULL;
+	int max_retries = 5;
+	int retry_count = 0;
+
+	while (retry_count < max_retries) {
+		ws_bev = create_ws_bufferevent();
+		if (!ws_bev) {
+			debug(LOG_ERR, "Failed to create bufferevent");
+			sleep(1);
+			retry_count++;
+			continue;
+		}
+
+		int ret = bufferevent_socket_connect_hostname(
+			ws_bev,
+			ws_state.dnsbase,
+			AF_INET,
+			ws_server->hostname,
+			ws_server->port
+		);
+
+		if (ret >= 0) {
+			ws_state.upgraded = false;
+			return 0;
+		}
+
+		debug(LOG_ERR, "Connection attempt %d failed: %s", 
+			  retry_count + 1, strerror(errno));
+		bufferevent_free(ws_bev);
+		sleep(1);
+		retry_count++;
+	}
+
+	return -1;
+}
+
+/**
+ * @brief Starts the WebSocket server thread
+ * 
+ * This function initializes and starts a new thread dedicated to handling 
+ * WebSocket connections. It sets up the necessary WebSocket server infrastructure
+ * and begins listening for incoming client connections.
+ *
+ * @param arg Pointer to arguments passed to the thread (can be NULL)
+ *
+ * @return void
+ *
+ * @note This function runs in its own thread context
+ */
+void 
+start_ws_thread(void *arg)
 {
 	t_ws_server *ws_server = get_ws_server();
-
-	// Initialize SSL
-	if (!RAND_poll()) {
-		termination_handler(0);
+	if (!ws_server) {
+		debug(LOG_ERR, "No WebSocket server configuration");
+		return;
 	}
 
-	ssl_ctx = SSL_CTX_new(SSLv23_method());
-	if (!ssl_ctx) {
-		termination_handler(0);
-	}
-
-	ssl = SSL_new(ssl_ctx);
-	if (!ssl) {
-		termination_handler(0);
-	}
-
-	// Set SSL SNI hostname
-	if (!SSL_set_tlsext_host_name(ssl, ws_server->hostname)) {
-		debug(LOG_ERR, "SSL_set_tlsext_host_name failed");
-		termination_handler(0);
-	}
-
-	// Setup event bases
-	ws_base = event_base_new();
-	if (ws_base == NULL) {
-		debug(LOG_ERR, "Failed to create event base");
-		termination_handler(0);
-	}
-
-	ws_dnsbase = evdns_base_new(ws_base, 1);
-	if (ws_dnsbase == NULL) {
-		debug(LOG_ERR, "Failed to create DNS base");
-		termination_handler(0);
-	}
-
-	// Connect to WebSocket server with retry
-	struct bufferevent *ws_bev = NULL;
-	while (1) {
-		ws_bev = create_ws_bufferevent();
-		int ret = bufferevent_socket_connect_hostname(ws_bev, ws_dnsbase, AF_INET,
-													ws_server->hostname, 
-													ws_server->port);
-		upgraded = false;
-		
-		if (ret < 0) {
-			debug(LOG_ERR, "Connection failed: %s", strerror(errno));
-			bufferevent_free(ws_bev);
-			sleep(1);
-		} else {
-			break;
+	// Initialize SSL if needed
+	if (ws_server->use_ssl) {
+		if (setup_ssl(ws_server->hostname) < 0) {
+			debug(LOG_ERR, "SSL setup failed");
+			return;
 		}
 	}
 
-	debug(LOG_DEBUG, "WebSocket thread started");
-	event_base_dispatch(ws_base);
+	// Setup event and DNS bases
+	if (setup_event_bases() < 0) {
+		debug(LOG_ERR, "Event base setup failed");
+		goto cleanup;
+	}
 
-	// Cleanup
-	if (ws_base) event_base_free(ws_base);
-	if (ws_dnsbase) evdns_base_free(ws_dnsbase, 0);
-	if (ws_bev) bufferevent_free(ws_bev);
-	if (ssl) SSL_free(ssl);
-	if (ssl_ctx) SSL_CTX_free(ssl_ctx);
+	// Connect to WebSocket server
+	if (connect_ws_server(ws_server) < 0) {
+		debug(LOG_ERR, "Failed to connect to WebSocket server");
+		goto cleanup;
+	}
+
+	debug(LOG_DEBUG, "WebSocket thread started");
+	event_base_dispatch(ws_state.base);
+
+cleanup:
+	if (ws_state.base) event_base_free(ws_state.base);
+	if (ws_state.dnsbase) evdns_base_free(ws_state.dnsbase, 0);
+	if (ssl_state.ssl) SSL_free(ssl_state.ssl);
+	if (ssl_state.ctx) SSL_CTX_free(ssl_state.ctx);
 }
 
 /**
@@ -874,5 +1059,5 @@ start_ws_thread(void *arg)
 void
 stop_ws_thread()
 {
-	event_base_loopexit(ws_base, NULL);
+	event_base_loopexit(ws_state.base, NULL);
 }
