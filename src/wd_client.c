@@ -359,46 +359,65 @@ wd_set_request_header(struct evhttp_request *req, const char *host)
 }
 
 /**
- * @brief make http client request to auth server 
+ * @brief Creates an HTTP/HTTPS request to the authentication server
  * 
- * @param request_ctx which has set event_base and bufferevent
- * @param evcon it's out param
- * @param req	it's out param
- * @param cb  it's callback function for evhttp_request_new
- * @return 1 fail or 0 success
- * 
+ * @param request_ctx Context containing event base and bufferevent settings
+ * @param evcon Output parameter for the created HTTP connection
+ * @param req Output parameter for the created HTTP request
+ * @param cb Callback function to handle the request response
+ * @return int 0 on success, 1 on failure
+ *
+ * This function:
+ * 1. Creates an HTTP connection using the bufferevent from request context
+ * 2. Sets connection timeout
+ * 3. Creates new HTTP request with callback
+ * 4. Sets standard HTTP headers
+ *
+ * The caller is responsible for:
+ * - Freeing the connection with evhttp_connection_free()
+ * - Handling request lifecycle in the callback
  */
 int
 wd_make_request(struct wd_request_context *request_ctx, 
-	struct evhttp_connection **evcon, struct evhttp_request **req,
-	void (*cb)(struct evhttp_request *, void *))
+				struct evhttp_connection **evcon, 
+				struct evhttp_request **req,
+				void (*cb)(struct evhttp_request *, void *))
 {
-	struct bufferevent *bev = request_ctx->bev;
-	struct event_base *base = request_ctx->base;
-	t_auth_serv *auth_server = get_auth_server();
-	
-	debug(LOG_DEBUG, "auth_server->authserv_use_ssl: %d", auth_server->authserv_use_ssl);
-	if (!auth_server->authserv_use_ssl) {
-		*evcon = evhttp_connection_base_bufferevent_new(base, NULL, bev,
-				auth_server->authserv_hostname, auth_server->authserv_http_port);
-	} else {
-		*evcon = evhttp_connection_base_bufferevent_new(base, NULL, bev,
-				auth_server->authserv_hostname, auth_server->authserv_ssl_port);
-	}
-	if (!*evcon) {
-		debug(LOG_ERR, "evhttp_connection_base_bufferevent_new failed");
+	if (!request_ctx || !evcon || !req || !cb) {
+		debug(LOG_ERR, "Invalid parameters to wd_make_request");
 		return 1;
 	}
 
-	evhttp_connection_set_timeout(*evcon, WD_CONNECT_TIMEOUT); // 2 seconds
+	t_auth_serv *auth_server = get_auth_server();
+	struct bufferevent *bev = request_ctx->bev;
+	struct event_base *base = request_ctx->base;
+	int port = auth_server->authserv_use_ssl ? 
+			   auth_server->authserv_ssl_port : 
+			   auth_server->authserv_http_port;
+	
+	debug(LOG_DEBUG, "Creating %s connection to auth server", 
+		  auth_server->authserv_use_ssl ? "HTTPS" : "HTTP");
 
+	// Create HTTP connection with bufferevent
+	*evcon = evhttp_connection_base_bufferevent_new(base, NULL, bev,
+				auth_server->authserv_hostname, port);
+	if (!*evcon) {
+		debug(LOG_ERR, "Failed to create HTTP connection");
+		return 1;
+	}
+
+	// Set connection timeout
+	evhttp_connection_set_timeout(*evcon, WD_CONNECT_TIMEOUT);
+
+	// Create HTTP request with callback
 	*req = evhttp_request_new(cb, request_ctx);
 	if (!*req) {
-		debug(LOG_ERR, "evhttp_request_new failed");
+		debug(LOG_ERR, "Failed to create HTTP request");
 		evhttp_connection_free(*evcon);
 		return 1;
 	}
 
+	// Set standard HTTP headers
 	wd_set_request_header(*req, auth_server->authserv_hostname);
 
 	return 0;
