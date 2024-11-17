@@ -177,32 +177,53 @@ wd_request_context_free(struct wd_request_context *context)
 }
 
 /**
- * @brief create wifidog request context
+ * @brief Creates a new wifidog request context for HTTP/HTTPS connections
  * 
- * @param base The event_base
- * @param ssl The SSL
- * @param authserv_use_ssl Whether auth server used ssl or not
- * @return return wd_request_context which need to be free by caller
- * 
+ * @param base The libevent event_base for event handling
+ * @param ssl SSL context for HTTPS connections, NULL for HTTP
+ * @param authserv_use_ssl Flag indicating if auth server uses SSL/TLS (1) or not (0)
+ * @return struct wd_request_context* New context that must be freed by caller, or NULL on failure
+ *
+ * This function initializes a request context by:
+ * 1. Creating an appropriate bufferevent based on SSL/non-SSL connection
+ * 2. Setting buffer event options for reliable operation
+ * 3. Allocating and initializing the context structure
+ *
+ * The caller is responsible for freeing the returned context using wd_request_context_free()
  */
 struct wd_request_context *
 wd_request_context_new(struct event_base *base, SSL *ssl, int authserv_use_ssl)
 {
-	struct bufferevent *bev;
+	struct bufferevent *bev = NULL;
+	struct wd_request_context *context = NULL;
+
+	if (!base) return NULL;
+
+	// Create appropriate bufferevent based on SSL usage
 	if (!authserv_use_ssl) {
 		bev = bufferevent_socket_new(base, -1, BEV_OPT_CLOSE_ON_FREE);
 	} else {
+		if (!ssl) return NULL;
 		bev = bufferevent_openssl_socket_new(base, -1, ssl,
-			BUFFEREVENT_SSL_CONNECTING, BEV_OPT_CLOSE_ON_FREE|BEV_OPT_DEFER_CALLBACKS);
+			BUFFEREVENT_SSL_CONNECTING,
+			BEV_OPT_CLOSE_ON_FREE | BEV_OPT_DEFER_CALLBACKS);
 	}
+
 	if (!bev) return NULL;
 
+	// Allow dirty shutdown for SSL connections
 	bufferevent_openssl_set_allow_dirty_shutdown(bev, 1);
 
-	struct wd_request_context * context = safe_malloc(sizeof(struct wd_request_context));
-	context->base 	= base;
-	context->ssl 	= ssl;
-	context->bev	= bev;
+	// Initialize context structure
+	context = safe_malloc(sizeof(struct wd_request_context));
+	if (!context) {
+		bufferevent_free(bev);
+		return NULL;
+	}
+
+	context->base = base;
+	context->ssl = ssl;
+	context->bev = bev;
 
 	return context;
 }
