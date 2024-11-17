@@ -387,39 +387,64 @@ ws_heartbeat_cb(evutil_socket_t fd, short event, void *arg)
 	send_msg(out, "heartbeat");
 }
 
+/**
+ * WebSocket read callback handler
+ *
+ * Handles incoming WebSocket data including:
+ * - Initial HTTP upgrade handshake verification 
+ * - Processing of WebSocket frames after upgrade
+ * - Sending initial connect message and starting heartbeat
+ *
+ * @param b_ws The WebSocket bufferevent
+ * @param ctx User-provided context (unused)
+ */
 static void 
 ws_read_cb(struct bufferevent *b_ws, void *ctx)
 {
 	struct evbuffer *input = bufferevent_get_input(b_ws);
 	unsigned char data[1024] = {0};
-	int pos = 0;
-	int data_len = 0;
-	while((data_len = evbuffer_get_length(input)) > 0){
-		evbuffer_remove(input, data + pos, data_len);
-		pos += data_len;
+	size_t total_len = 0;
+
+	// Read all available data from input buffer
+	size_t chunk_len;
+	while ((chunk_len = evbuffer_get_length(input)) > 0) {
+		if (total_len + chunk_len >= sizeof(data)) {
+			debug(LOG_ERR, "Input buffer overflow");
+			return;
+		}
+		evbuffer_remove(input, data + total_len, chunk_len);
+		total_len += chunk_len;
 	}
-	assert(pos < 1023);
-    if (!upgraded) {
-        if(!strstr((const char*)data, "\r\n\r\n")) {
-            debug (LOG_INFO, "data end");
-            return;
-        }
-        
-        if(strncmp((const char*)data, "HTTP/1.1 101", strlen("HTTP/1.1 101")) != 0
-            || !strstr((const char*)data, fixed_accept)){
-            debug (LOG_INFO, "not web socket supported");
-            return;
-        }
 
-        upgraded = true;
-		debug (LOG_DEBUG, "ws_read_cb : upgraded is %d\n", upgraded);
+	// Handle HTTP upgrade handshake
+	if (!upgraded) {
+		// Wait for complete HTTP response
+		if (!strstr((const char*)data, "\r\n\r\n")) {
+			debug(LOG_DEBUG, "Incomplete HTTP response");
+			return;
+		}
 
-		send_msg(bufferevent_get_output(b_ws), "connect");
+		// Verify upgrade response
+		if (strncmp((const char*)data, "HTTP/1.1 101", strlen("HTTP/1.1 101")) != 0 
+			|| !strstr((const char*)data, fixed_accept)) {
+			debug(LOG_ERR, "Invalid WebSocket upgrade response");
+			return;
+		}
 
+		debug(LOG_DEBUG, "WebSocket upgrade successful");
+		upgraded = true;
+
+		// Send initial connect message
+		struct evbuffer *output = bufferevent_get_output(b_ws);
+		send_msg(output, "connect");
+
+		// Start heartbeat timer
 		start_ws_heartbeat(b_ws);
-    } else {
-		ws_receive(data, pos);
+		return;
 	}
+
+	// Process WebSocket frames after upgrade
+	ws_receive(data, total_len);
 }
 
 /**
