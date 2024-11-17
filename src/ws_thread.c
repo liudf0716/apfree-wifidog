@@ -132,22 +132,43 @@ handle_auth_response(json_object *j_auth)
 	}
 }
 
+/**
+ * Handle temporary pass response from WebSocket server
+ *
+ * Processes a temporary access request for a client device based on MAC address.
+ * The request format is:
+ * {
+ *   "client_mac": "<MAC_ADDRESS>",
+ *   "timeout": <SECONDS>        // Optional, defaults to 300s (5 min)
+ * }
+ *
+ * Sets up temporary firewall access for the specified MAC address
+ * that expires after the timeout period.
+ *
+ * @param j_tmp_pass JSON object containing the temporary pass request
+ */
 static void
 handle_tmp_pass_response(json_object *j_tmp_pass)
 {
+	// Extract required client MAC
 	json_object *client_mac = json_object_object_get(j_tmp_pass, "client_mac");
-	json_object *timeout = json_object_object_get(j_tmp_pass, "timeout");
-	if(client_mac == NULL){
-		debug(LOG_ERR, "temp_pass: parse json data failed\n");
+	if (!client_mac) {
+		debug(LOG_ERR, "Temporary pass: Missing client MAC address");
 		return;
 	}
-
 	const char *client_mac_str = json_object_get_string(client_mac);
-	uint32_t timeout_value = 5*60;
-	if (timeout != NULL) {
+
+	// Get optional timeout value, default 5 minutes
+	uint32_t timeout_value = 5 * 60;
+	json_object *timeout = json_object_object_get(j_tmp_pass, "timeout");
+	if (timeout) {
 		timeout_value = json_object_get_int(timeout);
 	}
+
+	// Set temporary firewall access
 	fw_set_mac_temporary(client_mac_str, timeout_value);
+	debug(LOG_DEBUG, "Set temporary access for MAC %s with timeout %u seconds", 
+		  client_mac_str, timeout_value);
 }
 
 /**
