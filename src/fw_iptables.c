@@ -4,8 +4,6 @@
  * Copyright (c) 2023 Dengfeng Liu <liudf0716@gmail.com>
  */
 
-#define _GNU_SOURCE
-
 #include <arpa/inet.h>
 #include <libiptc/libiptc.h>
 #include <xtables.h>

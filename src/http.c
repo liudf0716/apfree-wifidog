@@ -4,8 +4,6 @@
  * Copyright (c) 2023 Dengfeng Liu <liudf0716@gmail.com>
  */
 
-/* Note that libcs other than GLIBC also use this macro to enable vasprintf */
-#define _GNU_SOURCE
 
 #include <sys/types.h>
 #include <sys/stat.h>
