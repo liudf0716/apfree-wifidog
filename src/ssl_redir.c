@@ -325,15 +325,9 @@ ssl_redirect_loop () {
                        SSL_OP_SINGLE_ECDH_USE |
                        SSL_OP_NO_SSLv2);
 
-	/* Cheesily pick an elliptic curve to use with elliptic curve ciphersuites.
-	* We just hardcode a single curve which is reasonably decent.
-	* See http://www.mail-archive.com/openssl-dev@openssl.org/msg30957.html */
-	EC_KEY *ecdh = EC_KEY_new_by_curve_name (NID_X9_62_prime256v1);
-	if (! ecdh)
-    	die_most_horribly_from_openssl_error ("EC_KEY_new_by_curve_name");
-  	if (1 != SSL_CTX_set_tmp_ecdh (ctx, ecdh))
-    	die_most_horribly_from_openssl_error ("SSL_CTX_set_tmp_ecdh");
-	
+	if (SSL_CTX_set_ecdh_auto(ctx, 1) != 1) {
+    	die_most_horribly_from_openssl_error("SSL_CTX_set_ecdh_auto");
+	}
 	struct stat st;
 	if (stat(https_server->svr_crt_file, &st) || stat(https_server->svr_key_file, &st)) {
 		debug(LOG_ERR, "couldn't find crt [%s] or key file [%s]", https_server->svr_crt_file, https_server->svr_key_file);
