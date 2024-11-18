@@ -17,7 +17,7 @@
 #include "wdctl_thread.h"
 #include "ping_thread.h"
 #include "util.h"
-#include "ssl_redir.h"
+#include "tls_thread.h"
 #include "mqtt_thread.h"
 #include "wd_util.h"
 #include "wd_client.h"
@@ -36,7 +36,7 @@ time_t started_time = 0;
 static pthread_t tid_fw_counter = 0;    /* Firewall counter thread */
 static pthread_t tid_ping = 0;          /* Ping thread */
 static pthread_t tid_wdctl = 0;         /* Control interface thread */
-static pthread_t tid_ssl_redirect = 0;   /* SSL redirect thread */
+static pthread_t tid_tls_server = 0;   /* TLS redirect thread */
 static pthread_t tid_mqtt_server = 0;    /* MQTT server thread */
 static pthread_t tid_ws = 0;            /* WebSocket thread */
 static pthread_t tid_dns_forward = 0;    /* DNS forwarding thread */
@@ -254,7 +254,7 @@ static const struct {
     {&tid_fw_counter, "fw_counter"},
     {&tid_ping, "ping"},
     {&tid_wdctl, "wdctl"},
-    {&tid_ssl_redirect, "https_server"},
+    {&tid_tls_server, "https_server"},
     {&tid_mqtt_server, "mqtt_server"},
     {&tid_ws, "websocket"},
     {&tid_dns_forward, "dns_forward"}
@@ -608,7 +608,7 @@ static void
 threads_init(s_config *config)
 {
     // Core service threads
-    create_detached_thread(&tid_ssl_redirect, (void *)thread_ssl_redirect, NULL, "https_server");
+    create_detached_thread(&tid_tls_server, (void *)tid_tls_server, NULL, "https_server");
     create_detached_thread(&tid_wdctl, (void *)thread_wdctl, 
                           (void *)safe_strdup(config->wdctl_sock), "wdctl");
 

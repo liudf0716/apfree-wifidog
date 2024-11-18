@@ -4,9 +4,9 @@
  * Copyright (c) 2023 Dengfeng Liu <liudf0716@gmail.com>
  */
 
-#ifndef	_SSL_REDIR_H_
-#define	_SSL_REDIR_H_
+#ifndef	_TLS_THREAD_H_
+#define	_TLS_THREAD_H_
 
-void thread_ssl_redirect(void *args);
+void thread_tls_server(void *args);
 
 #endif

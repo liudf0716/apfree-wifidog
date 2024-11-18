@@ -3,7 +3,7 @@ set(src_apfreewifidog
 	main.c gateway.c commandline.c conf.c debug.c
 	firewall.c centralserver.c http.c auth.c client_list.c
 	util.c wdctl_thread.c ping_thread.c safe.c pstring.c
-	ssl_redir.c wd_client.c wd_util.c mqtt_thread.c
+	tls_thread.c wd_client.c wd_util.c mqtt_thread.c
 	ws_thread.c dns_forward.c
 )
 

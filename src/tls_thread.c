@@ -10,7 +10,7 @@
 #include <netdb.h>
 
 #include "common.h"
-#include "ssl_redir.h"
+#include "tls_thread.h"
 #include "debug.h"
 #include "conf.h"
 #include "gateway.h"
@@ -37,7 +37,7 @@ die_most_horribly_from_openssl_error (const char *func) {
  * 
  */ 
 static void
-process_ssl_request_cb (struct evhttp_request *req, void *arg) {  
+process_tls_request_cb (struct evhttp_request *req, void *arg) {  
 	if (!is_online()){
         ev_http_reply_client_error(req, INTERNET_OFFLINE, NULL, NULL, NULL, NULL, NULL);
         return;
@@ -292,7 +292,7 @@ schedule_work_cb(evutil_socket_t fd, short event, void *arg) {
 }
 
 static int 
-ssl_redirect_loop () { 	
+tls_process_loop () { 	
 	struct event timeout;
 	struct timeval tv;
 	s_config *config = config_get_config();
@@ -364,7 +364,7 @@ ssl_redirect_loop () {
 	}
 
 	// This is the callback that gets called when a request comes in.
-	evhttp_set_gencb (http, process_ssl_request_cb, NULL);
+	evhttp_set_gencb (http, process_tls_request_cb, NULL);
 
 	memset(&sin_ipv6, 0, sizeof(sin_ipv6));
 	sin_ipv6.sin6_family = AF_INET6;
@@ -420,7 +420,7 @@ ssl_redirect_loop () {
 }
 
 void 
-thread_ssl_redirect(void *args) {
+thread_tls_server(void *args) {
 	init_apfree_wifidog_cert();
-   	ssl_redirect_loop ();
+   	tls_process_loop ();
 }

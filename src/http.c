@@ -22,7 +22,6 @@
 #include "firewall.h"
 #include "http.h"
 #include "gateway.h"
-#include "ssl_redir.h"
 #include "safe.h"
 #include "util.h"
 #include "wdctl_thread.h"
