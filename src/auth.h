@@ -12,34 +12,52 @@
 /**
  * @brief Authentication codes returned by auth server.
  *
- * Authentication result codes returned by auth_server_request() corresponding
- * to result code from the central server itself.
+ * Defines possible authentication states returned by the authentication server,
+ * ranging from error conditions to successful authentication.
  */
 typedef enum {
-    AUTH_ERROR = -1, /**< An error occured during the validation process*/
-    AUTH_DENIED = 0, /**< Client was denied by the auth server */
-    AUTH_ALLOWED = 1, /**< Client was granted access by the auth server */
-    AUTH_VALIDATION = 5, /**< A misnomer.  Client is in 15 min probation to validate his new account */
-    AUTH_VALIDATION_FAILED = 6, /**< Client had X minutes to validate account by email and didn't = too late */
-    AUTH_LOCKED = 254 /**< Account has been locked */
+    AUTH_ERROR = -1,        /**< Authentication process error */
+    AUTH_DENIED = 0,        /**< Access denied by auth server */
+    AUTH_ALLOWED = 1,       /**< Access granted by auth server */
+    AUTH_VALIDATION = 5,    /**< Client in 15-minute probation period */
+    AUTH_VALIDATION_FAILED = 6, /**< Failed to validate account within time limit */
+    AUTH_LOCKED = 254       /**< Account is locked */
 } t_authcode;
 
-/** 
- * @brief This structure contains all the information returned by the  authentication server
+/**
+ * @brief Authentication response structure
+ *
+ * Contains the server's response data including authentication status
+ * and client identification.
  */
 typedef struct _t_authresponse {
-    t_authcode authcode; /**< Authentication code returned by the server */
-    unsigned long long client_id;
+    t_authcode authcode;         /**< Authentication result code */
+    unsigned long long client_id; /**< Unique client identifier */
 } t_authresponse;
 
 struct wd_request_context;
 
-/** @brief Logout a client and report to auth server. */
-void ev_logout_client(struct wd_request_context *, t_client *);
-/** @brief Authenticate a single client against the central server */
-void ev_authenticate_client(struct evhttp_request *, struct wd_request_context *, t_client *);
+/**
+ * @brief Handles client logout process
+ * @param context Request context
+ * @param client Client to be logged out
+ */
+void ev_logout_client(struct wd_request_context *context, t_client *client);
 
-/** @brief Periodically check if connections expired */
+/**
+ * @brief Processes client authentication
+ * @param request HTTP request object
+ * @param context Request context
+ * @param client Client to authenticate
+ */
+void ev_authenticate_client(struct evhttp_request *request, 
+                          struct wd_request_context *context, 
+                          t_client *client);
+
+/**
+ * @brief Periodic connection timeout checker
+ * @param arg Thread arguments
+ */
 void thread_client_timeout_check(const void *arg);
 
 #endif
