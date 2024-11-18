@@ -25,34 +25,41 @@
 #include "ws_thread.h"
 #include "dns_forward.h"
 
+/* Global mutexes and buffers */
 pthread_mutex_t g_resource_lock = PTHREAD_MUTEX_INITIALIZER;
-struct evbuffer *evb_internet_offline_page, *evb_authserver_offline_page;
-struct redir_file_buffer *wifidog_redir_html;
-time_t started_time;
+struct evbuffer *evb_internet_offline_page = NULL;
+struct evbuffer *evb_authserver_offline_page = NULL;
+redir_file_buffer_t *wifidog_redir_html = NULL;
+time_t started_time = 0;
 
-/** XXX Ugly hack 
- * We need to remember the thread IDs of threads that simulate wait with pthread_cond_timedwait
- * so we can explicitly kill them in the termination handler
- */
-static pthread_t tid_fw_counter;
-static pthread_t tid_ping;
-static pthread_t tid_wdctl;
-static pthread_t tid_ssl_redirect;
-static pthread_t tid_mqtt_server;
-static pthread_t tid_ws;
-static pthread_t tid_dns_forward;
+/* Thread identifiers for various services */
+static pthread_t tid_fw_counter = 0;    /* Firewall counter thread */
+static pthread_t tid_ping = 0;          /* Ping thread */
+static pthread_t tid_wdctl = 0;         /* Control interface thread */
+static pthread_t tid_ssl_redirect = 0;   /* SSL redirect thread */
+static pthread_t tid_mqtt_server = 0;    /* MQTT server thread */
+static pthread_t tid_ws = 0;            /* WebSocket thread */
+static pthread_t tid_dns_forward = 0;    /* DNS forwarding thread */
 
-static int signals[] = { SIGTERM, SIGQUIT, SIGHUP, SIGINT, SIGPIPE, SIGCHLD, SIGUSR1 };
+/* Signal handling */
+static const int signals[] = { 
+    SIGTERM,    /* Termination */
+    SIGQUIT,    /* Quit */
+    SIGHUP,     /* Hangup */
+    SIGINT,     /* Interrupt */
+    SIGPIPE,    /* Broken pipe */
+    SIGCHLD,    /* Child status changed */
+    SIGUSR1     /* User-defined signal 1 */
+};
 static struct event *sev[sizeof(signals)/sizeof(int)];
 
-#if (OPENSSL_VERSION_NUMBER < 0x10100000L) || \
-	(defined(LIBRESSL_VERSION_NUMBER) && LIBRESSL_VERSION_NUMBER < 0x20700000L)
-static void *
-wd_zeroing_malloc(size_t howmuch) {
-	return calloc(1, howmuch);
-}
-#endif
 
+/**
+ * @brief This is the start of a static function definition in the gateway source file
+ * 
+ * Note: Without seeing the full function signature and implementation, 
+ * a more detailed description cannot be provided.
+ */
 static void 
 openssl_init(void)
 { 
@@ -61,192 +68,328 @@ openssl_init(void)
         exit(EXIT_FAILURE);
     }
 
-	debug (LOG_DEBUG, "Using OpenSSL version \"%s\"\nand libevent version \"%s\"\n",
-		  OpenSSL_version (OPENSSL_VERSION),
-		  event_get_version ());
+    debug(LOG_DEBUG, "Using OpenSSL version \"%s\"\n"
+                    "and libevent version \"%s\"",
+          OpenSSL_version(OPENSSL_VERSION),
+          event_get_version());
 }
 
+/**
+ * @brief Gateway function that will be defined (static scope)
+ * 
+ * This function represents a static gateway operation.
+ * The specific implementation details and parameters should be defined
+ * in the function body.
+ * 
+ * @note This is a static function and can only be used within the same file
+ */
 static void
-wd_msg_init()
+wd_msg_init(void)
 {
-	s_config *config = config_get_config();	
-	
-	evb_internet_offline_page 	= evbuffer_new();
-	evb_authserver_offline_page	= evbuffer_new();
-	if (!evb_internet_offline_page || !evb_authserver_offline_page)
-		exit(EXIT_FAILURE);
-	
-	if ( !ev_http_read_html_file(config->internet_offline_file, evb_internet_offline_page) || 
-		 !ev_http_read_html_file(config->authserver_offline_file, evb_authserver_offline_page)) {
-		debug(LOG_ERR, "wd_msg_init failed, exiting...");
-		exit(EXIT_FAILURE);
-	}
+    s_config *config = config_get_config();
+
+    // Create evbuffers
+    evb_internet_offline_page = evbuffer_new();
+    evb_authserver_offline_page = evbuffer_new();
+    
+    // Check evbuffer creation
+    if (!evb_internet_offline_page || !evb_authserver_offline_page) {
+        debug(LOG_ERR, "Failed to create evbuffers");
+        goto cleanup;
+    }
+
+    // Read offline message files
+    if (!ev_http_read_html_file(config->internet_offline_file, evb_internet_offline_page)) {
+        debug(LOG_ERR, "Failed to read internet offline file");
+        goto cleanup;
+    }
+
+    if (!ev_http_read_html_file(config->authserver_offline_file, evb_authserver_offline_page)) {
+        debug(LOG_ERR, "Failed to read auth server offline file");
+        goto cleanup;
+    }
+
+    return;
+
+cleanup:
+    if (evb_internet_offline_page) {
+        evbuffer_free(evb_internet_offline_page);
+        evb_internet_offline_page = NULL;
+    }
+    if (evb_authserver_offline_page) {
+        evbuffer_free(evb_authserver_offline_page);
+        evb_authserver_offline_page = NULL;
+    }
+    debug(LOG_ERR, "Failed to initialize message system");
+    exit(EXIT_FAILURE);
 }
 
+/**
+ * @brief This function is static and void, indicating it's a private helper function
+ *        with no return value. Additional context about the function's purpose and
+ *        parameters would be needed for more specific documentation.
+ * 
+ * @return void
+ */
 static void
 wd_redir_file_init(void)
 {
-	s_config *config = config_get_config();
-	char	front_file[128] = {0};
-	char	rear_file[128] = {0};
-	
-	
-	wifidog_redir_html = (struct redir_file_buffer *)safe_malloc(sizeof(struct redir_file_buffer));
-	
-	struct evbuffer *evb_front 	= evbuffer_new();
-	struct evbuffer *evb_rear	= evbuffer_new();
-	if (evb_front == NULL || evb_rear == NULL)  {
-		exit(EXIT_FAILURE);
-	}
-	
-	snprintf(front_file, 128, "%s.front", config->htmlredirfile);
-	snprintf(rear_file, 128, "%s.rear", config->htmlredirfile);
-	if (!ev_http_read_html_file(front_file, evb_front) || 
-		!ev_http_read_html_file(rear_file, evb_rear)) {
-		exit(EXIT_FAILURE);
-	}
-	
-	int len = 0;
-	wifidog_redir_html->front 		= evb_2_string(evb_front, &len);
-	wifidog_redir_html->front_len	= len;
-	wifidog_redir_html->rear		= evb_2_string(evb_rear, &len);
-	wifidog_redir_html->rear_len	= len;
-	
-	if (evb_front) evbuffer_free(evb_front);	
-	if (evb_rear) evbuffer_free(evb_rear);
+    s_config *config = config_get_config();
+    struct evbuffer *evb_front = NULL;
+    struct evbuffer *evb_rear = NULL;
+    char front_file[128] = {0};
+    char rear_file[128] = {0};
+
+    // Initialize redirect HTML buffer
+    wifidog_redir_html = safe_malloc(sizeof(redir_file_buffer_t));
+    if (!wifidog_redir_html) {
+        debug(LOG_ERR, "Failed to allocate memory for redirect HTML buffer");
+        goto cleanup;
+    }
+
+    // Create evbuffers
+    evb_front = evbuffer_new();
+    evb_rear = evbuffer_new();
+    if (!evb_front || !evb_rear) {
+        debug(LOG_ERR, "Failed to create evbuffers");
+        goto cleanup;
+    }
+
+    // Generate file paths
+    if (snprintf(front_file, sizeof(front_file), "%s.front", config->htmlredirfile) < 0 ||
+        snprintf(rear_file, sizeof(rear_file), "%s.rear", config->htmlredirfile) < 0) {
+        debug(LOG_ERR, "Failed to generate file paths");
+        goto cleanup;
+    }
+
+    // Read HTML files
+    if (!ev_http_read_html_file(front_file, evb_front) || 
+        !ev_http_read_html_file(rear_file, evb_rear)) {
+        debug(LOG_ERR, "Failed to read HTML files");
+        goto cleanup;
+    }
+
+    // Convert evbuffers to strings and store lengths
+    int len = 0;
+    wifidog_redir_html->front = evb_2_string(evb_front, &len);
+    wifidog_redir_html->front_len = len;
+    wifidog_redir_html->rear = evb_2_string(evb_rear, &len);
+    wifidog_redir_html->rear_len = len;
+
+    if (!wifidog_redir_html->front || !wifidog_redir_html->rear) {
+        debug(LOG_ERR, "Failed to convert evbuffers to strings");
+        goto cleanup;
+    }
+
+    // Normal cleanup
+    evbuffer_free(evb_front);
+    evbuffer_free(evb_rear);
+    return;
+
+cleanup:
+    // Error cleanup
+    if (evb_front) evbuffer_free(evb_front);
+    if (evb_rear) evbuffer_free(evb_rear);
+    if (wifidog_redir_html) {
+        free(wifidog_redir_html->front);
+        free(wifidog_redir_html->rear);
+        free(wifidog_redir_html);
+    }
+    exit(EXIT_FAILURE);
 }
 
-/* Appends -x, the current PID, and NULL to restartargv
- * see parse_commandline in commandline.c for details
- *
- * Why is restartargv global? Shouldn't it be at most static to commandline.c
- * and this function static there? -Alex @ 8oct2006
+
+/**
+ * @brief Appends process restart arguments to the restart argument array
+ * 
+ * This function adds two arguments to the restartargv array:
+ * 1. The "-x" flag
+ * 2. The current process ID as a string
+ * 
+ * These arguments are used when the process needs to be restarted
+ * while maintaining state information.
  */
 void
 append_x_restartargv(void)
 {
-	int i;
-    for (i = 0; restartargv[i]; i++) ;
+    int i;
+    // Find the end of the existing arguments
+    for (i = 0; restartargv[i]; i++);
 
+    // Append "-x" flag
     restartargv[i++] = safe_strdup("-x");
+    
+    // Append current process ID
     safe_asprintf(&(restartargv[i++]), "%d", getpid());
 }
 
-/**@internal
- * @brief Handles SIGCHLD signals to avoid zombie processes
- *
- * When a child process exits, it causes a SIGCHLD to be sent to the
- * process. This handler catches it and reaps the child process so it
- * can exit. Otherwise we'd get zombie processes.
+/**
+ * @brief Handler for SIGCHLD signals to reap zombie child processes
+ * 
+ * This function is called when a child process terminates. It performs
+ * non-blocking waits to collect the exit status of any terminated
+ * child processes, preventing them from becoming zombies.
+ * 
+ * @param s Signal number (unused but required by signal handler signature)
  */
 void
 sigchld_handler(int s)
 {
-    int status;
     pid_t rc;
+    int status;
 
     debug(LOG_DEBUG, "Handler for SIGCHLD called. Trying to reap a child");
-	do {
-    	rc = waitpid(-1, &status, WNOHANG);
-	} while(rc != (pid_t)0 && rc != (pid_t)-1);
+
+    // Keep reaping children until there are no more to reap
+    do {
+        rc = waitpid(-1, &status, WNOHANG);
+    } while (rc > 0);
 }
 
-/** Exits cleanly after cleaning up the firewall.  
- *  Use this function anytime you need to exit after firewall initialization.
- *  @param s Integer that is really a boolean, true means voluntary exit, 0 means error.
+/* Thread termination information */
+static const struct {
+    pthread_t *tid;
+    const char *name;
+} cleanup_threads[] = {
+    {&tid_fw_counter, "fw_counter"},
+    {&tid_ping, "ping"},
+    {&tid_wdctl, "wdctl"},
+    {&tid_ssl_redirect, "https_server"},
+    {&tid_mqtt_server, "mqtt_server"},
+    {&tid_ws, "websocket"},
+    {&tid_dns_forward, "dns_forward"}
+};
+
+/**
+ * @brief This function serves as a declaration of a static helper function.
+ * 
+ * The static keyword indicates this function is only accessible within the same file (gateway.c).
+ * The function has a void return type, indicating it doesn't return any value.
+ * 
+ * @note Further documentation requires the function name and parameters to be specified.
  */
-void
-termination_handler(int s)
-{
+static void 
+terminate_threads(pthread_t self) {
+    for (size_t i = 0; i < sizeof(cleanup_threads)/sizeof(cleanup_threads[0]); i++) {
+        if (*cleanup_threads[i].tid && self != *cleanup_threads[i].tid) {
+            debug(LOG_INFO, "Explicitly killing the %s thread", cleanup_threads[i].name);
+            pthread_kill(*cleanup_threads[i].tid, SIGKILL);
+        }
+    }
+}
+
+/**
+ * @file gateway.c
+ * 
+ * The main function declaration for gateway operations.
+ * This component handles core gateway functionality in the wifidogx system.
+ */
+void 
+termination_handler(int s) {
     static pthread_mutex_t sigterm_mutex = PTHREAD_MUTEX_INITIALIZER;
     pthread_t self = pthread_self();
 
     debug(LOG_INFO, "Handler for termination caught signal %d", s);
 
-    /* Makes sure we only call fw_destroy() once. */
+    /* Ensure cleanup only happens once */
     if (pthread_mutex_trylock(&sigterm_mutex)) {
         debug(LOG_INFO, "Another thread already began global termination handler. I'm exiting");
         pthread_exit(NULL);
-    } 
+    }
 
+    /* Cleanup firewall rules */
     debug(LOG_INFO, "Flushing firewall rules...");
     fw_destroy();
 
-    /* XXX Hack
-     * Aparently pthread_cond_timedwait under openwrt prevents signals (and therefore
-     * termination handler) from happening so we need to explicitly kill the threads 
-     * that use that
-     */
-    if (tid_fw_counter && self != tid_fw_counter) {
-        debug(LOG_INFO, "Explicitly killing the fw_counter thread");
-        pthread_kill(tid_fw_counter, SIGKILL);
-    }
-    if (tid_ping && self != tid_ping) {
-        debug(LOG_INFO, "Explicitly killing the ping thread");
-        pthread_kill(tid_ping, SIGKILL);
-    }
-	if (tid_wdctl && self != tid_wdctl) {
-        debug(LOG_INFO, "Explicitly killing the wdctl thread");
-		pthread_kill(tid_wdctl, SIGKILL);
-	}
-	if (tid_ssl_redirect && self != tid_ssl_redirect) {
-		debug(LOG_INFO, "Explicitly killing the https_server thread");
-		pthread_kill(tid_ssl_redirect, SIGKILL);
-	}
+    /* Clean up threads */
+    terminate_threads(self);
 
-    if (tid_mqtt_server && self != tid_mqtt_server) {
-        debug(LOG_INFO, "Explicitly killing the mqtt_server thread");
-        pthread_kill(tid_mqtt_server, SIGKILL);
-    }
-
-    if (tid_ws && self != tid_ws) {
-        debug(LOG_INFO, "Explicitly killing the websocket thread");
-        pthread_kill(tid_ws, SIGKILL);
-    }
-    if (tid_dns_forward && self != tid_dns_forward) {
-        debug(LOG_INFO, "Explicitly killing the dns_forward thread");
-        pthread_kill(tid_dns_forward, SIGKILL);
-    }
     debug(LOG_NOTICE, "Exiting...");
     exit(s == 0 ? EXIT_FAILURE : EXIT_SUCCESS);
 }
 
-/*
- * Signal handler for SIGTERM, SIGQUIT, SIGINT, SIGHUP, SIGPIPE and SIGUSR1.
+
+/**
+ * @brief The prefix "static void" indicates this is a private function within the source file
+ * that doesn't return a value.
+ * 
+ * @note This function is declared in gateway.c which appears to handle gateway-related
+ * functionality for the wifidogx/apfree-wifidog project.
+ */
+static void
+handle_termination(struct event_base *evbase)
+{
+    debug(LOG_INFO, "Received termination signal; exiting...");
+    event_base_loopbreak(evbase);
+    termination_handler(1);
+}
+
+static void
+handle_child(struct event_base *evbase)
+{
+    sigchld_handler(0);
+}
+
+static void
+handle_usr1(struct event_base *evbase) 
+{
+    debug(LOG_INFO, "Received SIGUSR1; reload fw.");
+    fw_destroy();
+    restart_orig_pid = 1;
+    fw_init();
+    restart_orig_pid = 0;
+}
+
+static void
+handle_pipe(struct event_base *evbase)
+{
+    debug(LOG_INFO, "Warning: Received SIGPIPE; ignoring.");
+}
+
+/**
+ * @brief Creates a static function definition
+ * 
+ * This section is meant to be completed with a function name and parameters.
+ * Static functions in C have internal linkage and are only visible within
+ * the source file where they are defined.
  */
 static void
 wd_signal_cb(evutil_socket_t fd, short what, void *arg)
 {
-	struct event_base *evbase = arg;
-	
-	switch(fd) {
-	case SIGTERM:
-	case SIGQUIT:
-	case SIGINT:
-	case SIGHUP:
-        debug(LOG_INFO, "Received signal %i; exiting...", fd);
-		event_base_loopbreak(evbase);
-		termination_handler(1);
-		break;
-	case SIGCHLD:
-		sigchld_handler(0);
-		break;
-	case SIGUSR1:
-		debug(LOG_INFO, "Received SIGUSER1; reload fw.");
-        fw_destroy();
-        restart_orig_pid = 1;
-        fw_init();
-        restart_orig_pid = 0;
-		break;
-	case SIGPIPE:
-		debug(LOG_INFO, "Warning: Received SIGPIPE; ignoring.\n");
-		break;
-	default:
-		debug(LOG_INFO, "Warning: Received unexpected signal %i\n", fd);
-		break;
-	}
+    struct event_base *evbase = arg;
+
+    // Common signal handling
+    static const struct {
+        int signal;
+        void (*handler)(struct event_base *);
+    } signal_handlers[] = {
+        {SIGTERM, handle_termination},
+        {SIGQUIT, handle_termination},
+        {SIGINT,  handle_termination},
+        {SIGHUP,  handle_termination},
+        {SIGCHLD, handle_child},
+        {SIGUSR1, handle_usr1},
+        {SIGPIPE, handle_pipe}
+    };
+
+    // Find and execute appropriate handler
+    for (size_t i = 0; i < sizeof(signal_handlers)/sizeof(signal_handlers[0]); i++) {
+        if (fd == signal_handlers[i].signal) {
+            signal_handlers[i].handler(evbase);
+            return;
+        }
+    }
+
+    debug(LOG_INFO, "Warning: Received unexpected signal %i\n", fd);
 }
 
+/**
+ * @brief A static helper function
+ * 
+ * To provide more meaningful documentation, please share the function signature
+ * and its purpose. Static functions are typically internal helpers with specific
+ * roles within the file.
+ */
 static void
 wd_signals_init(struct event_base *evbase)
 {
@@ -257,176 +400,256 @@ wd_signals_init(struct event_base *evbase)
 	}
 }
 
-
+/**
+ * @brief Initialize gateway settings for network interfaces
+ * 
+ * This function initializes the settings for each configured gateway interface:
+ * - Validates required interface and channel settings
+ * - Retrieves IPv4 address if not configured
+ * - Retrieves IPv6 address if not configured
+ * - Retrieves MAC address if gateway ID not configured
+ * 
+ * The function exits with failure if critical settings cannot be initialized.
+ */
 static void
-gateway_setting_init()
+gateway_setting_init(void)
 {
     t_gateway_setting *gateway_settings = get_gateway_settings();
-    while(gateway_settings) {
+    
+    while (gateway_settings) {
+        // Validate required settings
         if (!gateway_settings->gw_interface || !gateway_settings->gw_channel) {
             debug(LOG_ERR, "Gateway settings are not complete");
             exit(EXIT_FAILURE);
         }
-        debug(LOG_DEBUG, "gw_interface = %s, gw_channel = %s", 
-                gateway_settings->gw_interface, gateway_settings->gw_channel);
+
+        debug(LOG_DEBUG, "Initializing gateway interface '%s' on channel '%s'", 
+              gateway_settings->gw_interface, gateway_settings->gw_channel);
+
+        // Get IPv4 address if not configured
         if (!gateway_settings->gw_address_v4) {
-            if ((gateway_settings->gw_address_v4 = get_iface_ip(gateway_settings->gw_interface)) == NULL) {
-                debug(LOG_ERR, "Could not get IP address information of %s, exiting...", gateway_settings->gw_interface);
+            gateway_settings->gw_address_v4 = get_iface_ip(gateway_settings->gw_interface);
+            if (!gateway_settings->gw_address_v4) {
+                debug(LOG_ERR, "Could not get IPv4 address for interface %s", 
+                      gateway_settings->gw_interface);
                 exit(EXIT_FAILURE);
             }
         }
 
+        // Get IPv6 address if not configured
         if (!gateway_settings->gw_address_v6) {
-            if ((gateway_settings->gw_address_v6 = get_iface_ip6(gateway_settings->gw_interface)) == NULL) {
-                debug(LOG_ERR, "Could not get IPv6 address information of");
+            gateway_settings->gw_address_v6 = get_iface_ip6(gateway_settings->gw_interface);
+            if (!gateway_settings->gw_address_v6) {
+                debug(LOG_ERR, "Could not get IPv6 address for interface %s", 
+                      gateway_settings->gw_interface);
             }
         }
 
+        // Get MAC address for gateway ID if not configured
         if (!gateway_settings->gw_id) {
-            if ((gateway_settings->gw_id = get_iface_mac(gateway_settings->gw_interface)) == NULL) {
-                debug(LOG_ERR, "Could not get MAC address information of %s, exiting...", gateway_settings->gw_interface);
+            gateway_settings->gw_id = get_iface_mac(gateway_settings->gw_interface);
+            if (!gateway_settings->gw_id) {
+                debug(LOG_ERR, "Could not get MAC address for interface %s", 
+                      gateway_settings->gw_interface);
                 exit(EXIT_FAILURE);
             }
         }
 
-        debug(LOG_DEBUG, "gw_id [%s] %s = %s ", 
-            gateway_settings->gw_id, gateway_settings->gw_address_v4, 
-            gateway_settings->gw_address_v6?gateway_settings->gw_address_v6:"");
+        debug(LOG_DEBUG, "Gateway [ID: %s] IPv4: %s IPv6: %s", 
+              gateway_settings->gw_id,
+              gateway_settings->gw_address_v4,
+              gateway_settings->gw_address_v6 ? gateway_settings->gw_address_v6 : "none");
+
         gateway_settings = gateway_settings->next;
     }
 }
 
 /**
- * @brief wifidog init
+ * @brief Initializes system resource limits for file descriptors
+ * 
+ * Sets both soft and hard limits for number of open file descriptors
+ * to support high concurrent connections. Current limit is set to 1M files.
+ * 
+ * @note Requires root privileges to increase limits beyond system defaults
+ * 
+ * @throws Exits with failure if unable to get or set resource limits
  */
-static void
-wd_init(s_config *config)
+static void 
+init_resource_limits(void)
 {
-    // read wifidog msg file to memory
-    wd_msg_init();    
-    wd_redir_file_init();
-    openssl_init();              /* Initialize OpenSSL */
-	
-    /* Set the time when wifidog started */
-    if (!started_time) {
-        started_time = time(NULL);
-    } else if (started_time < MINIMUM_STARTED_TIME) {
-        started_time = time(NULL);
-    }  
+    struct rlimit file_limits;
 
-    /* save the pid file if needed */
-    if (config->pidfile)
-        save_pid_file(config->pidfile);
-
-    /*
-     * If needed, increase rlimits to allow as many connections
-     * as needed.
-     */
-    struct rlimit rlim;
-    memset(&rlim, 0, sizeof(struct rlimit));
-    if (getrlimit(RLIMIT_NOFILE, &rlim) != 0) {
-        debug(LOG_ERR, "Failed to getrlimit number of files");
+    // Get current file descriptor limits
+    if (getrlimit(RLIMIT_NOFILE, &file_limits) != 0) {
+        debug(LOG_ERR, "Failed to get file descriptor limits: %s", strerror(errno));
         exit(EXIT_FAILURE);
-    } else {
-        rlim.rlim_cur = 1024*1024;
-        rlim.rlim_max = 1024*1024;
-        if (setrlimit(RLIMIT_NOFILE, &rlim) != 0) {
-            debug(LOG_ERR, "Failed to set rlimit for open files. Try starting as root or requesting smaller maxconns value.");
-            exit(EXIT_FAILURE);
-        }
+    }
+    
+    // Set new limits - both soft and hard to 1M
+    const rlim_t MAX_FD = 1024 * 1024;  // 1 million file descriptors
+    file_limits.rlim_cur = MAX_FD;
+    file_limits.rlim_max = MAX_FD;
+
+    if (setrlimit(RLIMIT_NOFILE, &file_limits) != 0) {
+        debug(LOG_ERR, "Failed to set file descriptor limits to %ld: %s", 
+              (long)MAX_FD, strerror(errno));
+        debug(LOG_ERR, "Try running as root or requesting lower maxconns value");
+        exit(EXIT_FAILURE);
     }
 
+    debug(LOG_DEBUG, "Successfully set file descriptor limits to %ld", (long)MAX_FD);
+}
+
+/**
+ * @brief Initializes or validates the gateway start time
+ * 
+ * Ensures the gateway has a valid start timestamp that is at least
+ * equal to MINIMUM_STARTED_TIME. Sets current time if no valid
+ * timestamp exists.
+ * 
+ * This timestamp is used for various timing and scheduling operations
+ * throughout the gateway's operation.
+ */
+static void 
+init_started_time(void) 
+{
+    if (!started_time || started_time < MINIMUM_STARTED_TIME) {
+        started_time = time(NULL);
+        debug(LOG_DEBUG, "Gateway start time initialized to: %ld", (long)started_time);
+    }
+}
+
+/**
+ * @brief Initializes firewall rules and network security
+ * 
+ * This function:
+ * 1. Flushes the connection tracking table
+ * 2. Removes existing firewall rules
+ * 3. Initializes new firewall rules
+ * 
+ * @throws Exits with failure if firewall initialization fails
+ */
+static void 
+init_firewall(void)
+{
+    // Clear existing network state
     conntrack_flush();
-     /* Reset the firewall (if WiFiDog crashed) */
     fw_destroy();
-    /* Then initialize it */
+
+    // Initialize new firewall rules
     if (!fw_init()) {
         debug(LOG_ERR, "FATAL: Failed to initialize firewall");
         exit(EXIT_FAILURE);
     }
 }
 
+/**
+ * @brief Main initialization function for the WiFiDog gateway
+ * 
+ * Performs complete initialization of all gateway components:
+ * - Message system and redirect files
+ * - SSL/TLS security
+ * - System resources and limits
+ * - Process management
+ * - Network security
+ *
+ * @param config Pointer to the global configuration structure
+ * @throws Exits with failure if critical initialization fails
+ */
+static void 
+wd_init(s_config *config)
+{
+    // Initialize user interface components
+    wd_msg_init();    // Setup message system
+    wd_redir_file_init();  // Setup redirect pages
+    
+    // Initialize security components
+    openssl_init();  // Setup SSL/TLS
+    
+    // Initialize system components
+    init_started_time();  // Set gateway start time
+    init_resource_limits();  // Configure system limits
+    
+    // Process management
+    if (config->pidfile) {
+        save_pid_file(config->pidfile);
+    }
+
+    // Network security
+    init_firewall();
+}
+
+/**
+ * @brief Static function (internal use only)
+ * @details Implementation details should be specified here when the function is defined
+ * @return Returns an integer value
+ */
+static int 
+create_detached_thread(pthread_t *tid, void *(*routine)(void*), void *arg, const char *name) 
+{
+    int result = pthread_create(tid, NULL, routine, arg);
+    if (result != 0) {
+        debug(LOG_ERR, "FATAL: Failed to create a new thread (%s) - exiting", name);
+        termination_handler(0);
+        return 0;
+    }
+    pthread_detach(*tid);
+    return 1;
+}
+
+/**
+ * @brief Static helper function used in gateway operations
+ *
+ * @details This is a placeholder documentation as the function name and parameters 
+ * are not provided in the selection. To provide more specific documentation,
+ * please include the complete function signature including parameters and return type.
+ */
 static void
 threads_init(s_config *config)
 {
-    int result;
+    // Core service threads
+    create_detached_thread(&tid_ssl_redirect, (void *)thread_ssl_redirect, NULL, "https_server");
+    create_detached_thread(&tid_wdctl, (void *)thread_wdctl, 
+                          (void *)safe_strdup(config->wdctl_sock), "wdctl");
 
-    // add ssl redirect server    
-    result = pthread_create(&tid_ssl_redirect, NULL, (void *)thread_ssl_redirect, NULL);
-    if (result != 0) {
-        debug(LOG_ERR, "FATAL: Failed to create a new thread (https_server) - exiting");
-        termination_handler(0);
-    }
-    pthread_detach(tid_ssl_redirect);
-	
-	 /* Start control thread */
-    result = pthread_create(&tid_wdctl, NULL, (void *)thread_wdctl, (void *)safe_strdup(config->wdctl_sock));
-    if (result != 0) {
-        debug(LOG_ERR, "FATAL: Failed to create a new thread (wdctl) - exiting");
-        termination_handler(0);
-    }
-    pthread_detach(tid_wdctl);
-
-
+    // Optional service threads based on configuration
     if (config->enable_dns_forward) {
-        result = pthread_create(&tid_dns_forward, NULL, (void *)dns_forward_thread, NULL);
-        if (result != 0) {
-            debug(LOG_ERR, "FATAL: Failed to create a new thread (dns_forward) - exiting");
-            termination_handler(0);
-        }
-        pthread_detach(tid_dns_forward);
+        create_detached_thread(&tid_dns_forward, (void *)dns_forward_thread, NULL, "dns_forward");
     }
 
     if (config->enable_dhcp_cpi) {
-        result = pthread_create(&tid_fw_counter, NULL, (void *)thread_dhcp_cpi, NULL);
-        if (result != 0) {
-            debug(LOG_ERR, "FATAL: Failed to create a new thread (dhcp_cpi) - exiting");
-            termination_handler(0);
-        }
-        pthread_detach(tid_fw_counter);
+        create_detached_thread(&tid_fw_counter, (void *)thread_dhcp_cpi, NULL, "dhcp_cpi");
     }
 
-    // if no auth server avaible, dont start the following thread
+    // Auth server dependent threads
     if (!config->auth_servers) {
-        debug(LOG_INFO, "No auth server available, not starting the following threads");
+        debug(LOG_INFO, "No auth server available, not starting auth-dependent threads");
         return;
     }
 
-    /* Start heartbeat thread */
-    result = pthread_create(&tid_ping, NULL, (void *)thread_ping, NULL);
-    if (result != 0) {
-        debug(LOG_ERR, "FATAL: Failed to create a new thread (ping) - exiting");
-        termination_handler(0);
-    }
-    pthread_detach(tid_ping);
-    
-    /* Start client clean up thread */
-    result = pthread_create(&tid_fw_counter, NULL, (void *)thread_client_timeout_check, NULL);
-    if (result != 0) {
-        debug(LOG_ERR, "FATAL: Failed to create a new thread (fw_counter) - exiting");
-        termination_handler(0);
-    }
-    pthread_detach(tid_fw_counter);
+    // Start auth server dependent threads
+    create_detached_thread(&tid_ping, (void *)thread_ping, NULL, "ping");
+    create_detached_thread(&tid_fw_counter, (void *)thread_client_timeout_check, NULL, "fw_counter");
 
+    // Optional websocket thread
     if (get_ws_server()) {
-        result = pthread_create(&tid_ws, NULL, (void *)start_ws_thread, NULL);
-        if (result != 0) {
-            debug(LOG_INFO, "Failed to create a new thread (ws)");
-            termination_handler(0);
-        }
-        pthread_detach(tid_ws);
+        create_detached_thread(&tid_ws, (void *)start_ws_thread, NULL, "websocket");
     }
 
+    // Optional MQTT thread
     if (get_mqtt_server()) {
-        // start mqtt subscript thread
-        result = pthread_create(&tid_mqtt_server, NULL, (void *)thread_mqtt, config);
-        if (result != 0) {
-            debug(LOG_INFO, "Failed to create a new thread (thread_mqtt)");
-        }
-        pthread_detach(tid_mqtt_server);
+        create_detached_thread(&tid_mqtt_server, (void *)thread_mqtt, config, "mqtt");
     }
 }
 
+/**
+ * @brief Static function declaration
+ * 
+ * This placeholder documentation is generic since no function name, parameters,
+ * or implementation details are provided in the selection. To generate more
+ * specific documentation, please include the complete function signature and
+ * context.
+ */
 static void
 wd_debug_base(const struct event_base *ev_base)
 {
@@ -441,51 +664,33 @@ wd_debug_base(const struct event_base *ev_base)
 	               ((f & EV_FEATURE_FDS) ? "yes" : "no"));
 }
 
-static void
-http_redir_loop(s_config *config)
+/**
+ * @brief Internal function declaration prefix
+ * @details Defines a static function with return type int, indicating the function
+ *          is only visible within the current source file (gateway.c)
+ * @return integer value indicating success/failure status
+ */
+static int
+setup_http_server(struct evhttp *http, struct event_base *base)
 {
-    struct event_base *base;
-	struct evhttp *http;
-    struct evconnlistener *listener;
-    struct sockaddr_in6 sin_ipv6;
     t_auth_serv *auth_server = get_auth_server();
     
-    base = event_base_new();
-    if (!base) termination_handler(0);
-
-    wd_debug_base(base);
-
-    http = evhttp_new(base);
-    if (!http) termination_handler(0);
-
-	evhttp_set_allowed_methods(http,
-            EVHTTP_REQ_GET |
-            EVHTTP_REQ_POST |
-            EVHTTP_REQ_OPTIONS);
-	
-	wd_signals_init(base);
-    
-    setbuf(stdout, NULL);
-    setbuf(stderr, NULL);
-	
     if (auth_server) {
-        SSL_CTX *ssl_ctx = NULL;
-        SSL *ssl = NULL;
-        ssl_ctx = SSL_CTX_new(SSLv23_method());
-        if (!ssl_ctx) termination_handler(0);
+        SSL_CTX *ssl_ctx = SSL_CTX_new(SSLv23_method());
+        if (!ssl_ctx) return 0;
 
-        ssl = SSL_new(ssl_ctx);
-        if (!ssl) termination_handler(0);
+        SSL *ssl = SSL_new(ssl_ctx);
+        if (!ssl) return 0;
 
-        // authserv_hostname is the hostname of the auth server, must be domain name
         if (!SSL_set_tlsext_host_name(ssl, auth_server->authserv_hostname)) {
             debug(LOG_ERR, "SSL_set_tlsext_host_name failed");
-            termination_handler(0);
+            return 0;
         }
     
         struct wd_request_context *request_ctx = wd_request_context_new(
-            base, ssl, get_auth_server()->authserv_use_ssl);
-        if (!request_ctx) termination_handler(0);
+            base, ssl, auth_server->authserv_use_ssl);
+        if (!request_ctx) return 0;
+
         evhttp_set_cb(http, "/wifidog", ev_http_callback_wifidog, NULL);
         evhttp_set_cb(http, "/wifidog/auth", ev_http_callback_auth, request_ctx);
         evhttp_set_cb(http, "/wifidog/temporary_pass", ev_http_callback_temporary_pass, NULL);
@@ -493,24 +698,97 @@ http_redir_loop(s_config *config)
         evhttp_set_cb(http, "/wifidog/local_auth", ev_http_callback_local_auth, NULL);
     }
     evhttp_set_gencb(http, ev_http_callback_404, NULL);
+    return 1;
+}
+
+/**
+ * @brief Global HTTP server instance for handling web requests
+ * 
+ * This pointer holds the libevent HTTP server instance that handles
+ * all incoming HTTP requests for the gateway. It is used for processing
+ * authentication, portal pages, and other web-based interactions.
+ * 
+ * @return struct evhttp* Pointer to the HTTP server instance
+ */
+static struct evhttp* 
+init_http_server(struct event_base *base)
+{
+    struct evhttp *http = evhttp_new(base);
+    if (!http) return NULL;
+
+    evhttp_set_allowed_methods(http,
+        EVHTTP_REQ_GET |
+        EVHTTP_REQ_POST |
+        EVHTTP_REQ_OPTIONS);
+
+    return http;
+}
+
+/**
+ * @brief Function prototype declaration for an internal helper function
+ * 
+ * This static function is defined within the gateway.c file and is only accessible
+ * within this translation unit. The function serves as a helper function for the
+ * gateway functionality.
+ * 
+ * @return Returns an integer status code indicating success or failure
+ */
+static int
+bind_http_server(struct evhttp *http, struct event_base *base, int port)
+{
+    struct evconnlistener *listener;
+    struct sockaddr_in6 sin_ipv6;
 
     memset(&sin_ipv6, 0, sizeof(sin_ipv6));
     sin_ipv6.sin6_family = AF_INET6;
-    sin_ipv6.sin6_port = htons(config->gw_port);
+    sin_ipv6.sin6_port = htons(port);
     sin_ipv6.sin6_addr = in6addr_any;
 
     listener = evconnlistener_new_bind(base, NULL, NULL,
-                                    LEV_OPT_CLOSE_ON_FREE | LEV_OPT_REUSEABLE, -1,
-                                    (struct sockaddr*)&sin_ipv6, sizeof(sin_ipv6));
+        LEV_OPT_CLOSE_ON_FREE | LEV_OPT_REUSEABLE, -1,
+        (struct sockaddr*)&sin_ipv6, sizeof(sin_ipv6));
     if (!listener) {
-        debug(LOG_ERR, "Failed to bind ipv6 address to port %d", config->gw_port);
-        termination_handler(0);
+        debug(LOG_ERR, "Failed to bind ipv6 address to port %d", port);
+        return 0;
     }
 
     if (!evhttp_bind_listener(http, listener)) {
-        debug(LOG_ERR, "Failed to bind listener to port %d", config->gw_port);
-        termination_handler(0);
+        debug(LOG_ERR, "Failed to bind listener to port %d", port);
+        return 0;
     }
+
+    return 1;
+}
+
+/**
+ * @brief Gateway level static function that requires documentation
+ * 
+ * Note: Without more context about the function's purpose and parameters,
+ * this is a generic documentation template. Please provide the full 
+ * function signature and implementation details for more specific
+ * documentation.
+ */
+static void
+http_redir_loop(s_config *config)
+{
+    struct event_base *base = event_base_new();
+    if (!base) termination_handler(0);
+
+    wd_debug_base(base);
+
+    struct evhttp *http = init_http_server(base);
+    if (!http) termination_handler(0);
+    
+    wd_signals_init(base);
+    
+    setbuf(stdout, NULL);
+    setbuf(stderr, NULL);
+
+    if (!setup_http_server(http, base)) 
+        termination_handler(0);
+
+    if (!bind_http_server(http, base, config->gw_port))
+        termination_handler(0);
     
     debug(LOG_INFO, "HTTP server started on port %d", config->gw_port);
     event_base_dispatch(base);
@@ -519,46 +797,52 @@ http_redir_loop(s_config *config)
     event_base_free(base);
 }
 
-/**@internal
- * Main execution loop 
+/**
+ * @brief Main loop for the gateway
+ * 
+ * This function initializes the gateway components and starts the main loop
+ * for the gateway operation. It includes initialization of SSL, threads, and
+ * the HTTP server for handling web requests.
  */
 static void
 main_loop(void)
 {
     s_config *config = config_get_config();
-	
+    
     wd_init(config);
-	threads_init(config);
-
+    threads_init(config);
     http_redir_loop(config);
 }
 
-/** Reads the configuration file and then starts the main loop */
+/**
+ * @brief Gateway main function
+ * 
+ * This is the main entry point for the gateway application. It initializes
+ * the configuration, command line arguments, and gateway settings before
+ * starting the main loop for the gateway operation.
+ * 
+ * @param argc Number of command line arguments
+ * @param argv Array of command line arguments
+ * @return Integer status code
+ */
 int
 gw_main(int argc, char **argv)
 {
     config_init();
-
     parse_commandline(argc, argv);
-
-    /* Initialize the config */
     config_read();
     config_validate();
     gateway_setting_init();
-
-    /* Initializes the linked list of connected clients */
     client_list_init();
 
     if (config_get_config()->daemon) {
         debug(LOG_INFO, "Forking into background");
-
         switch (safe_fork()) {
         case 0:                /* child */
             setsid();
             append_x_restartargv();
             main_loop();
             break;
-
         default:               /* parent */
             exit(0);
             break;

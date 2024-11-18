@@ -43,7 +43,7 @@
 
 
 extern struct evbuffer *evb_internet_offline_page, *evb_authserver_offline_page;
-extern struct redir_file_buffer *wifidog_redir_html;
+extern redir_file_buffer_t *wifidog_redir_html;
 extern pthread_mutex_t g_resource_lock;
 
 const char *apple_domains[] = {
