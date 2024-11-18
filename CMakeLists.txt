@@ -1,32 +1,37 @@
-cmake_minimum_required(VERSION 2.8.12)
-project(ApFreeWiFidog C)
+cmake_minimum_required(VERSION 3.12)
+project(apfree-wifidog 
+  VERSION 1.0.0
+  DESCRIPTION "ApFree WiFiDog"
+  LANGUAGES C)
 
+# Set C standard and module path
 set(CMAKE_C_STANDARD 11)
-set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/Modules/")
+set(CMAKE_C_STANDARD_REQUIRED ON)
+set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/Modules" ${CMAKE_MODULE_PATH})
 
-option(AW_DEBUG		"Build debug"	ON)
-option(AW_WEBSSH	"Build with web ssh support"	OFF)
-option(AW_FW3   "Build with fw3 support"	OFF)
+# Options
+option(AW_DEBUG "Build with debug support" ON)
+option(AW_FW3 "Build with iptables support" OFF)
 
-find_package(LibEvent)
-if(NOT LibEvent_FOUND)
-  message(FATAL_ERROR "libevent2 not found!")
-endif(NOT LibEvent_FOUND)
+# Required packages
+include(FindPackageHandleStandardArgs)
 
-find_package(OpenSSL)
-if(NOT OPENSSL_FOUND)
-  message(FATAL_ERROR "OpenSSL not found!")
-endif(NOT OPENSSL_FOUND)
-
+# Find and include dependencies
+find_package(LibEvent REQUIRED)
+find_package(OpenSSL REQUIRED)
 find_package(JSON-C REQUIRED)
-include_directories(${JSON-C_INCLUDE_DIR})
-
 find_package(UCI REQUIRED)
-include_directories(${UCI_INCLUDE_DIR})
 
-if(LIB_INSTALL_DIR)
-else()
-  set(LIB_INSTALL_DIR lib)
+# Set installation directory
+if(NOT DEFINED LIB_INSTALL_DIR)
+    set(LIB_INSTALL_DIR lib)
 endif()
 
+# Include directories
+include_directories(
+    ${JSON-C_INCLUDE_DIR}
+    ${UCI_INCLUDE_DIR}
+)
+
+# Add subdirectories
 add_subdirectory(src)

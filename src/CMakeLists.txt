@@ -1,96 +1,80 @@
-
+# Define source file groups
 set(src_apfreewifidog
-	main.c
-	gateway.c 
-	commandline.c 
-	conf.c 
-	debug.c 
-	firewall.c 
-	centralserver.c 
-	http.c 
-	auth.c 
-	client_list.c 
-	util.c 
-	wdctl_thread.c 
-	ping_thread.c 
-	safe.c 
-	pstring.c 
-	ssl_redir.c
-	wd_client.c
-	wd_util.c 
-	mqtt_thread.c
-	ws_thread.c
-	dns_forward.c
+	main.c gateway.c commandline.c conf.c debug.c
+	firewall.c centralserver.c http.c auth.c client_list.c
+	util.c wdctl_thread.c ping_thread.c safe.c pstring.c
+	ssl_redir.c wd_client.c wd_util.c mqtt_thread.c
+	ws_thread.c dns_forward.c
 )
 
+set(src_fw3
+	fw_iptables.c fw3_iptc.c ipset.c
+)
 
+set(src_fw4
+	fw_nft.c
+)
+
+set(src_dhcp
+	dhcp_cpi.c dhcp.c ipv4.c options.c
+)
+
+set(src_wdctlx 
+	wdctl.c util.c debug.c
+)
+
+# Define common libraries
+set(common_libs
+	pthread m z json-c uci ssl crypto
+	event event_openssl netfilter_queue
+	resolv mosquitto
+)
+
+# Set compiler flags
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall --std=gnu99 -Wmissing-declarations")
+if(AW_DEBUG)
+	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -ggdb")
+	message(STATUS "Building in DEBUG mode")
+else()
+	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O2")
+	message(STATUS "Building in RELEASE mode")
+endif()
+
+# Handle firewall version
 if(AW_FW3)
+	set(fw_source ${src_fw3})
+	set(fw_libs dl ip4tc iptext iptext4 xtables)
+	add_definitions(-DAW_FW3)
+	message(STATUS "Building with fw3")
 	set(src_fw3
-		fw_iptables.c 
-		fw3_iptc.c
-		ipset.c
+		fw_iptables.c fw3_iptc.c ipset.c
 	)
 else()
+	set(fw_source ${src_fw4})
+	set(fw_libs "")
+	add_definitions(-DAW_FW4)
+	message(STATUS "Building with fw4")
 	set(src_fw4
 		fw_nft.c
 	)
 endif()
 
-set(src_dhcp
-	dhcp_cpi.c
-	dhcp.c
-	ipv4.c
-	options.c
-)
-
-set(src_wdctlx wdctl.c util.c debug.c)
-
-set(libs 
-	pthread 
-	m
-	z
-	json-c
-	uci
-	ssl
-	crypto
-	event
-	event_openssl
-	netfilter_queue
-	resolv
-	mosquitto)
-
-if(AW_DEBUG)
-	message("Building debug")
-	ADD_DEFINITIONS(-ggdb -Wall --std=gnu99 -Wmissing-declarations)
-else()
-	message("Buildign release")
-	ADD_DEFINITIONS(-O2 -Wall --std=gnu99 -Wmissing-declarations)
-endif()
-
-if (AW_FW3)
-	message("Building with fw3")
-	ADD_DEFINITIONS(-DAW_FW3)
-	set(fw3_libs
-		dl
-		ip4tc
-		iptext
-		iptext4
-		xtables)
-else()
-	message("Building with fw4")
-	ADD_DEFINITIONS(-DAW_FW4)
-endif()
-
+# Build targets
 add_executable(wdctlx ${src_wdctlx})
-if(AW_FW3)
-	add_executable(wifidogx ${src_apfreewifidog} ${src_fw3} ${src_dhcp})
-	target_link_libraries(wifidogx ${libs}  ${fw3_libs} ${CURL_LIBRARIES})
-else()
-	add_executable(wifidogx ${src_apfreewifidog} ${src_fw4} ${src_dhcp})
-	target_link_libraries(wifidogx ${libs} ${CURL_LIBRARIES})
-endif()
 
-install(TARGETS wifidogx wdctlx
-		RUNTIME DESTINATION bin
+add_executable(wifidogx 
+	${src_apfreewifidog}
+	${fw_source}
+	${src_dhcp}
 )
 
+target_link_libraries(wifidogx
+	${common_libs}
+	${fw_libs}
+	${CURL_LIBRARIES}
+)
+
+# Installation
+install(TARGETS wifidogx wdctlx
+	RUNTIME DESTINATION bin
+)
