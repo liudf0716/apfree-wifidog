@@ -933,107 +933,173 @@ get_trusted_pan_domains_text(void)
 	return result;
 }
 
+/**
+ * @brief Get serialized MAC address list for MQTT messaging
+ * 
+ * @param which Type of MAC list to serialize (TRUSTED_MAC, UNTRUSTED_MAC, etc)
+ * @return Newly allocated string containing comma-separated MAC addresses,
+ *         NULL if list is empty. Caller must free the returned string.
+ */
 char *
-mqtt_get_serialize_maclist(int which)
+mqtt_get_serialize_maclist(int which) 
 {
 	return get_serialize_maclist(which);
 }
 
-char *
+/**
+ * @brief Serialize a MAC address list into a comma-separated string
+ *
+ * This function takes a type of MAC list (trusted, untrusted, etc) and
+ * creates a comma-separated string of all MAC addresses in that list.
+ * Used for exporting MAC lists in a compact format.
+ *
+ * @param which Type of MAC list to serialize:
+ *        TRUSTED_MAC - Global trusted MAC list
+ *        UNTRUSTED_MAC - MAC blacklist
+ *        TRUSTED_LOCAL_MAC - Local network trusted MACs  
+ *        ROAM_MAC - Roaming MAC addresses
+ * @return Newly allocated string with comma-separated MACs, NULL if list empty
+ *         Caller must free the returned string
+ */
+char * 
 get_serialize_maclist(int which)
 {
-	pstr_t *pstr = NULL;
-    s_config *config;
+	s_config *config = config_get_config();
 	t_trusted_mac *maclist = NULL;
-	int line = 0;
-    config = config_get_config();
-	
+	struct evbuffer *evb = NULL;
+	char *retstr = NULL;
+	int first = 1;
+
+	// Get the requested MAC list
 	switch(which) {
-	case TRUSTED_MAC:
-		maclist = config->trustedmaclist; 
-		break;
-	case UNTRUSTED_MAC:
-		maclist = config->mac_blacklist;
-		break;
-	case TRUSTED_LOCAL_MAC:
-		maclist = config->trusted_local_maclist;
-		break;
-	case ROAM_MAC:
-		maclist = config->roam_maclist;
-		break;
-	default:
+		case TRUSTED_MAC:
+			maclist = config->trustedmaclist;
+			break; 
+		case UNTRUSTED_MAC:
+			maclist = config->mac_blacklist;
+			break;
+		case TRUSTED_LOCAL_MAC:
+			maclist = config->trusted_local_maclist;
+			break;
+		case ROAM_MAC:
+			maclist = config->roam_maclist;
+			break;
+		default:
+			return NULL;
+	}
+
+	if (!maclist) {
 		return NULL;
 	}
-	
-	if(maclist != NULL)
-		pstr = pstr_new();
-	else
+
+	evb = evbuffer_new();
+	if (!evb) {
 		return NULL;
+	}
 
 	LOCK_CONFIG();
-	
-	
-	for (; maclist != NULL; maclist = maclist->next, line++) {
-		if(line == 0)
-        	pstr_append_sprintf(pstr, "%s", maclist->mac);
-		else	
-        	pstr_append_sprintf(pstr, ",%s", maclist->mac);
-	}
-	
-	UNLOCK_CONFIG();
-    
-	return line?pstr_to_string(pstr):NULL;
 
+	// Build comma-separated list
+	while (maclist) {
+		if (first) {
+			evbuffer_add_printf(evb, "%s", maclist->mac);
+			first = 0;
+		} else {
+			evbuffer_add_printf(evb, ",%s", maclist->mac);
+		}
+		maclist = maclist->next;
+	}
+
+	UNLOCK_CONFIG();
+
+	if (!first) { // If we added any MACs
+		retstr = evb_2_string(evb, NULL);
+	}
+
+	evbuffer_free(evb);
+	return retstr;
 }
 
+/**
+ * @brief Get formatted text representation of a MAC address list
+ *
+ * This function generates a human-readable text report of the requested MAC list type.
+ * The output includes a header identifying the list type and the MAC addresses
+ * formatted in columns.
+ *
+ * @param which Type of MAC list to display:
+ *        TRUSTED_MAC - Global trusted MAC list
+ *        UNTRUSTED_MAC - MAC blacklist  
+ *        TRUSTED_LOCAL_MAC - Local network trusted MACs
+ *        ROAM_MAC - Roaming MAC addresses
+ * @return Newly allocated string containing the formatted text,
+ *         NULL if list is empty. Caller must free the returned string.
+ */
 static char *
 get_maclist_text(int which)
 {
-	pstr_t *pstr = NULL;
-    s_config *config;
+	s_config *config = config_get_config();
 	t_trusted_mac *maclist = NULL;
-	int line = 0;
-    config = config_get_config();
-    
+	struct evbuffer *evb = NULL;
+	char *header = NULL;
+	int count = 0;
+
+	// Set header and get MAC list based on type
 	switch(which) {
-	case TRUSTED_MAC:
-		pstr = pstr_new();
-		maclist = config->trustedmaclist; 
-		pstr_cat(pstr, "\nTrusted mac list:\n");
-		break;
-	case UNTRUSTED_MAC:
-		pstr = pstr_new();
-		maclist = config->mac_blacklist;
-		pstr_cat(pstr, "\nUntrusted mac list:\n");
-		break;
-	case TRUSTED_LOCAL_MAC:
-		pstr = pstr_new();
-		maclist = config->trusted_local_maclist;
-		pstr_cat(pstr, "\nTrusted local mac list:\n");
-		break;
-	case ROAM_MAC:
-		pstr = pstr_new();
-		maclist = config->roam_maclist;
-		pstr_cat(pstr, "\nRoam mac list:\n");
-		break;
-	default:
+		case TRUSTED_MAC:
+			header = "\nTrusted mac list:\n";
+			maclist = config->trustedmaclist;
+			break;
+		case UNTRUSTED_MAC:
+			header = "\nUntrusted mac list:\n";
+			maclist = config->mac_blacklist;
+			break;
+		case TRUSTED_LOCAL_MAC:
+			header = "\nTrusted local mac list:\n";
+			maclist = config->trusted_local_maclist;
+			break;
+		case ROAM_MAC:
+			header = "\nRoam mac list:\n";
+			maclist = config->roam_maclist;
+			break;
+		default:
+			return NULL;
+	}
+
+	if (!maclist) {
 		return NULL;
 	}
-	
-	LOCK_CONFIG();
-	
-	for (; maclist != NULL; maclist = maclist->next) {
-        pstr_append_sprintf(pstr, " %s ", maclist->mac);
-		line++;
-		if(line == 4) {
-			line = 0;
-			pstr_append_sprintf(pstr, "\n");
-		}
+
+	evb = evbuffer_new();
+	if (!evb) {
+		return NULL;
 	}
-	
+
+	evbuffer_add_printf(evb, "%s", header);
+
+	LOCK_CONFIG();
+
+	// Format MAC addresses in columns of 4
+	while (maclist) {
+		evbuffer_add_printf(evb, " %s ", maclist->mac);
+		count++;
+		if (count == 4) {
+			evbuffer_add_printf(evb, "\n");
+			count = 0;
+		}
+		maclist = maclist->next;
+	}
+
+	// Add final newline if needed
+	if (count != 0) {
+		evbuffer_add_printf(evb, "\n");
+	}
+
 	UNLOCK_CONFIG();
-    
-	return pstr_to_string(pstr);
+
+	char *retstr = evb_2_string(evb, NULL);
+	evbuffer_free(evb);
+	return retstr;
 }
 
 char *
