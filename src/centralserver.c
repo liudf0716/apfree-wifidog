@@ -151,49 +151,81 @@ process_auth_server_login_v2(struct evhttp_request *req, void *ctx)
 }
 
 /**
- * @brief get login2 request uri
- * 
- */ 
+ * @brief Get login v2 request URI for authenticating clients
+ *
+ * Constructs the URI used for v2 login requests to the auth server.
+ * The URI includes parameters like:
+ * - Gateway ID and channel 
+ * - Gateway address and port
+ * - Client MAC and IP address
+ *
+ * @param gw_setting Gateway settings containing ID, address etc
+ * @param auth_server Auth server configuration 
+ * @param auth Authentication request info with client details
+ * @return Dynamically allocated string containing complete URI.
+ *         Must be freed by caller.
+ *         Returns NULL on memory allocation failure.
+ */
 static char *
-get_login_v2_request_uri(t_gateway_setting *gw_setting, t_auth_serv *auth_server, const auth_req_info *auth)
+get_login_v2_request_uri(t_gateway_setting *gw_setting, 
+                        t_auth_serv *auth_server,
+                        const auth_req_info *auth)
 {
-    char *login2_uri = NULL;
-    safe_asprintf(&login2_uri, "%slogin2?gw_id=%s&gw_address=%s&gw_port=%d&mac=%s&gw_channel=%s&ip=%s", 
-        auth_server->authserv_path,
-        gw_setting->gw_id,
-		gw_setting->gw_address_v4,
-		config_get_config()->gw_port,
-		auth->mac,
-		gw_setting->gw_channel,
-		auth->ip);
-    return login2_uri;
+    char *login_uri = NULL;
+    if (safe_asprintf(&login_uri,
+            "%slogin2?gw_id=%s&gw_address=%s&gw_port=%d"
+            "&mac=%s&gw_channel=%s&ip=%s",
+            auth_server->authserv_path,
+            gw_setting->gw_id,
+            gw_setting->gw_address_v4,
+            config_get_config()->gw_port,
+            auth->mac,
+            gw_setting->gw_channel,
+            auth->ip) < 0) {
+        return NULL;
+    }
+    return login_uri;
 }
 
 /**
- * @brief wifidog make auth quest to auth server
- * 
- * @param auth The auth request data, need to be free 
- * 
- */ 
+ * @brief Make authentication request to auth server
+ *
+ * Sends a v2 login request to authenticate a client with the auth server.
+ * Request flow:
+ * 1. Constructs login URI with client and gateway details
+ * 2. Creates HTTP connection and request
+ * 3. Sends request to auth server
+ * 4. Response handled by process_auth_server_login_v2()
+ *
+ * @param context Request context for tracking state
+ * @param auth Authentication request data, freed after use
+ */
 void 
 make_auth_request(struct wd_request_context *context, auth_req_info *auth)
 {
-    // TODO:  find valid gateway setting
-	char *uri = get_login_v2_request_uri(get_gateway_settings(), get_auth_server(), auth);
+    char *uri = get_login_v2_request_uri(get_gateway_settings(), 
+                                        get_auth_server(), 
+                                        auth);
     if (!uri) {
+        debug(LOG_ERR, "Failed to create login v2 URI");
         free(auth);
         return;
     }
-    debug(LOG_DEBUG, "login2 request uri [%s]", uri);
+
+    debug(LOG_DEBUG, "Login v2 request URI: [%s]", uri);
 
     struct evhttp_connection *evcon = NULL;
-    struct evhttp_request *req      = NULL;
+    struct evhttp_request *req = NULL;
     context->data = auth;
+
+    // Create and send HTTP request
     if (!wd_make_request(context, &evcon, &req, process_auth_server_login_v2)) {
         evhttp_make_request(evcon, req, EVHTTP_REQ_GET, uri);
     } else {
+        debug(LOG_ERR, "Failed to create HTTP request");
         free(auth);
     }
+
     free(uri);
 }
 
