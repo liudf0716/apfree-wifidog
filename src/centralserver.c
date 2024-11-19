@@ -242,7 +242,7 @@ make_auth_request(struct wd_request_context *context, auth_req_info *auth)
  *         Must be freed by caller.
  *         Returns NULL on memory allocation failure.
  */
-static char *
+char *
 get_auth_counter_v2_uri(void)
 {
     t_auth_serv *auth_server = get_auth_server();
