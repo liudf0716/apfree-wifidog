@@ -48,7 +48,6 @@
 #include "safe.h"
 #include "util.h"
 #include "debug.h"
-#include "pstring.h"
 #include "firewall.h"
 #include "version.h"
 
@@ -486,49 +485,68 @@ get_wifidogx_json()
 }
 
 
+/**
+ * @brief Get serialized string of trusted IP addresses from the iplist domain
+ *   
+ * This function retrieves the list of trusted IP addresses stored under the special 
+ * "iplist" domain in the domain_trusted configuration and serializes them into a 
+ * comma-separated string.
+ *
+ * @return A newly allocated string containing comma-separated IP addresses,
+ *         NULL if no IPs are found or on error.
+ *         The caller is responsible for freeing the returned string.
+ */
 char *
 get_serialize_iplist()
 {
-		pstr_t *pstr = NULL;
-		s_config *config = config_get_config();
-		t_domain_trusted *domain_trusted = NULL;
-		t_ip_trusted	*iplist = NULL;
-		int line = 0;
+	s_config *config = config_get_config();
+	t_domain_trusted *domain_trusted = NULL;
+	t_ip_trusted *iplist = NULL;
+	struct evbuffer *evb = NULL;
+	int first_ip = 1;
 
-		domain_trusted = config->domains_trusted;
-		if(domain_trusted == NULL)
-				return NULL;
+	if (!config || !config->domains_trusted) {
+		return NULL;
+	}
 
+	LOCK_DOMAIN();
 
-		LOCK_DOMAIN();
-
-		for (; domain_trusted != NULL; domain_trusted = domain_trusted->next) {
-				if(strcmp(domain_trusted->domain, "iplist") == 0) {
-						break;
-				}
+	// Find the special "iplist" domain entry
+	for (domain_trusted = config->domains_trusted; 
+		 domain_trusted != NULL; 
+		 domain_trusted = domain_trusted->next) {
+		if (strcmp(domain_trusted->domain, "iplist") == 0) {
+			break;
 		}
+	}
 
-		if(domain_trusted != NULL)	
-				iplist = domain_trusted->ips_trusted;
-		else {
-				UNLOCK_DOMAIN();
-				debug(LOG_DEBUG, "no iplist ");
-				return NULL;
+	if (!domain_trusted || !domain_trusted->ips_trusted) {
+		UNLOCK_DOMAIN();
+		debug(LOG_DEBUG, "No iplist found");
+		return NULL;
+	}
+
+	evb = evbuffer_new();
+	if (!evb) {
+		UNLOCK_DOMAIN();
+		return NULL;
+	}
+
+	// Build comma-separated string of IP addresses 
+	for (iplist = domain_trusted->ips_trusted; iplist != NULL; iplist = iplist->next) {
+		if (first_ip) {
+			evbuffer_add_printf(evb, "%s", iplist->ip);
+			first_ip = 0;
+		} else {
+			evbuffer_add_printf(evb, ",%s", iplist->ip);
 		}
+	}
 
-		pstr = pstr_new();
+	UNLOCK_DOMAIN();
 
-		for(; iplist != NULL; iplist = iplist->next, line++) {
-				if(line == 0)
-						pstr_append_sprintf(pstr, "%s", iplist->ip);
-				else
-						pstr_append_sprintf(pstr, ",%s", iplist->ip);	
-		}
-
-		UNLOCK_DOMAIN();	
-
-		return pstr_to_string(pstr);
-
+	char *retStr = evb_2_string(evb, NULL);
+	evbuffer_free(evb);
+	return retStr;
 }
 
 char *
