@@ -610,39 +610,81 @@ client_counter_request_reply_v2(t_authresponse *authresponse,
     }
 } 
 
+/**
+ * @brief Process a single auth operation JSON object from the auth server
+ *
+ * Handles a JSON object containing gateway ID and array of auth operations:
+ * {
+ *   "gw_id": "gateway_id",
+ *   "auth_op": [
+ *     {
+ *       "id": client_id,
+ *       "auth_code": auth_code 
+ *     }
+ *   ]
+ * }
+ *
+ * @param j_result JSON object containing gateway ID and auth operations
+ * @param req HTTP request from auth server
+ * @param ctx Request context
+ */
 static void
-handle_json_object_from_auth_server(json_object *j_result, struct evhttp_request *req, void *ctx)
+handle_json_object_from_auth_server(json_object *j_result, struct evhttp_request *req, void *ctx) 
 {
+    // Extract gateway ID and auth operations array
     json_object *j_gw_id = json_object_object_get(j_result, "gw_id");
     json_object *j_auth_op = json_object_object_get(j_result, "auth_op");
-    assert(j_gw_id != NULL && j_auth_op != NULL);
-    assert(json_object_get_type(j_auth_op) == json_type_array);
-    for(int idx = 0; idx < json_object_array_length(j_auth_op); idx++) {
+    
+    // Validate required fields exist and auth_op is an array
+    if (!j_gw_id || !j_auth_op || json_object_get_type(j_auth_op) != json_type_array) {
+        debug(LOG_ERR, "Invalid JSON object format from auth server");
+        return;
+    }
+
+    // Process each auth operation
+    int auth_op_count = json_object_array_length(j_auth_op);
+    for (int idx = 0; idx < auth_op_count; idx++) {
         json_object *j_op = json_object_array_get_idx(j_auth_op, idx);
-        assert(j_op != NULL);
+        if (!j_op) continue;
+
+        // Extract client ID and auth code
         json_object *j_id = json_object_object_get(j_op, "id");
         json_object *j_auth_code = json_object_object_get(j_op, "auth_code");
-        assert(j_id != NULL && j_auth_code != NULL);
-        int id = json_object_get_int(j_id);
-        int auth_code = json_object_get_int(j_auth_code);
-        t_authresponse authresponse;
-        authresponse.client_id = id;
-        authresponse.authcode = auth_code;
+        if (!j_id || !j_auth_code) continue;
+
+        // Create auth response and process it
+        t_authresponse authresponse = {
+            .client_id = json_object_get_int(j_id),
+            .authcode = json_object_get_int(j_auth_code)
+        };
         client_counter_request_reply_v2(&authresponse, req, ctx);
     }
 }
 
+/**
+ * @brief Process array of auth operation results from auth server
+ *
+ * Handles an array of auth operation JSON objects returned from the server
+ *
+ * @param j_result JSON array of auth operation results
+ * @param req HTTP request from auth server  
+ * @param ctx Request context
+ */
 static void
 handle_json_array_from_auth_server(json_object *j_result, struct evhttp_request *req, void *ctx)
 {
     if (json_object_get_type(j_result) != json_type_array) {
+        debug(LOG_ERR, "Expected JSON array from auth server");
         return;
     }
 
-    for(int idx = 0; idx < json_object_array_length(j_result); idx++) {
+    // Process each result object in the array
+    int result_count = json_object_array_length(j_result);
+    for (int idx = 0; idx < result_count; idx++) {
         json_object *j_op = json_object_array_get_idx(j_result, idx);
-        assert(j_op != NULL);
-        handle_json_object_from_auth_server(j_op, req, ctx);
+        if (j_op) {
+            handle_json_object_from_auth_server(j_op, req, ctx);
+        }
     }
 }
 
