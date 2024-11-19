@@ -10,76 +10,76 @@
 #include <pthread.h>
 
 #include "common.h"
-/*@{*/
-/** Defines */
 
-/** Defaults configuration values */
+/** Configuration file paths */
 #ifndef SYSCONFDIR
 #define DEFAULT_CONFIGFILE "/etc/wifidog.conf"
 #define DEFAULT_HTMLMSGFILE "/etc/wifidog-msg.html"
 #define DEFAULT_REDIRECTFILE "/etc/wifidog-redir.html"
-#define	DEFAULT_INTERNET_OFFLINE_FILE	"/etc/internet-offline.html"
-#define	DEFAULT_AUTHSERVER_OFFLINE_FILE	"/etc/authserver-offline.html"
+#define DEFAULT_INTERNET_OFFLINE_FILE "/etc/internet-offline.html"
+#define DEFAULT_AUTHSERVER_OFFLINE_FILE "/etc/authserver-offline.html"
 #else
 #define DEFAULT_CONFIGFILE SYSCONFDIR"/wifidog.conf"
 #define DEFAULT_HTMLMSGFILE SYSCONFDIR"/wifidog-msg.html"
 #define DEFAULT_REDIRECTFILE SYSCONFDIR"/wifidog-redir.html"
-#define	DEFAULT_INTERNET_OFFLINE_FILE	SYSCONFDIR"/internet-offline.html"
-#define	DEFAULT_AUTHSERVER_OFFLINE_FILE	SYSCONFDIR"/authserver-offline.html"
+#define DEFAULT_INTERNET_OFFLINE_FILE SYSCONFDIR"/internet-offline.html"
+#define DEFAULT_AUTHSERVER_OFFLINE_FILE SYSCONFDIR"/authserver-offline.html"
 #endif
+
+/** Daemon configuration defaults */
 #define DEFAULT_DAEMON 1
 #define DEFAULT_DEBUGLEVEL LOG_INFO
-#define DEFAULT_HTTPDMAXCONN 10
-#define DEFAULT_GATEWAYID NULL
-#define DEFAULT_GATEWAYPORT 2060
-#define DEFAULT_GATEWAY_HTTPS_PORT 8443
-#define DEFAULT_HTTPDNAME "WiFiDog"
-#define DEFAULT_CLIENTTIMEOUT 5
-#define DEFAULT_CHECKINTERVAL 60
 #define DEFAULT_LOG_SYSLOG 0
 #define DEFAULT_SYSLOG_FACILITY LOG_DAEMON
 #define DEFAULT_WDCTL_SOCK "/tmp/wdctl.sock"
 #define DEFAULT_INTERNAL_SOCK "/tmp/wifidog.sock"
+
+/** Gateway configuration defaults */
+#define DEFAULT_GATEWAYID NULL
+#define DEFAULT_GATEWAYPORT 2060
+#define DEFAULT_GATEWAY_HTTPS_PORT 8443
+#define DEFAULT_HTTPDNAME "WiFiDog"
+#define DEFAULT_HTTPDMAXCONN 10
 #define DEFAULT_LOCAL_PORTAL "http://www.wifidogx.online"
+#define DEFAULT_CLIENTTIMEOUT 5
+#define DEFAULT_CHECKINTERVAL 60
+#define DEFAULT_DELTATRAFFIC 0
+#define DEFAULT_ARPTABLE "/proc/net/arp"
+
+/** Auth server configuration defaults */
 #define DEFAULT_AUTHSERVPORT 80
 #define DEFAULT_AUTHSERVSSLPORT 443
-/** Note that DEFAULT_AUTHSERVSSLAVAILABLE must be 0 or 1, even if the config file syntax is yes or no */
-#define DEFAULT_AUTHSERVSSLAVAILABLE 0
-/** Note:  The path must be prefixed by /, and must be suffixed /.  Put / for the server root.*/
+#define DEFAULT_AUTHSERVSSLAVAILABLE 0  /* 0 or 1 */
+#define DEFAULT_AUTHSERVSSLPEERVER 1    /* 0 = Enable peer verification */
 #define DEFAULT_AUTHSERVPATH "/wifidog/"
-#define DEFAULT_AUTHSERVLOGINPATHFRAGMENT 	"login/?"
-#define DEFAULT_AUTHSERVPORTALPATHFRAGMENT 	"portal/?"
-#define DEFAULT_AUTHSERVMSGPATHFRAGMENT 	"gw_message?"
-#define DEFAULT_AUTHSERVPINGPATHFRAGMENT 	"ping/?"
-#define DEFAULT_AUTHSERVAUTHPATHFRAGMENT 	"auth/?"
-#define	DEFAULT_WSPATHFRAGMENT		"/ws/wifidogx"
-/** Note that DEFAULT_AUTHSERVSSLNOPEERVER must be 0 or 1, even if the config file syntax is yes or no */
-#define DEFAULT_AUTHSERVSSLPEERVER 1    /* 0 means: Enable peer verification */
-#define DEFAULT_DELTATRAFFIC 0    /* 0 means: Enable peer verification */
-#define DEFAULT_ARPTABLE "/proc/net/arp"
-/*@}*/
+#define DEFAULT_AUTHSERVLOGINPATHFRAGMENT "login/?"
+#define DEFAULT_AUTHSERVPORTALPATHFRAGMENT "portal/?"
+#define DEFAULT_AUTHSERVMSGPATHFRAGMENT "gw_message?"
+#define DEFAULT_AUTHSERVPINGPATHFRAGMENT "ping/?"
+#define DEFAULT_AUTHSERVAUTHPATHFRAGMENT "auth/?"
+#define DEFAULT_WSPATHFRAGMENT "/ws/wifidogx"
 
-/*@{*/
-/** Defines for firewall rule sets. */
+/** Certificate/key file paths */
+#define DEFAULT_SVR_CRT_REQ_FILE "/tmp/apfree.csr"
+#define DEFAULT_CA_KEY_FILE "/etc/apfree.ca.key"
+#define DEFAULT_CA_CRT_FILE "/etc/apfree.ca"
+#define DEFAULT_SVR_CRT_FILE "/etc/apfree.crt"
+#define DEFAULT_SVR_KEY_FILE "/etc/apfree.key"
+#define DEFAULT_WWW_PATH "/etc/www/"
+
+/** Firewall rulesets */
 #define FWRULESET_GLOBAL "global"
 #define FWRULESET_VALIDATING_USERS "validating-users"
 #define FWRULESET_KNOWN_USERS "known-users"
 #define FWRULESET_AUTH_IS_DOWN "auth-is-down"
 #define FWRULESET_UNKNOWN_USERS "unknown-users"
 #define FWRULESET_LOCKED_USERS "locked-users"
-/*@}*/
 
-#define DEFAULT_SVR_CRT_REQ_FILE	"/tmp/apfree.csr"
-#define DEFAULT_CA_KEY_FILE			"/etc/apfree.ca.key"
-#define	DEFAULT_CA_CRT_FILE			"/etc/apfree.ca"
-#define	DEFAULT_SVR_CRT_FILE		"/etc/apfree.crt"
-#define	DEFAULT_SVR_KEY_FILE		"/etc/apfree.key"
-#define DEFAULT_WWW_PATH			"/etc/www/"
+/** HTML redirect content */
+#define WIFIDOG_REDIR_HTML_CONTENT "setTimeout(function() {location.href = \"%s\";}, 10);"
 
 
-#define	WIFIDOG_REDIR_HTML_CONTENT	"setTimeout(function() {location.href = \"%s\";}, 10);"
-
-
+/** Enumerations */
 typedef enum trusted_domain_t_ {
 	USER_TRUSTED_DOMAIN,
 	INNER_TRUSTED_DOMAIN,
@@ -93,21 +93,27 @@ typedef enum mac_choice_t_ {
 	ROAM_MAC
 } mac_choice_t;
 
-/**
- * Mutex for the configuration file, used by the auth_servers related
- * functions. */
-extern pthread_mutex_t config_mutex;
-extern pthread_mutex_t domains_mutex;
-
-typedef enum {
+typedef enum ip_type_t_ {
 	IP_TYPE_IPV4,
 	IP_TYPE_IPV6
 } ip_type_t;
 
+typedef enum firewall_target_t_ {
+	TARGET_DROP,
+	TARGET_REJECT,
+	TARGET_ACCEPT,
+	TARGET_LOG,
+	TARGET_ULOG
+} t_firewall_target;
+
+/** Mutex declarations */
+extern pthread_mutex_t config_mutex;
+extern pthread_mutex_t domains_mutex;
+
+/** Basic structures */
 typedef struct _ip_trusted_t {
 	char ip[INET6_ADDRSTRLEN];
-	union
-	{
+	union {
 		struct in_addr ipv4;
 		struct in6_addr ipv6;
 	} uip;
@@ -115,110 +121,85 @@ typedef struct _ip_trusted_t {
 	struct _ip_trusted_t *next;
 } t_ip_trusted;
 
-/**
- * Information about the authentication server
- */
+/** Server related structures */
 typedef struct _auth_serv_t {
-    char *authserv_hostname;    /**< @brief Hostname of the central server */
-    char *authserv_path;        /**< @brief Path where wifidog resides */
-    char *authserv_login_script_path_fragment;  /**< @brief This is the script the user will be sent to for login. */
-    char *authserv_portal_script_path_fragment; /**< @brief This is the script the user will be sent to after a successfull login. */
-    char *authserv_msg_script_path_fragment;    /**< @brief This is the script the user will be sent to upon error to read a readable message. */
-    char *authserv_ping_script_path_fragment;   /**< @brief This is the ping heartbeating script. */
-    char *authserv_auth_script_path_fragment;   /**< @brief This is the script that talks the wifidog gateway protocol. */
-	char *authserv_ws_script_path_fragment; /**< @breif This is web socket uri */
-    int authserv_http_port;     /**< @brief Http port the central server
-				     listens on */
-    int authserv_ssl_port;      /**< @brief Https port the central server
-				     listens on */
-    int authserv_use_ssl;       /**< @brief Use SSL or not */
-    char *last_ip;      /**< @brief Last ip used by authserver */
-	t_ip_trusted *ips_auth_server; /** @brief ip list of auth server*/
-	int	authserv_fd;	/** @brief this support keep-alive http connection*/
-	int	authserv_fd_ref; /** @brief is this socket fd being used or not*/
-	int authserv_connect_timeout; /** @brief when connect to auth server, seconds to wait time*/
-    struct _auth_serv_t *next;
+	// Auth server properties
+	char *authserv_hostname;
+	char *authserv_path;
+	char *authserv_login_script_path_fragment;
+	char *authserv_portal_script_path_fragment;
+	char *authserv_msg_script_path_fragment;
+	char *authserv_ping_script_path_fragment;
+	char *authserv_auth_script_path_fragment;
+	char *authserv_ws_script_path_fragment;
+	int authserv_http_port;
+	int authserv_ssl_port;
+	int authserv_use_ssl;
+	
+	// Connection related
+	char *last_ip;
+	t_ip_trusted *ips_auth_server;
+	int authserv_fd;
+	int authserv_fd_ref;
+	int authserv_connect_timeout;
+	
+	struct _auth_serv_t *next;
 } t_auth_serv;
 
-/**
- * Firewall targets
- */
-typedef enum {
-    TARGET_DROP,
-    TARGET_REJECT,
-    TARGET_ACCEPT,
-    TARGET_LOG,
-    TARGET_ULOG
-} t_firewall_target;
-
-/**
- * Firewall rules
- */
+/** Firewall related structures */
 typedef struct _firewall_rule_t {
-    t_firewall_target target;   /**< @brief t_firewall_target */
-    char *protocol;             /**< @brief tcp, udp, etc ... */
-    char *port;                 /**< @brief Port to block/allow */
-    char *mask;                 /**< @brief Mask for the rule *destination* */
-    int mask_is_ipset; /**< @brief *destination* is ipset  */
-    struct _firewall_rule_t *next;
+	t_firewall_target target;
+	char *protocol;
+	char *port;
+	char *mask;
+	int mask_is_ipset;
+	struct _firewall_rule_t *next;
 } t_firewall_rule;
 
-/**
- * Firewall rulesets
- */
 typedef struct _firewall_ruleset_t {
-    char *name;
-    t_firewall_rule *rules;
-    struct _firewall_ruleset_t *next;
+	char *name;
+	t_firewall_rule *rules;
+	struct _firewall_ruleset_t *next;
 } t_firewall_ruleset;
 
-/**
- * Trusted MAC Addresses
- */
+/** Trust related structures */
 typedef struct _trusted_mac_t {
-    char 	*mac;
-	char 	*ip;
-	int		is_online;
-    struct _trusted_mac_t *next;
+	char *mac;
+	char *ip;
+	int is_online;
+	struct _trusted_mac_t *next;
 } t_trusted_mac;
 
-typedef t_trusted_mac	t_untrusted_mac;
-
-/**
- * Popular Servers
- */
-typedef struct _popular_server_t {
-    char *hostname;
-    struct _popular_server_t *next;
-} t_popular_server;
+typedef t_trusted_mac t_untrusted_mac;
 
 typedef struct _domain_trusted_t {
 	char *domain;
-	t_ip_trusted	*ips_trusted;
-	int		invalid;
+	t_ip_trusted *ips_trusted;
+	int invalid;
 	struct _domain_trusted_t *next;
 } t_domain_trusted;
 
+/** Server configuration structures */
 typedef struct _https_server_t {
-	char	*ca_crt_file;
-	char	*svr_crt_file;
-	char	*svr_key_file;
+	char *ca_crt_file;
+	char *svr_crt_file;
+	char *svr_key_file;
 } t_https_server;
 
 typedef struct _http_server_t {
-	char 	*base_path;
-	short	gw_http_port;
-}t_http_server;
+	char *base_path;
+	short gw_http_port;
+} t_http_server;
 
 typedef struct _mqtt_server_t {
-	char 	*hostname;
-	char 	*username;
-	char 	*password;
-	char 	*cafile;
-	char 	*crtfile;
-	char 	*keyfile;
-	short	port;
-}t_mqtt_server;
+	char *hostname;
+	char *username;
+	char *password;
+	char *cafile;
+	char *crtfile;
+	char *keyfile;
+	short port;
+} t_mqtt_server;
 
 typedef struct _ws_server_t {
 	char *hostname;
@@ -233,130 +214,113 @@ typedef struct _gateway_setting_t {
 	char *gw_address_v4;
 	char *gw_address_v6;
 	char *gw_channel;
-	int   auth_mode;
+	int auth_mode;
 	struct _gateway_setting_t *next;
 } t_gateway_setting;
 
-/**
- * Configuration structure
- */
+typedef struct _popular_server_t {
+	char *hostname;
+	struct _popular_server_t *next;
+} t_popular_server;
+
+/** Main configuration structure */
 typedef struct {
-    char *configfile;       /**< @brief name of the config file */
-    char *htmlmsgfile;          /**< @brief name of the HTML file used for messages */
-    char *wdctl_sock;           /**< @brief wdctl path to socket */
-    char *internal_sock;                /**< @brief internal path to socket */
-    int deltatraffic;   /**< @brief reset each user's traffic (Outgoing and Incoming) value after each Auth operation. */
-    int daemon;                 /**< @brief if daemon > 0, use daemon mode */
-    char *pidfile;            /**< @brief pid file path of wifidog */
-    char *external_interface;   /**< @brief External network interface name for
-				     firewall rules */
-    uint16_t gw_port;                /**< @brief Port the http webserver will run on */
-	uint16_t gw_https_port;		/**< @brief Port the https webserver will run on */
-
-	char *device_id;				/**< @brief device id */
-	t_gateway_setting *gateway_settings; /** @brief gateway settings list */
-
-    t_auth_serv *auth_servers;  /**< @brief Auth servers list */
-    int clienttimeout;          /**< @brief How many CheckIntervals before a client
-				     must be re-authenticated */
-    int checkinterval;          /**< @brief Frequency the the client timeout check
-				     thread will run. */
-    int proxy_port;             /**< @brief Transparent proxy port (0 to disable) */
-    t_firewall_ruleset *rulesets;       /**< @brief firewall rules */
-    t_trusted_mac *trustedmaclist; /**< @brief list of trusted macs */
-    char *arp_table_path; /**< @brief Path to custom ARP table, formatted
-        like /proc/net/arp */
-
-    t_popular_server *popular_servers; /**< @brief list of popular servers */
-	t_https_server	*https_server; /** tls redirect server config */
-	t_http_server 	*http_server;	/** */
-	t_mqtt_server	*mqtt_server;
-	t_ws_server		*ws_server;
-
-	t_domain_trusted *pan_domains_trusted; /** pan-domain trusted list*/
-	t_domain_trusted *domains_trusted; /** domains list, seperate with comma*/
-	t_domain_trusted *inner_domains_trusted; /** inner domains list, user cannot configure*/
-	t_trusted_mac	*roam_maclist; /** roam mac list*/
-	t_trusted_mac	*trusted_local_maclist; /** trusted local mac list*/
-	t_untrusted_mac	*mac_blacklist; /** blacklist mac*/
-
-	char 	*htmlredirfile;
-	char	*internet_offline_file;
-	char	*authserver_offline_file;
-	char 	*local_portal;
-	short	wired_passed; /** 1 wired device no need to auth */
-	short	parse_checked; 
-	short	js_redir; /** boolean, whether to enable javascript to redirect url request to auth server */
-	short	no_auth;
-	short	work_mode; /** when work_mode 1, it will drop all packets default*/
-	short	bypass_apple_cna; /* 1, Bypass Apple Captive Network Assistant  2, apple no portal appear */
-	int 	update_domain_interval; /** 0, no need update; otherwise update every update_domain_interval*checkinterval seconds*/
-	char 	* dns_timeout; /*time to limit during of parsing the dns */
-	int 	fw4_enable; /* 1, enable ipv4 firewall */
-	char 	*dhcp_cpi_uri; /* dhcp cpi uri */
-	short 	enable_dhcp_cpi; /* 1, enable dhcp cpi */
-	short	enable_bypass_auth; /* 1, bypass auth */
-	short	enable_dns_forward; /* 1, enable dns forward */
-	short	enable_del_conntrack; /* 1, enable delete conntrack when client offline */
+	// File paths
+	char *configfile;
+	char *htmlmsgfile;
+	char *wdctl_sock;
+	char *internal_sock;
+	char *pidfile;
+	char *htmlredirfile;
+	char *internet_offline_file;
+	char *authserver_offline_file;
+	char *local_portal;
+	char *arp_table_path;
+	
+	// Network settings
+	char *external_interface;
+	char *device_id;
+	uint16_t gw_port;
+	uint16_t gw_https_port;
+	int proxy_port;
+	
+	// Server configurations
+	t_gateway_setting *gateway_settings;
+	t_auth_serv *auth_servers;
+	t_https_server *https_server;
+	t_http_server *http_server;
+	t_mqtt_server *mqtt_server;
+	t_ws_server *ws_server;
+	
+	// Trust lists
+	t_domain_trusted *pan_domains_trusted;
+	t_domain_trusted *domains_trusted;
+	t_domain_trusted *inner_domains_trusted;
+	t_trusted_mac *trustedmaclist;
+	t_trusted_mac *roam_maclist;
+	t_trusted_mac *trusted_local_maclist;
+	t_untrusted_mac *mac_blacklist;
+	
+	// Timing and traffic
+	int deltatraffic;
+	int clienttimeout;
+	int checkinterval;
+	int update_domain_interval;
+	
+	// Firewall
+	t_firewall_ruleset *rulesets;
+	t_popular_server *popular_servers;
+	
+	// Flags and modes
+	int daemon;
+	short wired_passed;
+	short parse_checked;
+	short js_redir;
+	short no_auth;
+	short work_mode;
+	short bypass_apple_cna;
+	short fw4_enable;
+	short enable_dhcp_cpi;
+	short enable_bypass_auth;
+	short enable_dns_forward;
+	short enable_del_conntrack;
+	
+	// Misc
+	char *dns_timeout;
+	char *dhcp_cpi_uri;
 } s_config;
 
-/** @brief Get the current gateway configuration */
+/** Configuration Access Functions */
 s_config *config_get_config(void);
-
 t_gateway_setting *get_gateway_settings(void);
-
 t_ws_server *get_ws_server(void);
-
 t_mqtt_server *get_mqtt_server(void);
-
 int get_gateway_count(void);
-
 const char *get_device_id(void);
 
-/** @brief Initialise the conf system */
+/** Configuration Initialization and Management */
 void config_init(void);
-
-/** @brief Initialize the variables we override with the command line*/
 void config_init_override(void);
-
-/** @brief Reads the configuration file */
-void config_read();
-
-/** @brief Check that the configuration is valid */
+void config_read(void);
 void config_validate(void);
 
-/** @brief Get the active auth server */
+/** Authentication Server Management */
 t_auth_serv *get_auth_server(void);
-
-/** @brief Bump server to bottom of the list */
 void mark_auth_server_bad(t_auth_serv *);
-
-/** @brief Fetch a firewall rule set. */
 t_firewall_rule *get_ruleset(const char *);
 
-/** @brief Get domains_trusted of config */
+/** Trusted Domain Management */
 t_domain_trusted *get_domains_trusted(void);
-
-/** @brief add trusted domain unsafely */
 t_domain_trusted *__add_domain_common(const char *, trusted_domain_t);
-/** @brief add trusted domain safely */
 t_domain_trusted *add_domain_common(const char *, trusted_domain_t);
-
-/** @brief add trusted domain for user define */
 t_domain_trusted *__add_user_trusted_domain(const char *);
 t_domain_trusted *add_user_trusted_domain(const char *);
-
 t_domain_trusted *__add_inner_trusted_domain(const char*);
 t_domain_trusted *add_inner_trusted_domain(const char*);
-
-t_domain_trusted  *__del_domain_common(const char *, trusted_domain_t );
+t_domain_trusted *__del_domain_common(const char *, trusted_domain_t);
 void del_domain_common(const char *, trusted_domain_t);
 
-/**
- *  @brief operation of parsing string to domain and add|remove the domain 
- * to the list
- *  
- */
+/** Domain String Parsing */
 void parse_domain_string_common_action(const char *, trusted_domain_t, int);
 void parse_domain_string_common(const char *, trusted_domain_t);
 void parse_inner_trusted_domain_string(const char *);
@@ -365,108 +329,77 @@ void parse_trusted_pan_domain_string(const char *);
 void parse_del_trusted_domain_string(const char *);
 void parse_del_trusted_pan_domain_string(const char *);
 
-/** @brief parse ip from trusted domain list and filled its ip */
+/** Domain List Management */
 void parse_common_trusted_domain_list(trusted_domain_t);
-
-void parse_user_trusted_domain_list();
-
-void parse_inner_trusted_domain_list();
-
-/** @brief add domain ip pair to inner or user trusted domain list */
+void parse_user_trusted_domain_list(void);
+void parse_inner_trusted_domain_list(void);
 void add_domain_ip_pair(const char *, trusted_domain_t);
-/** @brief  Clear domains_trusted of config safely */
-void clear_trusted_domains_(void); 
-
+void clear_trusted_domains_(void);
 void clear_trusted_pan_domains(void);
-
-/** @brief  Clear domains_trusted of config  */
 void __clear_trusted_domains(void);
-
 void __clear_trusted_domain_ip(t_ip_trusted *);
 
-
-/** @brief useless */
+/** MAC Address Management */
 void parse_roam_mac_list(const char *); 
-/** @brief useless */
 void __clear_roam_mac_list();
-/** @brief useless */
 void clear_roam_mac_list();
-/** @brief useless */
 t_trusted_mac *get_roam_maclist();
-/** @brief useless */
 int is_roaming(const char *);
-
 int is_untrusted_mac(const char *);
-
 int is_trusted_mac(const char *);
-
-/** @brief parse  macs from string and add all to trusted mac list */
 void parse_trusted_mac_list(const char *);
-/** @brief parse  macs from string and remove all from trusted mac list if exist */
 void parse_del_trusted_mac_list(const char *);
-/** @brief clear trusted mac list unsafely */
-void __clear_trusted_mac_list();
-/** @brief clear trusted mac list safely */
-void clear_trusted_mac_list();
-
+void __clear_trusted_mac_list(void);
+void clear_trusted_mac_list(void);
 t_trusted_mac *get_trusted_mac_by_ip(const char *);
-
-// trusted local maclist operation for wdctl
-void parse_trusted_local_mac_list(const char *);
-void parse_del_trusted_local_mac_list(const char *);
-void __clear_trusted_local_mac_list();
-void clear_trusted_local_mac_list();
-t_trusted_mac *add_trusted_local_mac(const char *);
-
-
-/** @brief useless */
-void parse_untrusted_mac_list(const char*);
-/** @brief useless */
-void parse_del_untrusted_mac_list(const char *);
-/** @brief useless */
-void __clear_untrusted_mac_list();
-/** @brief useless */
-void clear_untrusted_mac_list();
-
 void clear_dup_trusted_mac_list(t_trusted_mac *);
-
-/** add trusted&untrusted mac to list */
-void add_mac(const char *, mac_choice_t );
-
-void remove_mac(const char *, mac_choice_t );
-
+void add_mac(const char *, mac_choice_t);
+void remove_mac(const char *, mac_choice_t);
 void parse_mac_list(const char *, mac_choice_t);
-
-/** set all trusted mac offline */
-void reset_trusted_mac_list();
-
+void reset_trusted_mac_list(void);
 int trusted_mac_list_dup(t_trusted_mac **);
 
-/** operation of trusted ip list */
+/** Local MAC List Operations */
+void parse_trusted_local_mac_list(const char *);
+void parse_del_trusted_local_mac_list(const char *);
+void __clear_trusted_local_mac_list(void);
+void clear_trusted_local_mac_list(void);
+t_trusted_mac *add_trusted_local_mac(const char *);
+void parse_untrusted_mac_list(const char*);
+void parse_del_untrusted_mac_list(const char *);
+void __clear_untrusted_mac_list();
+void clear_untrusted_mac_list();
+void clear_dup_trusted_mac_list(t_trusted_mac *);
+void reset_trusted_mac_list();
+int trusted_mac_list_dup(t_trusted_mac **);
+
+/** IP List Management */
 void add_trusted_ip_list(const char *);
 void __clear_trusted_iplist(void);
 void clear_trusted_ip_list(void);
 void del_trusted_ip_list(const char *);
 
-// online clients
-extern int 		g_online_clients; // total connected client count
-extern char 	*g_version;
-extern char		*g_type; // hardware type
-extern char		*g_name; // firmware name
-extern char		*g_ssid;
+// Global state variables
+extern int g_online_clients;    // Total connected client count
+extern char *g_version;         // Software version
+extern char *g_type;            // Hardware type
+extern char *g_name;            // Firmware name
+extern char *g_ssid;            // Network SSID
 
-#define	LOCK_DOMAIN() do { \
+// Domain locking macros
+#define LOCK_DOMAIN() do { \
 	debug(LOG_DEBUG, "Locking domain"); \
-	pthread_mutex_lock(&domains_mutex);	\
+	pthread_mutex_lock(&domains_mutex); \
 	debug(LOG_DEBUG, "Domains locked"); \
 } while (0)
 
 #define UNLOCK_DOMAIN() do { \
 	debug(LOG_DEBUG, "Unlocking domain"); \
-	pthread_mutex_unlock(&domains_mutex);	\
+	pthread_mutex_unlock(&domains_mutex); \
 	debug(LOG_DEBUG, "Domain unlocked"); \
 } while (0)
 
+// Configuration locking macros 
 #define LOCK_CONFIG() do { \
 	debug(LOG_DEBUG, "Locking config"); \
 	pthread_mutex_lock(&config_mutex); \
