@@ -486,48 +486,59 @@ process_auth_server_login(struct evhttp_request *req, void *ctx)
 }
 
 /**
- * @brief reply wifidog client's counter response from auth server and free the dup client
+ * @brief Process auth server's counter response for a client and manage client timeout
  * 
+ * This function handles the counter response from the auth server for a specific client.
+ * It performs the following:
+ * 1. Checks if client has timed out based on last activity
+ * 2. If timed out, removes client and denies firewall access
+ * 3. If not timed out, processes any status changes from auth server
+ * 4. Frees the duplicate client data
+ *
+ * @param authresponse Authentication response from server
+ * @param req HTTP request containing response 
+ * @param context Request context containing client state
  */
 static void
-client_counter_request_reply(t_authresponse *authresponse, 
-        struct evhttp_request *req, struct wd_request_context *context)
+client_counter_request_reply(t_authresponse *authresponse,
+                           struct evhttp_request *req, 
+                           struct wd_request_context *context)
 {
     s_config *config = config_get_config();
-    t_client *p1 = (t_client *)context->data;
+    t_client *client = (t_client *)context->data;
     context->data = NULL;
 
+    // Calculate timeout values
     time_t current_time = time(NULL);
+    time_t idle_time = current_time - client->counters.last_updated;
+    time_t timeout = config->checkinterval * config->clienttimeout;
+
     debug(LOG_DEBUG,
-            "Checking client %s for timeout:  Last updated %ld (%ld seconds ago), timeout delay %ld seconds, current time %ld, ",
-            p1->ip, p1->counters.last_updated, current_time - p1->counters.last_updated,
-            config->checkinterval * config->clienttimeout, current_time);
-    if (p1->counters.last_updated + (config->checkinterval * config->clienttimeout) <= current_time) {
-        /* Timing out user */
-        debug(LOG_DEBUG, "%s - Inactive for more than %ld seconds, removing client and denying in firewall",
-                p1->ip, config->checkinterval * config->clienttimeout);
+          "Client %s timeout check: Last updated=%ld, Idle time=%ld, Timeout=%ld, Current time=%ld",
+          client->ip, client->counters.last_updated, idle_time, timeout, current_time);
+
+    if (idle_time >= timeout) {
+        // Client has timed out - remove them
+        debug(LOG_DEBUG, "Client %s timed out after %ld seconds of inactivity",
+              client->ip, idle_time);
+
         LOCK_CLIENT_LIST();
-        t_client *client = client_list_find_by_client(p1);
+        t_client *active_client = client_list_find_by_client(client);
         UNLOCK_CLIENT_LIST();
-        if (client) {
-            ev_logout_client(context, client);
+
+        if (active_client) {
+            ev_logout_client(context, active_client);
         } else {
             debug(LOG_NOTICE, "Client was already removed. Not logging out.");
         }
     } else {
-        /*
-            * This handles any change in
-            * the status this allows us
-            * to change the status of a
-            * user while he's connected
-            *
-            * Only run if we have an auth server
-            * configured!
-            */
-        fw_client_process_from_authserver_response(authresponse, p1);
+        // Client still active - process any status changes
+        fw_client_process_from_authserver_response(authresponse, client);
     }
-    client_free_node(p1);
-} 
+
+    // Free the duplicate client data
+    client_free_node(client);
+}
 
 /**
  * @brief Process client counter response from auth server
