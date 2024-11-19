@@ -569,46 +569,53 @@ read_api_response(struct evhttp_request *req)
 }
 
 /**
- * @brief reply wifidog client's counter response from auth server and free the dup client
+ * @brief Process counter response for a single client from auth server
  * 
+ * This function handles the counter response for an individual client,
+ * checking if they have timed out and processing their auth server response.
+ * It performs the following:
+ * 1. Finds client by ID from the client list
+ * 2. Checks if client has timed out based on last activity
+ * 3. Either logs out timed out clients or processes their auth status change
+ *
+ * @param authresponse Authentication response containing client ID and auth code
+ * @param req HTTP request from auth server
+ * @param context Request context containing client state
  */
 static void
 client_counter_request_reply_v2(t_authresponse *authresponse, 
-        struct evhttp_request *req, struct wd_request_context *context)
+    struct evhttp_request *req, struct wd_request_context *context)
 {
     s_config *config = config_get_config();
+
+    // Find client by ID with lock protection
     LOCK_CLIENT_LIST();
-    t_client *p1 = client_list_find_by_client_id(authresponse->client_id);
-    if (!p1) {
+    t_client *client = client_list_find_by_client_id(authresponse->client_id);
+    if (!client) {
         UNLOCK_CLIENT_LIST();
         return;
     }
 
+    // Check client timeout
     time_t current_time = time(NULL);
+    time_t idle_time = current_time - client->counters.last_updated;
+    time_t timeout = config->checkinterval * config->clienttimeout;
+
     debug(LOG_DEBUG,
-            "Checking client %s for timeout:  Last updated %ld (%ld seconds ago), timeout delay %ld seconds, current time %ld, ",
-            p1->ip, p1->counters.last_updated, current_time - p1->counters.last_updated,
-            config->checkinterval * config->clienttimeout, current_time);
-    if (p1->counters.last_updated + (config->checkinterval * config->clienttimeout) <= current_time) {
-        UNLOCK_CLIENT_LIST();
-        /* Timing out user */
-        debug(LOG_DEBUG, "%s - Inactive for more than %ld seconds, removing client and denying in firewall",
-                p1->ip, config->checkinterval * config->clienttimeout);
-        ev_logout_client(context, p1);     
+      "Client %s timeout check: Last updated=%ld, Idle time=%ld, Timeout=%ld, Current time=%ld",
+      client->ip, client->counters.last_updated, idle_time, timeout, current_time);
+
+    if (idle_time >= timeout) {
+        UNLOCK_CLIENT_LIST(); 
+        debug(LOG_DEBUG, "Client %s timed out after %ld seconds of inactivity",
+            client->ip, idle_time);
+        ev_logout_client(context, client);
     } else {
         UNLOCK_CLIENT_LIST();
-        /*
-            * This handles any change in
-            * the status this allows us
-            * to change the status of a
-            * user while he's connected
-            *
-            * Only run if we have an auth server
-            * configured!
-            */
-        fw_client_process_from_authserver_response(authresponse, p1);
+        // Process any status changes from auth server
+        fw_client_process_from_authserver_response(authresponse, client);
     }
-} 
+}
 
 /**
  * @brief Process a single auth operation JSON object from the auth server
