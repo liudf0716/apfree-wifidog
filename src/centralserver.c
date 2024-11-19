@@ -530,24 +530,44 @@ client_counter_request_reply(t_authresponse *authresponse,
 } 
 
 /**
- * @brief process wifidog's client counter response from auth server
+ * @brief Process client counter response from auth server
  * 
+ * This function processes the authentication server's response for client counters.
+ * It performs the following:
+ * 1. Parses auth server response to get authentication code
+ * 2. If successful, processes the counter response for the client
+ * 3. If parsing fails, frees the client data
+ *
+ * The counter response is used to:
+ * - Track client activity and timeout status
+ * - Process any auth status changes from server
+ * - Clean up client data if needed
+ *
+ * @param req HTTP request from auth server containing response
+ * @param ctx Request context containing client state
  */
 void
 process_auth_server_counter(struct evhttp_request *req, void *ctx)
 {
     t_authresponse authresponse;
     memset(&authresponse, 0, sizeof(t_authresponse));
-    if (parse_auth_server_response(&authresponse, req))
+
+    // Parse the auth server's response
+    if (parse_auth_server_response(&authresponse, req)) {
+        // Successfully parsed - process the counter response
         client_counter_request_reply(&authresponse, req, ctx);
-    else {
-        // free client in ctx
-        t_client *p1 = (t_client *)((struct wd_request_context *)ctx)->data;
-        debug(LOG_ERR, "parse_auth_server_response failed, free client %s", p1->ip);
-        client_free_node(p1);
+    } else {
+        // Failed to parse - clean up client data
+        t_client *client = (t_client *)((struct wd_request_context *)ctx)->data;
+        debug(LOG_ERR, "Failed to parse auth server response for client %s", 
+              client ? client->ip : "unknown");
+        
+        if (client) {
+            client_free_node(client);
+        }
         ((struct wd_request_context *)ctx)->data = NULL;
     }
-} 
+}
 
 /**
  * @brief Read and return the HTTP response body from an auth server request
