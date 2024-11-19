@@ -797,6 +797,12 @@ http_redir_loop(s_config *config)
     event_base_free(base);
 }
 
+static void
+aw_clean_before_exit(void)
+{
+    fw_destroy();
+}
+
 /**
  * @brief Main loop for the gateway
  * 
@@ -809,6 +815,7 @@ main_loop(void)
 {
     s_config *config = config_get_config();
     
+    safe_set_cleanup_func(aw_clean_before_exit);
     wd_init(config);
     threads_init(config);
     http_redir_loop(config);
