@@ -17,6 +17,8 @@ typedef struct _debug_conf {
 /* Global debug configuration instance */
 extern debugconf_t debugconf;
 
+extern char *program_argv0;
+
 /* Extract filename from full path */
 #define __FILENAME__ (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 

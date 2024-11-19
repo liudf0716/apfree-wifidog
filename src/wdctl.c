@@ -14,7 +14,7 @@
 #define WDCTL_MSG_LENG  1024*8
 
 static char *sk_name = NULL;
-char *progname = NULL;
+char *program_argv0 = NULL;
 
 static void show_command(const char *type);
 static void add_command(const char *type, char *values);
@@ -139,6 +139,8 @@ main(int argc, char **argv)
         display_help();
         return 1;
     }
+
+    program_argv0 = argv[0];
 
     char *command = argv[1];
     char *type = (argc > 2) ? argv[2] : NULL;
