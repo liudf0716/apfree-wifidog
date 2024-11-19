@@ -647,10 +647,28 @@ handle_json_array_from_auth_server(json_object *j_result, struct evhttp_request 
 }
 
 /**
- * @brief v2 of process_auth_server_counter
+ * @brief Process auth server's counter response (version 2)
  * 
- * auth response is {result:[{gw_id:"gw_id",auth_op:[{"id":clt_id,"auth_code":authcode}, ....]}, ...]}
+ * Processes the authentication server's counter response in JSON format.
+ * The expected JSON response format is:
+ * {
+ *   "result": [
+ *     {
+ *       "gw_id": "gateway_id",
+ *       "auth_op": [
+ *         {
+ *           "id": client_id,
+ *           "auth_code": auth_code
+ *         },
+ *         ...
+ *       ]
+ *     },
+ *     ...
+ *   ]
+ * }
  * 
+ * @param req The HTTP request from auth server
+ * @param ctx The request context
  */ 
 void
 process_auth_server_counter_v2(struct evhttp_request *req, void *ctx)
@@ -659,27 +677,37 @@ process_auth_server_counter_v2(struct evhttp_request *req, void *ctx)
         mark_auth_offline();
         return;
     }
-	
-    char *buff = read_api_response(req);
-    if (!buff) return;
 
-    debug(LOG_DEBUG, "Auth response [%s]", buff);
-
-    json_object *j_obj = json_tokener_parse(buff);
-    if (!j_obj) {
-        debug(LOG_ERR, "json_tokener_parse failed");
-        goto ERR;
+    // Read the response data
+    char *response_data = read_api_response(req);
+    if (!response_data) {
+        debug(LOG_ERR, "Failed to read API response");
+        return;
     }
 
-    json_object *j_result = NULL;
-    if (!json_object_object_get_ex(j_obj, "result", &j_result)) {
-        debug(LOG_ERR, "no result in json object");
-        goto ERR;
+    debug(LOG_DEBUG, "Auth response [%s]", response_data);
+
+    // Parse JSON response
+    json_object *json_response = json_tokener_parse(response_data);
+    if (!json_response) {
+        debug(LOG_ERR, "Failed to parse JSON response");
+        free(response_data);
+        return;
     }
 
-    handle_json_array_from_auth_server(j_result, req, ctx);
-	
-ERR:
-    if (j_obj) json_object_put(j_obj);
-    free(buff);
+    // Get result array from response
+    json_object *result_array = NULL;
+    if (!json_object_object_get_ex(json_response, "result", &result_array)) {
+        debug(LOG_ERR, "No 'result' field in JSON response");
+        json_object_put(json_response);
+        free(response_data);
+        return;
+    }
+
+    // Process the result array
+    handle_json_array_from_auth_server(result_array, req, ctx);
+
+    // Cleanup
+    json_object_put(json_response);
+    free(response_data);
 }
