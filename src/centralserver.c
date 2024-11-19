@@ -550,22 +550,46 @@ process_auth_server_counter(struct evhttp_request *req, void *ctx)
 } 
 
 /**
- * @intern
- * @brief read api response from wifidog auth server, need to be free by caller
- *  
+ * @brief Read and return the HTTP response body from an auth server request
+ *
+ * This function reads the complete response body from the auth server HTTP request
+ * and returns it as a null-terminated string. The response data needs to be freed
+ * by the caller.
+ *
+ * @param req The HTTP request containing the response buffer
+ * @return Dynamically allocated string containing response body, or NULL on error. 
+ *         Caller must free the returned string.
  */
 static char *
 read_api_response(struct evhttp_request *req)
 {
-    struct evbuffer *in = evhttp_request_get_input_buffer(req);
-    size_t len = evbuffer_get_length(in);
-    char *res = calloc(1, len+1);
-    if (res) {
-        memcpy(res, evbuffer_pullup(in, len), len);
+    if (!req) {
+        return NULL;
     }
-    evbuffer_drain(in, len);
 
-    return res;
+    // Get the input buffer containing response data
+    struct evbuffer *input_buf = evhttp_request_get_input_buffer(req);
+    if (!input_buf) {
+        return NULL;
+    }
+
+    // Get response length and allocate buffer 
+    size_t response_len = evbuffer_get_length(input_buf);
+    char *response_data = calloc(1, response_len + 1); // +1 for null terminator
+    if (!response_data) {
+        debug(LOG_ERR, "Failed to allocate memory for API response");
+        return NULL;
+    }
+
+    // Copy response data and drain the buffer
+    if (evbuffer_copyout(input_buf, response_data, response_len) < 0) {
+        debug(LOG_ERR, "Failed to copy API response data");
+        free(response_data);
+        return NULL;
+    }
+    evbuffer_drain(input_buf, response_len);
+
+    return response_data;
 }
 
 /**
