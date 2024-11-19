@@ -269,13 +269,37 @@ mqtt_get_status_text()
 	return retStr;
 }
 
+/**
+ * @brief Generates a detailed status report of the apfree wifidog system
+ * 
+ * This function creates a comprehensive text report including:
+ * - WiFiDog version
+ * - System uptime
+ * - Restart status
+ * - Internet and auth server connectivity status
+ * - Number of clients served
+ * - Currently connected clients with their details:
+ *   - IP and MAC addresses
+ *   - Authentication tokens
+ *   - Login times
+ *   - Data transfer statistics
+ * - Offline client information
+ * - Trusted MAC addresses
+ * - Authentication server details
+ *
+ * The status information is built using an evbuffer and converted to a string.
+ *
+ * @return A dynamically allocated string containing the status report.
+ *         The caller is responsible for freeing this memory.
+ * @note The returned string must be freed by the caller using free()
+ */
 /*
  * @return A string containing human-readable status text. MUST BE free()d by caller
  */
 char *
 get_status_text()
 {
-	pstr_t *pstr = pstr_new();
+	struct evbuffer *evb = evbuffer_new();
 	s_config *config;
 	t_auth_serv *auth_server;
 	t_client *sublist, *current;
@@ -284,8 +308,9 @@ get_status_text()
 	unsigned int days = 0, hours = 0, minutes = 0, seconds = 0;
 	t_trusted_mac *p;
 	t_offline_client *oc_list;
+	char *status_text;
 
-	pstr_cat(pstr, "WiFiDog status\n\n");
+	evbuffer_add_printf(evb, "apfree wifidog status\n\n");
 
 	uptime = time(NULL) - started_time;
 	days = (unsigned int)uptime / (24 * 60 * 60);
@@ -296,41 +321,36 @@ get_status_text()
 	uptime -= minutes * 60;
 	seconds = (unsigned int)uptime;
 
-	pstr_cat(pstr, "Version: " VERSION "\n");
-	pstr_append_sprintf(pstr, "Uptime: %ud %uh %um %us\n", days, hours, minutes, seconds);
-	pstr_cat(pstr, "Has been restarted: ");
+	evbuffer_add_printf(evb, "Version: " VERSION "\n");
+	evbuffer_add_printf(evb, "Uptime: %ud %uh %um %us\n", days, hours, minutes, seconds);
+	evbuffer_add_printf(evb, "Has been restarted: %s%s%d%s\n", 
+		restart_orig_pid ? "yes (from PID " : "no",
+		restart_orig_pid ? "" : "",
+		restart_orig_pid,
+		restart_orig_pid ? ")" : "");
 
-	if (restart_orig_pid) {
-		pstr_append_sprintf(pstr, "yes (from PID %d)\n", restart_orig_pid);
-	} else {
-		pstr_cat(pstr, "no\n");
-	}
-
-	pstr_append_sprintf(pstr, "Internet Connectivity: %s\n", (is_online()? "yes" : "no"));
-	pstr_append_sprintf(pstr, "Auth server reachable: %s\n", (is_auth_online()? "yes" : "no"));
-	pstr_append_sprintf(pstr, "Clients served this session: %lu\n\n", served_this_session);
+	evbuffer_add_printf(evb, "Internet Connectivity: %s\n", (is_online()? "yes" : "no"));
+	evbuffer_add_printf(evb, "Auth server reachable: %s\n", (is_auth_online()? "yes" : "no"));
+	evbuffer_add_printf(evb, "Clients served this session: %lu\n\n", served_this_session);
 
 	LOCK_CLIENT_LIST();
-
 	count = client_list_dup(&sublist);
-
 	UNLOCK_CLIENT_LIST();
 
 	current = sublist;
-
-	pstr_append_sprintf(pstr, "%d clients " "connected.\n", count);
+	evbuffer_add_printf(evb, "%d clients connected.\n", count);
 
 	count = 1;
 	active_count = 0;
 	while (current != NULL) {
-		pstr_append_sprintf(pstr, "\nClient %d status [%d]\n", count, current->is_online);
-		pstr_append_sprintf(pstr, "  IP: %s MAC: %s\n", current->ip, current->mac);
-		pstr_append_sprintf(pstr, "  Token: %s\n", current->token);
-		pstr_append_sprintf(pstr, "  First Login: %lld\n", (long long)current->first_login);
-		pstr_append_sprintf(pstr, "  Online Time: %lld\n", (long long)(time(NULL) - current->first_login));
-		pstr_append_sprintf(pstr, "  Name: %s\n", current->name != NULL?current->name:"null");
-		pstr_append_sprintf(pstr, "  Downloaded: %llu\n  Uploaded: %llu\n", current->counters.incoming,
-			current->counters.outgoing);
+		evbuffer_add_printf(evb, "\nClient %d status [%d]\n", count, current->is_online);
+		evbuffer_add_printf(evb, "  IP: %s MAC: %s\n", current->ip, current->mac);
+		evbuffer_add_printf(evb, "  Token: %s\n", current->token);
+		evbuffer_add_printf(evb, "  First Login: %lld\n", (long long)current->first_login);
+		evbuffer_add_printf(evb, "  Online Time: %lld\n", (long long)(time(NULL) - current->first_login));
+		evbuffer_add_printf(evb, "  Name: %s\n", current->name != NULL?current->name:"null");
+		evbuffer_add_printf(evb, "  Downloaded: %llu\n  Uploaded: %llu\n", 
+			current->counters.incoming, current->counters.outgoing);
 		count++;
 		if(current->is_online)
 			active_count++;
@@ -339,14 +359,14 @@ get_status_text()
 
 	client_list_destroy(sublist);
 
-	pstr_append_sprintf(pstr, "%d client " " %d active .\n", count-1, active_count);
+	evbuffer_add_printf(evb, "%d client %d active.\n", count-1, active_count);
 
 	LOCK_OFFLINE_CLIENT_LIST();
-	pstr_append_sprintf(pstr, "%d clients " "unconnected.\n", offline_client_number());
+	evbuffer_add_printf(evb, "%d clients unconnected.\n", offline_client_number());
 	oc_list = client_get_first_offline_client();
-	while(oc_list != NULL) {	
-		pstr_append_sprintf(pstr, "  IP: %s MAC: %s Last Login: %lld Hit Counts: %d Client Type: %d Temp Passed: %d\n", 
-			oc_list->ip, oc_list->mac, (long long)oc_list->last_login, 
+	while(oc_list != NULL) {    
+		evbuffer_add_printf(evb, "  IP: %s MAC: %s Last Login: %lld Hit Counts: %d Client Type: %d Temp Passed: %d\n", 
+			oc_list->ip, oc_list->mac, (long long)oc_list->last_login,
 			oc_list->hit_counts, oc_list->client_type, oc_list->temp_passed);
 		oc_list = oc_list->next;
 	}
@@ -357,22 +377,23 @@ get_status_text()
 	LOCK_CONFIG();
 
 	if (config->trustedmaclist != NULL) {
-		pstr_cat(pstr, "\nTrusted MAC addresses:\n");
-
+		evbuffer_add_printf(evb, "\nTrusted MAC addresses:\n");
 		for (p = config->trustedmaclist; p != NULL; p = p->next) {
-			pstr_append_sprintf(pstr, "  %s\n", p->mac);
+			evbuffer_add_printf(evb, "  %s\n", p->mac);
 		}
 	}
 
-	pstr_cat(pstr, "\nAuthentication servers:\n");
-
+	evbuffer_add_printf(evb, "\nAuthentication servers:\n");
 	for (auth_server = config->auth_servers; auth_server != NULL; auth_server = auth_server->next) {
-		pstr_append_sprintf(pstr, "  Host: %s (%s)\n", auth_server->authserv_hostname, auth_server->last_ip);
+		evbuffer_add_printf(evb, "  Host: %s (%s)\n", 
+			auth_server->authserv_hostname, auth_server->last_ip);
 	}
 
 	UNLOCK_CONFIG();
 
-	return pstr_to_string(pstr);
+	status_text = evb_2_string(evb, NULL);
+	evbuffer_free(evb);
+	return status_text;
 }
 
 char *
