@@ -7,26 +7,18 @@
 #ifndef _CENTRALSERVER_H_
 #define _CENTRALSERVER_H_
 
-#include <json-c/json.h>
+/* Request type definitions */
+#define REQUEST_TYPE_LOGIN         "login"
+#define REQUEST_TYPE_LOGOUT        "logout"
+#define REQUEST_TYPE_COUNTERS      "counters"
+#define REQUEST_TYPE_COUNTERS_V2   "counters_v2"
 
-/** @brief Ask the central server to login a client */
-#define REQUEST_TYPE_LOGIN     "login"
-/** @brief Notify the the central server of a client logout */
-#define REQUEST_TYPE_LOGOUT    "logout"
-/** @brief Update the central server's traffic counters */
-#define REQUEST_TYPE_COUNTERS  "counters"
-/** @brief New version of updating the central server's traffic counters*/
-#define REQUEST_TYPE_COUNTERS_V2    "counters_v2"
+/* Gateway message definitions */
+#define GATEWAY_MESSAGE_DENIED                     "denied"
+#define GATEWAY_MESSAGE_ACTIVATE_ACCOUNT           "activate"
+#define GATEWAY_MESSAGE_ACCOUNT_VALIDATION_FAILED  "failed_validation"
 
-/** @brief Sent when the user's token is denied by the central server */
-#define GATEWAY_MESSAGE_DENIED     "denied"
-/** @brief Sent when the user's token is accepted, but user is on probation  */
-#define GATEWAY_MESSAGE_ACTIVATE_ACCOUNT     "activate"
-/** @brief  Sent when the user's token is denied by the central server because the probation period is over */
-#define GATEWAY_MESSAGE_ACCOUNT_VALIDATION_FAILED     "failed_validation"
-/** @brief Sent after the user performed a manual log-out on the gateway  */
-#define GATEWAY_MESSAGE_ACCOUNT_LOGGED_OUT     "logged-out"
-
+/* Type definitions */
 typedef enum {
     ONLINE_CLIENT,
     TRUSTED_CLIENT
@@ -39,26 +31,22 @@ struct roam_req_info {
 
 typedef struct roam_req_info auth_req_info;
 
+/* Forward declarations */
 struct evhttp_request;
 struct wd_request_context;
 
-
-/** @brief wifidog make roam quest to auth server */
-void make_roam_request(struct wd_request_context *, struct roam_req_info *);
-/** @brief wifidog make auth quest to auth server */
-void make_auth_request(struct wd_request_context *, auth_req_info *);
-/** @brief get client's auth uri */
-char *get_auth_uri(const char *, client_type_t , void *);
-
-/** @brief process wifidog's client logout response */
-void process_auth_server_logout(struct evhttp_request *, void *);
-/** @brief process wifidog's client login response */
-void process_auth_server_login(struct evhttp_request *, void *);
-/** @brief process wifidog's client counter response */
-void process_auth_server_counter(struct evhttp_request *, void *);
-/** @brief process v2 of wifidog's client counter response */
-void process_auth_server_counter_v2(struct evhttp_request *, void *);
-/** @brief get auth counter v2 uri*/
+/* Authentication URI functions */
+char *get_auth_uri(const char *url, client_type_t type, void *info);
 char *get_auth_counter_v2_uri(void);
 
-#endif                          /* _CENTRALSERVER_H_ */
+/* Request handler functions */
+void make_roam_request(struct wd_request_context *context, struct roam_req_info *info);
+void make_auth_request(struct wd_request_context *context, auth_req_info *info);
+
+/* Response processor functions */
+void process_auth_server_login(struct evhttp_request *req, void *ctx);
+void process_auth_server_logout(struct evhttp_request *req, void *ctx);
+void process_auth_server_counter(struct evhttp_request *req, void *ctx);
+void process_auth_server_counter_v2(struct evhttp_request *req, void *ctx);
+
+#endif /* _CENTRALSERVER_H_ */
