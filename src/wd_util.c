@@ -604,35 +604,53 @@ get_serialize_trusted_domains()
 	return retStr;
 }
 
+/**
+ * @brief Serialize trusted pan domains into a comma-separated string
+ * 
+ * This function gets all trusted pan domains from the configuration and 
+ * serializes them into a comma-separated string format.
+ *
+ * @return A newly allocated string containing comma-separated domain names.
+ *         NULL if no pan domains exist or on error. 
+ *         The caller is responsible for freeing the returned string.
+ */
 char *
 get_serialize_trusted_pan_domains()
 {
-	pstr_t *pstr = NULL;
-    s_config *config;
+	s_config *config = config_get_config();
 	t_domain_trusted *domain_trusted = NULL;
-	int line = 0;
+	struct evbuffer *evb = NULL;
+	int first_domain = 1;
 
-    config = config_get_config();
-    
-	domain_trusted = config->pan_domains_trusted;
-	if(domain_trusted == NULL)
+	if (!config || !config->pan_domains_trusted) {
 		return NULL;
-
-	pstr = pstr_new();
-
-	LOCK_DOMAIN();
-	
-	for (; domain_trusted != NULL; domain_trusted = domain_trusted->next, line++) {
-		if(line == 0)
-        	pstr_append_sprintf(pstr, "%s", domain_trusted->domain);
-		else
-        	pstr_append_sprintf(pstr, ",%s", domain_trusted->domain);
 	}
 
-	UNLOCK_DOMAIN();	
-    
-	return line?pstr_to_string(pstr):NULL;
+	evb = evbuffer_new();
+	if (!evb) {
+		return NULL;
+	}
 
+	LOCK_DOMAIN();
+
+	// Build comma-separated string of domain names
+	for (domain_trusted = config->pan_domains_trusted; 
+		 domain_trusted != NULL; 
+		 domain_trusted = domain_trusted->next) {
+		
+		if (first_domain) {
+			evbuffer_add_printf(evb, "%s", domain_trusted->domain);
+			first_domain = 0;
+		} else {
+			evbuffer_add_printf(evb, ",%s", domain_trusted->domain);
+		}
+	}
+
+	UNLOCK_DOMAIN();
+
+	char *retStr = evb_2_string(evb, NULL);
+	evbuffer_free(evb);
+	return first_domain ? NULL : retStr;
 }
 
 char *
