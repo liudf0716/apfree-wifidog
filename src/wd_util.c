@@ -702,35 +702,51 @@ mqtt_get_trusted_pan_domains_text()
 	return first ? NULL : retStr;
 }
 
+/**
+ * @brief Get JSON formatted string containing trusted domains and their IP addresses
+ * 
+ * This function retrieves all trusted domains and their associated IP addresses from
+ * the configuration and formats them as a JSON array. Each domain is represented as
+ * an object with the domain name as key and comma-separated IP list as value.
+ *
+ * @return A newly allocated string containing the JSON array, or NULL if no trusted
+ *         domains exist. The caller must free this string.
+ */
 char *
 mqtt_get_trusted_domains_text()
 {
-    s_config *config;
-	t_domain_trusted *domain_trusted = NULL;
-	t_ip_trusted	*ip_trusted = NULL;
+	s_config *config = config_get_config();
+	if (config->domains_trusted == NULL)
+		return NULL;
 
-    config = config_get_config();
-    if (config->domains_trusted == NULL)
-    	return NULL;
-
-    struct json_object *jarray = json_object_new_array();
+	struct json_object *jarray = json_object_new_array();
+	
 	LOCK_DOMAIN();
 	
-	for (domain_trusted = config->domains_trusted; domain_trusted != NULL; domain_trusted = domain_trusted->next) {
-        pstr_t *pstr = pstr_new();
-        int first = 1;
-        struct json_object *jobj = json_object_new_object();
-		for(ip_trusted = domain_trusted->ips_trusted; ip_trusted != NULL; ip_trusted = ip_trusted->next) {
-        	if (first) {
-        		pstr_append_sprintf(pstr, "%s", ip_trusted->ip);
-        		first = 0;
-        	} else
-        		pstr_append_sprintf(pstr, ",%s", ip_trusted->ip);
+	for (t_domain_trusted *domain = config->domains_trusted; domain != NULL; domain = domain->next) {
+		struct evbuffer *evb = evbuffer_new();
+		int first = 1;
+		struct json_object *jobj = json_object_new_object();
+		
+		// Build comma-separated IP list
+		for (t_ip_trusted *ip = domain->ips_trusted; ip != NULL; ip = ip->next) {
+			if (first) {
+				evbuffer_add_printf(evb, "%s", ip->ip);
+				first = 0;
+			} else {
+				evbuffer_add_printf(evb, ",%s", ip->ip);
+			}
 		}
-		char *iplist = pstr_to_string(pstr);
-		json_object_object_add(jobj, domain_trusted->domain, 
-			json_object_new_string(first?"NULL":iplist));
+
+		// Get IP list as string
+		char *iplist = evb_2_string(evb, NULL);
+		evbuffer_free(evb);
+
+		// Add domain and its IPs to JSON object
+		json_object_object_add(jobj, domain->domain, 
+			json_object_new_string(first ? "NULL" : iplist));
 		json_object_array_add(jarray, jobj);
+		
 		if (iplist)
 			free(iplist);
 	}
@@ -738,49 +754,64 @@ mqtt_get_trusted_domains_text()
 	UNLOCK_DOMAIN();
 
 	char *retStr = safe_strdup(json_object_to_json_string(jarray));
-    json_object_put(jarray);
+	json_object_put(jarray);
 
 	return retStr;
 }
 
+/**
+ * @brief Get JSON formatted string containing IP addresses from the iplist domain
+ * 
+ * This function looks for a special domain named "iplist" in the trusted domains
+ * configuration and returns its IP addresses as a JSON array with a single object.
+ * The IPs are formatted as a comma-separated string.
+ *
+ * @return A newly allocated string containing the JSON array, or NULL if no iplist
+ *         domain exists. The caller must free this string.
+ */
 char *
 mqtt_get_trusted_iplist_text()
 {
-	s_config *config;
-	t_domain_trusted *domain_trusted = NULL;
-	t_ip_trusted	*ip_trusted = NULL;
-
-	config = config_get_config();
+	s_config *config = config_get_config();
 	if (config->domains_trusted == NULL)
 		return NULL;
 
-	domain_trusted = config->domains_trusted;
-	int first = 1;
+	t_domain_trusted *domain = NULL;
 	
 	LOCK_DOMAIN();
-	for (; (domain_trusted != NULL)&& (strcmp(domain_trusted->domain,"iplist") != 0); domain_trusted = domain_trusted->next) ;
+	
+	// Find the special "iplist" domain
+	for (domain = config->domains_trusted; 
+		 domain != NULL && strcmp(domain->domain, "iplist") != 0; 
+		 domain = domain->next);
 
-	if(domain_trusted == NULL) {
+	if (domain == NULL) {
 		UNLOCK_DOMAIN();
 		return NULL;
 	}
 
-	pstr_t *pstr = pstr_new();
-	for(ip_trusted = domain_trusted->ips_trusted; ip_trusted != NULL; ip_trusted = ip_trusted->next) {
-		if (first) {
-			  pstr_append_sprintf(pstr, "%s", ip_trusted->ip);
-			  first = 0;
-		 } else {
-			  pstr_append_sprintf(pstr, ",%s", ip_trusted->ip);
-		 }
-	 }
+	struct evbuffer *evb = evbuffer_new();
+	int first = 1;
 
-	char *iplist = pstr_to_string(pstr);
+	// Build comma-separated IP list
+	for (t_ip_trusted *ip = domain->ips_trusted; ip != NULL; ip = ip->next) {
+		if (first) {
+			evbuffer_add_printf(evb, "%s", ip->ip);
+			first = 0;
+		} else {
+			evbuffer_add_printf(evb, ",%s", ip->ip);
+		}
+	}
+
+	// Create JSON structure
+	char *iplist = evb_2_string(evb, NULL);
 	struct json_object *jobj = json_object_new_object();
 	struct json_object *jarray = json_object_new_array();
-	json_object_object_add(jobj, domain_trusted->domain, 
-		json_object_new_string(first?"NULL":iplist));
+	json_object_object_add(jobj, domain->domain,
+		json_object_new_string(first ? "NULL" : iplist));
 	json_object_array_add(jarray, jobj);
+
+	evbuffer_free(evb);
 	if (iplist)
 		free(iplist);
 
