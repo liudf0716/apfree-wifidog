@@ -307,9 +307,18 @@ get_auth_uri(const char *request_type, client_type_t type, void *data)
 }
 
 /**
- * @brief parse response from auth server
+ * @brief Parse authentication response from auth server
  * 
- */ 
+ * This function parses the authentication response received from the auth server.
+ * The expected response format is "Auth: <code>" where code is an integer 
+ * representing the authentication status.
+ *
+ * It also maintains the auth server online/offline status based on response.
+ *
+ * @param authresponse Pointer to store parsed authentication response
+ * @param req HTTP request containing auth server response
+ * @return 1 if response was successfully parsed, 0 otherwise
+ */
 static int
 parse_auth_server_response(t_authresponse *authresponse, struct evhttp_request *req) 
 {
@@ -317,45 +326,75 @@ parse_auth_server_response(t_authresponse *authresponse, struct evhttp_request *
         mark_auth_offline();
         return 0;
     }
-	
+
     char buffer[MAX_BUF] = {0};
-	char *tmp = NULL;
-    if (evbuffer_remove(evhttp_request_get_input_buffer(req), buffer, MAX_BUF-1) > 0 && 
-        (tmp = strstr(buffer, "Auth: "))) {
-        mark_auth_online();
-        if (sscanf(tmp, "Auth: %d", (int *)&authresponse->authcode) == 1) {
-            debug(LOG_INFO, "Auth server returned authentication code %d", authresponse->authcode);
-            return 1;
-        }
-    } else
+    char *auth_marker = NULL;
+    
+    // Read response into buffer
+    if (evbuffer_remove(evhttp_request_get_input_buffer(req), buffer, MAX_BUF-1) <= 0) {
         mark_auth_offline();
-    debug(LOG_WARNING, "Auth server did not return expected authentication code");
+        debug(LOG_WARNING, "Failed to read auth server response");
+        return 0;
+    }
+
+    // Look for "Auth: " marker
+    auth_marker = strstr(buffer, "Auth: ");
+    if (!auth_marker) {
+        mark_auth_offline();
+        debug(LOG_WARNING, "Auth server response missing 'Auth: ' marker");
+        return 0;
+    }
+
+    // Parse auth code
+    mark_auth_online();
+    if (sscanf(auth_marker, "Auth: %d", (int *)&authresponse->authcode) == 1) {
+        debug(LOG_INFO, "Auth server returned authentication code %d", 
+              authresponse->authcode);
+        return 1;
+    }
+
+    debug(LOG_WARNING, "Failed to parse auth code from server response");
     return 0;
 }
 
 /**
- * @brief Treat client's logout response from auth server
+ * @brief Process client logout response from auth server
  * 
- * @param req The http request
- * 
- */ 
+ * This function handles the authentication server's response to a client logout
+ * request. If the auth code is 0 (success), it:
+ * 1. Denies the client firewall access
+ * 2. Logs the successful logout
+ * 3. Removes the client from the client list
+ *
+ * @param req HTTP request containing auth server response
+ * @param ctx Request context containing client state
+ */
 void 
 process_auth_server_logout(struct evhttp_request *req, void *ctx) 
 {
-    t_authresponse authresponse;
-    memset(&authresponse, 0, sizeof(t_authresponse));
-    if (parse_auth_server_response(&authresponse, req)) {
-        if (authresponse.authcode == 0) {
-            // get client from ctx
-            t_client *client = (t_client *)((struct wd_request_context *)ctx)->data;
+    struct wd_request_context *context = (struct wd_request_context *)ctx;
+    t_client *client = (t_client *)context->data;
+    t_authresponse authresponse = {0};
+
+    if (!parse_auth_server_response(&authresponse, req)) {
+        debug(LOG_ERR, "Failed to parse auth server logout response");
+        goto cleanup;
+    }
+
+    if (authresponse.authcode == 0) {
+        // Successful logout
+        if (client) {
             fw_deny(client);
             debug(LOG_INFO, "Client %s logged out successfully", client->ip);
-            safe_client_list_delete(client);  
+            safe_client_list_delete(client);
         }
     } else {
-        debug(LOG_ERR, "parse_auth_server_response failed");
+        debug(LOG_WARNING, "Auth server returned non-zero code %d for logout",
+              authresponse.authcode);
     }
-    ((struct wd_request_context *)ctx)->data = NULL;
+
+cleanup:
+    context->data = NULL; // Clear client pointer from context
 }
 
 /**
