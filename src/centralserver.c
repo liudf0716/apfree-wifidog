@@ -19,27 +19,41 @@
 #include "ping_thread.h"
 
 /**
- * @brief process auth server's roam request
- * The response json like this:
- * {"roam":"yes|no", "client":{"token":"client_token", "first_login":"first login time"}} 
+ * @brief Process authentication server's roaming response
+ *
+ * Handles JSON response from auth server for roaming requests.
+ * Expected JSON format:
+ * {
+ *   "roam": "yes|no",           // Whether roaming is allowed
+ *   "client": {                 // Client info if roaming allowed
+ *     "token": "client_token",
+ *     "first_login": "timestamp"
+ *     ...
+ *   }
+ * }
+ *
+ * If roaming is allowed and client info provided, adds client to online list.
  * 
- * @param ctx The wifidog's request context, need to free its data member
- * 
- */ 
+ * @param req HTTP request containing auth server response
+ * @param ctx Request context containing roam info that must be freed
+ */
 static void
 process_auth_server_roam(struct evhttp_request *req, void *ctx)
 {
     struct roam_req_info *roam = ((struct wd_request_context *)ctx)->data;
+    
+    // Validate request
     if (!req) {
         mark_auth_offline();
         free(roam);
         return;
     }
 
-    debug(LOG_DEBUG, "process auth server roam response");
-	
+    debug(LOG_DEBUG, "Processing auth server roam response");
+
+    // Read response data
     char buffer[MAX_BUF] = {0};
-    if (evbuffer_remove(evhttp_request_get_input_buffer(req), buffer, MAX_BUF-1) > 0 ) {
+    if (evbuffer_remove(evhttp_request_get_input_buffer(req), buffer, MAX_BUF-1) > 0) {
         mark_auth_online();
     } else {
         mark_auth_offline();
@@ -47,28 +61,31 @@ process_auth_server_roam(struct evhttp_request *req, void *ctx)
         return;
     }
 
+    // Parse JSON response
     json_object *roam_info = json_tokener_parse(buffer);
-    if(roam_info == NULL) {
-        debug(LOG_ERR, "error parse json info %s!", buffer);
+    if (!roam_info) {
+        debug(LOG_ERR, "Failed to parse JSON response: %s", buffer);
         free(roam);
-        return ;
+        return;
     }
 
+    // Check roaming status
     json_object *roam_jo = NULL;
-    if ( !json_object_object_get_ex(roam_info, "roam", &roam_jo)) {
+    if (!json_object_object_get_ex(roam_info, "roam", &roam_jo)) {
         json_object_put(roam_info);
         free(roam);
-        return ;
+        return;
     }
     
+    // Process roaming client if allowed
     const char *is_roam = json_object_get_string(roam_jo);
-    if(is_roam && strcmp(is_roam, "yes") == 0) {
+    if (is_roam && strcmp(is_roam, "yes") == 0) {
         json_object *client = NULL;
-        if( json_object_object_get_ex(roam_info, "client", &client)) {
+        if (json_object_object_get_ex(roam_info, "client", &client)) {
             add_online_client(roam->ip, roam->mac, client);
         } else {
-			debug(LOG_ERR, "no roam client info!!!!!");
-		}
+            debug(LOG_ERR, "Missing client info in roaming response");
+        }
     }
 
     json_object_put(roam_info);
@@ -76,44 +93,73 @@ process_auth_server_roam(struct evhttp_request *req, void *ctx)
 }
 
 /**
- * @brief get roam request uri
- * 
- */ 
+ * @brief Get roaming request URI for auth server
+ *
+ * Constructs the URI used for roaming validation requests.
+ * The URI includes parameters:
+ * - Gateway ID and channel
+ * - Client MAC address
+ *
+ * @param gw_setting Gateway settings containing ID and channel
+ * @param auth_server Auth server configuration
+ * @param mac Client MAC address to validate
+ * @return Dynamically allocated URI string, NULL on error. Caller must free.
+ */
 static char *
-get_roam_request_uri(t_gateway_setting *gw_setting, t_auth_serv *auth_server, const char *mac)
+get_roam_request_uri(t_gateway_setting *gw_setting, 
+                    t_auth_serv *auth_server, 
+                    const char *mac)
 {
     char *roam_uri = NULL;
-    safe_asprintf(&roam_uri, "%sroam?gw_id=%s&mac=%s&gw_channel=%s", 
-        auth_server->authserv_path,
-        gw_setting->gw_id,
-		mac,
-		gw_setting->gw_channel);
+    if (safe_asprintf(&roam_uri,
+            "%sroam?gw_id=%s&mac=%s&gw_channel=%s",
+            auth_server->authserv_path,
+            gw_setting->gw_id,
+            mac,
+            gw_setting->gw_channel) < 0) {
+        return NULL;
+    }
     return roam_uri;
 }
 
 /**
- * @brief wifidog make roam quest to auth server
- * 
- * @param roam The roam request data, need to be free 
- * 
- */ 
+ * @brief Make roaming validation request to auth server
+ *
+ * Sends request to validate if client is allowed to roam to this gateway.
+ * Request flow:
+ * 1. Constructs roaming URI with client MAC and gateway details
+ * 2. Creates HTTP connection and request
+ * 3. Sends request to auth server
+ * 4. Response handled by process_auth_server_roam()
+ *
+ * @param context Request context for tracking state
+ * @param roam Roaming request data, freed after use
+ */
 void 
 make_roam_request(struct wd_request_context *context, struct roam_req_info *roam)
 {
-    // TODO:  find valid gateway setting
-    char *uri = get_roam_request_uri(get_gateway_settings(), get_auth_server(), roam->mac);
+    char *uri = get_roam_request_uri(get_gateway_settings(), 
+                                   get_auth_server(), 
+                                   roam->mac);
     if (!uri) {
+        debug(LOG_ERR, "Failed to create roaming request URI");
         free(roam);
         return;
     }
 
-    debug(LOG_DEBUG, "roam request uri [%s]", uri);
+    debug(LOG_DEBUG, "Roaming request URI: [%s]", uri);
 
     struct evhttp_connection *evcon = NULL;
-    struct evhttp_request *req      = NULL;
-    context->data = roam; 
-    wd_make_request(context, &evcon, &req, process_auth_server_roam);
-    evhttp_make_request(evcon, req, EVHTTP_REQ_GET, uri);
+    struct evhttp_request *req = NULL;
+    context->data = roam;
+
+    if (!wd_make_request(context, &evcon, &req, process_auth_server_roam)) {
+        evhttp_make_request(evcon, req, EVHTTP_REQ_GET, uri);
+    } else {
+        debug(LOG_ERR, "Failed to create HTTP request");
+        free(roam);
+    }
+
     free(uri);
 }
 
