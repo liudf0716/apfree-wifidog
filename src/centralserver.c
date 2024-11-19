@@ -198,21 +198,34 @@ make_auth_request(struct wd_request_context *context, auth_req_info *auth)
 }
 
 /**
- * @brief get auth counter v2 uri
- * @return need to be free by the caller
+ * @brief Get the URI for v2 counter authentication requests
  * 
- */ 
-char *
-get_auth_counter_v2_uri()
+ * Constructs the URI used for sending client counter information to the auth server
+ * using the v2 protocol. The URI is built from:
+ * - Auth server base path
+ * - Auth script path fragment
+ * - Counter v2 request type
+ *
+ * @return Dynamically allocated string containing the complete URI.
+ *         Must be freed by caller.
+ *         Returns NULL on memory allocation failure.
+ */
+static char *
+get_auth_counter_v2_uri(void)
 {
     t_auth_serv *auth_server = get_auth_server();
     char *uri = NULL;
-    safe_asprintf(&uri, "%s%sstage=%s",
-             auth_server->authserv_path,
-             auth_server->authserv_auth_script_path_fragment,
-             REQUEST_TYPE_COUNTERS_V2);
-    assert(uri != NULL);
-    debug(LOG_DEBUG, "auth counter v2 uri is [%s]", uri);
+
+    // Combine paths and request type into full URI
+    if (safe_asprintf(&uri, "%s%sstage=%s",
+                      auth_server->authserv_path,
+                      auth_server->authserv_auth_script_path_fragment,
+                      REQUEST_TYPE_COUNTERS_V2) < 0) {
+        debug(LOG_ERR, "Failed to allocate memory for counter v2 URI");
+        return NULL;
+    }
+
+    debug(LOG_DEBUG, "Counter v2 auth URI: [%s]", uri);
     return uri;
 }
 
