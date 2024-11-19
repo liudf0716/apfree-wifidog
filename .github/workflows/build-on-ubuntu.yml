@@ -1,13 +1,16 @@
 name: compile apfree-wifidog in ubuntu system
 
 on:
-  push:
-    branches: [ master ]
-  pull_request:
-    branches: [ master ]
-
-  # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
+    inputs:
+      firewall:
+        description: 'Firewall version (fw4 or fw3)'
+        required: true
+        default: 'fw4'
+        type: choice
+        options:
+          - fw4
+          - fw3
 
 env:
   BUILD_TYPE: Release
@@ -42,16 +45,7 @@ jobs:
         cd uci
         mkdir build && cd build && cmake ..
         sudo make install
-    
-    - name: compile apfree-wifidog fw4
-      run: |
-        mkdir build
-        cd build
-        cmake ..
-        make
-        ldd src/wifidogx
-        ldd src/wdctlx
-          
+
     - name: install iptables lib for apfree wifidog
       run: | 
         git clone https://github.com/liudf0716/iptables-apfree-wifidog.git
@@ -60,12 +54,16 @@ jobs:
         ./configure --disable-nftables
         make
         sudo make install
-
-    - name: compile apfree-wifidog fw3
-      run: |
-        cd build
-        rm -rf *
-        cmake -DAW_FW3=ON ..
-        make
     
-      
+    - name: compile apfree-wifidog
+      run: |
+        mkdir -p build
+        cd build
+        if [ "${{ github.event.inputs.firewall }}" = "fw3" ]; then
+          cmake -DAW_FW3=ON ..
+        else
+          cmake ..
+        fi
+        make
+        ldd src/wifidogx
+        ldd src/wdctlx
