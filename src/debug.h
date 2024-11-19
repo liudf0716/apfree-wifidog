@@ -4,32 +4,37 @@
  * Copyright (c) 2023 Dengfeng Liu <liudf0716@gmail.com>
  */
 
-#ifndef _WIFIDOG_DEBUG_H_
-#define _WIFIDOG_DEBUG_H_
+#pragma once
 
-#include <string.h>
-
-#define __FILENAME__ (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
-
+/* Debug configuration structure */
 typedef struct _debug_conf {
-    int debuglevel;      /**< @brief Debug information verbosity */
-    int log_stderr;      /**< @brief Output log to stdout */
-    int log_syslog;      /**< @brief Output log to syslog */
-    int syslog_facility; /**< @brief facility to use when using syslog for logging */
+    int debuglevel;      /* Debug verbosity level (0-7) */
+    int log_stderr;      /* Enable logging to stderr (0/1) */
+    int log_syslog;      /* Enable logging to syslog (0/1) */
+    int syslog_facility; /* Syslog facility number */
 } debugconf_t;
 
+/* Global debug configuration instance */
 extern debugconf_t debugconf;
 
+/* Extract filename from full path */
+#define __FILENAME__ (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 
-/** Used to output messages.
- * The messages will include the filename and line number, and will be sent to syslog if so configured in the config file 
- * @param level Debug level
- * @param format... sprintf like format string
+/**
+ * Debug message output macro
+ * @param level Debug level (0-7)
+ * @param format Printf-style format string
+ * 
+ * Messages include filename, line number and are sent to configured outputs
  */
-
 #define debug(level, format...) _debug(__FILENAME__, __LINE__, level, format)
 
-/** @internal */
-void _debug(const char *, int, int, const char *, ...);
+/**
+ * Internal debug function - do not call directly, use debug() macro instead
+ * @param filename Source file name
+ * @param line Line number
+ * @param level Debug level
+ * @param format Printf-style format string
+ */
+void _debug(const char *filename, int line, int level, const char *format, ...);
 
-#endif /* _DEBUG_H_ */
