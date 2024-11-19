@@ -359,108 +359,147 @@ process_auth_server_logout(struct evhttp_request *req, void *ctx)
 }
 
 /**
- * @brief Reply wifidog's client login response from auth server
- * 
- * @param authresponse Auth server's response to client's request
- * @param req Client's request
- * @param context Wifidog's http request context to auth server
- * 
+ * @brief Handle successful client authentication
+ *
+ * Processes a client that has been successfully authenticated:
+ * 1. Updates firewall to allow access
+ * 2. Sets client online status and login time
+ * 3. Removes from offline client list
+ * 4. Redirects client to appropriate destination
+ *
+ * @param client Authenticated client
+ * @param req Original client HTTP request  
+ * @param auth_server Auth server configuration
+ */
+static void 
+handle_auth_allowed(t_client *client, struct evhttp_request *req, 
+                   t_auth_serv *auth_server)
+{
+    char *url_fragment = NULL;
+    
+    debug(LOG_INFO, "Access granted for token %s from %s at %s",
+          client->token, client->ip, client->mac);
+
+    // Update client status
+    fw_allow(client, FW_MARK_KNOWN);
+    client->first_login = time(NULL);
+    client->is_online = 1;
+    served_this_session++;
+
+    // Remove from offline list if present
+    LOCK_OFFLINE_CLIENT_LIST();
+    t_offline_client *o_client = offline_client_list_find_by_mac(client->mac);    
+    if(o_client) {
+        offline_client_list_delete(o_client);
+    }
+    UNLOCK_OFFLINE_CLIENT_LIST();
+
+    // Handle WeChat auth or normal portal redirect
+    if(ev_http_find_query(req, "type")) {
+        evhttp_send_error(req, 200, "WeChat auth success!");
+    } else {
+        assert(client->gw_setting);
+        safe_asprintf(&url_fragment, "%sgw_id=%s&gw_channel=%s&mac=%s&name=%s", 
+                     auth_server->authserv_portal_script_path_fragment,
+                     client->gw_setting->gw_id,
+                     client->gw_setting->gw_channel,
+                     client->mac ? client->mac : "null",
+                     client->name ? client->name : "null");
+        ev_http_send_redirect_to_auth(req, url_fragment, "Redirect to portal");
+        free(url_fragment);
+    }
+}
+
+/**
+ * @brief Process and reply to a client's login request based on auth server response
+ *
+ * This function handles the authentication server's response for a client login
+ * and performs the appropriate actions based on the auth code:
+ * - AUTH_ERROR: Server communication error
+ * - AUTH_DENIED: Invalid credentials 
+ * - AUTH_VALIDATION: Temporary access granted for validation
+ * - AUTH_ALLOWED: Full access granted
+ * - AUTH_VALIDATION_FAILED: Email validation timeout
+ *
+ * Actions include:
+ * 1. Updating firewall rules
+ * 2. Managing client state
+ * 3. Sending appropriate redirect/response to client
+ *
+ * @param authresponse Authentication response from server
+ * @param req Original client HTTP request
+ * @param context Request context containing client state
  */
 static void
 client_login_request_reply(t_authresponse *authresponse, 
-        struct evhttp_request *req, struct wd_request_context *context)
+                         struct evhttp_request *req, 
+                         struct wd_request_context *context)
 {
     t_client *client = (t_client *)context->data;
     context->data = NULL;
     t_auth_serv *auth_server = get_auth_server();
     char *url_fragment = NULL;
 
+    // Validate request
     if (!req) {
         debug(LOG_ERR, "Got NULL request in client_login_request_reply");
-        evhttp_send_error(req, 200, "Internal Error, We can not validate your request at this time");
+        evhttp_send_error(req, 200, "Internal Error: Unable to validate request");
         safe_client_list_delete(client);
         return;
     }
 
+    // Process based on auth code
     switch (authresponse->authcode) {
     case AUTH_ERROR:
-        /* Error talking to central server */
-        debug(LOG_ERR, "Got ERROR from central server authenticating token %s from %s at %s", client->token, client->ip,
-              client->mac);
-		safe_client_list_delete(client);
-        evhttp_send_error(req, 200, "Error: We did not get a valid answer from the central server");
+        debug(LOG_ERR, "Auth server error for token %s from %s at %s", 
+              client->token, client->ip, client->mac);
+        safe_client_list_delete(client);
+        evhttp_send_error(req, 200, "Error: Invalid response from auth server");
         break;
+
     case AUTH_DENIED:
-        /* Central server said invalid token */
-        debug(LOG_INFO,
-              "Got DENIED from central server authenticating token %s from %s at %s - deleting from firewall and redirecting them to denied message",
+        debug(LOG_INFO, "Access denied for token %s from %s at %s", 
               client->token, client->ip, client->mac);
         fw_deny(client);
-		safe_client_list_delete(client);
+        safe_client_list_delete(client);
         safe_asprintf(&url_fragment, "%smessage=%s",
-                      auth_server->authserv_msg_script_path_fragment, GATEWAY_MESSAGE_DENIED);
-        ev_http_send_redirect_to_auth(req, url_fragment, "Redirect to denied message");
+                     auth_server->authserv_msg_script_path_fragment, 
+                     GATEWAY_MESSAGE_DENIED);
+        ev_http_send_redirect_to_auth(req, url_fragment, "Access denied");
         free(url_fragment);
         break;
+
     case AUTH_VALIDATION:
+        debug(LOG_INFO, "Validation access granted for token %s from %s at %s",
+              client->token, client->ip, client->mac);
         fw_allow(client, FW_MARK_PROBATION);
-        /* They just got validated for X minutes to check their email */
-        debug(LOG_INFO, "Got VALIDATION from central server authenticating token %s from %s at %s"
-              "- adding to firewall and redirecting them to activate message", client->token, client->ip, client->mac);
         safe_asprintf(&url_fragment, "%smessage=%s",
-                      auth_server->authserv_msg_script_path_fragment, GATEWAY_MESSAGE_ACTIVATE_ACCOUNT);
-        ev_http_send_redirect_to_auth(req, url_fragment, "Redirect to activate message");
+                     auth_server->authserv_msg_script_path_fragment,
+                     GATEWAY_MESSAGE_ACTIVATE_ACCOUNT);
+        ev_http_send_redirect_to_auth(req, url_fragment, "Activate account");
         free(url_fragment);
         break;
+
     case AUTH_ALLOWED:
-        fw_allow(client, FW_MARK_KNOWN);
-        /* Logged in successfully as a regular account */
-        debug(LOG_INFO, "Got ALLOWED from central server authenticating token %s from %s at %s - "
-              "adding to firewall and redirecting them to portal", client->token, client->ip, client->mac);
-    	
-		client->first_login = time(NULL);
-		client->is_online = 1;
-        {
-            LOCK_OFFLINE_CLIENT_LIST();
-            t_offline_client *o_client = offline_client_list_find_by_mac(client->mac);    
-            if(o_client)
-                offline_client_list_delete(o_client);
-            UNLOCK_OFFLINE_CLIENT_LIST();
-        }
-		
-        served_this_session++;
-		if(ev_http_find_query(req, "type")) {
-        	evhttp_send_error(req, 200, "weixin auth success!");
-		} else {
-            assert(client->gw_setting);
-        	safe_asprintf(&url_fragment, "%sgw_id=%s&gw_channel=%s&mac=%s&name=%s", 
-				auth_server->authserv_portal_script_path_fragment, 
-				client->gw_setting->gw_id,
-				client->gw_setting->gw_channel,
-				client->mac?client->mac:"null",
-				client->name?client->name:"null");
-        	ev_http_send_redirect_to_auth(req, url_fragment, "Redirect to portal");
-        	free(url_fragment);
-		}
+        handle_auth_allowed(client, req, auth_server);
         break;
+
     case AUTH_VALIDATION_FAILED:
-        /* Client had X minutes to validate account by email and didn't = too late */
-        debug(LOG_INFO, "Got VALIDATION_FAILED from central server authenticating token %s from %s at %s "
-              "- redirecting them to failed_validation message", client->token, client->ip, client->mac);
-		safe_client_list_delete(client);
-        
+        debug(LOG_INFO, "Validation failed for token %s from %s at %s",
+              client->token, client->ip, client->mac);
+        safe_client_list_delete(client);
         safe_asprintf(&url_fragment, "%smessage=%s",
-                      auth_server->authserv_msg_script_path_fragment, GATEWAY_MESSAGE_ACCOUNT_VALIDATION_FAILED);
-        ev_http_send_redirect_to_auth(req, url_fragment, "Redirect to failed validation message");
+                     auth_server->authserv_msg_script_path_fragment,
+                     GATEWAY_MESSAGE_ACCOUNT_VALIDATION_FAILED);
+        ev_http_send_redirect_to_auth(req, url_fragment, "Validation failed");
         free(url_fragment);
         break;
+
     default:
-        debug(LOG_WARNING,
-              "I don't know what the validation code %d means for token %s from %s at %s - sending error message",
+        debug(LOG_WARNING, "Unknown validation code %d for token %s from %s at %s",
               authresponse->authcode, client->token, client->ip, client->mac);
-		safe_client_list_delete(client);
-        
-        evhttp_send_error(req, 200, "Internal Error, We can not validate your request at this time");
+        safe_client_list_delete(client);
+        evhttp_send_error(req, 200, "Internal Error: Invalid auth code");
         break;
     }
 }
