@@ -823,60 +823,114 @@ mqtt_get_trusted_iplist_text()
 	return retStr;
 }
 
+/**
+ * @brief Get a formatted text representation of trusted domains and their IP addresses
+ *
+ * This function retrieves the list of trusted domains from the configuration and
+ * formats them as a text string. For each domain, it includes:
+ * - The domain name
+ * - All associated IP addresses
+ *
+ * The output is formatted with newlines and indentation for readability.
+ *
+ * @return Newly allocated string containing the formatted domains and IPs.
+ *         Must be freed by caller using free().
+ *         Returns NULL if no trusted domains exist or on memory allocation failure.
+ */
 char *
 get_trusted_domains_text(void)
 {
-	pstr_t *pstr = pstr_new();
-    s_config *config = config_get_config();
-	t_domain_trusted *domain_trusted = NULL;
-	t_ip_trusted	*ip_trusted = NULL;
-    
-	pstr_cat(pstr, "\nTrusted domains and its ip:\n");
+	struct evbuffer *evb = evbuffer_new();
+	if (!evb) {
+		return NULL;
+	}
+
+	s_config *config = config_get_config();
+	if (!config || !config->domains_trusted) {
+		evbuffer_free(evb);
+		return NULL;
+	}
+
+	t_domain_trusted *domain_trusted;
+	t_ip_trusted *ip_trusted;
+
+	evbuffer_add_printf(evb, "\nTrusted domains and its ip:\n");
 
 	LOCK_DOMAIN();
-	
+
 	for (domain_trusted = config->domains_trusted; domain_trusted != NULL; domain_trusted = domain_trusted->next) {
-        pstr_append_sprintf(pstr, "\nDomain: %s \n", domain_trusted->domain);
-		for(ip_trusted = domain_trusted->ips_trusted; ip_trusted != NULL; ip_trusted = ip_trusted->next) {
-        	pstr_append_sprintf(pstr, "  %s \n", ip_trusted->ip);
+		evbuffer_add_printf(evb, "\nDomain: %s\n", domain_trusted->domain);
+		
+		for (ip_trusted = domain_trusted->ips_trusted; ip_trusted != NULL; ip_trusted = ip_trusted->next) {
+			evbuffer_add_printf(evb, "  %s\n", ip_trusted->ip);
 		}
 	}
-	
+
 	UNLOCK_DOMAIN();
-    
-	return pstr_to_string(pstr);
+
+	char *result = evb_2_string(evb, NULL);
+	evbuffer_free(evb);
+	return result;
 }
 
+/**
+ * @brief Gets a text representation of trusted pan domains and their IP addresses
+ *
+ * This function formats a string containing all trusted pan (wildcard) domains 
+ * and their associated IP addresses from the configuration. For each domain:
+ * - Lists the domain name
+ * - If the domain has associated IPs, lists each IP address indented
+ * - Otherwise just shows the domain name
+ * 
+ * The output is formatted with newlines and indentation for readability.
+ *
+ * @return A newly allocated string containing the formatted domains and IPs.
+ *         Must be freed by caller using free().
+ *         Returns NULL if no trusted pan domains exist or on memory allocation failure.
+ */
 char *
 get_trusted_pan_domains_text(void)
 {
-	pstr_t *pstr = pstr_new();
+	struct evbuffer *evb = evbuffer_new();
+	if (!evb) {
+		return NULL;
+	}
+
 	s_config *config = config_get_config();
-	t_domain_trusted *domain_trusted = NULL;
-	
-	pstr_cat(pstr, "\nTrusted wildcard domains:\n");
+	if (!config || !config->pan_domains_trusted) {
+		evbuffer_free(evb);
+		return NULL;
+	}
+
+	evbuffer_add_printf(evb, "\nTrusted wildcard domains:\n");
 
 	LOCK_DOMAIN();
-	
-	for (domain_trusted = config->pan_domains_trusted; domain_trusted != NULL; domain_trusted = domain_trusted->next) {
-		pstr_append_sprintf(pstr, " %s ", domain_trusted->domain);
+
+	t_domain_trusted *domain_trusted;
+	for (domain_trusted = config->pan_domains_trusted; 
+		 domain_trusted != NULL; 
+		 domain_trusted = domain_trusted->next) {
+		
+		evbuffer_add_printf(evb, " %s ", domain_trusted->domain);
+		
 		t_ip_trusted *ip_trusted = domain_trusted->ips_trusted;
-		if(ip_trusted != NULL) {
-			pstr_cat(pstr, "with ip:\n");
+		if (ip_trusted) {
+			evbuffer_add_printf(evb, "with ip:\n");
 			for (; ip_trusted != NULL; ip_trusted = ip_trusted->next) {
-				// convert uip to string
 				char ip[INET_ADDRSTRLEN] = {0};
 				inet_ntop(AF_INET, &ip_trusted->uip, ip, INET_ADDRSTRLEN);
-				pstr_append_sprintf(pstr, "  %s\n", ip);
+				evbuffer_add_printf(evb, "  %s\n", ip);
 			}
 		} else {
-			pstr_cat(pstr, "\n");
+			evbuffer_add_printf(evb, "\n");
 		}
 	}
-	
+
 	UNLOCK_DOMAIN();
-	
-	return pstr_to_string(pstr);
+
+	char *result = evb_2_string(evb, NULL);
+	evbuffer_free(evb);
+	return result;
 }
 
 char *
