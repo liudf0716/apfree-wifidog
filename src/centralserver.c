@@ -466,22 +466,45 @@ client_login_request_reply(t_authresponse *authresponse,
 }
 
 /**
- * @brief process wifidog's client login response from auth server
- */ 
+ * @brief Process client login response from auth server
+ *
+ * This function handles the authentication server's response for a client login request.
+ * It performs the following:
+ * 1. Parses the auth server response to get authentication code
+ * 2. If successful, processes the login response and updates client state 
+ * 3. If parsing fails, removes client and sends error response
+ *
+ * The login response determines whether to:
+ * - Allow/deny client access
+ * - Redirect client to portal/validation page
+ * - Remove client from system
+ *
+ * @param req HTTP request from auth server containing response
+ * @param ctx Request context containing client state and original client request
+ */
 void 
 process_auth_server_login(struct evhttp_request *req, void *ctx) 
 {
     t_authresponse authresponse;
+    struct wd_request_context *context = (struct wd_request_context *)ctx;
+    t_client *client = (t_client *)context->data;
+
     memset(&authresponse, 0, sizeof(t_authresponse));
-    if (parse_auth_server_response(&authresponse, req))
-        client_login_request_reply(&authresponse, ((struct wd_request_context *)ctx)->clt_req, ctx);
-    else {
-        // free client in ctx
-        t_client *p1 = (t_client *)((struct wd_request_context *)ctx)->data;
-        debug(LOG_ERR, "parse_auth_server_response failed, free client %s", p1->ip);
-        safe_client_list_delete(p1);
-        evhttp_send_error(((struct wd_request_context *)ctx)->clt_req, 200, 
-            "Internal Error, We can not validate your request at this time");
+
+    if (parse_auth_server_response(&authresponse, req)) {
+        // Successfully parsed - process the login response
+        client_login_request_reply(&authresponse, context->clt_req, context);
+    } else {
+        // Failed to parse - remove client and send error
+        debug(LOG_ERR, "Failed to parse auth server response for client %s",
+              client ? client->ip : "unknown");
+
+        if (client) {
+            safe_client_list_delete(client);
+        }
+
+        evhttp_send_error(context->clt_req, 200,
+            "Internal Error: Unable to validate your request at this time");
     }
 }
 
