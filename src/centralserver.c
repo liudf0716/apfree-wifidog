@@ -117,37 +117,72 @@ make_roam_request(struct wd_request_context *context, struct roam_req_info *roam
     free(uri);
 }
 
+/**
+ * @brief Process authentication server's v2 login response
+ *
+ * Handles JSON response from auth server for v2 login requests.
+ * Expected JSON format:
+ * {
+ *   "ret_code": 0,            // 0 = success, non-zero = failure
+ *   "client": {               // Client authentication details
+ *     "token": "...",
+ *     "first_login": "...",
+ *     ...
+ *   }
+ * }
+ *
+ * @param req HTTP request containing auth server response
+ * @param ctx Request context containing auth info that must be freed
+ */
 static void
 process_auth_server_login_v2(struct evhttp_request *req, void *ctx)
 {
-	auth_req_info *auth = ((struct wd_request_context *)ctx)->data;
-	debug(LOG_DEBUG, "process auth server login2 response");
-	
+    auth_req_info *auth = ((struct wd_request_context *)ctx)->data;
+    debug(LOG_DEBUG, "Processing auth server login v2 response");
+
+    // Read response data
     char buffer[MAX_BUF] = {0};
-    if (evbuffer_remove(evhttp_request_get_input_buffer(req), buffer, MAX_BUF-1) <= 0 ) {
-		free(auth);
-		return;
-	}
-	
-	json_object *json_ret = json_tokener_parse(buffer);
-	json_object *ret_code = NULL;
-	json_object_object_get_ex(json_ret, "ret_code", &ret_code);
-	int retCode = json_object_get_int(ret_code);
-	if (retCode != 0) {
-		free(auth);
-		debug(LOG_INFO, "add test client failure: %d", retCode);
-		return;
-	}
-	
-	json_object *client = NULL;
-	if( json_object_object_get_ex(json_ret, "client", &client)) {
-		add_online_client(auth->ip, auth->mac, client);
-	} else {
-		debug(LOG_ERR, "no roam client info!!!!!");
-	}
-	
-	json_object_put(json_ret);
-	free(auth);
+    if (evbuffer_remove(evhttp_request_get_input_buffer(req), buffer, MAX_BUF-1) <= 0) {
+        debug(LOG_ERR, "Failed to read auth server response");
+        free(auth);
+        return;
+    }
+
+    // Parse JSON response
+    json_object *json_resp = json_tokener_parse(buffer);
+    if (!json_resp) {
+        debug(LOG_ERR, "Failed to parse JSON response");
+        free(auth);
+        return;
+    }
+
+    // Check return code
+    json_object *ret_code = NULL;
+    if (!json_object_object_get_ex(json_resp, "ret_code", &ret_code)) {
+        debug(LOG_ERR, "Missing ret_code in response");
+        json_object_put(json_resp);
+        free(auth);
+        return;
+    }
+
+    int retCode = json_object_get_int(ret_code);
+    if (retCode != 0) {
+        debug(LOG_INFO, "Authentication failed with code: %d", retCode);
+        json_object_put(json_resp);
+        free(auth);
+        return;
+    }
+
+    // Process client info if present
+    json_object *client = NULL;
+    if (json_object_object_get_ex(json_resp, "client", &client)) {
+        add_online_client(auth->ip, auth->mac, client);
+    } else {
+        debug(LOG_ERR, "Missing client info in successful response");
+    }
+
+    json_object_put(json_resp);
+    free(auth);
 }
 
 /**
