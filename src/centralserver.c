@@ -217,93 +217,121 @@ get_auth_counter_v2_uri()
 }
 
 /**
- * @brief get client's auth request uri according to its type
+ * @brief Builds authentication request URI for a client
+ *
+ * Constructs the full URI for authentication requests to the auth server based on:
+ * - Client type (online or trusted)
+ * - Request type (auth, logout, etc)
+ * - Client state (traffic counters, login time, etc)
  * 
- */ 
+ * The URI includes parameters like:
+ * - IP and MAC address
+ * - Auth token 
+ * - Traffic statistics
+ * - Login time and duration
+ * - Gateway ID and channel
+ * - Device identifiers
+ *
+ * @param request_type Type of auth request (e.g. "login", "counter")
+ * @param type Type of client (ONLINE_CLIENT or TRUSTED_CLIENT)
+ * @param data Client data (t_client* for online clients)
+ * @return Dynamically allocated URI string, NULL on error. Caller must free.
+ */
 char * 
 get_auth_uri(const char *request_type, client_type_t type, void *data)
 {
-    char *ip = NULL, *mac = NULL, *name = NULL, *safe_token = NULL;
-    unsigned long long int incoming = 0,  outgoing = 0, incoming_delta = 0, outgoing_delta = 0;
+    // Client parameters
+    char *ip = NULL, *mac = NULL, *name = NULL;
+    char *safe_token = NULL;
+    const char *gw_id = NULL, *gw_channel = NULL;
+    const char *device_id = get_device_id();
+    
+    // Traffic and timing stats
+    unsigned long long int incoming = 0, outgoing = 0;
+    unsigned long long int incoming_delta = 0, outgoing_delta = 0;
     time_t first_login = 0;
     uint32_t online_time = 0, wired = 0;
-    const char *gw_id = NULL;
-    const char *gw_channel = NULL;
-    const char *device_id = get_device_id();
 
+    // Extract client info based on type
     switch(type) {
-    case ONLINE_CLIENT:
-    {
-        t_client *o_client = (t_client *)data;
-        ip  = o_client->ip;
-        mac = o_client->mac;
-        safe_token = o_client->token;
-        if (o_client->name)
-            name = o_client->name;
-        if (!o_client->first_login)
-            first_login = time(0);
-        else
-            first_login = o_client->first_login;
-        incoming = o_client->counters.incoming;
-        outgoing = o_client->counters.outgoing;
-        incoming_delta  = o_client->counters.incoming_delta;
-        outgoing_delta  = o_client->counters.outgoing_delta;
-        wired = o_client->wired;
+    case ONLINE_CLIENT: {
+        t_client *client = (t_client *)data;
+        
+        // Basic identifiers
+        ip = client->ip;
+        mac = client->mac; 
+        safe_token = client->token;
+        name = client->name;
+        
+        // Traffic stats
+        incoming = client->counters.incoming;
+        outgoing = client->counters.outgoing;
+        incoming_delta = client->counters.incoming_delta;
+        outgoing_delta = client->counters.outgoing_delta;
+        
+        // Timing and status
+        first_login = client->first_login ? client->first_login : time(0);
         online_time = time(0) - first_login;
-        gw_id = o_client->gw_setting->gw_id;
-        gw_channel = o_client->gw_setting->gw_channel;
+        wired = client->wired;
+        
+        // Gateway info
+        gw_id = client->gw_setting->gw_id;
+        gw_channel = client->gw_setting->gw_channel;
         break;
     }    
+    
     case TRUSTED_CLIENT:
     default:
         return NULL;
     }
 
+    // Get config and auth server settings
     s_config *config = config_get_config();
     t_auth_serv *auth_server = get_auth_server();
     char *uri = NULL;
-    int nret = 0;
+
+    // Build URI with or without delta traffic stats
     if (config->deltatraffic) {
-        nret = safe_asprintf(&uri, 
-             "%s%sstage=%s&ip=%s&mac=%s&token=%s&incoming=%llu&outgoing=%llu&incomingdelta=%llu&outgoingdelta=%llu&first_login=%lld&online_time=%u&gw_id=%s&gw_channel=%s&name=%s&wired=%u&device_id=%s",
-             auth_server->authserv_path,
-             auth_server->authserv_auth_script_path_fragment,
-             request_type,
-             ip, 
-             mac, 
-             safe_token?safe_token:"null", 
-             incoming, 
-             outgoing, 
-             incoming_delta, 
-             outgoing_delta,
-             (long long)first_login,
-             online_time,
-             gw_id,
-             gw_channel, 
-             name?name:"null", 
-             wired,
-             device_id);
+        if (safe_asprintf(&uri, 
+            "%s%sstage=%s&ip=%s&mac=%s&token=%s"
+            "&incoming=%llu&outgoing=%llu"
+            "&incomingdelta=%llu&outgoingdelta=%llu"
+            "&first_login=%lld&online_time=%u"
+            "&gw_id=%s&gw_channel=%s"
+            "&name=%s&wired=%u&device_id=%s",
+            auth_server->authserv_path,
+            auth_server->authserv_auth_script_path_fragment,
+            request_type, ip, mac,
+            safe_token ? safe_token : "null",
+            incoming, outgoing,
+            incoming_delta, outgoing_delta,
+            (long long)first_login, online_time,
+            gw_id, gw_channel,
+            name ? name : "null",
+            wired, device_id) < 0) {
+            return NULL;
+        }
     } else {
-        nret = safe_asprintf(&uri, 
-             "%s%sstage=%s&ip=%s&mac=%s&token=%s&incoming=%llu&outgoing=%llu&first_login=%lld&online_time=%u&gw_id=%s&gw_channel=%s&name=%s&wired=%u&device_id=%s",
-             auth_server->authserv_path,
-             auth_server->authserv_auth_script_path_fragment,
-             request_type,
-             ip, 
-             mac, 
-             safe_token?safe_token:"null", 
-             incoming, 
-             outgoing, 
-             (long long)first_login,
-             online_time,
-             gw_id,
-             gw_channel, 
-             name?name:"null", 
-             wired,
-             device_id);
+        if (safe_asprintf(&uri,
+            "%s%sstage=%s&ip=%s&mac=%s&token=%s"
+            "&incoming=%llu&outgoing=%llu"
+            "&first_login=%lld&online_time=%u"
+            "&gw_id=%s&gw_channel=%s"
+            "&name=%s&wired=%u&device_id=%s",
+            auth_server->authserv_path,
+            auth_server->authserv_auth_script_path_fragment,
+            request_type, ip, mac,
+            safe_token ? safe_token : "null",
+            incoming, outgoing,
+            (long long)first_login, online_time, 
+            gw_id, gw_channel,
+            name ? name : "null",
+            wired, device_id) < 0) {
+            return NULL;
+        }
     }
 
-    return nret>0?uri:NULL;
+    return uri;
 }
 
 /**
