@@ -653,31 +653,53 @@ get_serialize_trusted_pan_domains()
 	return first_domain ? NULL : retStr;
 }
 
+/**
+ * @brief Get serialized string of trusted pan domains
+ *
+ * This function retrieves the list of trusted pan domains from the configuration 
+ * and serializes them into a comma-separated string format.
+ *
+ * @return A newly allocated string containing comma-separated domain names,
+ *         NULL if no pan domains exist or on error.
+ *         The caller is responsible for freeing the returned string.
+ */
 char *
 mqtt_get_trusted_pan_domains_text()
 {
-	s_config *config;
+	s_config *config = config_get_config();
 	t_domain_trusted *domain_trusted = NULL;
+	struct evbuffer *evb = NULL;
+	int first = 1;
 
-    config = config_get_config();
-    if (config->pan_domains_trusted == NULL)
-    	return NULL;
-
-    pstr_t *pstr = pstr_new();
-    int first = 1;
-	LOCK_DOMAIN();
-	
-	for (domain_trusted = config->pan_domains_trusted; domain_trusted != NULL; domain_trusted = domain_trusted->next) {
-        if (first) {
-        	pstr_append_sprintf(pstr, "%s", domain_trusted->domain);
-        	first = 0;
-        } else 
-        	pstr_append_sprintf(pstr, ",%s", domain_trusted->domain);
+	if (!config || !config->pan_domains_trusted) {
+		return NULL;
 	}
-	
+
+	evb = evbuffer_new();
+	if (!evb) {
+		return NULL;
+	}
+
+	LOCK_DOMAIN();
+
+	// Build comma-separated string of domain names
+	for (domain_trusted = config->pan_domains_trusted; 
+		 domain_trusted != NULL; 
+		 domain_trusted = domain_trusted->next) {
+		
+		if (first) {
+			evbuffer_add_printf(evb, "%s", domain_trusted->domain);
+			first = 0;
+		} else {
+			evbuffer_add_printf(evb, ",%s", domain_trusted->domain);
+		}
+	}
+
 	UNLOCK_DOMAIN();
 
-	return first?NULL:pstr_to_string(pstr);
+	char *retStr = evb_2_string(evb, NULL);
+	evbuffer_free(evb);
+	return first ? NULL : retStr;
 }
 
 char *
