@@ -30,8 +30,6 @@ int is_valid_ip6(const char *);
 
 int is_valid_mac(const char *);
 
-int wd_connect(int, const struct sockaddr *, socklen_t, int);
-
 float get_cpu_usage();
 
 #endif                          /* _UTIL_H_ */

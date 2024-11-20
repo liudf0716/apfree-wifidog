@@ -74,6 +74,10 @@ target_link_libraries(wifidogx
 	${CURL_LIBRARIES}
 )
 
+target_link_libraries(wdctlx
+	event
+)
+
 # Installation
 install(TARGETS wifidogx wdctlx
 	RUNTIME DESTINATION bin

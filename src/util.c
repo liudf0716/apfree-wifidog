@@ -266,50 +266,7 @@ is_valid_mac(const char *mac)
 	return (i == 12 && (s == 5 || s == 0));
 }
 
-// when sockfd is block, set timeout for connect
-int 
-wd_connect(int sockfd, const struct sockaddr *their_addr, socklen_t addrlen, int timeout)
-{
-	// Set non-blocking 
-	long arg = fcntl(sockfd, F_GETFL, NULL); 
-	arg |= O_NONBLOCK; 
-	fcntl(sockfd, F_SETFL, arg); 
-       	
-	int res = connect(sockfd, their_addr, addrlen); 
-	if ((res == -1) && (errno != EINPROGRESS)) {
-		goto ERROR;
-	} else if (res == 0) {
-		goto SUCCESS;
-	} else {
-		int so_error = 0;
-        unsigned len = sizeof(so_error);
 
-        struct pollfd fds;
-        memset(&fds, 0, sizeof(fds));
-        fds.fd      = sockfd;
-        fds.events   = POLLOUT;
-        res = poll(&fds, 1, timeout*1000);
-		switch(res) {
-		case 1: // data to read				
-			getsockopt(sockfd, SOL_SOCKET, SO_ERROR, &so_error, &len);
-			if (so_error == 0) {
-				goto SUCCESS;
-			}
-			break;
-		default: 
-			break;
-		}
-	} 
-
-ERROR:
-	return -1;
-SUCCESS:	
-	// Set to blocking mode again... 
-	arg = fcntl(sockfd, F_GETFL, NULL); 
-	arg &= (~O_NONBLOCK); 
-	fcntl(sockfd, F_SETFL, arg); 
-	return 0;
-}
 
 #define	BUF_MAX		1024
 
