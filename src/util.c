@@ -344,6 +344,10 @@ read_cpu_fields (FILE *fp, unsigned long *fields)
 	return total_tick?1:0; // in case of total_tick  is zero, as some platform reporting, I dont know why.
 }
 
+/**
+ * @brief Function prototype for a method returning a floating-point value
+ * @return float value
+ */
 float
 get_cpu_usage()
 {
@@ -351,12 +355,12 @@ get_cpu_usage()
 	unsigned long fields[10], total_tick, total_tick_old, idle, idle_old, del_total_tick, del_idle;
 	int i;
 	float percent_usage;
+	struct timespec sleep_time = {1, 0}; // 1 second sleep
 
 	fp = fopen ("/proc/stat", "r");
 	if (!fp) {
-		return 0.f;	
+		return 0.f;    
 	}
-
 
 	if (!read_cpu_fields (fp, fields)) { 
 		fclose (fp);
@@ -368,7 +372,7 @@ get_cpu_usage()
 	}
 	idle = fields[3]; /* idle ticks index */
 
-	wd_sleep(1, 0);
+	nanosleep(&sleep_time, NULL);
 	total_tick_old = total_tick;
 	idle_old = idle;
 
@@ -388,19 +392,8 @@ get_cpu_usage()
 	del_total_tick = total_tick - total_tick_old;
 	del_idle = idle - idle_old;
 
-	percent_usage = ((del_total_tick - del_idle) / (float) del_total_tick) * 100; /* 3 is index of idle time */
+	percent_usage = ((del_total_tick - del_idle) / (float) del_total_tick) * 100;
 	debug (LOG_DEBUG, "Total CPU Usage: %3.2lf%%\n", percent_usage);
 
 	return percent_usage;
-}
-
-// wd_sleep using select timeout method to instead of sleep-func
-// s: second, u: usec 10^6usec = 1s
-void 
-wd_sleep(unsigned int s, unsigned int u){
-	struct timeval timeout;
-	timeout.tv_sec = s;
-	timeout.tv_usec = u;
-
-	select(0, NULL, NULL, NULL, &timeout);
 }
