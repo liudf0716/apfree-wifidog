@@ -20,7 +20,7 @@ set(src_dhcp
 )
 
 set(src_wdctlx 
-	wdctl.c util.c debug.c
+	wdctlx.c util.c debug.c
 )
 
 # Define common libraries
