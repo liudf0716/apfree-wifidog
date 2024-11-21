@@ -11,8 +11,13 @@
 #include "common.h"
 #include "wd_util.h"
 
-#define DEFAULT_SOCK "/tmp/wdctlx.sock"
+#include <string.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <sys/socket.h>
+#include <sys/un.h>
 
+#define DEFAULT_SOCK "/tmp/wdctlx.sock"
 #define WDCTL_TIMEOUT 2000
 #define WDCTL_MSG_LEN 8192
 
@@ -21,25 +26,35 @@ static char *sk_name = NULL;
 char *program_argv0 = NULL;
 
 static void display_help();
+static struct bufferevent *connect_to_server(const char *sock_name);
+static void send_request(struct bufferevent *bev, const char *request);
+static void read_response(struct bufferevent *bev);
+static void execute_post_cmd(char *raw_cmd);
+static void handle_command(const char *cmd, const char *param);
 
+/**
+ * Event callback for handling connection events.
+ */
 static void event_cb(struct bufferevent *bev, short events, void *ctx) {
     int *connection_success = (int *)ctx;
     if (events & BEV_EVENT_CONNECTED) {
         *connection_success = 1;
-        event_base_loopexit(base, NULL);
     } else if (events & (BEV_EVENT_ERROR | BEV_EVENT_TIMEOUT)) {
         *connection_success = 0;
-        event_base_loopexit(base, NULL);
     }
+    event_base_loopexit(base, NULL);
 }
 
+/**
+ * Connects to the server using a UNIX domain socket.
+ */
 static struct bufferevent *connect_to_server(const char *sock_name) {
     struct sockaddr_un sa_un;
     int connection_success = 0;
 
     base = event_base_new();
     if (!base) {
-        fprintf(stdout, "Could not create event base\n");
+        fprintf(stderr, "Error: Could not create event base\n");
         exit(EXIT_FAILURE);
     }
 
@@ -49,7 +64,7 @@ static struct bufferevent *connect_to_server(const char *sock_name) {
 
     struct bufferevent *bev = bufferevent_socket_new(base, -1, BEV_OPT_CLOSE_ON_FREE);
     if (!bev) {
-        fprintf(stdout, "Could not create bufferevent\n");
+        fprintf(stderr, "Error: Could not create bufferevent\n");
         event_base_free(base);
         exit(EXIT_FAILURE);
     }
@@ -57,11 +72,11 @@ static struct bufferevent *connect_to_server(const char *sock_name) {
     bufferevent_setcb(bev, NULL, NULL, event_cb, &connection_success);
     bufferevent_enable(bev, EV_READ | EV_WRITE);
 
-    struct timeval tv = {2, 0};
+    struct timeval tv = {WDCTL_TIMEOUT / 1000, 0};
     bufferevent_set_timeouts(bev, &tv, &tv);
 
     if (bufferevent_socket_connect(bev, (struct sockaddr *)&sa_un, sizeof(sa_un)) < 0) {
-        fprintf(stdout, "Could not connect\n");
+        fprintf(stderr, "Error: Could not connect to server\n");
         bufferevent_free(bev);
         event_base_free(base);
         exit(EXIT_FAILURE);
@@ -70,7 +85,7 @@ static struct bufferevent *connect_to_server(const char *sock_name) {
     event_base_dispatch(base);
 
     if (!connection_success) {
-        fprintf(stdout, "wdctlx: apfree-wifidog probably not started\n");
+        fprintf(stderr, "Error: Connection failed. Is apfree-wifidog running?\n");
         bufferevent_free(bev);
         event_base_free(base);
         exit(EXIT_FAILURE);
@@ -80,10 +95,16 @@ static struct bufferevent *connect_to_server(const char *sock_name) {
     return bev;
 }
 
+/**
+ * Sends a request to the server.
+ */
 static void send_request(struct bufferevent *bev, const char *request) {
     bufferevent_write(bev, request, strlen(request));
 }
 
+/**
+ * Executes shell commands specified in the server response.
+ */
 static void execute_post_cmd(char *raw_cmd) {
     size_t nlen = strlen(raw_cmd);
     if (nlen < 3) return;
@@ -94,10 +115,13 @@ static void execute_post_cmd(char *raw_cmd) {
         system(cmd);
         fprintf(stdout, "Executed shell command: [%s]\n", cmd);
     } else {
-        fprintf(stdout, "[%s] is an illegal post command\n", raw_cmd);
+        fprintf(stderr, "Error: [%s] is an illegal post command\n", raw_cmd);
     }
 }
 
+/**
+ * Reads and processes the server's response.
+ */
 static void read_response(struct bufferevent *bev) {
     char buf[WDCTL_MSG_LEN + 1] = {0};
     int n = bufferevent_read(bev, buf, WDCTL_MSG_LEN);
@@ -111,7 +135,10 @@ static void read_response(struct bufferevent *bev) {
     }
 }
 
-static void wdctl_command_action(const char *cmd, const char *param) {
+/**
+ * Handles the main command logic.
+ */
+static void handle_command(const char *cmd, const char *param) {
     struct bufferevent *bev = connect_to_server(sk_name);
     char *request = NULL;
 
@@ -120,11 +147,76 @@ static void wdctl_command_action(const char *cmd, const char *param) {
     else
         asprintf(&request, "%s", cmd);
 
+    if (!request) {
+        fprintf(stderr, "Error: Memory allocation failed\n");
+        exit(EXIT_FAILURE);
+    }
+
     send_request(bev, request);
     free(request);
 
     read_response(bev);
     bufferevent_free(bev);
+}
+
+/**
+ * Displays usage help for the program.
+ */
+static void display_help() {
+    printf("Commands:\n");
+    printf("  wdctlx show domain|wildcard_domain|mac\n");
+    printf("  wdctlx add domain|wildcard_domain|mac value1,value2...\n");
+    printf("  wdctlx clear domain|wildcard_domain|mac\n");
+    printf("  wdctlx help|?\n");
+    printf("  wdctlx stop\n");
+    printf("  wdctlx reset value\n");
+    printf("  wdctlx status [type]\n");
+    printf("  wdctlx refresh\n");
+}
+
+typedef struct {
+    const char *command;
+    const char *server_cmd;
+    bool requires_type;
+    bool requires_values;
+} CommandMapping;
+
+static const CommandMapping COMMAND_MAP[] = {
+    {"show", "show_trusted_", true, false},
+    {"add", "add_trusted_", true, true},
+    {"clear", "clear_trusted_", true, false},
+    {"stop", "stop", false, false},
+    {"reset", "reset", false, true},
+    {"status", "status", false, false},
+    {"refresh", "refresh", false, false},
+    {NULL, NULL, false, false}
+};
+
+static const char *TYPE_MAP[] = {
+    "domain",
+    "wildcard_domain",
+    "mac",
+    NULL
+};
+
+static const char *get_server_command(const char *cmd_type, const char *type) {
+    static char server_cmd[64];
+    if (strcmp(cmd_type, "show") == 0 || strcmp(cmd_type, "add") == 0 || strcmp(cmd_type, "clear") == 0) {
+        const char *type_suffix = strcmp(type, "wildcard_domain") == 0 ? "pdomains" : 
+                                strcmp(type, "domain") == 0 ? "domains" : "mac";
+        snprintf(server_cmd, sizeof(server_cmd), "%s%s", strcmp(cmd_type, "show") == 0 ? "show_trusted_" :
+                                                        strcmp(cmd_type, "add") == 0 ? "add_trusted_" : 
+                                                        "clear_trusted_", type_suffix);
+        return server_cmd;
+    }
+    return cmd_type;
+}
+
+static bool is_valid_type(const char *type) {
+    for (const char **t = TYPE_MAP; *t; t++) {
+        if (strcmp(*t, type) == 0) return true;
+    }
+    return false;
 }
 
 int main(int argc, char **argv) {
@@ -134,82 +226,33 @@ int main(int argc, char **argv) {
     }
 
     program_argv0 = argv[0];
-    char *command = argv[1];
-    char *type = (argc > 2) ? argv[2] : NULL;
-    char *values = (argc > 3) ? argv[3] : NULL;
+    const char *command = argv[1];
+    const char *type = (argc > 2) ? argv[2] : NULL;
+    const char *values = (argc > 3) ? argv[3] : NULL;
 
-    if (strcmp(command, "show") == 0) {
-        if (!type) {
-            printf("Error: Missing type argument\n");
-            return 1;
-        }
-        if (strcmp(type, "domain") == 0) {
-            wdctl_command_action("show_trusted_domains", NULL);
-        } else if (strcmp(type, "wildcard_domain") == 0) {
-            wdctl_command_action("show_trusted_pdomains", NULL);
-        } else if (strcmp(type, "mac") == 0) {
-            wdctl_command_action("show_trusted_mac", NULL);
-        } else {
-            printf("Unknown type\n");
-        }
-    } else if (strcmp(command, "add") == 0) {
-        if (!type || !values) {
-            printf("Error: Missing type or values argument\n");
-            return 1;
-        }
-        if (strcmp(type, "domain") == 0) {
-            wdctl_command_action("add_trusted_domains", values);
-        } else if (strcmp(type, "wildcard_domain") == 0) {
-            wdctl_command_action("add_trusted_pdomains", values);
-        } else if (strcmp(type, "mac") == 0) {
-            wdctl_command_action("add_trusted_mac", values);
-        } else {
-            printf("Unknown type\n");
-        }
-    } else if (strcmp(command, "clear") == 0) {
-        if (!type) {
-            printf("Error: Missing type argument\n");
-            return 1;
-        }
-        if (strcmp(type, "domain") == 0) {
-            wdctl_command_action("clear_trusted_domains", NULL);
-        } else if (strcmp(type, "wildcard_domain") == 0) {
-            wdctl_command_action("clear_trusted_pdomains", NULL);
-        } else if (strcmp(type, "mac") == 0) {
-            wdctl_command_action("clear_trusted_mac", NULL);
-        } else {
-            printf("Unknown type\n");
-        }
-    } else if (strcmp(command, "help") == 0 || strcmp(command, "?") == 0) {
+    if (strcmp(command, "help") == 0 || strcmp(command, "?") == 0) {
         display_help();
-    } else if (strcmp(command, "stop") == 0) {
-        wdctl_command_action("stop", NULL);
-    } else if (strcmp(command, "reset") == 0) {
-        if (!values) {
-            printf("Error: Missing reset argument\n");
-            return 1;
-        }
-        wdctl_command_action("reset", values);
-    } else if (strcmp(command, "status") == 0) {
-        wdctl_command_action("status", type);
-    } else if (strcmp(command, "refresh") == 0) {
-        wdctl_command_action("refresh", NULL);
-    } else {
-        printf("Unknown command. Type 'wdctlx help' or 'wdctlx ?' for help.\n");
-        return 1;
+        return 0;
     }
 
-    return 0;
-}
+    for (const CommandMapping *cmd = COMMAND_MAP; cmd->command; cmd++) {
+        if (strcmp(command, cmd->command) == 0) {
+            if (cmd->requires_type && (!type || !is_valid_type(type))) {
+                fprintf(stderr, "Error: Invalid or missing type argument\n");
+                return 1;
+            }
+            if (cmd->requires_values && !values) {
+                fprintf(stderr, "Error: Missing values argument\n");
+                return 1;
+            }
 
-static void display_help() {
-    printf("Commands:\n");
-    printf("wdctlx show domain|wildcard_domain|mac\n");
-    printf("wdctlx add domain|wildcard_domain|mac value1,value2...\n");
-    printf("wdctlx clear domain|wildcard_domain|mac\n");
-    printf("wdctlx help|?\n");
-    printf("wdctlx stop\n");
-    printf("wdctlx reset value\n");
-    printf("wdctlx status [type]\n");
-    printf("wdctlx refresh\n");
+            const char *server_cmd = get_server_command(command, type);
+            handle_command(server_cmd, strcmp(command, "status") == 0 ? type : values);
+            return 0;
+        }
+    }
+
+    fprintf(stderr, "Error: Unknown command\n");
+    display_help();
+    return 1;
 }
