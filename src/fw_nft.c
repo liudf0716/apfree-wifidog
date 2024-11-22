@@ -115,69 +115,108 @@ const char *nft_wifidogx_dns_redirect_script[] = {
     "add rule inet wifidogx prerouting iifname $interface$ tcp dport 53 counter redirect to " DNS_FORWARD_PORT_STR,
 };
 
+/** Replace occurrences of a substring in a string
+ * @param content The source string to perform replacement on
+ * @param old_str The substring to be replaced
+ * @param new_str The string to replace old_str with
+ * @param out Buffer to store the resulting string
+ * @param out_len Length of the output buffer
+ * 
+ * This function safely replaces the first occurrence of old_str with new_str
+ * in content and stores the result in out. It handles buffer boundaries to
+ * prevent overflow.
+ */
 static void
-replace_str(const char *content, const char *old_str, const char *new_str, char *out, int out_len)
+replace_str(const char *content, const char *old_str, const char *new_str, 
+           char *out, int out_len)
 {
-    char *p = strstr(content, old_str);
+    if (!content || !old_str || !new_str || !out || out_len <= 0) {
+        return;
+    }
+
+    // Find first occurrence of old_str
+    const char *p = strstr(content, old_str); 
     if (p == NULL) {
+        // No match found - copy original string
         strncpy(out, content, out_len);
         return;
     }
 
-    int len = p - content;
-    strncpy(out, content, len);
-    out[len] = '\0';
-    strncat(out, new_str, strlen(new_str));
-    strncat(out, p + strlen(old_str), out_len - len - strlen(new_str));
+    // Calculate prefix length before replacement point
+    size_t prefix_len = p - content;
+    if (prefix_len >= (size_t)out_len) {
+        return; // Output buffer too small
+    }
+
+    // Copy prefix
+    memcpy(out, content, prefix_len);
+    out[prefix_len] = '\0';
+
+    // Append replacement string
+    strncat(out, new_str, out_len - prefix_len - 1);
+
+    // Append remainder of original string after old_str
+    size_t remaining = out_len - prefix_len - strlen(new_str) - 1;
+    strncat(out, p + strlen(old_str), remaining);
 }
 
+/**
+ * Generate nftables initialization script for wifidogx
+ * 
+ * This function generates the nftables configuration script by:
+ * 1. Writing base initialization rules
+ * 2. Adding DNS and DHCP pass rules
+ * 3. Adding DNS redirection rules if DNS forwarding is enabled
+ * 
+ * The generated script is written to NFT_FILENAME_OUT file.
+ */
 static void
 generate_nft_wifidogx_init_script()
 {
     s_config *config = config_get_config();
     t_gateway_setting *gw_settings = get_gateway_settings();
     FILE* output_file = NULL;
-    int i;
     char buf[1024] = {0};
 
-    // Open the output file for writing
+    // Open output file
     output_file = fopen(NFT_FILENAME_OUT, "w");
     if (output_file == NULL) {
         debug(LOG_ERR, "Failed to open %s for writing", NFT_FILENAME_OUT);
         termination_handler(0);
     }
 
-    for (i = 0; i < sizeof(nft_wifidogx_init_script) / sizeof(nft_wifidogx_init_script[0]); i++) {
+    // Write base initialization rules
+    for (size_t i = 0; i < sizeof(nft_wifidogx_init_script) / sizeof(nft_wifidogx_init_script[0]); i++) {
         fprintf(output_file, "%s\n", nft_wifidogx_init_script[i]);
-        memset(buf, 0, sizeof(buf));
     }
 
-    for (i = 0; i < sizeof(nft_wifidogx_dns_pass_script) / sizeof(nft_wifidogx_dns_pass_script[0]); i++) {
+    // Add DNS pass rules
+    for (size_t i = 0; i < sizeof(nft_wifidogx_dns_pass_script) / sizeof(nft_wifidogx_dns_pass_script[0]); i++) {
         fprintf(output_file, "%s\n", nft_wifidogx_dns_pass_script[i]);
     }
 
-    for (i = 0; i < sizeof(nft_wifidogx_dhcp_pass_script) / sizeof(nft_wifidogx_dhcp_pass_script[0]); i++) {
+    // Add DHCP pass rules 
+    for (size_t i = 0; i < sizeof(nft_wifidogx_dhcp_pass_script) / sizeof(nft_wifidogx_dhcp_pass_script[0]); i++) {
         fprintf(output_file, "%s\n", nft_wifidogx_dhcp_pass_script[i]);
     }
     
+    // Add DNS redirection rules if enabled
     if (config->enable_dns_forward) {
-        while(gw_settings) {
-           
-            for (i = 0; i < sizeof(nft_wifidogx_dns_redirect_script) / sizeof(nft_wifidogx_dns_redirect_script[0]); i++) {
-                const char *p = nft_wifidogx_dns_redirect_script[i];
-                if (strstr(p, "$interface$")) {
-                    replace_str(p, "$interface$", gw_settings->gw_interface, buf, sizeof(buf));
+        while (gw_settings) {
+            for (size_t i = 0; i < sizeof(nft_wifidogx_dns_redirect_script) / sizeof(nft_wifidogx_dns_redirect_script[0]); i++) {
+                const char *rule = nft_wifidogx_dns_redirect_script[i];
+                if (strstr(rule, "$interface$")) {
+                    // Replace interface placeholder with actual interface
+                    replace_str(rule, "$interface$", gw_settings->gw_interface, buf, sizeof(buf));
                     fprintf(output_file, "%s\n", buf);
+                    memset(buf, 0, sizeof(buf));
                 } else {
-                    fprintf(output_file, "%s\n", p);
+                    fprintf(output_file, "%s\n", rule);
                 }
             }
-            
             gw_settings = gw_settings->next;
         }
     }
-
-    
 
     fclose(output_file);
 }
