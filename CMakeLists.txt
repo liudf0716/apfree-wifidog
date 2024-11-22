@@ -7,31 +7,21 @@ project(apfree-wifidog
 # Set C standard and module path
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
-set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/Modules" ${CMAKE_MODULE_PATH})
 
 # Options
 option(AW_DEBUG "Build with debug support" ON)
 option(AW_FW3 "Build with iptables support" OFF)
 
 # Required packages
-include(FindPackageHandleStandardArgs)
 find_package(PkgConfig REQUIRED)
 
-# Find and include dependencies
-find_package(LibEvent REQUIRED)
-find_package(OpenSSL REQUIRED)
-find_package(JSON-C REQUIRED)
-find_package(UCI REQUIRED)
+# Find dependencies using pkg-config
+pkg_check_modules(LIBEVENT REQUIRED libevent)
+pkg_check_modules(OPENSSL REQUIRED openssl)
+pkg_check_modules(JSONC REQUIRED json-c)
 
 if (NOT AW_FW3)
     pkg_check_modules(NFTABLES REQUIRED libnftables)
-    if(NFTABLES_FOUND)
-     include_directories(${NFTABLES_INCLUDE_DIRS})
-     link_directories(${NFTABLES_LIBRARY_DIRS})
-     set(NFTABLES_LIBRARIES ${NFTABLES_LIBRARIES})
-    else()
-     message(FATAL_ERROR "libnftables not found")
-    endif()
 endif()
 
 # Set installation directory
@@ -41,8 +31,10 @@ endif()
 
 # Include directories
 include_directories(
-    ${JSON-C_INCLUDE_DIR}
-    ${UCI_INCLUDE_DIR}
+    ${JSONC_INCLUDE_DIRS}
+    ${UCI_INCLUDE_DIRS}
+    ${LIBEVENT_INCLUDE_DIRS}
+    ${OPENSSL_INCLUDE_DIRS}
 )
 
 # Add subdirectories
