@@ -28,27 +28,13 @@ jobs:
           sudo apt-get update -y
           sudo apt-get install -y libjson-c-dev
           sudo apt-get install -y libevent-dev
-          sudo apt-get install -y lua5.1 lua5.1-dev
-          sudo apt-get install -y nftables
+          sudo apt-get install -y libnftables-dev
           sudo apt-get install -y libnetfilter-queue-dev
           sudo apt-get install -y libmosquitto-dev
 
-    - name: install libubox
-      run: |
-        git clone https://github.com/git-openwrt-org-mirror/libubox.git
-        cd libubox
-        mkdir build && cd build && cmake ..
-        sudo make install
-        
-    - name: install uci
-      run: |
-        git clone https://github.com/git-openwrt-org-mirror/uci.git
-        cd uci
-        mkdir build && cd build && cmake ..
-        sudo make install
-
     - name: install iptables lib for apfree wifidog
-      run: | 
+      if: ${{ github.event.inputs.firewall == 'fw3' }}
+      run: |
         git clone https://github.com/liudf0716/iptables-apfree-wifidog.git
         cd iptables-apfree-wifidog
         ./autogen.sh
