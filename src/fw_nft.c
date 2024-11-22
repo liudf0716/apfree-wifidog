@@ -284,9 +284,28 @@ nftables_do_command(const char *format, ...)
 	return rc;
 }
 
-// Helper function to run nft command and read output
+/**
+ * @brief Executes an nft command and captures its output using libevent buffer
+ *
+ * This helper function runs the specified nft command and reads its output into a 
+ * dynamically allocated buffer using libevent's evbuffer functionality.
+ *
+ * @param cmd The nft command to execute
+ * @param output Pointer to char* where the command output will be stored. 
+ *              Memory is allocated by this function and must be freed by caller.
+ * @param output_len Pointer to store the length of the output
+ *
+ * @note The caller is responsible for freeing the memory allocated for *output
+ *
+ * The function:
+ * - Executes command using popen()
+ * - Reads output into evbuffer in chunks
+ * - Allocates memory for final output string
+ * - Copies evbuffer contents to output string
+ * - Handles error conditions throughout
+ */
 static void
-nft_statistical_helper(const char *cmd, char **output, uint32_t *output_len)
+nft_statistical_helper(const char *cmd, char **output, uint32_t *output_len) 
 {
     debug(LOG_DEBUG, "%s", cmd);
 
@@ -296,40 +315,73 @@ nft_statistical_helper(const char *cmd, char **output, uint32_t *output_len)
         return;
     }
 
-    size_t total_size = 0;
-    size_t chunk_size = 1024;
-    char *buffer = NULL;
+    struct evbuffer *buf = evbuffer_new();
+    if (!buf) {
+        debug(LOG_ERR, "evbuffer_new failed");
+        pclose(r_fp);
+        return;
+    }
 
-    while (1) {
-        buffer = realloc(buffer, total_size + chunk_size);
-        if (buffer == NULL) {
-            debug(LOG_ERR, "realloc failed");
+    char tmp[1024];
+    size_t n;
+    while ((n = fread(tmp, 1, sizeof(tmp), r_fp)) > 0) {
+        if (evbuffer_add(buf, tmp, n) < 0) {
+            debug(LOG_ERR, "evbuffer_add failed");
+            evbuffer_free(buf);
             pclose(r_fp);
             return;
         }
-
-        size_t bytes_read = fread(buffer + total_size, 1, chunk_size, r_fp);
-        if (bytes_read == 0) {
-            break;
-        }
-        total_size += bytes_read;
     }
 
     pclose(r_fp);
-    *output = buffer;
-    *output_len = total_size;
+
+    size_t len = evbuffer_get_length(buf);
+    *output = malloc(len + 1);
+    if (!*output) {
+        debug(LOG_ERR, "malloc failed");
+        evbuffer_free(buf);
+        return;
+    }
+
+    evbuffer_remove(buf, *output, len);
+    (*output)[len] = '\0';
+    *output_len = len;
+
+    evbuffer_free(buf);
 }
 
-// statistical outgoing information, must free when statistical is over
-void
+/**
+ * @brief Retrieves statistics for outgoing network traffic from NFT tables.
+ * 
+ * This function executes an NFT command to list the chain statistics for outgoing traffic
+ * in the mangle_prerouting_wifidogx_outgoing chain of the inet fw4 table.
+ * The results are returned in JSON format.
+ *
+ * @param[out] outgoing Pointer to a character pointer that will store the output string.
+ *                      The caller is responsible for freeing this memory.
+ * @param[out] outgoing_len Pointer to store the length of the output string
+ *
+ * @note The caller must free the memory allocated for *outgoing after use
+ */
+void 
 nft_statistical_outgoing(char **outgoing, uint32_t *outgoing_len)
 {
     nft_statistical_helper("nft -j list chain inet fw4 mangle_prerouting_wifidogx_outgoing", outgoing, outgoing_len);
 }
 
-// statistical incoming information, must free when statistical is over
+/**
+ * @brief Gets statistical information about incoming traffic using nftables
+ * 
+ * @param incoming Pointer to a character array that will store the incoming traffic statistics
+ * @param incoming_len Pointer to store the length of the incoming statistics data
+ * 
+ * @details This function retrieves statistical information about incoming network traffic
+ * using nftables framework. The statistics are stored in the provided buffer.
+ * 
+ * @return Returns 0 on success, negative value on failure
+ */
 void
-nft_statistical_incoming(char **incoming, uint32_t *incoming_len)
+nft_statistical_incoming(char **incoming, uint32_t *incoming_len) 
 {
     nft_statistical_helper("nft -j list chain inet fw4 mangle_postrouting_wifidogx_incoming", incoming, incoming_len);
 }
