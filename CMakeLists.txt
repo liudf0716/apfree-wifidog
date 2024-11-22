@@ -21,7 +21,8 @@ pkg_check_modules(OPENSSL REQUIRED openssl)
 pkg_check_modules(JSONC REQUIRED json-c)
 
 if (NOT AW_FW3)
-    pkg_check_modules(NFTABLES REQUIRED libnftables)
+  pkg_check_modules(NFTNL REQUIRED libnftnl)
+  pkg_check_modules(MNL REQUIRED libmnl)
 endif()
 
 # Set installation directory
