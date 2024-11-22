@@ -9,7 +9,13 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-#include <nftables/libnftables.h>
+#include <libmnl/libmnl.h>
+#include <libnftnl/table.h>
+#include <libnftnl/chain.h>
+#include <libnftnl/rule.h>
+#include <libnftnl/set.h>
+#include <libnftnl/expr.h>
+#include <libnftnl/object.h>
 
 #include "debug.h"
 #include "util.h"
@@ -22,6 +28,8 @@
 #include "gateway.h"
 #include "safe.h"
 
+#define NFPROTO_INET        1
+#define NFT_MSG_GETCHAIN    4
 
 #define NFT_CONF_FILENAME "/etc/fw4_apfree-wifiodg_init.conf"
 #define NFT_FILENAME_OUT "/tmp/fw4_apfree-wifiodg_init.conf.out"
@@ -298,8 +306,8 @@ nftables_do_command(const char *format, ...)
  * @param output Pointer to store the command output
  * @param output_len Pointer to store output length
  */
-static void
-nft_statistical_helper(const char *cmd, char **output, uint32_t *output_len)
+static void 
+nft_statistical_helper(const char *cmd, char **output, uint32_t *output_len) 
 {
     if (!cmd || !output || !output_len) {
         debug(LOG_ERR, "Invalid parameters");
@@ -309,39 +317,81 @@ nft_statistical_helper(const char *cmd, char **output, uint32_t *output_len)
     *output = NULL;
     *output_len = 0;
 
-    struct nft_ctx *nft = nft_ctx_new(NFT_CTX_DEFAULT);
-    if (!nft) {
-        debug(LOG_ERR, "Failed to create nftables context");
+    // Open netlink socket
+    struct mnl_socket *nl;
+    nl = mnl_socket_open(NETLINK_NETFILTER);
+    if (!nl) {
+        debug(LOG_ERR, "mnl_socket_open: %s", strerror(errno));
         return;
     }
 
-    // Enable JSON output format
-    nft_ctx_output_set_flags(nft, NFT_CTX_OUTPUT_JSON);
-
-    // Run the command
-    int ret = nft_run_cmd_from_buffer(nft, cmd);
-    if (ret != 0) {
-        debug(LOG_ERR, "nftables command failed: %s", cmd);
-        nft_ctx_free(nft);
+    // Bind to netlink
+    if (mnl_socket_bind(nl, 0, MNL_SOCKET_AUTOPID) < 0) {
+        debug(LOG_ERR, "mnl_socket_bind: %s", strerror(errno));
+        mnl_socket_close(nl);
         return;
     }
 
-    // Get the output
-    const char *nft_output = nft_ctx_get_output_buffer(nft);
-    if (nft_output) {
-        size_t len = strlen(nft_output);
-        char *buf = malloc(len + 1);
-        if (buf) {
-            memcpy(buf, nft_output, len);
-            buf[len] = '\0';
-            *output = buf;
-            *output_len = len;
-        } else {
-            debug(LOG_ERR, "Failed to allocate memory for output");
-        }
+    // Create list request message
+    char buf[MNL_SOCKET_BUFFER_SIZE];
+    struct nlmsghdr *nlh;
+    struct nftnl_chain *chain;
+    uint32_t seq = time(NULL);
+
+    chain = nftnl_chain_alloc();
+    if (!chain) {
+        debug(LOG_ERR, "nftnl_chain_alloc failed");
+        mnl_socket_close(nl);
+        return;
     }
 
-    nft_ctx_free(nft);
+    // Parse chain name from command
+    char table[32], chain_name[32];
+    if (sscanf(cmd, "list chain inet %s %s", table, chain_name) != 2) {
+        debug(LOG_ERR, "Failed to parse command: %s", cmd);
+        nftnl_chain_free(chain);
+        mnl_socket_close(nl);
+        return;
+    }
+
+    nftnl_chain_set_str(chain, NFTNL_CHAIN_TABLE, table);
+    nftnl_chain_set_str(chain, NFTNL_CHAIN_NAME, chain_name);
+    nftnl_chain_set_u32(chain, NFTNL_CHAIN_FAMILY, NFPROTO_INET);
+
+    nlh = nftnl_chain_nlmsg_build_hdr(buf, NFT_MSG_GETCHAIN, NFPROTO_INET,
+                                     NLM_F_DUMP, seq);
+    nftnl_chain_nlmsg_build_payload(nlh, chain);
+
+    if (mnl_socket_sendto(nl, nlh, nlh->nlmsg_len) < 0) {
+        debug(LOG_ERR, "mnl_socket_sendto: %s", strerror(errno));
+        nftnl_chain_free(chain);
+        mnl_socket_close(nl);
+        return;
+    }
+
+    // Allocate buffer for output
+    struct json_object *json = json_object_new_object();
+    struct json_object *rules_array = json_object_new_array();
+    json_object_object_add(json, "nftables", rules_array);
+
+    // Receive response 
+    int ret;
+    while ((ret = mnl_socket_recvfrom(nl, buf, sizeof(buf))) > 0) {
+        ret = mnl_cb_run(buf, ret, seq, mnl_socket_get_portid(nl), NULL, NULL);
+        if (ret <= 0)
+            break;
+    }
+
+    // Convert output to JSON string
+    const char *json_str = json_object_to_json_string_ext(json, JSON_C_TO_STRING_PRETTY);
+    if (json_str) {
+        *output = strdup(json_str);
+        *output_len = strlen(json_str);
+    }
+
+    json_object_put(json);
+    nftnl_chain_free(chain);
+    mnl_socket_close(nl);
 }
 
 /**

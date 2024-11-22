@@ -7,11 +7,6 @@
 #ifndef _WD_UTIL_H_
 #define _WD_UTIL_H_
 
-#include <event2/dns.h>
-#include <event2/util.h>
-#include <event2/event.h>
-#include <event2/buffer.h>
-
 #include "conf.h"
 #include "client_list.h"
 
