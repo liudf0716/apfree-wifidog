@@ -15,12 +15,24 @@ option(AW_FW3 "Build with iptables support" OFF)
 
 # Required packages
 include(FindPackageHandleStandardArgs)
+find_package(PkgConfig REQUIRED)
 
 # Find and include dependencies
 find_package(LibEvent REQUIRED)
 find_package(OpenSSL REQUIRED)
 find_package(JSON-C REQUIRED)
 find_package(UCI REQUIRED)
+
+if (NOT AW_FW3)
+    pkg_check_modules(NFTABLES REQUIRED libnftables)
+    if(NFTABLES_FOUND)
+     include_directories(${NFTABLES_INCLUDE_DIRS})
+     link_directories(${NFTABLES_LIBRARY_DIRS})
+     set(NFTABLES_LIBRARIES ${NFTABLES_LIBRARIES})
+    else()
+     message(FATAL_ERROR "libnftables not found")
+    endif()
+endif()
 
 # Set installation directory
 if(NOT DEFINED LIB_INSTALL_DIR)

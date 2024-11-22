@@ -8,6 +8,9 @@
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
+
+#include <nftables/libnftables.h>
+
 #include "debug.h"
 #include "util.h"
 #include "wd_util.h"
@@ -284,106 +287,93 @@ nftables_do_command(const char *format, ...)
 	return rc;
 }
 
+#include <nftables/libnftables.h>
+
 /**
- * @brief Executes an nft command and captures its output using libevent buffer
+ * @brief Helper function to execute nftables commands using libnftables
  *
- * This helper function runs the specified nft command and reads its output into a 
- * dynamically allocated buffer using libevent's evbuffer functionality.
- *
- * @param cmd The nft command to execute
- * @param output Pointer to char* where the command output will be stored. 
- *              Memory is allocated by this function and must be freed by caller.
- * @param output_len Pointer to store the length of the output
- *
- * @note The caller is responsible for freeing the memory allocated for *output
- *
- * The function:
- * - Executes command using popen()
- * - Reads output into evbuffer in chunks
- * - Allocates memory for final output string
- * - Copies evbuffer contents to output string
- * - Handles error conditions throughout
+ * This helper function uses libnftables to execute commands and capture output
+ * 
+ * @param cmd The nftables command to execute
+ * @param output Pointer to store the command output
+ * @param output_len Pointer to store output length
  */
 static void
-nft_statistical_helper(const char *cmd, char **output, uint32_t *output_len) 
+nft_statistical_helper(const char *cmd, char **output, uint32_t *output_len)
 {
-    debug(LOG_DEBUG, "%s", cmd);
-
-    FILE *r_fp = popen(cmd, "r");
-    if (r_fp == NULL) {
-        debug(LOG_ERR, "popen failed");
+    if (!cmd || !output || !output_len) {
+        debug(LOG_ERR, "Invalid parameters");
         return;
     }
 
-    struct evbuffer *buf = evbuffer_new();
-    if (!buf) {
-        debug(LOG_ERR, "evbuffer_new failed");
-        pclose(r_fp);
+    *output = NULL;
+    *output_len = 0;
+
+    struct nft_ctx *nft = nft_ctx_new(NFT_CTX_DEFAULT);
+    if (!nft) {
+        debug(LOG_ERR, "Failed to create nftables context");
         return;
     }
 
-    char tmp[1024];
-    size_t n;
-    while ((n = fread(tmp, 1, sizeof(tmp), r_fp)) > 0) {
-        if (evbuffer_add(buf, tmp, n) < 0) {
-            debug(LOG_ERR, "evbuffer_add failed");
-            evbuffer_free(buf);
-            pclose(r_fp);
-            return;
+    // Enable JSON output format
+    nft_ctx_output_set_flags(nft, NFT_CTX_OUTPUT_JSON);
+
+    // Run the command
+    int ret = nft_run_cmd_from_buffer(nft, cmd);
+    if (ret != 0) {
+        debug(LOG_ERR, "nftables command failed: %s", cmd);
+        nft_ctx_free(nft);
+        return;
+    }
+
+    // Get the output
+    const char *nft_output = nft_ctx_get_output_buffer(nft);
+    if (nft_output) {
+        size_t len = strlen(nft_output);
+        char *buf = malloc(len + 1);
+        if (buf) {
+            memcpy(buf, nft_output, len);
+            buf[len] = '\0';
+            *output = buf;
+            *output_len = len;
+        } else {
+            debug(LOG_ERR, "Failed to allocate memory for output");
         }
     }
 
-    pclose(r_fp);
-
-    size_t len = evbuffer_get_length(buf);
-    *output = malloc(len + 1);
-    if (!*output) {
-        debug(LOG_ERR, "malloc failed");
-        evbuffer_free(buf);
-        return;
-    }
-
-    evbuffer_remove(buf, *output, len);
-    (*output)[len] = '\0';
-    *output_len = len;
-
-    evbuffer_free(buf);
+    nft_ctx_free(nft);
 }
 
 /**
- * @brief Retrieves statistics for outgoing network traffic from NFT tables.
- * 
- * This function executes an NFT command to list the chain statistics for outgoing traffic
- * in the mangle_prerouting_wifidogx_outgoing chain of the inet fw4 table.
- * The results are returned in JSON format.
+ * @brief Get outgoing traffic statistics using libnftables
  *
- * @param[out] outgoing Pointer to a character pointer that will store the output string.
- *                      The caller is responsible for freeing this memory.
- * @param[out] outgoing_len Pointer to store the length of the output string
+ * Retrieves statistics for outgoing traffic from the 
+ * mangle_prerouting_wifidogx_outgoing chain using libnftables API
  *
- * @note The caller must free the memory allocated for *outgoing after use
+ * @param[out] outgoing Pointer to store output string
+ * @param[out] outgoing_len Length of output
  */
 void 
 nft_statistical_outgoing(char **outgoing, uint32_t *outgoing_len)
 {
-    nft_statistical_helper("nft -j list chain inet fw4 mangle_prerouting_wifidogx_outgoing", outgoing, outgoing_len);
+    const char *cmd = "list chain inet fw4 mangle_prerouting_wifidogx_outgoing";
+    nft_statistical_helper(cmd, outgoing, outgoing_len);
 }
 
 /**
- * @brief Gets statistical information about incoming traffic using nftables
+ * @brief Get incoming traffic statistics using libnftables
  * 
- * @param incoming Pointer to a character array that will store the incoming traffic statistics
- * @param incoming_len Pointer to store the length of the incoming statistics data
- * 
- * @details This function retrieves statistical information about incoming network traffic
- * using nftables framework. The statistics are stored in the provided buffer.
- * 
- * @return Returns 0 on success, negative value on failure
+ * Retrieves statistics for incoming traffic from the
+ * mangle_postrouting_wifidogx_incoming chain using libnftables API
+ *
+ * @param[out] incoming Pointer to store output string  
+ * @param[out] incoming_len Length of output
  */
 void
-nft_statistical_incoming(char **incoming, uint32_t *incoming_len) 
+nft_statistical_incoming(char **incoming, uint32_t *incoming_len)
 {
-    nft_statistical_helper("nft -j list chain inet fw4 mangle_postrouting_wifidogx_incoming", incoming, incoming_len);
+    const char *cmd = "list chain inet fw4 mangle_postrouting_wifidogx_incoming";
+    nft_statistical_helper(cmd, incoming, incoming_len);
 }
 
 void

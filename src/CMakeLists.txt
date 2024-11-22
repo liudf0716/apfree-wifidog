@@ -51,7 +51,7 @@ if(AW_FW3)
 	)
 else()
 	set(fw_source ${src_fw4})
-	set(fw_libs "")
+	set(fw_libs nftables)
 	add_definitions(-DAW_FW4)
 	message(STATUS "Building with fw4")
 	set(src_fw4
