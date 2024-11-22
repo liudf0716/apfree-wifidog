@@ -68,7 +68,6 @@
 
 #include <json-c/json.h>
 #include <mosquitto.h>
-#include <uci.h>
 
 #ifdef EVENT__HAVE_NETINET_IN_H
 #include <netinet/in.h>

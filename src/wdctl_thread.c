@@ -716,48 +716,7 @@ wdctl_clear_untrusted_maclist(struct bufferevent *fd)
 void
 user_cfg_save(void)
 {
-    const char *trusted_maclist     	= get_serialize_maclist(TRUSTED_MAC);
-	const char *trusted_local_maclist	= get_serialize_maclist(TRUSTED_LOCAL_MAC);
-    const char *untrusted_maclist   	= get_serialize_maclist(UNTRUSTED_MAC);
-    const char *trusted_domains     	= get_serialize_trusted_domains();
-    const char *trusted_iplist      	= get_serialize_iplist();
-    const char *trusted_pan_domains 	= get_serialize_trusted_pan_domains();
-
-    if(trusted_pan_domains) {
-        uci_set_value("wifidogx", "wifidog", "trusted_pan_domains", trusted_pan_domains);
-    } else {
-        uci_del_value("wifidogx", "wifidog", "trusted_pan_domains");
-    }
-    
-    if(trusted_domains) {
-        uci_set_value("wifidogx", "wifidog", "trusted_domains", trusted_domains);
-    } else {
-        uci_del_value("wifidogx", "wifidog", "trusted_domains");
-    }
-    
-    if(trusted_iplist) {
-        uci_set_value("wifidogx", "wifidog", "trusted_iplist", trusted_iplist);
-    } else {
-        uci_del_value("wifidogx", "wifidog", "trusted_iplist");
-    }
-    
-    if(trusted_maclist) {
-        uci_set_value("wifidogx", "wifidog", "trusted_maclist", trusted_maclist);
-    } else {
-        uci_del_value("wifidogx", "wifidog", "trusted_maclist");
-    }
-    
-	if(trusted_local_maclist) {
-        uci_set_value("wifidogx", "wifidog", "trusted_local_maclist", trusted_local_maclist);
-    } else {
-        uci_del_value("wifidogx", "wifidog", "trusted_local_maclist");
-    }
-	
-    if(untrusted_maclist) {
-        uci_set_value("wifidogx", "wifidog", "untrusted_maclist", untrusted_maclist);
-    } else {
-        uci_del_value("wifidogx", "wifidog", "untrusted_maclist");
-    }
+    // todo
 }
 
 static void

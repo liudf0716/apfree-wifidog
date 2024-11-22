@@ -25,7 +25,7 @@ set(src_wdctlx
 
 # Define common libraries
 set(common_libs
-	pthread m z json-c uci ssl crypto
+	pthread m z json-c ssl crypto
 	event event_openssl netfilter_queue
 	resolv mosquitto
 )
