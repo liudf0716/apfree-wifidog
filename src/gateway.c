@@ -409,19 +409,19 @@ threads_init(s_config *config)
         pthread_detach(tid_fw_counter);
     }
 
+    /* Start heartbeat thread */
+    result = pthread_create(&tid_ping, NULL, (void *)thread_ping, NULL);
+    if (result != 0) {
+        debug(LOG_ERR, "FATAL: Failed to create a new thread (ping) - exiting");
+        termination_handler(0);
+    }
+    pthread_detach(tid_ping);
+
     // if no auth server avaible, dont start the following thread
     if (!config->auth_servers) {
         debug(LOG_INFO, "No auth server available, not starting the following threads");
         return;
     } else if (config->auth_mode == 0) { // bypass auth mode don't need to start the following threads
-        /* Start heartbeat thread */
-        result = pthread_create(&tid_ping, NULL, (void *)thread_ping, NULL);
-        if (result != 0) {
-            debug(LOG_ERR, "FATAL: Failed to create a new thread (ping) - exiting");
-            termination_handler(0);
-        }
-        pthread_detach(tid_ping);
-        
         /* Start client clean up thread */
         result = pthread_create(&tid_fw_counter, NULL, (void *)thread_client_timeout_check, NULL);
         if (result != 0) {

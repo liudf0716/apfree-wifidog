@@ -198,6 +198,11 @@ mark_auth_offline()
 int
 is_auth_online()
 {
+	s_config *config = config_get_config();
+	if (config->auth_mode) {
+		return 1;
+	}
+	
 	if (!is_online()) {
         /* If we're not online auth is definately not online :) */
         return (0);

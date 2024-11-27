@@ -99,7 +99,13 @@ ping_work_cb(evutil_socket_t fd, short event, void *arg) {
 void
 thread_ping(void *arg)
 {
+	s_config *config = config_get_config();
 	fw_init_delay();
+	if (config->auth_mode) {
+		debug(LOG_INFO, "auth mode is not cloud, no need to ping");
+		mark_auth_online();
+		return;
+	}
 	wd_request_loop(ping_work_cb);
 }
 
