@@ -320,6 +320,7 @@ typedef struct {
 	short	enable_bypass_auth; /* 1, bypass auth */
 	short	enable_dns_forward; /* 1, enable dns forward */
 	short	enable_del_conntrack; /* 1, enable delete conntrack when client offline */
+	int		auth_mode; /* 0, cloud auth mode; 1, cloud auth bypass mode; 3, local auth mod*/
 } s_config;
 
 /** @brief Get the current gateway configuration */

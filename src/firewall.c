@@ -687,12 +687,6 @@ get_gw_clients_counter(t_gateway_setting *gw_setting, t_client *worklist)
 static void
 sync_gw_clients_counter(struct wd_request_context *context, t_gateway_setting *gw_setting, t_client *worklist)
 {
-	t_auth_serv *auth_server = get_auth_server();
-	if (!auth_server) {
-		debug(LOG_ERR, "Could not get auth server");
-		return;
-	}
-
 	char *uri = get_auth_counter_v2_uri();
 	struct evhttp_connection *evcon = NULL;
 	struct evhttp_request *req = NULL;
