@@ -52,10 +52,20 @@ wd_get_orig_url(struct evhttp_request *req, int is_ssl)
     }
 
     // Reconstruct the path and query components
-    char path[4096] = {0};
-    if (evhttp_uri_join(uri, path, sizeof(path) - 1) == -1) {
-        return NULL;
-    }
+	const char *uri_path = evhttp_uri_get_path(uri);
+	const char *uri_query = evhttp_uri_get_query(uri);
+	size_t path_len = (uri_path ? strlen(uri_path) : 0) + (uri_query ? strlen(uri_query) + 2 : 1);
+	char *path = calloc(path_len, sizeof(char));
+	if (!path) {
+		return NULL;
+	}
+	if (uri_path) {
+		strcat(path, uri_path);
+	}
+	if (uri_query) {
+		strcat(path, "?");
+		strcat(path, uri_query);
+	}
 	debug(LOG_DEBUG, "path: %s", path);
 	
     // Get the scheme, host, and port from the URI
