@@ -21,6 +21,7 @@ set(src_apfreewifidog
 	mqtt_thread.c
 	ws_thread.c
 	dns_forward.c
+	bypass_user.c
 )
 
 

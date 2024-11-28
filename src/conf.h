@@ -32,6 +32,8 @@
 #include <pthread.h>
 
 #include "common.h"
+#include "bypass_user.h"
+
 /*@{*/
 /** Defines */
 
@@ -101,19 +103,13 @@
 
 #define	WIFIDOG_REDIR_HTML_CONTENT	"setTimeout(function() {location.href = \"%s\";}, 10);"
 
+typedef t_trusted_mac t_untrusted_mac;
 
 typedef enum trusted_domain_t_ {
 	USER_TRUSTED_DOMAIN,
 	INNER_TRUSTED_DOMAIN,
 	TRUSTED_PAN_DOMAIN,
 } trusted_domain_t;
-
-typedef enum mac_choice_t_ {
-	TRUSTED_MAC,
-	UNTRUSTED_MAC,
-	TRUSTED_LOCAL_MAC,
-	ROAM_MAC
-} mac_choice_t;
 
 /**
  * Mutex for the configuration file, used by the auth_servers related
@@ -194,19 +190,6 @@ typedef struct _firewall_ruleset_t {
     struct _firewall_ruleset_t *next;
 } t_firewall_ruleset;
 
-/**
- * Trusted MAC Addresses
- */
-typedef struct _trusted_mac_t {
-    char 	*mac;
-	char 	*ip;
-	char 	*serial;
-	uint16_t 	is_online;
-	uint16_t 	remaining_time;
-    struct _trusted_mac_t *next;
-} t_trusted_mac;
-
-typedef t_trusted_mac	t_untrusted_mac;
 
 /**
  * Popular Servers
@@ -459,8 +442,7 @@ void clear_dup_trusted_mac_list(t_trusted_mac *);
 void add_mac(const char *, mac_choice_t );
 void remove_mac(const char *, mac_choice_t );
 void parse_mac_list(const char *, mac_choice_t);
-bool add_bypass_user(const char *, const uint16_t , const char *);
-bool remove_bypass_user(const char *);
+
 
 /** set all trusted mac offline */
 void reset_trusted_mac_list();
