@@ -46,9 +46,9 @@ void icmp6_ping(const char *);
 /** @brief Save pid of this wifidog in pid file */
 void save_pid_file(const char *);
 
-int is_valid_ip(const char *);
+bool is_valid_ip(const char *);
 
-int is_valid_ip6(const char *);
+bool is_valid_ip6(const char *);
 
 bool is_valid_mac(const char *);
 

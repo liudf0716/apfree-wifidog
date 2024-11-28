@@ -244,22 +244,22 @@ save_pid_file(const char *pf)
 }
 
 // true: 1; false: 0
-int
+bool
 is_valid_ip(const char *ip)
 {
 	if (!ip) {
-		return 0;
+		return false;
 	}
 	struct sockaddr_in sa;
     int result = inet_pton(AF_INET, ip, &(sa.sin_addr));
     return result != 0;
 }
 
-int
+bool
 is_valid_ip6(const char *ip)
 {
 	if (!ip) {
-		return 0;
+		return false;
 	}
 	struct sockaddr_in6 sa;
 	int result = inet_pton(AF_INET6, ip, &(sa.sin6_addr));
