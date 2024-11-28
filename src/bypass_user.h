@@ -11,6 +11,11 @@ typedef enum mac_choice_t_ {
 	ROAM_MAC
 } mac_choice_t;
 
+typedef enum {
+    QUERY_BY_IP,
+    QUERY_BY_MAC,
+} query_choice_t;
+
 /**
  * Trusted MAC Addresses
  */
@@ -30,6 +35,6 @@ t_trusted_mac *add_mac_from_list(const char *, const uint16_t , const char *, ma
 bool add_bypass_user(const char *, const uint16_t , const char *);
 bool remove_bypass_user(const char *);
 char *dump_bypass_user_list_json();
-char *query_bypass_user_status(const char *, const char *, const char *);
+char *query_bypass_user_status(const char *, const char *, const char *, query_choice_t choice);
 
 #endif
