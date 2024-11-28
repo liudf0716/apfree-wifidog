@@ -1293,28 +1293,6 @@ parse_boolean_value(char *line)
 	return -1;
 }
 
-
-/** 
- * @internal
- * @brief remove online client by its mac
- * 
- */
-
-static void
-remove_online_client(const char *mac)
-{
-	debug(LOG_DEBUG, "remove mac [%s] from client list", mac);
-
-	t_client *client = NULL;
-	LOCK_CLIENT_LIST();
-	if((client = client_list_find_by_mac(mac)) != NULL) {
-		fw_deny(client);
-		client_list_remove(client);
-		client_free_node(client);
-	}
-	UNLOCK_CLIENT_LIST();
-}
-
 void
 remove_mac(const char *mac, mac_choice_t which)
 {
