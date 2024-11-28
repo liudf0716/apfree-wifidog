@@ -88,6 +88,39 @@ remove_mac_from_list(const char *mac, mac_choice_t which)
 	UNLOCK_CONFIG();
 }
 
+static char *
+get_user_ip_by_mac(const char *mac)
+{
+    FILE *proc = NULL;
+    char ip[16] = {0};
+    char mac_addr[18] = {0};
+    char *reply = NULL;
+    s_config *config = config_get_config();
+
+    if (!(proc = fopen(config->arp_table_path, "r"))) {
+        return NULL;
+    }
+
+    while (!feof(proc) && fgetc(proc) != '\n') ;
+
+    reply = NULL;
+    while (!feof(proc) && (fscanf(proc, " %15[0-9.] %*s %*s %17[a-fA-F0-9:] %*s %*s", ip, mac_addr) == 2)) {
+        if (strcmp(mac_addr, mac) == 0) {
+            if(reply) {
+                free(reply);
+                reply = NULL;
+            }
+            reply = safe_strdup(ip);
+        }
+    }
+
+    fclose(proc);
+
+    debug(LOG_DEBUG, "IP address for MAC [%s] is [%s]", mac, reply?reply:"not found");
+
+    return reply;
+}
+
 t_trusted_mac *
 add_mac_from_list(const char *mac, const uint16_t remaining_time, const char *serial, mac_choice_t which)
 {
@@ -96,6 +129,12 @@ add_mac_from_list(const char *mac, const uint16_t remaining_time, const char *se
 
 	debug(LOG_DEBUG, "Adding MAC address [%s] to  mac list [%d]", mac, which);
 
+    char *ip = get_user_ip_by_mac(mac);
+    if (ip == NULL) {
+        debug(LOG_ERR, "Could not find IP address for MAC [%s]", mac);
+        return NULL;
+    }
+
 	LOCK_CONFIG();
 
 	switch (which) {
@@ -103,6 +142,7 @@ add_mac_from_list(const char *mac, const uint16_t remaining_time, const char *se
 		if (config->trustedmaclist == NULL) {
 			config->trustedmaclist = safe_malloc(sizeof(t_trusted_mac));
 			config->trustedmaclist->mac = safe_strdup(mac);
+            config->trustedmaclist->ip = ip;
 			config->trustedmaclist->remaining_time = remaining_time?remaining_time:UINT16_MAX;
 			config->trustedmaclist->serial = serial?safe_strdup(serial):NULL;
 			config->trustedmaclist->next = NULL;
@@ -153,6 +193,7 @@ add_mac_from_list(const char *mac, const uint16_t remaining_time, const char *se
 	if (!skipmac) {
 		p = safe_malloc(sizeof(t_trusted_mac));
 		p->mac = safe_strdup(mac);
+        p->ip = ip;
 		p->remaining_time = remaining_time?remaining_time:UINT16_MAX;
 		p->serial = serial?safe_strdup(serial):NULL;
 		switch (which) {
@@ -277,6 +318,58 @@ dump_bypass_user_list_json()
     
     json_object_object_add(j_obj, "online user", j_array);
     
+    const char *json_str = json_object_to_json_string(j_obj);
+    char *res = safe_strdup(json_str);
+    
+    json_object_put(j_obj);
+    
+    return res;
+}
+
+char *
+query_bypass_user_status(const char *mac, const char *gw_mac, const char *gw_address)
+{
+    s_config *config = config_get_config();
+    json_object *j_obj = json_object_new_object();
+    json_object *j_status = json_object_new_object();
+    char remaining_time_str[32] = {0};
+    int found = 0;
+
+    if (!mac || !is_valid_mac(mac)) {
+        return NULL;
+    }
+
+    LOCK_CONFIG();
+
+    t_trusted_mac *tmac = config->trustedmaclist;
+    while (tmac) {
+        if (strcmp(tmac->mac, mac) == 0) {
+            found = 1;
+            json_object_object_add(j_obj, "已放行", j_status);
+            json_object_object_add(j_status, "gw mac", json_object_new_string(gw_mac));
+            json_object_object_add(j_status, "c mac", json_object_new_string(mac));
+            json_object_object_add(j_status, "c ip", json_object_new_string(tmac->ip ? tmac->ip : "unknown"));
+            json_object_object_add(j_status, "gw ip", json_object_new_string(gw_address));
+            json_object_object_add(j_status, "release", json_object_new_string("1"));
+            snprintf(remaining_time_str, sizeof(remaining_time_str), "%d", tmac->remaining_time);
+            json_object_object_add(j_status, "remaining time", json_object_new_string(remaining_time_str));
+            json_object_object_add(j_status, "serial", json_object_new_string(tmac->serial ? tmac->serial : ""));
+            break;
+        }
+        tmac = tmac->next;
+    }
+
+    UNLOCK_CONFIG();
+
+    if (!found) {
+        json_object_object_add(j_obj, "未放行", j_status);
+        json_object_object_add(j_status, "gw mac", json_object_new_string(gw_mac));
+        json_object_object_add(j_status, "c mac", json_object_new_string(mac));
+        json_object_object_add(j_status, "c ip", json_object_new_string("unknown"));
+        json_object_object_add(j_status, "gw ip", json_object_new_string(gw_address));
+        json_object_object_add(j_status, "release", json_object_new_string("0"));
+    }
+
     const char *json_str = json_object_to_json_string(j_obj);
     char *res = safe_strdup(json_str);
     
