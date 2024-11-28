@@ -266,7 +266,7 @@ is_valid_ip6(const char *ip)
 	return result != 0;
 }
 
-int 
+bool 
 is_valid_mac(const char *mac)
 {
 	int i = 0;

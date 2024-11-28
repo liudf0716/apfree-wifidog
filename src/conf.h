@@ -200,7 +200,9 @@ typedef struct _firewall_ruleset_t {
 typedef struct _trusted_mac_t {
     char 	*mac;
 	char 	*ip;
-	int		is_online;
+	char 	*serial;
+	uint16_t 	is_online;
+	uint16_t 	remaining_time;
     struct _trusted_mac_t *next;
 } t_trusted_mac;
 
@@ -455,10 +457,10 @@ void clear_dup_trusted_mac_list(t_trusted_mac *);
 
 /** add trusted&untrusted mac to list */
 void add_mac(const char *, mac_choice_t );
-
 void remove_mac(const char *, mac_choice_t );
-
 void parse_mac_list(const char *, mac_choice_t);
+bool add_bypass_user(const char *, const uint16_t , const char *);
+bool remove_bypass_user(const char *);
 
 /** set all trusted mac offline */
 void reset_trusted_mac_list();

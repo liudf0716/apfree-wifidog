@@ -30,6 +30,7 @@
 
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <stdbool.h>
 
 /** @brief Initialize the ICMP socket */
 int init_icmp_socket(void);
@@ -49,7 +50,7 @@ int is_valid_ip(const char *);
 
 int is_valid_ip6(const char *);
 
-int is_valid_mac(const char *);
+bool is_valid_mac(const char *);
 
 int wd_connect(int, const struct sockaddr *, socklen_t, int);
 

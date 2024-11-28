@@ -1393,7 +1393,7 @@ remove_mac_from_list(const char *mac, mac_choice_t which)
 }
 
 static t_trusted_mac *
-add_mac_from_list(const char *mac, mac_choice_t which)
+add_mac_from_list(const char *mac, const uint16_t remaining_time, const char *serial, mac_choice_t which)
 {
 	t_trusted_mac *pret = NULL, *p = NULL;
 
@@ -1408,6 +1408,8 @@ add_mac_from_list(const char *mac, mac_choice_t which)
 		if (config.trustedmaclist == NULL) {
 			config.trustedmaclist = safe_malloc(sizeof(t_trusted_mac));
 			config.trustedmaclist->mac = safe_strdup(mac);
+			config.trustedmaclist->remaining_time = remaining_time?remaining_time:UINT16_MAX;
+			config.trustedmaclist->serial = serial?safe_strdup(serial):NULL;
 			config.trustedmaclist->next = NULL;
 			pret = config.trustedmaclist;
 			UNLOCK_CONFIG();
@@ -1456,6 +1458,8 @@ add_mac_from_list(const char *mac, mac_choice_t which)
 	if (!skipmac) {
 		p = safe_malloc(sizeof(t_trusted_mac));
 		p->mac = safe_strdup(mac);
+		p->remaining_time = remaining_time?remaining_time:UINT16_MAX;
+		p->serial = serial?safe_strdup(serial):NULL;
 		switch (which) {
 		case TRUSTED_MAC:
 			p->next = config.trustedmaclist;
@@ -1495,7 +1499,31 @@ remove_mac(const char *mac, mac_choice_t which)
 void
 add_mac(const char *mac, mac_choice_t which)
 {
-	add_mac_from_list(mac, which);
+	add_mac_from_list(mac, 0, NULL, which);
+}
+
+bool
+add_bypass_user(const char *mac, const uint16_t remaining_time, const char *serial)
+{
+	if (mac == NULL || !is_valid_mac(mac) || serial == NULL) {
+		return false;
+	}
+	if (add_mac_from_list(mac, remaining_time, serial, TRUSTED_MAC) == NULL) {
+		return false;
+	}
+
+	return true;
+}
+
+bool
+remove_bypass_user(const char *mac)
+{
+	if (mac == NULL || !is_valid_mac(mac)) {
+		return false;
+	}
+	
+	remove_mac_from_list(mac, TRUSTED_MAC);
+	return true;
 }
 
 /* *
