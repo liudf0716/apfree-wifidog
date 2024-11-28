@@ -2331,6 +2331,8 @@ trusted_mac_dup(t_trusted_mac *src)
 	new = safe_malloc(sizeof(t_trusted_mac));
 	new->mac 		= safe_strdup(src->mac);
 	new->ip 		= src->ip?safe_strdup(src->ip):NULL;
+	new->remaining_time = src->remaining_time;
+	new->serial 	= src->serial?safe_strdup(src->serial):NULL;
 	new->is_online 	= src->is_online;
 
 	return new;

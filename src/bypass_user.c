@@ -3,7 +3,10 @@
 #include "debug.h"
 #include "safe.h"
 #include "util.h"
+#include "version.h"
 #include "bypass_user.h"
+
+extern time_t started_time;
 
 void
 remove_mac_from_list(const char *mac, mac_choice_t which)
@@ -201,4 +204,76 @@ remove_bypass_user(const char *mac)
 	
 	remove_mac_from_list(mac, TRUSTED_MAC);
 	return true;
+}
+
+static char *
+get_firmware_version(void)
+{
+    FILE *fp = NULL;
+    char *line = NULL;
+    size_t len = 0;
+    ssize_t read;
+    char *version = NULL;
+    char *cleaned_version = NULL;
+
+    fp = fopen("/etc/openwrt_version", "r");
+    if (!fp) {
+        debug(LOG_ERR, "Could not open /etc/openwrt_version: %s", strerror(errno));
+        return safe_strdup("unknown");
+    }
+
+    read = getline(&line, &len, fp);
+    if (read != -1) {
+        // Remove trailing newlines and whitespace
+        while (read > 0 && (line[read-1] == '\n' || line[read-1] == '\r' || line[read-1] == ' ')) {
+            line[--read] = '\0';
+        }
+        
+        if (read > 0) {
+            cleaned_version = safe_strdup(line);
+        }
+    }
+
+    free(line);
+    fclose(fp);
+
+    return cleaned_version ? cleaned_version : safe_strdup("unknown");
+}
+
+char *
+dump_bypass_user_list_json()
+{
+    s_config *config = config_get_config();
+    json_object *j_obj = json_object_new_object();
+    json_object *j_array = json_object_new_array();
+    uint32_t uptime = time(NULL) - started_time;
+    char uptime_str[32] = {0};
+    snprintf(uptime_str, sizeof(uptime_str), "%d", uptime);
+
+    json_object_object_add(j_obj, "apfree version", json_object_new_string(VERSION));
+    json_object_object_add(j_obj, "openwrt version", json_object_new_string(get_firmware_version()));
+    json_object_object_add(j_obj, "uptime", json_object_new_string(uptime_str));
+    
+    LOCK_CONFIG();
+    
+    t_trusted_mac *tmac = config->trustedmaclist;
+    while (tmac) {
+        json_object *j_user = json_object_new_object();
+        json_object_object_add(j_user, "mac", json_object_new_string(tmac->mac));
+        json_object_object_add(j_user, "serial", json_object_new_string(tmac->serial ? tmac->serial : ""));
+        json_object_object_add(j_user, "remaining time", json_object_new_string_fmt("%d", tmac->remaining_time));
+        json_object_array_add(j_array, j_user);
+        tmac = tmac->next;
+    }
+    
+    UNLOCK_CONFIG();
+    
+    json_object_object_add(j_obj, "online user", j_array);
+    
+    const char *json_str = json_object_to_json_string(j_obj);
+    char *res = safe_strdup(json_str);
+    
+    json_object_put(j_obj);
+    
+    return res;
 }
