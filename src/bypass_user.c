@@ -1,3 +1,6 @@
+
+#include <json-c/json.h>
+
 #include "common.h"
 #include "conf.h"
 #include "debug.h"
@@ -213,7 +216,6 @@ get_firmware_version(void)
     char *line = NULL;
     size_t len = 0;
     ssize_t read;
-    char *version = NULL;
     char *cleaned_version = NULL;
 
     fp = fopen("/etc/openwrt_version", "r");
@@ -247,23 +249,28 @@ dump_bypass_user_list_json()
     json_object *j_obj = json_object_new_object();
     json_object *j_array = json_object_new_array();
     uint32_t uptime = time(NULL) - started_time;
+    char *firmware_version = get_firmware_version();
     char uptime_str[32] = {0};
     snprintf(uptime_str, sizeof(uptime_str), "%d", uptime);
 
     json_object_object_add(j_obj, "apfree version", json_object_new_string(VERSION));
-    json_object_object_add(j_obj, "openwrt version", json_object_new_string(get_firmware_version()));
+    json_object_object_add(j_obj, "openwrt version", json_object_new_string(firmware_version));
     json_object_object_add(j_obj, "uptime", json_object_new_string(uptime_str));
+    free(firmware_version);
     
     LOCK_CONFIG();
     
     t_trusted_mac *tmac = config->trustedmaclist;
+    char remaining_time_str[32] = {0};
     while (tmac) {
+        snprintf(remaining_time_str, sizeof(remaining_time_str), "%d", tmac->remaining_time);
         json_object *j_user = json_object_new_object();
         json_object_object_add(j_user, "mac", json_object_new_string(tmac->mac));
         json_object_object_add(j_user, "serial", json_object_new_string(tmac->serial ? tmac->serial : ""));
-        json_object_object_add(j_user, "remaining time", json_object_new_string_fmt("%d", tmac->remaining_time));
+        json_object_object_add(j_user, "remaining time", json_object_new_string(remaining_time_str));
         json_object_array_add(j_array, j_user);
         tmac = tmac->next;
+        memset(remaining_time_str, 0, sizeof(remaining_time_str));
     }
     
     UNLOCK_CONFIG();
