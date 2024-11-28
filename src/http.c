@@ -53,6 +53,7 @@
 #include "wd_util.h"
 #include "version.h"
 #include "wd_client.h"
+#include "bypass_user.h"
 
 #define APPLE_REDIRECT_MSG  "<!DOCTYPE html>"	\
 				"<html>"						\
@@ -698,6 +699,69 @@ ev_http_callback_local_auth(struct evhttp_request *req, void *arg)
 END:
     if (mac) free((void *)mac);
     if (ip) free((void *)ip);
+}
+
+/**
+ * @brief process client's device request
+ * 
+ * @param req Client's http request
+ * @param arg useless
+ * 
+ */
+void
+ev_http_callback_device(struct evhttp_request *req, void *arg)
+{
+    if (evhttp_request_get_command(req) == EVHTTP_REQ_OPTIONS) {
+        ev_http_respond_options(req);
+        return;
+    }
+
+    evhttp_add_header(evhttp_request_get_output_headers(req), "Access-Control-Allow-Origin", "*");
+    evhttp_add_header(evhttp_request_get_output_headers(req), "Access-Control-Allow-Methods", "GET,POST,OPTIONS,DELETE,PUT");
+
+    // Get client IP from query string
+    char *client_ip = ev_http_find_query(req, "client_ip");
+    if (!client_ip) {
+        evhttp_send_error(req, HTTP_OK, "Client IP need to be specified");
+        return;
+    }
+
+    char if_name[IFNAMSIZ] = {0};
+    if (!get_ifname_by_address(client_ip, if_name)) {
+        free(client_ip);
+        debug(LOG_ERR, "get_ifname_by_address [%s] failed", client_ip);
+        evhttp_send_error(req, 200, "Cant get client's interface name");
+        return;
+    }
+    free(client_ip);
+
+    if_name[IFNAMSIZ-1] = '\0';
+    t_gateway_setting *gw_setting = get_gateway_setting_by_ifname(if_name);
+    if (!gw_setting) {
+        debug(LOG_ERR, "get_gateway_setting_by_ifname [%s] failed", if_name);
+        evhttp_send_error(req, 200, "Cant get gateway setting by interface name");
+        return;
+    }
+
+    const char *json_query_result = query_bypass_user_status(client_ip, gw_setting->gw_id, gw_setting->gw_address_v4, QUERY_BY_IP);
+    if (!json_query_result) {
+        evhttp_send_error(req, HTTP_OK, "Failed to query bypass user status");
+        return;
+    }
+
+    struct evbuffer *ev = evbuffer_new();
+    if (!ev) {
+        free((void *)json_query_result);
+        evhttp_send_error(req, HTTP_INTERNAL, "Failed to create response buffer");
+        return;
+    }
+    
+    evbuffer_add(ev, json_query_result, strlen(json_query_result));
+    evhttp_add_header(evhttp_request_get_output_headers(req), "Content-Type", "application/json");
+    evhttp_send_reply(req, HTTP_OK, "OK", ev);
+
+    free((void *)json_query_result);
+    evbuffer_free(ev);
 }
 
 

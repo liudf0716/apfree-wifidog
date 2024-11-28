@@ -49,6 +49,8 @@ void ev_http_callback_auth(struct evhttp_request *, void *);
 void ev_http_callback_disconnect(struct evhttp_request *, void *);
 /** @brief callback for evhttp, temporary allow user to access network one minute  */
 void ev_http_callback_temporary_pass(struct evhttp_request *, void *);
+/** @brief callback for evhttp, query bypass user status by its ip  */
+void ev_http_callback_device(struct evhttp_request *, void *);
 
 /** @brief resend client's request */
 void ev_http_resend(struct evhttp_request *);

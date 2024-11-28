@@ -512,6 +512,9 @@ http_redir_loop(s_config *config)
         evhttp_set_cb(http, "/wifidog", ev_http_callback_wifidog, NULL);
         evhttp_set_cb(http, "/wifidog/auth", ev_http_callback_auth, request_ctx);
         evhttp_set_cb(http, "/wifidog/temporary_pass", ev_http_callback_temporary_pass, NULL);
+        if (config->auth_mode == 1) {
+            evhttp_set_cb(http, "/cgi-bin/cgi-device", ev_http_callback_device, NULL);
+        }
     } else {
         evhttp_set_cb(http, "/wifidog/local_auth", ev_http_callback_local_auth, NULL);
     }
