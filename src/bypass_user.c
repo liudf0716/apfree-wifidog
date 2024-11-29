@@ -219,6 +219,7 @@ add_mac_from_list(const char *mac, const uint16_t remaining_time, const char *se
 	while (p != NULL) {
 		if (0 == strcmp(p->mac, mac)) {
 			skipmac = 1;
+            p->remaining_time = remaining_time;
 		}
 		p = p->next;
 	}
