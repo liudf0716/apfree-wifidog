@@ -42,6 +42,7 @@
 #include "gateway.h"
 #include "safe.h"
 #include "wd_client.h"
+#include "bypass_user.h"
 
 static struct sockaddr_un *create_unix_socket(const char *);
 
@@ -81,6 +82,10 @@ static void wdctl_add_untrusted_maclist(struct bufferevent *, const char *);
 static void wdctl_del_untrusted_maclist(struct bufferevent *, const char *);
 static void wdctl_add_online_client(struct bufferevent *, const char *);
 static void wdctl_add_auth_client(struct bufferevent *, const char *);
+
+static void wdctl_user_list(struct bufferevent *);
+static void wdctl_user_info(struct bufferevent *, const char *);
+static void wdctl_user_auth(struct bufferevent *, const char *);
 
 static struct wd_request_context *request_ctx;
 static const char *no_auth_response = "no auth server";
@@ -126,6 +131,10 @@ static struct wdctl_command {
     {"del_untrusted_mac", NULL, wdctl_del_untrusted_maclist},
     {"add_online_client", NULL, wdctl_add_online_client},
 	{"add_auth_client", NULL, wdctl_add_auth_client},
+    // apfree command
+    {"user_list", wdctl_user_list, NULL},
+    {"user_info", NULL, wdctl_user_info},
+    {"user_auth", NULL, wdctl_user_auth},
 };
 
 static void 
@@ -855,5 +864,80 @@ wdctl_add_auth_client(struct bufferevent *fd, const char *args)
     
 OUT:
     if (client_info) json_object_put(client_info);
+    bufferevent_write(fd, "Yes", 3);
+}
+
+static void
+wdctl_user_list(struct bufferevent *fd)
+{
+    char *json_user_list = dump_bypass_user_list_json();
+    if (json_user_list) {
+        size_t len = strlen(json_user_list);
+        bufferevent_write(fd, json_user_list, len);   /* XXX Not handling error because we'd just print the same log line. */
+        free(json_user_list);
+    } else 
+        bufferevent_write(fd, "{}", 2);
+}
+
+static void
+wdctl_user_info(struct bufferevent *fd, const char *args)
+{
+    if (!is_valid_ip(args)) {
+        bufferevent_write(fd, "{}", 2);
+        return;
+    }
+}
+
+static void
+wdctl_user_auth(struct bufferevent *fd, const char *json_value)
+{
+    json_object *root = json_tokener_parse(json_value);
+    if (is_error(root) || json_object_get_type(root) != json_type_object) {
+        debug(LOG_ERR, "Failed to parse json value: %s", json_value);
+        goto OUT;
+    }
+
+    json_object *user_array = NULL;
+    if (!json_object_object_get_ex(root, "user", &user_array) ||
+        json_object_get_type(user_array) != json_type_array) {
+        debug(LOG_ERR, "Failed to get user array");
+        goto OUT;
+    }
+
+    // iterate over the user array
+    for (int i = 0; i < json_object_array_length(user_array); i++) {
+        json_object *user = json_object_array_get_idx(user_array, i);
+        if (!user) {
+            debug(LOG_ERR, "User array is empty");
+            continue;
+        }
+
+        json_object *serial_jo = NULL;
+        json_object *time_jo = NULL;
+        json_object *mac_jo = NULL;
+
+        if (!json_object_object_get_ex(user, "serial", &serial_jo) ||
+            !json_object_object_get_ex(user, "time", &time_jo) ||
+            !json_object_object_get_ex(user, "mac", &mac_jo)) {
+            debug(LOG_ERR, "Failed to get required fields from user object");
+            continue;
+        }
+
+        const char *serial = json_object_get_string(serial_jo);
+        const char *time_str = json_object_get_string(time_jo);
+        const char *mac = json_object_get_string(mac_jo);
+
+        debug(LOG_DEBUG, "Parsed values - serial: %s, time: %s, mac: %s", 
+              serial, time_str, mac);
+        uint16_t remaining_time = atoi(time_str);
+        if (remaining_time == 0) {
+            remove_bypass_user(mac);
+        } else {
+            add_bypass_user(serial, remaining_time, mac);
+        }
+    }
+
+OUT:
+    if (root) json_object_put(root);
     bufferevent_write(fd, "Yes", 3);
 }

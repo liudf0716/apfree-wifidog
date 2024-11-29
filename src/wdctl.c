@@ -39,6 +39,7 @@ char *progname = NULL;
 
 static void show_command(const char *type);
 static void add_command(const char *type, char *values);
+static void del_command(const char *type, char *values);
 static void clear_command(const char *type);
 static void display_help();
 static void stop_command();
@@ -177,6 +178,12 @@ main(int argc, char **argv)
             return 1;
         }
         add_command(type, values);
+    } else if (strcmp(command, "del") == 0) {
+        if (!type || !values) {
+            printf("Error: Missing type or values argument\n");
+            return 1;
+        }
+        del_command(type, values);
     } else if (strcmp(command, "clear") == 0) {
         if (!type) {
             printf("Error: Missing type argument\n");
@@ -197,13 +204,40 @@ main(int argc, char **argv)
         status_command();
     } else if (strcmp(command, "refresh") == 0) {
         refresh_command();
+    } else if (strcasecmp(command, "APfree") == 0) {
+        if (!type) {
+            printf("Error: Missing type argument\n");
+            return 1;
+        }
+        if (strcasecmp(type, "onlineUserList") == 0) {
+            wdctl_command_action("user_list", NULL);
+        } else if (strcasecmp(type, "onlineUser") == 0) {
+            if (!values) {
+                printf("Error: Missing IP address\n");
+                return 1;
+            }
+            if (!is_valid_ip(values)) {
+                printf("Error: Invalid IP address\n");
+                return 1;
+            }
+            wdctl_command_action("user_info", values);
+        } else if (strcasecmp(type, "PushUserAuth") == 0) {
+            if (!values) {
+                printf("Error: Missing user auth data\n");
+                return 1;
+            }
+            wdctl_command_action("user_auth", values);
+        } else {
+            printf("Unknown APfree command. Available commands: onlineUserList, onlineUser, PushUserAuth\n");
+            return 1;
+        }
     } else {
         printf("Unknown command. Type 'wdctlx help' or 'wdctlx ?' for help.\n");
         return 1;
     }
 
     return 0;
-}
+} 
 
 static void 
 show_command(const char *type) {
@@ -236,6 +270,21 @@ add_command(const char *type, char *values) {
     }
 }
 
+static void
+del_command(const char *type, char *values) {
+    printf("Deleting %s values is %s\n", type, values);
+    // Add the logic to delete the values from domain|wildcard_domain|mac
+    if (strcmp(type, "domain") == 0) {
+        wdctl_command_action("del_trusted_domains", values);
+    } else if (strcmp(type, "wildcard_domain") == 0) {
+        wdctl_command_action("del_trusted_pdomains", values);
+    } else if (strcmp(type, "mac") == 0) {
+        wdctl_command_action("del_trusted_mac", values);
+    } else {
+        printf("Unknown type\n");
+    }
+}
+
 static void 
 clear_command(const char *type) {
     printf("Clearing %s\n", type);
@@ -256,6 +305,7 @@ display_help() {
     printf("Commands:\n");
     printf("wdctlx show domain|wildcard_domain|mac\n");
     printf("wdctlx add domain|wildcard_domain|mac value1,value2...\n");
+    printf("wdctlx del domain|wildcard_domain|mac value1,value2...\n");
     printf("wdctlx clear domain|wildcard_domain|mac\n");
     printf("wdctlx help|?\n");
     printf("wdctlx stop\n");
