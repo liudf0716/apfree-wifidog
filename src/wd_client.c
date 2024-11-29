@@ -130,10 +130,10 @@ wd_get_redir_url_to_auth(struct evhttp_request *req,
 						 const char *device_id,
 						 int is_ssl)
 {
-    t_auth_serv *auth_server = get_auth_server();
-    char *orig_url = wd_get_orig_url(req, is_ssl);
-    if (!orig_url) 
-		orig_url= safe_strdup("null");
+	t_auth_serv *auth_server = get_auth_server();
+	char *orig_url = wd_get_orig_url(req, is_ssl);
+	if (!orig_url) 
+		orig_url = safe_strdup("null");
 	char *gw_address = NULL;
 	int is_ipv6 = 0;
 	if (is_valid_ip6(remote_host)) {
@@ -142,27 +142,47 @@ wd_get_redir_url_to_auth(struct evhttp_request *req,
 	} else
 		gw_address = gw_setting->gw_address_v4;
 
-    char *redir_url = NULL;
-    safe_asprintf(&redir_url, "%s://%s:%d%s%sgw_address=%s&is_ipv6=%d&gw_port=%d&device_id=%s&gw_id=%s&gw_channel=%s&ssid=%s&ip=%s&mac=%s&protocol=%s&url=%s",
-        auth_server->authserv_use_ssl?"https":"http",
-        auth_server->authserv_hostname,
-        auth_server->authserv_use_ssl?auth_server->authserv_ssl_port:auth_server->authserv_http_port,
-		auth_server->authserv_path,
-		auth_server->authserv_login_script_path_fragment,
-        gw_address,
-		is_ipv6,
-		gw_port,
-		device_id,
-		gw_setting->gw_id, 
-        gw_setting->gw_channel?gw_setting->gw_channel:"null",
-        g_ssid?g_ssid:"null",
-        remote_host, 
-		mac, 
-		is_ssl?"https":"http",
-		orig_url); 
+	char *redir_url = NULL;
+	if ((auth_server->authserv_use_ssl && auth_server->authserv_ssl_port == 443) ||
+		(!auth_server->authserv_use_ssl && auth_server->authserv_http_port == 80)) {
+		safe_asprintf(&redir_url, "%s://%s%s%sgw_address=%s&is_ipv6=%d&gw_port=%d&device_id=%s&gw_id=%s&gw_channel=%s&ssid=%s&ip=%s&mac=%s&protocol=%s&url=%s",
+			auth_server->authserv_use_ssl?"https":"http",
+			auth_server->authserv_hostname,
+			auth_server->authserv_path,
+			auth_server->authserv_login_script_path_fragment,
+			gw_address,
+			is_ipv6,
+			gw_port,
+			device_id,
+			gw_setting->gw_id, 
+			gw_setting->gw_channel?gw_setting->gw_channel:"null",
+			g_ssid?g_ssid:"null",
+			remote_host, 
+			mac, 
+			is_ssl?"https":"http",
+			orig_url);
+	} else {
+		safe_asprintf(&redir_url, "%s://%s:%d%s%sgw_address=%s&is_ipv6=%d&gw_port=%d&device_id=%s&gw_id=%s&gw_channel=%s&ssid=%s&ip=%s&mac=%s&protocol=%s&url=%s",
+			auth_server->authserv_use_ssl?"https":"http",
+			auth_server->authserv_hostname,
+			auth_server->authserv_use_ssl?auth_server->authserv_ssl_port:auth_server->authserv_http_port,
+			auth_server->authserv_path,
+			auth_server->authserv_login_script_path_fragment,
+			gw_address,
+			is_ipv6,
+			gw_port,
+			device_id,
+			gw_setting->gw_id, 
+			gw_setting->gw_channel?gw_setting->gw_channel:"null",
+			g_ssid?g_ssid:"null",
+			remote_host, 
+			mac, 
+			is_ssl?"https":"http",
+			orig_url);
+	}
 		
-    free(orig_url);
-    return redir_url;
+	free(orig_url);
+	return redir_url;
 }
 
 /**
