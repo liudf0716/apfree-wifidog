@@ -220,9 +220,9 @@ set_auth_server_op(void *mosq, const char *type, const char *value, const int re
 {
 	char * hostname = config->auth_servers->authserv_hostname;
 	char * path = config->auth_servers->authserv_path;
-	char * tmp_host_name = NULL;
-	char * tmp_http_port = NULL;
-	char * tmp_path = NULL;
+	const char * tmp_host_name = NULL;
+	const char * tmp_http_port = NULL;
+	const char * tmp_path = NULL;
 		
 	debug(LOG_DEBUG, "value is %s\n", value);
 	json_object *json_request = json_tokener_parse(value);
