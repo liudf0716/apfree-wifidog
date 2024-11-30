@@ -124,7 +124,9 @@ void fw_clear_untrusted_maclist();
 
 void fw_set_mac_temporary(const char *, int);
 
-void fw_set_trusted_mac(const char *);
+void fw_add_trusted_mac(const char *, uint16_t);
+void fw_del_trusted_mac(const char *);
+void fw_update_trusted_mac(const char *, uint16_t);
 
 void fw_client_process_from_authserver_response(t_authresponse *, t_client *p1);
 

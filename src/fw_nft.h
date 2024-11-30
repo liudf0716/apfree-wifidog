@@ -56,5 +56,8 @@ void nft_fw_refresh_user_domains_trusted();
 void nft_fw_set_trusted_maclist();
 void nft_fw_clear_trusted_maclist();
 void nft_fw_set_mac_temporary(const char *mac, int which);
+void nft_fw_add_trusted_mac(const char *mac, int timeout);
+void nft_fw_del_trusted_mac(const char *mac);
+void nft_fw_update_trusted_mac(const char *mac, int timeout);
 
 #endif

@@ -482,13 +482,35 @@ fw_set_mac_temporary(const char *mac, int which)
 }
 
 void
-fw_set_trusted_mac(const char *mac)
+fw_add_trusted_mac(const char *mac, uint16_t timeout)
 {
-	debug(LOG_DEBUG, "Clear untrusted maclist");
+	debug(LOG_DEBUG, "Set trusted mac [%s] with timeout %d", mac, timeout);
 #ifdef AW_FW3
 	iptables_fw_set_trusted_mac(mac);
 #else
-	//nft_fw_set_trusted_mac(mac);
+	nft_fw_add_trusted_mac(mac, timeout);
+#endif
+}
+
+void
+fw_del_trusted_mac(const char *mac)
+{
+	debug(LOG_DEBUG, "Del trusted mac [%s]", mac);
+#ifdef AW_FW3
+	iptables_fw_del_trusted_mac(mac);
+#else
+	nft_fw_del_trusted_mac(mac);
+#endif
+}
+
+void
+fw_update_trusted_mac(const char *mac, uint16_t timeout)
+{
+	debug(LOG_DEBUG, "Update trusted mac [%s] with timeout %d", mac, timeout);
+#ifdef AW_FW3
+	iptables_fw_update_trusted_mac(mac);
+#else
+	nft_fw_update_trusted_mac(mac, timeout);
 #endif
 }
 

@@ -61,7 +61,7 @@ const char *nft_wifidogx_init_script[] = {
     "add set inet fw4 set_wifidogx_inner_trust_domains_v6 { type ipv6_addr; }",
     "add set inet fw4 set_wifidogx_bypass_clients { type ipv4_addr; flags interval; }",
     "add set inet fw4 set_wifidogx_bypass_clients_v6 { type ipv6_addr; flags interval; }",
-    "add set inet fw4 set_wifidogx_trust_clients { type ether_addr; }",
+    "add set inet fw4 set_wifidogx_trust_clients { type ether_addr; flags timeout; timeout 1h; counter; }",
     "add set inet fw4 set_wifidogx_tmp_trust_clients { type ether_addr; flags timeout; timeout 1m; }",
     "add chain inet fw4 dstnat_wifidogx_auth_server",
     "add chain inet fw4 dstnat_wifidogx_wan",
@@ -889,6 +889,46 @@ nft_fw_refresh_user_domains_trusted()
     nft_fw_set_user_domains_trusted();
 }
 
+static void
+__nft_fw_add_trusted_mac(const char *mac, int timeout)
+{
+    if (timeout == 0)
+        nftables_do_command("add element inet fw4 set_wifidogx_trust_clients { %s }", mac);
+    else
+        nftables_do_command("add element inet fw4 set_wifidogx_trust_clients { %s timeout %ds}", mac, timeout);
+}
+
+static void
+__nft_fw_del_trusted_mac(const char *mac)
+{
+    nftables_do_command("delete element inet fw4 set_wifidogx_trust_clients { %s }", mac);
+}
+
+void
+nft_fw_del_trusted_mac(const char *mac)
+{
+    LOCK_CONFIG();
+    __nft_fw_del_trusted_mac(mac);
+    UNLOCK_CONFIG();
+}
+
+void
+nft_fw_add_trusted_mac(const char *mac, int timeout)
+{
+    LOCK_CONFIG();
+    __nft_fw_add_trusted_mac(mac, timeout);
+    UNLOCK_CONFIG();
+}
+
+void
+nft_fw_update_trusted_mac(const char *mac, int timeout)
+{
+    LOCK_CONFIG();
+    __nft_fw_del_trusted_mac(mac);
+    __nft_fw_add_trusted_mac(mac, timeout);
+    UNLOCK_CONFIG();
+}
+
 void
 nft_fw_set_trusted_maclist()
 {
@@ -897,7 +937,7 @@ nft_fw_set_trusted_maclist()
 
 	LOCK_CONFIG();
 	for (p = config->trustedmaclist; p != NULL; p = p->next)
-		nftables_do_command("add element inet fw4 set_wifidogx_trust_clients { %s }", p->mac);
+        nft_fw_add_trusted_mac(p->mac, p->remaining_time);
 	UNLOCK_CONFIG();
 }
 

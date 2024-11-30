@@ -6,6 +6,7 @@
 #include "debug.h"
 #include "safe.h"
 #include "util.h"
+#include "firewall.h"
 #include "version.h"
 #include "bypass_user.h"
 
@@ -56,24 +57,29 @@ remove_mac_from_list(const char *mac, mac_choice_t which)
 	if(p) {
 		switch(which) {
 		case TRUSTED_MAC:
+            debug(LOG_DEBUG, "Removing trusted MAC [%s]", mac);
+            fw_del_trusted_mac(mac);
 			if(p == config->trustedmaclist)
 				config->trustedmaclist = p->next;
 			else
 				p1->next = p->next;
 			break;
 		case UNTRUSTED_MAC:
+            debug(LOG_ERR, "forbid here");
 			if(p == config->mac_blacklist)
 				config->mac_blacklist = p->next;
 			else
 				p1->next = p->next;
 			break;
 		case TRUSTED_LOCAL_MAC:
+            debug(LOG_ERR, "forbid here");
 			if(p == config->trusted_local_maclist)
 				config->trusted_local_maclist = p->next;
 			else
 				p1->next = p->next;
 			break;
 		case ROAM_MAC:
+            debug(LOG_ERR, "forbid here");
 			if(p == config->roam_maclist)
 				config->roam_maclist = p->next;
 			else
@@ -83,7 +89,9 @@ remove_mac_from_list(const char *mac, mac_choice_t which)
 		free(p->mac);
 		if(p->ip) free(p->ip);
 		free(p);
-	}
+	} else {
+        debug(LOG_ERR, "MAC address [%s] not found in mac list [%d]", mac, which);
+    }
 
 	UNLOCK_CONFIG();
 }
@@ -175,11 +183,12 @@ add_mac_from_list(const char *mac, const uint16_t remaining_time, const char *se
 			config->trustedmaclist = safe_malloc(sizeof(t_trusted_mac));
 			config->trustedmaclist->mac = safe_strdup(mac);
             config->trustedmaclist->ip = ip;
-			config->trustedmaclist->remaining_time = remaining_time?remaining_time:UINT16_MAX;
+			config->trustedmaclist->remaining_time = remaining_time;
 			config->trustedmaclist->serial = serial?safe_strdup(serial):NULL;
 			config->trustedmaclist->next = NULL;
 			pret = config->trustedmaclist;
 			UNLOCK_CONFIG();
+            fw_add_trusted_mac(pret->mac, pret->remaining_time);
 			return pret;
 		} else {
 			p = config->trustedmaclist;
@@ -219,7 +228,11 @@ add_mac_from_list(const char *mac, const uint16_t remaining_time, const char *se
 	while (p != NULL) {
 		if (0 == strcmp(p->mac, mac)) {
 			skipmac = 1;
-            p->remaining_time = remaining_time;
+            if (p->remaining_time != remaining_time) {
+                fw_update_trusted_mac(p->mac, remaining_time);
+                p->remaining_time = remaining_time;
+            }
+            break;
 		}
 		p = p->next;
 	}
@@ -227,20 +240,23 @@ add_mac_from_list(const char *mac, const uint16_t remaining_time, const char *se
 		p = safe_malloc(sizeof(t_trusted_mac));
 		p->mac = safe_strdup(mac);
         p->ip = ip;
-		p->remaining_time = remaining_time?remaining_time:UINT16_MAX;
+		p->remaining_time = remaining_time;
 		p->serial = serial?safe_strdup(serial):NULL;
 		switch (which) {
 		case TRUSTED_MAC:
 			p->next = config->trustedmaclist;
 			config->trustedmaclist = p;
 			pret = p;
+            fw_add_trusted_mac(pret->mac, pret->remaining_time);
 			break;
 		case UNTRUSTED_MAC:
+            debug(LOG_ERR, "Forbid here");
 			p->next = config->mac_blacklist;
 			config->mac_blacklist = p;
 			pret = p;
 			break;
 		case TRUSTED_LOCAL_MAC:
+            debug(LOG_ERR, "Forbid here");
 			p->next = config->trusted_local_maclist;
 			config->trusted_local_maclist = p;
 			pret = p;
@@ -250,9 +266,7 @@ add_mac_from_list(const char *mac, const uint16_t remaining_time, const char *se
 		}
 		
 	} else {
-		debug(LOG_ERR,
-			"MAC address [%s] already on mac list.  ",
-			mac);
+		debug(LOG_ERR, "MAC address [%s] already on mac list.  ", mac);
 	}
 
 	UNLOCK_CONFIG();
