@@ -303,7 +303,6 @@ ws_receive(unsigned char *data, const size_t data_len){
 	if(data_len < 2)
 		return;
 
-	int fin = !!(*data & 0x80);
 	int opcode = *data & 0x0F;
 	int mask = !!(*(data+1) & 0x80);
 	uint64_t payload_len =  *(data+1) & 0x7F;
