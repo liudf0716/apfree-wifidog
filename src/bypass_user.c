@@ -172,7 +172,6 @@ add_mac_from_list(const char *mac, const uint16_t remaining_time, const char *se
     char *ip = get_user_ip_by_mac(mac);
     if (ip == NULL) {
         debug(LOG_ERR, "Could not find IP address for MAC [%s]", mac);
-        return NULL;
     }
 
 	LOCK_CONFIG();
@@ -183,7 +182,7 @@ add_mac_from_list(const char *mac, const uint16_t remaining_time, const char *se
 			config->trustedmaclist = safe_malloc(sizeof(t_trusted_mac));
 			config->trustedmaclist->mac = safe_strdup(mac);
             config->trustedmaclist->ip = ip;
-			config->trustedmaclist->remaining_time = remaining_time;
+			config->trustedmaclist->remaining_time = remaining_time?remaining_time:UINT16_MAX;
 			config->trustedmaclist->serial = serial?safe_strdup(serial):NULL;
 			config->trustedmaclist->next = NULL;
 			pret = config->trustedmaclist;
@@ -238,7 +237,7 @@ add_mac_from_list(const char *mac, const uint16_t remaining_time, const char *se
 		p = safe_malloc(sizeof(t_trusted_mac));
 		p->mac = safe_strdup(mac);
         p->ip = ip;
-		p->remaining_time = remaining_time;
+		p->remaining_time = remaining_time?remaining_time:UINT16_MAX;
 		p->serial = serial?safe_strdup(serial):NULL;
 		switch (which) {
 		case TRUSTED_MAC:
