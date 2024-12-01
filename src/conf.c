@@ -1245,15 +1245,12 @@ config_read()
 					break;
 				case oAuthServerMode:
 					sscanf(p1, "%hu", &config.auth_server_mode);
-					debug(LOG_DEBUG, "auth_server_mode: %d", config.auth_server_mode);
 					break;
 				case oEnableAntiNat:
 					config.enable_anti_nat = parse_boolean_value(p1);
-					debug(LOG_DEBUG, "enable_anti_nat: %d", config.enable_anti_nat);
 					break;
 				case oTTLValues:
 					config.ttl_values = safe_strdup(p1);
-					debug(LOG_DEBUG, "ttl_values: %s", config.ttl_values);
 					break;
 				case oDeviceID:
 					config.device_id = safe_strdup(p1);
