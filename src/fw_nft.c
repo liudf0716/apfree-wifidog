@@ -139,7 +139,7 @@ const char *nft_wifidogx_dns_redirect_script[] = {
 const char *nft_wifidogx_anti_nat_script[] = {
     "add rule inet wifidogx prerouting iifname $interface$ ether saddr @set_wifidogx_local_trust_clients accept",
     "add rule inet wifidogx prerouting iifname $interface$ ip ttl != { $ttlvalues$ } counter drop",
-    "add rule inet wifidogx prerouting iifname $interface$ ip6 hoplimit != { $ttlvalues } counter drop",
+    "add rule inet wifidogx prerouting iifname $interface$ ip6 hoplimit != { $ttlvalues$ } counter drop",
 };
 
 static void
