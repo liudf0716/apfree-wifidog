@@ -2383,6 +2383,10 @@ void
 config_validate(void)
 {
 	config_notnull(config.gateway_settings, "GatewaySetting");
+	if (config.auth_server_mode == 0 || config.auth_server_mode == 1) {
+		config_notnull(config.auth_servers, "AuthServer");
+	}
+	
 	if (missing_parms) {
 		debug(LOG_ERR, "Configuration is incomplete.  Exiting.");
 		exit(1);
