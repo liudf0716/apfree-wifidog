@@ -188,7 +188,6 @@ add_mac_from_list(const char *mac, const uint16_t remaining_time, const char *se
 			config->trustedmaclist->next = NULL;
 			pret = config->trustedmaclist;
 			UNLOCK_CONFIG();
-            fw_add_trusted_mac(pret->mac, pret->remaining_time);
 			return pret;
 		} else {
 			p = config->trustedmaclist;
@@ -229,7 +228,6 @@ add_mac_from_list(const char *mac, const uint16_t remaining_time, const char *se
 		if (0 == strcmp(p->mac, mac)) {
 			skipmac = 1;
             if (p->remaining_time != remaining_time) {
-                fw_update_trusted_mac(p->mac, remaining_time);
                 p->remaining_time = remaining_time;
             }
             break;
@@ -247,7 +245,6 @@ add_mac_from_list(const char *mac, const uint16_t remaining_time, const char *se
 			p->next = config->trustedmaclist;
 			config->trustedmaclist = p;
 			pret = p;
-            fw_add_trusted_mac(pret->mac, pret->remaining_time);
 			break;
 		case UNTRUSTED_MAC:
             debug(LOG_ERR, "Forbid here");
