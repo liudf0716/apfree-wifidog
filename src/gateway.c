@@ -421,7 +421,7 @@ threads_init(s_config *config)
     if (!config->auth_servers) {
         debug(LOG_INFO, "No auth server available, not starting the following threads");
         return;
-    } else if (config->auth_mode == 0) { // bypass auth mode don't need to start the following threads
+    } else if (config->auth_server_mode == 0) { // bypass auth mode don't need to start the following threads
         /* Start client clean up thread */
         result = pthread_create(&tid_fw_counter, NULL, (void *)thread_client_timeout_check, NULL);
         if (result != 0) {
@@ -512,7 +512,7 @@ http_redir_loop(s_config *config)
         evhttp_set_cb(http, "/wifidog", ev_http_callback_wifidog, NULL);
         evhttp_set_cb(http, "/wifidog/auth", ev_http_callback_auth, request_ctx);
         evhttp_set_cb(http, "/wifidog/temporary_pass", ev_http_callback_temporary_pass, NULL);
-        if (config->auth_mode == 1) {
+        if (config->auth_server_mode == 1) {
             evhttp_set_cb(http, "/cgi-bin/cgi-device", ev_http_callback_device, NULL);
         }
     } else {

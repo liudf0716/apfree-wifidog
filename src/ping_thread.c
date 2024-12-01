@@ -101,7 +101,7 @@ thread_ping(void *arg)
 {
 	s_config *config = config_get_config();
 	fw_init_delay();
-	if (config->auth_mode) {
+	if (config->auth_server_mode) {
 		debug(LOG_INFO, "auth mode is not cloud, no need to ping");
 		mark_auth_online();
 		return;

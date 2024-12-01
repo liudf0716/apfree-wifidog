@@ -133,7 +133,7 @@ typedef enum {
 	oWSServerPath,
 	oWSServerSSL,
 	oEnableDelConntrack,
-	oAuthMode,
+	oAuthServerMode,
 	oEnableAntiNat,
 	oTTLValues,
 } OpCodes;
@@ -211,7 +211,7 @@ static const struct {
 	"wsserverpath",oWSServerPath},{
 	"wsserverssl",oWSServerSSL},{
 	"enabledelconntrack",oEnableDelConntrack},{
-	"authmode",oAuthMode},{
+	"authservermode",oAuthServerMode},{
 	"enableantinat",oEnableAntiNat},{
 	"ttlvalues",oTTLValues},{
     NULL, oBadOption},};
@@ -340,7 +340,7 @@ config_init(void)
 	config.enable_dhcp_cpi = 0;
 	config.enable_dns_forward = 1;
 	config.enable_del_conntrack = 1;
-	config.auth_mode = 0;
+	config.auth_server_mode = 0;
 	config.enable_anti_nat = 0;
 	config.ttl_values = safe_strdup(DEFAULT_TTL_VALUES);
 
@@ -1243,14 +1243,17 @@ config_read()
 				case oEnableDelConntrack:
 					config.enable_del_conntrack = parse_boolean_value(p1);
 					break;
-				case oAuthMode:
-					sscanf(p1, "%hu", &config.auth_mode);
+				case oAuthServerMode:
+					sscanf(p1, "%hu", &config.auth_server_mode);
+					debug(LOG_DEBUG, "auth_server_mode: %d", config.auth_server_mode);
 					break;
 				case oEnableAntiNat:
 					config.enable_anti_nat = parse_boolean_value(p1);
+					debug(LOG_DEBUG, "enable_anti_nat: %d", config.enable_anti_nat);
 					break;
 				case oTTLValues:
 					config.ttl_values = safe_strdup(p1);
+					debug(LOG_DEBUG, "ttl_values: %s", config.ttl_values);
 					break;
 				case oDeviceID:
 					config.device_id = safe_strdup(p1);

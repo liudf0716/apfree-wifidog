@@ -306,7 +306,7 @@ typedef struct {
 	short	enable_bypass_auth; /* 1, bypass auth */
 	short	enable_dns_forward; /* 1, enable dns forward */
 	short	enable_del_conntrack; /* 1, enable delete conntrack when client offline */
-	short	auth_mode; /* 0, cloud auth mode; 1, cloud auth bypass mode; 3, local auth mod*/
+	short	auth_server_mode; /* 0, cloud auth mode; 1, cloud auth bypass mode; 3, local auth mod*/
 	short	enable_anti_nat; /* 1, enable anti nat */
 	char 	*ttl_values; /* ttl values */
 } s_config;

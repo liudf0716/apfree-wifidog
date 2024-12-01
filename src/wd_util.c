@@ -199,7 +199,7 @@ int
 is_auth_online()
 {
 	s_config *config = config_get_config();
-	if (config->auth_mode) {
+	if (config->auth_server_mode) {
 		return 1;
 	}
 	
