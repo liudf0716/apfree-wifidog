@@ -58,7 +58,6 @@ remove_mac_from_list(const char *mac, mac_choice_t which)
 		switch(which) {
 		case TRUSTED_MAC:
             debug(LOG_DEBUG, "Removing trusted MAC [%s]", mac);
-            fw_del_trusted_mac(mac);
 			if(p == config->trustedmaclist)
 				config->trustedmaclist = p->next;
 			else
