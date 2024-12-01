@@ -278,7 +278,7 @@ add_bypass_user(const char *mac, const uint16_t remaining_time, const char *seri
 	if (add_mac_from_list(mac, remaining_time, serial, TRUSTED_MAC) == NULL) {
 		return false;
 	}
-
+    fw_update_trusted_mac(mac, remaining_time);
 	return true;
 }
 
@@ -290,6 +290,7 @@ remove_bypass_user(const char *mac)
 	}
 	
 	remove_mac_from_list(mac, TRUSTED_MAC);
+    fw_del_trusted_mac(mac);
 	return true;
 }
 
