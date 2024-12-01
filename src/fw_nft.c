@@ -49,8 +49,9 @@ static void nft_statistical_helper(const char *cmd, char **output, uint32_t *out
 
 const char *nft_wifidogx_init_script[] = {
     "add table inet wifidogx",
-    "add chain  inet wifidogx prerouting{ type nat hook prerouting priority 0; policy accept; }",
+    "add chain  inet wifidogx prerouting { type nat hook prerouting priority 0; policy accept; }",
     "add chain  inet wifidogx mangle_prerouting { type filter hook postrouting priority 0; policy accept; }",
+    "add set inet wifidogx set_wifidogx_local_trust_clients { type ether_addr; }",
     "add set inet fw4 set_wifidogx_auth_servers { type ipv4_addr; }",
     "add set inet fw4 set_wifidogx_auth_servers_v6 { type ipv6_addr; }",
     "add set inet fw4 set_wifidogx_gateway { type ipv4_addr; }",
@@ -135,6 +136,12 @@ const char *nft_wifidogx_dns_redirect_script[] = {
     "add rule inet wifidogx prerouting iifname $interface$ tcp dport 53 counter redirect to " DNS_FORWARD_PORT_STR,
 };
 
+const char *nft_wifidogx_anti_nat_script[] = {
+    "add rule inet wifidogx prerouting iifname $interface$ ether saddr @set_wifidogx_local_trust_clients accept",
+    "add rule inet wifidogx prerouting iifname $interface$ ip ttl != { $ttlvalues$ } counter drop",
+    "add rule inet wifidogx prerouting iifname $interface$ ip6 hoplimit != { $ttlvalues } counter drop",
+};
+
 static void
 replace_str(const char *content, const char *old_str, const char *new_str, char *out, int out_len)
 {
@@ -180,11 +187,40 @@ generate_nft_wifidogx_init_script()
         fprintf(output_file, "%s\n", nft_wifidogx_dhcp_pass_script[i]);
     }
     
+    if (config->enable_anti_nat) {
+        while(gw_settings) {
+            for (i = 0; i < sizeof(nft_wifidogx_anti_nat_script) / sizeof(nft_wifidogx_anti_nat_script[0]); i++) {
+                const char *p = nft_wifidogx_anti_nat_script[i];
+                memset(buf, 0, sizeof(buf));
+                
+                if (strstr(p, "$interface$") && strstr(p, "$ttlvalues$")) {
+                    // First replace interface
+                    replace_str(p, "$interface$", gw_settings->gw_interface, buf, sizeof(buf));
+                    // Then replace ttlvalues in the result
+                    char tmp[1024] = {0};
+                    replace_str(buf, "$ttlvalues$", config->ttl_values, tmp, sizeof(tmp));
+                    fprintf(output_file, "%s\n", tmp);
+                } else if (strstr(p, "$interface$")) {
+                    replace_str(p, "$interface$", gw_settings->gw_interface, buf, sizeof(buf));
+                    fprintf(output_file, "%s\n", buf);
+                } else if (strstr(p, "$ttlvalues$")) {
+                    replace_str(p, "$ttlvalues$", config->ttl_values, buf, sizeof(buf));
+                    fprintf(output_file, "%s\n", buf);
+                } else {
+                    fprintf(output_file, "%s\n", p);
+                }
+                debug(LOG_DEBUG, "anti nat script: %s", buf);
+            }
+            gw_settings = gw_settings->next;
+        }
+    }
+
     if (config->enable_dns_forward) {
         while(gw_settings) {
            
             for (i = 0; i < sizeof(nft_wifidogx_dns_redirect_script) / sizeof(nft_wifidogx_dns_redirect_script[0]); i++) {
                 const char *p = nft_wifidogx_dns_redirect_script[i];
+                memset(buf, 0, sizeof(buf));
                 if (strstr(p, "$interface$")) {
                     replace_str(p, "$interface$", gw_settings->gw_interface, buf, sizeof(buf));
                     fprintf(output_file, "%s\n", buf);
@@ -196,8 +232,6 @@ generate_nft_wifidogx_init_script()
             gw_settings = gw_settings->next;
         }
     }
-
-    
 
     fclose(output_file);
 }
