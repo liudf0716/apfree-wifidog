@@ -971,19 +971,22 @@ nft_fw_set_trusted_maclist()
 
 	LOCK_CONFIG();
 	for (p = config->trustedmaclist; p != NULL; p = p->next)
-        nft_fw_add_trusted_mac(p->mac, p->remaining_time);
+        __nft_fw_add_trusted_mac(p->mac, p->remaining_time);
 	UNLOCK_CONFIG();
 }
 
 void
 nft_fw_clear_trusted_maclist()
 {
+    LOCK_CONFIG();
     nftables_do_command("flush set inet fw4 set_wifidogx_trust_clients");
+    UNLOCK_CONFIG();
 }
 
 void 
 nft_fw_set_mac_temporary(const char *mac, int which)
 {
+    LOCK_CONFIG();
     if (which == 0) {
 		nftables_do_command("add element inet fw4 set_wifidogx_tmp_trust_clients { %s }", mac);
 	} else if(which > 0) { // trusted
@@ -993,4 +996,5 @@ nft_fw_set_mac_temporary(const char *mac, int which)
 	} else if(which < 0) { // untrusted
 		// TODO
 	}
+    UNLOCK_CONFIG();
 }
