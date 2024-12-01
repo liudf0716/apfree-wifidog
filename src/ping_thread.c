@@ -58,9 +58,6 @@ static void fw_init_delay()
 {
 	parse_inner_trusted_domain_list();
 	parse_user_trusted_domain_list();
-	
-	fw_set_pan_domains_trusted();	
-	fw_set_trusted_maclist();
 }
 
 static void 

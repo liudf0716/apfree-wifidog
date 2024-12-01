@@ -455,6 +455,7 @@ nft_fw_init()
     nft_add_gw();
     nft_set_ext_interface();
     nft_fw_set_authservers();
+    nft_fw_set_trusted_maclist();
 
     return 1;
 }
