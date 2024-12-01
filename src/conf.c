@@ -134,6 +134,8 @@ typedef enum {
 	oWSServerSSL,
 	oEnableDelConntrack,
 	oAuthMode,
+	oEnableAntiNat,
+	oTTLValues,
 } OpCodes;
 
 /** @internal
@@ -210,6 +212,8 @@ static const struct {
 	"wsserverssl",oWSServerSSL},{
 	"enabledelconntrack",oEnableDelConntrack},{
 	"authmode",oAuthMode},{
+	"enableantinat",oEnableAntiNat},{
+	"ttlvalues",oTTLValues},{
     NULL, oBadOption},};
 
 static void config_notnull(const void *, const char *);
@@ -337,6 +341,8 @@ config_init(void)
 	config.enable_dns_forward = 1;
 	config.enable_del_conntrack = 1;
 	config.auth_mode = 0;
+	config.enable_anti_nat = 0;
+	config.ttl_values = safe_strdup(DEFAULT_TTL_VALUES);
 
 	debugconf.log_stderr = 1;
 	debugconf.debuglevel = DEFAULT_DEBUGLEVEL;
@@ -1238,7 +1244,13 @@ config_read()
 					config.enable_del_conntrack = parse_boolean_value(p1);
 					break;
 				case oAuthMode:
-					sscanf(p1, "%u", &config.auth_mode);
+					sscanf(p1, "%hu", &config.auth_mode);
+					break;
+				case oEnableAntiNat:
+					config.enable_anti_nat = parse_boolean_value(p1);
+					break;
+				case oTTLValues:
+					config.ttl_values = safe_strdup(p1);
 					break;
 				case oDeviceID:
 					config.device_id = safe_strdup(p1);

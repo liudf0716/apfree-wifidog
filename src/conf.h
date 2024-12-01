@@ -99,6 +99,7 @@
 #define	DEFAULT_SVR_CRT_FILE		"/etc/apfree.crt"
 #define	DEFAULT_SVR_KEY_FILE		"/etc/apfree.key"
 #define DEFAULT_WWW_PATH			"/etc/www/"
+#define DEFAULT_TTL_VALUES			"64,128"
 
 
 #define	WIFIDOG_REDIR_HTML_CONTENT	"setTimeout(function() {location.href = \"%s\";}, 10);"
@@ -305,7 +306,9 @@ typedef struct {
 	short	enable_bypass_auth; /* 1, bypass auth */
 	short	enable_dns_forward; /* 1, enable dns forward */
 	short	enable_del_conntrack; /* 1, enable delete conntrack when client offline */
-	int		auth_mode; /* 0, cloud auth mode; 1, cloud auth bypass mode; 3, local auth mod*/
+	short	auth_mode; /* 0, cloud auth mode; 1, cloud auth bypass mode; 3, local auth mod*/
+	short	enable_anti_nat; /* 1, enable anti nat */
+	char 	*ttl_values; /* ttl values */
 } s_config;
 
 /** @brief Get the current gateway configuration */
