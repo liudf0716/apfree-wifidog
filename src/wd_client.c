@@ -182,6 +182,7 @@ wd_get_redir_url_to_auth(struct evhttp_request *req,
 	}
 		
 	free(orig_url);
+	debug(LOG_DEBUG, "redir_url: %s", redir_url);
 	return redir_url;
 }
 
