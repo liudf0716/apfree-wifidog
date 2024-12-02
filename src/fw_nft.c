@@ -209,7 +209,7 @@ generate_nft_wifidogx_init_script()
                 } else {
                     fprintf(output_file, "%s\n", p);
                 }
-                debug(LOG_DEBUG, "anti nat script: %s", buf);
+                debug(LOG_DEBUG, "anti nat script: %s", output_file);
             }
             gw_settings = gw_settings->next;
         }
