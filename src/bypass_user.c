@@ -369,20 +369,100 @@ dump_bypass_user_list_json()
     return res;
 }
 
-static void
-add_user_status_to_json(json_object *j_status, const t_trusted_mac *tmac, 
-                        const char *gw_mac, const char *gw_address)
-{
+static char *get_release_value(const char *key, const char *value) {
+    if (!key || !value) {
+        debug(LOG_WARNING, "Invalid input: key or value is NULL");
+        return NULL;
+    }
+
+    char cmd[128] = {0};
+    char rout[32] = {0};
+    char *result = NULL;
+
+    // Construct the command safely
+    if (snprintf(cmd, sizeof(cmd), "uci -q -c /tmp/config get release.%s.%s", key, value) >= sizeof(cmd)) {
+        debug(LOG_WARNING, "Command length exceeds buffer size");
+        return NULL;
+    }
+
+    // Execute the command
+    FILE *fout = popen(cmd, "r");
+    if (!fout) {
+        debug(LOG_WARNING, "popen failed for cmd '%s': %s", cmd, strerror(errno));
+        return NULL;
+    }
+
+    // Read the output safely
+    if (fgets(rout, sizeof(rout), fout) != NULL) {
+        // Remove trailing newline
+        size_t len = strlen(rout);
+        if (len > 0 && rout[len - 1] == '\n') {
+            rout[len - 1] = '\0';
+        }
+        result = safe_strdup(rout);  // Allocate a safe copy
+    } else {
+        debug(LOG_WARNING, "Failed to read output of cmd '%s'", cmd);
+    }
+
+    // Close the file pointer
+    if (pclose(fout) == -1) {
+        debug(LOG_WARNING, "pclose failed for cmd '%s': %s", cmd, strerror(errno));
+    }
+
+    return result;
+}
+
+
+static void add_user_status_to_json(json_object *j_status, const t_trusted_mac *tmac,
+                                    const char *gw_mac, const char *gw_address) {
+    if (!j_status || !tmac || !gw_mac || !gw_address) {
+        debug(LOG_WARNING, "Invalid input to add_user_status_to_json");
+        return;
+    }
+
     char remaining_time_str[32] = {0};
-    
+
+    // Add static values to JSON
     json_object_object_add(j_status, "gw mac", json_object_new_string(gw_mac));
     json_object_object_add(j_status, "c mac", json_object_new_string(tmac->mac));
     json_object_object_add(j_status, "c ip", json_object_new_string(tmac->ip));
     json_object_object_add(j_status, "gw ip", json_object_new_string(gw_address));
     json_object_object_add(j_status, "release", json_object_new_string("1"));
-    snprintf(remaining_time_str, sizeof(remaining_time_str), "%d", tmac->remaining_time);
-    json_object_object_add(j_status, "remaining time", json_object_new_string(remaining_time_str));
-    json_object_object_add(j_status, "serial", json_object_new_string(tmac->serial ? tmac->serial : ""));
+
+    if (!tmac->serial) {
+        char *v_time = get_release_value(tmac->mac, "time");
+        char *v_serial = get_release_value(tmac->mac, "serial");
+
+        if (!v_time || !v_serial) {
+            debug(LOG_WARNING, "Failed to retrieve time or serial for mac '%s'", tmac->mac);
+            free(v_time);
+            free(v_serial);
+            return;
+        }
+
+        // Calculate remaining time
+        time_t cur_time = time(NULL);
+        int16_t remain_time = cur_time - atol(v_time);
+
+        if (remain_time <= 0) {
+            debug(LOG_WARNING, "Invalid remaining time calculated for mac '%s'", tmac->mac);
+            remain_time = 0; // Ensure non-negative value
+        }
+
+        snprintf(remaining_time_str, sizeof(remaining_time_str), "%d", remain_time);
+        json_object_object_add(j_status, "remaining time", json_object_new_string(remaining_time_str));
+        json_object_object_add(j_status, "serial", json_object_new_string(v_serial));
+
+        // Free allocated memory
+        free(v_time);
+        free(v_serial);
+    } else {
+        // Use pre-existing values
+        snprintf(remaining_time_str, sizeof(remaining_time_str), "%d", tmac->remaining_time);
+        json_object_object_add(j_status, "remaining time", json_object_new_string(remaining_time_str));
+
+        json_object_object_add(j_status, "serial", json_object_new_string(tmac->serial));
+    }
 }
 
 static void 
