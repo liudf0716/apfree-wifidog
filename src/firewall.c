@@ -827,3 +827,23 @@ conntrack_flush()
 	debug(LOG_DEBUG, "Flush conntrack");
 	execute("conntrack -F", 0);
 }
+
+void
+fw_add_anti_nat_permit_device(const char *mac)
+{
+	debug(LOG_DEBUG, "Add anti nat permit device [%s]", mac);
+#ifdef AW_FW3
+#else
+	nft_fw_add_anti_nat_permit(mac);
+#endif
+}
+
+void
+fw_del_anti_nat_permit_device(const char *mac)
+{
+	debug(LOG_DEBUG, "Del anti nat permit device [%s]", mac);
+#ifdef AW_FW3
+#else
+	nft_fw_del_anti_nat_permit(mac);
+#endif
+}

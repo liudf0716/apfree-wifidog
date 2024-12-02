@@ -138,4 +138,7 @@ void ev_fw_sync_with_authserver_v2(struct wd_request_context *);
 
 void conntrack_flush();
 
+void fw_add_anti_nat_permit_device(const char *);
+void fw_del_anti_nat_permit_device(const char *);
+
 #endif                          /* _FIREWALL_H_ */
