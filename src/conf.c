@@ -136,6 +136,7 @@ typedef enum {
 	oAuthServerMode,
 	oEnableAntiNat,
 	oTTLValues,
+	oAntiNatPermitMacs,
 } OpCodes;
 
 /** @internal
@@ -214,6 +215,7 @@ static const struct {
 	"authservermode",oAuthServerMode},{
 	"enableantinat",oEnableAntiNat},{
 	"ttlvalues",oTTLValues},{
+	"antinatpermitmacs",oAntiNatPermitMacs},{
     NULL, oBadOption},};
 
 static void config_notnull(const void *, const char *);
@@ -343,6 +345,7 @@ config_init(void)
 	config.auth_server_mode = 0;
 	config.enable_anti_nat = 0;
 	config.ttl_values = safe_strdup(DEFAULT_TTL_VALUES);
+	config.anti_nat_permit_macs = NULL;
 
 	debugconf.log_stderr = 1;
 	debugconf.debuglevel = DEFAULT_DEBUGLEVEL;
@@ -1251,6 +1254,12 @@ config_read()
 					break;
 				case oTTLValues:
 					config.ttl_values = safe_strdup(p1);
+					break;
+				case oAntiNatPermitMacs:
+					if (is_valid_mac(p1))
+						config.anti_nat_permit_macs = safe_strdup(p1);
+					else
+						debug(LOG_ERR, "Invalid MAC address %s", p1);
 					break;
 				case oDeviceID:
 					config.device_id = safe_strdup(p1);

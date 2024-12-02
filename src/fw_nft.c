@@ -456,6 +456,7 @@ nft_fw_init()
     nft_set_ext_interface();
     nft_fw_set_authservers();
     nft_fw_set_trusted_maclist();
+    nft_fw_set_anti_nat_permit();
 
     return 1;
 }
@@ -1013,5 +1014,19 @@ nft_fw_del_anti_nat_permit(const char *mac)
 {
     LOCK_CONFIG();
     nftables_do_command("delete element inet fw4 set_wifidogx_local_trust_clients { %s }", mac);
+    UNLOCK_CONFIG();
+}
+
+void
+nft_fw_set_anti_nat_permit()
+{
+    const s_config *config = config_get_config();
+    if (config->anti_nat_permit_macs == NULL) {
+        debug(LOG_WARNING, "anti_nat_permit_macs is NULL");
+        return;
+    }
+
+    LOCK_CONFIG();
+    nftables_do_command("add element inet fw4 set_wifidogx_local_trust_clients { %s }", config->anti_nat_permit_macs);
     UNLOCK_CONFIG();
 }

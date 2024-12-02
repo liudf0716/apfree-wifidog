@@ -798,7 +798,7 @@ wdctl_add_online_client(struct bufferevent *fd, const char *args)
     }
 
     json_object *client_info = json_tokener_parse(args);
-	if(is_error(client_info) || json_object_get_type(client_info) != json_type_object) { 
+    if(!client_info || json_object_get_type(client_info) != json_type_object) { 
         goto OUT;
     }
 
@@ -898,7 +898,7 @@ static void
 wdctl_user_auth(struct bufferevent *fd, const char *json_value)
 {
     json_object *root = json_tokener_parse(json_value);
-    if (is_error(root) || json_object_get_type(root) != json_type_object) {
+    if (!root || json_object_get_type(root) != json_type_object) {
         debug(LOG_ERR, "Failed to parse json value: %s", json_value);
         goto OUT;
     }
