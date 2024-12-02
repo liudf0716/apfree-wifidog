@@ -87,6 +87,9 @@ static void wdctl_user_list(struct bufferevent *);
 static void wdctl_user_info(struct bufferevent *, const char *);
 static void wdctl_user_auth(struct bufferevent *, const char *);
 
+static void wdctl_add_anti_nat_permit_device(struct bufferevent *, const char *mac);
+static void wdctl_del_anti_nat_permit_device(struct bufferevent *, const char *mac);
+
 static struct wd_request_context *request_ctx;
 static const char *no_auth_response = "no auth server";
 
@@ -135,6 +138,9 @@ static struct wdctl_command {
     {"user_list", wdctl_user_list, NULL},
     {"user_info", NULL, wdctl_user_info},
     {"user_auth", NULL, wdctl_user_auth},
+
+    {"add_anti_nat_permit_device", NULL, wdctl_add_anti_nat_permit_device},
+    {"del_anti_nat_permit_device", NULL, wdctl_del_anti_nat_permit_device},
 };
 
 static void 
@@ -939,5 +945,29 @@ wdctl_user_auth(struct bufferevent *fd, const char *json_value)
 
 OUT:
     if (root) json_object_put(root);
+    bufferevent_write(fd, "Yes", 3);
+}
+
+static void
+wdctl_add_anti_nat_permit_device(struct bufferevent *fd, const char *mac)
+{
+    if (!is_valid_mac(mac)) {
+        debug(LOG_ERR, "Invalid mac address: %s", mac);
+        return;
+    }
+
+    fw_add_anti_nat_permit_device(mac);
+    bufferevent_write(fd, "Yes", 3);
+}
+
+static void
+wdctl_del_anti_nat_permit_device(struct bufferevent *fd, const char *mac)
+{
+    if (!is_valid_mac(mac)) {
+        debug(LOG_ERR, "Invalid mac address: %s", mac);
+        return;
+    }
+
+    fw_del_anti_nat_permit_device(mac);
     bufferevent_write(fd, "Yes", 3);
 }
