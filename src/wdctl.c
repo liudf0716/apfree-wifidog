@@ -311,6 +311,8 @@ display_help() {
     printf("wdctlx add domain|wildcard_domain|mac value1,value2...\n");
     printf("wdctlx del domain|wildcard_domain|mac value1,value2...\n");
     printf("wdctlx clear domain|wildcard_domain|mac\n");
+    printf("wdctlx add nat value");
+    printf("wdctlx del nat value");
     printf("wdctlx help|?\n");
     printf("wdctlx stop\n");
     printf("wdctlx reset\n");
