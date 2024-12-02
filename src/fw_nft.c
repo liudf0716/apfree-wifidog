@@ -999,3 +999,19 @@ nft_fw_set_mac_temporary(const char *mac, int which)
 	}
     UNLOCK_CONFIG();
 }
+
+void
+nft_fw_add_anti_nat_permit(const char *mac)
+{
+    LOCK_CONFIG();
+    nftables_do_command("add element inet fw4 set_wifidogx_local_trust_clients { %s }", mac);
+    UNLOCK_CONFIG();
+}
+
+void
+nft_fw_del_anti_nat_permit(const char *mac)
+{
+    LOCK_CONFIG();
+    nftables_do_command("delete element inet fw4 set_wifidogx_local_trust_clients { %s }", mac);
+    UNLOCK_CONFIG();
+}

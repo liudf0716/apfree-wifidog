@@ -59,5 +59,7 @@ void nft_fw_set_mac_temporary(const char *mac, int which);
 void nft_fw_add_trusted_mac(const char *mac, int timeout);
 void nft_fw_del_trusted_mac(const char *mac);
 void nft_fw_update_trusted_mac(const char *mac, int timeout);
+void nft_fw_add_anti_nat_permit(const char *mac);
+void nft_fw_del_anti_nat_permit(const char *mac);
 
 #endif
