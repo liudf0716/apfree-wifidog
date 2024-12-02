@@ -200,6 +200,7 @@ generate_nft_wifidogx_init_script()
                     char tmp[1024] = {0};
                     replace_str(buf, "$ttlvalues$", config->ttl_values, tmp, sizeof(tmp));
                     fprintf(output_file, "%s\n", tmp);
+                    debug(LOG_DEBUG, "anti nat script: %s", tmp);
                 } else if (strstr(p, "$interface$")) {
                     replace_str(p, "$interface$", gw_settings->gw_interface, buf, sizeof(buf));
                     fprintf(output_file, "%s\n", buf);
@@ -209,7 +210,6 @@ generate_nft_wifidogx_init_script()
                 } else {
                     fprintf(output_file, "%s\n", p);
                 }
-                debug(LOG_DEBUG, "anti nat script: %s", output_file);
             }
             gw_settings = gw_settings->next;
         }
@@ -1027,6 +1027,6 @@ nft_fw_set_anti_nat_permit()
     }
 
     LOCK_CONFIG();
-    nftables_do_command("add element inet fw4 set_wifidogx_local_trust_clients { %s }", config->anti_nat_permit_macs);
+    nftables_do_command("add element inet wifidogx set_wifidogx_local_trust_clients { %s }", config->anti_nat_permit_macs);
     UNLOCK_CONFIG();
 }
