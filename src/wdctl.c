@@ -265,6 +265,8 @@ add_command(const char *type, char *values) {
         wdctl_command_action("add_trusted_pdomains", values);
     } else if (strcmp(type, "mac") == 0) {
         wdctl_command_action("add_trusted_mac", values);
+    } else if (strcmp(type, "nat") == 0) {
+        wdctl_command_action("add_anti_nat_permit_device", values);
     } else {
         printf("Unknown type\n");
     }
@@ -280,6 +282,8 @@ del_command(const char *type, char *values) {
         wdctl_command_action("del_trusted_pdomains", values);
     } else if (strcmp(type, "mac") == 0) {
         wdctl_command_action("del_trusted_mac", values);
+    } else if (strcmp(type, "nat")) {
+        wdctl_command_action("del_anti_nat_permit_device", values);
     } else {
         printf("Unknown type\n");
     }
