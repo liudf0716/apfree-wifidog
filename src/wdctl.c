@@ -28,11 +28,11 @@
 #define _GNU_SOURCE
 
 #include "common.h"
-#include "wdctl.h"
 #include "util.h"
 
 #define WDCTL_TIMEOUT   (1000*2)
 #define WDCTL_MSG_LENG  (1024*8)
+#define DEFAULT_SOCK	"/tmp/wdctl.sock"
 
 static char *sk_name = NULL;
 char *progname = NULL;
