@@ -408,16 +408,26 @@ get_release_value(const char *mac, const char *value)
         return NULL;
     }
 
-    // Read the output safely
-    if (fgets(rout, sizeof(rout), fout) != NULL) {
-        // Remove trailing newline
-        size_t len = strlen(rout);
-        if (len > 0 && rout[len - 1] == '\n') {
-            rout[len - 1] = '\0';
+    // Read the output safely with retry logic
+    int retries = 3;
+    while (retries > 0) {
+        if (fgets(rout, sizeof(rout), fout) != NULL) {
+            // Remove trailing newline
+            size_t len = strlen(rout);
+            if (len > 0 && rout[len - 1] == '\n') {
+                rout[len - 1] = '\0';
+            }
+            result = safe_strdup(rout);  // Allocate a safe copy
+            break;
+        } else if (errno == EAGAIN) {
+            // Resource temporarily unavailable, wait and retry
+            usleep(100000);  // Sleep for 100ms
+            retries--;
+            continue;
+        } else {
+            debug(LOG_WARNING, "Failed to read output of cmd '%s': %s", cmd, strerror(errno));
+            break;
         }
-        result = safe_strdup(rout);  // Allocate a safe copy
-    } else {
-        debug(LOG_WARNING, "Failed to read output of cmd '%s' : %s", cmd, strerror(errno));
     }
 
     // Close the file pointer
