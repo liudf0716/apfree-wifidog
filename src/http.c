@@ -265,7 +265,7 @@ ev_http_reply_client_error(struct evhttp_request *req, enum reply_client_error_t
         pthread_mutex_unlock(&g_resource_lock);
         break;
     }
-    debug(LOG_DEBUG, "reply client error");
+    
     evhttp_send_reply(req, 200, "OK", evb);
     evbuffer_free(evb);
 }
