@@ -404,7 +404,7 @@ ev_http_callback_404(struct evhttp_request *req, void *arg)
         return;
     }
 
-    if (!is_auth_online()) {
+    if (!is_auth_online() || config_get_config()->auth_server_mode == 2) {
         char gw_port[8] = {0};
         snprintf(gw_port, sizeof(gw_port), "%d", config_get_config()->gw_port);
         debug(LOG_INFO, "Auth server is offline");
