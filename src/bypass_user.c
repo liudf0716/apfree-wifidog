@@ -372,7 +372,6 @@ dump_bypass_user_list_json()
 static char *
 get_release_value(const char *mac, const char *value) 
 {
-    
     if (!mac || !value) {
         debug(LOG_WARNING, "Invalid input: mac or value is NULL");
         return NULL;
@@ -383,6 +382,7 @@ get_release_value(const char *mac, const char *value)
         return NULL;
     }
 
+    // Convert MAC to UCI key format
     char key[12] = {0};
     for (size_t i = 0, j = 0; i < strlen(mac) && j < sizeof(key); i++) {
         if (mac[i] != ':') {
@@ -390,49 +390,46 @@ get_release_value(const char *mac, const char *value)
         }
     }
 
-    char cmd[128] = {0};
-    char rout[32] = {0};
+    struct uci_context *ctx = NULL;
+    struct uci_package *pkg = NULL;
+    struct uci_section *sec = NULL;
+    struct uci_element *elem = NULL;
     char *result = NULL;
 
-    // Construct the command safely
-    if (snprintf(cmd, sizeof(cmd), "uci -q -c /tmp/config get release.%s.%s", key, value) >= sizeof(cmd)) {
-        debug(LOG_WARNING, "Command [%s] length exceeds buffer size", cmd);
-        return NULL;
-    }
-    debug(LOG_DEBUG, "Executing command: %s", cmd);
-
-    // Execute the command
-    FILE *fout = popen(cmd, "r");
-    if (!fout) {
-        debug(LOG_WARNING, "popen failed for cmd '%s': %s", cmd, strerror(errno));
+    // Initialize UCI context
+    ctx = uci_alloc_context();
+    if (!ctx) {
+        debug(LOG_WARNING, "Failed to allocate UCI context");
         return NULL;
     }
 
-    // Read the output safely with retry logic
-    int retries = 3;
-    while (retries > 0) {
-        if (fgets(rout, sizeof(rout), fout) != NULL) {
-            // Remove trailing newline
-            size_t len = strlen(rout);
-            if (len > 0 && rout[len - 1] == '\n') {
-                rout[len - 1] = '\0';
+    // Set config directory to /tmp/config
+    if (uci_set_confdir(ctx, "/tmp/config") != UCI_OK) {
+        debug(LOG_WARNING, "Failed to set UCI config directory");
+        goto cleanup;
+    }
+
+    // Load the release package
+    if (uci_load(ctx, "release", &pkg) != UCI_OK) {
+        debug(LOG_WARNING, "Failed to load UCI package 'release'");
+        goto cleanup;
+    }
+
+    // Find the section with our key
+    uci_foreach_element(&pkg->sections, elem) {
+        sec = uci_to_section(elem);
+        if (strcmp(sec->e.name, key) == 0) {
+            const char *opt_value = uci_lookup_option_string(ctx, sec, value);
+            if (opt_value) {
+                result = safe_strdup(opt_value);
             }
-            result = safe_strdup(rout);  // Allocate a safe copy
-            break;
-        } else if (errno == EAGAIN) {
-            // Resource temporarily unavailable, wait and retry
-            usleep(100000);  // Sleep for 100ms
-            retries--;
-            continue;
-        } else {
-            debug(LOG_WARNING, "Failed to read output of cmd '%s': %s", cmd, strerror(errno));
             break;
         }
     }
 
-    // Close the file pointer
-    if (pclose(fout) == -1) {
-        debug(LOG_WARNING, "pclose failed for cmd '%s': %s", cmd, strerror(errno));
+cleanup:
+    if (ctx) {
+        uci_free_context(ctx);
     }
 
     return result;
