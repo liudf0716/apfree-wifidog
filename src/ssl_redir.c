@@ -272,7 +272,7 @@ static void
 check_auth_server_available() {
     t_auth_serv *auth_server = get_auth_server();
 	if (!auth_server) {
-		debug(LOG_INFO, "no auth server");
+		debug(LOG_INFO, "no auth server and auth server mode is %d", config_get_config()->auth_server_mode);
 		return;
 	}
     struct evutil_addrinfo hints;

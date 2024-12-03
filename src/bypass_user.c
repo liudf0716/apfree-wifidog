@@ -383,12 +383,13 @@ get_release_value(const char *mac, const char *value)
     }
 
     // Convert MAC to UCI key format
-    char key[12] = {0};
+    char key[13] = {0};
     for (size_t i = 0, j = 0; i < strlen(mac) && j < sizeof(key); i++) {
         if (mac[i] != ':') {
             key[j++] = mac[i];
         }
     }
+    key[12] = '\0';
 
     struct uci_context *ctx = NULL;
     struct uci_package *pkg = NULL;
