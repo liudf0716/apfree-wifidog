@@ -404,7 +404,8 @@ ev_http_callback_404(struct evhttp_request *req, void *arg)
         return;
     }
 
-    if (!is_auth_online() || config_get_config()->auth_server_mode == 2) {
+    const s_config *config = config_get_config();
+    if (!is_auth_online() || config->auth_server_mode == 2) {
         char gw_port[8] = {0};
         snprintf(gw_port, sizeof(gw_port), "%d", config_get_config()->gw_port);
         debug(LOG_INFO, "Auth server is offline");
@@ -416,7 +417,7 @@ ev_http_callback_404(struct evhttp_request *req, void *arg)
 
     if (process_already_login_client(req, mac, remote_host)) return;
 
-    const s_config *config = config_get_config();
+    
     if (config->wired_passed && process_wired_device_pass(req, mac)) return;
 
     char *redir_url = wd_get_redir_url_to_auth(req, gw_setting, mac, remote_host, config->gw_port, config->device_id, 0);

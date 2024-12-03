@@ -100,7 +100,8 @@ process_ssl_request_cb (struct evhttp_request *req, void *arg) {
         return;
     }
 
-	if (!is_auth_online()) {
+	s_config *config = config_get_config();
+	if (!is_auth_online() || config->auth_server_mode == 2) {
 		debug(LOG_INFO, "Auth server is offline");
 		char gw_https_port[8] = {0};
 		snprintf(gw_https_port, sizeof(gw_https_port), "%d", config_get_config()->gw_https_port);
@@ -108,9 +109,8 @@ process_ssl_request_cb (struct evhttp_request *req, void *arg) {
 			gw_setting->gw_address_v4?gw_setting->gw_address_v4:gw_setting->gw_address_v6, 
 			gw_https_port, "https", remote_host, mac);
         return;
-    } 
-
-	s_config *config = config_get_config();
+    }
+	
 	char *redir_url = wd_get_redir_url_to_auth(req, gw_setting, mac, remote_host, config->gw_https_port, config->device_id, 1);
     if (!redir_url) {
         evhttp_send_error(req, 200, "Cant get client's redirect to auth server's url");
