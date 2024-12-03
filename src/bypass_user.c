@@ -400,7 +400,7 @@ get_release_value(const char *mac, const char *value)
         return NULL;
     }
     debug(LOG_DEBUG, "Executing command: %s", cmd);
-    
+
     // Execute the command
     FILE *fout = popen(cmd, "r");
     if (!fout) {
@@ -417,7 +417,7 @@ get_release_value(const char *mac, const char *value)
         }
         result = safe_strdup(rout);  // Allocate a safe copy
     } else {
-        debug(LOG_WARNING, "Failed to read output of cmd '%s'", cmd);
+        debug(LOG_WARNING, "Failed to read output of cmd '%s' : %s", cmd, strerror(errno));
     }
 
     // Close the file pointer
