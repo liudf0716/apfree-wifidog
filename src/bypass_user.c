@@ -423,10 +423,10 @@ static void add_user_status_to_json(json_object *j_status, const t_trusted_mac *
     char remaining_time_str[32] = {0};
 
     // Add static values to JSON
-    json_object_object_add(j_status, "gw mac", json_object_new_string(gw_mac));
-    json_object_object_add(j_status, "c mac", json_object_new_string(tmac->mac));
-    json_object_object_add(j_status, "c ip", json_object_new_string(tmac->ip));
-    json_object_object_add(j_status, "gw ip", json_object_new_string(gw_address));
+    json_object_object_add(j_status, "gw_mac", json_object_new_string(gw_mac));
+    json_object_object_add(j_status, "c_mac", json_object_new_string(tmac->mac));
+    json_object_object_add(j_status, "c_ip", json_object_new_string(tmac->ip));
+    json_object_object_add(j_status, "gw_ip", json_object_new_string(gw_address));
     json_object_object_add(j_status, "release", json_object_new_string("1"));
 
     if (!tmac->serial) {
@@ -468,10 +468,10 @@ static void add_user_status_to_json(json_object *j_status, const t_trusted_mac *
 static void 
 add_not_found_status(json_object *j_status, const char *mac, const char *ip, const char *gw_mac, const char *gw_address)
 {
-    json_object_object_add(j_status, "gw mac", json_object_new_string(gw_mac));
-    json_object_object_add(j_status, "c mac", json_object_new_string(mac));
-    json_object_object_add(j_status, "c ip", json_object_new_string(ip));
-    json_object_object_add(j_status, "gw ip", json_object_new_string(gw_address));
+    json_object_object_add(j_status, "gw_mac", json_object_new_string(gw_mac));
+    json_object_object_add(j_status, "c_mac", json_object_new_string(mac));
+    json_object_object_add(j_status, "c_ip", json_object_new_string(ip));
+    json_object_object_add(j_status, "gw_ip", json_object_new_string(gw_address));
     json_object_object_add(j_status, "release", json_object_new_string("0"));
 }
 
