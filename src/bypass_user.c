@@ -369,10 +369,25 @@ dump_bypass_user_list_json()
     return res;
 }
 
-static char *get_release_value(const char *key, const char *value) {
-    if (!key || !value) {
-        debug(LOG_WARNING, "Invalid input: key or value is NULL");
+static char *
+get_release_value(const char *mac, const char *value) 
+{
+    
+    if (!mac || !value) {
+        debug(LOG_WARNING, "Invalid input: mac or value is NULL");
         return NULL;
+    }
+
+    if (!is_valid_mac(mac)) {
+        debug(LOG_WARNING, "Invalid MAC address: %s", mac);
+        return NULL;
+    }
+
+    char key[12] = {0};
+    for (size_t i = 0, j = 0; i < strlen(mac) && j < sizeof(key); i++) {
+        if (mac[i] != ':') {
+            key[j++] = mac[i];
+        }
     }
 
     char cmd[128] = {0};
@@ -381,10 +396,11 @@ static char *get_release_value(const char *key, const char *value) {
 
     // Construct the command safely
     if (snprintf(cmd, sizeof(cmd), "uci -q -c /tmp/config get release.%s.%s", key, value) >= sizeof(cmd)) {
-        debug(LOG_WARNING, "Command length exceeds buffer size");
+        debug(LOG_WARNING, "Command [%s] length exceeds buffer size", cmd);
         return NULL;
     }
-
+    debug(LOG_DEBUG, "Executing command: %s", cmd);
+    
     // Execute the command
     FILE *fout = popen(cmd, "r");
     if (!fout) {
@@ -413,8 +429,10 @@ static char *get_release_value(const char *key, const char *value) {
 }
 
 
-static void add_user_status_to_json(json_object *j_status, const t_trusted_mac *tmac,
-                                    const char *gw_mac, const char *gw_address) {
+static void 
+add_user_status_to_json(json_object *j_status, const t_trusted_mac *tmac,
+                        const char *gw_mac, const char *gw_address) 
+{
     if (!j_status || !tmac || !gw_mac || !gw_address) {
         debug(LOG_WARNING, "Invalid input to add_user_status_to_json");
         return;
