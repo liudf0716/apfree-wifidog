@@ -176,7 +176,6 @@ generate_nft_wifidogx_init_script()
 
     for (i = 0; i < sizeof(nft_wifidogx_init_script) / sizeof(nft_wifidogx_init_script[0]); i++) {
         fprintf(output_file, "%s\n", nft_wifidogx_init_script[i]);
-        memset(buf, 0, sizeof(buf));
     }
 
     for (i = 0; i < sizeof(nft_wifidogx_dns_pass_script) / sizeof(nft_wifidogx_dns_pass_script[0]); i++) {
@@ -215,6 +214,7 @@ generate_nft_wifidogx_init_script()
         }
     }
 
+    gw_settings = get_gateway_settings();
     if (config->enable_dns_forward) {
         while(gw_settings) {
            
