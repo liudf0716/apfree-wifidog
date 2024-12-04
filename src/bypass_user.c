@@ -161,7 +161,7 @@ get_user_mac_by_ip(const char *c_ip)
 }
 
 t_trusted_mac *
-add_mac_from_list(const char *mac, const uint16_t remaining_time, const char *serial, mac_choice_t which)
+add_mac_from_list(const char *mac, const uint32_t remaining_time, const char *serial, mac_choice_t which)
 {
     s_config *config = config_get_config();
 	t_trusted_mac *pret = NULL, *p = NULL;
@@ -269,7 +269,7 @@ add_mac_from_list(const char *mac, const uint16_t remaining_time, const char *se
 }
 
 bool
-add_bypass_user(const char *mac, const uint16_t remaining_time, const char *serial)
+add_bypass_user(const char *mac, const uint32_t remaining_time, const char *serial)
 {
 	if (mac == NULL || !is_valid_mac(mac) || serial == NULL) {
 		return false;
@@ -469,14 +469,14 @@ add_user_status_to_json(json_object *j_status, const t_trusted_mac *tmac,
         // Calculate remaining time
         time_t release_time = (time_t)atol(v_time);
         time_t cur_time = time(NULL);
-        uint16_t remain_time;
+        uint32_t remain_time;
 
         if (release_time <= cur_time) {
             debug(LOG_WARNING, "Release time expired for MAC '%s' (release: %ld, current: %ld)", 
                   tmac->mac, release_time, cur_time);
             remain_time = 0;
         } else {
-            remain_time = (uint16_t)(release_time - cur_time);
+            remain_time = (uint32_t)(release_time - cur_time);
             debug(LOG_DEBUG, "Remaining time for MAC '%s': %d seconds", tmac->mac, remain_time);
         }
 
