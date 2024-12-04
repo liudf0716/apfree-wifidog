@@ -728,27 +728,30 @@ ev_http_callback_device(struct evhttp_request *req, void *arg)
     }
 
     char if_name[IFNAMSIZ] = {0};
-    if (!get_ifname_by_address(client_ip, if_name)) {
-        free(client_ip);
+    if (!get_ifname_by_address(client_ip, if_name)) { 
         debug(LOG_ERR, "get_ifname_by_address [%s] failed", client_ip);
         evhttp_send_error(req, 200, "Cant get client's interface name");
+        free(client_ip);
         return;
     }
-    free(client_ip);
+    
 
     if_name[IFNAMSIZ-1] = '\0';
     t_gateway_setting *gw_setting = get_gateway_setting_by_ifname(if_name);
     if (!gw_setting) {
         debug(LOG_ERR, "get_gateway_setting_by_ifname [%s] failed", if_name);
         evhttp_send_error(req, 200, "Cant get gateway setting by interface name");
+        free(client_ip);
         return;
     }
 
     const char *json_query_result = query_bypass_user_status(client_ip, gw_setting->gw_id, gw_setting->gw_address_v4, QUERY_BY_IP);
     if (!json_query_result) {
+        free(client_ip);
         evhttp_send_error(req, HTTP_OK, "Failed to query bypass user status");
         return;
     }
+    free(client_ip);
 
     struct evbuffer *ev = evbuffer_new();
     if (!ev) {
