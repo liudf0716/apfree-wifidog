@@ -467,16 +467,21 @@ add_user_status_to_json(json_object *j_status, const t_trusted_mac *tmac,
         }
 
         // Calculate remaining time
+        time_t release_time = (time_t)atol(v_time);
         time_t cur_time = time(NULL);
-        int16_t remain_time = cur_time - atol(v_time);
+        uint16_t remain_time;
 
-        if (remain_time <= 0) {
-            debug(LOG_WARNING, "Invalid remaining time calculated for mac '%s'", tmac->mac);
-            remain_time = 0; // Ensure non-negative value
+        if (release_time <= cur_time) {
+            debug(LOG_WARNING, "Release time expired for MAC '%s' (release: %ld, current: %ld)", 
+                  tmac->mac, release_time, cur_time);
+            remain_time = 0;
+        } else {
+            remain_time = (uint16_t)(release_time - cur_time);
+            debug(LOG_DEBUG, "Remaining time for MAC '%s': %d seconds", tmac->mac, remain_time);
         }
 
         snprintf(remaining_time_str, sizeof(remaining_time_str), "%d", remain_time);
-        json_object_object_add(j_status, "remaining time", json_object_new_string(remaining_time_str));
+        json_object_object_add(j_status, "remaining_time", json_object_new_string(remaining_time_str));
         json_object_object_add(j_status, "serial", json_object_new_string(v_serial));
 
         // Free allocated memory
@@ -485,7 +490,7 @@ add_user_status_to_json(json_object *j_status, const t_trusted_mac *tmac,
     } else {
         // Use pre-existing values
         snprintf(remaining_time_str, sizeof(remaining_time_str), "%d", tmac->remaining_time);
-        json_object_object_add(j_status, "remaining time", json_object_new_string(remaining_time_str));
+        json_object_object_add(j_status, "remaining_time", json_object_new_string(remaining_time_str));
 
         json_object_object_add(j_status, "serial", json_object_new_string(tmac->serial));
     }
