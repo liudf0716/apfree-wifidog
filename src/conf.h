@@ -45,6 +45,7 @@
 #define DEFAULT_CHECKINTERVAL 60
 #define DEFAULT_DELTATRAFFIC 0
 #define DEFAULT_ARPTABLE "/proc/net/arp"
+#define DEFAULT_EXT_IF	"wan"
 
 /** Auth server configuration defaults */
 #define DEFAULT_AUTHSERVPORT 80

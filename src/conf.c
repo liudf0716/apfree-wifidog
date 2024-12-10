@@ -252,7 +252,7 @@ config_init(void)
 
 	config.configfile = safe_strdup(DEFAULT_CONFIGFILE);
 	config.htmlmsgfile = safe_strdup(DEFAULT_HTMLMSGFILE);
-	config.external_interface = NULL;;
+	config.external_interface = safe_strdup(DEFAULT_EXT_IF);
 	config.gw_port = DEFAULT_GATEWAYPORT;
 	config.gw_https_port = DEFAULT_GATEWAY_HTTPS_PORT;
 	config.gateway_settings = NULL;
@@ -2535,6 +2535,8 @@ config_validate(void)
 		debug(LOG_ERR, "Configuration is incomplete.  Exiting.");
 		exit(1);
 	}
+
+	switch (config.mode) {
 
 	validate_popular_servers();
 }
