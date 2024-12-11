@@ -59,6 +59,12 @@ static void wdctl_del_untrusted_maclist(struct bufferevent *, const char *);
 static void wdctl_add_online_client(struct bufferevent *, const char *);
 static void wdctl_add_auth_client(struct bufferevent *, const char *);
 
+static void wdctl_user_list(struct bufferevent *);
+static void wdctl_user_info(struct bufferevent *, const char *);
+static void wdctl_user_auth(struct bufferevent *, const char *);
+static void wdctl_add_anti_nat_permit_device(struct bufferevent *, const char *mac);
+static void wdctl_del_anti_nat_permit_device(struct bufferevent *, const char *mac);
+
 static struct wd_request_context *request_ctx;
 static const char *no_auth_response = "no auth server";
 
@@ -102,7 +108,15 @@ static struct wdctl_command {
     {"add_untrusted_mac", NULL, wdctl_add_untrusted_maclist},
     {"del_untrusted_mac", NULL, wdctl_del_untrusted_maclist},
     {"add_online_client", NULL, wdctl_add_online_client},
-	{"add_auth_client", NULL, wdctl_add_auth_client},
+    {"add_auth_client", NULL, wdctl_add_auth_client},
+
+    // apfree command
+    {"user_list", wdctl_user_list, NULL},
+    {"user_info", NULL, wdctl_user_info},
+    {"user_auth", NULL, wdctl_user_auth},
+
+    {"add_anti_nat_permit_device", NULL, wdctl_add_anti_nat_permit_device},
+    {"del_anti_nat_permit_device", NULL, wdctl_del_anti_nat_permit_device},
 };
 
 static void 
@@ -173,7 +187,7 @@ wdctl_listen_new_client(struct evconnlistener *listener, evutil_socket_t fd,
     struct sockaddr *a, int slen, void *p)
 {
     struct event_base *base = (struct event_base *)p;
-	struct bufferevent *b_client = bufferevent_socket_new(
+    struct bufferevent *b_client = bufferevent_socket_new(
         base, fd, BEV_OPT_CLOSE_ON_FREE|BEV_OPT_DEFER_CALLBACKS);
     
     bufferevent_setcb(b_client, wdctl_client_read_cb, NULL, wdctl_client_event_cb, NULL);
@@ -189,8 +203,8 @@ thread_wdctl(void *arg)
 {
     struct sockaddr_un *su_socket = create_unix_socket((char *)arg);
     if (!su_socket) termination_handler(0);
-	
-	struct event_base *wdctl_base = event_base_new();
+    
+    struct event_base *wdctl_base = event_base_new();
     if (!wdctl_base) termination_handler(0);
 
     if (get_auth_server()) {
@@ -206,8 +220,8 @@ thread_wdctl(void *arg)
     }
 
     struct evconnlistener *listener = evconnlistener_new_bind(wdctl_base, wdctl_listen_new_client, wdctl_base,
-	    LEV_OPT_CLOSE_ON_FREE|LEV_OPT_CLOSE_ON_EXEC|LEV_OPT_REUSEABLE,
-	    -1, (struct sockaddr*)su_socket, sizeof(struct sockaddr_un));
+        LEV_OPT_CLOSE_ON_FREE|LEV_OPT_CLOSE_ON_EXEC|LEV_OPT_REUSEABLE,
+        -1, (struct sockaddr*)su_socket, sizeof(struct sockaddr_un));
     if (!listener) termination_handler(0);
 
     event_base_dispatch(wdctl_base);
@@ -334,7 +348,7 @@ clear_trusted_pdomains(void)
 static void
 wdctl_clear_trusted_pan_domains(struct bufferevent *fd)
 {
-	clear_trusted_pdomains();
+    clear_trusted_pdomains();
 }
 
 char *
@@ -373,7 +387,7 @@ add_trusted_iplist(const char *arg)
 static void
 wdctl_add_trusted_iplist(struct bufferevent *fd, const char *arg)
 {
-	add_trusted_iplist(arg);
+    add_trusted_iplist(arg);
     bufferevent_write(fd, "Yes", 3);
 }
 
@@ -387,7 +401,7 @@ del_trusted_iplist(const char *arg)
 static void
 wdctl_del_trusted_iplist(struct bufferevent *fd, const char *arg)
 {
-	del_trusted_iplist(arg);
+    del_trusted_iplist(arg);
     bufferevent_write(fd, "Yes", 3);
 }
 
@@ -401,7 +415,7 @@ clear_trusted_iplist(void)
 static void
 wdctl_clear_trusted_iplist(struct bufferevent *fd)
 {
-	clear_trusted_iplist();
+    clear_trusted_iplist();
     bufferevent_write(fd, "Yes", 3);
 }
 
@@ -415,7 +429,7 @@ add_trusted_domains(const char *arg)
 static void
 wdctl_add_trusted_domains(struct bufferevent *fd, const char *arg)
 {
-	add_trusted_domains(arg);
+    add_trusted_domains(arg);
     bufferevent_write(fd, "Yes", 3);
 }
 
@@ -429,21 +443,21 @@ del_trusted_domains(const char *arg)
 static void
 wdctl_del_trusted_domains(struct bufferevent *fd, const char *arg)
 {
-	del_trusted_domains(arg);
+    del_trusted_domains(arg);
     bufferevent_write(fd, "Yes", 3);	
 }
 
 static void
 wdctl_reparse_trusted_domains(struct bufferevent *fd)
 {
-	parse_user_trusted_domain_list();	
+    parse_user_trusted_domain_list();	
     bufferevent_write(fd, "Yes", 3);
 }
 
 static void
 wdctl_clear_trusted_domains(struct bufferevent *fd)
 {
-	clear_trusted_domains();
+    clear_trusted_domains();
     fw_refresh_user_domains_trusted();
     bufferevent_write(fd, "Yes", 3);
 }
@@ -477,7 +491,7 @@ add_domain_ip(const char *args)
 static void
 wdctl_add_domain_ip(struct bufferevent *fd, const char *args)
 {
-	add_domain_ip(args);
+    add_domain_ip(args);
     bufferevent_write(fd, "Yes", 3);
 }
 
@@ -485,10 +499,10 @@ wdctl_add_domain_ip(struct bufferevent *fd, const char *args)
 static void
 wdctl_add_roam_maclist(struct bufferevent *fd, const char *args)
 {
-	LOCK_CONFIG();
-	parse_roam_mac_list(args);	
-	UNLOCK_CONFIG();
-	
+    LOCK_CONFIG();
+    parse_roam_mac_list(args);	
+    UNLOCK_CONFIG();
+    
     bufferevent_write(fd, "Yes", 3);
 }
 
@@ -508,8 +522,8 @@ wdctl_show_roam_maclist(struct bufferevent *fd)
 static void
 wdctl_clear_roam_maclist(struct bufferevent *fd)
 {
-	clear_roam_mac_list();
-	fw_clear_roam_maclist();
+    clear_roam_mac_list();
+    fw_clear_roam_maclist();
 
     bufferevent_write(fd, "Yes", 3);
 }
@@ -526,7 +540,7 @@ del_trusted_maclist(const char *args)
 static void
 wdctl_del_trusted_maclist(struct bufferevent *fd, const char *args)
 {
-	del_trusted_maclist(args);
+    del_trusted_maclist(args);
     bufferevent_write(fd, "Yes", 3);
 
 }
@@ -542,7 +556,7 @@ add_trusted_maclist(const char *args)
 static void
 wdctl_add_trusted_maclist(struct bufferevent *fd, const char *args)
 {
-	add_trusted_maclist(args);
+    add_trusted_maclist(args);
     bufferevent_write(fd, "Yes", 3);
 }
 
@@ -591,7 +605,7 @@ del_trusted_local_maclist(const char *args)
 static void
 wdctl_del_trusted_local_maclist(struct bufferevent *fd, const char *args)
 {
-	del_trusted_local_maclist(args);
+    del_trusted_local_maclist(args);
     bufferevent_write(fd, "Yes", 3);
 }
 
@@ -606,7 +620,7 @@ add_trusted_local_maclist(const char *args)
 static void
 wdctl_add_trusted_local_maclist(struct bufferevent *fd, const char *args)
 {
-	add_trusted_local_maclist(args);
+    add_trusted_local_maclist(args);
     bufferevent_write(fd, "Yes", 3);
 }
 
@@ -654,7 +668,7 @@ del_untrusted_maclist(const char *args)
 static void
 wdctl_del_untrusted_maclist(struct bufferevent *fd, const char *args)
 {
-	del_untrusted_maclist(args);
+    del_untrusted_maclist(args);
     bufferevent_write(fd, "Yes", 3);
 }
 
@@ -669,7 +683,7 @@ add_untrusted_maclist(const char *args)
 static void
 wdctl_add_untrusted_maclist(struct bufferevent *fd, const char *args)
 {
-	add_untrusted_maclist(args);
+    add_untrusted_maclist(args);
     bufferevent_write(fd, "Yes", 3);
 }
 
@@ -696,7 +710,7 @@ clear_untrusted_maclist(void)
 static void
 wdctl_clear_untrusted_maclist(struct bufferevent *fd)
 {
-	clear_untrusted_maclist();
+    clear_untrusted_maclist();
     bufferevent_write(fd, "Yes", 3);
 }
 
@@ -714,7 +728,7 @@ user_cfg_save(void)
 static void
 wdctl_user_cfg_save(struct bufferevent *fd)
 {
-	user_cfg_save();	
+    user_cfg_save();	
     bufferevent_write(fd, "Yes", 3);
 }
 
@@ -734,7 +748,7 @@ wdctl_add_online_client(struct bufferevent *fd, const char *args)
     }
 
     json_object *client_info = json_tokener_parse(args);
-	if(is_error(client_info) || json_object_get_type(client_info) != json_type_object) { 
+    if(is_error(client_info) || json_object_get_type(client_info) != json_type_object) { 
         goto OUT;
     }
 
@@ -742,8 +756,8 @@ wdctl_add_online_client(struct bufferevent *fd, const char *args)
     json_object *ip_jo 	= NULL;
     json_object *name_jo = NULL;
     if(!json_object_object_get_ex(client_info, "mac", &mac_jo) || 
-	   !json_object_object_get_ex(client_info, "ip", &ip_jo) || 
-	   !json_object_object_get_ex(client_info, "name", &name_jo)) { 
+       !json_object_object_get_ex(client_info, "ip", &ip_jo) || 
+       !json_object_object_get_ex(client_info, "name", &name_jo)) { 
         goto OUT;
     }
 
@@ -774,8 +788,8 @@ wdctl_add_auth_client(struct bufferevent *fd, const char *args)
         return;
     }
     
-	json_object *client_info = json_tokener_parse(args);
-	if(is_error(client_info) || json_object_get_type(client_info) != json_type_object) { 
+    json_object *client_info = json_tokener_parse(args);
+    if(is_error(client_info) || json_object_get_type(client_info) != json_type_object) { 
         debug(LOG_ERR, "json_tokener_parse failed: args is %s", args);
         goto OUT;
     }
@@ -784,8 +798,8 @@ wdctl_add_auth_client(struct bufferevent *fd, const char *args)
     json_object *ip_jo 	= NULL;
     json_object *name_jo = NULL;
     if(!json_object_object_get_ex(client_info, "mac", &mac_jo) || 
-	   !json_object_object_get_ex(client_info, "ip", &ip_jo) || 
-	   !json_object_object_get_ex(client_info, "name", &name_jo)) { 
+       !json_object_object_get_ex(client_info, "ip", &ip_jo) || 
+       !json_object_object_get_ex(client_info, "name", &name_jo)) { 
         debug(LOG_ERR, "json_object_object_get_ex failed");
         goto OUT;
     }
@@ -806,5 +820,104 @@ wdctl_add_auth_client(struct bufferevent *fd, const char *args)
     
 OUT:
     if (client_info) json_object_put(client_info);
+    bufferevent_write(fd, "Yes", 3);
+}
+
+static void
+wdctl_user_list(struct bufferevent *fd)
+{
+    char *json_user_list = dump_bypass_user_list_json();
+    if (json_user_list) {
+        size_t len = strlen(json_user_list);
+        bufferevent_write(fd, json_user_list, len);   /* XXX Not handling error because we'd just print the same log line. */
+        free(json_user_list);
+    } else
+        bufferevent_write(fd, "{}", 2);
+}
+
+static void
+wdctl_user_info(struct bufferevent *fd, const char *args)
+{
+    if (!is_valid_ip(args)) {
+        bufferevent_write(fd, "{}", 2);
+        return;
+    }
+}
+
+static void
+wdctl_user_auth(struct bufferevent *fd, const char *json_value)
+{
+    json_object *root = json_tokener_parse(json_value);
+    if (!root || json_object_get_type(root) != json_type_object) {
+        debug(LOG_ERR, "Failed to parse json value: %s", json_value);
+        goto OUT;
+    }
+
+    json_object *user_array = NULL;
+    if (!json_object_object_get_ex(root, "user", &user_array) ||
+        json_object_get_type(user_array) != json_type_array) {
+        debug(LOG_ERR, "Failed to get user array");
+        goto OUT;
+    }
+
+    // iterate over the user array
+    for (int i = 0; i < json_object_array_length(user_array); i++) {
+        json_object *user = json_object_array_get_idx(user_array, i);
+        if (!user) {
+            debug(LOG_ERR, "User array is empty");
+            continue;
+        }
+
+        json_object *serial_jo = NULL;
+        json_object *time_jo = NULL;
+        json_object *mac_jo = NULL;
+
+        if (!json_object_object_get_ex(user, "serial", &serial_jo) ||
+            !json_object_object_get_ex(user, "time", &time_jo) ||
+            !json_object_object_get_ex(user, "mac", &mac_jo)) {
+            debug(LOG_ERR, "Failed to get required fields from user object");
+            continue;
+        }
+
+        const char *serial = json_object_get_string(serial_jo);
+        const char *time_str = json_object_get_string(time_jo);
+        const char *mac = json_object_get_string(mac_jo);
+
+        debug(LOG_DEBUG, "Parsed values - serial: %s, time: %s, mac: %s",
+              serial, time_str, mac);
+        uint16_t remaining_time = atoi(time_str);
+        if (remaining_time == 0) {
+            remove_bypass_user(mac);
+        } else {
+            add_bypass_user(serial, remaining_time, mac);
+        }
+    }
+
+OUT:
+    if (root) json_object_put(root);
+    bufferevent_write(fd, "Yes", 3);
+}
+
+static void
+wdctl_add_anti_nat_permit_device(struct bufferevent *fd, const char *mac)
+{
+    if (!is_valid_mac(mac)) {
+        debug(LOG_ERR, "Invalid mac address: %s", mac);
+        return;
+    }
+
+    fw_add_anti_nat_permit_device(mac);
+    bufferevent_write(fd, "Yes", 3);
+}
+
+static void
+wdctl_del_anti_nat_permit_device(struct bufferevent *fd, const char *mac)
+{
+    if (!is_valid_mac(mac)) {
+        debug(LOG_ERR, "Invalid mac address: %s", mac);
+        return;
+    }
+
+    fw_del_anti_nat_permit_device(mac);
     bufferevent_write(fd, "Yes", 3);
 }
