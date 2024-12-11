@@ -10,6 +10,7 @@
 #include <pthread.h>
 
 #include "common.h"
+#include "bypass_user.h"
 
 /** Configuration file paths */
 #ifndef SYSCONFDIR
@@ -87,13 +88,6 @@ typedef enum trusted_domain_t_ {
 	TRUSTED_PAN_DOMAIN,
 } trusted_domain_t;
 
-typedef enum mac_choice_t_ {
-	TRUSTED_MAC,
-	UNTRUSTED_MAC,
-	TRUSTED_LOCAL_MAC,
-	ROAM_MAC
-} mac_choice_t;
-
 typedef enum ip_type_t_ {
 	IP_TYPE_IPV4,
 	IP_TYPE_IPV6
@@ -162,17 +156,6 @@ typedef struct _firewall_ruleset_t {
 	t_firewall_rule *rules;
 	struct _firewall_ruleset_t *next;
 } t_firewall_ruleset;
-
-/** Trust related structures */
-typedef struct _trusted_mac_t {
-	char *mac;
-	char *ip;
-	int is_online;
-	int remaining_time;
-	struct _trusted_mac_t *next;
-} t_trusted_mac;
-
-typedef t_trusted_mac t_untrusted_mac;
 
 typedef struct _domain_trusted_t {
 	char *domain;
@@ -278,8 +261,6 @@ typedef struct {
 	short wired_passed;
 	short parse_checked;
 	short js_redir;
-	short no_auth;
-	short work_mode;
 	short bypass_apple_cna;
 	short fw4_enable;
 	short enable_dhcp_cpi;

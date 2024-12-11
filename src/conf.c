@@ -85,8 +85,6 @@ typedef enum {
 	oWiredPassed,
 	oParseChecked,
 	oTrustedIpList,
-	oNoAuth,
-	oWorkMode,
 	oUpdateDomainInterval,
 	oTrustedLocalMACList,
 	oAppleCNA,
@@ -160,8 +158,6 @@ static const struct {
 	"wiredPassed", oWiredPassed}, {
 	"parseChecked", oParseChecked}, {
 	"trustedIpList", oTrustedIpList}, {
-	"noAuth", oNoAuth}, {
-	"workMode", oWorkMode}, {
 	"updateDomainInterval", oUpdateDomainInterval}, {
 	"trustedlocalmaclist", oTrustedLocalMACList}, {
 	"bypassAppleCNA", oAppleCNA}, {
@@ -276,8 +272,6 @@ config_init(void)
 	config.js_redir 		= 1; // default enable it
 	config.wired_passed		= 1; // default wired device no need login
 	config.parse_checked	= 1; // before parse domain's ip; fping check it
-	config.no_auth 			= 0; //
-	config.work_mode		= 0;
 	config.update_domain_interval  = 60; // very 60*interval second parse trusted domain
 	config.dns_timeout         =   "1.0";  //default dns parsing timeout  is 1.0s
 	config.bypass_apple_cna = 1; // default enable it
@@ -1175,12 +1169,6 @@ config_read()
 				case oTrustedIpList:
 					add_trusted_ip_list(rawarg);
 					break;
-				case oNoAuth:
-					config.no_auth = parse_boolean_value(p1);
-					break;
-				case oWorkMode:
-					sscanf(p1, "%hu", &config.work_mode);
-					break;
 				case oUpdateDomainInterval:
 					sscanf(p1, "%d", &config.update_domain_interval);
 					break;
@@ -1267,200 +1255,6 @@ parse_boolean_value(char *line)
 	return -1;
 }
 
-
-/** 
- * @internal
- * @brief remove online client by its mac
- * 
- */
-
-static void
-remove_online_client(const char *mac)
-{
-	debug(LOG_DEBUG, "remove mac [%s] from client list", mac);
-
-	t_client *client = NULL;
-	LOCK_CLIENT_LIST();
-	if((client = client_list_find_by_mac(mac)) != NULL) {
-		fw_deny(client);
-		client_list_remove(client);
-		client_free_node(client);
-	}
-	UNLOCK_CLIENT_LIST();
-}
-
-static void
-remove_mac_from_list(const char *mac, mac_choice_t which)
-{
-	t_trusted_mac *p = NULL, *p1 = NULL;
-	switch(which) {
-	case TRUSTED_MAC:
-		p = config.trustedmaclist;
-		p1 = p;
-		break;
-	case UNTRUSTED_MAC:
-		p = config.mac_blacklist;
-		p1 = p;
-		break;
-	case TRUSTED_LOCAL_MAC:
-		p = config.trusted_local_maclist;
-		p1 = p;
-		break;
-	case ROAM_MAC:
-		p = config.roam_maclist;
-		p1 = p;
-		break;
-	default:
-		return;
-	}
-	
-	if (p == NULL) {
-		return;
-	}
-	
-	debug(LOG_DEBUG, "Remove MAC address [%s] to  mac list [%d]", mac, which);
-	
-	remove_online_client(mac);
-	
-	LOCK_CONFIG();
-
-	while(p) {
-		if(strcmp(p->mac, mac) == 0) {
-			break;
-		}
-		p1 = p;
-		p = p->next;
-	}
-
-	if(p) {
-		switch(which) {
-		case TRUSTED_MAC:
-			if(p == config.trustedmaclist)
-				config.trustedmaclist = p->next;
-			else
-				p1->next = p->next;
-			break;
-		case UNTRUSTED_MAC:
-			if(p == config.mac_blacklist)
-				config.mac_blacklist = p->next;
-			else
-				p1->next = p->next;
-			break;
-		case TRUSTED_LOCAL_MAC:
-			if(p == config.trusted_local_maclist)
-				config.trusted_local_maclist = p->next;
-			else
-				p1->next = p->next;
-			break;
-		case ROAM_MAC:
-			if(p == config.roam_maclist)
-				config.roam_maclist = p->next;
-			else
-				p1->next = p->next;
-			break;
-		}	
-		free(p->mac);
-		if(p->ip) free(p->ip);
-		free(p);
-	}
-
-	UNLOCK_CONFIG();
-}
-
-static t_trusted_mac *
-add_mac_from_list(const char *mac, mac_choice_t which)
-{
-	t_trusted_mac *pret = NULL, *p = NULL;
-
-	remove_online_client(mac);
-
-	debug(LOG_DEBUG, "Adding MAC address [%s] to  mac list [%d]", mac, which);
-
-	LOCK_CONFIG();
-
-	switch (which) {
-	case TRUSTED_MAC:
-		if (config.trustedmaclist == NULL) {
-			config.trustedmaclist = safe_malloc(sizeof(t_trusted_mac));
-			config.trustedmaclist->mac = safe_strdup(mac);
-			config.trustedmaclist->next = NULL;
-			pret = config.trustedmaclist;
-			UNLOCK_CONFIG();
-			return pret;
-		} else {
-			p = config.trustedmaclist;
-		}
-		break;
-	case UNTRUSTED_MAC:
-		if (config.mac_blacklist == NULL) {
-			config.mac_blacklist = safe_malloc(sizeof(t_untrusted_mac));
-			config.mac_blacklist->mac = safe_strdup(mac);
-			config.mac_blacklist->next = NULL;
-			UNLOCK_CONFIG();
-			return pret;
-		} else {
-			p = config.mac_blacklist;
-		}
-		break;
-	case TRUSTED_LOCAL_MAC:
-		if (config.trusted_local_maclist == NULL) {
-			config.trusted_local_maclist = safe_malloc(sizeof(t_trusted_mac));
-			config.trusted_local_maclist->mac = safe_strdup(mac);
-			config.trusted_local_maclist->next = NULL;
-			pret = config.trusted_local_maclist;
-			UNLOCK_CONFIG();
-			return pret;
-		} else {
-			p = config.trusted_local_maclist;
-		}
-		break;
-	case ROAM_MAC: //deprecated
-		break;
-	}
-	
-	
-	int skipmac;
-	/* Advance to the last entry */
-	skipmac = 0;
-	while (p != NULL) {
-		if (0 == strcmp(p->mac, mac)) {
-			skipmac = 1;
-		}
-		p = p->next;
-	}
-	if (!skipmac) {
-		p = safe_malloc(sizeof(t_trusted_mac));
-		p->mac = safe_strdup(mac);
-		switch (which) {
-		case TRUSTED_MAC:
-			p->next = config.trustedmaclist;
-			config.trustedmaclist = p;
-			pret = p;
-			break;
-		case UNTRUSTED_MAC:
-			p->next = config.mac_blacklist;
-			config.mac_blacklist = p;
-			pret = p;
-			break;
-		case TRUSTED_LOCAL_MAC:
-			p->next = config.trusted_local_maclist;
-			config.trusted_local_maclist = p;
-			pret = p;
-			break;
-		case ROAM_MAC: //deprecated
-			break;
-		}
-		
-	} else {
-		debug(LOG_ERR,
-			"MAC address [%s] already on mac list.  ",
-			mac);
-	}
-
-	UNLOCK_CONFIG();
-	return pret;
-}
-
 void
 remove_mac(const char *mac, mac_choice_t which)
 {
@@ -1470,7 +1264,7 @@ remove_mac(const char *mac, mac_choice_t which)
 void
 add_mac(const char *mac, mac_choice_t which)
 {
-	add_mac_from_list(mac, which);
+	add_mac_from_list(mac, 0, NULL, which);
 }
 
 /* *
