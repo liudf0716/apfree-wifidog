@@ -28,6 +28,7 @@ typedef struct _trusted_mac_t {
 	uint32_t 	remaining_time;
 } t_trusted_mac;
 
+typedef t_trusted_mac t_untrusted_mac;
 
 void remove_mac_from_list(const char *, mac_choice_t );
 t_trusted_mac *add_mac_from_list(const char *, const uint32_t , const char *, mac_choice_t which);

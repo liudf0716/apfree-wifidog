@@ -1,5 +1,6 @@
 
 #include <json-c/json.h>
+#include <uci.h>
 
 #include "common.h"
 #include "conf.h"
