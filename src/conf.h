@@ -141,22 +141,6 @@ typedef struct _auth_serv_t {
 	struct _auth_serv_t *next;
 } t_auth_serv;
 
-/** Firewall related structures */
-typedef struct _firewall_rule_t {
-	t_firewall_target target;
-	char *protocol;
-	char *port;
-	char *mask;
-	int mask_is_ipset;
-	struct _firewall_rule_t *next;
-} t_firewall_rule;
-
-typedef struct _firewall_ruleset_t {
-	char *name;
-	t_firewall_rule *rules;
-	struct _firewall_ruleset_t *next;
-} t_firewall_ruleset;
-
 typedef struct _domain_trusted_t {
 	char *domain;
 	t_ip_trusted *ips_trusted;
@@ -252,8 +236,7 @@ typedef struct {
 	int checkinterval;
 	int update_domain_interval;
 	
-	// Firewall
-	t_firewall_ruleset *rulesets;
+	// popular servers
 	t_popular_server *popular_servers;
 	
 	// Flags and modes
@@ -294,75 +277,46 @@ void config_validate(void);
 /** Authentication Server Management */
 t_auth_serv *get_auth_server(void);
 void mark_auth_server_bad(t_auth_serv *);
-t_firewall_rule *get_ruleset(const char *);
-
-/** Trusted Domain Management */
-t_domain_trusted *get_domains_trusted(void);
-t_domain_trusted *__add_domain_common(const char *, trusted_domain_t);
-t_domain_trusted *add_domain_common(const char *, trusted_domain_t);
-t_domain_trusted *__add_user_trusted_domain(const char *);
-t_domain_trusted *add_user_trusted_domain(const char *);
-t_domain_trusted *__add_inner_trusted_domain(const char*);
-t_domain_trusted *add_inner_trusted_domain(const char*);
-t_domain_trusted *__del_domain_common(const char *, trusted_domain_t);
-void del_domain_common(const char *, trusted_domain_t);
 
 /** Domain String Parsing */
-void parse_domain_string_common_action(const char *, trusted_domain_t, int);
-void parse_domain_string_common(const char *, trusted_domain_t);
-void parse_inner_trusted_domain_string(const char *);
 void parse_user_trusted_domain_string(const char *);
 void parse_trusted_pan_domain_string(const char *);
 void parse_del_trusted_domain_string(const char *);
 void parse_del_trusted_pan_domain_string(const char *);
 
 /** Domain List Management */
-void parse_common_trusted_domain_list(trusted_domain_t);
 void parse_user_trusted_domain_list(void);
 void parse_inner_trusted_domain_list(void);
 void add_domain_ip_pair(const char *, trusted_domain_t);
-void clear_trusted_domains_(void);
+void clear_trusted_domains(void);
 void clear_trusted_pan_domains(void);
-void __clear_trusted_domains(void);
-void __clear_trusted_domain_ip(t_ip_trusted *);
 
-/** MAC Address Management */
+/** Roam MAC List operation */
 void parse_roam_mac_list(const char *); 
-void __clear_roam_mac_list();
 void clear_roam_mac_list();
 t_trusted_mac *get_roam_maclist();
-int is_roaming(const char *);
-int is_untrusted_mac(const char *);
-int is_trusted_mac(const char *);
+
+/** Trusted MAC List Operations */
+bool is_trusted_mac(const char *);
 void parse_trusted_mac_list(const char *);
 void parse_del_trusted_mac_list(const char *);
-void __clear_trusted_mac_list(void);
 void clear_trusted_mac_list(void);
-t_trusted_mac *get_trusted_mac_by_ip(const char *);
-void clear_dup_trusted_mac_list(t_trusted_mac *);
 void add_mac(const char *, mac_choice_t);
 void remove_mac(const char *, mac_choice_t);
-void parse_mac_list(const char *, mac_choice_t);
-void reset_trusted_mac_list(void);
-int trusted_mac_list_dup(t_trusted_mac **);
 
 /** Local MAC List Operations */
 void parse_trusted_local_mac_list(const char *);
 void parse_del_trusted_local_mac_list(const char *);
-void __clear_trusted_local_mac_list(void);
 void clear_trusted_local_mac_list(void);
 t_trusted_mac *add_trusted_local_mac(const char *);
+
+/** Untrusted MAC List Operations */
 void parse_untrusted_mac_list(const char*);
 void parse_del_untrusted_mac_list(const char *);
-void __clear_untrusted_mac_list();
 void clear_untrusted_mac_list();
-void clear_dup_trusted_mac_list(t_trusted_mac *);
-void reset_trusted_mac_list();
-int trusted_mac_list_dup(t_trusted_mac **);
 
 /** IP List Management */
 void add_trusted_ip_list(const char *);
-void __clear_trusted_iplist(void);
 void clear_trusted_ip_list(void);
 void del_trusted_ip_list(const char *);
 

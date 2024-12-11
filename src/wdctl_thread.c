@@ -440,17 +440,11 @@ wdctl_reparse_trusted_domains(struct bufferevent *fd)
     bufferevent_write(fd, "Yes", 3);
 }
 
-void 
-clear_trusted_domains()
-{
-    clear_trusted_domains_();
-    fw_refresh_user_domains_trusted();
-}
-
 static void
 wdctl_clear_trusted_domains(struct bufferevent *fd)
 {
 	clear_trusted_domains();
+    fw_refresh_user_domains_trusted();
     bufferevent_write(fd, "Yes", 3);
 }
 
@@ -514,11 +508,9 @@ wdctl_show_roam_maclist(struct bufferevent *fd)
 static void
 wdctl_clear_roam_maclist(struct bufferevent *fd)
 {
-	LOCK_CONFIG();
-	__clear_roam_mac_list();		
-	UNLOCK_CONFIG();	
-
+	clear_roam_mac_list();
 	fw_clear_roam_maclist();
+
     bufferevent_write(fd, "Yes", 3);
 }
 

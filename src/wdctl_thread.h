@@ -31,7 +31,6 @@ void add_trusted_local_maclist(const char *args);
 void del_trusted_local_maclist(const char *args);
 
 char *show_trusted_domains(void);
-void clear_trusted_domains(void);
 void add_trusted_domains(const char *args);
 void del_trusted_domains(const char *args);
 

@@ -71,8 +71,6 @@ typedef enum {
 	oCheckInterval,
 	oWdctlSocket,
 	oSyslogFacility,
-	oFirewallRule,
-	oFirewallRuleSet,
 	oTrustedMACList,
 	oPopularServers,
 	oHtmlMessageFile,
@@ -145,8 +143,6 @@ static const struct {
 	"authserverofflinefile", oAuthServerOfflineFile}, {
 	"internetofflinefile", oInternetOfflineFile}, {
 	"localportal", oLocalPortal}, {
-	"firewallruleset", oFirewallRuleSet}, {
-	"firewallrule", oFirewallRule}, {
 	"trustedmaclist", oTrustedMACList}, {
 	"popularservers", oPopularServers}, {
 	"htmlmessagefile", oHtmlMessageFile}, {
@@ -184,8 +180,6 @@ static void config_notnull(const void *, const char *);
 static int parse_boolean_value(char *);
 static void parse_auth_server(FILE *, const char *, int *);
 static void parse_mqtt_server(FILE *, const char *, int *);
-static int _parse_firewall_rule(const char *, char *);
-static void parse_firewall_ruleset(const char *, FILE *, const char *, int *);
 static void parse_popular_servers(const char *);
 static void validate_popular_servers(void);
 static void add_popular_server(const char *);
@@ -259,7 +253,6 @@ config_init(void)
 	config.pidfile = NULL;
 	config.wdctl_sock = safe_strdup(DEFAULT_WDCTL_SOCK);
 	config.internal_sock = safe_strdup(DEFAULT_INTERNAL_SOCK);
-	config.rulesets = NULL;
 	config.trustedmaclist = NULL;
 	config.popular_servers = NULL;
 	config.proxy_port = 0;
@@ -812,216 +805,6 @@ Advance to the next word
 	} \
 } while (0)
 
-/** @internal
-Parses firewall rule set information
-*/
-static void
-parse_firewall_ruleset(const char *ruleset, FILE * file, const char *filename, int *linenum)
-{
-	char line[MAX_BUF], *p1, *p2;
-	int opcode;
-
-	debug(LOG_DEBUG, "Adding Firewall Rule Set %s", ruleset);
-
-	/* Parsing loop */
-	while (memset(line, 0, MAX_BUF) && fgets(line, MAX_BUF - 1, file) && (strchr(line, '}') == NULL)) {
-		(*linenum)++;		   /* increment line counter. */
-
-		/* skip leading blank spaces */
-		for (p1 = line; isblank(*p1); p1++) ;
-
-		/* End at end of line */
-		if ((p2 = strchr(p1, '#')) != NULL) {
-			*p2 = '\0';
-		} else if ((p2 = strchr(p1, '\r')) != NULL) {
-			*p2 = '\0';
-		} else if ((p2 = strchr(p1, '\n')) != NULL) {
-			*p2 = '\0';
-		}
-
-		/* next, we coopt the parsing of the regular config */
-		if (strlen(p1) > 0) {
-			p2 = p1;
-			/* keep going until word boundary is found. */
-			while ((*p2 != '\0') && (!isblank(*p2)))
-				p2++;
-
-			/* Terminate first word. */
-			*p2 = '\0';
-			p2++;
-
-			/* skip all further blanks. */
-			while (isblank(*p2))
-				p2++;
-
-			/* Get opcode */
-			opcode = config_parse_token(p1, filename, *linenum);
-
-			debug(LOG_DEBUG, "p1 = [%s]; p2 = [%s]", p1, p2);
-
-			switch (opcode) {
-			case oFirewallRule:
-				_parse_firewall_rule(ruleset, p2);
-				break;
-
-			case oBadOption:
-			default:
-				debug(LOG_ERR, "Bad option on line %d " "in %s.", *linenum, filename);
-				debug(LOG_ERR, "Exiting...");
-				exit(-1);
-				break;
-			}
-		}
-	}
-
-	debug(LOG_DEBUG, "Firewall Rule Set %s added.", ruleset);
-}
-
-/** @internal
-Helper for parse_firewall_ruleset.  Parses a single rule in a ruleset
-*/
-static int
-_parse_firewall_rule(const char *ruleset, char *leftover)
-{
-	int i;
-	t_firewall_target target = TARGET_REJECT;	 /**< firewall target */
-	int all_nums = 1;	 /**< If 0, port contained non-numerics */
-	int finished = 0;	 /**< reached end of line */
-	char *token = NULL;	 /**< First word */
-	char *port = NULL;	 /**< port to open/block */
-	char *protocol = NULL;	 /**< protocol to block, tcp/udp/icmp */
-	char *mask = NULL;	 /**< Netmask */
-	char *other_kw = NULL;	 /**< other key word */
-	int mask_is_ipset = 0;
-	t_firewall_ruleset *tmpr;
-	t_firewall_ruleset *tmpr2;
-	t_firewall_rule *tmp;
-	t_firewall_rule *tmp2;
-
-	debug(LOG_DEBUG, "leftover: %s", leftover);
-
-	/* lower case */
-	for (i = 0; *(leftover + i) != '\0' && (*(leftover + i) = tolower((unsigned char)*(leftover + i))); i++) ;
-
-	token = leftover;
-	TO_NEXT_WORD(leftover, finished);
-
-	/* Parse token */
-	if (!strcasecmp(token, "block") || finished) {
-		target = TARGET_REJECT;
-	} else if (!strcasecmp(token, "drop")) {
-		target = TARGET_DROP;
-	} else if (!strcasecmp(token, "allow")) {
-		target = TARGET_ACCEPT;
-	} else if (!strcasecmp(token, "log")) {
-		target = TARGET_LOG;
-	} else if (!strcasecmp(token, "ulog")) {
-		target = TARGET_ULOG;
-	} else {
-		debug(LOG_ERR, "Invalid rule type %s, expecting " "\"block\",\"drop\",\"allow\",\"log\" or \"ulog\"", token);
-		return -1;
-	}
-
-	/* Parse the remainder */
-	/* Get the protocol */
-	if (strncmp(leftover, "tcp", 3) == 0 || strncmp(leftover, "udp", 3) == 0 || strncmp(leftover, "icmp", 4) == 0) {
-		protocol = leftover;
-		TO_NEXT_WORD(leftover, finished);
-	}
-
-	/* Get the optional port or port range */
-	if (strncmp(leftover, "port", 4) == 0) {
-		TO_NEXT_WORD(leftover, finished);
-		/* Get port now */
-		port = leftover;
-		TO_NEXT_WORD(leftover, finished);
-		for (i = 0; *(port + i) != '\0'; i++)
-			if (!isdigit((unsigned char)*(port + i)) && ((unsigned char)*(port + i) != ':'))
-				all_nums = 0;   /*< No longer only digits */
-		if (!all_nums) {
-			debug(LOG_ERR, "ERROR: wifidog config file, section FirewallRuleset %s. " "Invalid port %s", ruleset, port);
-			return -3;		  /*< Fail */
-		}
-	}
-
-	/* Now, further stuff is optional */
-	if (!finished) {
-		/* should be exactly "to" or "to-ipset" */
-		other_kw = leftover;
-		TO_NEXT_WORD(leftover, finished);
-		if (!finished) {
-			/* Get arg now and check validity in next section */
-			mask = leftover;
-		}
-		if (strncmp(other_kw, "to-ipset", 8) == 0 && !finished) {
-			mask_is_ipset = 1;
-		}
-		TO_NEXT_WORD(leftover, finished);
-		if (!finished) {
-			debug(LOG_WARNING, "Ignoring trailining string after successfully parsing rule: %s", leftover);
-		}
-	}
-	/* Generate rule record */
-	tmp = safe_malloc(sizeof(t_firewall_rule));
-	tmp->target = target;
-	tmp->mask_is_ipset = mask_is_ipset;
-	if (protocol != NULL)
-		tmp->protocol = safe_strdup(protocol);
-	if (port != NULL)
-		tmp->port = safe_strdup(port);
-	if (mask == NULL)
-		tmp->mask = safe_strdup("0.0.0.0/0");
-	else
-		tmp->mask = safe_strdup(mask);
-
-	debug(LOG_DEBUG, "Adding Firewall Rule %s %s port %s to %s", token, tmp->protocol, tmp->port, tmp->mask);
-
-	/* Append the rule record */
-	if (config.rulesets == NULL) {
-		config.rulesets = safe_malloc(sizeof(t_firewall_ruleset));
-		config.rulesets->name = safe_strdup(ruleset);
-		tmpr = config.rulesets;
-	} else {
-		tmpr2 = tmpr = config.rulesets;
-		while (tmpr != NULL && (strcmp(tmpr->name, ruleset) != 0)) {
-			tmpr2 = tmpr;
-			tmpr = tmpr->next;
-		}
-		if (tmpr == NULL) {
-			/* Rule did not exist */
-			tmpr = safe_malloc(sizeof(t_firewall_ruleset));
-			tmpr->name = safe_strdup(ruleset);
-			tmpr2->next = tmpr;
-		}
-	}
-
-	/* At this point, tmpr == current ruleset */
-	if (tmpr->rules == NULL) {
-		/* No rules... */
-		tmpr->rules = tmp;
-	} else {
-		tmp2 = tmpr->rules;
-		while (tmp2->next != NULL)
-			tmp2 = tmp2->next;
-		tmp2->next = tmp;
-	}
-
-	return 1;
-}
-
-t_firewall_rule *
-get_ruleset(const char *ruleset)
-{
-	t_firewall_ruleset *tmp;
-
-	for (tmp = config.rulesets; tmp != NULL && strcmp(tmp->name, ruleset) != 0; tmp = tmp->next) ;
-
-	if (tmp == NULL)
-		return NULL;
-
-	return (tmp->rules);
-}
-
 /**
 @param filename Full path of the configuration file to be read
 */
@@ -1111,9 +894,6 @@ config_read()
 					break;
 				case oAuthServer:
 					parse_auth_server(fd, filename, &linenum);
-					break;
-				case oFirewallRuleSet:
-					parse_firewall_ruleset(p1, fd, filename, &linenum);
 					break;
 				case oTrustedMACList:
 					parse_trusted_mac_list(p1);
@@ -1315,58 +1095,46 @@ parse_mac_list_action(const char *ptr, mac_choice_t which, int action)
 	free(pt);
 }
 
-static void
-parse_remove_mac_list(const char *ptr, mac_choice_t which)
-{
-	parse_mac_list_action(ptr, which, 0);;
-}
-
-void
-parse_mac_list(const char *ptr, mac_choice_t which)
-{
-	parse_mac_list_action(ptr, which, 1);
-}
-
 void
 parse_trusted_mac_list(const char *pstr)
 {
-	parse_mac_list(pstr, TRUSTED_MAC);
+	parse_mac_list_action(pstr, TRUSTED_MAC, 1);
 }
 
 void
 parse_trusted_local_mac_list(const char *pstr)
 {
-	parse_mac_list(pstr, TRUSTED_LOCAL_MAC);
+	parse_mac_list_action(pstr, TRUSTED_LOCAL_MAC, 1);
 }
 
 void
 parse_del_trusted_mac_list(const char *pstr)
 {
-	parse_remove_mac_list(pstr, TRUSTED_MAC);
+	parse_mac_list_action(pstr, TRUSTED_MAC, 0);
 }
 
 void
 parse_del_trusted_local_mac_list(const char *pstr)
 {
-	parse_remove_mac_list(pstr, TRUSTED_LOCAL_MAC);
+	parse_mac_list_action(pstr, TRUSTED_LOCAL_MAC, 0);
 }
 
 void
 parse_untrusted_mac_list(const char *pstr)
 {
-	parse_mac_list(pstr, UNTRUSTED_MAC);
+	parse_mac_list_action(pstr, UNTRUSTED_MAC, 1);
 }
 
 void
 parse_del_untrusted_mac_list(const char *pstr)
 {
-	parse_remove_mac_list(pstr, UNTRUSTED_MAC);
+	parse_mac_list_action(pstr, UNTRUSTED_MAC, 0);
 }
 
 void
 parse_roam_mac_list(const char *pstr)
 {
-	parse_mac_list(pstr, ROAM_MAC);
+	parse_mac_list_action(pstr, ROAM_MAC, 1);
 }
 
 //<<< liudf added end
@@ -1429,12 +1197,51 @@ parse_popular_servers(const char *ptr)
 	free(pt);
 }
 
-/*
- * liudf added 20151224
- * trust domain related function
- */
+// clear domain's ip collection
+static void
+__clear_trusted_domain_ip(t_ip_trusted *ipt)
+{
+	t_ip_trusted *p, *p1;
+	for(p = ipt; p != NULL;) {
+		p1 = p;
+		p = p->next;
+		free(p1);
+	}
+}
 
-t_domain_trusted *
+// clear domain_trusted list
+static void
+__clear_trusted_domains(void)
+{
+	t_domain_trusted *p, *p1;
+	int has_iplist = 0;
+	for (p = config.domains_trusted; p != NULL;) {
+		if(strcmp(p->domain, "iplist") != 0) {
+			p1 = p;
+			p = p->next;
+			__clear_trusted_domain_ip(p1->ips_trusted);
+			free(p1->domain);
+			free(p1);
+		} else {
+			config.domains_trusted = p;
+			has_iplist = 1;
+			p = p->next;
+			config.domains_trusted->next = NULL;
+		}
+	}
+	if(has_iplist == 0)
+		config.domains_trusted = NULL;
+}
+
+void
+clear_trusted_domains(void)
+{
+	LOCK_DOMAIN();
+	__clear_trusted_domains();
+	UNLOCK_DOMAIN();
+}
+
+static t_domain_trusted *
 __del_domain_common(const char *domain, trusted_domain_t which)
 {
 	t_domain_trusted *p = NULL, *p1 = NULL;
@@ -1529,23 +1336,7 @@ __del_ip_domain_common(const char *domain, trusted_domain_t which)
 	return p;
 }
 
-
-void
-del_domain_common(const char *domain, trusted_domain_t which)
-{
-	t_domain_trusted *p = NULL;
-	LOCK_DOMAIN();
-	p = __del_domain_common(domain, which);
-	UNLOCK_DOMAIN();
-
-	if(p) {
-		__clear_trusted_domain_ip(p->ips_trusted);
-		free(p->domain);
-		free(p);
-	}
-}
-
-t_domain_trusted *
+static t_domain_trusted *
 __add_domain_common(const char *domain, trusted_domain_t which)
 {
 	t_domain_trusted *p = NULL;
@@ -1616,7 +1407,7 @@ __add_domain_common(const char *domain, trusted_domain_t which)
 }
 
 
-t_domain_trusted *
+static t_domain_trusted *
 add_domain_common(const char *domain, trusted_domain_t which)
 {
 	t_domain_trusted *p = NULL;
@@ -1630,48 +1421,7 @@ add_domain_common(const char *domain, trusted_domain_t which)
 	return p;
 }
 
-// add domain to user trusted domain list
-t_domain_trusted *
-add_user_trusted_domain(const char *domain)
-{
-	return add_domain_common(domain, USER_TRUSTED_DOMAIN);
-}
-
-t_domain_trusted *
-__add_user_trusted_domain(const char *domain)
-{
-	return __add_domain_common(domain, USER_TRUSTED_DOMAIN);
-}
-
-// add domain to inner trusted domain list
-t_domain_trusted *
-add_inner_trusted_domain(const char *domain)
-{
-	return add_domain_common(domain, INNER_TRUSTED_DOMAIN);
-}
-
-t_domain_trusted *
-__add_inner_trusted_domain(const char *domain)
-{
-	return	__add_domain_common(domain, INNER_TRUSTED_DOMAIN);
-}
-
-void parse_inner_trusted_domain_string(const char *domain_list)
-{
-	parse_domain_string_common(domain_list, INNER_TRUSTED_DOMAIN);
-}
-
-void parse_user_trusted_domain_string(const char *domain_list)
-{
-	parse_domain_string_common(domain_list, USER_TRUSTED_DOMAIN);
-}
-
-void parse_trusted_pan_domain_string(const char *domain_list)
-{
-	parse_domain_string_common(domain_list, TRUSTED_PAN_DOMAIN);
-}
-
-void
+static void
 parse_domain_string_common_action(const char *ptr, trusted_domain_t which, int action)
 {
 	char *ptrcopy = NULL, *pt = NULL;
@@ -1721,12 +1471,6 @@ parse_domain_string_common_action(const char *ptr, trusted_domain_t which, int a
 }
 
 void
-parse_domain_string_common(const char *ptr, trusted_domain_t which)
-{
-	parse_domain_string_common_action(ptr, which, 1);
-}
-
-void
 parse_del_trusted_pan_domain_string(const char *ptr)
 {
 	parse_domain_string_common_action(ptr, TRUSTED_PAN_DOMAIN, 0);
@@ -1736,6 +1480,24 @@ void
 parse_del_trusted_domain_string(const char *ptr)
 {
 	parse_domain_string_common_action(ptr, USER_TRUSTED_DOMAIN, 0);
+}
+
+static void
+parse_domain_string_common(const char *ptr, trusted_domain_t which)
+{
+	parse_domain_string_common_action(ptr, which, 1);
+}
+
+void 
+parse_user_trusted_domain_string(const char *domain_list)
+{
+	parse_domain_string_common(domain_list, USER_TRUSTED_DOMAIN);
+}
+
+void 
+parse_trusted_pan_domain_string(const char *domain_list)
+{
+	parse_domain_string_common(domain_list, TRUSTED_PAN_DOMAIN);
 }
 
 // add ip to domain list
@@ -1821,7 +1583,7 @@ add_domain_ip_pair(const char *args, trusted_domain_t which)
  * @param which The INNER_TRUSTED_DOMAIN or USER_TRUSTED_DOMAIN
  * 
  */ 
-void
+static void
 parse_common_trusted_domain_list(trusted_domain_t which)
 {
 	evdns_parse_trusted_domain_2_ip(which);
@@ -1952,50 +1714,6 @@ void add_trusted_ip_list(const char *ptr)
 
 }
 
-// clear domain's ip collection
-void
-__clear_trusted_domain_ip(t_ip_trusted *ipt)
-{
-	t_ip_trusted *p, *p1;
-	for(p = ipt; p != NULL;) {
-		p1 = p;
-		p = p->next;
-		free(p1);
-	}
-}
-
-// clear domain_trusted list
-void
-__clear_trusted_domains(void)
-{
-	t_domain_trusted *p, *p1;
-	int has_iplist = 0;
-	for (p = config.domains_trusted; p != NULL;) {
-		if(strcmp(p->domain, "iplist") != 0) {
-			p1 = p;
-			p = p->next;
-			__clear_trusted_domain_ip(p1->ips_trusted);
-			free(p1->domain);
-			free(p1);
-		} else {
-			config.domains_trusted = p;
-			has_iplist = 1;
-			p = p->next;
-			config.domains_trusted->next = NULL;
-		}
-	}
-	if(has_iplist == 0)
-		config.domains_trusted = NULL;
-}
-
-void
-clear_trusted_domains_(void)
-{
-	LOCK_DOMAIN();
-	__clear_trusted_domains();
-	UNLOCK_DOMAIN();
-}
-
 static void
 __clear_trusted_pan_domains(void)
 {
@@ -2018,7 +1736,7 @@ clear_trusted_pan_domains(void)
 	UNLOCK_DOMAIN();
 }
 
-void
+static void
 __clear_trusted_iplist(void)
 {
 	t_domain_trusted *p, *p1;
@@ -2047,13 +1765,6 @@ clear_trusted_ip_list(void)
 	__clear_trusted_iplist();
 	UNLOCK_DOMAIN();
 }
-
-t_domain_trusted *
-get_domains_trusted(void)
-{
-	return config.domains_trusted;
-}
-
 
 static void
 __clear_mac_list(mac_choice_t which)
@@ -2099,10 +1810,7 @@ __clear_mac_list(mac_choice_t which)
 	}
 }
 
-/**
- * Operate the roam mac list.
- */
-void
+static void
 __clear_roam_mac_list()
 {
 	__clear_mac_list(ROAM_MAC);
@@ -2122,21 +1830,7 @@ get_roam_maclist()
 	return config.roam_maclist;
 }
 
-int
-is_roaming(const char *mac)
-{
-	t_trusted_mac *p = NULL;
-
-	for (p = config.roam_maclist; p != NULL; p = p->next) {
-		if(strcmp(mac, p->mac) == 0)
-			break;
-	}
-
-	return p==NULL?0:1;
-}
-
-// 1 not; 0 is
-int
+bool
 is_trusted_mac(const char *mac)
 {
 	t_trusted_mac *p = NULL;
@@ -2145,180 +1839,37 @@ is_trusted_mac(const char *mac)
 	for (p = config.trustedmaclist; p != NULL; p = p->next) {
 		if(strcmp(mac, p->mac) == 0) {
 			UNLOCK_CONFIG();
-			return 0;
+			return true;
 		}
 	}
 	UNLOCK_CONFIG();
 
-	return 1;
-}
-
-t_trusted_mac *
-get_trusted_mac_by_ip(const char *ip)
-{
-	t_trusted_mac *p = NULL;
-
-	LOCK_CONFIG();
-	for (p = config.trustedmaclist; p != NULL; p = p->next) {
-		if(p->ip && strcmp(ip, p->ip) == 0)
-			break;
-	}
-	UNLOCK_CONFIG();
-
-	return p;
-}
-
-// 1 not; 0 is
-int
-is_untrusted_mac(const char *mac)
-{
-	t_trusted_mac *p = NULL;
-
-	LOCK_CONFIG();
-	for (p = config.mac_blacklist; p != NULL; p = p->next) {
-		if(strcmp(mac, p->mac) == 0)
-			break;
-	}
-	UNLOCK_CONFIG();
-
-	return p==NULL?1:0;
-
-}
-
-void
-clear_dup_trusted_mac_list(t_trusted_mac *dup_list)
-{
-	t_trusted_mac *p, *p1;
-	for (p = dup_list; p != NULL;) {
-		p1 = p;
-		p = p->next;
-		if(p1->ip) free(p1->ip);
-		free(p1->mac);
-		free(p1);
-	}
-	dup_list = NULL;
-}
-
-
-void
-__clear_trusted_mac_list()
-{
-	__clear_mac_list(TRUSTED_MAC);
+	return false;
 }
 
 void
 clear_trusted_mac_list()
 {
 	LOCK_CONFIG();
-	__clear_trusted_mac_list();
+	__clear_mac_list(TRUSTED_MAC);
 	UNLOCK_CONFIG();
-}
-
-void
-__clear_trusted_local_mac_list()
-{
-	__clear_mac_list(TRUSTED_LOCAL_MAC);
 }
 
 void
 clear_trusted_local_mac_list()
 {
 	LOCK_CONFIG();
-	__clear_trusted_local_mac_list();
+	__clear_mac_list(TRUSTED_LOCAL_MAC);
 	UNLOCK_CONFIG();
-}
-
-void
-__clear_untrusted_mac_list()
-{
-	__clear_mac_list(UNTRUSTED_MAC);
 }
 
 void
 clear_untrusted_mac_list()
 {
 	LOCK_CONFIG();
-	__clear_untrusted_mac_list();
+	__clear_mac_list(UNTRUSTED_MAC);
 	UNLOCK_CONFIG();
 }
-
-// set all trusted mac to offline
-static void
-__reset_trusted_mac_list()
-{
-	t_trusted_mac *p;
-	for (p = config.trustedmaclist; p != NULL; p = p->next) {
-		p->is_online = 0;
-	}
-}
-
-void
-reset_trusted_mac_list()
-{
-	LOCK_CONFIG();
-	__reset_trusted_mac_list();
-	UNLOCK_CONFIG();
-}
-
-static t_trusted_mac *
-trusted_mac_dup(t_trusted_mac *src)
-{
-	t_trusted_mac *new = NULL;
-
-	if(src == NULL)
-		return NULL;
-
-	new = safe_malloc(sizeof(t_trusted_mac));
-	new->mac 		= safe_strdup(src->mac);
-	new->ip 		= src->ip?safe_strdup(src->ip):NULL;
-	new->is_online 	= src->is_online;
-
-	return new;
-}
-
-static int
-__trusted_mac_list_dup(t_trusted_mac ** dest)
-{
-	t_trusted_mac *new, *cur, *top, *prev;
-	int copied = 0;
-
-	cur = config.trustedmaclist;
-	new = top = prev = NULL;
-
-	if (NULL == cur) {
-		*dest = new;			/* NULL */
-		return copied;
-	}
-
-	while (NULL != cur) {
-		new = trusted_mac_dup(cur);
-		if (NULL == top) {
-			/* first item */
-			top = new;
-		} else {
-			prev->next = new;
-		}
-		prev = new;
-		copied++;
-		cur = cur->next;
-	}
-
-	*dest = top;
-	return copied;
-
-}
-
-int
-trusted_mac_list_dup(t_trusted_mac **worklist)
-{
-	int num = 0;
-	LOCK_CONFIG();
-	num = __trusted_mac_list_dup(worklist);
-	UNLOCK_CONFIG();
-
-	return num;
-}
-// >>> end liudf added
 
 /** Verifies if the configuration is complete and valid.  Terminates the program if it isn't */
 void
