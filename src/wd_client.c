@@ -117,52 +117,57 @@ wd_get_redir_url_to_auth(struct evhttp_request *req,
 {
 	t_auth_serv *auth_server = get_auth_server();
 	char *orig_url = wd_get_orig_url(req, is_ssl);
-	char *gw_address;
-	char *redir_url = NULL;
-	int is_ipv6 = is_valid_ip6(remote_host);
-
-	// Use fallback value if original URL extraction fails
-	if (!orig_url) {
+	if (!orig_url) 
 		orig_url = safe_strdup("null");
+	char *gw_address = NULL;
+	int is_ipv6 = 0;
+	if (is_valid_ip6(remote_host)) {
+		is_ipv6 = 1;
+		gw_address = gw_setting->gw_address_v6;
+	} else
+		gw_address = gw_setting->gw_address_v4;
+
+	char *redir_url = NULL;
+	if ((auth_server->authserv_use_ssl && auth_server->authserv_ssl_port == 443) ||
+		(!auth_server->authserv_use_ssl && auth_server->authserv_http_port == 80)) {
+		safe_asprintf(&redir_url, "%s://%s%s%sgw_address=%s&is_ipv6=%d&gw_port=%d&device_id=%s&gw_id=%s&gw_channel=%s&ssid=%s&ip=%s&mac=%s&protocol=%s&url=%s",
+			auth_server->authserv_use_ssl?"https":"http",
+			auth_server->authserv_hostname,
+			auth_server->authserv_path,
+			auth_server->authserv_login_script_path_fragment,
+			gw_address,
+			is_ipv6,
+			gw_port,
+			device_id,
+			gw_setting->gw_id, 
+			gw_setting->gw_channel?gw_setting->gw_channel:"null",
+			g_ssid?g_ssid:"null",
+			remote_host, 
+			mac, 
+			is_ssl?"https":"http",
+			orig_url);
+	} else {
+		safe_asprintf(&redir_url, "%s://%s:%d%s%sgw_address=%s&is_ipv6=%d&gw_port=%d&device_id=%s&gw_id=%s&gw_channel=%s&ssid=%s&ip=%s&mac=%s&protocol=%s&url=%s",
+			auth_server->authserv_use_ssl?"https":"http",
+			auth_server->authserv_hostname,
+			auth_server->authserv_use_ssl?auth_server->authserv_ssl_port:auth_server->authserv_http_port,
+			auth_server->authserv_path,
+			auth_server->authserv_login_script_path_fragment,
+			gw_address,
+			is_ipv6,
+			gw_port,
+			device_id,
+			gw_setting->gw_id, 
+			gw_setting->gw_channel?gw_setting->gw_channel:"null",
+			g_ssid?g_ssid:"null",
+			remote_host, 
+			mac, 
+			is_ssl?"https":"http",
+			orig_url);
 	}
-
-	// Select appropriate gateway address based on IP version
-	gw_address = is_ipv6 ? gw_setting->gw_address_v6 : gw_setting->gw_address_v4;
-
-	// Build the complete redirect URL with all parameters
-	safe_asprintf(&redir_url, 
-		"%s://%s:%d%s%s"  // Auth server base URL
-		"gw_address=%s"    // Gateway address
-		"&is_ipv6=%d"      // IPv6 flag
-		"&gw_port=%d"      // Gateway port
-		"&device_id=%s"    // Device ID
-		"&gw_id=%s"        // Gateway ID
-		"&gw_channel=%s"   // Gateway channel
-		"&ssid=%s"         // SSID
-		"&ip=%s"           // Client IP
-		"&mac=%s"          // Client MAC
-		"&protocol=%s"     // Protocol
-		"&url=%s",         // Original URL
-		// Parameter values
-		auth_server->authserv_use_ssl ? "https" : "http",
-		auth_server->authserv_hostname,
-		auth_server->authserv_use_ssl ? auth_server->authserv_ssl_port : auth_server->authserv_http_port,
-		auth_server->authserv_path,
-		auth_server->authserv_login_script_path_fragment,
-		gw_address,
-		is_ipv6,
-		gw_port,
-		device_id,
-		gw_setting->gw_id,
-		gw_setting->gw_channel ? gw_setting->gw_channel : "null",
-		g_ssid ? g_ssid : "null",
-		remote_host,
-		mac,
-		is_ssl ? "https" : "http",
-		orig_url
-	);
-
+		
 	free(orig_url);
+	debug(LOG_DEBUG, "redir_url: %s", redir_url);
 	return redir_url;
 }
 

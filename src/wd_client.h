@@ -30,10 +30,10 @@ struct wd_request_context {
 /**
  * @brief Get URL-encoded original URL from client request
  * @param request HTTP request object
- * @param escape_json Flag to indicate if JSON escaping is needed
+ * @param is_ssl 
  * @return Encoded URL string, must be freed by caller
  */
-char *wd_get_orig_url(struct evhttp_request *request, int escape_json);
+char *wd_get_orig_url(struct evhttp_request *request, int is_ssl);
 
 /**
  * @brief Generate full redirect URL for auth server
@@ -43,12 +43,12 @@ char *wd_get_orig_url(struct evhttp_request *request, int escape_json);
  * @param ip Client IP address
  * @param port Port number
  * @param url Original URL
- * @param escape_json Flag to indicate if JSON escaping is needed
+ * @param is_ssl 
  * @return Full redirect URL, must be freed by caller
  */
 char *wd_get_redir_url_to_auth(struct evhttp_request *request, t_gateway_setting *settings, 
                               const char *mac, const char *ip, const uint16_t port, 
-                              const char *url, int escape_json);
+                              const char *url, int is_ssl);
 
 /**
  * @brief Free request context and associated resources
