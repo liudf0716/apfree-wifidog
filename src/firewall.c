@@ -456,17 +456,6 @@ fw_set_mac_temporary(const char *mac, int which)
 #endif
 }
 
-void
-fw_set_trusted_mac(const char *mac)
-{
-	debug(LOG_DEBUG, "Clear untrusted maclist");
-#ifdef AW_FW3
-	iptables_fw_set_trusted_mac(mac);
-#else
-	//nft_fw_set_trusted_mac(mac);
-#endif
-}
-
 /** Remove the firewall rules
  * This is used when we do a clean shutdown of WiFiDog.
  * @return Return code of the fw.destroy script
@@ -785,4 +774,57 @@ conntrack_flush()
 {
 	debug(LOG_DEBUG, "Flush conntrack");
 	execute("conntrack -F", 0);
+}
+
+void
+fw_add_trusted_mac(const char *mac, uint16_t timeout)
+{
+	debug(LOG_DEBUG, "Set trusted mac [%s] with timeout %d", mac, timeout);
+#ifdef AW_FW3
+	 iptables_fw_set_trusted_mac(mac);
+#else
+	nft_fw_add_trusted_mac(mac, timeout);
+#endif
+}
+
+void
+fw_del_trusted_mac(const char *mac)
+{
+	debug(LOG_DEBUG, "Del trusted mac [%s]", mac);
+#ifdef AW_FW3
+	iptables_fw_del_trusted_mac(mac);
+#else
+	nft_fw_del_trusted_mac(mac);
+#endif
+}
+
+void
+fw_update_trusted_mac(const char *mac, uint16_t timeout)
+{
+	debug(LOG_DEBUG, "Update trusted mac [%s] with timeout %d", mac, timeout);
+#ifdef AW_FW3
+	iptables_fw_update_trusted_mac(mac);
+#else
+	nft_fw_update_trusted_mac(mac, timeout);
+#endif
+}
+
+void
+fw_add_anti_nat_permit_device(const char *mac)
+{
+	debug(LOG_DEBUG, "Add anti nat permit device [%s]", mac);
+#ifdef AW_FW3
+#else
+	nft_fw_add_anti_nat_permit(mac);
+#endif
+}
+
+void
+fw_del_anti_nat_permit_device(const char *mac)
+{
+	debug(LOG_DEBUG, "Del anti nat permit device [%s]", mac);
+#ifdef AW_FW3
+#else
+	nft_fw_del_anti_nat_permit(mac);
+#endif
 }

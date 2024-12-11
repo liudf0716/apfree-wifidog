@@ -75,7 +75,6 @@ void fw_refresh_user_domains_trusted(void);
 
 /** pan domains */
 void fw_clear_pan_domains_trusted(void);
-
 void fw_set_pan_domains_trusted(void);
 
 /** inner trusted domains */
@@ -86,33 +85,34 @@ void fw_refresh_inner_domains_trusted(void);
 
 
 void fw_clear_roam_maclist(void);
-
 void fw_set_roam_mac(const char *);
 
-void fw_set_trusted_maclist();
-
-void fw_clear_trusted_maclist();
-
 void fw_set_trusted_local_maclist();
-
 void fw_clear_trusted_local_maclist();
 
 void fw_set_untrusted_maclist();
-
 void fw_clear_untrusted_maclist();
 
 void fw_set_mac_temporary(const char *, int);
 
-void fw_set_trusted_mac(const char *);
+/**
+ * @brief  trusted mac operations
+ */
+void fw_set_trusted_maclist();
+void fw_clear_trusted_maclist();
+void fw_add_trusted_mac(const char *, uint16_t);
+void fw_del_trusted_mac(const char *);
+void fw_update_trusted_mac(const char *, uint16_t);
 
 void fw_client_process_from_authserver_response(t_authresponse *, t_client *p1);
 
 /** @brief Refreshes the entire client list */
 void ev_fw_sync_with_authserver(struct wd_request_context *);
-
-/** @brief  */
 void ev_fw_sync_with_authserver_v2(struct wd_request_context *);
 
 void conntrack_flush();
+
+void fw_add_anti_nat_permit_device(const char *);
+void fw_del_anti_nat_permit_device(const char *);
 
 #endif                          /* _FIREWALL_H_ */
