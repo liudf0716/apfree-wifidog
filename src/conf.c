@@ -234,203 +234,215 @@ get_gateway_count(void)
 	return count;
 }
 
-/** Sets the default config parameters and initialises the configuration system */
-void
-config_init(void)
+/**
+ * @brief Initializes the gateway configuration with default parameters.
+ *
+ * This function sets up the default configuration for the gateway by
+ * allocating memory for various configuration structures and setting
+ * their initial values. It ensures that all necessary fields are
+ * properly initialized to avoid undefined behavior.
+ */
+void config_init(void)
 {
-	debug(LOG_DEBUG, "Setting default config parameters");
+	debug(LOG_DEBUG, "Initializing default configuration parameters");
 
-	config.configfile = safe_strdup(DEFAULT_CONFIGFILE);
-	config.htmlmsgfile = safe_strdup(DEFAULT_HTMLMSGFILE);
-	config.external_interface = safe_strdup(DEFAULT_EXT_IF);
-	config.gw_port = DEFAULT_GATEWAYPORT;
-	config.gw_https_port = DEFAULT_GATEWAY_HTTPS_PORT;
-	config.gateway_settings = NULL;
-	config.auth_servers = NULL;
-	config.clienttimeout = DEFAULT_CLIENTTIMEOUT;
-	config.checkinterval = DEFAULT_CHECKINTERVAL;
-	config.daemon = -1;
-	config.pidfile = NULL;
-	config.wdctl_sock = safe_strdup(DEFAULT_WDCTL_SOCK);
-	config.internal_sock = safe_strdup(DEFAULT_INTERNAL_SOCK);
-	config.trustedmaclist = NULL;
-	config.popular_servers = NULL;
-	config.proxy_port = 0;
-	config.deltatraffic = DEFAULT_DELTATRAFFIC;
-	config.arp_table_path = safe_strdup(DEFAULT_ARPTABLE);	
-	config.htmlredirfile 			= safe_strdup(DEFAULT_REDIRECTFILE);
-	config.internet_offline_file	= safe_strdup(DEFAULT_INTERNET_OFFLINE_FILE);
-	config.authserver_offline_file	= safe_strdup(DEFAULT_AUTHSERVER_OFFLINE_FILE);
-	config.local_portal				= safe_strdup(DEFAULT_LOCAL_PORTAL);
-	config.js_redir 		= 1; // default enable it
-	config.wired_passed		= 1; // default wired device no need login
-	config.parse_checked	= 1; // before parse domain's ip; fping check it
-	config.update_domain_interval  = 60; // very 60*interval second parse trusted domain
-	config.dns_timeout         =   "1.0";  //default dns parsing timeout  is 1.0s
-	config.bypass_apple_cna = 1; // default enable it
-	config.pan_domains_trusted		= NULL;
-	config.domains_trusted			= NULL;
-	config.inner_domains_trusted	= NULL;
-	config.roam_maclist				= NULL;
-	config.trusted_local_maclist	= NULL;
-	config.mac_blacklist			= NULL;
-	
-	t_https_server *https_server	= (t_https_server *)malloc(sizeof(t_https_server));
+	// Initialize basic configuration parameters
+	config.configfile               = safe_strdup(DEFAULT_CONFIGFILE);
+	config.htmlmsgfile              = safe_strdup(DEFAULT_HTMLMSGFILE);
+	config.external_interface       = safe_strdup(DEFAULT_EXT_IF);
+	config.gw_port                  = DEFAULT_GATEWAYPORT;
+	config.gw_https_port            = DEFAULT_GATEWAY_HTTPS_PORT;
+	config.gateway_settings         = NULL;
+	config.auth_servers             = NULL;
+	config.clienttimeout            = DEFAULT_CLIENTTIMEOUT;
+	config.checkinterval            = DEFAULT_CHECKINTERVAL;
+	config.daemon                   = -1;
+	config.pidfile                  = NULL;
+	config.wdctl_sock               = safe_strdup(DEFAULT_WDCTL_SOCK);
+	config.internal_sock            = safe_strdup(DEFAULT_INTERNAL_SOCK);
+	config.trustedmaclist           = NULL;
+	config.popular_servers          = NULL;
+	config.proxy_port               = 0;
+	config.deltatraffic             = DEFAULT_DELTATRAFFIC;
+	config.arp_table_path           = safe_strdup(DEFAULT_ARPTABLE);
+	config.htmlredirfile            = safe_strdup(DEFAULT_REDIRECTFILE);
+	config.internet_offline_file    = safe_strdup(DEFAULT_INTERNET_OFFLINE_FILE);
+	config.authserver_offline_file  = safe_strdup(DEFAULT_AUTHSERVER_OFFLINE_FILE);
+	config.local_portal             = safe_strdup(DEFAULT_LOCAL_PORTAL);
+	config.js_redir                 = 1; // Enable JavaScript redirection by default
+	config.wired_passed             = 1; // Allow wired devices without login by default
+	config.parse_checked            = 1; // Enable domain IP parsing with fping check
+	config.update_domain_interval   = 60; // Update trusted domains every 60 seconds
+	config.dns_timeout              = "1.0"; // DNS parsing timeout set to 1.0 seconds
+	config.bypass_apple_cna         = 1; // Enable Apple CNA bypass by default
+	config.pan_domains_trusted      = NULL;
+	config.domains_trusted          = NULL;
+	config.inner_domains_trusted    = NULL;
+	config.roam_maclist             = NULL;
+	config.trusted_local_maclist    = NULL;
+	config.mac_blacklist            = NULL;
+
+	// Initialize HTTPS server configuration
+	t_https_server *https_server = malloc(sizeof(t_https_server));
+	if (!https_server) {
+		debug(LOG_ERR, "Failed to allocate memory for HTTPS server");
+		exit(EXIT_FAILURE);
+	}
 	memset(https_server, 0, sizeof(t_https_server));
-	https_server->ca_crt_file	= safe_strdup(DEFAULT_CA_CRT_FILE);
-	https_server->svr_crt_file	= safe_strdup(DEFAULT_SVR_CRT_FILE);
-	https_server->svr_key_file	= safe_strdup(DEFAULT_SVR_KEY_FILE);
+	https_server->ca_crt_file      = safe_strdup(DEFAULT_CA_CRT_FILE);
+	https_server->svr_crt_file     = safe_strdup(DEFAULT_SVR_CRT_FILE);
+	https_server->svr_key_file     = safe_strdup(DEFAULT_SVR_KEY_FILE);
+	config.https_server             = https_server;
 
-	config.https_server	= https_server;
-
-	t_http_server *http_server  = (t_http_server *)malloc(sizeof(t_http_server));
+	// Initialize HTTP server configuration
+	t_http_server *http_server = malloc(sizeof(t_http_server));
+	if (!http_server) {
+		debug(LOG_ERR, "Failed to allocate memory for HTTP server");
+		exit(EXIT_FAILURE);
+	}
 	memset(http_server, 0, sizeof(t_http_server));
-	http_server->gw_http_port   = 8403;
-	http_server->base_path	  = safe_strdup(DEFAULT_WWW_PATH);
+	http_server->gw_http_port      = 8403;
+	http_server->base_path         = safe_strdup(DEFAULT_WWW_PATH);
+	config.http_server             = http_server;
 
-	config.http_server  = http_server;
-
-	config.fw4_enable = 1;
-	config.enable_bypass_auth = 0;
-	config.enable_dhcp_cpi = 0;
-	config.enable_dns_forward = 1;
+	// Initialize firewall and feature flags
+	config.fw4_enable           = 1;
+	config.enable_bypass_auth   = 0;
+	config.enable_dhcp_cpi      = 0;
+	config.enable_dns_forward   = 1;
 	config.enable_del_conntrack = 1;
 
-	debugconf.log_stderr = 1;
-	debugconf.debuglevel = DEFAULT_DEBUGLEVEL;
+	// Initialize debugging configuration
+	debugconf.log_stderr     = 1;
+	debugconf.debuglevel     = DEFAULT_DEBUGLEVEL;
 	debugconf.syslog_facility = DEFAULT_SYSLOG_FACILITY;
-	debugconf.log_syslog = DEFAULT_LOG_SYSLOG;
-}
-
-/**
- * If the command-line didn't provide a config, use the default.
- */
-void
-config_init_override(void)
-{
-	if (config.daemon == -1) {
-		config.daemon = DEFAULT_DAEMON;
-		if (config.daemon > 0) {
-			debugconf.log_stderr = 0;
-		}
-	}
+	debugconf.log_syslog     = DEFAULT_LOG_SYSLOG;
 }
 
 /** @internal
-Parses a single token from the config file
-*/
+ * Parses a single token from the configuration file.
+ *
+ * @param cp        The token string to parse.
+ * @param filename  The name of the configuration file.
+ * @param linenum   The current line number being parsed.
+ * @return          The corresponding OpCode, or oBadOption if invalid.
+ */
 static OpCodes
 config_parse_token(const char *cp, const char *filename, int linenum)
 {
-	for (int i = 0; keywords[i].name; i++)
-		if (strcasecmp(cp, keywords[i].name) == 0)
+	for (int i = 0; keywords[i].name; i++) {
+		if (strcasecmp(cp, keywords[i].name) == 0) {
 			return keywords[i].opcode;
+		}
+	}
 
 	debug(LOG_ERR, "%s: line %d: Bad configuration option: %s", filename, linenum, cp);
 	return oBadOption;
 }
 
 /** @internal
- * Parses gateway settings
+ * Parses gateway settings from the configuration file.
+ *
+ * @param file      The file pointer to read from.
+ * @param filename  The name of the configuration file.
+ * @param linenum   The current line number being parsed.
  */
 static void
-parse_gateway_settings(FILE * file, const char *filename, int *linenum)
+parse_gateway_settings(FILE *file, const char *filename, int *linenum)
 {
-	char line[MAX_BUF], *p1, *p2;
+	char line[MAX_BUF];
 	char *gw_id = NULL;
 	char *gw_interface = NULL;
 	char *gw_channel = NULL;
-	t_gateway_setting *new, *tmp;
+	t_gateway_setting *new_setting = NULL;
+	t_gateway_setting *current = NULL;
 
-	/* Parsing loop */
-	while (memset(line, 0, MAX_BUF) && fgets(line, MAX_BUF - 1, file) && (strchr(line, '}') == NULL)) {
-		(*linenum)++;		   /* increment line counter. */
+	while (memset(line, 0, MAX_BUF) && fgets(line, MAX_BUF - 1, file) && !strchr(line, '}')) {
+		(*linenum)++;
 
-		/* skip leading blank spaces */
-		for (p1 = line; isblank(*p1); p1++) ;
+		// Trim leading whitespace
+		char *p = line;
+		while (isblank(*p)) p++;
 
-		/* End at end of line */
-		if ((p2 = strchr(p1, '#')) != NULL) {
-			*p2 = '\0';
-		} else if ((p2 = strchr(p1, '\r')) != NULL) {
-			*p2 = '\0';
-		} else if ((p2 = strchr(p1, '\n')) != NULL) {
-			*p2 = '\0';
+		// Remove comments and trailing whitespace
+		char *end = strpbrk(p, "#\r\n");
+		if (end) *end = '\0';
+
+		// Trim trailing whitespace
+		end = p + strlen(p) - 1;
+		while (end > p && isblank(*end)) {
+			*end = '\0';
+			end--;
 		}
 
-		/* trim all blanks at the end of the line */
-		for (p2 = (p2 != NULL ? p2 - 1 : &line[MAX_BUF - 2]); isblank(*p2) && p2 > p1; p2--) {
-			*p2 = '\0';
-		}
+		if (strlen(p) > 0) {
+			// Extract key and value
+			char *key = p;
+			char *value = NULL;
 
-		/* next, we coopt the parsing of the regular config */
-		if (strlen(p1) > 0) {
-			p2 = p1;
-			/* keep going until word boundary is found. */
-			while ((*p2 != '\0') && (!isblank(*p2)))
-				p2++;
+			char *space = strpbrk(p, " \t");
+			if (space) {
+				*space = '\0';
+				value = space + 1;
 
-			/* Terminate first word. */
-			*p2 = '\0';
-			p2++;
+				while (isblank(*value)) value++;
+			}
 
-			/* skip all further blanks. */
-			while (isblank(*p2))
-				p2++;
-
-			/* Get opcode */
-			int opcode = config_parse_token(p1, filename, *linenum);
-
-			switch (opcode) {
-			case oGatewayID:
-				gw_id = safe_strdup(p2);
-				break;
-			case oGatewayInterface:
-				gw_interface = safe_strdup(p2);
-				break;
-			case oGatewayChannel:
-				gw_channel = safe_strdup(p2);
-				break;
-			case oBadOption:
-			default:
-				debug(LOG_ERR, "Bad option on line %d " "in %s.", *linenum, filename);
-				debug(LOG_ERR, "Exiting...");
-				exit(-1);
-				break;
+			if (value) {
+				OpCodes opcode = config_parse_token(key, filename, *linenum);
+				switch (opcode) {
+					case oGatewayID:
+						gw_id = safe_strdup(value);
+						break;
+					case oGatewayInterface:
+						gw_interface = safe_strdup(value);
+						break;
+					case oGatewayChannel:
+						gw_channel = safe_strdup(value);
+						break;
+					case oBadOption:
+					default:
+						debug(LOG_ERR, "Bad option on line %d in %s.", *linenum, filename);
+						debug(LOG_ERR, "Exiting...");
+						goto ERR;
+				}
 			}
 		}
 	}
 
-	/* only proceed if we have an channel and an interface */
+	// Validate mandatory fields
 	if (gw_channel == NULL || gw_interface == NULL) {
 		debug(LOG_ERR, "Missing mandatory parameters for gateway settings");
 		goto ERR;
 	}
 
-	debug(LOG_DEBUG, "Adding gateway settings: %s %s %s", gw_id?gw_id:"null", gw_interface, gw_channel);
+	debug(LOG_DEBUG, "Adding gateway settings: %s %s %s", gw_id ? gw_id : "null", gw_interface, gw_channel);
 
-	new = safe_malloc(sizeof(t_gateway_setting));
-	new->gw_id = gw_id;
-	new->gw_interface = gw_interface;
-	new->gw_channel = gw_channel;
-	new->auth_mode  = 1;
+	// Allocate and initialize new gateway setting
+	new_setting = safe_malloc(sizeof(t_gateway_setting));
+	new_setting->gw_id = gw_id;
+	new_setting->gw_interface = gw_interface;
+	new_setting->gw_channel = gw_channel;
+	new_setting->auth_mode = 1;
+	new_setting->next = NULL;
 
-	/* If it's the first, add to config, else append to last server */
+	// Append to the gateway settings list
 	if (config.gateway_settings == NULL) {
-		config.gateway_settings = new;
+		config.gateway_settings = new_setting;
 	} else {
-		for (tmp = config.gateway_settings; tmp->next != NULL; tmp = tmp->next) ;
-		tmp->next = new;
+		current = config.gateway_settings;
+		while (current->next != NULL) {
+			current = current->next;
+		}
+		current->next = new_setting;
 	}
 
 	return;
+
 ERR:
-	if (gw_id)
-		free(gw_id);
-	if (gw_channel)
-		free(gw_channel);
-	if (gw_interface)
-		free(gw_interface);
+	if (gw_id) free(gw_id);
+	if (gw_interface) free(gw_interface);
+	if (gw_channel) free(gw_channel);
 }
 
 /** @internal
@@ -783,29 +795,6 @@ parse_ws_server(FILE * file, const char *filename, int *linenum)
 }
 
 /**
-Advance to the next word
-@param s string to parse, this is the next_word pointer, the value of s
-	 when the macro is called is the current word, after the macro
-	 completes, s contains the beginning of the NEXT word, so you
-	 need to save s to something else before doing TO_NEXT_WORD
-@param e should be 0 when calling TO_NEXT_WORD(), it'll be changed to 1
-	 if the end of the string is reached.
-*/
-#define TO_NEXT_WORD(s, e) do { \
-	while (*s != '\0' && !isblank(*s)) { \
-		s++; \
-	} \
-	if (*s != '\0') { \
-		*s = '\0'; \
-		s++; \
-		while (isblank(*s)) \
-			s++; \
-	} else { \
-		e = 1; \
-	} \
-} while (0)
-
-/**
 @param filename Full path of the configuration file to be read
 */
 void
@@ -1047,8 +1036,17 @@ add_mac(const char *mac, mac_choice_t which)
 	add_mac_from_list(mac, 0, NULL, which);
 }
 
-/* *
- * action: 1 add, 0 remove
+
+/**
+ * @brief Parses a string of MAC addresses and performs add or remove actions.
+ *
+ * This function takes a string containing one or multiple MAC addresses, validates each
+ * address, and either adds it to or removes it from the specified MAC address list based
+ * on the provided action.
+ *
+ * @param ptr     Pointer to the string containing MAC addresses.
+ * @param which   Specifies which MAC address list to modify.
+ * @param action  Action to perform: non-zero to add MAC addresses, zero to remove them.
  */
 static void
 parse_mac_list_action(const char *ptr, mac_choice_t which, int action)
@@ -1136,8 +1134,6 @@ parse_roam_mac_list(const char *pstr)
 {
 	parse_mac_list_action(pstr, ROAM_MAC, 1);
 }
-
-//<<< liudf added end
 
 /** @internal
  * Add a popular server to the list. It prepends for simplicity.
@@ -1810,17 +1806,11 @@ __clear_mac_list(mac_choice_t which)
 	}
 }
 
-static void
-__clear_roam_mac_list()
-{
-	__clear_mac_list(ROAM_MAC);
-}
-
 void
 clear_roam_mac_list()
 {
 	LOCK_CONFIG();
-	__clear_roam_mac_list();
+	__clear_mac_list(ROAM_MAC);
 	UNLOCK_CONFIG();
 }
 
@@ -1876,6 +1866,27 @@ void
 config_validate(void)
 {
 	config_notnull(config.gateway_settings, "GatewaySetting");
+	config_notnull(config.external_interface, "ExternalInterface");
+
+	if (config.auth_server_mode == 0) {
+		config_notnull(config.auth_servers, "AuthServer");
+	} else if (config.auth_server_mode == 2) {
+		if(is_file_exist(config.authserver_offline_file) == false) {
+			debug(LOG_ERR, "AuthServerOfflineFile is not exist");
+			exit(1);
+		}
+		config_notnull(config.local_portal, "LocalPortal");
+	}
+	
+	if (config.enable_anti_nat) {
+		config_notnull(config.ttl_values, "TTLValues");
+	}
+
+	if (config.ws_server) {
+		config_notnull(config.ws_server->hostname, "WSHostname");
+		config_notnull(config.ws_server->path, "WSPath");
+	}
+
 	if (missing_parms) {
 		debug(LOG_ERR, "Configuration is incomplete.  Exiting.");
 		exit(1);

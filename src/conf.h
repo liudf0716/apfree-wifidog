@@ -68,6 +68,7 @@
 #define DEFAULT_SVR_CRT_FILE "/etc/apfree.crt"
 #define DEFAULT_SVR_KEY_FILE "/etc/apfree.key"
 #define DEFAULT_WWW_PATH "/etc/www/"
+#define DEFAULT_TTL_VALUES	"64,128,255"
 
 /** Firewall rulesets */
 #define FWRULESET_GLOBAL "global"
@@ -270,7 +271,6 @@ const char *get_device_id(void);
 
 /** Configuration Initialization and Management */
 void config_init(void);
-void config_init_override(void);
 void config_read(void);
 void config_validate(void);
 
