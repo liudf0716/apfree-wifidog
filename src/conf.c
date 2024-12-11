@@ -2536,8 +2536,6 @@ config_validate(void)
 		exit(1);
 	}
 
-	switch (config.mode) {
-
 	validate_popular_servers();
 }
 

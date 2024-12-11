@@ -168,6 +168,7 @@ typedef struct _trusted_mac_t {
 	char *mac;
 	char *ip;
 	int is_online;
+	int remaining_time;
 	struct _trusted_mac_t *next;
 } t_trusted_mac;
 
@@ -285,7 +286,11 @@ typedef struct {
 	short enable_bypass_auth;
 	short enable_dns_forward;
 	short enable_del_conntrack;
-	
+	short auth_server_mode; /* 0, cloud auth mode; 1, cloud auth bypass mode; 2, local auth mod*/
+	short enable_anti_nat; /* 1, enable anti nat */
+	char *ttl_values; /* ttl values */
+	char *anti_nat_permit_macs; /* anti nat permit mac */
+
 	// Misc
 	char *dns_timeout;
 	char *dhcp_cpi_uri;
