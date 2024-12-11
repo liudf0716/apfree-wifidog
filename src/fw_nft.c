@@ -40,8 +40,9 @@ static void nft_statistical_helper(const char *cmd, char **output, uint32_t *out
 
 const char *nft_wifidogx_init_script[] = {
     "add table inet wifidogx",
-    "add chain  inet wifidogx prerouting{ type nat hook prerouting priority 0; policy accept; }",
-    "add chain  inet wifidogx mangle_prerouting { type filter hook postrouting priority 0; policy accept; }",
+    "add set inet wifidogx set_wifidogx_local_trust_clients { type ether_addr; counter; }",
+    "add chain inet wifidogx prerouting{ type nat hook prerouting priority 0; policy accept; }",
+    "add chain inet wifidogx mangle_prerouting { type filter hook postrouting priority 0; policy accept; }",
     "add set inet fw4 set_wifidogx_auth_servers { type ipv4_addr; }",
     "add set inet fw4 set_wifidogx_auth_servers_v6 { type ipv6_addr; }",
     "add set inet fw4 set_wifidogx_gateway { type ipv4_addr; }",
@@ -52,8 +53,8 @@ const char *nft_wifidogx_init_script[] = {
     "add set inet fw4 set_wifidogx_inner_trust_domains_v6 { type ipv6_addr; }",
     "add set inet fw4 set_wifidogx_bypass_clients { type ipv4_addr; flags interval; }",
     "add set inet fw4 set_wifidogx_bypass_clients_v6 { type ipv6_addr; flags interval; }",
-    "add set inet fw4 set_wifidogx_trust_clients { type ether_addr; }",
-    "add set inet fw4 set_wifidogx_tmp_trust_clients { type ether_addr; flags timeout; timeout 1m; }",
+    "add set inet fw4 set_wifidogx_trust_clients_out { type ether_addr; flags timeout; timeout 1d; counter; }",
+    "add set inet fw4 set_wifidogx_tmp_trust_clients { type ether_addr; flags timeout; timeout 1m; counter; }",
     "add chain inet fw4 dstnat_wifidogx_auth_server",
     "add chain inet fw4 dstnat_wifidogx_wan",
     "add chain inet fw4 dstnat_wifidogx_outgoing",
@@ -63,7 +64,7 @@ const char *nft_wifidogx_init_script[] = {
     "add rule inet fw4 dstnat_wifidogx_outgoing ip6 daddr @set_wifidogx_gateway_v6 accept",
     "add rule inet fw4 dstnat_wifidogx_outgoing jump dstnat_wifidogx_wan",
     "add rule inet fw4 dstnat_wifidogx_wan ether saddr @set_wifidogx_tmp_trust_clients accept",
-    "add rule inet fw4 dstnat_wifidogx_wan ether saddr @set_wifidogx_trust_clients accept",
+    "add rule inet fw4 dstnat_wifidogx_wan ether saddr @set_wifidogx_trust_clients_out accept",
     "add rule inet fw4 dstnat_wifidogx_wan ip saddr @set_wifidogx_bypass_clients accept",
     "add rule inet fw4 dstnat_wifidogx_wan ip6 saddr @set_wifidogx_bypass_clients_v6 accept",
     "add rule inet fw4 dstnat_wifidogx_wan meta mark 0x20000 accept",
@@ -90,7 +91,7 @@ const char *nft_wifidogx_init_script[] = {
     "add rule inet fw4 forward_wifidogx_wan jump forward_wifidogx_auth_servers",
     "add rule inet fw4 forward_wifidogx_wan jump forward_wifidogx_trust_domains",
     "add rule inet fw4 forward_wifidogx_wan ether saddr @set_wifidogx_tmp_trust_clients accept",
-    "add rule inet fw4 forward_wifidogx_wan ether saddr @set_wifidogx_trust_clients accept",
+    "add rule inet fw4 forward_wifidogx_wan ether saddr @set_wifidogx_trust_clients_out accept",
     "add rule inet fw4 forward_wifidogx_wan ip saddr @set_wifidogx_bypass_clients accept",
     "add rule inet fw4 forward_wifidogx_wan ip6 saddr @set_wifidogx_bypass_clients_v6 accept",
     "add rule inet fw4 forward_wifidogx_wan meta mark 0x10000 accept",
@@ -124,6 +125,12 @@ const char *nft_wifidogx_dhcp_redirect_script[] = {
 const char *nft_wifidogx_dns_redirect_script[] = {
     "add rule inet wifidogx prerouting iifname $interface$ udp dport 53 counter redirect to  " DNS_FORWARD_PORT_STR,
     "add rule inet wifidogx prerouting iifname $interface$ tcp dport 53 counter redirect to " DNS_FORWARD_PORT_STR,
+};
+
+const char *nft_wifidogx_anti_nat_script[] = {
+    "add rule inet wifidogx prerouting iifname $interface$ ether saddr @set_wifidogx_local_trust_clients accept",
+    "add rule inet wifidogx prerouting iifname $interface$ ip ttl != { $ttlvalues$ } counter drop",
+    "add rule inet wifidogx prerouting iifname $interface$ ip6 hoplimit != { $ttlvalues$ } counter drop",
 };
 
 /** Replace occurrences of a substring in a string
@@ -211,6 +218,36 @@ generate_nft_wifidogx_init_script()
         fprintf(output_file, "%s\n", nft_wifidogx_dhcp_pass_script[i]);
     }
     
+    if (config->enable_anti_nat) {
+        while(gw_settings) {
+            for (size_t i = 0; i < sizeof(nft_wifidogx_anti_nat_script) / sizeof(nft_wifidogx_anti_nat_script[0]); i++) {
+                const char *p = nft_wifidogx_anti_nat_script[i];
+                memset(buf, 0, sizeof(buf));
+
+                if (strstr(p, "$interface$") && strstr(p, "$ttlvalues$")) {
+                    // First replace interface
+                    replace_str(p, "$interface$", gw_settings->gw_interface, buf, sizeof(buf));
+                    // Then replace ttlvalues in the result
+                    char tmp[1024] = {0};
+                    replace_str(buf, "$ttlvalues$", config->ttl_values, tmp, sizeof(tmp));
+                    fprintf(output_file, "%s\n", tmp);
+                    debug(LOG_DEBUG, "anti nat script: %s", tmp);
+                } else if (strstr(p, "$interface$")) {
+                    replace_str(p, "$interface$", gw_settings->gw_interface, buf, sizeof(buf));
+                    fprintf(output_file, "%s\n", buf);
+                } else if (strstr(p, "$ttlvalues$")) {
+                    replace_str(p, "$ttlvalues$", config->ttl_values, buf, sizeof(buf));
+                    fprintf(output_file, "%s\n", buf);
+                } else {
+                    fprintf(output_file, "%s\n", p);
+                }
+            }
+            gw_settings = gw_settings->next;
+        }
+    }
+
+    gw_settings = get_gateway_settings();
+
     // Add DNS redirection rules if enabled
     if (config->enable_dns_forward) {
         while (gw_settings) {
@@ -230,34 +267,6 @@ generate_nft_wifidogx_init_script()
     }
 
     fclose(output_file);
-}
-
-// the function run_cmd is used to run the nftables command
-static int 
-run_cmd(char *cmd, ...)
-{
-#define CMDBUFLEN 1024
-    va_list ap;//声明命名参数
-    char buf[CMDBUFLEN] = {0};
-    va_start(ap, cmd);//va_start宏允许访问命名参数parmN后面的变量参数。
-    vsnprintf(buf, CMDBUFLEN, cmd, ap);// 将结果写入buf
-    va_end(ap);
-
-    debug(LOG_DEBUG, "EXEC: %s\n", buf);
-    
-    int nret = execute(buf, 0);
-    if (nret != 0) {
-        debug(LOG_ERR, "Failed to execute (%d) %s", nret,  buf);
-    }
-    return nret;
-}
-/* end of utils function */
-
-// run nft script
-static void 
-nft_do_init_script_command()
-{
-	run_cmd("nft -f %s", NFT_FILENAME_OUT);
 }
 
 /** @internal
@@ -295,7 +304,16 @@ nftables_do_command(const char *format, ...)
 	return rc;
 }
 
-#include <nftables/libnftables.h>
+static void 
+nft_do_init_script_command()
+{
+    if (access(NFT_CONF_FILENAME, F_OK) == -1) {
+        debug(LOG_ERR, "nftables configuration file %s not found", NFT_CONF_FILENAME);
+        termination_handler(0);
+    }
+
+	nftables_do_command("-f %s", NFT_FILENAME_OUT);
+}
 
 /**
  * @brief Helper function to execute nftables commands using libnftables
@@ -403,7 +421,7 @@ nft_statistical_helper(const char *cmd, char **output, uint32_t *output_len)
  * @param[out] outgoing Pointer to store output string
  * @param[out] outgoing_len Length of output
  */
-void 
+static void 
 nft_statistical_outgoing(char **outgoing, uint32_t *outgoing_len)
 {
     const char *cmd = "list chain inet fw4 mangle_prerouting_wifidogx_outgoing";
@@ -419,15 +437,15 @@ nft_statistical_outgoing(char **outgoing, uint32_t *outgoing_len)
  * @param[out] incoming Pointer to store output string  
  * @param[out] incoming_len Length of output
  */
-void
+static void
 nft_statistical_incoming(char **incoming, uint32_t *incoming_len)
 {
     const char *cmd = "list chain inet fw4 mangle_postrouting_wifidogx_incoming";
     nft_statistical_helper(cmd, incoming, incoming_len);
 }
 
-void
-nft_add_gw()
+static void
+__nft_add_gw()
 {
     t_gateway_setting *gw_settings = get_gateway_settings();
     if (gw_settings == NULL) {
@@ -438,13 +456,13 @@ nft_add_gw()
     while(gw_settings) {
         if (gw_settings->auth_mode) {
             debug(LOG_DEBUG, "add gateway %s to auth", gw_settings->gw_interface);
-            run_cmd("nft add rule inet fw4 dstnat iifname %s jump dstnat_wifidogx_outgoing", gw_settings->gw_interface);
-            run_cmd("nft add rule inet fw4 mangle_prerouting iifname %s jump mangle_prerouting_wifidogx_outgoing", gw_settings->gw_interface);
-            run_cmd("nft add rule inet fw4 mangle_postrouting oifname %s jump mangle_postrouting_wifidogx_incoming", gw_settings->gw_interface);
+            nftables_do_command("add rule inet fw4 dstnat iifname %s jump dstnat_wifidogx_outgoing", gw_settings->gw_interface);
+            nftables_do_command("add rule inet fw4 mangle_prerouting iifname %s jump mangle_prerouting_wifidogx_outgoing", gw_settings->gw_interface);
+            nftables_do_command("add rule inet fw4 mangle_postrouting oifname %s jump mangle_postrouting_wifidogx_incoming", gw_settings->gw_interface);
             if (gw_settings->gw_address_v4)
-                run_cmd("nft add element inet fw4 set_wifidogx_gateway { %s }", gw_settings->gw_address_v4);
+                nftables_do_command("add element inet fw4 set_wifidogx_gateway { %s }", gw_settings->gw_address_v4);
             if (gw_settings->gw_address_v6)
-                run_cmd("nft add element inet fw4 set_wifidogx_gateway_v6 { %s }", gw_settings->gw_address_v6);
+                nftables_do_command("add element inet fw4 set_wifidogx_gateway_v6 { %s }", gw_settings->gw_address_v6);
         }
         gw_settings = gw_settings->next;
     }
@@ -469,29 +487,31 @@ delete_wifidogx_rules(const char *chain_name, const char *rule_name)
             if (p) {
                 int handle;
                 sscanf(p, "handle %d", &handle);
-                run_cmd("nft delete rule inet fw4 %s handle %d", chain_name, handle);
+                nftables_do_command("delete rule inet fw4 %s handle %d", chain_name, handle);
                 debug(LOG_DEBUG, "delete chain %s rule hanle %d", chain_name, handle);
             }
         }
     }
 }
 
-void
-nft_del_gw()
+static void
+__nft_del_gw()
 {
     delete_wifidogx_rules("dstnat", "dstnat_wifidogx_outgoing");
     delete_wifidogx_rules("mangle_prerouting", "mangle_prerouting_wifidogx_outgoing");
     delete_wifidogx_rules("mangle_postrouting", "mangle_postrouting_wifidogx_incoming");
 
-    run_cmd("nft flush set inet fw4 set_wifidogx_gateway");
-    run_cmd("nft flush set inet fw4 set_wifidogx_gateway_v6");
+    nftables_do_command("flush set inet fw4 set_wifidogx_gateway");
+    nftables_do_command("flush set inet fw4 set_wifidogx_gateway_v6");
 }
 
 void
 nft_reload_gw()
 {
-    nft_del_gw();
-    nft_add_gw();
+    LOCK_CONFIG();
+    __nft_del_gw();
+    __nft_add_gw();
+    UNLOCK_CONFIG();
 }
 
 
@@ -510,7 +530,7 @@ nft_set_ext_interface()
         debug(LOG_ERR, "get_iface_ip [%s] failed", config->external_interface);
         return;
     }
-    run_cmd("nft add element inet fw4 set_wifidogx_bypass_clients { %s }", ip);
+    nftables_do_command("add element inet fw4 set_wifidogx_bypass_clients { %s }", ip);
     free(ip);
 
     ip = get_iface_ip6(config->external_interface);
@@ -518,22 +538,8 @@ nft_set_ext_interface()
         debug(LOG_ERR, "get_iface_ip6 [%s] failed", config->external_interface);
         return;
     }
-    run_cmd("nft add element inet fw4 set_wifidogx_bypass_clients_v6 { %s }", ip);
+    nftables_do_command("add element inet fw4 set_wifidogx_bypass_clients_v6 { %s }", ip);
     free(ip);
-}
-
-/** Initialize the firewall rules
-*/
-int 
-nft_fw_init()
-{
-	generate_nft_wifidogx_init_script();
-	nft_do_init_script_command();
-    nft_add_gw();
-    nft_set_ext_interface();
-    nft_fw_set_authservers();
-
-    return 1;
 }
 
 int
@@ -617,7 +623,7 @@ static void
 nft_fw_del_rule_by_ip_and_mac(const char *ip, const char *mac, const char *chain)
 {
     char cmd[256];
-    snprintf(cmd, sizeof(cmd), "nft -j list chain inet fw4 %s", chain);
+    snprintf(cmd, sizeof(cmd), " -j list chain inet fw4 %s", chain);
     debug(LOG_DEBUG, "cmd: %s", cmd);
 
     char *buf = NULL;
@@ -672,34 +678,69 @@ nft_fw_del_rule_by_ip_and_mac(const char *ip, const char *mac, const char *chain
 
             const char *handle = json_object_get_string(jobj_rule_handle);
             snprintf(cmd, sizeof(cmd), "nft delete rule inet fw4 %s handle %s", chain, handle);
-            run_cmd(cmd);
+            nftables_do_command(cmd);
         }
     }
 
     json_object_put(jobj);
 }
 
-/** Set if a specific client has access through the firewall */
+/**
+ * Control client firewall access
+ *
+ * @param type          Access type - allow or deny
+ * @param ip           Client IP address
+ * @param mac          Client MAC address 
+ * @param tag          Tag for marking rules (unused)
+ *
+ * @return 0 on success, 1 on failure
+ *
+ * This function controls client network access by:
+ * - FW_ACCESS_ALLOW: Adding rules to allow traffic for the client
+ * - FW_ACCESS_DENY: Removing existing rules and optionally clearing conntrack entries
+ */
 int
 nft_fw_access(fw_access_t type, const char *ip, const char *mac, int tag)
 {
+    if (!ip || !mac) {
+        debug(LOG_ERR, "Invalid parameters: ip or mac is NULL");
+        return 1;
+    }
+
     s_config *config = config_get_config();
+
     switch(type) {
         case FW_ACCESS_ALLOW:
-            nftables_do_command("add rule inet fw4 mangle_prerouting_wifidogx_outgoing ether saddr %s ip saddr %s counter mark set 0x20000 accept", mac, ip);
-            nftables_do_command("add rule inet fw4 mangle_postrouting_wifidogx_incoming ip daddr %s counter mark set 0x20000 accept", ip);
+            // Add outgoing traffic rule with counter and mark
+            nftables_do_command("add rule inet fw4 mangle_prerouting_wifidogx_outgoing "
+                              "ether saddr %s ip saddr %s counter mark set 0x20000 accept", 
+                              mac, ip);
+
+            // Add incoming traffic rule with counter
+            nftables_do_command("add rule inet fw4 mangle_postrouting_wifidogx_incoming "
+                              "ip daddr %s counter accept", ip);
             break;
+
         case FW_ACCESS_DENY:
+            // Remove client rules from outgoing chain
             nft_fw_del_rule_by_ip_and_mac(ip, mac, "mangle_prerouting_wifidogx_outgoing");
+            
+            // Remove client rules from incoming chain
             nft_fw_del_rule_by_ip_and_mac(ip, NULL, "mangle_postrouting_wifidogx_incoming");
+
+            // Optionally clear connection tracking entries
             if (config->enable_del_conntrack) {
-                run_cmd("conntrack -D -s %s", ip);
+                char cmd[128] = {0};
+                snprintf(cmd, sizeof(cmd), "conntrack -D -s %s", ip);
+                execute(cmd, 0);
             }
             break;
+
         default:
             debug(LOG_ERR, "Unknown fw_access type %d", type);
             return 1;
     }
+
     return 0;
 }
 
@@ -709,9 +750,22 @@ nft_fw_access_host(fw_access_t type, const char *ip)
     return 0;
 }
 
-/** Reload client's firewall rules */
-int 
-nft_fw_reload_client()
+
+/**
+ * Reload all client firewall rules and counters
+ *
+ * This function:
+ * 1. Gets first client from client list
+ * 2. Creates a temporary file to store nftables rules
+ * 3. Flushes existing client chains
+ * 4. For each client:
+ *    - Adds outgoing traffic rule with packet/byte counters and mark
+ *    - Adds incoming traffic rule with packet/byte counters
+ * 5. Applies the rules using nft command
+ *
+ * @return 0 on success, 1 on failure
+ */
+int nft_fw_reload_client()
 {
     t_client *first_client = client_get_first_client();
     if (first_client == NULL) {
@@ -719,67 +773,121 @@ nft_fw_reload_client()
         return 1;
     }
 
+    // Open temporary file to store rules
     FILE *fp = fopen(NFT_WIFIDOGX_CLIENT_LIST, "w");
     if (fp == NULL) {
-        debug(LOG_ERR, "Failed to open %s", NFT_WIFIDOGX_CLIENT_LIST);
+        debug(LOG_ERR, "Failed to open %s: %s", 
+              NFT_WIFIDOGX_CLIENT_LIST, strerror(errno));
         return 1;
     }
+
+    // Flush existing client chains
     fprintf(fp, "flush chain inet fw4 mangle_prerouting_wifidogx_outgoing\n");
     fprintf(fp, "flush chain inet fw4 mangle_postrouting_wifidogx_incoming\n");
     
+    // Add rules for each client
     t_client *current = first_client;
-    char line[256] = {0};
+    char rule[256];
     do {
-        snprintf(line, sizeof(line), 
-            "add rule inet fw4 mangle_prerouting_wifidogx_outgoing ether saddr %s ip saddr %s  counter packets %llu bytes %llu mark set 0x20000 accept\n", 
-            current->mac, current->ip, current->counters.outgoing_packets, current->counters.outgoing);
-        fprintf(fp, "%s", line);
-        memset(line, 0, sizeof(line));
-        snprintf(line, sizeof(line), 
-            "add rule inet fw4 mangle_postrouting_wifidogx_incoming ip daddr %s counter packets %llu bytes %llu accept\n", 
-            current->ip, current->counters.incoming_packets, current->counters.incoming);
-        fprintf(fp, "%s", line);
-        memset(line, 0, sizeof(line));
+        // Add outgoing rule with counters
+        snprintf(rule, sizeof(rule), 
+                "add rule inet fw4 mangle_prerouting_wifidogx_outgoing "
+                "ether saddr %s ip saddr %s counter packets %llu bytes %llu "
+                "mark set 0x20000 accept\n",
+                current->mac, current->ip,
+                current->counters.outgoing_packets,
+                current->counters.outgoing);
+        fprintf(fp, "%s", rule);
+
+        // Add incoming rule with counters
+        snprintf(rule, sizeof(rule),
+                "add rule inet fw4 mangle_postrouting_wifidogx_incoming "
+                "ip daddr %s counter packets %llu bytes %llu accept\n",
+                current->ip,
+                current->counters.incoming_packets,
+                current->counters.incoming);
+        fprintf(fp, "%s", rule);
+
         current = current->next;
     } while (current != NULL);
+
     fclose(fp);
 
-    run_cmd("nft -f %s", NFT_WIFIDOGX_CLIENT_LIST);
-
-    return 0;
+    // Apply the rules
+    return nftables_do_command(" -f %s", NFT_WIFIDOGX_CLIENT_LIST);
 }
 
 
+/** 
+ * Update traffic counters for a client
+ *
+ * This function updates the traffic statistics for a given client,
+ * including packet and byte counts for incoming/outgoing traffic.
+ * It also updates the client's online status and wired connection type.
+ *
+ * @param client        Pointer to client structure to update
+ * @param packets       Number of packets counted
+ * @param bytes        Number of bytes counted 
+ * @param is_outgoing  1 if outgoing traffic, 0 if incoming traffic
+ */
 static void 
 update_client_counters(t_client *client, uint64_t packets, uint64_t bytes, int is_outgoing)
 {
-    if (client) {
-        if (client->name == NULL) {
-            debug(LOG_INFO, "fw4_counters_update(): client->name is NULL");
-            __get_client_name(client);
-        }
-
-        if (client->wired == -1) {
-            client->wired = br_is_device_wired(client->mac);
-        }
-
-        if (is_outgoing) {
-            client->counters.outgoing_history = client->counters.outgoing;
-            client->counters.outgoing = bytes;
-            client->counters.outgoing_packets = packets;
-        } else {
-            client->counters.incoming_history = client->counters.incoming;
-            client->counters.incoming = bytes;
-            client->counters.incoming_packets = packets;
-        }
-
-        client->counters.last_updated = time(NULL);
-        client->is_online = 1;
-    } else {
-        debug(LOG_INFO, "fw4_counters_update(): client is NULL");
+    if (!client) {
+        debug(LOG_INFO, "Client is NULL, cannot update counters");
+        return;
     }
+
+    // Get client name if not already set
+    if (!client->name) {
+        debug(LOG_INFO, "Client name not set, retrieving name");
+        __get_client_name(client); 
+    }
+
+    // Determine if client is on wired connection
+    if (client->wired == -1) {
+        client->wired = br_is_device_wired(client->mac);
+    }
+
+    // Update traffic counters
+    if (is_outgoing) {
+        // Save previous outgoing count and update with new values
+        client->counters.outgoing_history = client->counters.outgoing;
+        client->counters.outgoing = bytes;
+        client->counters.outgoing_packets = packets;
+    } else {
+        // Save previous incoming count and update with new values
+        client->counters.incoming_history = client->counters.incoming;
+        client->counters.incoming = bytes;
+        client->counters.incoming_packets = packets;
+    }
+
+    // Update timestamp and online status
+    client->counters.last_updated = time(NULL);
+    client->is_online = 1;
 }
 
+/**
+ * @brief Process nftables expressions to extract counter data and client information
+ *
+ * This function parses a JSON object containing nftables expressions to extract:
+ * 1. Counter data (packets and bytes)
+ * 2. Client information based on IP or MAC address
+ * 
+ * The function then updates the client counters with the extracted information.
+ *
+ * @param jobj_expr JSON object array containing nftables expressions
+ * @param is_outgoing Flag indicating if the traffic is outgoing (1) or incoming (0)
+ *
+ * The function performs the following:
+ * - Iterates through expression array
+ * - Extracts packet and byte counters if present
+ * - Identifies client by IP or MAC address from match expressions
+ * - Updates client counters with accumulated data
+ *
+ * @note The function expects the JSON object to follow nftables JSON format
+ * @note Client identification stops after finding the first valid IP/MAC match
+ */
 static void
 process_nftables_expr(json_object *jobj_expr, int is_outgoing)
 {
@@ -819,6 +927,37 @@ process_nftables_expr(json_object *jobj_expr, int is_outgoing)
     update_client_counters(p1, packets, bytes, is_outgoing);
 }
 
+/**
+ * @brief Process JSON representation of nftables rules
+ *
+ * Parses a JSON object containing nftables rules and processes each rule's expressions.
+ * The function traverses the JSON structure to extract rule expressions for either
+ * incoming or outgoing traffic.
+ *
+ * @param jobj The root JSON object containing nftables configuration
+ * @param is_outgoing Flag indicating if processing outgoing (1) or incoming (0) rules
+ * 
+ * @details
+ * The expected JSON structure should be:
+ * {
+ *   "nftables": [
+ *     {
+ *       "rule": {
+ *         "expr": [...]
+ *       }
+ *     },
+ *     ...
+ *   ]
+ * }
+ *
+ * The function will:
+ * 1. Extract the "nftables" array
+ * 2. Iterate through each array element
+ * 3. Extract "rule" and "expr" objects
+ * 4. Process expressions through process_nftables_expr()
+ *
+ * @note Function silently returns if required JSON objects are not found
+ */
 static void 
 process_nftables_json(json_object *jobj, int is_outgoing)
 {
@@ -843,6 +982,25 @@ process_nftables_json(json_object *jobj, int is_outgoing)
     }
 }
 
+/**
+ * @brief Updates firewall counters by processing nftables statistics
+ * 
+ * This function performs the following operations:
+ * 1. Resets the client list
+ * 2. Retrieves and processes outgoing traffic statistics from nftables
+ * 3. Retrieves and processes incoming traffic statistics from nftables
+ * 
+ * The function uses JSON parsing to process the nftables statistics data.
+ * Both incoming and outgoing traffic data are handled separately through
+ * the process_nftables_json function.
+ * 
+ * @return 0 on success, -1 on failure
+ *         Failures can occur if:
+ *         - Unable to get outgoing traffic statistics
+ *         - Unable to parse outgoing traffic JSON
+ *         - Unable to get incoming traffic statistics
+ *         - Unable to parse incoming traffic JSON
+ */
 int 
 nft_fw_counters_update()
 {
@@ -902,16 +1060,23 @@ nft_fw_auth_reachable()
     return 0;
 }
 
-void
-nft_fw_clear_authservers()
+static void
+__nft_fw_clear_authservers()
 {
     nftables_do_command("flush set inet fw4 set_wifidogx_auth_servers");
     nftables_do_command("flush set inet fw4 set_wifidogx_auth_servers_v6");
 }
 
-
 void
-nft_fw_set_authservers()
+nft_fw_clear_authservers()
+{
+    LOCK_CONFIG();
+    __nft_fw_clear_authservers();
+    UNLOCK_CONFIG();
+}
+
+static void
+__nft_fw_set_authservers()
 {
     t_auth_serv *auth_server = get_auth_server();
     if (auth_server == NULL) {
@@ -934,93 +1099,193 @@ nft_fw_set_authservers()
 }
 
 void
-nft_fw_clear_inner_domains_trusted()
+nft_fw_set_authservers()
+{
+    LOCK_CONFIG();
+    __nft_fw_set_authservers();
+    UNLOCK_CONFIG();
+}
+
+static void
+__nft_fw_clear_inner_domains_trusted()
 {
     nftables_do_command("flush set inet fw4 set_wifidogx_inner_trust_domains");
     nftables_do_command("flush set inet fw4 set_wifidogx_inner_trust_domains_v6");
 }
 
 void
-nft_fw_set_inner_domains_trusted()
+nft_fw_clear_inner_domains_trusted()
+{
+    LOCK_CONFIG();
+    __nft_fw_clear_inner_domains_trusted();
+    UNLOCK_CONFIG();
+}
+
+static void
+__nft_fw_set_inner_domains_trusted()
 {
     const s_config *config = config_get_config();
-	t_domain_trusted *domain_trusted = NULL;
+    t_domain_trusted *domain_trusted = NULL;
 
-	LOCK_DOMAIN();
+    for (domain_trusted = config->inner_domains_trusted; domain_trusted != NULL; domain_trusted = domain_trusted->next) {
+        t_ip_trusted *ip_trusted = NULL;
+        for(ip_trusted = domain_trusted->ips_trusted; ip_trusted != NULL; ip_trusted = ip_trusted->next) {
+            if (ip_trusted->ip_type == IP_TYPE_IPV4)
+                nftables_do_command("add element inet fw4 set_wifidogx_inner_trust_domains { %s }", ip_trusted->ip);
+            else if (ip_trusted->ip_type == IP_TYPE_IPV6)
+                nftables_do_command("add element inet fw4 set_wifidogx_inner_trust_domains_v6 { %s }", ip_trusted->ip);
+        }
+    }
+}
 
-	for (domain_trusted = config->inner_domains_trusted; domain_trusted != NULL; domain_trusted = domain_trusted->next) {
-		t_ip_trusted *ip_trusted = NULL;
-		for(ip_trusted = domain_trusted->ips_trusted; ip_trusted != NULL; ip_trusted = ip_trusted->next) {
-			if (ip_trusted->ip_type == IP_TYPE_IPV4)
-				nftables_do_command("add element inet fw4 set_wifidogx_inner_trust_domains { %s }", ip_trusted->ip);
-			else if (ip_trusted->ip_type == IP_TYPE_IPV6)
-				nftables_do_command("add element inet fw4 set_wifidogx_inner_trust_domains_v6 { %s }", ip_trusted->ip);
-		}
-	}
-
-	UNLOCK_DOMAIN();
+void
+nft_fw_set_inner_domains_trusted()
+{
+    LOCK_CONFIG();
+    __nft_fw_set_inner_domains_trusted();
+    UNLOCK_CONFIG();
 }
 
 void
 nft_fw_refresh_inner_domains_trusted()
 {
-    nft_fw_clear_inner_domains_trusted();
-    nft_fw_set_inner_domains_trusted();
+    LOCK_CONFIG();
+    __nft_fw_clear_inner_domains_trusted();
+    __nft_fw_set_inner_domains_trusted();
+    UNLOCK_CONFIG();
+}
+
+static void
+__nft_fw_set_user_domains_trusted()
+{
+    const s_config *config = config_get_config();
+    t_domain_trusted *domain_trusted = NULL;
+
+    for (domain_trusted = config->domains_trusted; domain_trusted != NULL; domain_trusted = domain_trusted->next) {
+        t_ip_trusted *ip_trusted = NULL;
+        for(ip_trusted = domain_trusted->ips_trusted; ip_trusted != NULL; ip_trusted = ip_trusted->next) {
+            nftables_do_command("add element inet fw4 set_wifidogx_trust_domains { %s }", ip_trusted->ip);
+        }
+    }
 }
 
 void
 nft_fw_set_user_domains_trusted()
 {
-    const s_config *config = config_get_config();
-	t_domain_trusted *domain_trusted = NULL;
-
 	LOCK_DOMAIN();
-
-	for (domain_trusted = config->domains_trusted; domain_trusted != NULL; domain_trusted = domain_trusted->next) {
-		t_ip_trusted *ip_trusted = NULL;
-		for(ip_trusted = domain_trusted->ips_trusted; ip_trusted != NULL; ip_trusted = ip_trusted->next) {
-			nftables_do_command("add element inet fw4 set_wifidogx_trust_domains { %s }", ip_trusted->ip);
-		}
-	}
-
+	__nft_fw_set_user_domains_trusted();
 	UNLOCK_DOMAIN();
 }
 
-void
-nft_fw_clear_user_domains_trusted()
+static void
+__nft_fw_clear_user_domains_trusted()
 {
     nftables_do_command("flush set inet fw4 set_wifidogx_trust_domains");
     nftables_do_command("flush set inet fw4 set_wifidogx_trust_domains_v6");
 }
 
 void
+nft_fw_clear_user_domains_trusted()
+{
+    LOCK_DOMAIN();
+    __nft_fw_clear_user_domains_trusted();
+    UNLOCK_DOMAIN();
+}
+
+void
 nft_fw_refresh_user_domains_trusted()
 {
-    nft_fw_clear_user_domains_trusted();
-    nft_fw_set_user_domains_trusted();
+    LOCK_DOMAIN();
+    __nft_fw_clear_user_domains_trusted();
+    __nft_fw_set_user_domains_trusted();
+    UNLOCK_DOMAIN();
+}
+
+static void
+__nft_fw_add_trusted_mac(const char *mac, int timeout)
+{
+    if (timeout == 0)
+        nftables_do_command("add element inet fw4 set_wifidogx_trust_clients_out { %s }", mac);
+    else
+        nftables_do_command("add element inet fw4 set_wifidogx_trust_clients_out { %s timeout %ds}", mac, timeout);
+}
+
+static void
+__nft_fw_del_trusted_mac(const char *mac)
+{
+    nftables_do_command("delete element inet fw4 set_wifidogx_trust_clients_out { %s }", mac);
+}
+
+void
+nft_fw_del_trusted_mac(const char *mac)
+{
+    LOCK_CONFIG();
+    __nft_fw_del_trusted_mac(mac);
+    UNLOCK_CONFIG();
+}
+
+void
+nft_fw_add_trusted_mac(const char *mac, int timeout)
+{
+    LOCK_CONFIG();
+    __nft_fw_add_trusted_mac(mac, timeout);
+    UNLOCK_CONFIG();
+}
+
+void
+nft_fw_update_trusted_mac(const char *mac, int timeout)
+{
+    LOCK_CONFIG();
+    __nft_fw_del_trusted_mac(mac);
+    __nft_fw_add_trusted_mac(mac, timeout);
+    UNLOCK_CONFIG();
+}
+
+static void
+__nft_fw_set_trusted_maclist()
+{
+    const s_config *config = config_get_config();
+    t_trusted_mac *p = NULL;
+
+    for (p = config->trustedmaclist; p != NULL; p = p->next)
+        __nft_fw_add_trusted_mac(p->mac, p->remaining_time);
 }
 
 void
 nft_fw_set_trusted_maclist()
 {
-    const s_config *config = config_get_config();
-	t_trusted_mac *p = NULL;
+    LOCK_CONFIG();
+    __nft_fw_set_trusted_maclist();
+    UNLOCK_CONFIG();
+}
 
-	LOCK_CONFIG();
-	for (p = config->trustedmaclist; p != NULL; p = p->next)
-		nftables_do_command("add element inet fw4 set_wifidogx_trust_clients { %s }", p->mac);
-	UNLOCK_CONFIG();
+static void
+__nft_fw_clear_trusted_maclist()
+{
+    nftables_do_command("flush set inet fw4 set_wifidogx_trust_clients_out");
 }
 
 void
 nft_fw_clear_trusted_maclist()
 {
-    nftables_do_command("flush set inet fw4 set_wifidogx_trust_clients");
+    LOCK_CONFIG();
+    __nft_fw_clear_trusted_maclist();
+    UNLOCK_CONFIG();
+}
+
+void
+nft_fw_refresh_trusted_maclist()
+{
+    LOCK_CONFIG();
+    __nft_fw_clear_trusted_maclist();
+    __nft_fw_set_trusted_maclist();
+    UNLOCK_CONFIG();
 }
 
 void 
 nft_fw_set_mac_temporary(const char *mac, int which)
 {
+    LOCK_CONFIG();
     if (which == 0) {
 		nftables_do_command("add element inet fw4 set_wifidogx_tmp_trust_clients { %s }", mac);
 	} else if(which > 0) { // trusted
@@ -1030,4 +1295,69 @@ nft_fw_set_mac_temporary(const char *mac, int which)
 	} else if(which < 0) { // untrusted
 		// TODO
 	}
+    UNLOCK_CONFIG();
+}
+
+void
+nft_fw_add_anti_nat_permit(const char *mac)
+{
+    LOCK_CONFIG();
+    nftables_do_command("add element inet fw4 set_wifidogx_local_trust_clients { %s }", mac);
+    UNLOCK_CONFIG();
+}
+
+void
+nft_fw_del_anti_nat_permit(const char *mac)
+{
+    LOCK_CONFIG();
+    nftables_do_command("delete element inet fw4 set_wifidogx_local_trust_clients { %s }", mac);
+    UNLOCK_CONFIG();
+}
+
+static void
+__nft_fw_set_anti_nat_permit()
+{
+    const s_config *config = config_get_config();
+    if (config->anti_nat_permit_macs == NULL) {
+        debug(LOG_WARNING, "anti_nat_permit_macs is NULL");
+        return;
+    }
+
+    nftables_do_command("add element inet wifidogx set_wifidogx_local_trust_clients { %s }", config->anti_nat_permit_macs);
+}
+
+void
+nft_fw_set_anti_nat_permit()
+{
+    LOCK_CONFIG();
+    __nft_fw_set_anti_nat_permit();
+    UNLOCK_CONFIG();
+}
+
+/**
+ * @brief Initializes the nftables firewall rules for WiFiDog
+ * 
+ * This function performs the complete initialization of nftables firewall rules by:
+ * 1. Generating the initial nftables script
+ * 2. Executing the initialization script
+ * 3. Setting up external interface rules
+ * 4. Adding gateway rules
+ * 5. Configuring authentication server rules
+ * 6. Setting up trusted MAC address list
+ * 7. Configuring anti-NAT permit rules
+ *
+ * @return Returns 1 upon successful completion
+ */
+int 
+nft_fw_init()
+{
+	generate_nft_wifidogx_init_script();
+	nft_do_init_script_command();
+    nft_set_ext_interface();
+    __nft_add_gw();
+    __nft_fw_set_authservers();
+    __nft_fw_set_trusted_maclist();
+    __nft_fw_set_anti_nat_permit();
+
+    return 1;
 }
