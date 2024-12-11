@@ -33,9 +33,6 @@ static void fw_init_delay()
 {
 	parse_inner_trusted_domain_list();
 	parse_user_trusted_domain_list();
-	
-	fw_set_pan_domains_trusted();	
-	fw_set_trusted_maclist();
 }
 
 static void 
@@ -74,8 +71,15 @@ ping_work_cb(evutil_socket_t fd, short event, void *arg) {
 void
 thread_ping(void *arg)
 {
+	s_config *config = config_get_config();
+
 	fw_init_delay();
-	wd_request_loop(ping_work_cb);
+	
+	if (config->auth_server_mode == AUTH_MODE_LOCAL) {
+		debug(LOG_DEBUG, "auth mode is local, no need to ping auth server");
+		mark_auth_online();
+	} else 
+		wd_request_loop(ping_work_cb);
 }
 
 static long
