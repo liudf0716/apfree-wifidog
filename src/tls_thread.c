@@ -79,7 +79,8 @@ process_tls_request_cb (struct evhttp_request *req, void *arg) {
         return;
     }
 
-	if (!is_auth_online()) {
+	s_config *config = config_get_config();
+	if (!is_auth_online() || config->auth_server_mode == AUTH_MODE_LOCAL) {
 		debug(LOG_INFO, "Auth server is offline");
 		char gw_https_port[8] = {0};
 		snprintf(gw_https_port, sizeof(gw_https_port), "%d", config_get_config()->gw_https_port);
@@ -89,7 +90,7 @@ process_tls_request_cb (struct evhttp_request *req, void *arg) {
         return;
     } 
 
-	s_config *config = config_get_config();
+	
 	char *redir_url = wd_get_redir_url_to_auth(req, gw_setting, mac, remote_host, config->gw_https_port, config->device_id, 1);
     if (!redir_url) {
         evhttp_send_error(req, 200, "Cant get client's redirect to auth server's url");
@@ -297,7 +298,6 @@ tls_process_loop () {
 	struct timeval tv;
 	s_config *config = config_get_config();
 	t_https_server *https_server = config->https_server;
-	t_auth_serv *auth_server = get_auth_server();
 	struct evconnlistener *listener_ipv6;
 	struct sockaddr_in6 sin_ipv6;
 	
@@ -338,7 +338,8 @@ tls_process_loop () {
 	// This is the magic that lets evhttp use SSL.
 	evhttp_set_bevcb (http, ssl_bevcb, ctx);
  
-	if (auth_server) {
+	if (config->auth_server_mode == AUTH_MODE_CLOUD) {
+		t_auth_serv *auth_server = get_auth_server();
 		SSL_CTX *ssl_ctx = NULL;
 		SSL *ssl = NULL;
         ssl_ctx = SSL_CTX_new(SSLv23_method());
@@ -359,8 +360,9 @@ tls_process_loop () {
 		evhttp_set_cb(http, "/wifidog", ev_http_callback_wifidog, NULL);
 		evhttp_set_cb(http, "/wifidog/auth", ev_http_callback_auth, request_ctx);
 		evhttp_set_cb(http, "/wifidog/temporary_pass", ev_http_callback_temporary_pass, NULL);
-	} else {
+	} else if (config->auth_server_mode == AUTH_MODE_LOCAL) {
 		evhttp_set_cb(http, "/wifidog/local_auth", ev_http_callback_local_auth, NULL);
+		evhttp_set_cb(http, "/cgi-bin/cgi-device", ev_http_callback_device, NULL);
 	}
 
 	// This is the callback that gets called when a request comes in.
