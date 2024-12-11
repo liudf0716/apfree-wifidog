@@ -4,7 +4,7 @@ set(src_apfreewifidog
 	firewall.c centralserver.c http.c auth.c client_list.c
 	util.c wdctl_thread.c ping_thread.c safe.c
 	tls_thread.c wd_client.c wd_util.c mqtt_thread.c
-	ws_thread.c dns_forward.c
+	ws_thread.c dns_forward.c bypass_user.c
 )
 
 set(src_fw3
@@ -27,7 +27,7 @@ set(src_wdctlx
 set(common_libs
 	pthread m z json-c ssl crypto
 	event event_openssl netfilter_queue
-	resolv mosquitto
+	resolv mosquitto uci
 )
 
 # Set compiler flags
