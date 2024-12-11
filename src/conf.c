@@ -1889,16 +1889,27 @@ clear_untrusted_mac_list()
 	UNLOCK_CONFIG();
 }
 
+static bool
+is_auth_server_mode_valid(short mode) 
+{
+	return (mode >= AUTH_MODE_CLOUD && mode <= AUTH_MODE_LOCAL);
+}
+
 /** Verifies if the configuration is complete and valid.  Terminates the program if it isn't */
 void
 config_validate(void)
 {
+	if (!is_auth_server_mode_valid(config.auth_server_mode)) {
+		debug(LOG_ERR, "Invalid auth server mode: %d", config.auth_server_mode);
+		exit(1);
+	}
+	
 	config_notnull(config.gateway_settings, "GatewaySetting");
 	config_notnull(config.external_interface, "ExternalInterface");
 
-	if (config.auth_server_mode == 0) {
+	if (config.auth_server_mode == AUTH_MODE_CLOUD) {
 		config_notnull(config.auth_servers, "AuthServer");
-	} else if (config.auth_server_mode == 2) {
+	} else if (config.auth_server_mode == AUTH_MODE_LOCAL) {
 		if(is_file_exist(config.authserver_offline_file) == false) {
 			debug(LOG_ERR, "AuthServerOfflineFile is not exist");
 			exit(1);

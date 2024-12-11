@@ -102,6 +102,12 @@ typedef enum firewall_target_t_ {
 	TARGET_ULOG
 } t_firewall_target;
 
+typedef enum auth_server_mode_t_ {
+	AUTH_MODE_CLOUD = 0,
+	AUTH_MODE_BYPASS,
+	AUTH_MODE_LOCAL
+} t_auth_server_mode;
+
 /** Mutex declarations */
 extern pthread_mutex_t config_mutex;
 extern pthread_mutex_t domains_mutex;
