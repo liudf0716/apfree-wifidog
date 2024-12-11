@@ -24,6 +24,7 @@ void ev_http_callback_auth(struct evhttp_request *, void *);
 void ev_http_callback_disconnect(struct evhttp_request *, void *);
 void ev_http_callback_temporary_pass(struct evhttp_request *, void *);
 void ev_http_callback_local_auth(struct evhttp_request *, void *);
+void ev_http_callback_device(struct evhttp_request *, void *);
 
 /* HTTP Response Functions */
 void ev_http_send_redirect(struct evhttp_request *, const char *, const char *);

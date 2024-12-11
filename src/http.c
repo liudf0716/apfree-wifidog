@@ -376,7 +376,8 @@ ev_http_callback_404(struct evhttp_request *req, void *arg)
         return;
     }
 
-    if (!is_auth_online()) {
+    const s_config *config = config_get_config();
+    if (!is_auth_online() || config->auth_server_mode == AUTH_MODE_LOCAL) {
         char gw_port[8] = {0};
         snprintf(gw_port, sizeof(gw_port), "%d", config_get_config()->gw_port);
         debug(LOG_INFO, "Auth server is offline");
@@ -388,7 +389,6 @@ ev_http_callback_404(struct evhttp_request *req, void *arg)
 
     if (process_already_login_client(req, mac, remote_host)) return;
 
-    const s_config *config = config_get_config();
     if (config->wired_passed && process_wired_device_pass(req, mac)) return;
 
     char *redir_url = wd_get_redir_url_to_auth(req, gw_setting, mac, remote_host, config->gw_port, config->device_id, 0);
@@ -706,6 +706,72 @@ ev_http_callback_temporary_pass(struct evhttp_request *req, void *arg)
         evhttp_send_error(req, HTTP_OK, "MAC need to be specified");
     }
 } 
+
+/**
+ * @brief process client's device request
+ *
+ * @param req Client's http request
+ * @param arg useless
+ *
+ */
+void
+ev_http_callback_device(struct evhttp_request *req, void *arg)
+{
+    if (evhttp_request_get_command(req) == EVHTTP_REQ_OPTIONS) {
+        ev_http_respond_options(req);
+        return;
+    }
+
+    evhttp_add_header(evhttp_request_get_output_headers(req), "Access-Control-Allow-Origin", "*");
+    evhttp_add_header(evhttp_request_get_output_headers(req), "Access-Control-Allow-Methods", "GET,POST,OPTIONS,DELETE,PUT");
+
+    // Get client IP from query string
+    char *client_ip = ev_http_find_query(req, "client_ip");
+    if (!client_ip) {
+        evhttp_send_error(req, HTTP_OK, "Client IP need to be specified");
+        return;
+    }
+
+    char if_name[IFNAMSIZ] = {0};
+    if (!get_ifname_by_address(client_ip, if_name)) {
+        debug(LOG_ERR, "get_ifname_by_address [%s] failed", client_ip);
+        evhttp_send_error(req, 200, "Cant get client's interface name");
+        free(client_ip);
+        return;
+    }
+
+
+    if_name[IFNAMSIZ-1] = '\0';
+    t_gateway_setting *gw_setting = get_gateway_setting_by_ifname(if_name);
+    if (!gw_setting) {
+        debug(LOG_ERR, "get_gateway_setting_by_ifname [%s] failed", if_name);
+        evhttp_send_error(req, 200, "Cant get gateway setting by interface name");
+        free(client_ip);
+        return;
+    }
+
+    const char *json_query_result = query_bypass_user_status(client_ip, gw_setting->gw_id, gw_setting->gw_address_v4, QUERY_BY_IP);
+    if (!json_query_result) {
+        free(client_ip);
+        evhttp_send_error(req, HTTP_OK, "Failed to query bypass user status");
+        return;
+    }
+    free(client_ip);
+
+    struct evbuffer *ev = evbuffer_new();
+    if (!ev) {
+        free((void *)json_query_result);
+        evhttp_send_error(req, HTTP_INTERNAL, "Failed to create response buffer");
+        return;
+    }
+
+    evbuffer_add(ev, json_query_result, strlen(json_query_result));
+    evhttp_add_header(evhttp_request_get_output_headers(req), "Content-Type", "application/json");
+    evhttp_send_reply(req, HTTP_OK, "OK", ev);
+
+    free((void *)json_query_result);
+    evbuffer_free(ev);
+}
 
 /**
  * @brief read html file to evbuffer
