@@ -621,6 +621,8 @@ threads_init(s_config *config)
         create_detached_thread(&tid_fw_counter, (void *)thread_dhcp_cpi, NULL, "dhcp_cpi");
     }
 
+    create_detached_thread(&tid_ping, (void *)thread_ping, NULL, "ping");
+
     // Auth server dependent threads
     if (!config->auth_servers) {
         debug(LOG_INFO, "No auth server available, not starting auth-dependent threads");
@@ -628,7 +630,6 @@ threads_init(s_config *config)
     }
 
     // Start auth server dependent threads
-    create_detached_thread(&tid_ping, (void *)thread_ping, NULL, "ping");
     create_detached_thread(&tid_fw_counter, (void *)thread_client_timeout_check, NULL, "fw_counter");
 
     // Optional websocket thread
@@ -673,9 +674,10 @@ wd_debug_base(const struct event_base *ev_base)
 static int
 setup_http_server(struct evhttp *http, struct event_base *base)
 {
-    t_auth_serv *auth_server = get_auth_server();
+    s_config *config = config_get_config();
     
-    if (auth_server) {
+    if (config->auth_server_mode == AUTH_MODE_CLOUD) {
+        t_auth_serv *auth_server = get_auth_server();
         SSL_CTX *ssl_ctx = SSL_CTX_new(SSLv23_method());
         if (!ssl_ctx) return 0;
 
@@ -694,8 +696,9 @@ setup_http_server(struct evhttp *http, struct event_base *base)
         evhttp_set_cb(http, "/wifidog", ev_http_callback_wifidog, NULL);
         evhttp_set_cb(http, "/wifidog/auth", ev_http_callback_auth, request_ctx);
         evhttp_set_cb(http, "/wifidog/temporary_pass", ev_http_callback_temporary_pass, NULL);
-    } else {
+    } else if (config->auth_server_mode == AUTH_MODE_LOCAL) {
         evhttp_set_cb(http, "/wifidog/local_auth", ev_http_callback_local_auth, NULL);
+        evhttp_set_cb(http, "/cgi-bin/cgi-device", ev_http_callback_device, NULL);
     }
     evhttp_set_gencb(http, ev_http_callback_404, NULL);
     return 1;
