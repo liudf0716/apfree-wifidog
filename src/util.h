@@ -7,8 +7,7 @@
 #ifndef _UTIL_H_
 #define _UTIL_H_
 
-#include <sys/types.h>
-#include <sys/socket.h>
+#include <stdbool.h>
 
 /** @brief Initialize the ICMP socket */
 int init_icmp_socket(void);
@@ -24,12 +23,14 @@ void icmp6_ping(const char *);
 /** @brief Save pid of this wifidog in pid file */
 void save_pid_file(const char *);
 
-int is_valid_ip(const char *);
+bool is_valid_ip(const char *);
 
-int is_valid_ip6(const char *);
+bool is_valid_ip6(const char *);
 
-int is_valid_mac(const char *);
+bool is_valid_mac(const char *);
 
 float get_cpu_usage();
+
+bool is_file_exist(const char *file);
 
 #endif                          /* _UTIL_H_ */
