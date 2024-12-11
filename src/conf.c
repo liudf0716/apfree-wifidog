@@ -16,7 +16,7 @@
 
 /** @internal
  * Holds the current configuration of the gateway */
-static s_config config;
+static s_config config = {0};
 
 /**
  * Mutex for the configuration file, used by the auth_servers related
@@ -103,6 +103,10 @@ typedef enum {
 	oWSServerPath,
 	oWSServerSSL,
 	oEnableDelConntrack,
+	oAuthServerMode,
+	oEnableAntiNat,
+	oTTLValues,
+	oAntiNatPermitMacs,
 } OpCodes;
 
 /** @internal
@@ -174,7 +178,12 @@ static const struct {
 	"wsserverpath",oWSServerPath},{
 	"wsserverssl",oWSServerSSL},{
 	"enabledelconntrack",oEnableDelConntrack},{
-    NULL, oBadOption},};
+	"authservermode", oAuthServerMode}, {
+	"enableantinat", oEnableAntiNat}, {
+	"ttlvalues", oTTLValues}, {
+	"antinatpermitmacs", oAntiNatPermitMacs}, {
+	NULL, oBadOption},
+};
 
 static void config_notnull(const void *, const char *);
 static int parse_boolean_value(char *);
@@ -292,7 +301,7 @@ void config_init(void)
 	https_server->ca_crt_file      = safe_strdup(DEFAULT_CA_CRT_FILE);
 	https_server->svr_crt_file     = safe_strdup(DEFAULT_SVR_CRT_FILE);
 	https_server->svr_key_file     = safe_strdup(DEFAULT_SVR_KEY_FILE);
-	config.https_server             = https_server;
+	config.https_server            = https_server;
 
 	// Initialize HTTP server configuration
 	t_http_server *http_server = malloc(sizeof(t_http_server));
@@ -311,12 +320,16 @@ void config_init(void)
 	config.enable_dhcp_cpi      = 0;
 	config.enable_dns_forward   = 1;
 	config.enable_del_conntrack = 1;
+	config.auth_server_mode 	= 0;
+	config.enable_anti_nat 		= 0;
+	config.ttl_values 			= safe_strdup(DEFAULT_TTL_VALUES);
+	config.anti_nat_permit_macs = NULL;
 
 	// Initialize debugging configuration
-	debugconf.log_stderr     = 1;
-	debugconf.debuglevel     = DEFAULT_DEBUGLEVEL;
-	debugconf.syslog_facility = DEFAULT_SYSLOG_FACILITY;
-	debugconf.log_syslog     = DEFAULT_LOG_SYSLOG;
+	debugconf.log_stderr     	= 1;
+	debugconf.debuglevel     	= DEFAULT_DEBUGLEVEL;
+	debugconf.syslog_facility 	= DEFAULT_SYSLOG_FACILITY;
+	debugconf.log_syslog     	= DEFAULT_LOG_SYSLOG;
 }
 
 /** @internal
@@ -964,6 +977,21 @@ config_read()
 					break;
 				case oEnableDelConntrack:
 					config.enable_del_conntrack = parse_boolean_value(p1);
+					break;
+				case oAuthServerMode:
+					sscanf(p1, "%hu", &config.auth_server_mode);
+					break;
+				case oEnableAntiNat:
+					config.enable_anti_nat = parse_boolean_value(p1);
+					break;
+				case oTTLValues:
+					config.ttl_values = safe_strdup(p1);
+					break;
+				case oAntiNatPermitMacs:
+					if (is_valid_mac(p1))
+						config.anti_nat_permit_macs = safe_strdup(p1);
+					else
+						debug(LOG_ERR, "Invalid MAC address %s", p1);
 					break;
 				case oDeviceID:
 					config.device_id = safe_strdup(p1);
