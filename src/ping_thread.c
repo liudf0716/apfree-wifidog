@@ -25,15 +25,8 @@ char *g_type;
 char *g_name;
 char *g_ssid;
 
-static void fw_init_delay();
 static void ping_work_cb(evutil_socket_t, short, void *);
 static void process_ping_response(struct evhttp_request *, void *);
-
-static void fw_init_delay()
-{
-	parse_inner_trusted_domain_list();
-	parse_user_trusted_domain_list();
-}
 
 static void 
 ping_work_cb(evutil_socket_t fd, short event, void *arg) {
@@ -72,8 +65,6 @@ void
 thread_ping(void *arg)
 {
 	s_config *config = config_get_config();
-
-	fw_init_delay();
 	
 	if (config->auth_server_mode == AUTH_MODE_LOCAL) {
 		debug(LOG_DEBUG, "auth mode is local, no need to ping auth server");
