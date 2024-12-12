@@ -773,7 +773,10 @@ void
 conntrack_flush()
 {
 	debug(LOG_DEBUG, "Flush conntrack");
-	execute("conntrack -F", 0);
+#ifdef AW_FW3
+#else
+	nft_fw_conntrack_flush();
+#endif
 }
 
 void
