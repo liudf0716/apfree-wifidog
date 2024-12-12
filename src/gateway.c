@@ -608,7 +608,7 @@ static void
 threads_init(s_config *config)
 {
     // Core service threads
-    create_detached_thread(&tid_tls_server, (void *)tid_tls_server, NULL, "https_server");
+    create_detached_thread(&tid_tls_server, (void *)thread_tls_server, NULL, "https_server");
     create_detached_thread(&tid_wdctl, (void *)thread_wdctl, 
                           (void *)safe_strdup(config->wdctl_sock), "wdctl");
 
