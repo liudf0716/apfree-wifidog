@@ -25,7 +25,7 @@ static char *sk_name = NULL;
 char *program_argv0 = NULL;
 
 static void display_help();
-static struct bufferevent *connect_to_server(const char *sock_name);
+static struct bufferevent *connect_to_server(const char *sock_name, void *data);
 static void send_request(struct bufferevent *bev, const char *request);
 static void read_response(struct bufferevent *bev);
 static void execute_post_cmd(char *raw_cmd);
@@ -36,22 +36,26 @@ static void handle_command(const char *cmd, const char *param);
  */
 static void 
 event_cb(struct bufferevent *bev, short events, void *ctx) {
-    int *connection_success = (int *)ctx;
+    char *request = (char *)ctx;
     if (events & BEV_EVENT_CONNECTED) {
-        *connection_success = 1;
-    } else if (events & (BEV_EVENT_ERROR | BEV_EVENT_TIMEOUT)) {
-        *connection_success = 0;
+        send_request(bev, request);
+        free(request);
     }
-    event_base_loopexit(base, NULL);
+}
+
+static void
+read_cb(struct bufferevent *bev, void *ctx) {
+    read_response(bev);
+    event_base_loopexit(bufferevent_get_base(bev), NULL);
 }
 
 /**
  * Connects to the server using a UNIX domain socket.
  */
 static struct bufferevent *
-connect_to_server(const char *sock_name) {
+connect_to_server(const char *sock_name, void *data) 
+{
     struct sockaddr_un sa_un;
-    int connection_success = 0;
 
     base = event_base_new();
     if (!base) {
@@ -70,7 +74,7 @@ connect_to_server(const char *sock_name) {
         exit(EXIT_FAILURE);
     }
 
-    bufferevent_setcb(bev, NULL, NULL, event_cb, &connection_success);
+    bufferevent_setcb(bev, read_cb, NULL, event_cb, data);
     bufferevent_enable(bev, EV_READ | EV_WRITE);
 
     struct timeval tv = {WDCTL_TIMEOUT, 0};
@@ -85,13 +89,7 @@ connect_to_server(const char *sock_name) {
 
     event_base_dispatch(base);
 
-    if (!connection_success) {
-        fprintf(stderr, "Error: Connection failed. Is apfree-wifidog running?\n");
-        bufferevent_free(bev);
-        event_base_free(base);
-        exit(EXIT_FAILURE);
-    }
-
+    bufferevent_free(bev);
     event_base_free(base);
     return bev;
 }
@@ -153,10 +151,9 @@ read_response(struct bufferevent *bev) {
  * Handles the main command logic.
  */
 static void 
-handle_command(const char *cmd, const char *param) {
-    struct bufferevent *bev = connect_to_server(sk_name);
+handle_command(const char *cmd, const char *param) 
+{
     char *request = NULL;
-
     if (param)
         asprintf(&request, "%s %s", cmd, param);
     else
@@ -167,11 +164,7 @@ handle_command(const char *cmd, const char *param) {
         exit(EXIT_FAILURE);
     }
 
-    send_request(bev, request);
-    free(request);
-
-    read_response(bev);
-    bufferevent_free(bev);
+    connect_to_server(sk_name, request);
 }
 
 /**
