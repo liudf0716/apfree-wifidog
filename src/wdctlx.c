@@ -18,8 +18,7 @@
 #include <sys/un.h>
 
 #define DEFAULT_SOCK "/tmp/wdctlx.sock"
-#define WDCTL_TIMEOUT 2000
-#define WDCTL_MSG_LEN 8192
+#define WDCTL_TIMEOUT 1
 
 static struct event_base *base = NULL;
 static char *sk_name = NULL;
@@ -35,7 +34,8 @@ static void handle_command(const char *cmd, const char *param);
 /**
  * Event callback for handling connection events.
  */
-static void event_cb(struct bufferevent *bev, short events, void *ctx) {
+static void 
+event_cb(struct bufferevent *bev, short events, void *ctx) {
     int *connection_success = (int *)ctx;
     if (events & BEV_EVENT_CONNECTED) {
         *connection_success = 1;
@@ -48,7 +48,8 @@ static void event_cb(struct bufferevent *bev, short events, void *ctx) {
 /**
  * Connects to the server using a UNIX domain socket.
  */
-static struct bufferevent *connect_to_server(const char *sock_name) {
+static struct bufferevent *
+connect_to_server(const char *sock_name) {
     struct sockaddr_un sa_un;
     int connection_success = 0;
 
@@ -72,7 +73,7 @@ static struct bufferevent *connect_to_server(const char *sock_name) {
     bufferevent_setcb(bev, NULL, NULL, event_cb, &connection_success);
     bufferevent_enable(bev, EV_READ | EV_WRITE);
 
-    struct timeval tv = {WDCTL_TIMEOUT / 1000, 0};
+    struct timeval tv = {WDCTL_TIMEOUT, 0};
     bufferevent_set_timeouts(bev, &tv, &tv);
 
     if (bufferevent_socket_connect(bev, (struct sockaddr *)&sa_un, sizeof(sa_un)) < 0) {
@@ -105,7 +106,8 @@ static void send_request(struct bufferevent *bev, const char *request) {
 /**
  * Executes shell commands specified in the server response.
  */
-static void execute_post_cmd(char *raw_cmd) {
+static void 
+execute_post_cmd(char *raw_cmd) {
     size_t nlen = strlen(raw_cmd);
     if (nlen < 3) return;
 
@@ -122,23 +124,36 @@ static void execute_post_cmd(char *raw_cmd) {
 /**
  * Reads and processes the server's response.
  */
-static void read_response(struct bufferevent *bev) {
-    char buf[WDCTL_MSG_LEN + 1] = {0};
-    int n = bufferevent_read(bev, buf, WDCTL_MSG_LEN);
-    if (n > 0) {
-        buf[n] = '\0';
-        if (!strncmp(buf, "CMD", 3)) {
-            execute_post_cmd(buf + 3);
-        } else {
-            fprintf(stdout, "%s\n", buf);
+static void 
+read_response(struct bufferevent *bev) {
+    struct evbuffer *input = bufferevent_get_input(bev);
+    size_t len = evbuffer_get_length(input);
+    
+    if (len > 0) {
+        char *buf = malloc(len + 1);
+        if (!buf) {
+            fprintf(stderr, "Error: Memory allocation failed\n");
+            return;
         }
+        
+        if (evbuffer_remove(input, buf, len) > 0) {
+            buf[len] = '\0';
+            if (len >= 3 && !strncmp(buf, "CMD", 3)) {
+                execute_post_cmd(buf + 3);
+            } else {
+                fprintf(stdout, "%s\n", buf);
+            }
+        }
+        
+        free(buf);
     }
 }
 
 /**
  * Handles the main command logic.
  */
-static void handle_command(const char *cmd, const char *param) {
+static void 
+handle_command(const char *cmd, const char *param) {
     struct bufferevent *bev = connect_to_server(sk_name);
     char *request = NULL;
 
@@ -164,14 +179,16 @@ static void handle_command(const char *cmd, const char *param) {
  */
 static void display_help() {
     printf("Commands:\n");
-    printf("  wdctlx show domain|wildcard_domain|mac\n");
-    printf("  wdctlx add domain|wildcard_domain|mac value1,value2...\n");
-    printf("  wdctlx clear domain|wildcard_domain|mac\n");
+    printf("  wdctlx show <domain|wildcard_domain|mac>\n");
+    printf("  wdctlx add <domain|wildcard_domain|mac> <value1,value2...>\n");
+    printf("  wdctlx del <mac> <value1,value2...>\n");
+    printf("  wdctlx clear <domain|wildcard_domain|mac>\n");
     printf("  wdctlx help|?\n");
     printf("  wdctlx stop\n");
     printf("  wdctlx reset value\n");
     printf("  wdctlx status [type]\n");
     printf("  wdctlx refresh\n");
+    printf("  wdctlx apfree <user_list|user_info|user_auth>\n");
 }
 
 typedef struct {
@@ -184,11 +201,15 @@ typedef struct {
 static const CommandMapping COMMAND_MAP[] = {
     {"show", "show_trusted_", true, false},
     {"add", "add_trusted_", true, true},
+    {"del", "del_trusted_", true, true},
     {"clear", "clear_trusted_", true, false},
     {"stop", "stop", false, false},
     {"reset", "reset", false, true},
     {"status", "status", false, false},
     {"refresh", "refresh", false, false},
+    {"apfree", "user_list", false, false},
+    {"apfree", "user_info", false, true},
+    {"apfree", "user_auth", false, true},
     {NULL, NULL, false, false}
 };
 
@@ -199,27 +220,34 @@ static const char *TYPE_MAP[] = {
     NULL
 };
 
-static const char *get_server_command(const char *cmd_type, const char *type) {
+static const char *
+get_server_command(const char *cmd_type, const char *type) {
     static char server_cmd[64];
-    if (strcmp(cmd_type, "show") == 0 || strcmp(cmd_type, "add") == 0 || strcmp(cmd_type, "clear") == 0) {
+    if (strcmp(cmd_type, "show") == 0 || 
+        strcmp(cmd_type, "add") == 0 || 
+        strcmp(cmd_type, "clear") == 0 || 
+        strcmp(cmd_type, "del") == 0) {
         const char *type_suffix = strcmp(type, "wildcard_domain") == 0 ? "pdomains" : 
                                 strcmp(type, "domain") == 0 ? "domains" : "mac";
         snprintf(server_cmd, sizeof(server_cmd), "%s%s", strcmp(cmd_type, "show") == 0 ? "show_trusted_" :
                                                         strcmp(cmd_type, "add") == 0 ? "add_trusted_" : 
+                                                        strcmp(cmd_type, "del") == 0 ? "del_trusted_" :
                                                         "clear_trusted_", type_suffix);
         return server_cmd;
     }
     return cmd_type;
 }
 
-static bool is_valid_type(const char *type) {
+static bool 
+is_valid_type(const char *type) {
     for (const char **t = TYPE_MAP; *t; t++) {
         if (strcmp(*t, type) == 0) return true;
     }
     return false;
 }
 
-int main(int argc, char **argv) {
+int 
+main(int argc, char **argv) {
     if (argc < 2) {
         display_help();
         return 1;
