@@ -34,6 +34,20 @@
 #define NFT_FILENAME_OUT "/tmp/fw4_apfree-wifiodg_init.conf.out"
 #define NFT_WIFIDOGX_CLIENT_LIST "/tmp/nftables_wifidogx_client_list"
 
+#define NFT_WIFIDOGX_BYPASS_MODE()    \
+s_config *config = config_get_config(); \
+if (config->auth_server_mode == AUTH_MODE_BYPASS) { \
+    debug(LOG_DEBUG, "Bypass mode is enabled, skip nftables rules"); \
+    return; \
+}
+
+#define NFT_WIFIDOGX_BYPASS_MODE_RETURN(val)    \
+s_config *config = config_get_config(); \
+if (config->auth_server_mode == AUTH_MODE_BYPASS) { \
+    debug(LOG_DEBUG, "Bypass mode is enabled, skip nftables rules"); \
+    return val; \
+}
+
 static int fw_quiet = 0;
 static void nft_statistical_helper(const char *cmd, char **output, uint32_t *output_len);
 
@@ -507,6 +521,8 @@ __nft_del_gw()
 void
 nft_reload_gw()
 {
+    NFT_WIFIDOGX_BYPASS_MODE();
+
     LOCK_CONFIG();
     __nft_del_gw();
     __nft_add_gw();
@@ -544,6 +560,8 @@ nft_set_ext_interface()
 int
 nft_fw_destroy(void)
 {
+    NFT_WIFIDOGX_BYPASS_MODE_RETURN(0);
+
 	FILE *fp;
     char buffer[128];
     int table_exists = 0;
@@ -701,12 +719,12 @@ nft_fw_del_rule_by_ip_and_mac(const char *ip, const char *mac, const char *chain
 int
 nft_fw_access(fw_access_t type, const char *ip, const char *mac, int tag)
 {
+    NFT_WIFIDOGX_BYPASS_MODE_RETURN(0);
+
     if (!ip || !mac) {
         debug(LOG_ERR, "Invalid parameters: ip or mac is NULL");
         return 1;
     }
-
-    s_config *config = config_get_config();
 
     switch(type) {
         case FW_ACCESS_ALLOW:
@@ -764,8 +782,11 @@ nft_fw_access_host(fw_access_t type, const char *ip)
  *
  * @return 0 on success, 1 on failure
  */
-int nft_fw_reload_client()
+int 
+nft_fw_reload_client()
 {
+    NFT_WIFIDOGX_BYPASS_MODE_RETURN(0);
+
     t_client *first_client = client_get_first_client();
     if (first_client == NULL) {
         debug(LOG_INFO, "No clients in list!");
@@ -1003,6 +1024,8 @@ process_nftables_json(json_object *jobj, int is_outgoing)
 int 
 nft_fw_counters_update()
 {
+    NFT_WIFIDOGX_BYPASS_MODE_RETURN(0);
+
     reset_client_list();
 
     // get client outgoing traffic
@@ -1069,6 +1092,8 @@ __nft_fw_clear_authservers()
 void
 nft_fw_clear_authservers()
 {
+    NFT_WIFIDOGX_BYPASS_MODE();
+
     LOCK_CONFIG();
     __nft_fw_clear_authservers();
     UNLOCK_CONFIG();
@@ -1100,6 +1125,8 @@ __nft_fw_set_authservers()
 void
 nft_fw_set_authservers()
 {
+    NFT_WIFIDOGX_BYPASS_MODE();
+
     LOCK_CONFIG();
     __nft_fw_set_authservers();
     UNLOCK_CONFIG();
@@ -1115,6 +1142,8 @@ __nft_fw_clear_inner_domains_trusted()
 void
 nft_fw_clear_inner_domains_trusted()
 {
+    NFT_WIFIDOGX_BYPASS_MODE();
+
     LOCK_CONFIG();
     __nft_fw_clear_inner_domains_trusted();
     UNLOCK_CONFIG();
@@ -1140,6 +1169,8 @@ __nft_fw_set_inner_domains_trusted()
 void
 nft_fw_set_inner_domains_trusted()
 {
+    NFT_WIFIDOGX_BYPASS_MODE();
+
     LOCK_CONFIG();
     __nft_fw_set_inner_domains_trusted();
     UNLOCK_CONFIG();
@@ -1148,6 +1179,8 @@ nft_fw_set_inner_domains_trusted()
 void
 nft_fw_refresh_inner_domains_trusted()
 {
+    NFT_WIFIDOGX_BYPASS_MODE();
+
     LOCK_CONFIG();
     __nft_fw_clear_inner_domains_trusted();
     __nft_fw_set_inner_domains_trusted();
@@ -1171,6 +1204,8 @@ __nft_fw_set_user_domains_trusted()
 void
 nft_fw_set_user_domains_trusted()
 {
+    NFT_WIFIDOGX_BYPASS_MODE();
+
 	LOCK_DOMAIN();
 	__nft_fw_set_user_domains_trusted();
 	UNLOCK_DOMAIN();
@@ -1186,6 +1221,8 @@ __nft_fw_clear_user_domains_trusted()
 void
 nft_fw_clear_user_domains_trusted()
 {
+    NFT_WIFIDOGX_BYPASS_MODE();
+
     LOCK_DOMAIN();
     __nft_fw_clear_user_domains_trusted();
     UNLOCK_DOMAIN();
@@ -1194,6 +1231,8 @@ nft_fw_clear_user_domains_trusted()
 void
 nft_fw_refresh_user_domains_trusted()
 {
+    NFT_WIFIDOGX_BYPASS_MODE();
+
     LOCK_DOMAIN();
     __nft_fw_clear_user_domains_trusted();
     __nft_fw_set_user_domains_trusted();
@@ -1218,6 +1257,8 @@ __nft_fw_del_trusted_mac(const char *mac)
 void
 nft_fw_del_trusted_mac(const char *mac)
 {
+    NFT_WIFIDOGX_BYPASS_MODE();
+
     LOCK_CONFIG();
     __nft_fw_del_trusted_mac(mac);
     UNLOCK_CONFIG();
@@ -1226,6 +1267,8 @@ nft_fw_del_trusted_mac(const char *mac)
 void
 nft_fw_add_trusted_mac(const char *mac, int timeout)
 {
+    NFT_WIFIDOGX_BYPASS_MODE();
+
     LOCK_CONFIG();
     __nft_fw_add_trusted_mac(mac, timeout);
     UNLOCK_CONFIG();
@@ -1234,6 +1277,8 @@ nft_fw_add_trusted_mac(const char *mac, int timeout)
 void
 nft_fw_update_trusted_mac(const char *mac, int timeout)
 {
+    NFT_WIFIDOGX_BYPASS_MODE();
+
     LOCK_CONFIG();
     __nft_fw_del_trusted_mac(mac);
     __nft_fw_add_trusted_mac(mac, timeout);
@@ -1244,15 +1289,15 @@ static void
 __nft_fw_set_trusted_maclist()
 {
     const s_config *config = config_get_config();
-    t_trusted_mac *p = NULL;
-
-    for (p = config->trustedmaclist; p != NULL; p = p->next)
+    for (t_trusted_mac *p = config->trustedmaclist; p != NULL; p = p->next)
         __nft_fw_add_trusted_mac(p->mac, p->remaining_time);
 }
 
 void
 nft_fw_set_trusted_maclist()
 {
+    NFT_WIFIDOGX_BYPASS_MODE();
+
     LOCK_CONFIG();
     __nft_fw_set_trusted_maclist();
     UNLOCK_CONFIG();
@@ -1267,6 +1312,8 @@ __nft_fw_clear_trusted_maclist()
 void
 nft_fw_clear_trusted_maclist()
 {
+    NFT_WIFIDOGX_BYPASS_MODE();
+
     LOCK_CONFIG();
     __nft_fw_clear_trusted_maclist();
     UNLOCK_CONFIG();
@@ -1275,6 +1322,8 @@ nft_fw_clear_trusted_maclist()
 void
 nft_fw_refresh_trusted_maclist()
 {
+    NFT_WIFIDOGX_BYPASS_MODE();
+
     LOCK_CONFIG();
     __nft_fw_clear_trusted_maclist();
     __nft_fw_set_trusted_maclist();
@@ -1284,6 +1333,8 @@ nft_fw_refresh_trusted_maclist()
 void 
 nft_fw_set_mac_temporary(const char *mac, int which)
 {
+    NFT_WIFIDOGX_BYPASS_MODE();
+
     LOCK_CONFIG();
     if (which == 0) {
 		nftables_do_command("add element inet fw4 set_wifidogx_tmp_trust_clients { %s }", mac);
@@ -1300,6 +1351,8 @@ nft_fw_set_mac_temporary(const char *mac, int which)
 void
 nft_fw_add_anti_nat_permit(const char *mac)
 {
+    NFT_WIFIDOGX_BYPASS_MODE();
+
     LOCK_CONFIG();
     nftables_do_command("add element inet fw4 set_wifidogx_local_trust_clients { %s }", mac);
     UNLOCK_CONFIG();
@@ -1308,6 +1361,8 @@ nft_fw_add_anti_nat_permit(const char *mac)
 void
 nft_fw_del_anti_nat_permit(const char *mac)
 {
+    NFT_WIFIDOGX_BYPASS_MODE();
+
     LOCK_CONFIG();
     nftables_do_command("delete element inet fw4 set_wifidogx_local_trust_clients { %s }", mac);
     UNLOCK_CONFIG();
@@ -1328,6 +1383,8 @@ __nft_fw_set_anti_nat_permit()
 void
 nft_fw_set_anti_nat_permit()
 {
+    NFT_WIFIDOGX_BYPASS_MODE();
+
     LOCK_CONFIG();
     __nft_fw_set_anti_nat_permit();
     UNLOCK_CONFIG();
@@ -1350,6 +1407,8 @@ nft_fw_set_anti_nat_permit()
 int 
 nft_fw_init()
 {
+    NFT_WIFIDOGX_BYPASS_MODE_RETURN(1);
+
 	generate_nft_wifidogx_init_script();
 	nft_do_init_script_command();
     nft_set_ext_interface();
@@ -1359,4 +1418,12 @@ nft_fw_init()
     __nft_fw_set_anti_nat_permit();
 
     return 1;
+}
+
+void
+nft_fw_conntrack_flush()
+{
+    NFT_WIFIDOGX_BYPASS_MODE();
+
+    execute("conntrack -F", 0);
 }
