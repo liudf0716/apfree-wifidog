@@ -29,6 +29,6 @@ struct dns_header {
     unsigned short arcount;
 };
 
-void *dns_forward_thread(void *);
+void *thread_dns_forward(void *);
 
 #endif

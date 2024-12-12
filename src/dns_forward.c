@@ -316,7 +316,7 @@ read_cb(evutil_socket_t fd, short event, void *arg)
 }
 
 void *
-dns_forward_thread(void *arg) {
+thread_dns_forward(void *arg) {
     int sockfd;
     struct sockaddr_in server_addr;
 

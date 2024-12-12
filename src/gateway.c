@@ -614,7 +614,7 @@ threads_init(s_config *config)
 
     // Optional service threads based on configuration
     if (config->enable_dns_forward) {
-        create_detached_thread(&tid_dns_forward, (void *)dns_forward_thread, NULL, "dns_forward");
+        create_detached_thread(&tid_dns_forward, (void *)thread_dns_forward, NULL, "dns_forward");
     }
 
     if (config->enable_dhcp_cpi) {
