@@ -1013,7 +1013,7 @@ connect_ws_server(t_ws_server *ws_server)
  * @note This function runs in its own thread context
  */
 void 
-start_ws_thread(void *arg)
+thread_websocket(void *arg)
 {
 	t_ws_server *ws_server = get_ws_server();
 	if (!ws_server) {
@@ -1049,15 +1049,4 @@ cleanup:
 	if (ws_state.dnsbase) evdns_base_free(ws_state.dnsbase, 0);
 	if (ssl_state.ssl) SSL_free(ssl_state.ssl);
 	if (ssl_state.ctx) SSL_CTX_free(ssl_state.ctx);
-}
-
-/**
- * Stop the WebSocket client thread
- * 
- * Forces the event loop to exit, triggering cleanup
- */
-void
-stop_ws_thread()
-{
-	event_base_loopexit(ws_state.base, NULL);
 }

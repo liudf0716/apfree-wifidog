@@ -20,8 +20,6 @@ struct ws_header {
     uint8_t masking_key[4];    // Masking key
 };
 
-void start_ws_thread(void *arg);
-
-void stop_ws_thread();
+void thread_websocket(void *arg);
 
 #endif

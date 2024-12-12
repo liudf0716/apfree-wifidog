@@ -634,7 +634,7 @@ threads_init(s_config *config)
 
     // Optional websocket thread
     if (get_ws_server()) {
-        create_detached_thread(&tid_ws, (void *)start_ws_thread, NULL, "websocket");
+        create_detached_thread(&tid_ws, (void *)thread_websocket, NULL, "websocket");
     }
 
     // Optional MQTT thread
