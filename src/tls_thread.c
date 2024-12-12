@@ -211,6 +211,7 @@ check_auth_server_available_cb(int errcode, struct evutil_addrinfo *res, void *p
 		mark_auth_server_bad(auth_server);
 		return;
 	}
+	debug(LOG_INFO, "auth server dns resolve success");
 
 	struct evutil_addrinfo *addr = res;
 	for (; addr != NULL; addr = addr->ai_next) {

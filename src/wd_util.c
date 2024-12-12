@@ -1441,7 +1441,7 @@ thread_evdns_parse_trusted_domain_2_ip(void *arg)
 		return;
 
 	if (!p) {
-		debug(LOG_DEBUG, "parsed domain list is empty");
+		debug(LOG_DEBUG, "parsed [%s] domain list is empty", which == INNER_TRUSTED_DOMAIN ? "inner" : "user");
 		return;
 	}
 

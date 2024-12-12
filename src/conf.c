@@ -1477,7 +1477,8 @@ parse_domain_string_common_action(const char *ptr, trusted_domain_t which, int a
 		if (*tmp != '\0' && isblank(*tmp)) {
 			*tmp = '\0';
 		}
-		debug(LOG_DEBUG, "Adding&Delete [%d] trust domain [%s] to&from list", action, hostname);
+
+		debug(LOG_DEBUG, "[%s] trust domain [%s] to&from list", action?"add":"del", hostname);
 		if(action) // 1: add
 			__add_domain_common(hostname, which);
 		else {// 0: del
