@@ -31,7 +31,6 @@
 #define NFPROTO_INET        1
 #define NFT_MSG_GETCHAIN    4
 
-#define NFT_CONF_FILENAME "/etc/fw4_apfree-wifiodg_init.conf"
 #define NFT_FILENAME_OUT "/tmp/fw4_apfree-wifiodg_init.conf.out"
 #define NFT_WIFIDOGX_CLIENT_LIST "/tmp/nftables_wifidogx_client_list"
 
@@ -307,8 +306,8 @@ nftables_do_command(const char *format, ...)
 static void 
 nft_do_init_script_command()
 {
-    if (access(NFT_CONF_FILENAME, F_OK) == -1) {
-        debug(LOG_ERR, "nftables configuration file %s not found", NFT_CONF_FILENAME);
+    if (access(NFT_FILENAME_OUT, F_OK) == -1) {
+        debug(LOG_ERR, "nftables rule file %s not found", NFT_FILENAME_OUT);
         termination_handler(0);
     }
 
