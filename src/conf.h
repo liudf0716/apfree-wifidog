@@ -32,8 +32,8 @@
 #define DEFAULT_DEBUGLEVEL LOG_INFO
 #define DEFAULT_LOG_SYSLOG 0
 #define DEFAULT_SYSLOG_FACILITY LOG_DAEMON
-#define DEFAULT_WDCTL_SOCK "/tmp/wdctl.sock"
-#define DEFAULT_INTERNAL_SOCK "/tmp/wifidog.sock"
+#define DEFAULT_WDCTL_SOCK "/tmp/wdctlx.sock"
+#define DEFAULT_INTERNAL_SOCK "/tmp/wifidogx.sock"
 
 /** Gateway configuration defaults */
 #define DEFAULT_GATEWAYID NULL

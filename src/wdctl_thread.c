@@ -203,7 +203,8 @@ thread_wdctl(void *arg)
 {
     struct sockaddr_un *su_socket = create_unix_socket((char *)arg);
     if (!su_socket) termination_handler(0);
-    
+    free(arg);
+
     struct event_base *wdctl_base = event_base_new();
     if (!wdctl_base) termination_handler(0);
 
@@ -233,18 +234,6 @@ static void
 wdctl_status(struct bufferevent *fd, const char *arg)
 {
     const char *type = arg;
-    if (!type) {
-        char *status = get_status_text();
-        if (status) {
-            size_t len = strlen(status);
-            bufferevent_write(fd, status, len);   /* XXX Not handling error because we'd just print the same log line. */
-            free(status);
-        } else 
-            bufferevent_write(fd, "No", 2); 
-
-        return;
-    }
-
     char *status = NULL;
 
     if (!strcmp(type, "client")) {
@@ -253,6 +242,8 @@ wdctl_status(struct bufferevent *fd, const char *arg)
         status = get_auth_status_json();
     } else if (!strcmp(type, "wifidogx")) {
         status = get_wifidogx_json();
+    } else {
+        status = get_status_text();
     }
 
     if (status) {
