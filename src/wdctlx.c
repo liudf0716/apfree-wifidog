@@ -179,7 +179,7 @@ static void display_help() {
     printf("  wdctlx help|?\n");
     printf("  wdctlx stop\n");
     printf("  wdctlx reset value\n");
-    printf("  wdctlx status [type]\n");
+    printf("  wdctlx status [client|auth|wifidogx]\n");
     printf("  wdctlx refresh\n");
     printf("  wdctlx apfree <user_list|user_info|user_auth>\n");
 }
