@@ -483,6 +483,7 @@ get_wifidogx_json()
 	json_object_object_add(jstatus, "is_internet_connected", json_object_new_int(is_online()));
 	json_object_object_add(jstatus, "is_auth_server_connected", json_object_new_int(is_auth_online()));
 	json_object_object_add(jstatus, "wifidogx_version", json_object_new_string(VERSION));
+	json_object_object_add(jstatus, "auth_server_mode", json_object_new_int(config_get_config()->auth_server_mode));
 
 	char *retStr = safe_strdup(json_object_to_json_string(jstatus));
 	json_object_put(jstatus);
