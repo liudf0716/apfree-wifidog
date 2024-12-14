@@ -19,6 +19,7 @@ find_package(PkgConfig REQUIRED)
 pkg_check_modules(LIBEVENT REQUIRED libevent)
 pkg_check_modules(OPENSSL REQUIRED openssl)
 pkg_check_modules(JSONC REQUIRED json-c)
+pkg_check_modules(MOSQUITTO REQUIRED libmosquitto)
 
 if (NOT AW_FW3)
   pkg_check_modules(NFTNL REQUIRED libnftnl)
