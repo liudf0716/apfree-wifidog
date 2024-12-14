@@ -9,7 +9,7 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 
 # Options
-option(AW_DEBUG "Build with debug support" ON)
+option(AW_DEBUG "Build with debug support" OFF)
 option(AW_FW3 "Build with iptables support" OFF)
 
 # Required packages
