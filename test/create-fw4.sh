@@ -13,7 +13,7 @@ if [ $? -ne 0 ]; then
 fi
 ip link set dummy0 up
 # Set the dummy0 interface IP address
-ip addr add dummy0 192.168.80.1/24
+ip addr add 192.168.80.1/24 dev dummy0
 
 # Create the 'fw4' table in 'inet' family
 nft add table inet fw4
