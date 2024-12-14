@@ -689,6 +689,7 @@ ev_fw_sync_with_authserver_v2(struct wd_request_context *context)
 		return;
 	}
 	
+	debug(LOG_DEBUG, "Syncing client counters with auth server");
 #ifdef AW_FW3
 	if (-1 == iptables_fw_counters_update()) 
 #else 

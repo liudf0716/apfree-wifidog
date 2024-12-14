@@ -1036,6 +1036,7 @@ nft_fw_counters_update()
         debug(LOG_ERR, "nft_fw_counters_update(): outgoing is NULL");
         return -1;
     }
+    debug(LOG_DEBUG, "outgoing: %s", outgoing);
     json_object *jobj_outgoing = json_tokener_parse(outgoing);
     if (jobj_outgoing == NULL) {
         free(outgoing);
@@ -1054,6 +1055,7 @@ nft_fw_counters_update()
         json_object_put(jobj_outgoing);
         return -1;
     }
+    debug(LOG_DEBUG, "incoming: %s", incoming);
     json_object *jobj_incoming = json_tokener_parse(incoming);
     if (jobj_incoming == NULL) {
         debug(LOG_ERR, "nft_fw_counters_update(): jobj_incoming is NULL");
