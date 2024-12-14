@@ -6,6 +6,15 @@ if [ $? -eq 0 ]; then
     nft delete table inet fw4
 fi
 
+# Create a dummy0 interface if it does not exist
+ip link show dummy0 > /dev/null 2>&1
+if [ $? -ne 0 ]; then
+    ip link add dummy0 type dummy
+fi
+ip link set dummy0 up
+# Set the dummy0 interface IP address
+ip addr add dummy0 192.168.80.1/24
+
 # Create the 'fw4' table in 'inet' family
 nft add table inet fw4
 
