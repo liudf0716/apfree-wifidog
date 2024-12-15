@@ -8,6 +8,12 @@
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <time.h>
+#include <netinet/in.h>
+#include <errno.h>
+
+#include <linux/netfilter.h>
+#include <linux/netfilter/nf_tables.h>
 
 #include <libmnl/libmnl.h>
 #include <libnftnl/table.h>
@@ -28,9 +34,6 @@
 #include "gateway.h"
 #include "safe.h"
 
-#define NFPROTO_INET        1
-#define NFT_MSG_GETCHAIN    4
-
 #define NFT_FILENAME_OUT "/tmp/fw4_apfree-wifiodg_init.conf.out"
 #define NFT_WIFIDOGX_CLIENT_LIST "/tmp/nftables_wifidogx_client_list"
 
@@ -49,7 +52,7 @@ if (config->auth_server_mode == AUTH_MODE_BYPASS) { \
 }
 
 static int fw_quiet = 0;
-static void nft_statistical_helper(const char *cmd, char **output, uint32_t *output_len);
+static void nft_statistical_helper(const char *tab, const char *chain, char **output, uint32_t *output_len);
 
 const char *nft_wifidogx_init_script[] = {
     "add table inet wifidogx",
@@ -328,6 +331,29 @@ nft_do_init_script_command()
 	nftables_do_command("-f %s", NFT_FILENAME_OUT);
 }
 
+
+
+// Callback function to process Netlink responses
+static int 
+parse_nft_chain_cb(const struct nlmsghdr *nlh, void *data) 
+{
+    struct nftnl_rule *rule;
+    rule = nftnl_rule_alloc();
+    if (!rule) {
+        debug(LOG_ERR, "nftnl_rule_alloc failed");
+        return MNL_CB_ERROR;
+    }
+
+    if (nftnl_rule_nlmsg_parse(nlh, rule) < 0) {
+        debug(LOG_ERR, "nftnl_chain_nlmsg_parse failed");
+        nftnl_rule_free(rule);
+        return MNL_CB_ERROR;
+    }
+
+    nftnl_rule_free(rule);
+    return MNL_CB_OK;
+}
+
 /**
  * @brief Helper function to execute nftables commands using libnftables
  *
@@ -338,15 +364,13 @@ nft_do_init_script_command()
  * @param output_len Pointer to store output length
  */
 static void 
-nft_statistical_helper(const char *cmd, char **output, uint32_t *output_len) 
+nft_mnl_statistical_helper(const char *tab, const char *chain_name, char **output, uint32_t *output_len) 
 {
-    if (!cmd || !output || !output_len) {
+    if (!chain_name || !output || !output_len) {
         debug(LOG_ERR, "Invalid parameters");
         return;
     }
-
-    *output = NULL;
-    *output_len = 0;
+    debug(LOG_DEBUG, "nft_statistical_helper: %s", chain_name);
 
     // Open netlink socket
     struct mnl_socket *nl;
@@ -376,20 +400,11 @@ nft_statistical_helper(const char *cmd, char **output, uint32_t *output_len)
         return;
     }
 
-    // Parse chain name from command
-    char table[32], chain_name[32];
-    if (sscanf(cmd, "list chain inet %s %s", table, chain_name) != 2) {
-        debug(LOG_ERR, "Failed to parse command: %s", cmd);
-        nftnl_chain_free(chain);
-        mnl_socket_close(nl);
-        return;
-    }
-
-    nftnl_chain_set_str(chain, NFTNL_CHAIN_TABLE, table);
+    nftnl_chain_set_str(chain, NFTNL_CHAIN_TABLE, tab);
     nftnl_chain_set_str(chain, NFTNL_CHAIN_NAME, chain_name);
     nftnl_chain_set_u32(chain, NFTNL_CHAIN_FAMILY, NFPROTO_INET);
 
-    nlh = nftnl_chain_nlmsg_build_hdr(buf, NFT_MSG_GETCHAIN, NFPROTO_INET,
+    nlh = nftnl_chain_nlmsg_build_hdr(buf, NFT_MSG_GETRULE, NFPROTO_INET,
                                      NLM_F_DUMP, seq);
     nftnl_chain_nlmsg_build_payload(nlh, chain);
 
@@ -408,13 +423,14 @@ nft_statistical_helper(const char *cmd, char **output, uint32_t *output_len)
     // Receive response 
     int ret;
     while ((ret = mnl_socket_recvfrom(nl, buf, sizeof(buf))) > 0) {
-        ret = mnl_cb_run(buf, ret, seq, mnl_socket_get_portid(nl), NULL, NULL);
+        ret = mnl_cb_run(buf, ret, seq, mnl_socket_get_portid(nl), parse_nft_chain_cb, rules_array);
         if (ret <= 0)
             break;
     }
 
     // Convert output to JSON string
     const char *json_str = json_object_to_json_string_ext(json, JSON_C_TO_STRING_PRETTY);
+    debug(LOG_DEBUG, "nft_statistical_helper: %s", json_str);
     if (json_str) {
         *output = strdup(json_str);
         *output_len = strlen(json_str);
@@ -435,10 +451,82 @@ nft_statistical_helper(const char *cmd, char **output, uint32_t *output_len)
  * @param[out] outgoing_len Length of output
  */
 static void 
+nft_statistical_helper(const char *tab, const char *chain, char **output, uint32_t *output_len)
+{
+    if (!tab || !chain || !output || !output_len) {
+        debug(LOG_ERR, "Invalid parameters");
+        return;
+    }
+
+    char cmd[256] = {0};
+    snprintf(cmd, sizeof(cmd), "nft -j list chain inet %s %s", tab, chain);
+    debug(LOG_DEBUG, "Running command: %s", cmd);
+
+    FILE *fp = popen(cmd, "r");
+    if (!fp) {
+        debug(LOG_ERR, "Failed to run command: %s", strerror(errno));
+        return;
+    }
+
+    // Read output in chunks
+    char *buf = NULL;
+    size_t total_len = 0;
+    size_t chunk_size = 4096;
+    
+    while (1) {
+        char *new_buf = realloc(buf, total_len + chunk_size);
+        if (!new_buf) {
+            debug(LOG_ERR, "Memory allocation failed");
+            free(buf);
+            pclose(fp);
+            return;
+        }
+        buf = new_buf;
+
+        size_t bytes_read = fread(buf + total_len, 1, chunk_size, fp);
+        total_len += bytes_read;
+
+        if (bytes_read < chunk_size) {
+            if (feof(fp)) {
+                break;
+            }
+            if (ferror(fp)) {
+                debug(LOG_ERR, "Error reading command output: %s", strerror(errno));
+                free(buf);
+                pclose(fp);
+                return;
+            }
+        }
+    }
+
+    pclose(fp);
+
+    // Ensure buffer is null terminated
+    char *final_buf = realloc(buf, total_len + 1);
+    if (!final_buf) {
+        debug(LOG_ERR, "Final buffer allocation failed");
+        free(buf);
+        return;
+    }
+    final_buf[total_len] = '\0';
+
+    *output = final_buf;
+    *output_len = total_len;
+}
+
+/**
+ * @brief Get outgoing traffic statistics using libnftables
+ *
+ * Retrieves statistics for outgoing traffic from the 
+ * mangle_prerouting_wifidogx_outgoing chain using libnftables API
+ *
+ * @param[out] outgoing Pointer to store output string
+ * @param[out] outgoing_len Length of output
+ */
+static void 
 nft_statistical_outgoing(char **outgoing, uint32_t *outgoing_len)
 {
-    const char *cmd = "list chain inet fw4 mangle_prerouting_wifidogx_outgoing";
-    nft_statistical_helper(cmd, outgoing, outgoing_len);
+    nft_statistical_helper("fw4", "mangle_prerouting_wifidogx_outgoing", outgoing, outgoing_len);
 }
 
 /**
@@ -453,8 +541,7 @@ nft_statistical_outgoing(char **outgoing, uint32_t *outgoing_len)
 static void
 nft_statistical_incoming(char **incoming, uint32_t *incoming_len)
 {
-    const char *cmd = "list chain inet fw4 mangle_postrouting_wifidogx_incoming";
-    nft_statistical_helper(cmd, incoming, incoming_len);
+    nft_statistical_helper("fw4", "mangle_postrouting_wifidogx_incoming", incoming, incoming_len);
 }
 
 static void
@@ -639,13 +726,9 @@ check_nft_expr_json_array_object(json_object *jobj, const char *ip, const char *
 static void
 nft_fw_del_rule_by_ip_and_mac(const char *ip, const char *mac, const char *chain)
 {
-    char cmd[256];
-    snprintf(cmd, sizeof(cmd), " -j list chain inet fw4 %s", chain);
-    debug(LOG_DEBUG, "cmd: %s", cmd);
-
     char *buf = NULL;
     uint32_t buf_len = 0;
-    nft_statistical_helper(cmd, &buf, &buf_len);
+    nft_statistical_helper("fw4", chain, &buf, &buf_len);
     if (buf == NULL) {
         debug(LOG_ERR, "nft_statistical_helper failed");
         return;
@@ -667,6 +750,7 @@ nft_fw_del_rule_by_ip_and_mac(const char *ip, const char *mac, const char *chain
     }
 
     int len = json_object_array_length(jobj_nftables);
+    char cmd[128] = {0};
     for (int i = 0; i < len; i++) {
         json_object *jobj_item = json_object_array_get_idx(jobj_nftables, i);
         if (jobj_item == NULL) {
@@ -696,6 +780,7 @@ nft_fw_del_rule_by_ip_and_mac(const char *ip, const char *mac, const char *chain
             const char *handle = json_object_get_string(jobj_rule_handle);
             snprintf(cmd, sizeof(cmd), "nft delete rule inet fw4 %s handle %s", chain, handle);
             nftables_do_command(cmd);
+            memset(cmd, 0, sizeof(cmd));
         }
     }
 
