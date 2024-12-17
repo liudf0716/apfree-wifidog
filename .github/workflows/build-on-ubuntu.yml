@@ -28,9 +28,25 @@ jobs:
           sudo apt-get update -y
           sudo apt-get install -y libjson-c-dev
           sudo apt-get install -y libevent-dev
-          sudo apt-get install -y libnftnl-dev libmnt-dev
+          sudo apt-get install -y libnftnl-dev libmnl-dev
           sudo apt-get install -y libnetfilter-queue-dev
           sudo apt-get install -y libmosquitto-dev
+    
+    - name: install libubox for apfree wifidog
+      run: |
+        git clone https://github.com/liudf0716/libubox.git
+        cd libubox
+        cmake .
+        make
+        sudo make install
+
+    - name: install uci for apfree wifidog
+      run: |
+        git clone https://github.com/liudf0716/uci.git
+        cd uci
+        cmake .
+        make
+        sudo make install
 
     - name: install iptables lib for apfree wifidog
       if: ${{ github.event.inputs.firewall == 'fw3' }}
