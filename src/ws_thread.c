@@ -476,7 +476,10 @@ ws_send(struct evbuffer *buf, const char *msg, const size_t len)
 	}
 
 	// Add masking key and masked payload
-	uint8_t mask_key[4] = {1, 2, 3, 4};
+	uint8_t mask_key[4];
+    for (int i = 0; i < 4; i++) {
+        mask_key[i] = rand() & 0xFF;
+    }
 	evbuffer_add(buf, mask_key, 4);
 
 	// Mask and write payload
