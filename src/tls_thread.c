@@ -21,6 +21,8 @@
 #include "wd_client.h"
 #include "http.h"
 
+#define DNS_RESOLV_CONF "/etc/resolv.conf"
+
 static struct event_base *base		= NULL;
 static struct evdns_base *dnsbase 	= NULL;
 
@@ -392,10 +394,9 @@ tls_process_loop () {
 	if (!dnsbase) {
 		debug (LOG_ERR, "dnsbase new failed. \n");
 		termination_handler(0);
-	} else if ( 0 != evdns_base_resolv_conf_parse(dnsbase, DNS_OPTION_NAMESERVERS, "/tmp/resolv.conf.auto") ) {
+	} else if ( 0 != evdns_base_resolv_conf_parse(dnsbase, DNS_OPTION_NAMESERVERS, DNS_RESOLV_CONF) ) {
 		debug (LOG_ERR, "evdns_base_resolv_conf_parse failed. \n");
-		if (!dnsbase) 
-			termination_handler(0);
+		termination_handler(0);
 	}
 	evdns_base_set_option(dnsbase, "timeout", config->dns_timeout);
 	evdns_base_set_option(dnsbase, "randomize-case:", "0");//TurnOff DNS-0x20 encoding
