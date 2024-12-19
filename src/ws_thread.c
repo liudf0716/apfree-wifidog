@@ -58,8 +58,8 @@ static struct {
  * Fixed values used for testing/development
  * TODO: Generate random key and accept token for production
  */
-static const char *WS_KEY = "dGhlIHNhbXBsZSBub25jZQ==";
-static const char *WS_ACCEPT = "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=";
+static const char *WS_KEY = "Hg04qu/w3ScU0zYla/sTaA==";
+static const char *WS_ACCEPT = "MU1F8vXbrribCyF0iGUimSRJFGY=";
 
 /* Forward declarations for callback functions */
 static void ws_heartbeat_cb(evutil_socket_t fd, short events, void *arg);
@@ -566,24 +566,20 @@ ws_request(struct bufferevent* b_ws)
 	t_ws_server *ws_server = get_ws_server();
 	
 	debug(LOG_DEBUG, "Sending WebSocket upgrade request to path: %s", ws_server->path);
-
-	// Build HTTP request headers
-	const char *scheme = ws_server->use_ssl ? "https" : "http";
 	
 	// Required WebSocket headers
 	evbuffer_add_printf(out, 
 		"GET %s HTTP/1.1\r\n"
 		"Host: %s:%d\r\n"
+		"User-Agent: apfree-wifidog\r\n"
 		"Upgrade: websocket\r\n"
 		"Connection: upgrade\r\n"
 		"Sec-WebSocket-Key: %s\r\n"
 		"Sec-WebSocket-Version: 13\r\n"
-		"Origin: %s://%s:%d\r\n"
 		"\r\n",
 		ws_server->path,
 		ws_server->hostname, ws_server->port,
-		WS_KEY,
-		scheme, ws_server->hostname, ws_server->port
+		WS_KEY
 	);
 }
 
