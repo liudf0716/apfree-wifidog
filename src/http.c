@@ -46,7 +46,7 @@
                     "  return typeof window !== 'undefined' && typeof document !== 'undefined';" \
                     "}" \
                     "if (isBrowser()) {" \
-                    "  window.location.replace(\"%s\");" \
+                    "  window.location.href = %s;" \
                     "}" \
                 "</script>"	\
                 "<body>"	\
