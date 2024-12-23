@@ -42,12 +42,7 @@
                 "<html>"						\
                 "<title>apfree-wifidog redirecting...</title>"		\
                 "<script type=\"text/javascript\">"	\
-                    "function isBrowser() {"  \
-                    "  return typeof window !== 'undefined' && typeof document !== 'undefined';" \
-                    "}" \
-                    "if (isBrowser()) {" \
-                    "  window.location.href = '%s';" \
-                    "}" \
+                    "window.location.replace(\"%s\");"	\
                 "</script>"	\
                 "<body>"	\
                 "apfree-wifidog redirecting..."	\
