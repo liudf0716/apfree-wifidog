@@ -4,6 +4,8 @@
  * Copyright (c) 2023 Dengfeng Liu <liudf0716@gmail.com>
  */
 
+#include <netinet/tcp.h>
+
 #include "common.h"
 #include "ws_thread.h"
 #include "debug.h"
@@ -54,6 +56,21 @@ static struct {
 	.ssl = NULL
 };
 
+enum WebSocketFrameType {
+	ERROR_FRAME = 0xFF,
+	INCOMPLETE_DATA = 0xFE,
+
+	CLOSING_FRAME = 0x8,
+
+	INCOMPLETE_FRAME = 0x81,
+
+	TEXT_FRAME = 0x1,
+	BINARY_FRAME = 0x2,
+
+	PING_FRAME = 0x9,
+	PONG_FRAME = 0xA
+};
+
 /**
  * WebSocket handshake constants
  * Fixed values used for testing/development
@@ -72,6 +89,37 @@ static void handle_kickoff_response(json_object *j_auth);
 static void cleanup_connection(struct bufferevent *bev);
 static void reconnect_websocket(void);
 
+static int
+evutil_set_tcp_keepalive(evutil_socket_t fd, int on, int timeout)
+{
+	int ret = setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &on, sizeof(on));
+	if (ret < 0) {
+		debug(LOG_ERR, "Failed to set SO_KEEPALIVE: %s", strerror(errno));
+		return -1;
+	}
+
+	int keep_idle = 30;
+	ret = setsockopt(fd, IPPROTO_TCP, TCP_KEEPIDLE, &keep_idle, sizeof(keep_idle));
+	if (ret < 0) {
+		debug(LOG_ERR, "Failed to set TCP_KEEPIDLE: %s", strerror(errno));
+		return -1;
+	}
+
+	ret = setsockopt(fd, IPPROTO_TCP, TCP_KEEPINTVL, &timeout, sizeof(timeout));
+	if (ret < 0) {
+		debug(LOG_ERR, "Failed to set TCP_KEEPINTVL: %s", strerror(errno));
+		return -1;
+	}
+
+	int keep_cnt = 3;
+	ret = setsockopt(fd, IPPROTO_TCP, TCP_KEEPCNT, &keep_cnt, sizeof(keep_cnt));
+	if (ret < 0) {
+		debug(LOG_ERR, "Failed to set TCP_KEEPCNT: %s", strerror(errno));
+		return -1;
+	}
+
+	return 0;
+}
 
 /**
  * @brief Generates a secure WebSocket key for WebSocket handshake
@@ -456,7 +504,7 @@ start_ws_heartbeat(struct bufferevent *b_ws)
 
 	// Set 60 second interval
 	struct timeval tv = {
-		.tv_sec = 60,
+		.tv_sec = 30,
 		.tv_usec = 0
 	};
 
@@ -629,9 +677,11 @@ ws_receive(unsigned char *data, const size_t data_len)
 	}
 
 	// Process text frames
-	if (opcode == 0x01) {
+	if (opcode == TEXT_FRAME) {
 		const char *msg = (const char *)(data + header_len);
 		process_ws_msg(msg);
+	} else {
+		debug(LOG_ERR, "Unsupported WebSocket opcode: %d", opcode);
 	}
 }
 
@@ -741,7 +791,8 @@ ws_heartbeat_cb(evutil_socket_t fd, short event, void *arg)
 {
 	struct bufferevent *b_ws = (struct bufferevent *)arg;
 	struct evbuffer *out = bufferevent_get_output(b_ws);
-	send_msg(out, "heartbeat");
+	
+	send_msg(out, "heartbeat");	
 }
 
 /**
@@ -794,6 +845,11 @@ ws_read_cb(struct bufferevent *b_ws, void *ctx)
 		// Send initial connect message
 		struct evbuffer *output = bufferevent_get_output(b_ws);
 		send_msg(output, "connect");
+
+		// enable TCP KEEPALIVE
+		evutil_socket_t fd = bufferevent_getfd(b_ws);
+		int enable = 1;
+		evutil_set_tcp_keepalive(fd, enable, 30);
 
 		// Start heartbeat timer
 		start_ws_heartbeat(b_ws);
