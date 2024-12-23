@@ -578,10 +578,11 @@ process_ws_msg(const char *msg)
  * @param len Length of the message payload
  */
 static void 
-ws_send(struct evbuffer *buf, const char *msg, const size_t len)
+ws_send(struct evbuffer *buf, const char *msg, const size_t len, enum WebSocketFrameType frame_type)
 {
 	// Frame header byte 1: FIN=1, RSV1-3=0, Opcode=0x1 (text)
-	uint8_t header1 = 0x81; // 1000 0001
+	uint8_t header1 = 0x80; // 1000 0001
+	header1 |= frame_type;
 
 	// Frame header byte 2: MASK=1, with payload length
 	uint8_t header2 = 0x80; // Set mask bit
@@ -677,7 +678,7 @@ ws_receive(unsigned char *data, const size_t data_len)
 	}
 
 	// Process text frames
-	if (opcode == TEXT_FRAME) {
+	if (opcode == TEXT_FRAME || opcode == PONG_FRAME) {
 		const char *msg = (const char *)(data + header_len);
 		process_ws_msg(msg);
 	} else {
@@ -772,7 +773,11 @@ send_msg(struct evbuffer *out, const char *type)
 	const char *json_str = json_object_to_json_string(root);
 	debug(LOG_DEBUG, "Sending %s message: %s", type, json_str);
 	
-	ws_send(out, json_str, strlen(json_str));
+	if (strcmp(type, "heartbeat") == 0) {
+		ws_send(out, json_str, strlen(json_str), PING_FRAME);
+	} else {
+		ws_send(out, json_str, strlen(json_str), TEXT_FRAME);
+	}
 	json_object_put(root);
 }
 
@@ -845,11 +850,6 @@ ws_read_cb(struct bufferevent *b_ws, void *ctx)
 		// Send initial connect message
 		struct evbuffer *output = bufferevent_get_output(b_ws);
 		send_msg(output, "connect");
-
-		// enable TCP KEEPALIVE
-		evutil_socket_t fd = bufferevent_getfd(b_ws);
-		int enable = 1;
-		evutil_set_tcp_keepalive(fd, enable, 30);
 
 		// Start heartbeat timer
 		start_ws_heartbeat(b_ws);
