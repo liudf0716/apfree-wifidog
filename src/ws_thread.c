@@ -19,6 +19,7 @@
  * Maximum size of WebSocket output buffer in bytes
  */
 #define MAX_OUTPUT (512*1024)
+#define WS_GUID "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
 /**
  * Network byte order conversion for 64-bit integers
@@ -58,8 +59,10 @@ static struct {
  * Fixed values used for testing/development
  * TODO: Generate random key and accept token for production
  */
-static const char *WS_KEY = "Hg04qu/w3ScU0zYla/sTaA==";
-static const char *WS_ACCEPT = "MU1F8vXbrribCyF0iGUimSRJFGY=";
+#define WS_KEY_LEN 		24
+#define WS_ACCEPT_LEN 	28
+static char WS_KEY[WS_KEY_LEN+1];
+static char WS_ACCEPT[WS_ACCEPT_LEN+1];
 
 /* Forward declarations for callback functions */
 static void ws_heartbeat_cb(evutil_socket_t fd, short events, void *arg);
@@ -68,6 +71,90 @@ static void handle_auth_response(json_object *j_auth);
 static void handle_kickoff_response(json_object *j_auth);
 static void cleanup_connection(struct bufferevent *bev);
 static void reconnect_websocket(void);
+
+
+/**
+ * @brief Generates a secure WebSocket key for WebSocket handshake
+ *
+ * This function generates a WebSocket key according to RFC 6455 specifications:
+ * 1. Creates 16 random bytes using OpenSSL's RAND_bytes
+ * 2. Encodes these bytes using Base64 encoding
+ * 
+ * The resulting key is exactly 24 bytes long (not counting null terminator).
+ *
+ * @param key Buffer where the generated key will be stored
+ * @param length Size of the provided buffer (must be at least 25 bytes to accommodate 
+ *               24 Base64 encoded characters plus null terminator)
+ *
+ * @note The function will return without generating a key if:
+ *       - Random bytes generation fails
+ *       - The provided buffer is too small (< 25 bytes)
+ */
+static void
+generate_sec_websocket_key(char *key, size_t length)
+{
+	// Generate 16 random bytes as required by WebSocket spec
+	unsigned char rand_bytes[16];
+	if (!RAND_bytes(rand_bytes, sizeof(rand_bytes))) {
+		debug(LOG_ERR, "Failed to generate random bytes for WebSocket key");
+		return;
+	}
+
+	// Base64 encode the random bytes
+	// Base64 encoding of 16 bytes will produce exactly 24 bytes plus null terminator
+	if (length < 25) {
+		debug(LOG_ERR, "Buffer too small for WebSocket key");
+		return;
+	}
+
+	EVP_EncodeBlock((unsigned char *)key, rand_bytes, sizeof(rand_bytes));
+	
+	// Ensure null termination
+	key[24] = '\0';
+
+	debug(LOG_DEBUG, "Generated WebSocket key: %s", key);
+}
+
+/**
+ * @brief Generates the Sec-WebSocket-Accept header value for WebSocket handshake
+ *
+ * This function implements the WebSocket handshake process by:
+ * 1. Concatenating the client's Sec-WebSocket-Key with the WebSocket GUID
+ * 2. Computing the SHA-1 hash of the concatenated string
+ * 3. Base64 encoding the resulting hash
+ *
+ * @param key The Sec-WebSocket-Key value from the client's handshake request
+ * @param accept Buffer to store the generated accept token
+ * @param length Size of the accept buffer (must be at least 29 bytes)
+ * 
+ * @note The WebSocket GUID is defined as "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+ * @note The resulting accept token is exactly 28 bytes long plus null terminator
+ */
+static void
+generate_sec_websocket_accept(const char *key, char *accept, size_t length)
+{
+	// Concatenate WebSocket key with WebSocket GUID
+	char key_guid[64];
+	snprintf(key_guid, sizeof(key_guid), "%s%s", key, WS_GUID);
+
+	// Calculate SHA1 hash of concatenated key
+	unsigned char sha1_hash[SHA_DIGEST_LENGTH];
+	SHA1((const unsigned char *)key_guid, strlen(key_guid), sha1_hash);
+
+	// Base64 encode the SHA1 hash
+	// Base64 encoding of 20 bytes will produce exactly 28 bytes plus null terminator
+	if (length < 29) {
+		debug(LOG_ERR, "Buffer too small for WebSocket accept token");
+		return;
+	}
+
+	EVP_EncodeBlock((unsigned char *)accept, sha1_hash, SHA_DIGEST_LENGTH);
+
+	// Ensure null termination
+	accept[28] = '\0';
+
+	debug(LOG_DEBUG, "Generated WebSocket accept token: %s", accept);
+}
 
 /**
  * Handle client kickoff response from WebSocket server
@@ -965,6 +1052,9 @@ connect_ws_server(t_ws_server *ws_server)
 	struct bufferevent *ws_bev = NULL;
 	int max_retries = 5;
 	int retry_count = 0;
+
+	generate_sec_websocket_key(WS_KEY, sizeof(WS_KEY));
+	generate_sec_websocket_accept(WS_KEY, WS_ACCEPT, sizeof(WS_ACCEPT));
 
 	while (retry_count < max_retries) {
 		ws_bev = create_ws_bufferevent();
