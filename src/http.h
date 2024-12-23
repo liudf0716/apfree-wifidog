@@ -31,14 +31,10 @@ void ev_http_callback_device(struct evhttp_request *, void *);
 void ev_http_send_redirect(struct evhttp_request *, const char *, const char *);
 void ev_http_send_redirect_to_auth(struct evhttp_request *, const char *, const char *);
 void ev_http_send_js_redirect(struct evhttp_request *, const char *);
-void ev_http_send_apple_redirect(struct evhttp_request *, const char *);
-void ev_send_http_page(struct evhttp_request *, const char *, const char *);
 void ev_http_reply_client_error(struct evhttp_request *, enum reply_client_error_type, 
                                char *, char *, char *, char *, char *);
 
 /* HTTP Utility Functions */
-void ev_http_resend(struct evhttp_request *);
-void ev_http_replay_wisper(struct evhttp_request *);
 struct evbuffer *ev_http_read_html_file(const char *, struct evbuffer *);
 char *ev_http_find_query(struct evhttp_request *, const char *);
 int ev_http_connection_get_peer(struct evhttp_connection *, char **, uint16_t *);

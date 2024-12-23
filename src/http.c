@@ -73,6 +73,15 @@ const char *apple_wisper = "<!DOCTYPE html>"
 				"</body>"
 				"</html>";
 
+static void ev_http_resend(struct evhttp_request *req);
+static int process_already_login_client(struct evhttp_request *req, const char *mac, const char *remote_host);
+static int process_wired_device_pass(struct evhttp_request *req, const char *mac);
+static void ev_http_respond_options(struct evhttp_request *req);
+static int process_apple_wisper(struct evhttp_request *req, const char *mac, const char *remote_host, const char *redir_url, const int mode);
+static void ev_http_send_apple_redirect(struct evhttp_request *req, const char *redir_url);
+static void ev_http_replay_wisper(struct evhttp_request *req);
+static void ev_send_http_page(struct evhttp_request *req, const char *title, const char *msg);
+
 static int
 is_apple_captive(const char *domain)
 {
@@ -142,52 +151,10 @@ process_apple_wisper(struct evhttp_request *req, const char *mac, const char *re
 }
 
 /**
- * @brief reply client error of gw internet offline or auth server offline
- * 
- * @param req  The http request
- * @param type 1: internet not online
- *             other: auth server offline
- */
-void
-ev_http_reply_client_error(struct evhttp_request *req, enum reply_client_error_type type, 
-    char *ip, char *port, char *proto, char *client_ip, char *client_mac)
-{
-    struct evbuffer *evb;
-    switch(type) {
-    case INTERNET_OFFLINE:
-        evb = evbuffer_new();
-        // lock extern pthread_mutex_t g_resource_lock;
-        pthread_mutex_lock(&g_resource_lock);
-        // copy evb_internet_offline_page to evb
-        evbuffer_add(evb, evbuffer_pullup(evb_internet_offline_page, -1), evbuffer_get_length(evb_internet_offline_page));
-        pthread_mutex_unlock(&g_resource_lock);
-        break;
-    case AUTHSERVER_OFFLINE:
-        evb = evbuffer_new();
-        pthread_mutex_lock(&g_resource_lock);
-        evbuffer_add(evb, evbuffer_pullup(evb_authserver_offline_page, -1), evbuffer_get_length(evb_authserver_offline_page));
-        pthread_mutex_unlock(&g_resource_lock);
-        break;
-    case LOCAL_AUTH:
-    default:
-        debug(LOG_DEBUG, "local auth redirect -- ip: %s, port: %s, proto: %s, client_ip: %s, client_mac: %s", 
-            ip, port, proto, client_ip, client_mac);
-        char redir_url[256] = {0};
-        snprintf(redir_url, sizeof(redir_url), "%s://%s:%s/wifidog/auth?ip=%s&mac=%s", proto, ip, port, client_ip, client_mac);
-        evb = evbuffer_new();
-        evbuffer_add_printf(evb, AW_LOCAL_REDIRECT_MSG, redir_url);
-        break;
-    }
-    debug(LOG_DEBUG, "reply client error");
-    evhttp_send_reply(req, 200, "OK", evb);
-    evbuffer_free(evb);
-}
-
-/**
  * @brief reply client to resend its request
  * 
  */ 
-void
+static void
 ev_http_resend(struct evhttp_request *req)
 {
     char *orig_url = wd_get_orig_url(req, 0);
@@ -241,6 +208,101 @@ process_wired_device_pass(struct evhttp_request *req, const char *mac)
         return 1;
     }
     return 0;
+}
+
+static void
+ev_http_respond_options(struct evhttp_request *req)
+{
+    struct evbuffer *evb = evbuffer_new();
+    if (!evb) {
+        evhttp_send_error(req, 500, "Internal error");
+        return;
+    }
+    evhttp_add_header(evhttp_request_get_output_headers(req), "Access-Control-Allow-Origin", "*");
+    evhttp_add_header(evhttp_request_get_output_headers(req), "Access-Control-Allow-Headers", "*");
+    evhttp_add_header(evhttp_request_get_output_headers(req), "Access-Control-Allow-Methods", "GET,POST,OPTIONS,DELETE,PUT");
+    evbuffer_add_printf(evb, "options success");
+    evhttp_send_reply(req, 204, "options success", evb);
+    evbuffer_free(evb);
+}
+
+/**
+ * @brief tell apple device to redirect to redir_url
+ * 
+ * @param req The http request
+ * @param redir_url redirect url of response
+ * 
+ */ 
+static void
+ev_http_send_apple_redirect(struct evhttp_request *req, const char *redir_url)
+{
+    struct evbuffer *evb = evbuffer_new();
+    if (!evb) {
+        evhttp_send_error(req, HTTP_INTERNAL, "Failed to evbuffer_new");
+        return;
+    }
+    evbuffer_add_printf(evb, APPLE_REDIRECT_MSG, redir_url);
+    evhttp_send_reply(req, HTTP_OK, "OK", evb);
+    evbuffer_free(evb);
+}
+
+/**
+ * @brief replay apple wisper detect request
+ * 
+ */
+static void
+ev_http_replay_wisper(struct evhttp_request *req)
+{
+    struct evbuffer *evb = evbuffer_new ();
+    if (!evb) {
+        evhttp_send_error(req, HTTP_INTERNAL, "Failed to evbuffer_new");
+        return;
+    }	
+    evbuffer_add(evb, apple_wisper, strlen(apple_wisper));
+    evhttp_send_reply(req, HTTP_OK, "OK", evb);
+    evbuffer_free(evb);
+}
+
+/**
+ * @brief reply client error of gw internet offline or auth server offline
+ * 
+ * @param req  The http request
+ * @param type 1: internet not online
+ *             other: auth server offline
+ */
+void
+ev_http_reply_client_error(struct evhttp_request *req, enum reply_client_error_type type, 
+    char *ip, char *port, char *proto, char *client_ip, char *client_mac)
+{
+    struct evbuffer *evb;
+    switch(type) {
+    case INTERNET_OFFLINE:
+        evb = evbuffer_new();
+        // lock extern pthread_mutex_t g_resource_lock;
+        pthread_mutex_lock(&g_resource_lock);
+        // copy evb_internet_offline_page to evb
+        evbuffer_add(evb, evbuffer_pullup(evb_internet_offline_page, -1), evbuffer_get_length(evb_internet_offline_page));
+        pthread_mutex_unlock(&g_resource_lock);
+        break;
+    case AUTHSERVER_OFFLINE:
+        evb = evbuffer_new();
+        pthread_mutex_lock(&g_resource_lock);
+        evbuffer_add(evb, evbuffer_pullup(evb_authserver_offline_page, -1), evbuffer_get_length(evb_authserver_offline_page));
+        pthread_mutex_unlock(&g_resource_lock);
+        break;
+    case LOCAL_AUTH:
+    default:
+        debug(LOG_DEBUG, "local auth redirect -- ip: %s, port: %s, proto: %s, client_ip: %s, client_mac: %s", 
+            ip, port, proto, client_ip, client_mac);
+        char redir_url[256] = {0};
+        snprintf(redir_url, sizeof(redir_url), "%s://%s:%s/wifidog/auth?ip=%s&mac=%s", proto, ip, port, client_ip, client_mac);
+        evb = evbuffer_new();
+        evbuffer_add_printf(evb, AW_LOCAL_REDIRECT_MSG, redir_url);
+        break;
+    }
+    debug(LOG_DEBUG, "reply client error");
+    evhttp_send_reply(req, 200, "OK", evb);
+    evbuffer_free(evb);
 }
 
 int
@@ -426,22 +488,6 @@ ev_http_send_redirect(struct evhttp_request * req, const char *url, const char *
     evhttp_add_header(header, "Location", url);
     evbuffer_add_printf(evb, "<html><body>Please <a href='%s'>click here</a>.</body></html>", url);
     evhttp_send_reply(req, 307, text, evb);
-    evbuffer_free(evb);
-}
-
-static void
-ev_http_respond_options(struct evhttp_request *req)
-{
-    struct evbuffer *evb = evbuffer_new();
-    if (!evb) {
-        evhttp_send_error(req, 500, "Internal error");
-        return;
-    }
-    evhttp_add_header(evhttp_request_get_output_headers(req), "Access-Control-Allow-Origin", "*");
-    evhttp_add_header(evhttp_request_get_output_headers(req), "Access-Control-Allow-Headers", "*");
-    evhttp_add_header(evhttp_request_get_output_headers(req), "Access-Control-Allow-Methods", "GET,POST,OPTIONS,DELETE,PUT");
-    evbuffer_add_printf(evb, "options success");
-    evhttp_send_reply(req, 204, "options success", evb);
     evbuffer_free(evb);
 }
 
@@ -753,7 +799,7 @@ ev_http_read_html_file(const char *filename, struct evbuffer *evb)
  * @param message Replace $message of the html file with it
  * @todo need more complex process engine
  */ 
-void
+static void
 ev_send_http_page(struct evhttp_request *req, const char *title, const char *message)
 {
     struct stat st;
@@ -829,43 +875,6 @@ ev_http_send_js_redirect(struct evhttp_request *req, const char *redir_url)
 
     evbuffer_free(evb);
 }
-
-/**
- * @brief tell apple device to redirect to redir_url
- * 
- * @param req The http request
- * @param redir_url redirect url of response
- * 
- */ 
-void
-ev_http_send_apple_redirect(struct evhttp_request *req, const char *redir_url)
-{
-    struct evbuffer *evb = evbuffer_new();
-    if (!evb) {
-        evhttp_send_error(req, HTTP_INTERNAL, "Failed to evbuffer_new");
-        return;
-    }
-    evbuffer_add_printf(evb, APPLE_REDIRECT_MSG, redir_url);
-    evhttp_send_reply(req, HTTP_OK, "OK", evb);
-    evbuffer_free(evb);
-}
-
-/**
- * @brief replay apple wisper detect request
- * 
- */
-void
-ev_http_replay_wisper(struct evhttp_request *req)
-{
-    struct evbuffer *evb = evbuffer_new ();
-    if (!evb) {
-        evhttp_send_error(req, HTTP_INTERNAL, "Failed to evbuffer_new");
-        return;
-    }	
-    evbuffer_add(evb, apple_wisper, strlen(apple_wisper));
-    evhttp_send_reply(req, HTTP_OK, "OK", evb);
-    evbuffer_free(evb);
-} 
 
 /**
  * @brief get query's value according to key
