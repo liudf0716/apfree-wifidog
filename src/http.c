@@ -38,6 +38,21 @@
 				"</body>"	\
 				"</html>"
 
+#define AW_LOCAL_REDIRECT_MSG  "<!DOCTYPE html>"	\
+                "<html>"						\
+                "<title>apfree-wifidog redirecting...</title>"		\
+                "<script type=\"text/javascript\">"	\
+                    "function isBrowser() {"  \
+                    "  return typeof window !== 'undefined' && typeof document !== 'undefined';" \
+                    "}" \
+                    "if (isBrowser()) {" \
+                    "  window.location.replace(\"%s\");" \
+                    "}" \
+                "</script>"	\
+                "<body>"	\
+                "apfree-wifidog redirecting..."	\
+                "</body>"	\
+                "</html>"
 
 extern struct evbuffer *evb_internet_offline_page, *evb_authserver_offline_page;
 extern redir_file_buffer_t *wifidog_redir_html;
@@ -126,80 +141,6 @@ process_apple_wisper(struct evhttp_request *req, const char *mac, const char *re
 	
 }
 
-// define old_subs and new_subs for replace_substrings
-static char *old_subs[] = {"$GATEWAY_IP$", "$GATEWAY_PORT$", "$PROTO$", "$CLIENT_IP$", "$CLIENT_MAC$"};
-
-static char *
-replace_substrings(const char *str, char **old_subs, char **new_subs, int count)
-{
-    size_t total_length = 0;
-    const char *p = str;
-    int i;
-
-    // First pass: Calculate required length
-    while (*p) {
-        int replaced = 0;
-        for (i = 0; i < count; i++) {
-            size_t old_len = strlen(old_subs[i]);
-            if (strncmp(p, old_subs[i], old_len) == 0) {
-                total_length += strlen(new_subs[i]);
-                p += old_len;
-                replaced = 1;
-                break;
-            }
-        }
-        if (!replaced) {
-            total_length++;
-            p++;
-        }
-    }
-
-    // Allocate memory
-    char *result = malloc(total_length + 1);
-    if (!result) return NULL;
-
-    // Second pass: Build the new string
-    p = str;
-    char *r = result;
-    while (*p) {
-        int replaced = 0;
-        for (i = 0; i < count; i++) {
-            size_t old_len = strlen(old_subs[i]);
-            if (strncmp(p, old_subs[i], old_len) == 0) {
-                size_t new_len = strlen(new_subs[i]);
-                memcpy(r, new_subs[i], new_len);
-                r += new_len;
-                p += old_len;
-                replaced = 1;
-                break;
-            }
-        }
-        if (!replaced) {
-            *r++ = *p++;
-        }
-    }
-    *r = '\0';
-    return result;
-}
-
-static struct evbuffer *
-replace_evbuffer_content(struct evbuffer *evb,  char **old_subs,  char **new_subs, int count)
-{
-    struct evbuffer *new_evb = evbuffer_new();
-    if (!new_evb) return NULL;
-
-    char *content = (char *)evbuffer_pullup(evb, -1);
-    char *new_content = replace_substrings(content, old_subs, new_subs, count);
-    if (!new_content) {
-        evbuffer_free(new_evb);
-        return NULL;
-    }
-
-    evbuffer_add(new_evb, new_content, strlen(new_content));
-    free(new_content);
-    return new_evb;
-}
-
 /**
  * @brief reply client error of gw internet offline or auth server offline
  * 
@@ -222,19 +163,19 @@ ev_http_reply_client_error(struct evhttp_request *req, enum reply_client_error_t
         pthread_mutex_unlock(&g_resource_lock);
         break;
     case AUTHSERVER_OFFLINE:
-    default:
-        debug(LOG_DEBUG, "auth server offline -- ip: %s, port: %s, proto: %s, client_ip: %s, client_mac: %s", 
-            ip, port, proto, client_ip, client_mac);
-        char *new_subs[5] = {
-                        ip?ip:"", 
-                        port?port:"", 
-                        proto?proto:"", 
-                        client_ip?client_ip:"", 
-                        client_mac?client_mac:""
-                    };
+        evb = evbuffer_new();
         pthread_mutex_lock(&g_resource_lock);
-        evb = replace_evbuffer_content(evb_authserver_offline_page, old_subs, new_subs, 5);
+        evbuffer_add(evb, evbuffer_pullup(evb_authserver_offline_page, -1), evbuffer_get_length(evb_authserver_offline_page));
         pthread_mutex_unlock(&g_resource_lock);
+        break;
+    case LOCAL_AUTH:
+    default:
+        debug(LOG_DEBUG, "local auth redirect -- ip: %s, port: %s, proto: %s, client_ip: %s, client_mac: %s", 
+            ip, port, proto, client_ip, client_mac);
+        char redir_url[256] = {0};
+        snprintf(redir_url, sizeof(redir_url), "%s://%s:%s/wifidog/auth?ip=%s&mac=%s", proto, ip, port, client_ip, client_mac);
+        evb = evbuffer_new();
+        evbuffer_add_printf(evb, AW_LOCAL_REDIRECT_MSG, redir_url);
         break;
     }
     debug(LOG_DEBUG, "reply client error");
@@ -381,7 +322,7 @@ ev_http_callback_404(struct evhttp_request *req, void *arg)
         char gw_port[8] = {0};
         snprintf(gw_port, sizeof(gw_port), "%d", config_get_config()->gw_port);
         debug(LOG_INFO, "Auth server is offline");
-        ev_http_reply_client_error(req, AUTHSERVER_OFFLINE, 
+        ev_http_reply_client_error(req, config->auth_server_mode == AUTH_MODE_LOCAL?LOCAL_AUTH:AUTHSERVER_OFFLINE, 
             gw_setting->gw_address_v4?gw_setting->gw_address_v4:gw_setting->gw_address_v6, 
             gw_port, "http", remote_host, mac);
         return;

@@ -86,7 +86,7 @@ process_tls_request_cb (struct evhttp_request *req, void *arg) {
 		debug(LOG_INFO, "Auth server is offline");
 		char gw_https_port[8] = {0};
 		snprintf(gw_https_port, sizeof(gw_https_port), "%d", config_get_config()->gw_https_port);
-        ev_http_reply_client_error(req, AUTHSERVER_OFFLINE, 
+        ev_http_reply_client_error(req, config->auth_server_mode == AUTH_MODE_LOCAL?LOCAL_AUTH:AUTHSERVER_OFFLINE, 
 			gw_setting->gw_address_v4?gw_setting->gw_address_v4:gw_setting->gw_address_v6, 
 			gw_https_port, "https", remote_host, mac);
         return;
