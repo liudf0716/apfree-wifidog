@@ -1910,13 +1910,7 @@ config_validate(void)
 
 	if (config.auth_server_mode == AUTH_MODE_CLOUD) {
 		config_notnull(config.auth_servers, "AuthServer");
-	} else if (config.auth_server_mode == AUTH_MODE_LOCAL) {
-		if(is_file_exist(config.authserver_offline_file) == false) {
-			debug(LOG_ERR, "AuthServerOfflineFile is not exist");
-			exit(1);
-		}
-		config_notnull(config.local_portal, "LocalPortal");
-	}
+	} 
 	
 	if (config.enable_anti_nat) {
 		config_notnull(config.ttl_values, "TTLValues");
