@@ -178,19 +178,21 @@ typedef struct _mqtt_server_t {
 } t_mqtt_server;
 
 typedef struct _ws_server_t {
-	char *hostname;
-	char *path;
-	unsigned short port;
-	unsigned short use_ssl;
+	char 		*hostname;
+	char 		*path;
+	uint16_t 	port;
+	uint16_t 	use_ssl;
 } t_ws_server;
 
 typedef struct _gateway_setting_t {
-	char *gw_id;
-	char *gw_interface;
-	char *gw_address_v4;
-	char *gw_address_v6;
-	char *gw_channel;
-	int auth_mode;
+	char 		*gw_id;
+	char 		*gw_interface;
+	char 		*gw_address_v4;
+	char 		*gw_address_v6;
+	char 		*gw_channel;
+	int 		auth_mode;
+	uint32_t	ip_v4;
+	uint32_t	mask_v4;
 	struct _gateway_setting_t *next;
 } t_gateway_setting;
 

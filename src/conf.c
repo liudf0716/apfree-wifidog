@@ -46,6 +46,7 @@ typedef enum {
 	oGatewayID,
 	oGatewayInterface,
 	oGatewayChannel,
+	oGatewaySubnetV4,
 	oAuthServer,
 	oAuthServHostname,
 	oAuthServSSLAvailable,
@@ -353,6 +354,56 @@ config_parse_token(const char *cp, const char *filename, int linenum)
 	return oBadOption;
 }
 
+/**
+ * Parses an IPv4 subnet string in CIDR notation (e.g., "192.168.1.0/24")
+ * and converts it to numeric address and netmask.
+ *
+ * @param subnet  The subnet string in CIDR notation to parse
+ * @param addr    Pointer to store the parsed network address in host byte order
+ * @param mask    Pointer to store the calculated netmask in host byte order
+ *
+ * @return true if parsing was successful, false if the input was invalid
+ *
+ * The function validates:
+ * - Proper CIDR format with '/' separator
+ * - Valid mask length (0-32)
+ * - Valid IPv4 address format
+ *
+ * On success, stores the network address and calculated netmask in the provided pointers.
+ * On failure, outputs error messages via debug() and returns false.
+ */
+static bool
+parse_subnet_v4(const char *subnet, uint32_t *addr, uint32_t *mask)
+{
+	char *slash = strchr(subnet, '/');
+	if (!slash) {
+		debug(LOG_ERR, "Invalid subnet format: %s", subnet);
+		return false;
+	}
+
+	char *endptr;
+	long masklen = strtol(slash + 1, &endptr, 10);
+	if (*endptr || masklen < 0 || masklen > 32) {
+		debug(LOG_ERR, "Invalid subnet mask length: %s", slash + 1);
+		return false;
+	}
+
+	char ip[16]={0};
+	strncpy(ip, subnet, slash - subnet);
+	ip[slash - subnet] = '\0';
+
+	struct in_addr in;
+	if (!inet_aton(ip, &in)) {
+		debug(LOG_ERR, "Invalid subnet IP address: %s", ip);
+		return false;
+	}
+
+	*addr = ntohl(in.s_addr);
+	*mask = 0xFFFFFFFF << (32 - masklen);
+
+	return true;
+}
+
 /** @internal
  * Parses gateway settings from the configuration file.
  *
@@ -367,6 +418,7 @@ parse_gateway_settings(FILE *file, const char *filename, int *linenum)
 	char *gw_id = NULL;
 	char *gw_interface = NULL;
 	char *gw_channel = NULL;
+	char *gw_subnet_v4 = NULL;
 	t_gateway_setting *new_setting = NULL;
 	t_gateway_setting *current = NULL;
 
@@ -413,6 +465,9 @@ parse_gateway_settings(FILE *file, const char *filename, int *linenum)
 					case oGatewayChannel:
 						gw_channel = safe_strdup(value);
 						break;
+					case oGatewaySubnetV4:
+						gw_subnet_v4 = safe_strdup(value);
+						break;
 					case oBadOption:
 					default:
 						debug(LOG_ERR, "Bad option on line %d in %s.", *linenum, filename);
@@ -424,7 +479,7 @@ parse_gateway_settings(FILE *file, const char *filename, int *linenum)
 	}
 
 	// Validate mandatory fields
-	if (gw_channel == NULL || gw_interface == NULL) {
+	if (gw_id == NULL || gw_channel == NULL || gw_interface == NULL || gw_subnet_v4 == NULL) {
 		debug(LOG_ERR, "Missing mandatory parameters for gateway settings");
 		goto ERR;
 	}
@@ -433,6 +488,11 @@ parse_gateway_settings(FILE *file, const char *filename, int *linenum)
 
 	// Allocate and initialize new gateway setting
 	new_setting = safe_malloc(sizeof(t_gateway_setting));
+
+	if (!parse_subnet_v4(gw_subnet_v4, &new_setting->ip_v4, &new_setting->mask_v4)) {
+		debug(LOG_ERR, "Invalid subnet format: %s", gw_subnet_v4);
+		goto ERR;
+	}
 	new_setting->gw_id = gw_id;
 	new_setting->gw_interface = gw_interface;
 	new_setting->gw_channel = gw_channel;
