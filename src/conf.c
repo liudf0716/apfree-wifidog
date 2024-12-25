@@ -125,6 +125,7 @@ static const struct {
 	"gatewayid", oGatewayID}, {
 	"gatewayinterface", oGatewayInterface}, {
 	"gatewaychannel", oGatewayChannel}, {
+	"gatewaysubnetv4", oGatewaySubnetV4}, {
 	"gatewayport", oGatewayPort}, {
 	"gatewayhttpsport", oGatewayHttpsPort}, {
 	"gatewaysetting", oGatewaySetting}, {
