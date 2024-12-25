@@ -17,7 +17,7 @@ ip netns exec aw ip link show dummy0 > /dev/null 2>&1; then
     sudo ip netns exec aw ip link del dummy0
 fi
 sudo ip netns exec aw ip link add dummy0 type dummy
-sudo ip netns exec aw ip addr add 10.11.12.1/24 dev dummy0
+sudo ip netns exec aw ip addr add 192.168.1.1/24 dev dummy0
 sudo ip netns exec aw ip link set dummy0 up
 
 # Check if the interface tap0 exists
