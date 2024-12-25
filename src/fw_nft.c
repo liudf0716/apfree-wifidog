@@ -38,15 +38,13 @@
 #define NFT_WIFIDOGX_CLIENT_LIST "/tmp/nftables_wifidogx_client_list"
 
 #define NFT_WIFIDOGX_BYPASS_MODE()    \
-s_config *config = config_get_config(); \
-if (config->auth_server_mode == AUTH_MODE_BYPASS) { \
+if (is_bypass_mode()) { \
     debug(LOG_DEBUG, "Bypass mode is enabled, skip nftables rules"); \
     return; \
 }
 
 #define NFT_WIFIDOGX_BYPASS_MODE_RETURN(val)    \
-s_config *config = config_get_config(); \
-if (config->auth_server_mode == AUTH_MODE_BYPASS) { \
+if (is_bypass_mode()) { \
     debug(LOG_DEBUG, "Bypass mode is enabled, skip nftables rules"); \
     return val; \
 }
@@ -831,7 +829,7 @@ nft_fw_access(fw_access_t type, const char *ip, const char *mac, int tag)
             nft_fw_del_rule_by_ip_and_mac(ip, NULL, "mangle_postrouting_wifidogx_incoming");
 
             // Optionally clear connection tracking entries
-            if (config->enable_del_conntrack) {
+            if (config_get_config()->enable_del_conntrack) {
                 char cmd[128] = {0};
                 snprintf(cmd, sizeof(cmd), "conntrack -D -s %s", ip);
                 execute(cmd, 0);
