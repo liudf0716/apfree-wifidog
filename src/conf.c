@@ -2053,3 +2053,16 @@ mark_auth_server_bad(t_auth_serv * bad_server)
 	}
 
 }
+
+
+bool
+is_bypass_mode(void)
+{
+	return config.auth_server_mode == AUTH_MODE_BYPASS;
+}
+
+bool
+is_local_auth_mode(void)
+{
+	return config.auth_server_mode == AUTH_MODE_LOCAL;
+}

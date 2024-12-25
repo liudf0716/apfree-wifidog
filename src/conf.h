@@ -328,6 +328,9 @@ void add_trusted_ip_list(const char *);
 void clear_trusted_ip_list(void);
 void del_trusted_ip_list(const char *);
 
+bool is_bypass_mode(void);
+bool is_local_auth_mode(void);
+
 // Global state variables
 extern int g_online_clients;    // Total connected client count
 extern char *g_version;         // Software version
