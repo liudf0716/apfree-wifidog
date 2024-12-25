@@ -35,79 +35,6 @@ die_most_horribly_from_openssl_error (const char *func) {
 }
 
 /**
- * @brief the main
- * 
- */ 
-static void
-process_tls_request_cb (struct evhttp_request *req, void *arg) {  
-	if (!is_online()){
-        ev_http_reply_client_error(req, INTERNET_OFFLINE, NULL, NULL, NULL, NULL, NULL);
-        return;
-    }  
-
-    char *remote_host;
-    uint16_t port;
-    ev_http_connection_get_peer(evhttp_request_get_connection(req), &remote_host, &port);
-	if (!remote_host) {
-		evhttp_send_error(req, 200, "Cant get client's ip");
-		return;
-	}
-
-	struct bufferevent *bev = evhttp_connection_get_bufferevent(evhttp_request_get_connection(req));
-    evutil_socket_t fd = bufferevent_getfd(bev);
-    if (fd < 0) {
-        debug(LOG_ERR, "evhttp_connection_get_fd failed: %s", strerror(errno));
-        evhttp_send_error(req, 200, "Cant get client's fd");
-        return;
-    }
-
-    char if_name[IFNAMSIZ] = {0};
-    if (!get_ifname_by_address(remote_host, if_name)) {
-        debug(LOG_ERR, "get_ifname_by_address [%s] failed", remote_host);
-        evhttp_send_error(req, 200, "Cant get client's interface name");
-        return;
-    }
-	if_name[IFNAMSIZ-1] = '\0';
-    t_gateway_setting *gw_setting = get_gateway_setting_by_ifname(if_name);
-    if (!gw_setting) {
-        debug(LOG_ERR, "get_gateway_setting_by_ifname [%s] failed", if_name);
-        evhttp_send_error(req, 200, "Cant get gateway setting by interface name");
-        return;
-    }
-
-    char mac[MAC_LENGTH] = {0};
-    if(!br_arp_get_mac(gw_setting, remote_host, mac)) {
-        evhttp_send_error(req, 200, "Cant get client's mac by its ip");
-        return;
-    }
-
-	s_config *config = config_get_config();
-	if (!is_auth_online() || config->auth_server_mode == AUTH_MODE_LOCAL) {
-		debug(LOG_INFO, "Auth server is offline");
-		char gw_https_port[8] = {0};
-		snprintf(gw_https_port, sizeof(gw_https_port), "%d", config_get_config()->gw_https_port);
-        ev_http_reply_client_error(req, config->auth_server_mode == AUTH_MODE_LOCAL?LOCAL_AUTH:AUTHSERVER_OFFLINE, 
-			gw_setting->gw_address_v4?gw_setting->gw_address_v4:gw_setting->gw_address_v6, 
-			gw_https_port, "https", remote_host, mac);
-        return;
-    } 
-
-	
-	char *redir_url = wd_get_redir_url_to_auth(req, gw_setting, mac, remote_host, config->gw_https_port, config->device_id, 1);
-    if (!redir_url) {
-        evhttp_send_error(req, 200, "Cant get client's redirect to auth server's url");
-        return;
-    }
-
-	if (config->js_redir)
-        ev_http_send_js_redirect(req, redir_url);
-	else
-        ev_http_send_redirect(req, redir_url, "Redirect to login page");
-
-	free(redir_url);
-}
-
-/**
  * This callback is responsible for creating a new SSL connection
  * and wrapping it in an OpenSSL bufferevent.  This is the way
  * we implement an https server instead of a plain old http server.
@@ -369,7 +296,9 @@ tls_process_loop () {
 	}
 
 	// This is the callback that gets called when a request comes in.
-	evhttp_set_gencb (http, process_tls_request_cb, NULL);
+	int *is_ssl = safe_malloc(sizeof(int));
+	*is_ssl = 1;
+	evhttp_set_gencb (http, ev_http_callback_404, is_ssl);
 
 	memset(&sin_ipv6, 0, sizeof(sin_ipv6));
 	sin_ipv6.sin6_family = AF_INET6;

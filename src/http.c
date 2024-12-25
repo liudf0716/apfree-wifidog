@@ -334,6 +334,13 @@ ev_http_connection_get_peer(struct evhttp_connection *evcon, char **remote_host,
 void
 ev_http_callback_404(struct evhttp_request *req, void *arg)
 {
+    if (arg == NULL) {
+        debug(LOG_ERR, "ev_http_callback_404 arg is NULL");
+        evhttp_send_error(req, 404, "Not Found");
+        return;
+    }
+    int is_ssl = *((int *)arg);
+    free(arg);
     if (!is_online()) {
         debug(LOG_INFO, "Internet is offline");
         ev_http_reply_client_error(req, INTERNET_OFFLINE, NULL, NULL, NULL, NULL, NULL);
@@ -353,48 +360,48 @@ ev_http_callback_404(struct evhttp_request *req, void *arg)
         return;
     }
 
-    char if_name[IFNAMSIZ] = {0};
-    if (!get_ifname_by_address(remote_host, if_name)) {
-        debug(LOG_ERR, "get_ifname_by_address [%s] failed", remote_host);
-        evhttp_send_error(req, 200, "Cant get client's interface name");
-        return;
-    }
-    if_name[IFNAMSIZ-1] = '\0';
-    t_gateway_setting *gw_setting = get_gateway_setting_by_ifname(if_name);
+    t_gateway_setting *gw_setting = get_gateway_setting_by_ipv4(remote_host);
     if (!gw_setting) {
-        debug(LOG_ERR, "get_gateway_setting_by_ifname [%s] failed", if_name);
-        evhttp_send_error(req, 200, "Cant get gateway setting by interface name");
+        debug(LOG_ERR, "get_gateway_setting_by_ipv4 [%s] failed", remote_host);
+        evhttp_send_error(req, 200, "Cant get gateway setting by client's ip");
         return;
     }
 
+    s_config *config = config_get_config();
     char mac[MAC_LENGTH] = {0};
-    if (!br_arp_get_mac(gw_setting, remote_host, mac)) {
+    if (is_bypass_mode()) {
+        snprintf(mac, sizeof(mac), "%s", "00:00:00:00:00:00");
+    } else if (!br_arp_get_mac(gw_setting, remote_host, mac)) {
         evhttp_send_error(req, 200, "Cant get client's mac by its ip");
         return;
     }
-
-    const s_config *config = config_get_config();
-    if (!is_auth_online() || config->auth_server_mode == AUTH_MODE_LOCAL) {
+    
+    if (!is_auth_online() || is_local_auth_mode()) {
         char gw_port[8] = {0};
         snprintf(gw_port, sizeof(gw_port), "%d", config_get_config()->gw_port);
         debug(LOG_INFO, "Auth server is offline");
-        ev_http_reply_client_error(req, config->auth_server_mode == AUTH_MODE_LOCAL?LOCAL_AUTH:AUTHSERVER_OFFLINE, 
+        ev_http_reply_client_error(req, is_local_auth_mode()?LOCAL_AUTH:AUTHSERVER_OFFLINE, 
             gw_setting->gw_address_v4?gw_setting->gw_address_v4:gw_setting->gw_address_v6, 
             gw_port, "http", remote_host, mac);
         return;
-    } 
+    }    
 
     if (process_already_login_client(req, mac, remote_host)) return;
 
-    if (config->wired_passed && process_wired_device_pass(req, mac)) return;
+    if (!is_bypass_mode() &&
+        config->wired_passed && 
+        process_wired_device_pass(req, mac)) 
+        return;
 
-    char *redir_url = wd_get_redir_url_to_auth(req, gw_setting, mac, remote_host, config->gw_port, config->device_id, 0);
+    char *redir_url = wd_get_redir_url_to_auth(req, gw_setting, mac, remote_host, config->gw_port, config->device_id, is_ssl);
     if (!redir_url) {
         evhttp_send_error(req, 200, "Cant get client's redirect to auth server's url");
         return;
     }
     
-    if (!config->bypass_apple_cna && process_apple_wisper(req, mac, remote_host, redir_url, config->bypass_apple_cna))
+    if (!is_ssl &&
+        !config->bypass_apple_cna && 
+        process_apple_wisper(req, mac, remote_host, redir_url, config->bypass_apple_cna))
         goto END;
 
     if (config->js_redir)
