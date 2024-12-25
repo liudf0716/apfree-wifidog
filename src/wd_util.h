@@ -144,8 +144,8 @@ int br_arp_get_mac(t_gateway_setting *, const char *, char *);
 int get_ifname_by_address(const char *, char *);
 
 t_gateway_setting *get_gateway_setting_by_ifname(const char *);
-
 t_gateway_setting *get_gateway_setting_by_id(const char *);
+t_gateway_setting *get_gateway_setting_by_ipv4(const char *);
 
 /** @brief generate cert for apfree-wifidog */
 void init_apfree_wifidog_cert();

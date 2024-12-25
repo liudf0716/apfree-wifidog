@@ -1975,6 +1975,25 @@ get_gateway_setting_by_id(const char *gw_id)
 	return NULL;
 }
 
+t_gateway_setting *
+get_gateway_setting_by_ipv4(const char *ip)
+{
+	if (!ip)
+		return NULL;
+	
+	// convert ip to uint32_t
+	uint32_t ip_int = inet_addr(ip);
+	if (ip_int == INADDR_NONE)
+		return NULL;
+
+	t_gateway_setting *gw = get_gateway_settings();
+	while (gw) {
+		if ((gw->ip_v4 & gw->mask_v4) == (ip_int & gw->mask_v4))
+			return gw;
+		gw = gw->next;
+	}
+	return NULL;
+}
 /**
  * @brief generate cert for apfree-wifidog
  * first, generate ca cert
