@@ -90,38 +90,6 @@ static void handle_kickoff_response(json_object *j_auth);
 static void cleanup_connection(struct bufferevent *bev);
 static void reconnect_websocket(void);
 
-static int
-evutil_set_tcp_keepalive(evutil_socket_t fd, int on, int timeout)
-{
-	int ret = setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &on, sizeof(on));
-	if (ret < 0) {
-		debug(LOG_ERR, "Failed to set SO_KEEPALIVE: %s", strerror(errno));
-		return -1;
-	}
-
-	int keep_idle = 30;
-	ret = setsockopt(fd, IPPROTO_TCP, TCP_KEEPIDLE, &keep_idle, sizeof(keep_idle));
-	if (ret < 0) {
-		debug(LOG_ERR, "Failed to set TCP_KEEPIDLE: %s", strerror(errno));
-		return -1;
-	}
-
-	ret = setsockopt(fd, IPPROTO_TCP, TCP_KEEPINTVL, &timeout, sizeof(timeout));
-	if (ret < 0) {
-		debug(LOG_ERR, "Failed to set TCP_KEEPINTVL: %s", strerror(errno));
-		return -1;
-	}
-
-	int keep_cnt = 3;
-	ret = setsockopt(fd, IPPROTO_TCP, TCP_KEEPCNT, &keep_cnt, sizeof(keep_cnt));
-	if (ret < 0) {
-		debug(LOG_ERR, "Failed to set TCP_KEEPCNT: %s", strerror(errno));
-		return -1;
-	}
-
-	return 0;
-}
-
 /**
  * @brief Generates a secure WebSocket key for WebSocket handshake
  *
