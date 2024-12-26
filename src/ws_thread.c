@@ -22,6 +22,7 @@
  */
 #define MAX_OUTPUT (512*1024)
 #define WS_GUID "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+#define WS_HEARTBEAT_INTERVAL 60
 
 /**
  * Network byte order conversion for 64-bit integers
@@ -502,9 +503,8 @@ start_ws_heartbeat(struct bufferevent *b_ws)
 		ws_state.heartbeat_ev = NULL;
 	}
 
-	// Set 60 second interval
 	struct timeval tv = {
-		.tv_sec = 30,
+		.tv_sec = WS_HEARTBEAT_INTERVAL,
 		.tv_usec = 0
 	};
 
@@ -678,7 +678,7 @@ ws_receive(unsigned char *data, const size_t data_len)
 	}
 
 	// Process text frames
-	if (opcode == TEXT_FRAME || opcode == PONG_FRAME) {
+	if (opcode == TEXT_FRAME) {
 		const char *msg = (const char *)(data + header_len);
 		process_ws_msg(msg);
 	} else {
@@ -773,11 +773,8 @@ send_msg(struct evbuffer *out, const char *type)
 	const char *json_str = json_object_to_json_string(root);
 	debug(LOG_DEBUG, "Sending %s message: %s", type, json_str);
 	
-	if (strcmp(type, "heartbeat") == 0) {
-		ws_send(out, json_str, strlen(json_str), PING_FRAME);
-	} else {
-		ws_send(out, json_str, strlen(json_str), TEXT_FRAME);
-	}
+	
+	ws_send(out, json_str, strlen(json_str), TEXT_FRAME);
 	json_object_put(root);
 }
 
