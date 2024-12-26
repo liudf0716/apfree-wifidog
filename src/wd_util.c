@@ -1985,7 +1985,7 @@ get_gateway_setting_by_ipv4(const char *ip)
 	uint32_t ip_int = inet_addr(ip);
 	if (ip_int == INADDR_NONE)
 		return NULL;
-
+	ip_int = ntohl(ip_int);
 	t_gateway_setting *gw = get_gateway_settings();
 	while (gw) {
 		if ((gw->ip_v4 & gw->mask_v4) == (ip_int & gw->mask_v4))
