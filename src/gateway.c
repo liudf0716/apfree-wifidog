@@ -701,7 +701,7 @@ setup_http_server(struct evhttp *http, struct event_base *base)
         evhttp_set_cb(http, "/wifidog/local_auth", ev_http_callback_local_auth, NULL);
         evhttp_set_cb(http, "/cgi-bin/cgi-device", ev_http_callback_device, NULL);
     }
-    evhttp_set_gencb(http, ev_http_callback_404, &is_ssl);
+    evhttp_set_gencb(http, ev_http_callback_404, is_ssl);
     return 1;
 }
 
