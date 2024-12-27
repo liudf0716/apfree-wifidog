@@ -675,8 +675,7 @@ static int
 setup_http_server(struct evhttp *http, struct event_base *base)
 {
     s_config *config = config_get_config();
-    int *is_ssl = safe_malloc(sizeof(int));
-    *is_ssl = 0;
+    int is_ssl = 0;
     if (config->auth_server_mode == AUTH_MODE_CLOUD) {
         t_auth_serv *auth_server = get_auth_server();
         SSL_CTX *ssl_ctx = SSL_CTX_new(SSLv23_method());
@@ -701,7 +700,7 @@ setup_http_server(struct evhttp *http, struct event_base *base)
         evhttp_set_cb(http, "/wifidog/local_auth", ev_http_callback_local_auth, NULL);
         evhttp_set_cb(http, "/cgi-bin/cgi-device", ev_http_callback_device, NULL);
     }
-    evhttp_set_gencb(http, ev_http_callback_404, is_ssl);
+    evhttp_set_gencb(http, ev_http_callback_404, &is_ssl);
     return 1;
 }
 

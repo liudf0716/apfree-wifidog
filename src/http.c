@@ -340,7 +340,6 @@ ev_http_callback_404(struct evhttp_request *req, void *arg)
         return;
     }
     int is_ssl = *((int *)arg);
-    free(arg);
     if (!is_online()) {
         debug(LOG_INFO, "Internet is offline");
         ev_http_reply_client_error(req, INTERNET_OFFLINE, NULL, NULL, NULL, NULL, NULL);

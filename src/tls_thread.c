@@ -296,9 +296,8 @@ tls_process_loop () {
 	}
 
 	// This is the callback that gets called when a request comes in.
-	int *is_ssl = safe_malloc(sizeof(int));
-	*is_ssl = 1;
-	evhttp_set_gencb (http, ev_http_callback_404, is_ssl);
+	int is_ssl = 1;
+	evhttp_set_gencb (http, ev_http_callback_404, &is_ssl);
 
 	memset(&sin_ipv6, 0, sizeof(sin_ipv6));
 	sin_ipv6.sin6_family = AF_INET6;
