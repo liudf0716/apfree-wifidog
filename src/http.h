@@ -10,7 +10,7 @@
 /**
  * @brief Error types for client replies
  */
-enum reply_client_error_type {
+enum reply_client_page_type {
     INTERNET_OFFLINE,    /**< Internet connection is not available */
     AUTHSERVER_OFFLINE,  /**< Authentication server is not reachable */
     LOCAL_AUTH,          /**< Local authentication mode */
@@ -32,7 +32,7 @@ void ev_http_callback_device(struct evhttp_request *, void *);
 void ev_http_send_redirect(struct evhttp_request *, const char *, const char *);
 void ev_http_send_redirect_to_auth(struct evhttp_request *, const char *, const char *);
 void ev_http_send_js_redirect(struct evhttp_request *, const char *);
-void ev_http_reply_client_error(struct evhttp_request *, enum reply_client_error_type, 
+void ev_http_reply_client_error(struct evhttp_request *, enum reply_client_page_type, 
                                char *, char *, char *, char *, char *);
 
 /* HTTP Utility Functions */

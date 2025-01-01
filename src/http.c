@@ -386,7 +386,7 @@ process_custom_auth_offline_page(const char *ip, const char *port, const char *p
  *             other: auth server offline
  */
 void
-ev_http_reply_client_error(struct evhttp_request *req, enum reply_client_error_type type, 
+ev_http_reply_client_error(struct evhttp_request *req, enum reply_client_page_type type, 
     char *ip, char *port, char *proto, char *client_ip, char *client_mac)
 {
     struct evbuffer *evb;
@@ -419,7 +419,7 @@ ev_http_reply_client_error(struct evhttp_request *req, enum reply_client_error_t
         evbuffer_add_printf(evb, AW_LOCAL_REDIRECT_MSG, redir_url);
         break;
     }
-    
+
     if (!evb) {
         evhttp_send_error(req, HTTP_INTERNAL, "Failed to evbuffer_new");
         debug(LOG_ERR, "Failed to evbuffer_new");
@@ -457,6 +457,25 @@ ev_http_connection_get_peer(struct evhttp_connection *evcon, char **remote_host,
     }
 
     return 1;
+}
+
+/**
+ * @brief Determine what type of offline page to show to clients
+ * 
+ * @return LOCAL_CUSTROM_AUTH if using custom auth offline page
+ *         LOCAL_AUTH if using local auth mode without custom page
+ *         AUTHSERVER_OFFLINE if auth server is offline in normal mode
+ */
+static enum reply_client_page_type
+get_authserver_offline_page_type()
+{
+    // First check if we're in local auth mode
+    if (!is_local_auth_mode()) {
+        return AUTHSERVER_OFFLINE;
+    }
+    
+    // In local auth mode, check if custom page is configured
+    return is_custom_auth_offline_page() ? LOCAL_CUSTROM_AUTH : LOCAL_AUTH;
 }
 
 /**
@@ -510,8 +529,9 @@ ev_http_callback_404(struct evhttp_request *req, void *arg)
     if (!is_auth_online() || is_local_auth_mode()) {
         char gw_port[8] = {0};
         snprintf(gw_port, sizeof(gw_port), "%d", config_get_config()->gw_port);
-        debug(LOG_INFO, "Auth server is offline");
-        ev_http_reply_client_error(req, is_local_auth_mode()?LOCAL_AUTH:AUTHSERVER_OFFLINE, 
+        enum reply_client_page_type r_type = get_authserver_offline_page_type();
+        debug(LOG_INFO, "Auth server is offline and its reply type is %d", r_type);
+        ev_http_reply_client_error(req, r_type, 
             gw_setting->gw_address_v4?gw_setting->gw_address_v4:gw_setting->gw_address_v6, 
             gw_port, "http", remote_host, mac);
         return;

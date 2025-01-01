@@ -293,6 +293,8 @@ void config_init(void)
 	config.trusted_local_maclist    = NULL;
 	config.mac_blacklist            = NULL;
 
+	config.is_custom_auth_offline_file = 0;
+
 	// Initialize HTTPS server configuration
 	t_https_server *https_server = malloc(sizeof(t_https_server));
 	if (!https_server) {
@@ -1061,6 +1063,7 @@ config_read()
 					if (config.authserver_offline_file)
 						free(config.authserver_offline_file);
 					config.authserver_offline_file = safe_strdup(p1);
+					config.is_custom_auth_offline_file = 1;
 					break;
 				case oInternetOfflineFile:
 					if (config.internet_offline_file)
@@ -2066,4 +2069,10 @@ bool
 is_local_auth_mode(void)
 {
 	return config.auth_server_mode == AUTH_MODE_LOCAL;
+}
+
+bool
+is_custom_auth_offline_page(void)
+{
+	return config.is_custom_auth_offline_file == 1;
 }
