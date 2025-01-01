@@ -1173,7 +1173,7 @@ iptables_fw_counters_update(void)
 
 				// get client name
 				if(p1->name == NULL)
-					__get_client_name(p1);
+					get_client_name(p1);
 
 				if(p1->wired == -1) {
 					p1->wired = br_is_device_wired(p1->mac);

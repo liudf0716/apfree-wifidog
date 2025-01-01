@@ -944,7 +944,7 @@ update_client_counters(t_client *client, uint64_t packets, uint64_t bytes, int i
     // Get client name if not already set
     if (!client->name) {
         debug(LOG_INFO, "Client name not set, retrieving name");
-        __get_client_name(client); 
+        get_client_name(client); 
     }
 
     // Determine if client is on wired connection

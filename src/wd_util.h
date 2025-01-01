@@ -150,6 +150,6 @@ t_gateway_setting *get_gateway_setting_by_ipv4(const char *);
 /** @brief generate cert for apfree-wifidog */
 void init_apfree_wifidog_cert();
 
-void __get_client_name(t_client *client);
+void get_client_name(t_client *client);
 
 #endif /* _WD_UTIL_H_ */
