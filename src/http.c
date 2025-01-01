@@ -27,6 +27,9 @@
 #include "version.h"
 #include "wd_client.h"
 
+// Define max allowed file size (10KB)
+#define MAX_HTML_FILE_SIZE (10 * 1024)
+
 #define APPLE_REDIRECT_MSG  "<!DOCTYPE html>"	\
 				"<html>"						\
 				"<title>Success</title>"		\
@@ -923,24 +926,35 @@ ev_http_callback_device(struct evhttp_request *req, void *arg)
 struct evbuffer *
 ev_http_read_html_file(const char *filename, struct evbuffer *evb)
 {
-	if (!evb) return NULL;
-	
-	int fd = open(filename, O_RDONLY);
-	if (fd == -1) {
-		debug(LOG_CRIT, "Failed to open HTML message file %s: %s", strerror(errno), 
-			filename);
-		return NULL;
-	}
-	
-	if (evbuffer_add_file(evb, fd, 0, -1)) {
-		debug(LOG_CRIT, "Failed to read HTML message file %s: %s", strerror(errno), 
-			filename);
-		close(fd);
-		return NULL;
-	}
+    if (!evb || !filename) return NULL;
+    
+    // check size of filename, it is great than 10k then exit
+    struct stat st;
+    if (stat(filename, &st) == -1) {
+        debug(LOG_CRIT, "Failed to stat HTML file %s: %s", filename, strerror(errno));
+        return NULL;
+    }
 
-	close(fd);
-	return evb;
+    if (st.st_size > MAX_HTML_FILE_SIZE) {
+        debug(LOG_CRIT, "HTML file %s too large: %ld bytes (max %d)", 
+              filename, (long)st.st_size, MAX_HTML_FILE_SIZE);
+        return NULL;
+    }
+
+    int fd = open(filename, O_RDONLY);
+    if (fd == -1) {
+        debug(LOG_CRIT, "Failed to open HTML message file %s: %s", filename, strerror(errno));
+        return NULL;
+    }
+    
+    if (evbuffer_add_file(evb, fd, 0, st.st_size)) {
+        debug(LOG_CRIT, "Failed to read HTML message file %s: %s", filename, strerror(errno));
+        close(fd);
+        return NULL;
+    }
+
+    close(fd);
+    return evb;
 }
 
 /**
