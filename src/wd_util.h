@@ -152,4 +152,6 @@ void init_apfree_wifidog_cert();
 
 void get_client_name(t_client *client);
 
+bool is_openwrt_platform(void);
+
 #endif /* _WD_UTIL_H_ */

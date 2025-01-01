@@ -971,6 +971,12 @@ wdctl_hotplugin_event(struct bufferevent *fd, const char *event_json_data) {
     bool success = true;
     char *wan_ip = NULL;
 
+    if (!is_openwrt_platform()) {
+        debug(LOG_INFO, "Hotplugin events are only supported on OpenWrt platform");
+        bufferevent_write(fd, "Not Support", strlen("Not Support"));
+        return;
+    }
+
     // Parse JSON
     root = json_tokener_parse(event_json_data);
     if (!root || json_object_get_type(root) != json_type_object) {

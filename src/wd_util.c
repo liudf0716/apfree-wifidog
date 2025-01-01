@@ -2045,3 +2045,11 @@ get_client_name(t_client *client)
 		debug(LOG_INFO, "get_client_name [%s]", name);
 	}
 }
+
+bool
+is_openwrt_platform(void)
+{
+	if (access("/etc/openwrt_release", F_OK) == 0)
+		return true;
+	return false;
+}
