@@ -14,6 +14,7 @@ enum reply_client_error_type {
     INTERNET_OFFLINE,    /**< Internet connection is not available */
     AUTHSERVER_OFFLINE,  /**< Authentication server is not reachable */
     LOCAL_AUTH,          /**< Local authentication mode */
+    LOCAL_CUSTROM_AUTH,  /**< Local custom authentication mode */
 };
 
 /* HTTP Request Callback Functions */

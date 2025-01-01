@@ -259,6 +259,126 @@ ev_http_replay_wisper(struct evhttp_request *req)
 }
 
 /**
+ * @brief Replace multiple placeholders in a template string with their corresponding values
+ *
+ * @param template The template string containing placeholders
+ * @param placeholders Array of placeholder strings to be replaced
+ * @param values Array of values to replace the placeholders with
+ * @param count Number of placeholder/value pairs
+ * @return Newly allocated string with replacements made, or NULL on failure
+ */
+static char *
+replace_placeholder_multi(const char *template, const char **placeholders, const char **values, size_t count) {
+    if (!template || !placeholders || !values || count == 0) {
+        return NULL;
+    }
+
+    int need_replace = 0;
+    for (size_t i = 0; i < count; i++) {
+        if (!placeholders[i] || !values[i]) {
+            debug(LOG_ERR, "Invalid placeholder or value");
+            return NULL;
+        }
+        if (strstr(template, placeholders[i])) {
+            need_replace = 1;
+        }
+    }
+
+    if (!need_replace) {
+        debug(LOG_DEBUG, "No placeholders found in template");
+        return safe_strdup(template);
+    }
+
+    // Calculate required buffer size
+    size_t total_len = strlen(template) + 1;
+    size_t *placeholder_lens = malloc(count * sizeof(size_t));
+    size_t *value_lens = malloc(count * sizeof(size_t));
+    
+    if (!placeholder_lens || !value_lens) {
+        free(placeholder_lens);
+        free(value_lens);
+        return NULL;
+    }
+
+    for (size_t i = 0; i < count; i++) {
+        placeholder_lens[i] = strlen(placeholders[i]);
+        value_lens[i] = strlen(values[i]);
+        // Adjust total length by difference between placeholder and value lengths
+        if (value_lens[i] > placeholder_lens[i]) {
+            total_len += value_lens[i] - placeholder_lens[i];
+        }
+    }
+
+    // Allocate final buffer
+    char *result = malloc(total_len);
+    if (!result) {
+        free(placeholder_lens);
+        free(value_lens);
+        return NULL;
+    }
+
+    const char *src = template;
+    char *dst = result;
+    
+    while (*src) {
+        int replaced = 0;
+        for (size_t i = 0; i < count; i++) {
+            if (strncmp(src, placeholders[i], placeholder_lens[i]) == 0) {
+                memcpy(dst, values[i], value_lens[i]);
+                dst += value_lens[i];
+                src += placeholder_lens[i];
+                replaced = 1;
+                break;
+            }
+        }
+        if (!replaced) {
+            *dst++ = *src++;
+        }
+    }
+    *dst = '\0';
+
+    free(placeholder_lens);
+    free(value_lens);
+    return result;
+}
+
+static struct evbuffer *
+process_custom_auth_offline_page(const char *ip, const char *port, const char *proto, const char *client_ip, const char *client_mac)
+{
+    struct evbuffer *evb = evbuffer_new();
+    if (!evb) {
+        return NULL;
+    }
+
+    const char *placeholders[] = {
+        "{{ip}}",
+        "{{port}}",
+        "{{proto}}",
+        "{{client_ip}}",
+        "{{client_mac}}"
+    };
+
+    const char *values[] = {
+        ip,
+        port,
+        proto,
+        client_ip,
+        client_mac
+    };
+
+    char *page = replace_placeholder_multi(evbuffer_pullup(evb_authserver_offline_page, -1), placeholders, values, sizeof(placeholders) / sizeof(placeholders[0]));
+    if (!page) {
+        evbuffer_free(evb);
+        return NULL;
+    }
+
+    evbuffer_add(evb, page, strlen(page));
+    free(page);
+    return evb;
+}
+
+
+/**
  * @brief reply client error of gw internet offline or auth server offline
  * 
  * @param req  The http request
@@ -285,6 +405,11 @@ ev_http_reply_client_error(struct evhttp_request *req, enum reply_client_error_t
         evbuffer_add(evb, evbuffer_pullup(evb_authserver_offline_page, -1), evbuffer_get_length(evb_authserver_offline_page));
         pthread_mutex_unlock(&g_resource_lock);
         break;
+    case LOCAL_CUSTROM_AUTH:
+        pthread_mutex_lock(&g_resource_lock);
+        evb = process_custom_auth_offline_page(ip, port, proto, client_ip, client_mac);
+        pthread_mutex_unlock(&g_resource_lock);
+        break;
     case LOCAL_AUTH:
     default:
         char redir_url[256] = {0};
@@ -294,7 +419,14 @@ ev_http_reply_client_error(struct evhttp_request *req, enum reply_client_error_t
         evbuffer_add_printf(evb, AW_LOCAL_REDIRECT_MSG, redir_url);
         break;
     }
-    debug(LOG_DEBUG, "reply client error");
+    
+    if (!evb) {
+        evhttp_send_error(req, HTTP_INTERNAL, "Failed to evbuffer_new");
+        debug(LOG_ERR, "Failed to evbuffer_new");
+        return;
+    }
+
+    debug(LOG_DEBUG, "reply client type: %d", type);
     evhttp_send_reply(req, 200, "OK", evb);
     evbuffer_free(evb);
 }
