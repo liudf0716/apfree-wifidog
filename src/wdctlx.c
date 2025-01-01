@@ -178,10 +178,11 @@ static void display_help() {
     printf("  wdctlx clear <domain|wildcard_domain|mac>\n");
     printf("  wdctlx help|?\n");
     printf("  wdctlx stop\n");
-    printf("  wdctlx reset value\n");
+    printf("  wdctlx reset <value>\n");
     printf("  wdctlx status [client|auth|wifidogx]\n");
     printf("  wdctlx refresh\n");
     printf("  wdctlx apfree <user_list|user_info|user_auth>\n");
+    printf("  wdctlx hotplugin <json_value>\n");
 }
 
 typedef struct {
@@ -203,6 +204,7 @@ static const CommandMapping COMMAND_MAP[] = {
     {"apfree", "user_list", false, false},
     {"apfree", "user_info", false, true},
     {"apfree", "user_auth", false, true},
+    {"hotplugin", "hotplugin", false, true},
     {NULL, NULL, false, false}
 };
 
