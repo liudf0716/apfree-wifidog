@@ -254,7 +254,6 @@ main(int argc, char **argv) {
     const char *command = argv[1];
     const char *type = (argc > 2) ? argv[2] : NULL;
     const char *values = (argc > 3) ? argv[3] : NULL;
-    printf("Command: %s, type: %s, values: %s\n", command, type? type : "NULL", values? values : "NULL");
 
     if (strcmp(command, "help") == 0 || strcmp(command, "?") == 0) {
         display_help();
