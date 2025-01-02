@@ -204,7 +204,7 @@ static const CommandMapping COMMAND_MAP[] = {
     {"apfree", "user_list", true, false},
     {"apfree", "user_info", true, true},
     {"apfree", "user_auth", true, true},
-    {"hotplugin", "hotplugin", false, true},
+    {"hotplugin", "hotplugin", false, false},
     {NULL, NULL, false, false}
 };
 
