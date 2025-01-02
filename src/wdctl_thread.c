@@ -1047,7 +1047,7 @@ wdctl_hotplugin_event(struct bufferevent *fd, const char *event_json_data) {
                 lan_ip_parts[0], lan_ip_parts[1], 
                 lan_ip_parts[2], lan_ip_parts[3]);
 
-        snprintf(cmd, sizeof(cmd), "uci set network.lan.ipaddr='%s' && uci commit network",
+        snprintf(cmd, sizeof(cmd), "uci set network.lan.ipaddr='%s' && uci commit network && reboot",
                 new_ip);
         
         if (system(cmd) != 0) {
