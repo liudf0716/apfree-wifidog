@@ -201,9 +201,9 @@ static const CommandMapping COMMAND_MAP[] = {
     {"reset", "reset", false, true},
     {"status", "status", false, false},
     {"refresh", "refresh", false, false},
-    {"apfree", "user_list", false, false},
-    {"apfree", "user_info", false, true},
-    {"apfree", "user_auth", false, true},
+    {"apfree", "user_list", true, false},
+    {"apfree", "user_info", true, true},
+    {"apfree", "user_auth", true, true},
     {"hotplugin", "hotplugin", false, true},
     {NULL, NULL, false, false}
 };
@@ -229,7 +229,9 @@ get_server_command(const char *cmd_type, const char *type) {
                                                         strcmp(cmd_type, "del") == 0 ? "del_trusted_" :
                                                         "clear_trusted_", type_suffix);
         return server_cmd;
-    }
+    } else if (strcmp(cmd_type, "apfree") == 0) {
+        return type;
+    } 
     return cmd_type;
 }
 
@@ -252,6 +254,7 @@ main(int argc, char **argv) {
     const char *command = argv[1];
     const char *type = (argc > 2) ? argv[2] : NULL;
     const char *values = (argc > 3) ? argv[3] : NULL;
+    printf("Command: %s, type: %s, values: %s\n", command, type? type : "NULL", values? values : "NULL");
 
     if (strcmp(command, "help") == 0 || strcmp(command, "?") == 0) {
         display_help();
@@ -270,7 +273,12 @@ main(int argc, char **argv) {
             }
 
             const char *server_cmd = get_server_command(command, type);
-            handle_command(server_cmd, strcmp(command, "status") == 0 ? type : values);
+            if (!strcmp(command, "status") || !strcmp(command, "hotplugin")) {
+                // type as input values
+                handle_command(server_cmd, type);
+            } else {
+                handle_command(server_cmd, values);
+            }
             return 0;
         }
     }
