@@ -1,0 +1,340 @@
+#!/usr/bin/lua
+
+-- Required modules
+require "ubus"
+require "luci.util"
+local json = require "luci.jsonc"
+local nixio = require "nixio"
+
+-- Constants
+local LOGIN_PASSWORD = "admin123"
+local WIFI_IFACE_NAMES = {
+    radio0 = "apci24g",
+    radio1 = "apci5g"
+}
+
+-- Utility functions
+local function is_logged_in(post_data)
+    return post_data and post_data["session"] == "logged_in"
+end
+
+local function match_login_password(login_password)
+    -- get the password from the /etc/config/wifi_config file
+    -- the wifi_config file should have the following content:
+    -- config wifi_config 
+    --     option password 'admin123'
+    -- check if /etc/config/wifi_config file exists
+    if not nixio.fs.access("/etc/config/wifi_config") then
+        return true
+    end
+    local password = (luci.util.exec("uci -q get wifi_config.@wifi_config[0].password") or ""):gsub("^%s*(.-)%s*$", "%1")
+    return login_password == password
+end
+
+local function parse_post_data()
+    local post_data = nil
+    local content_length = tonumber(os.getenv("CONTENT_LENGTH")) or 0
+    if content_length > 0 then
+        local raw_data = nixio.stdin:read(content_length)
+        post_data = {}
+        for key, value in string.gmatch(raw_data, "([^&=]+)=([^&=]*)&?") do
+            post_data[key] = value
+        end
+    end
+    return post_data
+end
+
+-- WiFi configuration functions
+local function execute_uci_commands(commands)
+    for _, cmd in ipairs(commands) do
+        os.execute("uci " .. cmd)
+    end
+    os.execute("uci commit wireless")
+    os.execute("reboot")
+end
+
+local function configure_wifi(ssid, password, radio, encryption)
+    if not (ssid and password and radio and encryption) then return end
+
+    local wifi_iface_name = WIFI_IFACE_NAMES[radio]
+    local commands = {
+        "add wireless wifi-iface",
+        string.format("set wireless.@wifi-iface[-1].device='%s'", radio),
+        "set wireless.@wifi-iface[-1].mode='sta'",
+        "set wireless.@wifi-iface[-1].network='wwan'",
+        string.format("set wireless.@wifi-iface[-1].ssid='%s'", ssid),
+        string.format("set wireless.@wifi-iface[-1].encryption='%s'", encryption),
+        string.format("set wireless.@wifi-iface[-1].key='%s'", password),
+        "set wireless.@wifi-iface[-1].disabled='0'",
+        string.format("rename wireless.@wifi-iface[-1]='%s'", wifi_iface_name),
+    }
+    execute_uci_commands(commands)
+end
+
+-- Network scanning functions
+local function get_network_info(conn, radio)
+    local results = conn:call("iwinfo", "scan", { device = radio })
+    local networks = {}
+    if results and results.results then
+        for _, network in ipairs(results.results) do
+            if network.ssid then
+                local auth = "none"
+                if network.encryption and network.encryption.enabled then
+                    if network.encryption.wpa and network.encryption.wpa[1] == 2 then
+                        if network.encryption.authentication and network.encryption.authentication[1] == "psk" then
+                            auth = "psk2"
+                        end
+                    end
+                end
+                table.insert(networks, {
+                    ssid = network.ssid,
+                    encryption = auth
+                })
+            end
+        end
+    end
+    return networks
+end
+
+-- HTML rendering functions
+local function render_network_options(networks)
+    local html = '<option value="none" data-auth="none">none</option>'
+    for _, network in ipairs(networks) do
+        html = html .. string.format(
+            '<option value="%s" data-auth="%s">%s</option>',
+            network.ssid,
+            network.encryption,
+            network.ssid
+        )
+    end
+    return html
+end
+
+local function show_login_form(error_message)
+    print([[<h1>WiFi Configuration</h1>]])
+    print([[<div class="form-container">]])
+    if error_message then
+        print([[<p style="color: red;">]] .. error_message .. [[</p>]])
+    end
+    print([[<form method="post" action="/cgi-bin/wifi-config">]])
+    print([[<input type="password" name="login_password" placeholder="Password">]])
+    print([[<input type="submit" value="Login">]])
+    print([[</form>]])
+    print([[</div>]])
+end
+
+local function show_wifi_form()
+    local conn = ubus.connect()
+    if not conn then
+        error("Failed to connect to ubus")
+    end
+
+    local radio0_results = get_network_info(conn, "radio0")
+    local radio1_results = get_network_info(conn, "radio1")
+
+    print([[
+        <div class="form-container" id="wifiFormContainer">
+            <h1>WiFi Configuration</h1>
+            <form id="wifiForm" action="/cgi-bin/wifi-config" method="post">
+                <input type="hidden" name="ssid" id="selectedSSID">
+                <input type="hidden" name="encryption" id="selectedEncryption">
+                <input type="hidden" name="radio" id="selectedRadio">
+                <div class="wifi-toggle">
+                    <input type="checkbox" id="wifiToggle" onchange="toggleWifi()">
+                    <label for="wifiToggle">Show 2.4GHz Networks</label>
+                </div>
+    ]])
+
+    -- Keep the 2.4GHz networks section
+    print([[
+                <div id="networks2G" style="display: none;">
+                    <h2>2.4GHz Networks</h2>
+                    <select id="networks2GSelect" onchange="showEncryption('2G', this.selectedIndex)">]])
+    print(render_network_options(radio0_results))
+    print([[
+                    </select>
+                    <input type="text" id="auth2G" readonly>
+                </div>]])
+
+
+    print([[
+                <div id="networks5G">
+                    <h2>5GHz Networks</h2>
+                    <select id="networks5GSelect" onchange="showEncryption('5G', this.selectedIndex)">]])
+    print(render_network_options(radio1_results))
+
+    print([[
+                    </select>
+                    <input type="text" id="auth5G" readonly>
+                </div>
+                <input type="password" name="password" id="wifiPassword" placeholder="Enter WiFi Password" required>
+                <input type="submit" value="Connect" onclick="return prepareSubmission()">
+            </form>
+        </div>
+
+        <script>
+        function toggleWifi() {
+            var networks2G = document.getElementById('networks2G');
+            var networks5G = document.getElementById('networks5G');
+            var checkbox = document.getElementById('wifiToggle');
+            
+            if (checkbox.checked) {
+                networks2G.style.display = 'block';
+                networks5G.style.display = 'none';
+            } else {
+                networks2G.style.display = 'none';
+                networks5G.style.display = 'block';
+            }
+        }
+
+        function showEncryption(band, index) {
+            var select = document.getElementById('networks' + band + 'Select');
+            var auth = document.getElementById('auth' + band);
+            if (select.options[index]) {
+                auth.value = select.options[index].getAttribute('data-auth') || 'none';
+            }
+        }
+
+        function prepareSubmission() {
+            var is2G = document.getElementById('wifiToggle').checked;
+            var select = document.getElementById(is2G ? 'networks2GSelect' : 'networks5GSelect');
+            var auth = document.getElementById(is2G ? 'auth2G' : 'auth5G');
+            var password = document.getElementById('wifiPassword');
+
+            if (select.value === 'none') {
+                alert('Please select a network');
+                return false;
+            }
+
+            document.getElementById('selectedSSID').value = select.value;
+            document.getElementById('selectedEncryption').value = auth.value;
+            document.getElementById('selectedRadio').value = is2G ? 'radio0' : 'radio1';
+
+            if (auth.value !== 'none' && !password.value) {
+                alert('Password is required for this network');
+                return false;
+            }
+
+            return true;
+        }
+        </script>
+    ]])
+
+    conn:close()
+end
+
+-- Main execution
+local function main()
+    -- Connect to ubus
+    local conn = ubus.connect()
+    if not conn then
+        error("Failed to connect to ubus")
+    end
+
+    -- Write HTTP headers and CSS
+    print("Content-Type: text/html\n")
+    print([[<!DOCTYPE html><html><head><title>WiFi Configuration</title>]])
+    print([[
+        <style>
+            body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+            }
+            h1 {
+                color: #333;
+                text-align: center;
+                margin-bottom: 30px;
+            }
+            h2 {
+                color: #444;
+                margin-top: 20px;
+            }
+            .form-container {
+                background: white;
+                padding: 20px;
+                border-radius: 8px;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            }
+            .wifi-toggle {
+                margin: 20px 0;
+            }
+            .wifi-toggle label {
+                font-size: 16px;
+                margin-left: 8px;
+                cursor: pointer;
+            }
+            select {
+                width: 100%;
+                padding: 10px;
+                margin: 10px 0;
+                border: 1px solid #ddd;
+                border-radius: 4px;
+                font-size: 14px;
+            }
+            input[type="text"] {
+                width: 100%;
+                padding: 10px;
+                margin: 10px 0;
+                border: 1px solid #ddd;
+                border-radius: 4px;
+                font-size: 14px;
+            }
+            input[type="password"] {
+                width: 100%;
+                padding: 10px;
+                margin: 10px 0;
+                border: 1px solid #ddd;
+                border-radius: 4px;
+                font-size: 14px;
+            }
+            input[type="submit"] {
+                width: 100%;
+                padding: 12px;
+                background-color: #4CAF50;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 16px;
+                margin-top: 20px;
+            }
+            input[type="submit"]:hover {
+                background-color: #45a049;
+            }
+        </style>
+    ]])
+    print([[</head><body>]])
+
+    -- Handle requests
+    local post_data = parse_post_data()
+    if post_data then
+        if post_data["login_password"] then
+            local login_password = post_data["login_password"]
+            if match_login_password(login_password) then
+                show_wifi_form(conn)
+            else
+                show_login_form("Invalid password")
+            end
+        elseif is_logged_in(post_data) then
+            configure_wifi(
+                post_data["ssid"],
+                post_data["password"],
+                post_data["radio"],
+                post_data["encryption"]
+            )
+        else
+            show_login_form()
+        end
+    else
+        show_login_form()
+    end
+
+    print([[</body></html>]])
+    conn:close()
+end
+
+-- Start the application
+main()
