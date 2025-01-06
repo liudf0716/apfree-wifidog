@@ -17,6 +17,49 @@
 #include "version.h"
 #include "wd_client.h"
 
+const char *captive_domains[] = {
+	"captive.apple.com",
+    "www.apple.com",
+    "connect.rom.miui.com",
+    "www.msftconnecttest.com",
+    "www.gstatic.com",
+    "www.gstatic.cn",
+    "www.google.cn",
+    "www.qualcomm.cn",
+    "conn1.oppomobile.com",
+    "conn2.oppomobile.com",
+    "connectivitycheck.platform.hicloud.com",
+	"connectivitycheck.gstatic.com",
+    "cp.cloudflare.com",
+    "wifi.vivo.com.cn",
+    "connectivitycheck.platform.hihonorcloud.com",
+    "detectportal.firefox.com",
+    "services.googleapis.cn",
+	"g.cn",
+    "developer.android.google.cn",
+    "source.android.google.cn",
+    "www.google-analytics.com",
+    "clients1.google.com",
+    "clients2.google.com",
+    "clients3.google.com",
+    "clients4.google.com",
+    "clients5.google.com",
+    "goo.gl",
+    "google.cn",
+    "google.com.hk",
+    "google.com.tw",
+    "google.com",
+    "googleapis.com",
+    "play.googleapis.com",
+    "www.g.cn",
+    "www.google.com.hk",
+    "www.google.com.tw",
+    "www.google.com",
+    "www.googleapis.com",
+    "www.youtube.com",
+    "yt.be"
+};
+
 extern time_t started_time;
 
 int g_online_clients;
@@ -27,6 +70,43 @@ char *g_ssid;
 
 static void ping_work_cb(evutil_socket_t, short, void *);
 static void process_ping_response(struct evhttp_request *, void *);
+
+static void
+make_captive_domains_query_responsable(void)
+{
+	static int domains_added = 0;
+	
+	if (!is_openwrt_platform()) {
+		debug(LOG_INFO, "it's not openwrt platform, no need to make captive domains responsable");
+		return;
+	}
+
+	if (is_online()) {
+		if (domains_added) {
+			for (int i = 0; i < sizeof(captive_domains)/sizeof(captive_domains[0]); i++) {
+				char cmd[256] = {0};
+				snprintf(cmd, sizeof(cmd), "uci -q del dhcp.@dnsmasq[0].address=/%s/1.1.1.1/", captive_domains[i]);
+				system(cmd);
+			}
+			system("uci commit dhcp && /etc/init.d/dnsmasq restart >/dev/null 2>&1");
+			domains_added = 0;
+			debug(LOG_INFO, "Removed captive domains as gateway is online");
+		}
+		return;
+	}
+
+	if (!domains_added) {
+		// Add all captive domains when offline
+		char cmd[256] = {0};
+		for (int i = 0; i < sizeof(captive_domains)/sizeof(captive_domains[0]); i++) {
+			snprintf(cmd, sizeof(cmd), "uci -q add dhcp.@dnsmasq[0].address=/%s/1.1.1.1/", captive_domains[i]);
+			system(cmd);
+		}
+		system("uci commit dhcp && /etc/init.d/dnsmasq restart >/dev/null 2>&1");
+		domains_added = 1;
+		debug(LOG_INFO, "Added captive domains as gateway is offline");
+	}
+}
 
 static void 
 ping_work_cb(evutil_socket_t fd, short event, void *arg) {
@@ -66,6 +146,8 @@ thread_ping(void *arg)
 {
 	s_config *config = config_get_config();
 	
+	make_captive_domains_query_responsable();
+
 	if (config->auth_server_mode == AUTH_MODE_LOCAL) {
 		debug(LOG_DEBUG, "auth mode is local, no need to ping auth server");
 		mark_auth_online();
