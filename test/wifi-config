@@ -123,68 +123,45 @@ local function show_login_form(error_message)
     print([[</div>]])
 end
 
-local function show_wifi_form()
-    local conn = ubus.connect()
-    if not conn then
-        error("Failed to connect to ubus")
-    end
-
-    local radio0_results = get_network_info(conn, "radio0")
-    local radio1_results = get_network_info(conn, "radio1")
-
-    print([[
-        <div class="form-container" id="wifiFormContainer">
-            <h1>WiFi Configuration</h1>
-            <form id="wifiForm" action="/cgi-bin/wifi-config" method="post">
-                <input type="hidden" name="ssid" id="selectedSSID">
-                <input type="hidden" name="encryption" id="selectedEncryption">
-                <input type="hidden" name="radio" id="selectedRadio">
-                <div class="wifi-toggle">
-                    <input type="checkbox" id="wifiToggle" onchange="toggleWifi()">
-                    <label for="wifiToggle">Show 2.4GHz Networks</label>
-                </div>
-    ]])
-
-    -- Keep the 2.4GHz networks section
-    print([[
-                <div id="networks2G" style="display: none;">
-                    <h2>2.4GHz Networks</h2>
-                    <select id="networks2GSelect" onchange="showEncryption('2G', this.selectedIndex)">]])
-    print(render_network_options(radio0_results))
-    print([[
-                    </select>
-                    <input type="text" id="auth2G" readonly>
-                </div>]])
-
-
-    print([[
-                <div id="networks5G">
-                    <h2>5GHz Networks</h2>
-                    <select id="networks5GSelect" onchange="showEncryption('5G', this.selectedIndex)">]])
-    print(render_network_options(radio1_results))
-
-    print([[
-                    </select>
-                    <input type="text" id="auth5G" readonly>
-                </div>
-                <input type="password" name="password" id="wifiPassword" placeholder="Enter WiFi Password" required>
-                <input type="submit" value="Connect" onclick="return prepareSubmission()">
-            </form>
+-- HTML template functions
+local function render_wifi_toggle()
+    return [[
+        <div class="wifi-toggle">
+            <input type="checkbox" id="wifiToggle" onchange="toggleWifi()">
+            <label for="wifiToggle">Show 2.4GHz Networks</label>
         </div>
+    ]]
+end
 
+local function render_network_section(band, networks, is_hidden)
+    local html = string.format([[
+        <div id="networks%s" style="display: %s;">
+            <h2>%s Networks</h2>
+            <select id="networks%sSelect" onchange="showEncryption('%s', this.selectedIndex)">
+            %s
+            </select>
+            <input type="text" id="auth%s" readonly>
+        </div>
+    ]], 
+    band,
+    is_hidden and "none" or "block",
+    band == "2G" and "2.4GHz" or "5GHz",
+    band,
+    band,
+    render_network_options(networks),
+    band)
+    return html
+end
+
+local function render_javascript()
+    return [[
         <script>
         function toggleWifi() {
             var networks2G = document.getElementById('networks2G');
             var networks5G = document.getElementById('networks5G');
             var checkbox = document.getElementById('wifiToggle');
-            
-            if (checkbox.checked) {
-                networks2G.style.display = 'block';
-                networks5G.style.display = 'none';
-            } else {
-                networks2G.style.display = 'none';
-                networks5G.style.display = 'block';
-            }
+            networks2G.style.display = checkbox.checked ? 'block' : 'none';
+            networks5G.style.display = checkbox.checked ? 'none' : 'block';
         }
 
         function showEncryption(band, index) {
@@ -210,16 +187,39 @@ local function show_wifi_form()
             document.getElementById('selectedEncryption').value = auth.value;
             document.getElementById('selectedRadio').value = is2G ? 'radio0' : 'radio1';
 
-            if (auth.value !== 'none' && !password.value) {
-                alert('Password is required for this network');
-                return false;
-            }
-
-            return true;
+            return auth.value === 'none' || password.value ? true : (alert('Password is required for this network'), false);
         }
         </script>
+    ]]
+end
+
+local function show_wifi_form()
+    local conn = ubus.connect()
+    if not conn then
+        error("Failed to connect to ubus")
+    end
+
+    print([[
+        <div class="form-container" id="wifiFormContainer">
+            <h1>WiFi Configuration</h1>
+            <form id="wifiForm" action="/cgi-bin/wifi-config" method="post">
+                <input type="hidden" name="ssid" id="selectedSSID">
+                <input type="hidden" name="encryption" id="selectedEncryption">
+                <input type="hidden" name="radio" id="selectedRadio">
     ]])
 
+    print(render_wifi_toggle())
+    print(render_network_section("2G", get_network_info(conn, "radio0"), true))
+    print(render_network_section("5G", get_network_info(conn, "radio1"), false))
+
+    print([[
+                <input type="password" name="password" id="wifiPassword" placeholder="Enter WiFi Password" required>
+                <input type="submit" value="Connect" onclick="return prepareSubmission()">
+            </form>
+        </div>
+    ]])
+
+    print(render_javascript())
     conn:close()
 end
 
