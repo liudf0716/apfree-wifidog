@@ -114,9 +114,11 @@ make_captive_domains_query_responsable(void)
 static void 
 ping_work_cb(evutil_socket_t fd, short event, void *arg) {
 	make_captive_domains_query_responsable();
+	
 	if (is_local_auth_mode()) {
 		debug(LOG_DEBUG, "auth mode is local, no need to ping auth server");
 		mark_auth_online();
+		return;
 	}
 
 	struct wd_request_context *request_ctx = (struct wd_request_context *)arg;
