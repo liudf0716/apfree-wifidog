@@ -84,8 +84,11 @@ make_captive_domains_query_responsable(void)
 	if (is_online()) {
 		if (domains_added) {
 			for (int i = 0; i < sizeof(captive_domains)/sizeof(captive_domains[0]); i++) {
-				char cmd[256] = {0};
-				snprintf(cmd, sizeof(cmd), "uci -q del_list dhcp.@dnsmasq[0].address=/%s/1.1.1.1", captive_domains[i]);
+				char cmd[512] = {0};
+				if (snprintf(cmd, sizeof(cmd), "uci -q del_list dhcp.@dnsmasq[0].address=/%s/1.1.1.1", captive_domains[i]) >= sizeof(cmd)) {
+					debug(LOG_ERR, "Command buffer too small");
+					continue;
+				}
 				system(cmd);
 			}
 			system("uci commit dhcp && /etc/init.d/dnsmasq restart >/dev/null 2>&1");
@@ -97,12 +100,18 @@ make_captive_domains_query_responsable(void)
 
 	if (!domains_added) {
 		// Add all captive domains when offline
-		char cmd[256] = {0};
+		char cmd[512] = {0};
 		for (int i = 0; i < sizeof(captive_domains)/sizeof(captive_domains[0]); i++) {
-			snprintf(cmd, sizeof(cmd), "uci -q del_list dhcp.@dnsmasq[0].address=/%s/1.1.1.1", captive_domains[i]);
+			if (snprintf(cmd, sizeof(cmd), "uci -q del_list dhcp.@dnsmasq[0].address=/%s/1.1.1.1", captive_domains[i]) >= sizeof(cmd)) {
+				debug(LOG_ERR, "Command buffer too small");
+				continue;
+			}
 			system(cmd);
 			memset(cmd, 0, sizeof(cmd));
-			snprintf(cmd, sizeof(cmd), "uci -q add_list dhcp.@dnsmasq[0].address=/%s/1.1.1.1", captive_domains[i]);
+			if (snprintf(cmd, sizeof(cmd), "uci -q add_list dhcp.@dnsmasq[0].address=/%s/1.1.1.1", captive_domains[i]) >= sizeof(cmd)) {
+				debug(LOG_ERR, "Command buffer too small");
+				continue;
+			}
 			system(cmd);
 		}
 		system("uci commit dhcp && /etc/init.d/dnsmasq restart >/dev/null 2>&1");
@@ -113,6 +122,8 @@ make_captive_domains_query_responsable(void)
 
 static void 
 ping_work_cb(evutil_socket_t fd, short event, void *arg) {
+	debug(LOG_DEBUG, "ping work callback");
+	
 	make_captive_domains_query_responsable();
 	
 	if (is_local_auth_mode()) {
