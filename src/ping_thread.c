@@ -122,8 +122,6 @@ make_captive_domains_query_responsable(void)
 
 static void 
 ping_work_cb(evutil_socket_t fd, short event, void *arg) {
-	debug(LOG_DEBUG, "ping work callback");
-	
 	make_captive_domains_query_responsable();
 	
 	if (is_local_auth_mode()) {
@@ -166,7 +164,17 @@ ping_work_cb(evutil_socket_t fd, short event, void *arg) {
 void
 thread_ping(void *arg)
 {
-	wd_request_loop(ping_work_cb);
+	if (is_local_auth_mode()) {
+		debug(LOG_DEBUG, "auth mode is local, no need to ping auth server");
+		mark_auth_online();
+		while(1) {
+			make_captive_domains_query_responsable();
+			sleep(60);
+		}
+	} else {
+		debug(LOG_DEBUG, "auth mode is cloud, start to ping auth server");
+		wd_request_loop(ping_work_cb);
+	}
 }
 
 static long
