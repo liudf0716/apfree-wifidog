@@ -624,8 +624,8 @@ threads_init(s_config *config)
     create_detached_thread(&tid_ping, (void *)thread_ping, NULL, "ping");
 
     // Auth server dependent threads
-    if (!config->auth_servers) {
-        debug(LOG_INFO, "No auth server available, not starting auth-dependent threads");
+    if (is_local_auth_mode()) {
+        debug(LOG_INFO, "Auth mode is local, no need to start auth server related threads");
         return;
     }
 
