@@ -2001,7 +2001,7 @@ validate_popular_servers(void)
 {
 	if (config.popular_servers == NULL) {
 		add_popular_server("www.baidu.com");
-		add_popular_server("www.google.com");
+		add_popular_server("www.x.com");
 	}
 }
 
