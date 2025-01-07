@@ -99,6 +99,9 @@ make_captive_domains_query_responsable(void)
 		// Add all captive domains when offline
 		char cmd[256] = {0};
 		for (int i = 0; i < sizeof(captive_domains)/sizeof(captive_domains[0]); i++) {
+			snprintf(cmd, sizeof(cmd), "uci -q del_list dhcp.@dnsmasq[0].address=/%s/1.1.1.1", captive_domains[i]);
+			system(cmd);
+			memset(cmd, 0, sizeof(cmd));
 			snprintf(cmd, sizeof(cmd), "uci -q add_list dhcp.@dnsmasq[0].address=/%s/1.1.1.1", captive_domains[i]);
 			system(cmd);
 		}
