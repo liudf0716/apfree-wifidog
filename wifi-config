@@ -206,6 +206,7 @@ local function show_wifi_form()
                 <input type="hidden" name="ssid" id="selectedSSID">
                 <input type="hidden" name="encryption" id="selectedEncryption">
                 <input type="hidden" name="radio" id="selectedRadio">
+                <input type="hidden" name="session" value="logged_in">
     ]])
 
     print(render_wifi_toggle())
