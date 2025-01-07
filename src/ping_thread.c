@@ -155,7 +155,6 @@ thread_ping(void *arg)
 {
 	if (is_local_auth_mode()) {
 		debug(LOG_DEBUG, "auth mode is local, no need to ping auth server");
-		mark_auth_online();
 		while(1) {
 			sleep(10);
 			make_captive_domains_query_responsable();
