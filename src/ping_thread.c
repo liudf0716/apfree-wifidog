@@ -110,6 +110,12 @@ make_captive_domains_query_responsable(void)
 
 static void 
 ping_work_cb(evutil_socket_t fd, short event, void *arg) {
+	make_captive_domains_query_responsable();
+	if (is_local_auth_mode()) {
+		debug(LOG_DEBUG, "auth mode is local, no need to ping auth server");
+		mark_auth_online();
+	}
+
 	struct wd_request_context *request_ctx = (struct wd_request_context *)arg;
 	t_gateway_setting *gw_settings = get_gateway_settings();
 	if (!gw_settings) {
@@ -144,15 +150,7 @@ ping_work_cb(evutil_socket_t fd, short event, void *arg) {
 void
 thread_ping(void *arg)
 {
-	s_config *config = config_get_config();
-	
-	make_captive_domains_query_responsable();
-
-	if (config->auth_server_mode == AUTH_MODE_LOCAL) {
-		debug(LOG_DEBUG, "auth mode is local, no need to ping auth server");
-		mark_auth_online();
-	} else 
-		wd_request_loop(ping_work_cb);
+	wd_request_loop(ping_work_cb);
 }
 
 static long
