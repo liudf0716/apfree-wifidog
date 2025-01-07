@@ -85,7 +85,7 @@ make_captive_domains_query_responsable(void)
 		if (domains_added) {
 			for (int i = 0; i < sizeof(captive_domains)/sizeof(captive_domains[0]); i++) {
 				char cmd[256] = {0};
-				snprintf(cmd, sizeof(cmd), "uci -q delete dhcp.@dnsmasq[0].address=/%s/1.1.1.1/", captive_domains[i]);
+				snprintf(cmd, sizeof(cmd), "uci -q del_list dhcp.@dnsmasq[0].address=/%s/1.1.1.1", captive_domains[i]);
 				system(cmd);
 			}
 			system("uci commit dhcp && /etc/init.d/dnsmasq restart >/dev/null 2>&1");
@@ -99,7 +99,7 @@ make_captive_domains_query_responsable(void)
 		// Add all captive domains when offline
 		char cmd[256] = {0};
 		for (int i = 0; i < sizeof(captive_domains)/sizeof(captive_domains[0]); i++) {
-			snprintf(cmd, sizeof(cmd), "uci -q set dhcp.@dnsmasq[0].address=/%s/1.1.1.1/", captive_domains[i]);
+			snprintf(cmd, sizeof(cmd), "uci -q add_list dhcp.@dnsmasq[0].address=/%s/1.1.1.1", captive_domains[i]);
 			system(cmd);
 		}
 		system("uci commit dhcp && /etc/init.d/dnsmasq restart >/dev/null 2>&1");
