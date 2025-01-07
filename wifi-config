@@ -9,8 +9,8 @@ local nixio = require "nixio"
 -- Constants
 local LOGIN_PASSWORD = "admin123"
 local WIFI_IFACE_NAMES = {
-    radio0 = "apci24g",
-    radio1 = "apci5g"
+    radio0 = "apcli24g",
+    radio1 = "apcli5g"
 }
 
 -- Utility functions
@@ -47,9 +47,10 @@ end
 -- WiFi configuration functions
 local function execute_uci_commands(commands)
     for _, cmd in ipairs(commands) do
-        os.execute("uci " .. cmd)
+        os.execute("uci -q " .. cmd)
     end
     os.execute("uci commit wireless")
+    os.execute("uci commit network")
     os.execute("reboot")
 end
 
@@ -58,6 +59,11 @@ local function configure_wifi(ssid, password, radio, encryption)
 
     local wifi_iface_name = WIFI_IFACE_NAMES[radio]
     local commands = {
+        "delete network.wwan",
+        "add network interface",
+        "set network.@interface[-1].proto='dhcp'",
+        "rename network.@interface[-1]='wwan'",
+        string.format("delete wireless.%s", wifi_iface_name),
         "add wireless wifi-iface",
         string.format("set wireless.@wifi-iface[-1].device='%s'", radio),
         "set wireless.@wifi-iface[-1].mode='sta'",
