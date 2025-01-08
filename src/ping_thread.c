@@ -144,8 +144,6 @@ check_wifidogx_firewall_rules(void)
 		return;
 	}
 
-	// check table inet fw4's chain dstnat, if it has no rule that jump to dstnat_wifidogx_outgoing
-	// then reload aw firewall rules
 	FILE *fp = popen("nft list chain inet fw4 dstnat", "r");
 	if (!fp) {
 		debug(LOG_ERR, "Failed to list chain inet fw4 dstnat");
@@ -159,7 +157,7 @@ check_wifidogx_firewall_rules(void)
 			break;
 		}
 	}
-	fclose(fp);
+	pclose(fp);
 
 	if (!has_rule) {
 		debug(LOG_INFO, "wifidogx's firewall rule is not completed, reload aw firewall rules");
@@ -214,7 +212,7 @@ thread_ping(void *arg)
 		} 
 
 		while(1) {
-			sleep(10);
+			sleep(60);
 			make_captive_domains_query_responsable();
 			check_wifidogx_firewall_rules();
 		}
