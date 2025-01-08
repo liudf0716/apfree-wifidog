@@ -205,12 +205,12 @@ ping_work_cb(evutil_socket_t fd, short event, void *arg) {
 void
 thread_ping(void *arg)
 {
+	if (!is_online()) {
+		update_captive_domains();
+	}
+	
 	if (is_local_auth_mode()) {
 		debug(LOG_DEBUG, "auth mode is local, no need to ping auth server");
-		if (!is_online()) {
-			update_captive_domains();
-		} 
-
 		while(1) {
 			sleep(60);
 			make_captive_domains_query_responsable();
