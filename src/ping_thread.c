@@ -133,6 +133,42 @@ make_captive_domains_query_responsable(void)
 	was_online = now_online;
 }
 
+static void
+check_wifidogx_firewall_rules(void)
+{
+	if (!is_openwrt_platform()) 
+		return;
+
+	if (is_bypass_mode()) {
+		debug(LOG_INFO, "Bypass mode, no need to check firewall rules");
+		return;
+	}
+
+	// check table inet fw4's chain dstnat, if it has no rule that jump to dstnat_wifidogx_outgoing
+	// then reload aw firewall rules
+	FILE *fp = popen("nft list chain inet fw4 dstnat", "r");
+	if (!fp) {
+		debug(LOG_ERR, "Failed to list chain inet fw4 dstnat");
+		return;
+	}
+	char line[512] = {0};
+	int has_rule = 0;
+	while (fgets(line, sizeof(line), fp)) {
+		if (strstr(line, "dstnat_wifidogx_outgoing")) {
+			has_rule = 1;
+			break;
+		}
+	}
+	fclose(fp);
+
+	if (!has_rule) {
+		debug(LOG_INFO, "wifidogx's firewall rule is not completed, reload aw firewall rules");
+		pid_t pid = getpid();
+    	kill(pid, SIGUSR1);
+	}
+}
+		
+
 static void 
 ping_work_cb(evutil_socket_t fd, short event, void *arg) {
 	make_captive_domains_query_responsable();
@@ -176,10 +212,11 @@ thread_ping(void *arg)
 		if (!is_online()) {
 			update_captive_domains();
 		} 
-		
+
 		while(1) {
 			sleep(10);
 			make_captive_domains_query_responsable();
+			check_wifidogx_firewall_rules();
 		}
 	} else {
 		debug(LOG_DEBUG, "auth mode is cloud, start to ping auth server");
