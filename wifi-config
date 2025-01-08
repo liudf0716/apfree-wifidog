@@ -51,6 +51,7 @@ local function execute_uci_commands(commands)
     end
     os.execute("uci commit wireless")
     os.execute("uci commit network")
+    os.execute("uci commit firewall")
     os.execute("reboot")
 end
 
@@ -63,6 +64,8 @@ local function configure_wifi(ssid, password, radio, encryption)
         "add network interface",
         "set network.@interface[-1].proto='dhcp'",
         "rename network.@interface[-1]='wwan'",
+        "del_list firewall.@zone[1].network='wwan'",
+        "add_list firewall.@zone[1].network='wwan'",
         string.format("delete wireless.%s", wifi_iface_name),
         "add wireless wifi-iface",
         string.format("set wireless.@wifi-iface[-1].device='%s'", radio),
