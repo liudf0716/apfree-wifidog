@@ -208,7 +208,10 @@ thread_ping(void *arg)
 	if (!is_online()) {
 		update_captive_domains();
 	}
-	
+
+	parse_user_trusted_domain_list();
+	parse_inner_trusted_domain_list();
+
 	if (is_local_auth_mode()) {
 		debug(LOG_DEBUG, "auth mode is local, no need to ping auth server");
 		while(1) {
