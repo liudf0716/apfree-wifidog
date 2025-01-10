@@ -1457,10 +1457,11 @@ thread_evdns_parse_trusted_domain_2_ip(void *arg)
     }
 
 	evdns_base_set_option(dnsbase, "timeout", config_get_config()->dns_timeout);
-    // thanks to the following article
-    // http://www.wuqiong.info/archives/13/
-    evdns_base_set_option(dnsbase, "randomize-case:", "0");//TurnOff DNS-0x20 encoding
-	evdns_base_nameserver_ip_add(dnsbase, "127.0.0.1");//LocalDNS
+	evdns_base_set_option(dnsbase, "randomize-case", "0");//TurnOff DNS-0x20 encoding
+	if (is_openwrt_platform())
+		evdns_base_nameserver_ip_add(dnsbase, "127.0.0.1");//LocalDNS
+	else
+		evdns_base_nameserver_ip_add(dnsbase, "1.1.1.1");//custom DNS
 
 	struct evutil_addrinfo hints;
 	LOCK_DOMAIN();
