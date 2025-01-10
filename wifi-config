@@ -97,6 +97,8 @@ local function get_network_info(conn, radio)
                 end
                 table.insert(networks, {
                     ssid = network.ssid,
+                    bssid = network.bssid,
+                    signal = network.signal,
                     encryption = auth
                 })
             end
@@ -110,10 +112,12 @@ local function render_network_options(networks)
     local html = '<option value="none" data-auth="none">none</option>'
     for _, network in ipairs(networks) do
         html = html .. string.format(
-            '<option value="%s" data-auth="%s">%s</option>',
+            '<option value="%s" data-auth="%s">%s (BSSID: %s, Signal: %ddBm)</option>',
             network.ssid,
             network.encryption,
-            network.ssid
+            network.ssid,
+            network.bssid,
+            network.signal
         )
     end
     return html
@@ -192,11 +196,21 @@ local function render_javascript()
                 return false;
             }
 
+            // Only require password if authentication is not 'none'
+            if (auth.value !== 'none' && !password.value) {
+                alert('Password is required for encrypted networks');
+                return false;
+            }
+
+            if (!confirm('This operation will cause the device to reboot. Do you want to continue?')) {
+                return false;
+            }
+
             document.getElementById('selectedSSID').value = select.value;
             document.getElementById('selectedEncryption').value = auth.value;
             document.getElementById('selectedRadio').value = is2G ? 'radio0' : 'radio1';
 
-            return auth.value === 'none' || password.value ? true : (alert('Password is required for this network'), false);
+            return true;
         }
         </script>
     ]]
