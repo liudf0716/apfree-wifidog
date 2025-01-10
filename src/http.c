@@ -804,7 +804,22 @@ ev_http_callback_local_auth(struct evhttp_request *req, void *arg)
 
     // fw_allow the client
     LOCK_CLIENT_LIST();
-    fw_allow_ip_mac(ip, mac); 
+    t_client *client = client_list_find_by_mac(mac);
+    if (!client) {
+        client = client_list_add(ip, mac, NULL, NULL);
+        fw_allow(client, FW_MARK_KNOWN);
+    } else if (strcmp(client->ip, ip) != 0) {
+        debug(LOG_INFO, "Local pass %s with different IP %s", mac, ip);
+        fw_deny(client);
+        free(client->ip);
+        client->ip = safe_strdup(ip);
+        fw_allow(client, FW_MARK_KNOWN);
+    } else {
+        UNLOCK_CLIENT_LIST();
+        debug(LOG_INFO, "Local pass %s already login", mac);
+        evhttp_send_error(req, HTTP_OK, "Client already login");
+        goto END;
+    }
     UNLOCK_CLIENT_LIST();
 
     // redirect the client to the internet
