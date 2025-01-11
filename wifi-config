@@ -58,15 +58,20 @@ end
 local function configure_wifi(ssid, password, radio, encryption)
     if not (ssid and password and radio and encryption) then return end
 
+    -- URL decode ssid and password
+    ssid = luci.util.urldecode(ssid)
+    password = luci.util.urldecode(password)
+
     local wifi_iface_name = WIFI_IFACE_NAMES[radio]
     local commands = {
         "delete network.wwan",
-        "add network interface",
+        "add network interface", 
         "set network.@interface[-1].proto='dhcp'",
         "rename network.@interface[-1]='wwan'",
         "del_list firewall.@zone[1].network='wwan'",
         "add_list firewall.@zone[1].network='wwan'",
-        string.format("delete wireless.%s", wifi_iface_name),
+        "delete wireless.apcli24g",
+        "delete wireless.apcli5g",
         "add wireless wifi-iface",
         string.format("set wireless.@wifi-iface[-1].device='%s'", radio),
         "set wireless.@wifi-iface[-1].mode='sta'",
@@ -237,7 +242,7 @@ local function show_wifi_form()
     print(render_network_section("5G", get_network_info(conn, "radio1"), false))
 
     print([[
-                <input type="password" name="password" id="wifiPassword" placeholder="Enter WiFi Password" required>
+                <input type="password" name="password" id="wifiPassword" placeholder="Enter WiFi Password">
                 <input type="submit" value="Connect" onclick="return prepareSubmission()">
             </form>
         </div>
