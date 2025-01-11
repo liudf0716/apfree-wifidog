@@ -416,7 +416,7 @@ ev_http_reply_client_error(struct evhttp_request *req, enum reply_client_page_ty
     case LOCAL_AUTH:
     default:
         char redir_url[256] = {0};
-        snprintf(redir_url, sizeof(redir_url), "%s://%s:%s/wifidog/local_auth/?ip=%s&mac=%s", proto, ip, port, client_ip, client_mac);
+        snprintf(redir_url, sizeof(redir_url), "%s://%s:%s/wifidog/local_auth?ip=%s&mac=%s", proto, ip, port, client_ip, client_mac);
         debug(LOG_DEBUG, "local auth redir_url: %s", redir_url);
         evb = evbuffer_new();
         evbuffer_add_printf(evb, AW_LOCAL_REDIRECT_MSG, redir_url);
@@ -525,6 +525,7 @@ ev_http_callback_404(struct evhttp_request *req, void *arg)
     if (is_bypass_mode()) {
         snprintf(mac, sizeof(mac), "%s", "00:00:00:00:00:00");
     } else if (!br_arp_get_mac(gw_setting, remote_host, mac)) {
+        debug(LOG_INFO, "get client's mac by ip [%s] failed", remote_host);
         evhttp_send_error(req, 200, "Cant get client's mac by its ip");
         return;
     }
@@ -778,6 +779,16 @@ ev_http_callback_disconnect(struct evhttp_request *req, void *arg)
     }
 }
 
+static void
+gen_random_token(char *token, size_t len)
+{
+    static const char charset[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    for (size_t i = 0; i < len; i++) {
+        token[i] = charset[rand() % (sizeof(charset) - 1)];
+    }
+    token[len] = '\0';
+}
+
 /**
  * @brief process client's local pass request
  * 
@@ -802,11 +813,19 @@ ev_http_callback_local_auth(struct evhttp_request *req, void *arg)
         goto END;
     }
 
+    t_gateway_setting *gw = get_gateway_setting_by_ipv4(ip);
+    if (!gw) {
+        evhttp_send_error(req, HTTP_OK, "Cant get gateway setting by client's ip");
+        goto END;
+    }
+
     // fw_allow the client
     LOCK_CLIENT_LIST();
     t_client *client = client_list_find_by_mac(mac);
     if (!client) {
-        client = client_list_add(ip, mac, NULL, NULL);
+        char rtoken[16] = {0};
+        gen_random_token(rtoken, sizeof(rtoken) - 1);
+        client = client_list_add(ip, mac, rtoken, gw);
         fw_allow(client, FW_MARK_KNOWN);
     } else if (strcmp(client->ip, ip) != 0) {
         debug(LOG_INFO, "Local pass %s with different IP %s", mac, ip);
