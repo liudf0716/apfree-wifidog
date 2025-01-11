@@ -1459,7 +1459,7 @@ nft_fw_add_anti_nat_permit(const char *mac)
     NFT_WIFIDOGX_BYPASS_MODE();
 
     LOCK_CONFIG();
-    nftables_do_command("add element inet fw4 set_wifidogx_local_trust_clients { %s }", mac);
+    nftables_do_command("add element inet wifidogx set_wifidogx_local_trust_clients { %s }", mac);
     UNLOCK_CONFIG();
 }
 
@@ -1469,7 +1469,7 @@ nft_fw_del_anti_nat_permit(const char *mac)
     NFT_WIFIDOGX_BYPASS_MODE();
 
     LOCK_CONFIG();
-    nftables_do_command("delete element inet fw4 set_wifidogx_local_trust_clients { %s }", mac);
+    nftables_do_command("delete element inet wifidogx set_wifidogx_local_trust_clients { %s }", mac);
     UNLOCK_CONFIG();
 }
 

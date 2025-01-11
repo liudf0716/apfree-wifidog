@@ -11,7 +11,6 @@
 #include "debug.h"
 #include "auth.h"
 #include "centralserver.h"
-#include "fw_iptables.h"
 #include "firewall.h"
 #include "client_list.h"
 #include "wdctl_thread.h"
@@ -867,10 +866,12 @@ wdctl_user_auth(struct bufferevent *fd, const char *json_value)
         json_object *serial_jo = NULL;
         json_object *time_jo = NULL;
         json_object *mac_jo = NULL;
+        json_object *nat_jo = NULL;
 
         if (!json_object_object_get_ex(user, "serial", &serial_jo) ||
             !json_object_object_get_ex(user, "time", &time_jo) ||
-            !json_object_object_get_ex(user, "mac", &mac_jo)) {
+            !json_object_object_get_ex(user, "mac", &mac_jo) ||
+            !json_object_object_get_ex(user, "nat", &nat_jo)) {
             debug(LOG_ERR, "Failed to get required fields from user object");
             continue;
         }
@@ -878,14 +879,19 @@ wdctl_user_auth(struct bufferevent *fd, const char *json_value)
         const char *serial = json_object_get_string(serial_jo);
         const char *time_str = json_object_get_string(time_jo);
         const char *mac = json_object_get_string(mac_jo);
+        const char *nat = json_object_get_string(nat_jo);           
 
-        debug(LOG_DEBUG, "Parsed values - serial: %s, time: %s, mac: %s",
-              serial, time_str, mac);
+        debug(LOG_DEBUG, "Parsed values - serial: %s, time: %s, mac: %s, nat: %s",
+              serial, time_str, mac, nat);
         uint16_t remaining_time = atoi(time_str);
+        uint16_t anti_nat = atoi(nat);
         if (remaining_time == 0) {
             remove_bypass_user(mac);
         } else {
             add_bypass_user(serial, remaining_time, mac);
+            if (anti_nat) {
+                fw_add_anti_nat_permit_device(mac);
+            }
         }
     }
 
