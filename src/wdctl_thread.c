@@ -888,7 +888,7 @@ wdctl_user_auth(struct bufferevent *fd, const char *json_value)
         if (remaining_time == 0) {
             remove_bypass_user(mac);
         } else {
-            add_bypass_user(serial, remaining_time, mac);
+            add_bypass_user(mac, remaining_time, serial);
             if (anti_nat) {
                 fw_add_anti_nat_permit_device(mac);
             }
