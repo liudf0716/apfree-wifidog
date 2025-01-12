@@ -212,6 +212,9 @@ static const char *TYPE_MAP[] = {
     "domain",
     "wildcard_domain",
     "mac",
+    "user_list",
+    "user_info",
+    "user_auth",
     NULL
 };
 
