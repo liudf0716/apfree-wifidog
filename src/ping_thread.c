@@ -205,7 +205,7 @@ ping_work_cb(evutil_socket_t fd, short event, void *arg) {
 void
 thread_ping(void *arg)
 {
-	if (!is_online()) {
+	if (!is_online() && is_openwrt_platform()) {
 		update_captive_domains();
 	}
 
