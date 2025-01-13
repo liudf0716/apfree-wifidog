@@ -1972,7 +1972,7 @@ config_validate(void)
 	config_notnull(config.gateway_settings, "GatewaySetting");
 	config_notnull(config.external_interface, "ExternalInterface");
 
-	if (config.auth_server_mode == AUTH_MODE_CLOUD) {
+	if (!is_local_auth_mode()) {
 		config_notnull(config.auth_servers, "AuthServer");
 	} 
 	
