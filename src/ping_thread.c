@@ -71,9 +71,14 @@ char *g_ssid;
 static void ping_work_cb(evutil_socket_t, short, void *);
 static void process_ping_response(struct evhttp_request *, void *);
 
-static void
+void
 remove_captive_domains(void)
 {
+	if (is_openwrt_platform()) {
+		debug(LOG_INFO, "Not openwrt platform, skipping remove captive domains setup");
+		return;
+	}
+
 	for (int i = 0; i < (int)(sizeof(captive_domains)/sizeof(captive_domains[0])); i++) {
 		char cmd[512];
 		if (snprintf(cmd, sizeof(cmd),
@@ -88,9 +93,14 @@ remove_captive_domains(void)
 	debug(LOG_INFO, "Removed captive domains");
 }
 
-static void
+void
 update_captive_domains(void)
 {
+	if (is_openwrt_platform()) {
+		debug(LOG_INFO, "Not openwrt platform, skipping update captive domains setup");
+		return;
+	}
+
 	for (int i = 0; i < (int)(sizeof(captive_domains)/sizeof(captive_domains[0])); i++) {
 		char cmd[512];
 		if (snprintf(cmd, sizeof(cmd),
@@ -118,11 +128,6 @@ make_captive_domains_query_responsable(void)
 {
 	static int was_online = 0;
 	int now_online = is_online();
-
-	if (!is_openwrt_platform()) {
-		debug(LOG_INFO, "Not openwrt platform, skipping captive domains setup");
-		return;
-	}
 
 	if (now_online && !was_online) {
 		remove_captive_domains();
@@ -205,12 +210,10 @@ ping_work_cb(evutil_socket_t fd, short event, void *arg) {
 void
 thread_ping(void *arg)
 {
-	if (!is_online() && is_openwrt_platform()) {
-		update_captive_domains();
-	}
-
 	parse_user_trusted_domain_list();
 	parse_inner_trusted_domain_list();
+	
+	update_captive_domains();
 
 	if (is_local_auth_mode()) {
 		debug(LOG_DEBUG, "auth mode is local, no need to ping auth server");

@@ -27,4 +27,7 @@ char *get_ping_v2_uri(const struct sys_info *);
 /** @brief Periodically checks on the auth server to see if it's alive. */
 void thread_ping(void *);
 
+void remove_captive_domains(void);
+void update_captive_domains(void);
+
 #endif
