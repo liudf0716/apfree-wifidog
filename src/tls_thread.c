@@ -100,7 +100,6 @@ check_internet_available_cb(int errcode, struct evutil_addrinfo *addr, void *ptr
 			debug (LOG_DEBUG, "Internet is available, mark online !\n");
 			mark_online();
 			evutil_freeaddrinfo(addr);
-			remove_captive_domains();
 		}
 	}
 }
