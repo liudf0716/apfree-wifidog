@@ -369,7 +369,7 @@ process_custom_auth_offline_page(const char *ip, const char *port, const char *p
         client_mac
     };
 
-    char *page = replace_placeholder_multi(evbuffer_pullup(evb_authserver_offline_page, -1), placeholders, values, sizeof(placeholders) / sizeof(placeholders[0]));
+    char *page = replace_placeholder_multi((const char *)evbuffer_pullup(evb_authserver_offline_page, -1), placeholders, values, sizeof(placeholders) / sizeof(placeholders[0]));
     if (!page) {
         evbuffer_free(evb);
         return NULL;
