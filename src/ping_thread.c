@@ -74,7 +74,7 @@ static void process_ping_response(struct evhttp_request *, void *);
 void
 remove_captive_domains(void)
 {
-	if (is_openwrt_platform()) {
+	if (!is_openwrt_platform()) {
 		debug(LOG_INFO, "Not openwrt platform, skipping remove captive domains setup");
 		return;
 	}
@@ -96,7 +96,7 @@ remove_captive_domains(void)
 void
 update_captive_domains(void)
 {
-	if (is_openwrt_platform()) {
+	if (!is_openwrt_platform()) {
 		debug(LOG_INFO, "Not openwrt platform, skipping update captive domains setup");
 		return;
 	}
