@@ -95,8 +95,10 @@ local function get_network_info(conn, radio)
                 local auth = "none"
                 if network.encryption and network.encryption.enabled then
                     if network.encryption.wpa and network.encryption.wpa[1] == 2 then
-                        if network.encryption.authentication and network.encryption.authentication[1] == "psk" then
+                        if network.encryption.authentication and network.encryption.authentication[1] == "psk2" then
                             auth = "psk2"
+                        elseif network.encryption.authentication and network.encryption.authentication[1] == "psk" then
+                            auth = "psk"
                         end
                     end
                 end
@@ -104,7 +106,8 @@ local function get_network_info(conn, radio)
                     ssid = network.ssid,
                     bssid = network.bssid,
                     signal = network.signal,
-                    encryption = auth
+                    encryption = auth,
+                    encryption_info = network.authentication
                 })
             end
         end
