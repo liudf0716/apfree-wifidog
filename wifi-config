@@ -93,15 +93,29 @@ local function get_network_info(conn, radio)
         for _, network in ipairs(results.results) do
             if network.ssid then
                 local auth = "none"
-                if network.encryption and network.encryption.enabled then
-                    if network.encryption.wpa and network.encryption.wpa[1] == 2 then
-                        if network.encryption.authentication and network.encryption.authentication[1] == "psk2" then
+                local enc = (type(network.encryption) == "table") and network.encryption or nil
+                local is_wep = enc and type(enc.wep) == "table"
+                local is_psk = enc and type(enc.wpa) == "table" and luci.util.contains(enc.authentication, 'psk')
+                local is_sae = enc and type(enc.wpa) == "table" and luci.util.contains(enc.authentication, 'sae')
+                
+                if is_sae then
+                    auth = "sae"
+                elseif is_psk then
+                    for i = #enc.wpa, 1, -1 do
+                        if enc.wpa[i] == 2 then
                             auth = "psk2"
-                        elseif network.encryption.authentication and network.encryption.authentication[1] == "psk" then
+                            break
+                        elseif enc.wpa[i] == 1 then
                             auth = "psk"
+                            break
                         end
                     end
+                elseif is_wep then
+                    auth = "wep"
+                else 
+                    auth = "none"
                 end
+                
                 table.insert(networks, {
                     ssid = network.ssid,
                     bssid = network.bssid,
