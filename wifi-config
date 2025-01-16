@@ -238,12 +238,7 @@ local function render_javascript()
     ]]
 end
 
-local function show_wifi_form()
-    local conn = ubus.connect()
-    if not conn then
-        error("Failed to connect to ubus")
-    end
-
+local function show_wifi_form(conn)
     print([[
         <div class="form-container" id="wifiFormContainer">
             <h1>WiFi Configuration</h1>
@@ -266,7 +261,6 @@ local function show_wifi_form()
     ]])
 
     print(render_javascript())
-    conn:close()
 end
 
 -- Main execution
