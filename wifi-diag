@@ -47,32 +47,49 @@ local function get_network_info(conn)
 end
 
 local function is_internet_connected()
-    local url = "http://worldtimeapi.org/api/timezone/Asia/Hong_Kong"
-    local code, resp, buffer, sock = http.request_raw(url, {
-        headers = {
-            ["Accept"] = "application/json"
-        }
-    })
+    -- Execute curl command
+    local cmd = 'curl -s -m 5 -L -w "%{http_code}" "http://api64.ipify.org?format=json"'
+    local handle = io.popen(cmd)
+    local result = handle:read("*a")
+    handle:close()
 
-    if not code then
-        return "Failed to make HTTP request"
-    end
+    -- Extract HTTP code (last 3 characters) and response body
+    local body = result:sub(1, -4)  -- Remove last 3 chars (HTTP code)
+    local code = result:sub(-3)     -- Get last 3 chars (HTTP code)
 
-    if code ~= 200 then
-        return string.format("HTTP request failed with status code: %d", code)
+    -- Check HTTP response code
+    if code ~= "200" then
+        return string.format("HTTP request failed with status code: %s", code)
     end
 
     -- Parse JSON response
-    local parsed = json.parse(buffer)
+    local parsed = json.parse(body)
     if not parsed then
         return "Failed to parse JSON response"
     end
 
-    -- Extract relevant data
-    local datetime = parsed.datetime or "unknown"
-    local timezone = parsed.timezone or "unknown"
+    -- Extract IP address
+    local ip = parsed.ip or "unknown"
 
-    return string.format("Internet is connected. Time: %s, Timezone: %s", datetime, timezone)
+    return string.format("Internet is connected. Public IP: %s", ip)
+end
+
+local function is_authserver_connected()
+    local cmd = 'curl -s -m 5 -L -w "%{http_code}" "http://portal.sharewifi.cc/pages/portal/portal"'
+    local handle = io.popen(cmd)
+    local result = handle:read("*a")
+    handle:close()
+
+    -- Extract HTTP code (last 3 characters) and response body
+    local body = result:sub(1, -4)  -- Remove last 3 chars (HTTP code)
+    local code = result:sub(-3)     -- Get last 3 chars (HTTP code)
+    
+    -- Check HTTP response code
+    if code ~= "200" then
+        return string.format("HTTP request failed with status code: %s", code)
+    end
+
+    return 'Authserver is connected. HTTP status code: 200 OK'
 end
 
 local function get_nft_info()
@@ -117,6 +134,9 @@ local function main()
     html = html .. "<hr>"
     html = html .. "<h1>Internet Connectivity</h1>"
     html = html .. is_internet_connected()
+    html = html .. "<hr>"
+    html = html .. "<h1>Authserver Connectivity</h1>"
+    html = html .. is_authserver_connected()
     html = html .. "<hr>"
     html = html .. "<h1>NFT Ruleset</h1>"
     html = html .. "<pre>" .. get_nft_info() .. "</pre>"
