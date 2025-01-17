@@ -49,9 +49,12 @@ local function execute_uci_commands(commands)
     for _, cmd in ipairs(commands) do
         os.execute("uci -q " .. cmd)
     end
-    os.execute("uci commit wireless")
-    os.execute("uci commit network")
-    os.execute("uci commit firewall")
+    os.execute("uci -q commit wireless")
+    os.execute("uci -q commit network")
+    os.execute("uci -q commit firewall")
+    -- Before reboot, notify the user that the device will reboot
+    print("<h1>Device will reboot</h>")
+    print("<p>Please wait for your router restarting</p>")
     os.execute("reboot")
 end
 
