@@ -333,7 +333,7 @@ handle_child(struct event_base *evbase)
 static void
 handle_usr1(struct event_base *evbase) 
 {
-    debug(LOG_INFO, "Received SIGUSR1; reload fw.");
+    debug(LOG_ERR, "Received SIGUSR1; reload fw.");
     fw_destroy();
     restart_orig_pid = 1;
     fw_init();

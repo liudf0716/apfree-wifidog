@@ -165,7 +165,7 @@ check_wifidogx_firewall_rules(void)
 	pclose(fp);
 
 	if (!has_rule) {
-		debug(LOG_INFO, "wifidogx's firewall rule is not completed, reload aw firewall rules");
+		debug(LOG_ERR, "wifidogx's firewall rule is not completed, reload aw firewall rules");
 		pid_t pid = getpid();
     	kill(pid, SIGUSR1);
 	}

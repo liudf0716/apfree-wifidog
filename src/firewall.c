@@ -230,6 +230,7 @@ fw_init(void)
 		debug(LOG_INFO, "Restoring firewall rules for clients");
 		LOCK_CLIENT_LIST();
 		nft_fw_reload_client();
+		nft_fw_reload_trusted_maclist();
 		UNLOCK_CLIENT_LIST();
 	}
 #endif

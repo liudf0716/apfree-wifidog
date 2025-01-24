@@ -22,6 +22,7 @@ int nft_fw_counters_update();
 int nft_fw_access(fw_access_t type, const char *ip, const char *mac, int tag);
 int nft_fw_access_host(fw_access_t type, const char *ip);
 int nft_fw_reload_client(void);
+int nft_fw_reload_trusted_maclist(void);
 void nft_reload_gw();
 
 

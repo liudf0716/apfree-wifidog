@@ -36,6 +36,7 @@
 
 #define NFT_FILENAME_OUT "/tmp/fw4_apfree-wifiodg_init.conf.out"
 #define NFT_WIFIDOGX_CLIENT_LIST "/tmp/nftables_wifidogx_client_list"
+#define NFT_WIFIDOGX_TRUST_CLIENTS "/tmp/nftables_wifidogx_trust_clients"
 
 #define NFT_WIFIDOGX_BYPASS_MODE()    \
 if (is_bypass_mode()) { \
@@ -940,6 +941,45 @@ nft_fw_reload_client()
     return nftables_do_command(" -f %s", NFT_WIFIDOGX_CLIENT_LIST);
 }
 
+/**
+ * Reload trusted mac list
+ */
+int
+nft_fw_reload_trusted_maclist()
+{
+    NFT_WIFIDOGX_BYPASS_MODE_RETURN(0);
+
+    s_config *config = config_get_config();
+    t_trusted_mac *mac_list = config->trustedmaclist;
+    
+    // Open temporary file
+    FILE *fp = fopen(NFT_WIFIDOGX_TRUST_CLIENTS, "w");
+    if (fp == NULL) {
+        debug(LOG_ERR, "Failed to open %s: %s", 
+                NFT_WIFIDOGX_TRUST_CLIENTS, strerror(errno));
+        return 1;
+    }
+
+    // Flush existing trust client set
+    fprintf(fp, "flush set inet fw4 set_wifidogx_trust_clients_out\n");
+    
+    // Add rules for each trusted MAC
+    while (mac_list != NULL) {
+        if (mac_list->remaining_time == 0) {
+            fprintf(fp, "add element inet fw4 set_wifidogx_trust_clients_out { %s }\n", 
+                    mac_list->mac);
+        } else {
+            fprintf(fp, "add element inet fw4 set_wifidogx_trust_clients_out { %s timeout %ds }\n",
+                    mac_list->mac, mac_list->remaining_time);
+        }
+        mac_list = mac_list->next;
+    }
+
+    fclose(fp);
+
+    // Apply the rules
+    return nftables_do_command(" -f %s", NFT_WIFIDOGX_TRUST_CLIENTS);
+}
 
 /** 
  * Update traffic counters for a client
