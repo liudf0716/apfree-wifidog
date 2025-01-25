@@ -22,6 +22,7 @@ const char *captive_domains[] = {
     "www.apple.com",
     "connect.rom.miui.com",
     "www.msftconnecttest.com",
+	"ipv6.msftconnecttest.com"
     "www.gstatic.com",
     "www.gstatic.cn",
     "www.google.cn",

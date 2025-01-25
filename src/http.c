@@ -444,6 +444,7 @@ ev_http_connection_get_peer(struct evhttp_connection *evcon, char **remote_host,
         debug(LOG_ERR, "evhttp_connection_get_peer failed");
         return 0;
     }
+    debug(LOG_DEBUG, "get peer ip is %s", ip);
 
     struct sockaddr_in6 *sin = (struct sockaddr_in6 *)&ss;
     if (inet_pton(AF_INET6, ip, &sin->sin6_addr) > 0) {
