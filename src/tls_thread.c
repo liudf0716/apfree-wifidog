@@ -183,7 +183,8 @@ static void
 check_auth_server_available() {
     t_auth_serv *auth_server = get_auth_server();
 	if (!auth_server) {
-		debug(LOG_INFO, "no auth server");
+		if (!is_local_auth_mode())
+			debug(LOG_ERR, "no auth server, impossible here!!!");
 		return;
 	}
     struct evutil_addrinfo hints;

@@ -331,6 +331,7 @@ void del_trusted_ip_list(const char *);
 
 bool is_bypass_mode(void);
 bool is_local_auth_mode(void);
+bool is_cloud_mode(void);
 bool is_custom_auth_offline_page(void);
 
 // Global state variables

@@ -534,7 +534,7 @@ ev_http_callback_404(struct evhttp_request *req, void *arg)
         char gw_port[8] = {0};
         snprintf(gw_port, sizeof(gw_port), "%d", config_get_config()->gw_port);
         enum reply_client_page_type r_type = get_authserver_offline_page_type();
-        debug(LOG_INFO, "Auth server is offline and its reply type is %d", r_type);
+        debug(LOG_DEBUG, "Auth server is offline and its reply type is %d", r_type);
         ev_http_reply_client_error(req, r_type, 
             gw_setting->gw_address_v4?gw_setting->gw_address_v4:gw_setting->gw_address_v6, 
             gw_port, "http", remote_host, mac);

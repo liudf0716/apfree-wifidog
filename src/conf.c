@@ -2072,6 +2072,12 @@ is_local_auth_mode(void)
 }
 
 bool
+is_cloud_mode(void)
+{
+	return config.auth_server_mode == AUTH_MODE_CLOUD;
+}
+
+bool
 is_custom_auth_offline_page(void)
 {
 	return config.is_custom_auth_offline_file == 1;
