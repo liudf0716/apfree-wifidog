@@ -43,12 +43,6 @@ int fw_destroy(void);
 /** @brief Allow a user through the firewall*/
 int fw_allow(t_client *, int);
 
-/** @brief Allow ip&mac pair through the firewall*/
-int fw_allow_ip_mac(const char *ip, const char *mac);
-
-/** @brief Allow a host through the firewall*/
-int fw_allow_host(const char *);
-
 /** @brief Deny a client access through the firewall*/
 int fw_deny(t_client *);
 

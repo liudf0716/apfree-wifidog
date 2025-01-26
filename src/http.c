@@ -72,7 +72,7 @@ const char *apple_wisper = "<!DOCTYPE html>"
 				"</html>";
 
 static void ev_http_resend(struct evhttp_request *req);
-static int process_already_login_client(struct evhttp_request *req, const char *mac, const char *remote_host);
+static int process_already_login_client(struct evhttp_request *req, const char *mac, const char *remote_host, const int addr_type);
 static int process_wired_device_pass(struct evhttp_request *req, const char *mac);
 static void ev_http_respond_options(struct evhttp_request *req);
 static int process_apple_wisper(struct evhttp_request *req, const char *mac, const char *remote_host, const char *redir_url, const int mode);
@@ -171,7 +171,7 @@ ev_http_resend(struct evhttp_request *req)
  * @return 1 end the http request or 0 continue the request
  */ 
 static int
-process_already_login_client(struct evhttp_request *req, const char *mac, const char *remote_host)
+process_already_login_client(struct evhttp_request *req, const char *mac, const char *remote_host, const int addr_type)
 {
 	if (!mac || !remote_host) return 0;
 	
@@ -179,7 +179,8 @@ process_already_login_client(struct evhttp_request *req, const char *mac, const 
 	
     LOCK_CLIENT_LIST();
     t_client *clt = client_list_find_by_mac(mac);
-    if (clt && strcmp(clt->ip, remote_host) != 0) { // the same client get different ip
+    if (clt && ((addr_type == 1 && clt->ip && strcmp(clt->ip, remote_host) != 0) ||
+        (addr_type == 2 && clt->ip6 && strcmp(clt->ip6, remote_host) != 0))) { // the same client get different ip
         fw_deny(clt);
         free(clt->ip);
         clt->ip = safe_strdup(remote_host);
@@ -576,7 +577,7 @@ ev_http_callback_404(struct evhttp_request *req, void *arg)
         return;
     }    
 
-    if (process_already_login_client(req, mac, remote_host)) return;
+    if (process_already_login_client(req, mac, remote_host, addr_type)) return;
 
     if (!is_bypass_mode() &&
         config->wired_passed && 
@@ -870,20 +871,39 @@ ev_http_callback_local_auth(struct evhttp_request *req, void *arg)
     LOCK_CLIENT_LIST();
     t_client *client = client_list_find_by_mac(mac);
     if (!client) {
+        // New client - add and allow
         char rtoken[16] = {0};
         gen_random_token(rtoken, sizeof(rtoken) - 1);
         client = client_list_add(ip, mac, rtoken, gw);
         fw_allow(client, FW_MARK_KNOWN);
-    } else if (strcmp(client->ip, ip) != 0) {
+    } else if ((addr_type == 1 && client->ip && strcmp(client->ip, ip) != 0) ||
+               (addr_type == 2 && client->ip6 && strcmp(client->ip6, ip) != 0)) {
+        // Client exists but IP changed - deny old and allow new
         debug(LOG_INFO, "Local pass %s with different IP %s", mac, ip);
         fw_deny(client);
-        free(client->ip);
-        client->ip = safe_strdup(ip);
+        if (addr_type == 1) {
+            if (client->ip) free(client->ip);
+            client->ip = safe_strdup(ip);
+        } else {
+            if (client->ip6) free(client->ip6);
+            client->ip6 = safe_strdup(ip);
+        }
+        fw_allow(client, FW_MARK_KNOWN);
+    } else if ((addr_type == 1 && !client->ip) || (addr_type == 2 && !client->ip6)) {
+        // Client exists but missing IP field - deny and allow
+        debug(LOG_INFO, "Local pass %s adding missing IP %s", mac, ip);
+        fw_deny(client);
+        if (addr_type == 1) {
+            client->ip = safe_strdup(ip);
+        } else {
+            client->ip6 = safe_strdup(ip);
+        }
         fw_allow(client, FW_MARK_KNOWN);
     } else {
+        // Client already logged in with this IP
         UNLOCK_CLIENT_LIST();
-        debug(LOG_INFO, "Local pass %s already login", mac);
-        evhttp_send_error(req, HTTP_OK, "Client already login");
+        debug(LOG_INFO, "Local pass %s already login with this IP", mac);
+        evhttp_send_error(req, HTTP_OK, "Client already login with this IP");
         goto END;
     }
     UNLOCK_CLIENT_LIST();

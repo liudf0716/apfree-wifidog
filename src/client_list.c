@@ -127,7 +127,12 @@ client_list_add(const char *ip, const char *mac, const char *token, t_gateway_se
 
     curclient = client_get_new();
 
-    curclient->ip = safe_strdup(ip);
+    if (is_valid_ip(ip)) 
+        curclient->ip = safe_strdup(ip);
+    else if (is_valid_ip6(ip))
+        curclient->ip6 = safe_strdup(ip);
+    else
+        debug(LOG_ERR, "Invalid IP address format [%s]", ip);
     curclient->mac = safe_strdup(mac);
     curclient->token = safe_strdup(token);
     curclient->counters.incoming_delta = curclient->counters.outgoing_delta = 
@@ -219,7 +224,10 @@ client_dup(const t_client * src)
     new = client_get_new();
 
     new->id = src->id;
-    new->ip = safe_strdup(src->ip);
+    if (src->ip) 
+        new->ip = safe_strdup(src->ip);
+    if (src->ip6)
+        new->ip6 = safe_strdup(src->ip6);
     new->mac = safe_strdup(src->mac);
     new->token = safe_strdup(src->token);
 	new->fw_connection_state = src->fw_connection_state;
@@ -291,10 +299,21 @@ client_list_find(const char *ip, const char *mac)
 {
     t_client *ptr;
 
+    if (!ip || !mac || (!is_valid_ip(ip) && !is_valid_ip6(ip))) {
+        debug(LOG_ERR, "Invalid parameters: ip=%s, mac=%s", ip ? ip : "null", mac ? mac : "null");
+        return NULL;
+    }
+
     ptr = firstclient;
-    while (NULL != ptr) {
-        if (0 == strcmp(ptr->ip, ip) && 0 == strcmp(ptr->mac, mac))
-            return ptr;
+    while (ptr != NULL) {
+        if (strcmp(ptr->mac, mac) == 0) {
+            if (is_valid_ip(ip) && ptr->ip && strcmp(ptr->ip, ip) == 0) {
+                return ptr;
+            }
+            if (is_valid_ip6(ip) && ptr->ip6 && strcmp(ptr->ip6, ip) == 0) {
+                return ptr;
+            }
+        }
         ptr = ptr->next;
     }
 
@@ -312,10 +331,20 @@ client_list_find_by_ip(const char *ip)
 {
     t_client *ptr;
 
+    if (!ip || (!is_valid_ip(ip) && !is_valid_ip6(ip))) {
+        debug(LOG_ERR, "Invalid IP address format [%s]", ip ? ip : "null");
+        return NULL;
+    }
+
     ptr = firstclient;
     while (NULL != ptr) {
-        if (0 == strcmp(ptr->ip, ip))
-            return ptr;
+        if (is_valid_ip(ip)) {
+            if (ptr->ip && 0 == strcmp(ptr->ip, ip))
+                return ptr;
+        } else if (is_valid_ip6(ip)) {
+            if (ptr->ip6 && 0 == strcmp(ptr->ip6, ip))
+                return ptr;
+        }
         ptr = ptr->next;
     }
 
@@ -416,10 +445,11 @@ offline_client_list_destroy(t_offline_client *list)
 void
 client_free_node(t_client * client)
 {
-    if(!client) return;
-    if(client->mac) free(client->mac);
-    if(client->ip) free(client->ip);
-    if(client->token) free(client->token);
+    if (!client) return;
+    if (client->mac) free(client->mac);
+    if (client->ip) free(client->ip);
+    if (client->ip6) free(client->ip6);
+    if (client->token) free(client->token);
 	if (client->name) free(client->name);
     client->gw_setting = NULL;
     client->next = NULL;
@@ -432,6 +462,7 @@ offline_client_free_node(t_offline_client *client)
 {
     if(!client) return;
 	if(client->ip) free(client->ip);
+    if(client->ip6) free(client->ip6);
 	if(client->mac) free(client->mac);
 	free(client);
 }

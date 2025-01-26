@@ -45,43 +45,25 @@ fw_allow(t_client * client, int new_fw_connection_state)
 		_fw_deny_raw(client->ip, client->mac, old_state);
 	}
 
-	debug(LOG_DEBUG, "Allowing %s %s with fw_connection_state %d", client->ip, client->mac, new_fw_connection_state);
+	debug(LOG_DEBUG, "Allowing %s %s %s with fw_connection_state %d", 
+		client->ip, client->ip6, client->mac, new_fw_connection_state);
+
 	client->fw_connection_state = new_fw_connection_state;
 
 	/* Grant first */
 #ifdef AW_FW3
 	result = iptables_fw_access(FW_ACCESS_ALLOW, client->ip, client->mac, new_fw_connection_state);
 #else
-	result = nft_fw_access(FW_ACCESS_ALLOW, client->ip, client->mac, new_fw_connection_state);
+	if (client->ip6) {
+		result = nft_fw_access(FW_ACCESS_ALLOW, client->ip6, client->mac, new_fw_connection_state);
+	} 
+	 
+	if (client->ip) {
+		result = nft_fw_access(FW_ACCESS_ALLOW, client->ip, client->mac, new_fw_connection_state);
+	}
 #endif
 
 	return result;
-}
-
-int
-fw_allow_ip_mac(const char *ip, const char *mac)
-{
-#ifdef AW_FW3
-	return iptables_fw_access(FW_ACCESS_ALLOW, ip, mac, FW_MARK_KNOWN);
-#else
-	return nft_fw_access(FW_ACCESS_ALLOW, ip, mac, FW_MARK_KNOWN);
-#endif
-}
-
-/**
- * Allow a host through the firewall by adding a rule in the firewall
- * @param host IP address, domain or hostname to allow
- * @return Return code of the command
- */
-int
-fw_allow_host(const char *host)
-{
-	debug(LOG_DEBUG, "Allowing %s", host);
-#ifdef AW_FW3
-	return iptables_fw_access_host(FW_ACCESS_ALLOW, host);
-#else
-	return nft_fw_access_host(FW_ACCESS_ALLOW, host);
-#endif
 }
 
 /**
@@ -98,7 +80,15 @@ fw_deny(t_client * client)
 	debug(LOG_DEBUG, "Denying %s %s with fw_connection_state %d", client->ip, client->mac, client->fw_connection_state);
 
 	client->fw_connection_state = FW_MARK_NONE; /* Clear */
-	return _fw_deny_raw(client->ip, client->mac, fw_connection_state);
+	int nret;
+	if (client->ip6) {
+		nret = _fw_deny_raw(client->ip6, client->mac, fw_connection_state);
+	}
+
+	if (client->ip) {
+		nret = _fw_deny_raw(client->ip, client->mac, fw_connection_state);
+	}
+	return nret;
 }
 
 /** @internal

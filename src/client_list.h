@@ -34,6 +34,7 @@ typedef struct _t_client {
     struct _t_client *next;             /**< @brief Pointer to the next client */
     unsigned long long id;           	/**< @brief Unique ID per client */
     char *ip;                           /**< @brief Client address */
+	char *ip6;
     char *mac;                          /**< @brief Client Mac address */
     char *token;                        /**< @brief Client token */
     int fw_connection_state;     		/**< @brief Connection state in the firewall */
@@ -52,6 +53,7 @@ typedef struct _t_client {
 typedef struct _t_offline_client {
 	struct _t_offline_client *next;
 	char *ip;
+	char *ip6;
 	char *mac;
 	
 	time_t 	last_login;	
