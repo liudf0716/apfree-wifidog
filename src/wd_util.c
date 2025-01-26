@@ -1825,31 +1825,54 @@ ndp_get_mac(const char *dev_name, const char *i_ip, char *o_mac)
         return 0;
     }
 
-    // Receive Neighbor Advertisement message
-    while (1) {
-        len = recv(sockfd, buf, sizeof(buf), 0);
-        if (len < 0) {
-            perror("recv");
-            close(sockfd);
-            return 0;
-        }
+	// Receive Neighbor Advertisement message with timeout
+	struct timeval tv;
+	fd_set rfds;
+	int max_attempts = 1;  // Maximum number of attempts
+	int attempts = 0;
 
-        // Parse Neighbor Advertisement message
-        na = (struct nd_neighbor_advert *)(buf + sizeof(struct ip6_hdr));
-        if (na->nd_na_hdr.icmp6_type == ND_NEIGHBOR_ADVERT) {
-            opt = (struct nd_opt_hdr *)(na + 1);
-            if (opt->nd_opt_type == ND_OPT_TARGET_LINKADDR) {
-                unsigned char *mac = (unsigned char *)(opt + 1);
-                snprintf(o_mac, MAC_LENGTH, "%02x:%02x:%02x:%02x:%02x:%02x",
-                         mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-                close(sockfd);
-                return 1;
-            }
-        }
-    }
+	while (attempts++ < max_attempts) {
+		FD_ZERO(&rfds);
+		FD_SET(sockfd, &rfds);
 
-    close(sockfd);
-    return 0;
+		tv.tv_sec = 0;
+		tv.tv_usec = 100;
+
+		int retval = select(sockfd + 1, &rfds, NULL, NULL, &tv);
+		if (retval == -1) {
+			debug(LOG_ERR, "select(): %s", strerror(errno));
+			close(sockfd);
+			return 0;
+		}
+
+		if (retval == 0) {  // Timeout
+			continue;
+		}
+
+		len = recv(sockfd, buf, sizeof(buf), 0);
+		if (len < 0) {
+			debug(LOG_ERR, "recv(): %s", strerror(errno));
+			close(sockfd);
+			return 0;
+		}
+
+		// Parse Neighbor Advertisement message
+		na = (struct nd_neighbor_advert *)(buf + sizeof(struct ip6_hdr));
+		if (na->nd_na_hdr.icmp6_type == ND_NEIGHBOR_ADVERT) {
+			opt = (struct nd_opt_hdr *)(na + 1);
+			if (opt->nd_opt_type == ND_OPT_TARGET_LINKADDR) {
+				unsigned char *mac = (unsigned char *)(opt + 1);
+				snprintf(o_mac, MAC_LENGTH, "%02x:%02x:%02x:%02x:%02x:%02x",
+						 mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+				close(sockfd);
+				return 1;
+			}
+		}
+	}
+
+	debug(LOG_DEBUG, "No valid response received after %d attempts", max_attempts);
+	close(sockfd);
+	return 0;
 }
 
 /**
