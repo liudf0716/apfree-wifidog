@@ -779,7 +779,7 @@ nft_fw_del_rule_by_ip_and_mac(const char *ip, const char *mac, const char *chain
             }
 
             const char *handle = json_object_get_string(jobj_rule_handle);
-            snprintf(cmd, sizeof(cmd), "nft delete rule inet fw4 %s handle %s", chain, handle);
+            snprintf(cmd, sizeof(cmd), "delete rule inet fw4 %s handle %s", chain, handle);
             nftables_do_command(cmd);
             memset(cmd, 0, sizeof(cmd));
         }
