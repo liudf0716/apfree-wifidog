@@ -416,7 +416,10 @@ ev_http_reply_client_error(struct evhttp_request *req, enum reply_client_page_ty
     case LOCAL_AUTH:
     default:
         char redir_url[256] = {0};
-        snprintf(redir_url, sizeof(redir_url), "%s://%s:%s/wifidog/local_auth?ip=%s&mac=%s", proto, ip, port, client_ip, client_mac);
+        if (!is_valid_ip(ip))
+            snprintf(redir_url, sizeof(redir_url), "%s://[%s]:%s/wifidog/local_auth?ip=%s&mac=%s", proto, ip, port, client_ip, client_mac);
+        else
+            snprintf(redir_url, sizeof(redir_url), "%s://%s:%s/wifidog/local_auth?ip=%s&mac=%s", proto, ip, port, client_ip, client_mac);
         debug(LOG_DEBUG, "local auth redir_url: %s", redir_url);
         evb = evbuffer_new();
         evbuffer_add_printf(evb, AW_LOCAL_REDIRECT_MSG, redir_url);
