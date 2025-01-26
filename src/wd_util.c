@@ -1976,7 +1976,7 @@ get_gateway_setting_by_id(const char *gw_id)
 	return NULL;
 }
 
-t_gateway_setting *
+static t_gateway_setting *
 get_gateway_setting_by_ipv4(const char *ip)
 {
 	if (!ip)
@@ -1995,6 +1995,28 @@ get_gateway_setting_by_ipv4(const char *ip)
 	}
 	return NULL;
 }
+
+static t_gateway_setting *
+get_gateway_setting_by_ipv6(const char *ipv6)
+{
+	if (!ipv6)
+		return NULL;
+
+	return get_gateway_settings(); // TODO;
+}
+
+t_gateway_setting *
+get_gateway_setting_by_addr(const char *addr, int type)
+{
+	if (type ==1) { // ipv4
+		return get_gateway_setting_by_ipv4(addr);
+	} else if (type == 2) { // ipv6
+		return get_gateway_setting_by_ipv6(addr);
+	}
+
+	return NULL;
+}
+
 /**
  * @brief generate cert for apfree-wifidog
  * first, generate ca cert

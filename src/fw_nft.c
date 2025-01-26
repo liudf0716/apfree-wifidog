@@ -705,6 +705,8 @@ check_nft_expr_json_array_object(json_object *jobj, const char *ip, const char *
                             mac_flag = 1;
                         } else if (strcmp(protocol, "ip") == 0 && ip && strcmp(right, ip) == 0) {
                             ip_flag = 1;
+                        } else if (strcmp(protocol, "ip6") == 0 && ip && strcmp(right, ip) == 0) {
+                            ip_flag = 1;
                         }
                     }
                 }
@@ -833,13 +835,26 @@ nft_fw_access(fw_access_t type, const char *ip, const char *mac, int tag)
     switch(type) {
         case FW_ACCESS_ALLOW:
             // Add outgoing traffic rule with counter and mark
-            nftables_do_command("add rule inet fw4 mangle_prerouting_wifidogx_outgoing "
-                              "ether saddr %s ip saddr %s counter mark set 0x20000 accept", 
-                              mac, ip);
+            if (is_valid_ip(ip)) {
+                nftables_do_command("add rule inet fw4 mangle_prerouting_wifidogx_outgoing "
+                                "ether saddr %s ip saddr %s counter mark set 0x20000 accept", 
+                                mac, ip);
 
-            // Add incoming traffic rule with counter
-            nftables_do_command("add rule inet fw4 mangle_postrouting_wifidogx_incoming "
-                              "ip daddr %s counter accept", ip);
+                // Add incoming traffic rule with counter
+                nftables_do_command("add rule inet fw4 mangle_postrouting_wifidogx_incoming "
+                                "ip daddr %s counter accept", ip);
+            } else if (is_valid_ip6(ip)){
+                nftables_do_command("add rule inet fw4 mangle_prerouting_wifidogx_outgoing "
+                                "ether saddr %s ip6 saddr %s counter mark set 0x20000 accept", 
+                                mac, ip);
+
+                // Add incoming traffic rule with counter
+                nftables_do_command("add rule inet fw4 mangle_postrouting_wifidogx_incoming "
+                                "ip6 daddr %s counter accept", ip);
+            } else {
+                debug(LOG_ERR, "Invalid IP address: %s", ip);
+            }
+            
             break;
 
         case FW_ACCESS_DENY:

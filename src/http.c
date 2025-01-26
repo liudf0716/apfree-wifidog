@@ -437,7 +437,6 @@ ev_http_reply_client_error(struct evhttp_request *req, enum reply_client_page_ty
 int
 ev_http_connection_get_peer(struct evhttp_connection *evcon, char **remote_host, uint16_t *port)
 {
-    struct sockaddr_storage ss;
     char *ip = NULL;
     evhttp_connection_get_peer(evcon, &ip, port);
     if (ip == NULL) {
@@ -446,21 +445,52 @@ ev_http_connection_get_peer(struct evhttp_connection *evcon, char **remote_host,
     }
     debug(LOG_DEBUG, "get peer ip is %s", ip);
 
-    struct sockaddr_in6 *sin = (struct sockaddr_in6 *)&ss;
-    if (inet_pton(AF_INET6, ip, &sin->sin6_addr) > 0) {
-        if (IN6_IS_ADDR_V4MAPPED(&sin->sin6_addr)) {
+    struct sockaddr_storage ss;
+    struct sockaddr_in6 *sin6 = (struct sockaddr_in6 *)&ss;
+    struct sockaddr_in *sin = (struct sockaddr_in *)&ss;
+    
+    // Try IPv6 first
+    if (inet_pton(AF_INET6, ip, &sin6->sin6_addr) > 0) {
+        if (IN6_IS_ADDR_V4MAPPED(&sin6->sin6_addr)) {
+            // Handle IPv4-mapped IPv6 address
             struct in_addr ipv4_addr;
-            memcpy(&ipv4_addr, &sin->sin6_addr.s6_addr[12], 4);
+            memcpy(&ipv4_addr, &sin6->sin6_addr.s6_addr[12], 4);
             *remote_host = safe_malloc(INET_ADDRSTRLEN);
             if (!inet_ntop(AF_INET, &ipv4_addr, *remote_host, INET_ADDRSTRLEN)) {
-                debug(LOG_ERR, "inet_ntop failed: %s", strerror(errno));
+                debug(LOG_ERR, "inet_ntop failed for IPv4-mapped address: %s", strerror(errno));
                 free(*remote_host);
                 return 0;
             }
+            debug(LOG_INFO, "IPv4-mapped IPv6 address detected, converted to IPv4: %s", *remote_host);
+            return 1; // IPv4
+        } else {
+            // Native IPv6 address
+            *remote_host = safe_malloc(INET6_ADDRSTRLEN);
+            if (!inet_ntop(AF_INET6, &sin6->sin6_addr, *remote_host, INET6_ADDRSTRLEN)) {
+                debug(LOG_ERR, "inet_ntop failed for IPv6 address: %s", strerror(errno));
+                free(*remote_host);
+                return 0;
+            }
+            debug(LOG_INFO, "IPv6 address detected: %s", *remote_host);
+            return 2; // IPv6
         }
+    } 
+    // Try IPv4
+    else if (inet_pton(AF_INET, ip, &sin->sin_addr) > 0) {
+        *remote_host = safe_malloc(INET_ADDRSTRLEN);
+        if (!inet_ntop(AF_INET, &sin->sin_addr, *remote_host, INET_ADDRSTRLEN)) {
+            debug(LOG_ERR, "inet_ntop failed for IPv4 address: %s", strerror(errno));
+            free(*remote_host);
+            return 0;
+        }
+        debug(LOG_INFO, "IPv4 address detected: %s", *remote_host);
+        return 1; // IPv4
     }
 
-    return 1;
+    // If we get here, the address format was invalid
+    debug(LOG_ERR, "Invalid IP address format: %s", ip);
+    *remote_host = NULL;
+    return 0;
 }
 
 /**
@@ -503,9 +533,10 @@ ev_http_callback_404(struct evhttp_request *req, void *arg)
 
     char *remote_host = NULL;
     uint16_t port;
-    ev_http_connection_get_peer(evhttp_request_get_connection(req), &remote_host, &port);
-	if (remote_host == NULL) return;
-
+    int addr_type = ev_http_connection_get_peer(evhttp_request_get_connection(req), &remote_host, &port);
+	if (addr_type == 0) return;
+    debug(LOG_INFO, "ev_http_callback_404 [%s] address type [%d]", remote_host, addr_type);
+    
     struct bufferevent *bev = evhttp_connection_get_bufferevent(evhttp_request_get_connection(req));
     evutil_socket_t fd = bufferevent_getfd(bev);
     if (fd < 0) {
@@ -514,9 +545,9 @@ ev_http_callback_404(struct evhttp_request *req, void *arg)
         return;
     }
 
-    t_gateway_setting *gw_setting = get_gateway_setting_by_ipv4(remote_host);
+    t_gateway_setting *gw_setting = get_gateway_setting_by_addr(remote_host, addr_type);
     if (!gw_setting) {
-        debug(LOG_ERR, "get_gateway_setting_by_ipv4 [%s] failed", remote_host);
+        debug(LOG_ERR, "Failed to get gateway settings for address [%s] type [%d]", remote_host, addr_type);
         evhttp_send_error(req, 200, "Cant get gateway setting by client's ip");
         return;
     }
@@ -537,7 +568,7 @@ ev_http_callback_404(struct evhttp_request *req, void *arg)
         enum reply_client_page_type r_type = get_authserver_offline_page_type();
         debug(LOG_DEBUG, "Auth server is offline and its reply type is %d", r_type);
         ev_http_reply_client_error(req, r_type, 
-            gw_setting->gw_address_v4?gw_setting->gw_address_v4:gw_setting->gw_address_v6, 
+            addr_type==1?gw_setting->gw_address_v4:gw_setting->gw_address_v6, 
             gw_port, "http", remote_host, mac);
         return;
     }    
@@ -810,11 +841,23 @@ ev_http_callback_local_auth(struct evhttp_request *req, void *arg)
     const char *mac = ev_http_find_query(req, "mac");
     const char *ip = ev_http_find_query(req, "ip");
     if (!mac || !ip) {
+        debug(LOG_INFO, "Local auth called without MAC and IP specified");
         evhttp_send_error(req, HTTP_OK, "MAC and IP need to be specified");
         goto END;
     }
 
-    t_gateway_setting *gw = get_gateway_setting_by_ipv4(ip);
+    uint32_t addr_type = 0;
+    if (is_valid_ip(ip))
+        addr_type = 1;
+    else if (is_valid_ip6(ip))
+        addr_type = 2;
+    if (!addr_type) {
+        debug(LOG_INFO, "Invalid IP address format [%s]", ip);
+        evhttp_send_error(req, HTTP_OK, "Invalid IP address format");
+        goto END;
+    }
+
+    t_gateway_setting *gw = get_gateway_setting_by_addr(ip, addr_type);
     if (!gw) {
         evhttp_send_error(req, HTTP_OK, "Cant get gateway setting by client's ip");
         goto END;
