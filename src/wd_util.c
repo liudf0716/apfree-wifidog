@@ -1775,105 +1775,47 @@ get_ext_iface(void)
 }
 
 static int 
-ndp_get_mac(const char *dev_name, const char *i_ip, char *o_mac) 
+ndp_get_mac(const char *dev_name, const char *i_ip, char *o_mac)
 {
-    int sockfd;
-    struct sockaddr_in6 dest;
-    struct icmp6_hdr icmp6_hdr;
-    struct msghdr msg;
-    struct iovec iov;
-    char buf[1024] = {0};
-    struct in6_addr target_addr;
-    struct nd_neighbor_advert *na;
-    struct nd_opt_hdr *opt;
-    ssize_t len;
+	FILE *fp = NULL;
+	char command[256] = {0};
+	char line[256] = {0};
+	char *mac_start;
 
-    // Create raw socket for ICMPv6
-    sockfd = socket(AF_INET6, SOCK_RAW, IPPROTO_ICMPV6);
-    if (sockfd < 0) {
-		debug(LOG_ERR, "socket(): %s", strerror(errno));
-        return 0;
-    }
+	if (!dev_name || !i_ip || !o_mac)
+		return 0;
 
-    // Set up destination address
-    memset(&dest, 0, sizeof(dest));
-    dest.sin6_family = AF_INET6;
-    inet_pton(AF_INET6, i_ip, &dest.sin6_addr);
-
-    // Set up ICMPv6 Neighbor Solicitation header
-    memset(&icmp6_hdr, 0, sizeof(icmp6_hdr));
-    icmp6_hdr.icmp6_type = ND_NEIGHBOR_SOLICIT;
-    icmp6_hdr.icmp6_code = 0;
-    icmp6_hdr.icmp6_cksum = 0;
-
-    // Set up target address
-    inet_pton(AF_INET6, i_ip, &target_addr);
-
-    // Set up message header
-    memset(&msg, 0, sizeof(msg));
-    msg.msg_name = &dest;
-    msg.msg_namelen = sizeof(dest);
-    iov.iov_base = &icmp6_hdr;
-    iov.iov_len = sizeof(icmp6_hdr);
-    msg.msg_iov = &iov;
-    msg.msg_iovlen = 1;
-
-    // Send Neighbor Solicitation message
-    if (sendmsg(sockfd, &msg, 0) < 0) {
-		debug(LOG_ERR, "sendmsg(): %s", strerror(errno));
-        close(sockfd);
-        return 0;
-    }
-
-	// Receive Neighbor Advertisement message with timeout
-	struct timeval tv;
-	fd_set rfds;
-	int max_attempts = 1;  // Maximum number of attempts
-	int attempts = 0;
-
-	while (attempts++ < max_attempts) {
-		FD_ZERO(&rfds);
-		FD_SET(sockfd, &rfds);
-
-		tv.tv_sec = 0;
-		tv.tv_usec = 100;
-
-		int retval = select(sockfd + 1, &rfds, NULL, NULL, &tv);
-		if (retval == -1) {
-			debug(LOG_ERR, "select(): %s", strerror(errno));
-			close(sockfd);
-			return 0;
-		}
-
-		if (retval == 0) {  // Timeout
-			continue;
-		}
-
-		len = recv(sockfd, buf, sizeof(buf), 0);
-		if (len < 0) {
-			debug(LOG_ERR, "recv(): %s", strerror(errno));
-			close(sockfd);
-			return 0;
-		}
-
-		// Parse Neighbor Advertisement message
-		na = (struct nd_neighbor_advert *)(buf + sizeof(struct ip6_hdr));
-		if (na->nd_na_hdr.icmp6_type == ND_NEIGHBOR_ADVERT) {
-			opt = (struct nd_opt_hdr *)(na + 1);
-			if (opt->nd_opt_type == ND_OPT_TARGET_LINKADDR) {
-				unsigned char *mac = (unsigned char *)(opt + 1);
-				snprintf(o_mac, MAC_LENGTH, "%02x:%02x:%02x:%02x:%02x:%02x",
-						 mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-				close(sockfd);
-				return 1;
-			}
-		}
+	snprintf(command, sizeof(command), "ip -6 neigh show %s dev %s", i_ip, dev_name);
+	fp = popen(command, "r");
+	if (!fp) {
+		debug(LOG_ERR, "popen(): %s", strerror(errno));
+		return 0;
 	}
 
-	debug(LOG_DEBUG, "No valid response received after %d attempts", max_attempts);
-	close(sockfd);
+	if (fgets(line, sizeof(line), fp) == NULL) {
+		pclose(fp);
+		return 0;
+	}
+
+	// Look for "lladdr" followed by MAC address
+	mac_start = strstr(line, "lladdr");
+	if (!mac_start) {
+		pclose(fp);
+		return 0;
+	}
+
+	mac_start += 7; // Skip "lladdr "
+	if (strlen(mac_start) >= 17) { // MAC should be 17 chars (xx:xx:xx:xx:xx:xx)
+		strncpy(o_mac, mac_start, 17);
+		o_mac[17] = '\0';
+		pclose(fp);
+		return 1;
+	}
+
+	pclose(fp);
 	return 0;
 }
+
 
 /**
  * @brief get client's mac from its ip
