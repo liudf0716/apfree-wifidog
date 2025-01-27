@@ -181,7 +181,7 @@ static void display_help() {
     printf("  wdctlx reset <value>\n");
     printf("  wdctlx status [client|auth|wifidogx]\n");
     printf("  wdctlx refresh\n");
-    printf("  wdctlx apfree <user_list|user_info|user_auth|save_user>\n");
+    printf("  wdctlx apfree <user_list|user_info|user_auth|save_user|restore_user>\n");
     printf("  wdctlx hotplugin <json_value>\n");
 }
 
@@ -205,6 +205,7 @@ static const CommandMapping COMMAND_MAP[] = {
     {"apfree", "user_info", true, true},
     {"apfree", "user_auth", true, true},
     {"apfree", "save_user", true, false},
+    {"apfree", "restore_user", true, false},
     {"hotplugin", "hotplugin", false, false},
     {NULL, NULL, false, false}
 };
@@ -217,6 +218,7 @@ static const char *TYPE_MAP[] = {
     "user_info",
     "user_auth",
     "save_user",
+    "restore_user",
     NULL
 };
 

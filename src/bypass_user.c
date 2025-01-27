@@ -414,39 +414,62 @@ save_bypass_user_list()
 void
 load_bypass_user_list()
 {
-    s_config *config = config_get_config();
     FILE *fp = fopen(BYPASS_USER_LIST_PATH, "r");
     if (!fp) {
         debug(LOG_ERR, "Could not open file %s for reading: %s", BYPASS_USER_LIST_PATH, strerror(errno));
         return;
     }
 
-    char *line = NULL;
-    size_t len = 0;
-    ssize_t read;
-    json_object *j_obj = NULL;
-    json_object *j_array = NULL;
+    // Get file size
+    fseek(fp, 0, SEEK_END);
+    long file_size = ftell(fp);
+    fseek(fp, 0, SEEK_SET);
 
-    while ((read = getline(&line, &len, fp)) != -1) {
-        j_obj = json_tokener_parse(line);
-        if (j_obj) {
-            j_array = json_object_object_get(j_obj, "user");
-            if (j_array) {
-                for (size_t i = 0; i < json_object_array_length(j_array); i++) {
-                    json_object *j_user = json_object_array_get_idx(j_array, i);
-                    const char *mac = json_object_get_string(json_object_object_get(j_user, "mac"));
-                    const char *serial = json_object_get_string(json_object_object_get(j_user, "serial"));
-                    const char *time_str = json_object_get_string(json_object_object_get(j_user, "time"));
-                    uint32_t time_val = atoi(time_str);
+    // Read entire file
+    char *file_content = safe_malloc(file_size + 1);
+    size_t bytes_read = fread(file_content, 1, file_size, fp);
+    fclose(fp);
+
+    if (bytes_read != (size_t)file_size) {
+        debug(LOG_ERR, "Failed to read entire file: expected %ld bytes but got %zu", file_size, bytes_read);
+        free(file_content);
+        return;
+    }
+    file_content[file_size] = '\0';
+
+    // Parse JSON
+    json_object *j_obj = json_tokener_parse(file_content);
+    free(file_content);
+
+    if (!j_obj) {
+        debug(LOG_ERR, "Failed to parse JSON content");
+        return;
+    }
+
+    json_object *j_array = json_object_object_get(j_obj, "user");
+    if (j_array && json_object_is_type(j_array, json_type_array)) {
+        for (size_t i = 0; i < json_object_array_length(j_array); i++) {
+            json_object *j_user = json_object_array_get_idx(j_array, i);
+            if (!j_user) continue;
+
+            json_object *j_mac = json_object_object_get(j_user, "mac");
+            json_object *j_serial = json_object_object_get(j_user, "serial");
+            json_object *j_time = json_object_object_get(j_user, "time");
+
+            if (j_mac && j_serial && j_time) {
+                const char *mac = json_object_get_string(j_mac);
+                const char *serial = json_object_get_string(j_serial);
+                const char *time_str = json_object_get_string(j_time);
+                
+                if (mac && serial && time_str) {
+                    uint32_t time_val = (uint32_t)strtoul(time_str, NULL, 10);
                     add_mac_from_list(mac, time_val, serial, TRUSTED_MAC);
                 }
             }
-            json_object_put(j_obj);
         }
     }
 
-    free(line);
-    fclose(fp);
+    json_object_put(j_obj);
 }
 
 static char *
