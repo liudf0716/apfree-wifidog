@@ -761,10 +761,10 @@ nft_fw_del_rule_by_ip_and_mac(const char *ip, const char *mac, const char *chain
 
         json_object *jobj_rule;
         if (!json_object_object_get_ex(jobj_item, "rule", &jobj_rule)) {
-            debug(LOG_ERR, "json_object_object_get_ex failed for rule");
             continue;
         }
 
+        debug(LOG_DEBUG, "jobj_rule: %s", json_object_to_json_string(jobj_rule));
         json_object *jobj_rule_expr;
         if (!json_object_object_get_ex(jobj_rule, "expr", &jobj_rule_expr)) {
             debug(LOG_ERR, "json_object_object_get_ex failed for expr");

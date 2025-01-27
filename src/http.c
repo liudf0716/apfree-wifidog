@@ -539,7 +539,7 @@ ev_http_callback_404(struct evhttp_request *req, void *arg)
     uint16_t port;
     int addr_type = ev_http_connection_get_peer(evhttp_request_get_connection(req), &remote_host, &port);
 	if (addr_type == 0) return;
-    debug(LOG_INFO, "ev_http_callback_404 [%s] address type [%d]", remote_host, addr_type);
+    
 
     struct bufferevent *bev = evhttp_connection_get_bufferevent(evhttp_request_get_connection(req));
     evutil_socket_t fd = bufferevent_getfd(bev);
@@ -566,6 +566,8 @@ ev_http_callback_404(struct evhttp_request *req, void *arg)
         return;
     }
     
+    debug(LOG_INFO, "ev_http_callback_404 [%s : %s] address type [%d]", remote_host, mac, addr_type);
+
     if (!is_auth_online() || is_local_auth_mode()) {
         char gw_port[8] = {0};
         snprintf(gw_port, sizeof(gw_port), "%d", config_get_config()->gw_port);

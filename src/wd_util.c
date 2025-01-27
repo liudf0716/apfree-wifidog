@@ -348,7 +348,9 @@ get_status_text()
 	active_count = 0;
 	while (current != NULL) {
 		evbuffer_add_printf(evb, "\nClient %d status [%d]\n", count, current->is_online);
-		evbuffer_add_printf(evb, "  IP: %s MAC: %s\n", current->ip, current->mac);
+		evbuffer_add_printf(evb, "  IP: %s\n", current->ip);
+		evbuffer_add_printf(evb, "  IP6: %s\n", current->ip6);
+		evbuffer_add_printf(evb, "  MAC: %s\n", current->mac);
 		evbuffer_add_printf(evb, "  Token: %s\n", current->token);
 		evbuffer_add_printf(evb, "  First Login: %lld\n", (long long)current->first_login);
 		evbuffer_add_printf(evb, "  Online Time: %lld\n", (long long)(time(NULL) - current->first_login));
@@ -419,6 +421,7 @@ get_client_status_json()
 		struct json_object *jclient = json_object_new_object();
 		json_object_object_add(jclient, "status", json_object_new_int(current->is_online));
 		json_object_object_add(jclient, "ip", json_object_new_string(current->ip));
+		json_object_object_add(jclient, "ip6", json_object_new_string(current->ip6));
 		json_object_object_add(jclient, "mac", json_object_new_string(current->mac));
 		json_object_object_add(jclient, "token", json_object_new_string(current->token));
 		json_object_object_add(jclient, "name", 
