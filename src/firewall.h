@@ -42,6 +42,7 @@ int fw_destroy(void);
 
 /** @brief Allow a user through the firewall*/
 int fw_allow(t_client *, int);
+int fw_allow_ip_mac(const char *, const char *, int);
 
 /** @brief Deny a client access through the firewall*/
 int fw_deny(t_client *);

@@ -66,6 +66,18 @@ fw_allow(t_client * client, int new_fw_connection_state)
 	return result;
 }
 
+int
+fw_allow_ip_mac(const char *ip, const char *mac, int fw_connection_state)
+{
+	int result;
+#ifdef AW_FW3
+	result = iptables_fw_access(FW_ACCESS_ALLOW, ip, mac, fw_connection_state);
+#else
+	result = nft_fw_access(FW_ACCESS_ALLOW, ip, mac, fw_connection_state);
+#endif
+	return result;
+}
+
 /**
  * @brief Deny a client access through the firewall by removing the rule in the firewall that was fw_connection_stateging the user's traffic
  * @param ip IP address to deny
