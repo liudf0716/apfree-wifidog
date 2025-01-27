@@ -568,6 +568,8 @@ ev_http_callback_404(struct evhttp_request *req, void *arg)
     
     debug(LOG_INFO, "ev_http_callback_404 [%s : %s] address type [%d]", remote_host, mac, addr_type);
 
+    if (process_already_login_client(req, mac, remote_host, addr_type)) return;
+
     if (!is_auth_online() || is_local_auth_mode()) {
         char gw_port[8] = {0};
         snprintf(gw_port, sizeof(gw_port), "%d", config_get_config()->gw_port);
@@ -578,8 +580,6 @@ ev_http_callback_404(struct evhttp_request *req, void *arg)
             gw_port, "http", remote_host, mac);
         return;
     }    
-
-    if (process_already_login_client(req, mac, remote_host, addr_type)) return;
 
     if (!is_bypass_mode() &&
         config->wired_passed && 
