@@ -77,7 +77,7 @@ int
 fw_deny(t_client * client)
 {
 	int fw_connection_state = client->fw_connection_state;
-	debug(LOG_INFO, "Denying %s %s %s %s with fw_connection_state %d",
+	debug(LOG_INFO, "Denying %s %s %s with fw_connection_state %d",
 		client->ip?client->ip:"N/A", client->ip6?client->ip6:"N/A", client->mac, client->fw_connection_state);
 
 	client->fw_connection_state = FW_MARK_NONE; /* Clear */

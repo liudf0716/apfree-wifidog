@@ -908,7 +908,7 @@ ev_http_callback_local_auth(struct evhttp_request *req, void *arg)
         fw_allow(client, FW_MARK_KNOWN);
     } else if ((addr_type == 1 && !client->ip) || (addr_type == 2 && !client->ip6)) {
         // Client exists but missing IP field - deny and allow
-        debug(LOG_INFO, "Local pass %s adding missing IP %s", mac, ip);
+        debug(LOG_INFO, "Local pass %s adding missing IP type %d", mac, addr_type);
         fw_deny(client);
         if (addr_type == 1) {
             client->ip = safe_strdup(ip);
