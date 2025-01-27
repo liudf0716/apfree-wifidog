@@ -841,6 +841,39 @@ gen_random_token(char *token, size_t len)
     token[len] = '\0';
 }
 
+void
+ev_http_send_user_redirect_page(struct evhttp_request *req, const char *redir_url)
+{
+    #define REDIRECT_PAGE_TEMPLATE \
+        "<html>" \
+        "<head>" \
+            "<title>Redirecting...</title>" \
+            "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">" \
+            "<style>" \
+                "body { font-size: 24px; text-align: center; margin: 20px; }" \
+                "h1 { font-size: 36px; }" \
+                "a { font-size: 28px; }" \
+            "</style>" \
+        "</head>" \
+        "<body>" \
+            "<h1>Redirecting...</h1>" \
+            "<p>If you are not redirected automatically, follow the <a href='%s'>link</a>.</p>" \
+        "</body>" \
+        "</html>"
+
+    struct evbuffer *evb = evbuffer_new();
+    if (!evb) {
+        evhttp_send_error(req, HTTP_INTERNAL, "Failed to create response buffer");
+        return;
+    }
+
+    evbuffer_add_printf(evb, REDIRECT_PAGE_TEMPLATE, redir_url);
+    evhttp_add_header(evhttp_request_get_output_headers(req), 
+                     "Content-Type", "text/html; charset=UTF-8");
+    evhttp_send_reply(req, HTTP_OK, "OK", evb);
+    evbuffer_free(evb);
+}
+
 /**
  * @brief process client's local pass request
  * 
@@ -919,7 +952,7 @@ ev_http_callback_local_auth(struct evhttp_request *req, void *arg)
         UNLOCK_CLIENT_LIST();
         // Existing client with same IP - just allow
         debug(LOG_INFO, "Local pass %s %s already login", mac, ip);
-        ev_http_send_js_redirect(req, config->local_portal);
+        ev_http_send_user_redirect_page(req, config->local_portal);
         goto END;
     }
     UNLOCK_CLIENT_LIST();

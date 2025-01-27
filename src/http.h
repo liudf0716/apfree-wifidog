@@ -34,6 +34,7 @@ void ev_http_send_redirect_to_auth(struct evhttp_request *, const char *, const 
 void ev_http_send_js_redirect(struct evhttp_request *, const char *);
 void ev_http_reply_client_error(struct evhttp_request *, enum reply_client_page_type, 
                                char *, char *, char *, char *, char *);
+void ev_http_send_user_redirect_page(struct evhttp_request *, const char *);
 
 /* HTTP Utility Functions */
 struct evbuffer *ev_http_read_html_file(const char *, struct evbuffer *);
