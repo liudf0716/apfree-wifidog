@@ -916,7 +916,11 @@ ev_http_callback_local_auth(struct evhttp_request *req, void *arg)
         }
         fw_allow_ip_mac(ip, mac , FW_MARK_KNOWN);
     } else {
-        debug(LOG_INFO, "Local pass %s already login with this IP", mac);
+        UNLOCK_CLIENT_LIST();
+        // Existing client with same IP - just allow
+        debug(LOG_INFO, "Local pass %s %s already login", mac, ip);
+        ev_http_send_js_redirect(req, config->local_portal);
+        goto END;
     }
     UNLOCK_CLIENT_LIST();
 
