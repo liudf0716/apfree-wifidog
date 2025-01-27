@@ -61,6 +61,7 @@ static void wdctl_add_auth_client(struct bufferevent *, const char *);
 static void wdctl_user_list(struct bufferevent *);
 static void wdctl_user_info(struct bufferevent *, const char *);
 static void wdctl_user_auth(struct bufferevent *, const char *);
+static void wdctl_save_user(struct bufferevent *);
 static void wdctl_add_anti_nat_permit_device(struct bufferevent *, const char *mac);
 static void wdctl_del_anti_nat_permit_device(struct bufferevent *, const char *mac);
 
@@ -115,6 +116,7 @@ static struct wdctl_command {
     {"user_list", wdctl_user_list, NULL},
     {"user_info", NULL, wdctl_user_info},
     {"user_auth", NULL, wdctl_user_auth},
+    {"save_user", wdctl_save_user, NULL},
 
     // hotplugin event
     {"hotplugin", NULL, wdctl_hotplugin_event},
@@ -828,6 +830,13 @@ wdctl_user_list(struct bufferevent *fd)
         free(json_user_list);
     } else
         bufferevent_write(fd, "{}", 2);
+}
+
+static void
+wdctl_save_user(struct bufferevent *fd)
+{
+    save_bypass_user_list();
+    bufferevent_write(fd, "Yes", 3);
 }
 
 static void

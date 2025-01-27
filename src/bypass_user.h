@@ -37,5 +37,7 @@ bool add_bypass_user(const char *, const uint32_t , const char *);
 bool remove_bypass_user(const char *);
 char *dump_bypass_user_list_json();
 char *query_bypass_user_status(const char *, const char *, const char *, query_choice_t choice);
+void save_bypass_user_list();
+void load_bypass_user_list();
 
 #endif

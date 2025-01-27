@@ -370,6 +370,85 @@ dump_bypass_user_list_json()
     return res;
 }
 
+#define BYPASS_USER_LIST_PATH "/etc/bypass_user_list.json"
+
+void
+save_bypass_user_list()
+{
+    FILE *fp = fopen(BYPASS_USER_LIST_PATH, "w");
+    if (!fp) {
+        debug(LOG_ERR, "Could not open file %s for writing: %s", BYPASS_USER_LIST_PATH, strerror(errno));
+        return;
+    }
+
+    s_config *config = config_get_config();
+    json_object *j_obj = json_object_new_object();
+    json_object *j_array = json_object_new_array();
+    char remaining_time_str[32] = {0};
+    
+    LOCK_CONFIG();
+    
+    t_trusted_mac *tmac = config->trustedmaclist;
+    while (tmac) {
+        snprintf(remaining_time_str, sizeof(remaining_time_str), "%d", tmac->remaining_time);
+        json_object *j_user = json_object_new_object();
+        json_object_object_add(j_user, "mac", json_object_new_string(tmac->mac));
+        json_object_object_add(j_user, "serial", json_object_new_string(tmac->serial ? tmac->serial : ""));
+        json_object_object_add(j_user, "time", json_object_new_string(remaining_time_str));
+        json_object_array_add(j_array, j_user);
+        tmac = tmac->next;
+        memset(remaining_time_str, 0, sizeof(remaining_time_str));
+    }
+    
+    UNLOCK_CONFIG();
+    
+    json_object_object_add(j_obj, "user", j_array);
+    
+    const char *json_str = json_object_to_json_string_ext(j_obj, JSON_C_TO_STRING_PRETTY);
+    fprintf(fp, "%s\n", json_str);
+    
+    fclose(fp);
+    json_object_put(j_obj);
+}
+
+void
+load_bypass_user_list()
+{
+    s_config *config = config_get_config();
+    FILE *fp = fopen(BYPASS_USER_LIST_PATH, "r");
+    if (!fp) {
+        debug(LOG_ERR, "Could not open file %s for reading: %s", BYPASS_USER_LIST_PATH, strerror(errno));
+        return;
+    }
+
+    char *line = NULL;
+    size_t len = 0;
+    ssize_t read;
+    json_object *j_obj = NULL;
+    json_object *j_array = NULL;
+
+    while ((read = getline(&line, &len, fp)) != -1) {
+        j_obj = json_tokener_parse(line);
+        if (j_obj) {
+            j_array = json_object_object_get(j_obj, "user");
+            if (j_array) {
+                for (size_t i = 0; i < json_object_array_length(j_array); i++) {
+                    json_object *j_user = json_object_array_get_idx(j_array, i);
+                    const char *mac = json_object_get_string(json_object_object_get(j_user, "mac"));
+                    const char *serial = json_object_get_string(json_object_object_get(j_user, "serial"));
+                    const char *time_str = json_object_get_string(json_object_object_get(j_user, "time"));
+                    uint32_t time_val = atoi(time_str);
+                    add_mac_from_list(mac, time_val, serial, TRUSTED_MAC);
+                }
+            }
+            json_object_put(j_obj);
+        }
+    }
+
+    free(line);
+    fclose(fp);
+}
+
 static char *
 get_release_value(const char *mac, const char *value) 
 {
