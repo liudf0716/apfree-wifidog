@@ -79,7 +79,7 @@
 #define FWRULESET_LOCKED_USERS "locked-users"
 
 /** HTML redirect content */
-#define WIFIDOG_REDIR_HTML_CONTENT "setTimeout(function() {location.href = \"%s\";}, 10);"
+#define WIFIDOG_REDIR_HTML_CONTENT "setTimeout(function() {location.href = \"%s\";}, 100);"
 
 
 /** Enumerations */
