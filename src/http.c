@@ -183,7 +183,13 @@ process_already_login_client(struct evhttp_request *req, const char *mac, const 
         (addr_type == 2 && clt->ip6 && strcmp(clt->ip6, remote_host) != 0))) { // the same client get different ip
         fw_deny(clt);
         free(clt->ip);
-        clt->ip = safe_strdup(remote_host);
+        if (addr_type == 1) {
+            free(clt->ip);
+            clt->ip = safe_strdup(remote_host);
+        } else {
+            free(clt->ip6);
+            clt->ip6 = safe_strdup(remote_host);
+        }
         fw_allow(clt, FW_MARK_KNOWN);
         debug(LOG_INFO, "client has login, replace it with new ip");
         flag = 1;
