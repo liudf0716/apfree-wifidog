@@ -45,8 +45,8 @@ fw_allow(t_client * client, int new_fw_connection_state)
 		_fw_deny_raw(client->ip, client->mac, old_state);
 	}
 
-	debug(LOG_DEBUG, "Allowing %s %s %s with fw_connection_state %d", 
-		client->ip, client->ip6, client->mac, new_fw_connection_state);
+	debug(LOG_INFO, "Allowing %s %s %s with fw_connection_state %d", 
+		client->ip?client->ip:"N/A", client->ip6?client->ip6:"N/A", client->mac, new_fw_connection_state);
 
 	client->fw_connection_state = new_fw_connection_state;
 
@@ -77,7 +77,8 @@ int
 fw_deny(t_client * client)
 {
 	int fw_connection_state = client->fw_connection_state;
-	debug(LOG_DEBUG, "Denying %s %s with fw_connection_state %d", client->ip, client->mac, client->fw_connection_state);
+	debug(LOG_INFO, "Denying %s %s %s %s with fw_connection_state %d",
+		client->ip?client->ip:"N/A", client->ip6?client->ip6:"N/A", client->mac, client->fw_connection_state);
 
 	client->fw_connection_state = FW_MARK_NONE; /* Clear */
 	int nret;

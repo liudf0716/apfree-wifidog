@@ -157,8 +157,7 @@ ev_http_resend(struct evhttp_request *req)
 {
     char *orig_url = wd_get_orig_url(req, 0);
     if (!orig_url) {
-        evhttp_send_error(req, HTTP_INTERNAL, NULL);
-        return;
+        orig_url = safe_strdup(config_get_config()->local_portal);
     }
 
     ev_http_send_redirect(req, orig_url, "resend its request");
@@ -173,12 +172,21 @@ ev_http_resend(struct evhttp_request *req)
 static int
 process_already_login_client(struct evhttp_request *req, const char *mac, const char *remote_host, const int addr_type)
 {
-	if (!mac || !remote_host) return 0;
-	
+	if (!mac || !remote_host) {
+        debug(LOG_ERR, "mac or remote_host is NULL");
+        return 0;
+    }
+
     int flag = 0;
 	
     LOCK_CLIENT_LIST();
     t_client *clt = client_list_find_by_mac(mac);
+    if (clt)
+        debug(LOG_DEBUG, "Client %s info: ip [%s] ip6 [%s] remote_host [%s] remote_mac [%s] addr_type [%d]",
+            clt->mac,
+            clt->ip ? clt->ip : "N/A",
+            clt->ip6 ? clt->ip6 : "N/A",
+            remote_host, mac, addr_type);
     if (clt && ((addr_type == 1 && clt->ip && strcmp(clt->ip, remote_host) != 0) ||
         (addr_type == 2 && clt->ip6 && strcmp(clt->ip6, remote_host) != 0))) { // the same client get different ip
         fw_deny(clt);
@@ -884,6 +892,7 @@ ev_http_callback_local_auth(struct evhttp_request *req, void *arg)
         gen_random_token(rtoken, sizeof(rtoken) - 1);
         client = client_list_add(ip, mac, rtoken, gw);
         fw_allow(client, FW_MARK_KNOWN);
+        debug(LOG_INFO, "Local pass %s %s ", mac, ip);
     } else if ((addr_type == 1 && client->ip && strcmp(client->ip, ip) != 0) ||
                (addr_type == 2 && client->ip6 && strcmp(client->ip6, ip) != 0)) {
         // Client exists but IP changed - deny old and allow new
