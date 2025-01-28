@@ -915,6 +915,8 @@ wdctl_user_auth(struct bufferevent *fd, const char *json_value)
 
 OUT:
     if (root) json_object_put(root);
+    save_bypass_user_list();
+    
     bufferevent_write(fd, "Yes", 3);
 }
 

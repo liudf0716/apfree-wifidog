@@ -235,6 +235,9 @@ fw_init(void)
 		nft_fw_reload_client();
 		nft_fw_reload_trusted_maclist();
 		UNLOCK_CLIENT_LIST();
+	} else {
+		debug(LOG_INFO, "Loading bypass user list");
+		load_bypass_user_list();
 	}
 #endif
 
