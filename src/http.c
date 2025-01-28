@@ -43,12 +43,12 @@
 
 #define AW_LOCAL_REDIRECT_MSG  "<!DOCTYPE html>"	\
                 "<html>"						\
-                "<title>Success</title>"		\
+                "<title>apfree-wifidog redirect ...</title>"		\
                 "<script type=\"text/javascript\">"	\
                     "window.setTimeout(function() {location.href = \"%s\";}, 10);"  \
                 "</script>"	\
                 "<body>"	\
-                "Success"	\
+                "apfree-wifidog redirect ..."	\
                 "</body>"	\
                 "</html>"
 
