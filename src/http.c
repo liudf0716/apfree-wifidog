@@ -692,10 +692,16 @@ ev_http_send_redirect(struct evhttp_request * req, const char *url, const char *
         evhttp_send_error(req, 500, "Internal error");
         return;
     }
-    struct evkeyvalq *header = evhttp_request_get_output_headers(req);
-    evhttp_add_header(header, "Location", url);
-    evbuffer_add_printf(evb, "<html><body>Please <a href='%s'>click here</a>.</body></html>", url);
-    evhttp_send_reply(req, 307, text, evb);
+
+    evbuffer_add_printf(evb, 
+        "<html><head>"
+        "<script type=\"text/javascript\">"
+        "setTimeout(function() { window.location.href = '%s'; }, 100);"
+        "</script></head>"
+        "<body>Please wait, redirecting... If nothing happens, <a href='%s'>click here</a>.</body></html>",
+        url, url);
+
+    evhttp_send_reply(req, 200, text, evb);
     evbuffer_free(evb);
 }
 
