@@ -43,12 +43,12 @@
 
 #define AW_LOCAL_REDIRECT_MSG  "<!DOCTYPE html>"	\
                 "<html>"						\
-                "<title>apfree-wifidog redirecting...</title>"		\
+                "<title>Success</title>"		\
                 "<script type=\"text/javascript\">"	\
-                    "window.location.replace(\"%s\");"	\
+                    "window.setTimeout(function() {location.href = \"%s\";}, 10);"  \
                 "</script>"	\
                 "<body>"	\
-                "apfree-wifidog redirecting..."	\
+                "Success"	\
                 "</body>"	\
                 "</html>"
 
@@ -607,7 +607,7 @@ ev_http_callback_404(struct evhttp_request *req, void *arg)
     }
     
     if (!is_ssl &&
-        !config->bypass_apple_cna && 
+        config->bypass_apple_cna && 
         process_apple_wisper(req, mac, remote_host, redir_url, config->bypass_apple_cna))
         goto END;
 
