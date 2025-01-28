@@ -849,10 +849,15 @@ ev_http_send_user_redirect_page(struct evhttp_request *req, const char *redir_ur
         "<head>" \
             "<title>Redirecting...</title>" \
             "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">" \
+            "<script type=\"text/javascript\">" \
+            "setTimeout(function() {" \
+                "window.location.href = '%s';" \
+            "}, 1000);" \
+            "</script>" \
             "<style>" \
-                "body { font-size: 24px; text-align: center; margin: 20px; }" \
-                "h1 { font-size: 36px; }" \
-                "a { font-size: 28px; }" \
+            "body { font-size: 24px; text-align: center; margin: 20px; }" \
+            "h1 { font-size: 36px; }" \
+            "a { font-size: 28px; }" \
             "</style>" \
         "</head>" \
         "<body>" \
@@ -867,7 +872,7 @@ ev_http_send_user_redirect_page(struct evhttp_request *req, const char *redir_ur
         return;
     }
 
-    evbuffer_add_printf(evb, REDIRECT_PAGE_TEMPLATE, redir_url);
+    evbuffer_add_printf(evb, REDIRECT_PAGE_TEMPLATE, redir_url, redir_url);
     evhttp_add_header(evhttp_request_get_output_headers(req), 
                      "Content-Type", "text/html; charset=UTF-8");
     evhttp_send_reply(req, HTTP_OK, "OK", evb);
