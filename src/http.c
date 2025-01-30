@@ -79,6 +79,7 @@ static int process_apple_wisper(struct evhttp_request *req, const char *mac, con
 static void ev_http_send_apple_redirect(struct evhttp_request *req, const char *redir_url);
 static void ev_http_replay_wisper(struct evhttp_request *req);
 static void ev_send_http_page(struct evhttp_request *req, const char *title, const char *msg);
+static void ev_http_send_redirect(struct evhttp_request *req, const char *redir_url, const char *msg, const uint32_t delay);
 
 static int
 is_apple_captive(const char *domain)
@@ -137,7 +138,7 @@ process_apple_wisper(struct evhttp_request *req, const char *mac, const char *re
         } else if(o_client->hit_counts > 2)
             ev_http_send_apple_redirect(req, redir_url);
         else {
-            ev_http_send_redirect(req, redir_url, "Redirect to login page");
+            ev_http_send_redirect(req, redir_url, "Redirect to login page", 0);
         }
     } else {	
         o_client->client_type = 1;
@@ -160,7 +161,7 @@ ev_http_resend(struct evhttp_request *req)
         orig_url = safe_strdup(config_get_config()->local_portal);
     }
 
-    ev_http_send_redirect(req, orig_url, "resend its request");
+    ev_http_send_redirect(req, orig_url, "resend its request", 0);
     free(orig_url);
 }
 
@@ -617,7 +618,7 @@ ev_http_callback_404(struct evhttp_request *req, void *arg)
     if (config->js_redir)
         ev_http_send_js_redirect(req, redir_url);
     else
-        ev_http_send_redirect(req, redir_url, "Redirect to login page");
+        ev_http_send_redirect(req, redir_url, "Redirect to login page", 0);
 
 END:
     free(redir_url);
@@ -678,7 +679,7 @@ ev_http_send_redirect_to_auth(struct evhttp_request *req, const char *url_fragme
         auth_server->authserv_use_ssl?auth_server->authserv_ssl_port:auth_server->authserv_http_port,
         auth_server->authserv_path, url_fragment);
 
-    ev_http_send_redirect(req, url, text);
+    ev_http_send_redirect(req, url, text, 0);
 	free(url);
 } 
 
@@ -688,8 +689,8 @@ ev_http_send_redirect_to_auth(struct evhttp_request *req, const char *url_fragme
  * @param url The url to redirect to
  * @param text The text to include in the redirect header and the manual redirect link title.  NULL is acceptable
  */ 
-void
-ev_http_send_redirect(struct evhttp_request * req, const char *url, const char *text)
+static void
+ev_http_send_redirect(struct evhttp_request * req, const char *url, const char *text, const uint32_t timeout)
 {
     struct evbuffer *evb = evbuffer_new();
     if (!evb) {
@@ -700,15 +701,16 @@ ev_http_send_redirect(struct evhttp_request * req, const char *url, const char *
     evbuffer_add_printf(evb, 
         "<html><head>"
         "<script type=\"text/javascript\">"
-        "setTimeout(function() { window.location.href = '%s'; }, 100);"
+        "setTimeout(function() { window.location.href = '%s'; }, %d);"
         "</script></head>"
         "<body>Please wait, redirecting... If nothing happens, <a href='%s'>click here</a>.</body></html>",
-        url, url);
+        url, timeout?timeout:100, url);
     
     evhttp_add_header(evhttp_request_get_output_headers(req), "Connection", "close");
     evhttp_send_reply(req, 200, text, evb);
     evbuffer_free(evb);
 }
+
 
 /**
  * @brief process client's login and logout request
@@ -975,7 +977,13 @@ ev_http_callback_local_auth(struct evhttp_request *req, void *arg)
     UNLOCK_CLIENT_LIST();
 
     // redirect the client to the internet
-    ev_http_send_redirect(req, config->local_portal, "Redirect to internet");
+    if (client->ip && client->ip6) {
+        debug(LOG_INFO, "Local pass %s %s %s", mac, client->ip, client->ip6);
+        ev_http_send_redirect(req, config->local_portal, "Redirect to internet", 0);
+    } else {
+        debug(LOG_INFO, "Local pass %s %s", mac, ip);
+        ev_http_send_redirect(req, config->local_portal, "Redirect to internet", 1000);
+    }
 
 END:
     if (mac) free((void *)mac);
