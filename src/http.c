@@ -255,6 +255,7 @@ ev_http_send_apple_redirect(struct evhttp_request *req, const char *redir_url)
         return;
     }
     evbuffer_add_printf(evb, APPLE_REDIRECT_MSG, redir_url);
+    evhttp_add_header(evhttp_request_get_output_headers(req), "Connection", "close");
     evhttp_send_reply(req, HTTP_OK, "OK", evb);
     evbuffer_free(evb);
 }
@@ -272,6 +273,7 @@ ev_http_replay_wisper(struct evhttp_request *req)
         return;
     }	
     evbuffer_add(evb, apple_wisper, strlen(apple_wisper));
+    evhttp_add_header(evhttp_request_get_output_headers(req), "Connection", "close");
     evhttp_send_reply(req, HTTP_OK, "OK", evb);
     evbuffer_free(evb);
 }
@@ -650,6 +652,7 @@ ev_http_callback_status(struct evhttp_request *req, void *arg)
     struct evbuffer *buffer = evbuffer_new();
 
     evbuffer_add_printf(buffer, "<html><body><pre>%s</pre></body></html>", status);
+    evhttp_add_header(evhttp_request_get_output_headers(req), "Connection", "close");
     evhttp_send_reply(req, HTTP_OK, "OK", buffer);
 
     free(status);
@@ -1005,7 +1008,8 @@ ev_http_callback_temporary_pass(struct evhttp_request *req, void *arg)
         debug(LOG_INFO, "Temporary passed %s timeout %s", mac, timeout);
         int ntimeout = atoi(timeout);
         if (ntimeout < 0) ntimeout = 0;
-        fw_set_mac_temporary(mac, ntimeout);	
+        fw_set_mac_temporary(mac, ntimeout);
+        evhttp_add_header(evhttp_request_get_output_headers(req), "Connection", "close");	
         evhttp_send_reply(req, HTTP_OK, "OK", NULL);
     } else {
         debug(LOG_INFO, "Temporary pass called without  MAC given");
@@ -1073,6 +1077,7 @@ ev_http_callback_device(struct evhttp_request *req, void *arg)
 
     evbuffer_add(ev, json_query_result, strlen(json_query_result));
     evhttp_add_header(evhttp_request_get_output_headers(req), "Content-Type", "application/json");
+    evhttp_add_header(evhttp_request_get_output_headers(req), "Connection", "close");
     evhttp_send_reply(req, HTTP_OK, "OK", ev);
 
     free((void *)json_query_result);
@@ -1163,7 +1168,8 @@ ev_send_http_page(struct evhttp_request *req, const char *title, const char *mes
         evhttp_send_error(req, HTTP_INTERNAL, NULL);
         return;
     }
-	
+
+	evhttp_add_header(evhttp_request_get_output_headers(req), "Connection", "close");
     evhttp_send_reply(req, HTTP_OK, "OK", buffer);
     evbuffer_free(buffer);
 }
