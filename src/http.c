@@ -448,6 +448,7 @@ ev_http_reply_client_error(struct evhttp_request *req, enum reply_client_page_ty
     }
 
     debug(LOG_DEBUG, "reply client type: %d", type);
+    evhttp_add_header(evhttp_request_get_output_headers(req), "Connection", "close");
     evhttp_send_reply(req, 200, "OK", evb);
     evbuffer_free(evb);
 }
@@ -700,7 +701,8 @@ ev_http_send_redirect(struct evhttp_request * req, const char *url, const char *
         "</script></head>"
         "<body>Please wait, redirecting... If nothing happens, <a href='%s'>click here</a>.</body></html>",
         url, url);
-
+    
+    evhttp_add_header(evhttp_request_get_output_headers(req), "Connection", "close");
     evhttp_send_reply(req, 200, text, evb);
     evbuffer_free(evb);
 }
@@ -879,6 +881,7 @@ ev_http_send_user_redirect_page(struct evhttp_request *req, const char *redir_ur
     }
 
     evbuffer_add_printf(evb, REDIRECT_PAGE_TEMPLATE, redir_url, redir_url);
+    evhttp_add_header(evhttp_request_get_output_headers(req), "Connection", "close");
     evhttp_add_header(evhttp_request_get_output_headers(req), 
                      "Content-Type", "text/html; charset=UTF-8");
     evhttp_send_reply(req, HTTP_OK, "OK", evb);
