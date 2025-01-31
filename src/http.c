@@ -203,7 +203,7 @@ process_already_login_client(struct evhttp_request *req, const char *mac, const 
     }
 
     // Log client info for debugging
-    debug(LOG_DEBUG, "Found client %s: ip [%s] ip6 [%s] remote_host [%s] addr_type [%d]",
+    debug(LOG_INFO, "Found client %s: ip [%s] ip6 [%s] remote_host [%s] addr_type [%d]",
         mac,
         client->ip ? client->ip : "N/A",
         client->ip6 ? client->ip6 : "N/A",
@@ -240,22 +240,23 @@ process_already_login_client(struct evhttp_request *req, const char *mac, const 
 
     // Update firewall rules if needed
     if (action == 1) {
+        UNLOCK_CLIENT_LIST();
+        ev_http_wisper_success(req);
+        LOCK_CLIENT_LIST();
         fw_deny(client);
         fw_allow(client, FW_MARK_KNOWN);
         debug(LOG_INFO, "Updated client %s with new %s address: %s", 
             mac, (addr_type == 1) ? "IPv4" : "IPv6", remote_host);
     } else if (action == 2) {
+        UNLOCK_CLIENT_LIST();
+        ev_http_wisper_success(req);
+        LOCK_CLIENT_LIST();
         fw_allow_ip_mac(remote_host, mac, FW_MARK_KNOWN);
         debug(LOG_INFO, "Added %s address %s to existing client %s",
             (addr_type == 1) ? "IPv4" : "IPv6", remote_host, mac);
     }
 
     UNLOCK_CLIENT_LIST();
-
-    // Handle response based on action taken
-    if (action) {
-        ev_http_wisper_success(req);
-    }
 
     return action;
 }
