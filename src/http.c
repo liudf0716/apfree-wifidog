@@ -41,6 +41,14 @@
 				"</body>"	\
 				"</html>"
 
+#define WISPER_SUCCESS_MSG  "<!DOCTYPE html>"	\
+				"<html>"						\
+				"<title>Success</title>"		\
+				"<body>"	\
+				"Success"	\
+				"</body>"	\
+				"</html>"
+
 #define AW_LOCAL_REDIRECT_MSG  "<!DOCTYPE html>"	\
                 "<html>"						\
                 "<title>apfree-wifidog redirect ...</title>"		\
@@ -78,6 +86,7 @@ static void ev_http_respond_options(struct evhttp_request *req);
 static int process_apple_wisper(struct evhttp_request *req, const char *mac, const char *remote_host, const char *redir_url, const int mode);
 static void ev_http_send_apple_redirect(struct evhttp_request *req, const char *redir_url);
 static void ev_http_replay_wisper(struct evhttp_request *req);
+static void ev_http_wisper_success(struct evhttp_request *req);
 static void ev_send_http_page(struct evhttp_request *req, const char *title, const char *msg);
 static void ev_http_send_redirect(struct evhttp_request *req, const char *redir_url, const char *msg, const uint32_t delay);
 
@@ -173,40 +182,84 @@ ev_http_resend(struct evhttp_request *req)
 static int
 process_already_login_client(struct evhttp_request *req, const char *mac, const char *remote_host, const int addr_type)
 {
-	if (!mac || !remote_host) {
-        debug(LOG_ERR, "mac or remote_host is NULL");
+    // Input validation
+    if (!mac || !remote_host) {
+        debug(LOG_ERR, "Invalid parameters: mac or remote_host is NULL");
         return 0;
     }
 
-    int flag = 0;
-	
-    LOCK_CLIENT_LIST();
-    t_client *clt = client_list_find_by_mac(mac);
-    if (clt)
-        debug(LOG_DEBUG, "Client %s info: ip [%s] ip6 [%s] remote_host [%s] remote_mac [%s] addr_type [%d]",
-            clt->mac,
-            clt->ip ? clt->ip : "N/A",
-            clt->ip6 ? clt->ip6 : "N/A",
-            remote_host, mac, addr_type);
-    if (clt && ((addr_type == 1 && clt->ip && strcmp(clt->ip, remote_host) != 0) ||
-        (addr_type == 2 && clt->ip6 && strcmp(clt->ip6, remote_host) != 0))) { // the same client get different ip
-        fw_deny(clt);
-        free(clt->ip);
-        if (addr_type == 1) {
-            free(clt->ip);
-            clt->ip = safe_strdup(remote_host);
-        } else {
-            free(clt->ip6);
-            clt->ip6 = safe_strdup(remote_host);
-        }
-        fw_allow(clt, FW_MARK_KNOWN);
-        debug(LOG_INFO, "client has login, replace it with new ip");
-        flag = 1;
+    if (addr_type != 1 && addr_type != 2) {
+        debug(LOG_ERR, "Invalid address type: %d", addr_type);
+        return 0;
     }
+
+    LOCK_CLIENT_LIST();
+    t_client *client = client_list_find_by_mac(mac);
+    
+    // Client not found
+    if (!client) {
+        UNLOCK_CLIENT_LIST();
+        return 0;
+    }
+
+    // Log client info for debugging
+    debug(LOG_DEBUG, "Found client %s: ip [%s] ip6 [%s] remote_host [%s] addr_type [%d]",
+        mac,
+        client->ip ? client->ip : "N/A",
+        client->ip6 ? client->ip6 : "N/A",
+        remote_host, addr_type);
+
+    int action = 0; // 0: no action, 1: IP changed, 2: Adding additional IP
+
+    // Handle IPv4
+    if (addr_type == 1) {
+        if (client->ip && strcmp(client->ip, remote_host) != 0) {
+            // IP changed
+            free(client->ip);
+            client->ip = safe_strdup(remote_host);
+            action = 1;
+        } else if (!client->ip) {
+            // Adding IPv4 to existing IPv6 client
+            client->ip = safe_strdup(remote_host);
+            action = 2;
+        }
+    }
+    // Handle IPv6
+    else if (addr_type == 2) {
+        if (client->ip6 && strcmp(client->ip6, remote_host) != 0) {
+            // IP changed
+            free(client->ip6);
+            client->ip6 = safe_strdup(remote_host);
+            action = 1;
+        } else if (!client->ip6) {
+            // Adding IPv6 to existing IPv4 client
+            client->ip6 = safe_strdup(remote_host);
+            action = 2;
+        }
+    }
+
+    // Update firewall rules if needed
+    if (action == 1) {
+        fw_deny(client);
+        fw_allow(client, FW_MARK_KNOWN);
+        debug(LOG_INFO, "Updated client %s with new %s address: %s", 
+            mac, (addr_type == 1) ? "IPv4" : "IPv6", remote_host);
+    } else if (action == 2) {
+        fw_allow_ip_mac(remote_host, mac, FW_MARK_KNOWN);
+        debug(LOG_INFO, "Added %s address %s to existing client %s",
+            (addr_type == 1) ? "IPv4" : "IPv6", remote_host, mac);
+    }
+
     UNLOCK_CLIENT_LIST();
 
-    if (flag) ev_http_resend(req);
-    return flag;
+    // Handle response based on action taken
+    if (action == 1) {
+        ev_http_resend(req);
+    } else if (action == 2) {
+        ev_http_wisper_success(req);
+    }
+
+    return action;
 }
 
 static int
@@ -274,6 +327,24 @@ ev_http_replay_wisper(struct evhttp_request *req)
         return;
     }	
     evbuffer_add(evb, apple_wisper, strlen(apple_wisper));
+    evhttp_add_header(evhttp_request_get_output_headers(req), "Connection", "close");
+    evhttp_send_reply(req, HTTP_OK, "OK", evb);
+    evbuffer_free(evb);
+}
+
+/**
+ * @brief reply wisper success
+ * 
+ */
+static void
+ev_http_wisper_success(struct evhttp_request *req)
+{
+    struct evbuffer *evb = evbuffer_new();
+    if (!evb) {
+        evhttp_send_error(req, HTTP_INTERNAL, "Failed to evbuffer_new");
+        return;
+    }
+    evbuffer_add(evb, WISPER_SUCCESS_MSG, strlen(WISPER_SUCCESS_MSG));
     evhttp_add_header(evhttp_request_get_output_headers(req), "Connection", "close");
     evhttp_send_reply(req, HTTP_OK, "OK", evb);
     evbuffer_free(evb);
