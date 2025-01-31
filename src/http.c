@@ -253,9 +253,7 @@ process_already_login_client(struct evhttp_request *req, const char *mac, const 
     UNLOCK_CLIENT_LIST();
 
     // Handle response based on action taken
-    if (action == 1) {
-        ev_http_resend(req, is_ssl);
-    } else if (action == 2) {
+    if (action) {
         ev_http_wisper_success(req);
     }
 
