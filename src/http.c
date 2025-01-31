@@ -79,8 +79,8 @@ const char *apple_wisper = "<!DOCTYPE html>"
 				"</body>"
 				"</html>";
 
-static void ev_http_resend(struct evhttp_request *req);
-static int process_already_login_client(struct evhttp_request *req, const char *mac, const char *remote_host, const int addr_type);
+static void ev_http_resend(struct evhttp_request *req, const int is_ssl);
+static int process_already_login_client(struct evhttp_request *req, const char *mac, const char *remote_host, const int addr_type, const int is_ssl);
 static int process_wired_device_pass(struct evhttp_request *req, const char *mac);
 static void ev_http_respond_options(struct evhttp_request *req);
 static int process_apple_wisper(struct evhttp_request *req, const char *mac, const char *remote_host, const char *redir_url, const int mode);
@@ -163,9 +163,9 @@ process_apple_wisper(struct evhttp_request *req, const char *mac, const char *re
  * 
  */ 
 static void
-ev_http_resend(struct evhttp_request *req)
+ev_http_resend(struct evhttp_request *req, const int is_ssl)
 {
-    char *orig_url = wd_get_orig_url(req, 0, 0);
+    char *orig_url = wd_get_orig_url(req, is_ssl, 0);
     if (!orig_url) {
         orig_url = safe_strdup(config_get_config()->local_portal);
     }
@@ -180,7 +180,7 @@ ev_http_resend(struct evhttp_request *req)
  * @return 1 end the http request or 0 continue the request
  */ 
 static int
-process_already_login_client(struct evhttp_request *req, const char *mac, const char *remote_host, const int addr_type)
+process_already_login_client(struct evhttp_request *req, const char *mac, const char *remote_host, const int addr_type, const int is_ssl)
 {
     // Input validation
     if (!mac || !remote_host) {
@@ -254,7 +254,7 @@ process_already_login_client(struct evhttp_request *req, const char *mac, const 
 
     // Handle response based on action taken
     if (action == 1) {
-        ev_http_resend(req);
+        ev_http_resend(req, is_ssl);
     } else if (action == 2) {
         ev_http_wisper_success(req);
     }
@@ -271,7 +271,7 @@ process_wired_device_pass(struct evhttp_request *req, const char *mac)
         debug(LOG_DEBUG, "wired_passed: add %s to trusted mac", mac);
         if (!is_trusted_mac(mac))
             add_trusted_maclist(mac);
-        ev_http_resend(req);
+        ev_http_resend(req, 0);
         return 1;
     }
     return 0;
@@ -657,7 +657,7 @@ ev_http_callback_404(struct evhttp_request *req, void *arg)
     
     debug(LOG_INFO, "ev_http_callback_404 [%s : %s] address type [%d]", remote_host, mac, addr_type);
 
-    if (process_already_login_client(req, mac, remote_host, addr_type)) return;
+    if (process_already_login_client(req, mac, remote_host, addr_type, is_ssl)) return;
 
     if (!is_auth_online() || is_local_auth_mode()) {
         char gw_port[8] = {0};
