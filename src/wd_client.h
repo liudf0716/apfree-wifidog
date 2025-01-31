@@ -33,7 +33,7 @@ struct wd_request_context {
  * @param is_ssl 
  * @return Encoded URL string, must be freed by caller
  */
-char *wd_get_orig_url(struct evhttp_request *request, int is_ssl);
+char *wd_get_orig_url(struct evhttp_request *request, int is_ssl, int url_encode);
 
 /**
  * @brief Generate full redirect URL for auth server

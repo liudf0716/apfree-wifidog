@@ -165,7 +165,7 @@ process_apple_wisper(struct evhttp_request *req, const char *mac, const char *re
 static void
 ev_http_resend(struct evhttp_request *req)
 {
-    char *orig_url = wd_get_orig_url(req, 0);
+    char *orig_url = wd_get_orig_url(req, 0, 0);
     if (!orig_url) {
         orig_url = safe_strdup(config_get_config()->local_portal);
     }

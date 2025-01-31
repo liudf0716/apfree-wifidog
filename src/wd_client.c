@@ -27,7 +27,7 @@
  * 4. URL-encoding the result
  */
 char *
-wd_get_orig_url(struct evhttp_request *req, int is_ssl) 
+wd_get_orig_url(struct evhttp_request *req, int is_ssl, int url_encode) 
 {
 	const struct evhttp_uri *uri;
 	const char *scheme, *host;
@@ -79,10 +79,12 @@ wd_get_orig_url(struct evhttp_request *req, int is_ssl)
 	debug(LOG_DEBUG, "Full URL: %s", full_url);
 
 	// URL-encode the full URL
-	encoded_url = evhttp_encode_uri(full_url);
-	free(full_url);
-
-	return encoded_url;
+	if (url_encode) {
+		encoded_url = evhttp_encode_uri(full_url);
+		free(full_url);
+		return encoded_url;
+	}
+	return full_url;
 }
 
 /**
@@ -116,7 +118,7 @@ wd_get_redir_url_to_auth(struct evhttp_request *req,
 						 int is_ssl)
 {
 	t_auth_serv *auth_server = get_auth_server();
-	char *orig_url = wd_get_orig_url(req, is_ssl);
+	char *orig_url = wd_get_orig_url(req, is_ssl, 1);
 	if (!orig_url) 
 		orig_url = safe_strdup("null");
 	char *gw_address = NULL;
