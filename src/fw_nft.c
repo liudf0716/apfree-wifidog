@@ -1248,6 +1248,8 @@ nft_fw_counters_update()
 {
     NFT_WIFIDOGX_BYPASS_MODE_RETURN(0);
 
+    LOCK_CLIENT_LIST();
+
     reset_client_list();
 
     // get client outgoing traffic
@@ -1255,12 +1257,14 @@ nft_fw_counters_update()
     uint32_t outgoing_len = 0;
     nft_statistical_outgoing(&outgoing, &outgoing_len);
     if (outgoing == NULL) {
+        UNLOCK_CLIENT_LIST();
         debug(LOG_ERR, "nft_fw_counters_update(): outgoing is NULL");
         return -1;
     }
     debug(LOG_DEBUG, "outgoing: %s", outgoing);
     json_object *jobj_outgoing = json_tokener_parse(outgoing);
     if (jobj_outgoing == NULL) {
+        UNLOCK_CLIENT_LIST();
         free(outgoing);
         debug(LOG_ERR, "nft_fw_counters_update(): jobj_outgoing is NULL");
         return -1;
@@ -1273,6 +1277,7 @@ nft_fw_counters_update()
     uint32_t incoming_len = 0;
     nft_statistical_incoming(&incoming, &incoming_len);
     if (incoming == NULL) {
+        UNLOCK_CLIENT_LIST();
         debug(LOG_ERR, "nft_fw_counters_update(): incoming is NULL");
         json_object_put(jobj_outgoing);
         return -1;
@@ -1280,6 +1285,7 @@ nft_fw_counters_update()
     debug(LOG_DEBUG, "incoming: %s", incoming);
     json_object *jobj_incoming = json_tokener_parse(incoming);
     if (jobj_incoming == NULL) {
+        UNLOCK_CLIENT_LIST();
         debug(LOG_ERR, "nft_fw_counters_update(): jobj_incoming is NULL");
         free(incoming);
         json_object_put(jobj_outgoing);
@@ -1287,6 +1293,8 @@ nft_fw_counters_update()
     }
     free(incoming);
     process_nftables_json(jobj_incoming, 0);
+    
+    UNLOCK_CLIENT_LIST();
 
     json_object_put(jobj_outgoing);
     json_object_put(jobj_incoming);
