@@ -863,13 +863,6 @@ nft_fw_access(fw_access_t type, const char *ip, const char *mac, int tag)
             
             // Remove client rules from incoming chain
             nft_fw_del_rule_by_ip_and_mac(ip, NULL, "mangle_postrouting_wifidogx_incoming");
-
-            // Optionally clear connection tracking entries
-            if (config_get_config()->enable_del_conntrack) {
-                char cmd[128] = {0};
-                snprintf(cmd, sizeof(cmd), "conntrack -D -s %s", ip);
-                execute(cmd, 0);
-            }
             break;
 
         default:
