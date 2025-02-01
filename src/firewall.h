@@ -46,6 +46,7 @@ int fw_allow_ip_mac(const char *, const char *, int);
 
 /** @brief Deny a client access through the firewall*/
 int fw_deny(t_client *);
+int fw_deny_ip_mac(const char *, const char *, int);
 
 /** @brief Passthrough for clients when auth server is down */
 int fw_set_authdown(void);

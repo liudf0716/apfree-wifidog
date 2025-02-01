@@ -96,11 +96,22 @@ fw_deny(t_client * client)
 	int nret;
 	if (client->ip6) {
 		nret = _fw_deny_raw(client->ip6, client->mac, fw_connection_state);
+		conntrack_flush(client->ip6);
 	}
 
 	if (client->ip) {
 		nret = _fw_deny_raw(client->ip, client->mac, fw_connection_state);
+		conntrack_flush(client->ip);
 	}
+	return nret;
+}
+
+int
+fw_deny_ip_mac(const char *ip, const char *mac, int fw_connection_state)
+{
+	int nret;
+	nret = _fw_deny_raw(ip, mac, fw_connection_state);
+	conntrack_flush(ip);
 	return nret;
 }
 
