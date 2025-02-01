@@ -533,7 +533,7 @@ static void
 init_firewall(void)
 {
     // Clear existing network state
-    conntrack_flush();
+    conntrack_flush(NULL);
     fw_destroy();
 
     // Initialize new firewall rules
