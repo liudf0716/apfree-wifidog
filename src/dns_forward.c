@@ -17,6 +17,7 @@
 #include "dns_forward.h"
 #include "debug.h"
 #include "conf.h"
+#include "wd_util.h"
 
 struct dns_query {
     int client_fd;
@@ -229,7 +230,7 @@ add_trusted_ip(t_domain_trusted *trusted_domain, uint16_t type, unsigned char *a
         } else {
             snprintf(cmd, sizeof(cmd), "nft add element inet fw4 set_wifidogx_inner_trust_domains_v6 { %s }", ip_str);
         }
-        system(cmd);
+        execute(cmd, 0);
     }
     return 0;
 }
