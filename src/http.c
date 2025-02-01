@@ -215,11 +215,14 @@ process_already_login_client(struct evhttp_request *req, const char *mac, const 
     if (addr_type == 1) {
         if (client->ip && strcmp(client->ip, remote_host) != 0) {
             // IP changed
+            fw_allow_ip_mac(remote_host, mac, FW_MARK_KNOWN);
+            fw_deny_ip_mac(client->ip, mac, FW_MARK_KNOWN);
             free(client->ip);
             client->ip = safe_strdup(remote_host);
             action = 1;
         } else if (!client->ip) {
             // Adding IPv4 to existing IPv6 client
+            fw_allow_ip_mac(remote_host, mac, FW_MARK_KNOWN);
             client->ip = safe_strdup(remote_host);
             action = 2;
         }
@@ -228,35 +231,30 @@ process_already_login_client(struct evhttp_request *req, const char *mac, const 
     else if (addr_type == 2) {
         if (client->ip6 && strcmp(client->ip6, remote_host) != 0) {
             // IP changed
+            fw_allow_ip_mac(remote_host, mac, FW_MARK_KNOWN);
+            fw_deny_ip_mac(client->ip6, mac, FW_MARK_KNOWN);
             free(client->ip6);
             client->ip6 = safe_strdup(remote_host);
             action = 1;
         } else if (!client->ip6) {
             // Adding IPv6 to existing IPv4 client
+            fw_allow_ip_mac(remote_host, mac, FW_MARK_KNOWN);
             client->ip6 = safe_strdup(remote_host);
             action = 2;
         }
     }
+    UNLOCK_CLIENT_LIST();
 
     // Update firewall rules if needed
     if (action == 1) {
-        UNLOCK_CLIENT_LIST();
         ev_http_wisper_success(req);
-        LOCK_CLIENT_LIST();
-        fw_deny(client);
-        fw_allow(client, FW_MARK_KNOWN);
         debug(LOG_INFO, "Updated client %s with new %s address: %s", 
             mac, (addr_type == 1) ? "IPv4" : "IPv6", remote_host);
     } else if (action == 2) {
-        UNLOCK_CLIENT_LIST();
         ev_http_wisper_success(req);
-        LOCK_CLIENT_LIST();
-        fw_allow_ip_mac(remote_host, mac, FW_MARK_KNOWN);
         debug(LOG_INFO, "Added %s address %s to existing client %s",
             (addr_type == 1) ? "IPv4" : "IPv6", remote_host, mac);
     }
-
-    UNLOCK_CLIENT_LIST();
 
     return action;
 }
