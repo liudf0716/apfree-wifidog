@@ -328,7 +328,7 @@ get_status_text()
 	evbuffer_add_printf(evb, "Version: " VERSION "\n");
 	evbuffer_add_printf(evb, "Uptime: %ud %uh %um %us\n", days, hours, minutes, seconds);
 	evbuffer_add_printf(evb, "Has been restarted: %s%s%d%s\n", 
-		restart_orig_pid ? "yes (from PID " : "no",
+		restart_orig_pid ? "yes (from PID " : "no ",
 		restart_orig_pid ? "" : "",
 		restart_orig_pid,
 		restart_orig_pid ? ")" : "");
@@ -357,6 +357,8 @@ get_status_text()
 		evbuffer_add_printf(evb, "  Name: %s\n", current->name != NULL?current->name:"null");
 		evbuffer_add_printf(evb, "  Downloaded: %llu\n  Uploaded: %llu\n", 
 			current->counters.incoming, current->counters.outgoing);
+		evbuffer_add_printf(evb, "  Downloaded_v6: %llu\n  Uploaded_v6: %llu\n", 
+			current->counters6.incoming, current->counters6.outgoing);
 		count++;
 		if(current->is_online)
 			active_count++;
@@ -433,6 +435,10 @@ get_client_status_json()
 			json_object_new_int64(current->counters.incoming));
 		json_object_object_add(jclient, "uploaded",
 			json_object_new_int64(current->counters.outgoing));
+		json_object_object_add(jclient, "downloaded_v6", 
+			json_object_new_int64(current->counters6.incoming));
+		json_object_object_add(jclient, "uploaded_v6",
+			json_object_new_int64(current->counters6.outgoing));
 
 		json_object_array_add(jclients, jclient);
 
