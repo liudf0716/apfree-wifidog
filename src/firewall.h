@@ -105,7 +105,7 @@ void fw_client_process_from_authserver_response(t_authresponse *, t_client *p1);
 void ev_fw_sync_with_authserver(struct wd_request_context *);
 void ev_fw_sync_with_authserver_v2(struct wd_request_context *);
 
-void conntrack_flush();
+void conntrack_flush(const char *);
 
 void fw_add_anti_nat_permit_device(const char *);
 void fw_del_anti_nat_permit_device(const char *);

@@ -70,6 +70,4 @@ void nft_fw_add_anti_nat_permit(const char *mac);
 void nft_fw_del_anti_nat_permit(const char *mac);
 void nft_fw_set_anti_nat_permit();
 
-void nft_fw_conntrack_flush();
-
 #endif

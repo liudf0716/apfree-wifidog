@@ -778,13 +778,16 @@ ev_fw_sync_with_authserver(struct wd_request_context *context)
 }
 
 void 
-conntrack_flush()
+conntrack_flush(const char *ip)
 {
-	debug(LOG_DEBUG, "Flush conntrack");
-#ifdef AW_FW3
-#else
-	nft_fw_conntrack_flush();
-#endif
+	debug(LOG_DEBUG, "Flush conntrack for ip [%s]", ip?ip:"all");
+	char cmd[128] = {0};
+	if (ip) {
+		snprintf(cmd, sizeof(cmd), "conntrack -D -s %s", ip);
+	} else {
+		snprintf(cmd, sizeof(cmd), "conntrack -F");
+	}
+	execute(cmd, 0);
 }
 
 void

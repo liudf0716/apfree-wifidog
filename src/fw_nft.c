@@ -1579,11 +1579,3 @@ nft_fw_init()
 
     return 1;
 }
-
-void
-nft_fw_conntrack_flush()
-{
-    NFT_WIFIDOGX_BYPASS_MODE();
-
-    execute("conntrack -F", 0);
-}
