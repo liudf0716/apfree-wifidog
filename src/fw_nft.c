@@ -1158,8 +1158,8 @@ process_nftables_expr(json_object *jobj_expr, int is_outgoing)
     }
 
     // Only update counters if we found both counter data and client identifiers
-    if (has_counter && (ip || mac)) {
-        t_client *client = client_list_find(ip, mac);
+    if (has_counter && ip) {
+        t_client *client = mac?client_list_find(ip, mac):client_list_find_by_ip(ip);
         if (client) {
             update_client_counters(client, packets, bytes, is_outgoing, is_ip6);
         } else {
