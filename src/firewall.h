@@ -111,4 +111,6 @@ void conntrack_flush(const char *);
 void fw_add_anti_nat_permit_device(const char *);
 void fw_del_anti_nat_permit_device(const char *);
 
+int fw_counters_update();
+
 #endif                          /* _FIREWALL_H_ */

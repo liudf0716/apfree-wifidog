@@ -244,11 +244,7 @@ wdctl_status(struct bufferevent *fd, const char *arg)
     const char *type = arg;
     char *status = NULL;
 
-#ifdef AW_FW3
-	if (-1 == iptables_fw_counters_update()) 
-#else
-	if (-1 == nft_fw_counters_update()) 
-#endif
+    if (fw_counters_update())
 	{
 		debug(LOG_ERR, "Could not get counters from firewall!");
 	}

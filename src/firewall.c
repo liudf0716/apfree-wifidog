@@ -853,3 +853,14 @@ fw_del_anti_nat_permit_device(const char *mac)
 	nft_fw_del_anti_nat_permit(mac);
 #endif
 }
+
+int
+fw_counters_update()
+{
+	debug(LOG_DEBUG, "Update firewall counters");
+#ifdef AW_FW3
+	return iptables_fw_counters_update();
+#else
+	return nft_fw_counters_update();
+#endif
+}
