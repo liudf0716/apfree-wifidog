@@ -1145,7 +1145,6 @@ process_nftables_expr(json_object *jobj_expr, int is_outgoing)
 
                     if (strcmp(protocol, "ip") == 0) {
                         ip = value;
-                        is_ip6 = 0;
                     } else if (strcmp(protocol, "ip6") == 0) {
                         ip = value;
                         is_ip6 = 1;
