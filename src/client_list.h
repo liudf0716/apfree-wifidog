@@ -42,6 +42,7 @@ typedef struct _t_client {
 											during login before one of the
 											_http_* function is called */
     t_counters counters;                /**< @brief Counters for input/output of the client. */
+	t_counters counters6;
 	time_t 	first_login;				/**< @brief first login time */
 	char	*name;						/**< @brief device name */
 	short 	is_online;

@@ -1002,7 +1002,7 @@ nft_fw_reload_trusted_maclist()
  * @param is_outgoing  1 if outgoing traffic, 0 if incoming traffic
  */
 static void 
-update_client_counters(t_client *client, uint64_t packets, uint64_t bytes, int is_outgoing)
+update_client_counters(t_client *client, uint64_t packets, uint64_t bytes, int is_outgoing, int is_ip6)
 {
     if (!client) {
         debug(LOG_INFO, "Client is NULL, cannot update counters");
@@ -1023,19 +1023,39 @@ update_client_counters(t_client *client, uint64_t packets, uint64_t bytes, int i
     // Update traffic counters
     if (is_outgoing) {
         // Save previous outgoing count and update with new values
-        client->counters.outgoing_history = client->counters.outgoing;
-        client->counters.outgoing = bytes;
-        client->counters.outgoing_packets = packets;
+        if (is_ip6) {
+            client->counters6.outgoing_history = client->counters6.outgoing;
+            client->counters6.outgoing = bytes;
+            client->counters6.outgoing_packets = packets;
+        } else {
+            client->counters.outgoing_history = client->counters.outgoing;
+            client->counters.outgoing = bytes;
+            client->counters.outgoing_packets = packets;
+        }
     } else {
         // Save previous incoming count and update with new values
-        client->counters.incoming_history = client->counters.incoming;
-        client->counters.incoming = bytes;
-        client->counters.incoming_packets = packets;
+        if (is_ip6) {
+            client->counters6.incoming_history = client->counters6.incoming;
+            client->counters6.incoming = bytes;
+            client->counters6.incoming_packets = packets;
+        } else {
+            client->counters.incoming_history = client->counters.incoming;
+            client->counters.incoming = bytes;
+            client->counters.incoming_packets = packets;
+        }
     }
 
     // Update timestamp and online status
-    client->counters.last_updated = time(NULL);
+    if (is_ip6) {
+        client->counters6.last_updated = time(NULL);
+    } else {
+        client->counters.last_updated = time(NULL);
+    }
     client->is_online = 1;
+
+    debug(LOG_INFO, "Updated counters for client: %s, IP: %s, MAC: %s, "
+            "Packets: %llu, Bytes: %llu, Outgoing: %d, IP6: %d",
+            client->name, client->ip, client->mac, packets, bytes, is_outgoing, is_ip6);
 }
 
 /**
@@ -1062,40 +1082,91 @@ update_client_counters(t_client *client, uint64_t packets, uint64_t bytes, int i
 static void
 process_nftables_expr(json_object *jobj_expr, int is_outgoing)
 {
-    uint64_t packets = 0, bytes = 0;
-    t_client *p1 = NULL;
-    int expr_arraylen = json_object_array_length(jobj_expr);
-    for (int j = 0; j < expr_arraylen; j++) {
-        json_object *jobj_expr_item = json_object_array_get_idx(jobj_expr, j);
-        if (jobj_expr_item == NULL) continue;
+    if (!jobj_expr) {
+        debug(LOG_ERR, "Invalid input: jobj_expr is NULL");
+        return;
+    }
 
-        json_object *jobj_counter = NULL;
-        json_object *jobj_match = NULL;
-        if (json_object_object_get_ex(jobj_expr_item, "counter", &jobj_counter)) {
-            json_object *jobj_packets = NULL;
-            json_object *jobj_bytes = NULL;
-            if (json_object_object_get_ex(jobj_counter, "packets", &jobj_packets) &&
-                json_object_object_get_ex(jobj_counter, "bytes", &jobj_bytes)) {
-                packets = json_object_get_int64(jobj_packets);
-                bytes = json_object_get_int64(jobj_bytes);
-            }
-        } else if (p1 == NULL && json_object_object_get_ex(jobj_expr_item, "match", &jobj_match)) {
-            json_object *jobj_match_right = NULL;
-            if (json_object_object_get_ex(jobj_match, "right", &jobj_match_right)) {
-                const char *ip_or_mac = json_object_get_string(jobj_match_right);
-                if (ip_or_mac) {
-                    if (is_valid_ip(ip_or_mac)) {
-                        p1 = client_list_find_by_ip(ip_or_mac);
-                    } else if (is_valid_mac(ip_or_mac)) {
-                        p1 = client_list_find_by_mac(ip_or_mac);
-                    } else {
-                        debug(LOG_INFO, "process_nftables_expr(): ip_or_mac is not ip address or mac address");
+    uint64_t packets = 0, bytes = 0;
+    const char *mac = NULL, *ip = NULL;
+    int is_ip6 = 0;
+    bool has_counter = false;
+
+    // Get array length of expressions
+    int expr_arraylen = json_object_array_length(jobj_expr);
+    if (expr_arraylen <= 0) {
+        debug(LOG_DEBUG, "Empty expression array");
+        return;
+    }
+
+    // First pass: collect counter data
+    // Second pass: collect client identifiers
+    for (int pass = 1; pass <= 2; pass++) {
+        for (int j = 0; j < expr_arraylen; j++) {
+            json_object *expr_item = json_object_array_get_idx(jobj_expr, j);
+            if (!expr_item) continue;
+
+            if (pass == 1) {
+                // Process counter information
+                json_object *counter_obj = NULL;
+                if (json_object_object_get_ex(expr_item, "counter", &counter_obj)) {
+                    json_object *packets_obj = NULL, *bytes_obj = NULL;
+                    if (json_object_object_get_ex(counter_obj, "packets", &packets_obj) &&
+                        json_object_object_get_ex(counter_obj, "bytes", &bytes_obj)) {
+                        packets = json_object_get_int64(packets_obj);
+                        bytes = json_object_get_int64(bytes_obj);
+                        has_counter = true;
+                    }
+                }
+            } else {
+                // Process match information for client identification
+                json_object *match_obj = NULL;
+                if (json_object_object_get_ex(expr_item, "match", &match_obj)) {
+                    json_object *left = NULL, *right = NULL;
+                    if (!json_object_object_get_ex(match_obj, "left", &left) ||
+                        !json_object_object_get_ex(match_obj, "right", &right)) {
+                        continue;
+                    }
+
+                    json_object *payload = NULL;
+                    if (!json_object_object_get_ex(left, "payload", &payload)) {
+                        continue;
+                    }
+
+                    json_object *protocol_obj = NULL;
+                    if (!json_object_object_get_ex(payload, "protocol", &protocol_obj)) {
+                        continue;
+                    }
+
+                    const char *protocol = json_object_get_string(protocol_obj);
+                    const char *value = json_object_get_string(right);
+
+                    if (!protocol || !value) continue;
+
+                    if (strcmp(protocol, "ip") == 0) {
+                        ip = value;
+                        is_ip6 = 0;
+                    } else if (strcmp(protocol, "ip6") == 0) {
+                        ip = value;
+                        is_ip6 = 1;
+                    } else if (strcmp(protocol, "ether") == 0) {
+                        mac = value;
                     }
                 }
             }
         }
     }
-    update_client_counters(p1, packets, bytes, is_outgoing);
+
+    // Only update counters if we found both counter data and client identifiers
+    if (has_counter && (ip || mac)) {
+        t_client *client = client_list_find(ip, mac);
+        if (client) {
+            update_client_counters(client, packets, bytes, is_outgoing, is_ip6);
+        } else {
+            debug(LOG_DEBUG, "No client found for IP: %s, MAC: %s", 
+                  ip ? ip : "N/A", mac ? mac : "N/A");
+        }
+    }
 }
 
 /**
