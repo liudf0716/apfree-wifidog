@@ -140,6 +140,7 @@ client_list_add(const char *ip, const char *mac, const char *token, t_gateway_se
     curclient->counters.outgoing_history = 0;
     curclient->counters.last_updated = time(NULL);
     curclient->gw_setting = gw_setting;
+    curclient->first_login = time(NULL);
 
     client_list_insert_client(curclient);
 
