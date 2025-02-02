@@ -45,19 +45,19 @@ static __always_inline __u32 get_current_time(void)
 }
 
 static inline void update_stats(struct counters *cnt, __u32 len, __u32 est_slot) {
-    __u32 old_slot = __atomic_load_n(&cnt->est_slot, __ATOMIC_RELAXED);
+    __u32 old_slot = cnt->est_slot;
     
     if (old_slot == est_slot) {
-        __atomic_fetch_add(&cnt->cur_s_bytes, len, __ATOMIC_RELAXED);
-    } else{
+        cnt->cur_s_bytes += len;
+    } else {
         __u32 new_prev = (old_slot == est_slot - 1) ? cnt->cur_s_bytes : 0;
-        __atomic_store_n(&cnt->prev_s_bytes, new_prev, __ATOMIC_RELAXED);
-        __atomic_store_n(&cnt->cur_s_bytes, 0, __ATOMIC_RELAXED);
-        __atomic_store_n(&cnt->est_slot, est_slot, __ATOMIC_RELAXED);
+        cnt->prev_s_bytes = new_prev;
+        cnt->cur_s_bytes = len;
+        cnt->est_slot = est_slot;
     }
 
-    __atomic_fetch_add(&cnt->total_bytes, len, __ATOMIC_RELAXED);
-    __atomic_fetch_add(&cnt->total_packets, 1, __ATOMIC_RELAXED);
+    cnt->total_bytes += len;
+    cnt->total_packets += 1;
 }
 
 static inline void process_packet(struct __sk_buff *skb) {
