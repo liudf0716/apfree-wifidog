@@ -26,6 +26,7 @@ pkg_check_modules(OPENSSL REQUIRED openssl)
 pkg_check_modules(JSONC REQUIRED json-c)
 pkg_check_modules(MOSQUITTO REQUIRED libmosquitto)
 pkg_check_modules(NFQUEUE REQUIRED libnetfilter_queue)
+pkg_check_modules(BPF REQUIRED libbpf)
 
 
 if (NOT AW_FW3)
@@ -44,7 +45,9 @@ include_directories(
     ${UCI_INCLUDE_DIRS}
     ${LIBEVENT_INCLUDE_DIRS}
     ${OPENSSL_INCLUDE_DIRS}
+    ${MOSQUITTO_INCLUDE_DIRS}
 )
 
 # Add subdirectories
 add_subdirectory(src)
+add_subdirectory(ebpf)
