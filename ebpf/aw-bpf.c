@@ -7,20 +7,7 @@
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_endian.h>
 
-
-struct counters {
-    __u32 cur_s_bytes;
-    __u32 prev_s_bytes;
-    __u64 total_bytes;
-    __u64 total_packets;
-    __u32 est_slot;
-    __u32 reserved;
-};
-
-struct traffic_stats {
-    struct counters incoming;
-    struct counters outgoing;
-};
+#include "aw-bpf.h"
 
 // Map for IPv4 addresses
 struct {
