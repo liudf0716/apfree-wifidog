@@ -25,6 +25,7 @@ struct traffic_stats {
 // Map for IPv4 addresses
 struct {
     __uint(type, BPF_MAP_TYPE_HASH);
+    __uint(pinning, 1);
     __type(key, __be32);
     __type(value, struct traffic_stats);
     __uint(max_entries, 1024);
@@ -33,6 +34,7 @@ struct {
 // Map for IPv6 addresses
 struct {
     __uint(type, BPF_MAP_TYPE_HASH);
+    __uint(pinning, 1);
     __type(key, struct in6_addr);
     __type(value, struct traffic_stats);
     __uint(max_entries, 1024);
