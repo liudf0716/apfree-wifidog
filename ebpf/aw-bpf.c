@@ -28,7 +28,7 @@ struct {
     __type(key, __be32);
     __type(value, struct traffic_stats);
     __uint(max_entries, 1024);
-} ipv4_map SEC(".maps");
+} ipv4_map SEC(".maps/tc/ipv4_map");
 
 // Map for IPv6 addresses
 struct {
@@ -36,7 +36,7 @@ struct {
     __type(key, struct in6_addr);
     __type(value, struct traffic_stats);
     __uint(max_entries, 1024);
-} ipv6_map SEC(".maps");
+} ipv6_map SEC(".maps/tc/ipv6_map");
 
 static __always_inline __u32 get_current_time(void)
 {
