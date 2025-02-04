@@ -23,7 +23,6 @@ static uint32_t
 calc_rate_estimator(struct traffic_stats *val, bool is_incoming)
 {
 #define	SMOOTH_VALUE	10
-#define	RATE_ESTIMATOR	4
 	uint32_t now = aw_bpf_gettime();
 	uint32_t est_slot = now / RATE_ESTIMATOR;
 	uint32_t rate = 0;

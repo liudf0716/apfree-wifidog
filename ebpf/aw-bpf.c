@@ -51,6 +51,7 @@ static inline void update_stats(struct counters *cnt, __u32 len, __u32 est_slot)
 
 static inline void process_packet(struct __sk_buff *skb) {
     __u32 current_time = get_current_time();
+    __u32 est_slot = current_time / RATE_ESTIMATOR;
     void *data = (void *)(long)skb->data;
     void *data_end = (void *)(long)skb->data_end;
 

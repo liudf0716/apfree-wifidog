@@ -1,5 +1,5 @@
 /*
- * aw-bpf.h - Header file for WiFiDog eBPF traffic statistics
+ * aw-bpf.h - Header file for apfree wifidog eBPF traffic statistics
  * Copyright (C) 2025 Dengfeng Liu <liudf0716@gmail.com>
  */
 
@@ -11,6 +11,8 @@
 #else
 #include <stdint.h>
 #endif
+
+#define RATE_ESTIMATOR 4
 
 /**
  * @struct counters
