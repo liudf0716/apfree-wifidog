@@ -7,6 +7,8 @@
 #include <bpf/bpf.h>
 #include <bpf/libbpf.h>
 #include <time.h>
+#include <json-c/json.h>
+
 #include "aw-bpf.h"
 
 static uint32_t 
@@ -85,6 +87,71 @@ print_stats_ipv6(struct in6_addr ip, struct traffic_stats *stats)
            stats->outgoing.total_bytes, stats->outgoing.total_packets, calc_rate_estimator(stats, false));
 }
 
+static struct json_object*
+parse_stats_ipv4_json(__be32 ip, struct traffic_stats *stats)
+{
+    char ip_str[INET_ADDRSTRLEN];
+    struct json_object *jobj = json_object_new_object();
+    
+
+    if (inet_ntop(AF_INET, &ip, ip_str, sizeof(ip_str)) == NULL) {
+        json_object_put(jobj);
+        return NULL;
+    }
+
+    // Add IP address
+    json_object_object_add(jobj, "ip", json_object_new_string(ip_str));
+
+    struct json_object *incoming = json_object_new_object();
+    struct json_object *outgoing = json_object_new_object();
+    
+    // Add incoming stats
+    json_object_object_add(incoming, "total_bytes", json_object_new_int64(stats->incoming.total_bytes));
+    json_object_object_add(incoming, "total_packets", json_object_new_int64(stats->incoming.total_packets));
+    json_object_object_add(incoming, "rate", json_object_new_int(calc_rate_estimator(stats, true)));
+    json_object_object_add(jobj, "incoming", incoming);
+
+    // Add outgoing stats
+    json_object_object_add(outgoing, "total_bytes", json_object_new_int64(stats->outgoing.total_bytes));
+    json_object_object_add(outgoing, "total_packets", json_object_new_int64(stats->outgoing.total_packets));
+    json_object_object_add(outgoing, "rate", json_object_new_int(calc_rate_estimator(stats, false)));
+    json_object_object_add(jobj, "outgoing", outgoing);
+
+    return jobj;
+}
+
+static struct json_object*
+parse_stats_ipv6_json(struct in6_addr ip, struct traffic_stats *stats)
+{
+    char ip_str[INET6_ADDRSTRLEN];
+    struct json_object *jobj = json_object_new_object();
+
+    if (inet_ntop(AF_INET6, &ip, ip_str, sizeof(ip_str)) == NULL) {
+        json_object_put(jobj);
+        return NULL;
+    }
+
+    // Add IP address
+    json_object_object_add(jobj, "ip", json_object_new_string(ip_str));
+
+    struct json_object *incoming = json_object_new_object();
+    struct json_object *outgoing = json_object_new_object();
+    
+    // Add incoming stats
+    json_object_object_add(incoming, "total_bytes", json_object_new_int64(stats->incoming.total_bytes));
+    json_object_object_add(incoming, "total_packets", json_object_new_int64(stats->incoming.total_packets));
+    json_object_object_add(incoming, "rate", json_object_new_int(calc_rate_estimator(stats, true)));
+    json_object_object_add(jobj, "incoming", incoming);
+
+    // Add outgoing stats
+    json_object_object_add(outgoing, "total_bytes", json_object_new_int64(stats->outgoing.total_bytes));
+    json_object_object_add(outgoing, "total_packets", json_object_new_int64(stats->outgoing.total_packets));
+    json_object_object_add(outgoing, "rate", json_object_new_int(calc_rate_estimator(stats, false)));
+    json_object_object_add(jobj, "outgoing", outgoing);
+
+    return jobj;
+}
+
 int 
 main(int argc, char **argv) {
     if (argc < 3) {
@@ -93,6 +160,7 @@ main(int argc, char **argv) {
         fprintf(stderr, "  %s <ipv4|ipv6> list\n", argv[0]);
         fprintf(stderr, "  %s <ipv4|ipv6> del <IP_ADDRESS>\n", argv[0]);
         fprintf(stderr, "  %s <ipv4|ipv6> flush\n", argv[0]);
+        fprintf(stderr, "  %s <ipv4|ipv6> json\n", argv[0]);
         return EXIT_FAILURE;
     }
 
@@ -193,6 +261,52 @@ main(int argc, char **argv) {
             if (ret != -ENOENT)
                 perror("bpf_map_get_next_key (IPv6)");
         }
+    } else if (strcmp(cmd, "json") == 0) {
+        if (argc != 3) {
+            printf("{\"error\":\"Invalid arguments\"}\n");
+            return EXIT_FAILURE;
+        }
+
+        struct json_object *jroot = json_object_new_object();
+        struct json_object *jdata = json_object_new_array();
+
+        if (strcmp(map_type, "ipv4") == 0) {
+            __be32 cur_key = 0, next_key = 0;
+            struct traffic_stats stats = {0};
+            
+            while (bpf_map_get_next_key(map_fd, cur_key ? &cur_key : NULL, &next_key) == 0) {
+                if (bpf_map_lookup_elem(map_fd, &next_key, &stats) == 0) {
+                    struct json_object *jentry = parse_stats_ipv4_json(next_key, &stats);
+                    if (jentry) {
+                        json_object_array_add(jdata, jentry);
+                    }
+                }
+                cur_key = next_key;
+            }
+
+        } else { // ipv6
+            struct in6_addr cur_key = {0}, next_key = {0};
+            struct traffic_stats stats = {0};
+
+            while (bpf_map_get_next_key(map_fd, 
+                   (memcmp(&cur_key, &(struct in6_addr){0}, sizeof(cur_key)) ? &cur_key : NULL),
+                   &next_key) == 0) {
+                if (bpf_map_lookup_elem(map_fd, &next_key, &stats) == 0) {
+                    struct json_object *jentry = parse_stats_ipv6_json(next_key, &stats);
+                    if (jentry) {
+                        json_object_array_add(jdata, jentry);
+                    }
+                }
+                cur_key = next_key;
+            }
+        }
+
+        json_object_object_add(jroot, "status", json_object_new_string("success"));
+        json_object_object_add(jroot, "type", json_object_new_string(map_type));
+        json_object_object_add(jroot, "data", jdata);
+
+        printf("%s\n", json_object_to_json_string_ext(jroot, JSON_C_TO_STRING_PRETTY));
+        json_object_put(jroot);
     } else if (strcmp(cmd, "del") == 0) {
         if (argc != 4) {
             fprintf(stderr, "Usage: %s %s del <IP_ADDRESS>\n", argv[0], map_type);
