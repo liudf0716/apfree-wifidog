@@ -68,13 +68,13 @@ static inline void process_packet(struct __sk_buff *skb) {
         // Process source IP (outgoing traffic)
         struct traffic_stats *s_stats = bpf_map_lookup_elem(&ipv4_map, &ip->saddr);
         if (s_stats) {
-            update_stats(&s_stats->outgoing, skb->len, current_time);
+            update_stats(&s_stats->outgoing, skb->len, est_slot);
         }
 
         // Process destination IP (incoming traffic)
         struct traffic_stats *d_stats = bpf_map_lookup_elem(&ipv4_map, &ip->daddr);
         if (d_stats) {
-            update_stats(&d_stats->incoming, skb->len, current_time);
+            update_stats(&d_stats->incoming, skb->len, est_slot);
         }
     }
     // Handle IPv6
@@ -86,13 +86,13 @@ static inline void process_packet(struct __sk_buff *skb) {
         // Process source IPv6 (outgoing traffic)
         struct traffic_stats *s_stats6 = bpf_map_lookup_elem(&ipv6_map, &ip6->saddr);
         if (s_stats6) {
-            update_stats(&s_stats6->outgoing, skb->len, current_time);
+            update_stats(&s_stats6->outgoing, skb->len, est_slot);
         }
 
         // Process destination IPv6 (incoming traffic)
         struct traffic_stats *d_stats6 = bpf_map_lookup_elem(&ipv6_map, &ip6->daddr);
         if (d_stats6) {
-            update_stats(&d_stats6->incoming, skb->len, current_time);
+            update_stats(&d_stats6->incoming, skb->len, est_slot);
         }
     }
 }
