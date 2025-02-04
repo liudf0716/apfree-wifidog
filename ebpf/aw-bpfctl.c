@@ -89,6 +89,8 @@ main(int argc, char **argv) {
         fprintf(stderr, "Usage:\n");
         fprintf(stderr, "  %s <ipv4|ipv6> add <IP_ADDRESS>\n", argv[0]);
         fprintf(stderr, "  %s <ipv4|ipv6> list\n", argv[0]);
+        fprintf(stderr, "  %s <ipv4|ipv6> del <IP_ADDRESS>\n", argv[0]);
+        fprintf(stderr, "  %s <ipv4|ipv6> flush\n", argv[0]);
         return EXIT_FAILURE;
     }
 
