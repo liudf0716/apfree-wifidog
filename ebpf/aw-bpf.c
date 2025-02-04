@@ -29,7 +29,7 @@ struct {
 
 static __always_inline __u32 get_current_time(void)
 {
-    __u32 val = bpf_ktime_get_ns() >> 24;
+    __u32 val = bpf_ktime_get_ns() / 1000000000;
     return val ? val : 1;
 }
 
