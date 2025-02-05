@@ -652,10 +652,12 @@ query_bypass_user_status(const char *key, const char *gw_mac, const char *gw_add
     if (!found) {
         if (choice == QUERY_BY_MAC) {
             char *ip = get_user_ip_by_mac(key);
+            if (!ip) ip = safe_strdup("unknown");
             add_not_found_status(j_status, key, ip, gw_mac, gw_address);
             free(ip);
         } else {
             char *mac = get_user_mac_by_ip(key);
+            if (!mac) mac = safe_strdup("unknown");
             add_not_found_status(j_status, mac, key, gw_mac, gw_address);
             free(mac);
         }
