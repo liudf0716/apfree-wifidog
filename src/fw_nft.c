@@ -805,13 +805,14 @@ nft_fw_del_rule_by_ip_and_mac(const char *ip, const char *mac, const char *chain
 int
 nft_fw_access(fw_access_t type, const char *ip, const char *mac, int tag)
 {
+    char cmd[128] = {0};
     if (is_bypass_mode()) {
         if (!ip) {
             debug(LOG_ERR, "Invalid parameters: ip is NULL");
             return 1;
         }
 
-        char cmd[128] = {0};
+        
         switch(type) {
             case FW_ACCESS_ALLOW:
                 snprintf(cmd, sizeof(cmd), "vppctl redirect set auth user %s", ip);
@@ -843,6 +844,9 @@ nft_fw_access(fw_access_t type, const char *ip, const char *mac, int tag)
                 // Add incoming traffic rule with counter
                 nftables_do_command("add rule inet fw4 mangle_postrouting_wifidogx_incoming "
                                 "ip daddr %s counter accept", ip);
+
+                snprintf(cmd, sizeof(cmd), "aw-bpfctl ipv4 add %s", ip);
+                execute(cmd, 0);
             } else if (is_valid_ip6(ip)){
                 nftables_do_command("add rule inet fw4 mangle_prerouting_wifidogx_outgoing "
                                 "ether saddr %s ip6 saddr %s counter mark set 0x20000 accept", 
@@ -851,6 +855,9 @@ nft_fw_access(fw_access_t type, const char *ip, const char *mac, int tag)
                 // Add incoming traffic rule with counter
                 nftables_do_command("add rule inet fw4 mangle_postrouting_wifidogx_incoming "
                                 "ip6 daddr %s counter accept", ip);
+
+                snprintf(cmd, sizeof(cmd), "aw-bpfctl ipv6 add %s", ip);
+                execute(cmd, 0);
             } else {
                 debug(LOG_ERR, "Invalid IP address: %s", ip);
             }
@@ -863,6 +870,16 @@ nft_fw_access(fw_access_t type, const char *ip, const char *mac, int tag)
             
             // Remove client rules from incoming chain
             nft_fw_del_rule_by_ip_and_mac(ip, NULL, "mangle_postrouting_wifidogx_incoming");
+
+            if (is_valid_ip(ip)) {
+                snprintf(cmd, sizeof(cmd), "aw-bpfctl ipv4 del %s", ip);
+                execute(cmd, 0);
+            } else if (is_valid_ip6(ip)) {
+                snprintf(cmd, sizeof(cmd), "aw-bpfctl ipv6 del %s", ip);
+                execute(cmd, 0);
+            } else {
+                debug(LOG_ERR, "Invalid IP address: %s", ip);
+            }
             break;
 
         default:
