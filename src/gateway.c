@@ -346,6 +346,18 @@ handle_pipe(struct event_base *evbase)
     debug(LOG_INFO, "Warning: Received SIGPIPE; ignoring.");
 }
 
+static void
+handle_hup(struct event_base *evbase)
+{
+    debug(LOG_INFO, "Received SIGHUP; ignoring...");
+}
+
+static void
+handle_int(struct event_base *evbase)
+{
+    debug(LOG_INFO, "Received SIGINT; ignoring...");
+}
+
 /**
  * @brief Creates a static function definition
  * 
@@ -365,8 +377,8 @@ wd_signal_cb(evutil_socket_t fd, short what, void *arg)
     } signal_handlers[] = {
         {SIGTERM, handle_termination},
         {SIGQUIT, handle_termination},
-        {SIGINT,  handle_termination},
-        {SIGHUP,  handle_termination},
+        {SIGINT,  handle_int},
+        {SIGHUP,  handle_hup},
         {SIGCHLD, handle_child},
         {SIGUSR1, handle_usr1},
         {SIGPIPE, handle_pipe}
