@@ -305,7 +305,7 @@ main(int argc, char **argv) {
         json_object_object_add(jroot, "type", json_object_new_string(map_type));
         json_object_object_add(jroot, "data", jdata);
 
-        printf("%s\n", json_object_to_json_string_ext(jroot, JSON_C_TO_STRING_PRETTY));
+        printf("%s\n", json_object_to_json_string(jroot));
         json_object_put(jroot);
     } else if (strcmp(cmd, "del") == 0) {
         if (argc != 4) {
