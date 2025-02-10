@@ -326,6 +326,7 @@ void config_init(void)
 	config.enable_del_conntrack = 1;
 	config.auth_server_mode 	= 0;
 	config.enable_anti_nat 		= 0;
+	config.enable_smart_qos 	= 0;
 	config.ttl_values 			= safe_strdup(DEFAULT_TTL_VALUES);
 	config.anti_nat_permit_macs = NULL;
 
