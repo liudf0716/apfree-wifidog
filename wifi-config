@@ -128,6 +128,8 @@ local function get_network_info(conn, radio)
                 })
             end
         end
+        -- Sort networks by signal strength (higher values first)
+        table.sort(networks, function(a, b) return a.signal > b.signal end)
     end
     return networks
 end
@@ -216,8 +218,8 @@ local function render_javascript()
             var auth = document.getElementById(is2G ? 'auth2G' : 'auth5G');
             var password = document.getElementById('wifiPassword');
 
-            if (select.value === 'none') {
-                alert('Please select a network');
+            if (!select || !select.value || select.value === 'none' || select.value === '') {
+                alert('Please select a valid network');
                 return false;
             }
 
@@ -225,7 +227,7 @@ local function render_javascript()
             if (auth.value !== 'none' && !password.value) {
                 alert('Password is required for encrypted networks');
                 return false;
-            }
+            } 
 
             if (!confirm('This operation will cause the device to reboot. Do you want to continue?')) {
                 return false;
