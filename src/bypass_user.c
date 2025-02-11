@@ -469,6 +469,8 @@ load_bypass_user_list()
     }
 
     json_object_put(j_obj);
+
+    fw_set_trusted_maclist();
 }
 
 static char *
