@@ -106,6 +106,7 @@ typedef enum {
 	oEnableDelConntrack,
 	oAuthServerMode,
 	oEnableAntiNat,
+	oEnableUserReload,
 	oTTLValues,
 	oAntiNatPermitMacs,
 } OpCodes;
@@ -182,6 +183,7 @@ static const struct {
 	"enabledelconntrack",oEnableDelConntrack},{
 	"authservermode", oAuthServerMode}, {
 	"enableantinat", oEnableAntiNat}, {
+	"enableuserreload", oEnableUserReload}, {
 	"ttlvalues", oTTLValues}, {
 	"antinatpermitmacs", oAntiNatPermitMacs}, {
 	NULL, oBadOption},
@@ -327,6 +329,7 @@ void config_init(void)
 	config.auth_server_mode 	= 0;
 	config.enable_anti_nat 		= 0;
 	config.enable_smart_qos 	= 0;
+	config.enable_user_reload 	= 1;
 	config.ttl_values 			= safe_strdup(DEFAULT_TTL_VALUES);
 	config.anti_nat_permit_macs = NULL;
 
@@ -1047,6 +1050,9 @@ config_read()
 					break;
 				case oEnableAntiNat:
 					config.enable_anti_nat = parse_boolean_value(p1);
+					break;
+				case oEnableUserReload:
+					config.enable_user_reload = parse_boolean_value(p1);
 					break;
 				case oTTLValues:
 					config.ttl_values = safe_strdup(p1);
@@ -2082,4 +2088,10 @@ bool
 is_custom_auth_offline_page(void)
 {
 	return config.is_custom_auth_offline_file == 1;
+}
+
+bool
+is_user_reload_enabled(void)
+{
+	return config.enable_user_reload;
 }

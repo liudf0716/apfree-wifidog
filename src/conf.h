@@ -263,6 +263,7 @@ typedef struct {
 	short auth_server_mode; /* 0, cloud auth mode; 1, cloud auth bypass mode; 2, local auth mod*/
 	short enable_anti_nat; /* 1, enable anti nat */
 	short enable_smart_qos; /* 1, enable smart qos */
+	short enable_user_reload; /* 1, enable user reload */
 	char *ttl_values; /* ttl values */
 	char *anti_nat_permit_macs; /* anti nat permit mac */
 
@@ -334,6 +335,7 @@ bool is_bypass_mode(void);
 bool is_local_auth_mode(void);
 bool is_cloud_mode(void);
 bool is_custom_auth_offline_page(void);
+bool is_user_reload_enabled(void);
 
 // Global state variables
 extern int g_online_clients;    // Total connected client count
