@@ -182,8 +182,9 @@ add_mac_from_list(const char *mac, const uint32_t remaining_time, const char *se
 			config->trustedmaclist = safe_malloc(sizeof(t_trusted_mac));
 			config->trustedmaclist->mac = safe_strdup(mac);
             config->trustedmaclist->ip = ip;
-			config->trustedmaclist->remaining_time = remaining_time?remaining_time:UINT16_MAX;
+			config->trustedmaclist->remaining_time = remaining_time?remaining_time:1;
 			config->trustedmaclist->serial = serial?safe_strdup(serial):NULL;
+            config->trustedmaclist->first_time = time(NULL);
 			config->trustedmaclist->next = NULL;
 			pret = config->trustedmaclist;
 			UNLOCK_CONFIG();
@@ -237,7 +238,8 @@ add_mac_from_list(const char *mac, const uint32_t remaining_time, const char *se
 		p = safe_malloc(sizeof(t_trusted_mac));
 		p->mac = safe_strdup(mac);
         p->ip = ip;
-		p->remaining_time = remaining_time?remaining_time:UINT16_MAX;
+		p->remaining_time = remaining_time?remaining_time:1;
+        p->first_time = time(NULL);
 		p->serial = serial?safe_strdup(serial):NULL;
 		switch (which) {
 		case TRUSTED_MAC:
@@ -384,16 +386,22 @@ save_bypass_user_list()
     json_object *j_obj = json_object_new_object();
     json_object *j_array = json_object_new_array();
     char remaining_time_str[32] = {0};
+    char first_time_str[32] = {0};
+    time_t cur_time = time(NULL);
     
     LOCK_CONFIG();
     
     t_trusted_mac *tmac = config->trustedmaclist;
     while (tmac) {
-        snprintf(remaining_time_str, sizeof(remaining_time_str), "%d", tmac->remaining_time);
+        int remain_time =tmac->remaining_time - (cur_time - tmac->first_time);
+        if(remain_time <=0 ) remain_time=1;
+        snprintf(remaining_time_str, sizeof(remaining_time_str), "%d", remain_time);
+        snprintf(first_time_str, sizeof(first_time_str), "%ld", cur_time);
         json_object *j_user = json_object_new_object();
         json_object_object_add(j_user, "mac", json_object_new_string(tmac->mac));
         json_object_object_add(j_user, "serial", json_object_new_string(tmac->serial ? tmac->serial : ""));
         json_object_object_add(j_user, "time", json_object_new_string(remaining_time_str));
+        json_object_object_add(j_user, "first_time", json_object_new_string(first_time_str));
         json_object_array_add(j_array, j_user);
         tmac = tmac->next;
         memset(remaining_time_str, 0, sizeof(remaining_time_str));
@@ -413,6 +421,11 @@ save_bypass_user_list()
 void
 load_bypass_user_list()
 {
+    if (is_user_reload_enabled() == false) {
+        debug(LOG_INFO, "User reload is disabled");
+        return;
+    }
+
     FILE *fp = fopen(BYPASS_USER_LIST_PATH, "r");
     if (!fp) {
         debug(LOG_ERR, "Could not open file %s for reading: %s", BYPASS_USER_LIST_PATH, strerror(errno));
@@ -454,15 +467,29 @@ load_bypass_user_list()
             json_object *j_mac = json_object_object_get(j_user, "mac");
             json_object *j_serial = json_object_object_get(j_user, "serial");
             json_object *j_time = json_object_object_get(j_user, "time");
-
+            json_object *j_first_time = json_object_object_get(j_user, "first_time");
+            int first_time=0;
             if (j_mac && j_serial && j_time) {
                 const char *mac = json_object_get_string(j_mac);
                 const char *serial = json_object_get_string(j_serial);
                 const char *time_str = json_object_get_string(j_time);
+                const char *first_time_str = NULL;
+                if (j_first_time)
+                    first_time_str = json_object_get_string(j_first_time);
                 
                 if (mac && serial && time_str) {
                     uint32_t time_val = (uint32_t)strtoul(time_str, NULL, 10);
-                    add_mac_from_list(mac, time_val, serial, TRUSTED_MAC);
+                    time_t cur_time = time(NULL);
+                    
+                    if (first_time_str) {
+                        first_time = (uint32_t)strtoul(first_time_str, NULL, 10);
+                    }
+
+                    int remain_time =(time_val - (cur_time - first_time));
+                    if(remain_time<=0) remain_time=1;
+
+                    add_mac_from_list(mac, remain_time, serial, TRUSTED_MAC);
+                    
                 }
             }
         }

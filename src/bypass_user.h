@@ -26,6 +26,7 @@ typedef struct _trusted_mac_t {
 	char 	*serial;
 	uint32_t 	is_online;
 	uint32_t 	remaining_time;
+	time_t		first_time;
 } t_trusted_mac;
 
 typedef t_trusted_mac t_untrusted_mac;
