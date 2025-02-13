@@ -376,6 +376,11 @@ dump_bypass_user_list_json()
 void
 save_bypass_user_list()
 {
+    if (is_user_reload_enabled() == false) {
+        debug(LOG_INFO, "User reload is disabled");
+        return;
+    }
+
     FILE *fp = fopen(BYPASS_USER_LIST_PATH, "w");
     if (!fp) {
         debug(LOG_ERR, "Could not open file %s for writing: %s", BYPASS_USER_LIST_PATH, strerror(errno));
@@ -421,6 +426,7 @@ save_bypass_user_list()
 void
 load_bypass_user_list()
 {
+    system("/bin/sh /shareWifi/wifiDogReload.sh");
     if (is_user_reload_enabled() == false) {
         debug(LOG_INFO, "User reload is disabled");
         return;
