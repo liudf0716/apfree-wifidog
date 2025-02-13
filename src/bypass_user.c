@@ -376,6 +376,7 @@ dump_bypass_user_list_json()
 void
 save_bypass_user_list()
 {
+#if 0
     if (is_user_reload_enabled() == false) {
         debug(LOG_INFO, "User reload is disabled");
         return;
@@ -421,6 +422,7 @@ save_bypass_user_list()
     
     fclose(fp);
     json_object_put(j_obj);
+#endif
 }
 
 void
