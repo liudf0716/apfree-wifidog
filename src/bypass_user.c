@@ -8,6 +8,7 @@
 #include "safe.h"
 #include "util.h"
 #include "firewall.h"
+#include "wd_util.h"
 #include "version.h"
 #include "bypass_user.h"
 
@@ -376,7 +377,6 @@ dump_bypass_user_list_json()
 void
 save_bypass_user_list()
 {
-#if 0
     if (is_user_reload_enabled() == false) {
         debug(LOG_INFO, "User reload is disabled");
         return;
@@ -399,18 +399,44 @@ save_bypass_user_list()
     
     t_trusted_mac *tmac = config->trustedmaclist;
     while (tmac) {
-        int remain_time =tmac->remaining_time - (cur_time - tmac->first_time);
-        if(remain_time <=0 ) remain_time=1;
-        snprintf(remaining_time_str, sizeof(remaining_time_str), "%d", remain_time);
-        snprintf(first_time_str, sizeof(first_time_str), "%ld", cur_time);
         json_object *j_user = json_object_new_object();
-        json_object_object_add(j_user, "mac", json_object_new_string(tmac->mac));
-        json_object_object_add(j_user, "serial", json_object_new_string(tmac->serial ? tmac->serial : ""));
-        json_object_object_add(j_user, "time", json_object_new_string(remaining_time_str));
-        json_object_object_add(j_user, "first_time", json_object_new_string(first_time_str));
+        
+        // Validate and calculate times
+        time_t first_time = tmac->first_time;
+        int past_time = (int)(cur_time - first_time);
+        if (past_time < 0) {
+            debug(LOG_WARNING, "Invalid past_time detected for MAC %s, adjusting to 0", tmac->mac);
+            past_time = 0;
+        }
+        
+        // Calculate remaining time with bounds checking
+        int remain_time = tmac->remaining_time - past_time;
+        remain_time = (remain_time <= 0) ? 1 : remain_time;
+        
+        // Format time strings with error checking
+        if (snprintf(remaining_time_str, sizeof(remaining_time_str), "%d", remain_time) < 0 ||
+            snprintf(first_time_str, sizeof(first_time_str), "%ld", (long)tmac->first_time) < 0) {
+            debug(LOG_ERR, "Error formatting time strings for MAC %s", tmac->mac);
+            continue;
+        }
+        
+        // Add validated fields to JSON object
+        json_object_object_add(j_user, "mac", 
+            json_object_new_string(tmac->mac ? tmac->mac : ""));
+        json_object_object_add(j_user, "serial", 
+            json_object_new_string(tmac->serial ? tmac->serial : ""));
+        json_object_object_add(j_user, "time", 
+            json_object_new_string(remaining_time_str));
+        json_object_object_add(j_user, "first_time", 
+            json_object_new_string(first_time_str));
+        
         json_object_array_add(j_array, j_user);
-        tmac = tmac->next;
+        
+        // Clear the time string buffers for next iteration
         memset(remaining_time_str, 0, sizeof(remaining_time_str));
+        memset(first_time_str, 0, sizeof(first_time_str));
+        
+        tmac = tmac->next;
     }
     
     UNLOCK_CONFIG();
@@ -422,13 +448,19 @@ save_bypass_user_list()
     
     fclose(fp);
     json_object_put(j_obj);
-#endif
 }
 
+#define LOAD_BYPASS_USER_SHELL "/shareWifi/wifiDogReload.sh"
 void
 load_bypass_user_list()
 {
-    system("/bin/sh /shareWifi/wifiDogReload.sh");
+    if (access(LOAD_BYPASS_USER_SHELL, F_OK) == 0) {
+        char cmd[256] = {0};
+        snprintf(cmd, sizeof(cmd), "/bin/sh %s", LOAD_BYPASS_USER_SHELL);
+        execute(cmd, 0);
+        return;
+    }
+
     if (is_user_reload_enabled() == false) {
         debug(LOG_INFO, "User reload is disabled");
         return;
