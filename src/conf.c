@@ -2093,5 +2093,5 @@ is_custom_auth_offline_page(void)
 bool
 is_user_reload_enabled(void)
 {
-	return config.enable_user_reload;
+	return config.enable_user_reload == 1;
 }

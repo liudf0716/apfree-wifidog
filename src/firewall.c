@@ -802,7 +802,7 @@ conntrack_flush(const char *ip)
 }
 
 void
-fw_add_trusted_mac(const char *mac, uint16_t timeout)
+fw_add_trusted_mac(const char *mac, uint32_t timeout)
 {
 	debug(LOG_DEBUG, "Set trusted mac [%s] with timeout %d", mac, timeout);
 #ifdef AW_FW3
@@ -824,7 +824,7 @@ fw_del_trusted_mac(const char *mac)
 }
 
 void
-fw_update_trusted_mac(const char *mac, uint16_t timeout)
+fw_update_trusted_mac(const char *mac, uint32_t timeout)
 {
 	debug(LOG_DEBUG, "Update trusted mac [%s] with timeout %d", mac, timeout);
 #ifdef AW_FW3

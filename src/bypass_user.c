@@ -556,6 +556,8 @@ load_bypass_user_list()
             // Calculate remaining time with bounds checking
             int remain_time = (int)(time_val - (cur_time - first_time));
             remain_time = (remain_time <= 0) ? 1 : remain_time;
+            debug(LOG_DEBUG, "cur_time: %ld, first_time: %ld, time_val: %d, remain_time: %d", 
+                  (long)cur_time, (long)first_time, time_val, remain_time);
 
             // Add user to trusted MAC list
             if (!add_mac_from_list(mac, remain_time, serial, TRUSTED_MAC)) {
