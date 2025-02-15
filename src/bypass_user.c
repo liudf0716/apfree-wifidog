@@ -502,35 +502,64 @@ load_bypass_user_list()
     if (j_array && json_object_is_type(j_array, json_type_array)) {
         for (size_t i = 0; i < json_object_array_length(j_array); i++) {
             json_object *j_user = json_object_array_get_idx(j_array, i);
-            if (!j_user) continue;
+            if (!j_user || !json_object_is_type(j_user, json_type_object)) {
+                debug(LOG_WARNING, "Invalid user entry at index %zu", i);
+                continue;
+            }
 
+            // Extract JSON objects
             json_object *j_mac = json_object_object_get(j_user, "mac");
             json_object *j_serial = json_object_object_get(j_user, "serial");
             json_object *j_time = json_object_object_get(j_user, "time");
             json_object *j_first_time = json_object_object_get(j_user, "first_time");
-            int first_time=0;
-            if (j_mac && j_serial && j_time) {
-                const char *mac = json_object_get_string(j_mac);
-                const char *serial = json_object_get_string(j_serial);
-                const char *time_str = json_object_get_string(j_time);
-                const char *first_time_str = NULL;
-                if (j_first_time)
-                    first_time_str = json_object_get_string(j_first_time);
-                
-                if (mac && serial && time_str) {
-                    uint32_t time_val = (uint32_t)strtoul(time_str, NULL, 10);
-                    time_t cur_time = time(NULL);
-                    
-                    if (first_time_str) {
-                        first_time = (uint32_t)strtoul(first_time_str, NULL, 10);
-                    }
 
-                    int remain_time =(time_val - (cur_time - first_time));
-                    if(remain_time<=0) remain_time=1;
+            // Validate required fields exist and are strings
+            if (!j_mac || !j_serial || !j_time || 
+                !json_object_is_type(j_mac, json_type_string) ||
+                !json_object_is_type(j_serial, json_type_string) ||
+                !json_object_is_type(j_time, json_type_string)) {
+                debug(LOG_WARNING, "Missing or invalid required fields in user entry");
+                continue;
+            }
 
-                    add_mac_from_list(mac, remain_time, serial, TRUSTED_MAC);
-                    
+            // Get string values
+            const char *mac = json_object_get_string(j_mac);
+            const char *serial = json_object_get_string(j_serial);
+            const char *time_str = json_object_get_string(j_time);
+
+            // Validate MAC address
+            if (!mac || !is_valid_mac(mac)) {
+                debug(LOG_WARNING, "Invalid MAC address: %s", mac ? mac : "null");
+                continue;
+            }
+
+            // Parse time values
+            char *endptr;
+            time_t cur_time = time(NULL);
+            uint32_t time_val = (uint32_t)strtoul(time_str, &endptr, 10);
+            if (*endptr != '\0') {
+                debug(LOG_WARNING, "Invalid time value: %s", time_str);
+                continue;
+            }
+
+            // Handle first_time if present
+            time_t first_time = 0;
+            if (j_first_time && json_object_is_type(j_first_time, json_type_string)) {
+                const char *first_time_str = json_object_get_string(j_first_time);
+                first_time = (time_t)strtoul(first_time_str, &endptr, 10);
+                if (*endptr != '\0') {
+                    debug(LOG_WARNING, "Invalid first_time value: %s", first_time_str);
+                    first_time = 0;
                 }
+            }
+
+            // Calculate remaining time with bounds checking
+            int remain_time = (int)(time_val - (cur_time - first_time));
+            remain_time = (remain_time <= 0) ? 1 : remain_time;
+
+            // Add user to trusted MAC list
+            if (!add_mac_from_list(mac, remain_time, serial, TRUSTED_MAC)) {
+                debug(LOG_ERR, "Failed to add MAC %s to trusted list", mac);
             }
         }
     }

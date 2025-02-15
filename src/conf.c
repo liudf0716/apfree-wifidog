@@ -329,7 +329,7 @@ void config_init(void)
 	config.auth_server_mode 	= 0;
 	config.enable_anti_nat 		= 0;
 	config.enable_smart_qos 	= 0;
-	config.enable_user_reload 	= 0;
+	config.enable_user_reload 	= 1;
 	config.ttl_values 			= safe_strdup(DEFAULT_TTL_VALUES);
 	config.anti_nat_permit_macs = NULL;
 
