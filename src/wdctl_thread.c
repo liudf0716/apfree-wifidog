@@ -906,7 +906,7 @@ wdctl_user_auth(struct bufferevent *fd, const char *json_value)
 
         debug(LOG_DEBUG, "Parsed values - serial: %s, time: %s, mac: %s, nat: %s",
               serial, time_str, mac, nat);
-        uint16_t remaining_time = atoi(time_str);
+        uint32_t remaining_time = atoi(time_str);
         uint16_t anti_nat = atoi(nat);
         if (remaining_time == 0) {
             remove_bypass_user(mac);
