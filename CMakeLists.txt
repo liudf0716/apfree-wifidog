@@ -12,13 +12,26 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 
 # Options
-option(AW_DEBUG "Build with debug support" OFF)
+option(AW_DEBUG "Build with debug support" ON)
 option(AW_FW3 "Build with iptables support" OFF)
+option(AW_VPP "Build with VPP support" OFF)
+
+# VPP-specific variables (added)
+if(AW_VPP)
+    set(VPP_INCLUDE_DIR "" CACHE PATH "Path to VPP include directory")
+    set(VPP_LIBRARY_DIR "" CACHE PATH "Path to VPP library directory")
+    if(NOT VPP_INCLUDE_DIR OR NOT VPP_LIBRARY_DIR)
+        message(FATAL_ERROR "VPP_INCLUDE_DIR and VPP_LIBRARY_DIR must be set when AW_VPP is ON")
+    endif()
+endif()
 
 # Find requried headers file
 find_package(PkgConfig REQUIRED)
 
 find_path(UCI_INCLUDE_DIRS uci.h)
+if(NOT UCI_INCLUDE_DIRS)
+    message(FATAL_ERROR "UCI headers not found. Please install libuci-dev.")
+endif()
 
 # Find dependencies using pkg-config
 pkg_check_modules(LIBEVENT REQUIRED libevent)
@@ -37,6 +50,16 @@ endif()
 # Set installation directory
 if(NOT DEFINED LIB_INSTALL_DIR)
     set(LIB_INSTALL_DIR lib)
+endif()
+
+if (AW_VPP)
+  pkg_check_modules(VPP REQUIRED vppapigen)
+  # Add VPP includes and libraries (modified)
+  include_directories(${VPP_INCLUDE_DIR})
+  link_directories(${VPP_LIBRARY_DIR})
+
+  # Define VPP libraries to link
+  set(VPP_LIBS vppinfra vlibmemoryclient vlibapi svm vppapiclient)
 endif()
 
 # Include directories

@@ -59,6 +59,11 @@ else()
 	)
 endif()
 
+if (AW_VPP)
+	add_definitions(-DAW_VPP)
+	message(STATUS "Building with VPP")
+endif()
+
 # Build targets
 add_executable(wdctlx ${src_wdctlx})
 
@@ -73,6 +78,10 @@ target_link_libraries(wifidogx
 	${fw_libs}
 	${CURL_LIBRARIES}
 )
+
+if (AW_VPP)
+	target_link_libraries(wifidogx ${VPP_LIBS})
+endif()
 
 target_link_libraries(wdctlx
 	event
