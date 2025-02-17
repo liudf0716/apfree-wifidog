@@ -53,7 +53,6 @@ if(NOT DEFINED LIB_INSTALL_DIR)
 endif()
 
 if (AW_VPP)
-  pkg_check_modules(VPP REQUIRED vppapigen)
   # Add VPP includes and libraries (modified)
   include_directories(${VPP_INCLUDE_DIR})
   link_directories(${VPP_LIBRARY_DIR})
