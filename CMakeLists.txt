@@ -22,6 +22,9 @@ if(AW_VPP)
     set(VPP_LIBRARY_DIR "" CACHE PATH "Path to VPP library directory")
     if(NOT VPP_INCLUDE_DIR OR NOT VPP_LIBRARY_DIR)
         message(FATAL_ERROR "VPP_INCLUDE_DIR and VPP_LIBRARY_DIR must be set when AW_VPP is ON")
+    else()
+        message(STATUS "VPP_INCLUDE_DIR: ${VPP_INCLUDE_DIR}")
+        message(STATUS "VPP_LIBRARY_DIR: ${VPP_LIBRARY_DIR}")
     endif()
 endif()
 
@@ -57,8 +60,20 @@ if (AW_VPP)
   include_directories(${VPP_INCLUDE_DIR})
   link_directories(${VPP_LIBRARY_DIR})
 
+  find_library(VPPINFRA_LIB vppinfra PATHS ${VPP_LIBRARY_DIR})
+  find_library(VLIBMEMORYCLIENT_LIB vlibmemoryclient PATHS ${VPP_LIBRARY_DIR})
+  find_library(VLIBAPI_LIB vlibapi PATHS ${VPP_LIBRARY_DIR})
+  find_library(SVM_LIB svm PATHS ${VPP_LIBRARY_DIR})
+  find_library(VPPAPICLIENT_LIB vppapiclient PATHS ${VPP_LIBRARY_DIR})
+
   # Define VPP libraries to link
-  set(VPP_LIBS vppinfra vlibmemoryclient vlibapi svm vppapiclient)
+  set(VPP_LIBS
+    ${VPPINFRA_LIB}
+    ${VLIBMEMORYCLIENT_LIB}
+    ${VLIBAPI_LIB}
+    ${SVM_LIB}
+    ${VPPAPICLIENT_LIB}
+  )
 endif()
 
 # Include directories
