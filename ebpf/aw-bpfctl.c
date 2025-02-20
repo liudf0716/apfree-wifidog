@@ -24,7 +24,6 @@ aw_bpf_gettime(void)
 static uint32_t
 calc_rate_estimator(struct traffic_stats *val, bool is_incoming)
 {
-#define	SMOOTH_VALUE	10
 	uint32_t now = aw_bpf_gettime();
 	uint32_t est_slot = now / RATE_ESTIMATOR;
 	uint32_t rate = 0;
@@ -32,9 +31,6 @@ calc_rate_estimator(struct traffic_stats *val, bool is_incoming)
 	uint32_t delta = RATE_ESTIMATOR - (now % RATE_ESTIMATOR);
 	uint32_t ratio = RATE_ESTIMATOR * SMOOTH_VALUE / delta;
 
-    //printf("now: %u, est_slot: %u, delta: %u, ratio: %u\n", now, est_slot, delta, ratio);
-    //printf("val->incoming.est_slot: %u, val->incoming.prev_s_bytes: %u, val->incoming.cur_s_bytes: %u\n",
-    //       val->incoming.est_slot, val->incoming.prev_s_bytes, val->incoming.cur_s_bytes);
     if (is_incoming) {
         if (val->incoming.est_slot == est_slot) {
             rate = val->incoming.prev_s_bytes;

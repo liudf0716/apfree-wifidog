@@ -4,18 +4,18 @@ CC ?= gcc
 
 BPF_CFLAGS = -I$(PWD)
 
-all: aw-bpf.o update-ipv4_map
+all: aw-bpf.o aw-bpfctl
 
 # eBPF program compilation
 aw-bpf.o: aw-bpf.c
 	$(CLANG) -g -O2 -target bpf -c $< $(BPF_CFLAGS) -o $@
 
 # User space program compilation
-update-ipv4_map: update-ipv4_map.c
-	$(CC) -O2 -o $@ $< -lbpf
+aw-bpfctl: aw-bpfctl.c
+	$(CC) -O2 -o $@ $< -lbpf -ljson-c
 
 clean:
-	rm -f aw-bpf.o update-ipv4_map
+	rm -f aw-bpf.o aw-bpfctl
 
 # load ebpf program to the kernel by tc in both egress and ingress
 load: aw-bpf.o

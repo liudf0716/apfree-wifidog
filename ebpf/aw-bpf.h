@@ -12,7 +12,13 @@
 #include <stdint.h>
 #endif
 
-#define RATE_ESTIMATOR 4
+#define ETH_ALEN        6
+#define RATE_ESTIMATOR  4
+#define SMOOTH_VALUE    10
+
+struct mac_addr {
+    char h_addr[ETH_ALEN];
+} __attribute__((packed));
 
 /**
  * @struct counters
@@ -34,6 +40,8 @@ struct counters {
 struct traffic_stats {
     struct counters incoming;    /* Incoming traffic counters */
     struct counters outgoing;    /* Outgoing traffic counters */
+    __u32  incoming_rate_limit;   /* Incoming rate limit */
+    __u32  outgoing_rate_limit;   /* Outgoing rate limit */
 } __attribute__((packed));
 
 /* Function declarations if any would go here */
