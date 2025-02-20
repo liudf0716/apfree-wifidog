@@ -377,7 +377,7 @@ wd_signal_cb(evutil_socket_t fd, short what, void *arg)
     } signal_handlers[] = {
         {SIGTERM, handle_termination},
         {SIGQUIT, handle_termination},
-        {SIGINT,  handle_int},
+        {SIGINT,  handle_termination},
         {SIGHUP,  handle_hup},
         {SIGCHLD, handle_child},
         {SIGUSR1, handle_usr1},
