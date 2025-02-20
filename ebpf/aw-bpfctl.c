@@ -8,6 +8,7 @@
 #include <bpf/libbpf.h>
 #include <time.h>
 #include <json-c/json.h>
+#include <ctype.h>
 
 #include "aw-bpf.h"
 
@@ -83,6 +84,18 @@ print_stats_ipv6(struct in6_addr ip, struct traffic_stats *stats)
            stats->outgoing.total_bytes, stats->outgoing.total_packets, calc_rate_estimator(stats, false));
 }
 
+static void 
+print_stats_mac(struct mac_addr mac, struct traffic_stats *stats)
+{
+    printf("Key (MAC): %02x:%02x:%02x:%02x:%02x:%02x\n", 
+           mac.h_addr[0], mac.h_addr[1], mac.h_addr[2],
+           mac.h_addr[3], mac.h_addr[4], mac.h_addr[5]);
+    printf("  Incoming: total_bytes=%llu, total_packets=%llu, rate=%u\n",
+           stats->incoming.total_bytes, stats->incoming.total_packets, calc_rate_estimator(stats, true));
+    printf("  Outgoing: total_bytes=%llu, total_packets=%llu, rate=%u\n",
+           stats->outgoing.total_bytes, stats->outgoing.total_packets, calc_rate_estimator(stats, false));
+}
+
 static struct json_object*
 parse_stats_ipv4_json(__be32 ip, struct traffic_stats *stats)
 {
@@ -148,15 +161,84 @@ parse_stats_ipv6_json(struct in6_addr ip, struct traffic_stats *stats)
     return jobj;
 }
 
+static struct json_object*
+parse_stats_mac_json(struct mac_addr mac, struct traffic_stats *stats)
+{
+    char mac_str[18];
+    struct json_object *jobj = json_object_new_object();
+
+    snprintf(mac_str, sizeof(mac_str), "%02x:%02x:%02x:%02x:%02x:%02x",
+             mac.h_addr[0], mac.h_addr[1], mac.h_addr[2],
+             mac.h_addr[3], mac.h_addr[4], mac.h_addr[5]);
+
+    // Add MAC address
+    json_object_object_add(jobj, "mac", json_object_new_string(mac_str));
+
+    struct json_object *incoming = json_object_new_object();
+    struct json_object *outgoing = json_object_new_object();
+    
+    // Add incoming stats
+    json_object_object_add(incoming, "total_bytes", json_object_new_int64(stats->incoming.total_bytes));
+    json_object_object_add(incoming, "total_packets", json_object_new_int64(stats->incoming.total_packets));
+    json_object_object_add(incoming, "rate", json_object_new_int(calc_rate_estimator(stats, true)));
+    json_object_object_add(jobj, "incoming", incoming);
+
+    // Add outgoing stats
+    json_object_object_add(outgoing, "total_bytes", json_object_new_int64(stats->outgoing.total_bytes));
+    json_object_object_add(outgoing, "total_packets", json_object_new_int64(stats->outgoing.total_packets));
+    json_object_object_add(outgoing, "rate", json_object_new_int(calc_rate_estimator(stats, false)));
+    json_object_object_add(jobj, "outgoing", outgoing);
+
+    return jobj;
+}
+
+static bool
+is_valid_mac_addr(const char *mac_addr)
+{
+    int i, colon_count = 0;
+    size_t len = strlen(mac_addr);
+
+    if (len != 17) // MAC address format should be XX:XX:XX:XX:XX:XX
+        return false;
+
+    for (i = 0; i < len; i++) {
+        if (i % 3 == 2) {
+            if (mac_addr[i] != ':')
+                return false;
+            colon_count++;
+        } else {
+            if (!isxdigit(mac_addr[i]))
+                return false;
+        }
+    }
+
+    return colon_count == 5;
+}
+
+static void
+parse_mac_address(struct mac_addr *m_addr, const char *str_val)
+{
+    unsigned int val;
+    const char *pos = str_val;
+
+    // Parse each byte of the MAC address
+    for (int i = 0; i < 6; i++) {
+        val = 0;
+        sscanf(pos, "%2x", &val);
+        m_addr->h_addr[i] = (uint8_t)val;
+        pos += 3;  // Move past the two hex digits and colon
+    }
+}
+
 int 
 main(int argc, char **argv) {
     if (argc < 3) {
         fprintf(stderr, "Usage:\n");
-        fprintf(stderr, "  %s <ipv4|ipv6> add <IP_ADDRESS>\n", argv[0]);
-        fprintf(stderr, "  %s <ipv4|ipv6> list\n", argv[0]);
-        fprintf(stderr, "  %s <ipv4|ipv6> del <IP_ADDRESS>\n", argv[0]);
-        fprintf(stderr, "  %s <ipv4|ipv6> flush\n", argv[0]);
-        fprintf(stderr, "  %s <ipv4|ipv6> json\n", argv[0]);
+        fprintf(stderr, "  %s <ipv4|ipv6|mac> add <IP_ADDRESS|MAC_ADDRESS>\n", argv[0]);
+        fprintf(stderr, "  %s <ipv4|ipv6|mac> list\n", argv[0]);
+        fprintf(stderr, "  %s <ipv4|ipv6|mac> del <IP_ADDRESS|MAC_ADDRESS>\n", argv[0]);
+        fprintf(stderr, "  %s <ipv4|ipv6|mac> flush\n", argv[0]);
+        fprintf(stderr, "  %s <ipv4|ipv6|mac> json\n", argv[0]);
         return EXIT_FAILURE;
     }
 
@@ -164,13 +246,20 @@ main(int argc, char **argv) {
     const char *cmd = argv[2];
     const char *map_path = NULL;
 
-    /* Adjust the pinning path as appropriate for your setup. */
-    if (strcmp(map_type, "ipv4") == 0)
+    /* Set map path based on map type */
+    if (!strcmp(map_type, "ipv4")) {
         map_path = "/sys/fs/bpf/tc/globals/ipv4_map";
-    else if (strcmp(map_type, "ipv6") == 0)
+    } else if (!strcmp(map_type, "ipv6")) {
         map_path = "/sys/fs/bpf/tc/globals/ipv6_map";
-    else {
-        fprintf(stderr, "Invalid map type. Use 'ipv4' or 'ipv6'.\n");
+    } else if (!strcmp(map_type, "mac")) {
+        map_path = "/sys/fs/bpf/tc/globals/mac_map";
+    } else {
+        fprintf(stderr, "Invalid map type. Must be 'ipv4', 'ipv6', or 'mac'.\n");
+        return EXIT_FAILURE;
+    }
+
+    if (!map_path) {
+        fprintf(stderr, "Failed to determine map path\n");
         return EXIT_FAILURE;
     }
 
@@ -182,46 +271,63 @@ main(int argc, char **argv) {
 
     if (strcmp(cmd, "add") == 0) {
         if (argc != 4) {
-            fprintf(stderr, "Usage: %s %s add <IP_ADDRESS>\n", argv[0], map_type);
+            fprintf(stderr, "Usage: %s %s add <IP_ADDRESS|MAC_ADDRESS>\n", argv[0], map_type);
             return EXIT_FAILURE;
         }
-        const char *ip_str = argv[3];
-        struct traffic_stats stats = {0};  // zero-initialized
+
+        const char *addr_str = argv[3];
+        struct traffic_stats stats = {0};
+        void *key = NULL;
+        int key_size = 0;
+        bool success = false;
 
         if (strcmp(map_type, "ipv4") == 0) {
-            __be32 key = 0;
-            if (inet_pton(AF_INET, ip_str, &key) != 1) {
+            __be32 ipv4_key = 0;
+            if (inet_pton(AF_INET, addr_str, &ipv4_key) != 1) {
                 perror("inet_pton (IPv4)");
                 return EXIT_FAILURE;
             }
-            /* Check if exists */
-            struct traffic_stats tmp;
-            if (bpf_map_lookup_elem(map_fd, &key, &tmp) == 0) {
-                printf("IPv4 key %s already exists in map.\n", ip_str);
-                return EXIT_SUCCESS;
-            }
-            if (bpf_map_update_elem(map_fd, &key, &stats, BPF_NOEXIST) < 0) {
-                perror("bpf_map_update_elem (IPv4)");
+            key = &ipv4_key;
+            key_size = sizeof(ipv4_key);
+            success = true;
+        } else if (strcmp(map_type, "mac") == 0) {
+            if (!is_valid_mac_addr(addr_str)) {
+                fprintf(stderr, "Invalid MAC address format\n");
                 return EXIT_FAILURE;
             }
-            printf("Added IPv4 key %s successfully.\n", ip_str);
-        } else { // ipv6
-            struct in6_addr key = {0};
-            if (inet_pton(AF_INET6, ip_str, &key) != 1) {
+            struct mac_addr mac_key = {0};
+            parse_mac_address(&mac_key, addr_str);
+            key = &mac_key;
+            key_size = sizeof(mac_key);
+            success = true;
+        } else if (strcmp(map_type, "ipv6") == 0) {
+            struct in6_addr ipv6_key = {0};
+            if (inet_pton(AF_INET6, addr_str, &ipv6_key) != 1) {
                 perror("inet_pton (IPv6)");
                 return EXIT_FAILURE;
             }
-            struct traffic_stats tmp;
-            if (bpf_map_lookup_elem(map_fd, &key, &tmp) == 0) {
-                printf("IPv6 key %s already exists in map.\n", ip_str);
-                return EXIT_SUCCESS;
-            }
-            if (bpf_map_update_elem(map_fd, &key, &stats, BPF_NOEXIST) < 0) {
-                perror("bpf_map_update_elem (IPv6)");
-                return EXIT_FAILURE;
-            }
-            printf("Added IPv6 key %s successfully.\n", ip_str);
+            key = &ipv6_key;
+            key_size = sizeof(ipv6_key);
+            success = true;
         }
+
+        if (!success || !key) {
+            fprintf(stderr, "Invalid address type\n");
+            return EXIT_FAILURE;
+        }
+
+        struct traffic_stats tmp;
+        if (bpf_map_lookup_elem(map_fd, key, &tmp) == 0) {
+            printf("%s key %s already exists in map.\n", map_type, addr_str);
+            return EXIT_SUCCESS;
+        }
+
+        if (bpf_map_update_elem(map_fd, key, &stats, BPF_NOEXIST) < 0) {
+            perror("bpf_map_update_elem");
+            return EXIT_FAILURE;
+        }
+
+        printf("Added %s key %s successfully.\n", map_type, addr_str);
     } else if (strcmp(cmd, "list") == 0) {
         if (strcmp(map_type, "ipv4") == 0) {
             __be32 cur_key = 0, next_key = 0;
@@ -240,6 +346,22 @@ main(int argc, char **argv) {
             }
             if (ret != -ENOENT)
                 perror("bpf_map_get_next_key (IPv4)");
+        } else if (strcmp(map_type, "mac") == 0) {
+            struct mac_addr cur_key = {0}, next_key = {0};
+            int ret;
+            struct traffic_stats stats = {0};
+            while ((ret = bpf_map_get_next_key(map_fd,
+                                        (memcmp(&cur_key, &(struct mac_addr){0}, sizeof(cur_key)) ? &cur_key : NULL),
+                                        &next_key)) == 0) {
+                if (bpf_map_lookup_elem(map_fd, &next_key, &stats) < 0) {
+                    perror("bpf_map_lookup_elem (MAC)");
+                } else {
+                    print_stats_mac(next_key, &stats);
+                }
+                cur_key = next_key;
+            }
+            if (ret != -ENOENT)
+                perror("bpf_map_get_next_key (MAC)");
         } else { // ipv6
             struct in6_addr cur_key = {0}, next_key = {0};
             int ret;
@@ -279,7 +401,21 @@ main(int argc, char **argv) {
                 }
                 cur_key = next_key;
             }
+        } else if (strcmp(map_type, "mac") == 0) {
+            struct mac_addr cur_key = {0}, next_key = {0};
+            struct traffic_stats stats = {0};
 
+            while (bpf_map_get_next_key(map_fd, 
+                   (memcmp(&cur_key, &(struct mac_addr){0}, sizeof(cur_key)) ? &cur_key : NULL),
+                   &next_key) == 0) {
+                if (bpf_map_lookup_elem(map_fd, &next_key, &stats) == 0) {
+                    struct json_object *jentry = parse_stats_mac_json(next_key, &stats);
+                    if (jentry) {
+                        json_object_array_add(jdata, jentry);
+                    }
+                }
+                cur_key = next_key;
+            }
         } else { // ipv6
             struct in6_addr cur_key = {0}, next_key = {0};
             struct traffic_stats stats = {0};
@@ -321,6 +457,18 @@ main(int argc, char **argv) {
                 return EXIT_FAILURE;
             }
             printf("Deleted IPv4 key %s successfully.\n", ip_str);
+        } else if (strcmp(map_type, "mac") == 0) {
+            if (!is_valid_mac_addr(ip_str)) {
+                fprintf(stderr, "Invalid MAC address format\n");
+                return EXIT_FAILURE;
+            }
+            struct mac_addr key = {0};
+            parse_mac_address(&key, ip_str);
+            if (bpf_map_delete_elem(map_fd, &key) < 0) {
+                perror("bpf_map_delete_elem (MAC)");
+                return EXIT_FAILURE;
+            }
+            printf("Deleted MAC key %s successfully.\n", ip_str);
         } else { // ipv6
             struct in6_addr key = {0};
             if (inet_pton(AF_INET6, ip_str, &key) != 1) {
