@@ -38,7 +38,7 @@ struct {
 
 static __always_inline __u32 get_current_time(void)
 {
-    __u32 val = bpf_ktime_get_ns() / 1000000000;
+    __u32 val = bpf_ktime_get_ns() >> 30;
     return val ? val : 1;
 }
 
@@ -73,11 +73,8 @@ static inline __u32 calc_rate_estimator(struct counters *cnt, __u32 now,  __u32 
         return 0;
     }
 
-    rate = rate * SMOOTH_VALUE / ratio;
+    rate = (rate * SMOOTH_VALUE) / ratio;
     rate += cur_bytes;
-
-	rate = rate * SMOOTH_VALUE / ratio;
-	rate += cur_bytes;
 
 	return rate * 8 / RATE_ESTIMATOR;
 }
@@ -93,9 +90,7 @@ static inline int process_packet(struct __sk_buff *skb) {
         return 0;
 
     {
-        struct mac_addr h_source;
-        __builtin_memcpy(h_source.h_addr, eth->h_source, sizeof(h_source.h_addr));
-        struct traffic_stats *s_stats = bpf_map_lookup_elem(&mac_map, &h_source);
+        struct traffic_stats *s_stats = bpf_map_lookup_elem(&mac_map, eth->h_source);
         if (s_stats) {
             update_stats(&s_stats->outgoing, skb->len, est_slot);
             if (s_stats->outgoing_rate_limit && 
@@ -106,9 +101,7 @@ static inline int process_packet(struct __sk_buff *skb) {
     }
      
     {
-        struct mac_addr h_dest;
-        __builtin_memcpy(h_dest.h_addr, eth->h_dest, sizeof(h_dest.h_addr));
-        struct traffic_stats *d_stats = bpf_map_lookup_elem(&mac_map, &h_dest);
+        struct traffic_stats *d_stats = bpf_map_lookup_elem(&mac_map, eth->h_dest);
         if (d_stats) {
             update_stats(&d_stats->incoming, skb->len, est_slot);
             if (d_stats->incoming_rate_limit && 
@@ -176,16 +169,12 @@ static inline int process_packet(struct __sk_buff *skb) {
 
 SEC("tc/ingress")
 int tc_ingress(struct __sk_buff *skb) {
-    if (process_packet(skb))
-        return TC_ACT_SHOT;
-    return TC_ACT_OK;
+    return process_packet(skb) ? TC_ACT_SHOT : TC_ACT_OK;
 }
 
 SEC("tc/egress")
 int tc_egress(struct __sk_buff *skb) {
-    if (process_packet(skb))
-        return TC_ACT_SHOT;
-    return TC_ACT_OK;
+    return process_packet(skb) ? TC_ACT_SHOT : TC_ACT_OK;
 }
 
 char _license[] SEC("license") = "GPL";
