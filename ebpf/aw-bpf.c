@@ -95,7 +95,7 @@ static inline int process_packet(struct __sk_buff *skb) {
     {
         struct mac_addr h_source;
         __builtin_memcpy(h_source.h_addr, eth->h_source, sizeof(h_source.h_addr));
-        struct traffic_stats *s_stats = bpf_map_lookup_elem(&ipv4_map, &h_source);
+        struct traffic_stats *s_stats = bpf_map_lookup_elem(&mac_map, &h_source);
         if (s_stats) {
             update_stats(&s_stats->outgoing, skb->len, est_slot);
             if (s_stats->outgoing_rate_limit && 

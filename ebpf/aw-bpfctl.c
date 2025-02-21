@@ -103,7 +103,7 @@ print_stats_mac(struct mac_addr mac, struct traffic_stats *stats)
 }
 
 static struct json_object*
-parse_stats_ipv4_json(__be32 ip, struct traffic_stats *stats)
+parse_stats_ipv4_json(__be32 ip, struct traffic_stats *stats) 
 {
     char ip_str[INET_ADDRSTRLEN];
     struct json_object *jobj = json_object_new_object();
