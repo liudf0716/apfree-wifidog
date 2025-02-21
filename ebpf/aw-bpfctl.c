@@ -69,6 +69,8 @@ print_stats_ipv4(__be32 ip, struct traffic_stats *stats)
            stats->incoming.total_bytes, stats->incoming.total_packets, calc_rate_estimator(stats, true));
     printf("  Outgoing: total_bytes=%llu, total_packets=%llu, rate=%u\n",
            stats->outgoing.total_bytes, stats->outgoing.total_packets, calc_rate_estimator(stats, false));
+    printf("  Rate Limits: incoming=%u bps, outgoing=%u bps\n",
+           stats->incoming_rate_limit, stats->outgoing_rate_limit);
 }
 
 static void 
@@ -82,6 +84,8 @@ print_stats_ipv6(struct in6_addr ip, struct traffic_stats *stats)
            stats->incoming.total_bytes, stats->incoming.total_packets, calc_rate_estimator(stats, true));
     printf("  Outgoing: total_bytes=%llu, total_packets=%llu, rate=%u\n",
            stats->outgoing.total_bytes, stats->outgoing.total_packets, calc_rate_estimator(stats, false));
+    printf("  Rate Limits: incoming=%u bps, outgoing=%u bps\n",
+           stats->incoming_rate_limit, stats->outgoing_rate_limit);
 }
 
 static void 
@@ -94,6 +98,8 @@ print_stats_mac(struct mac_addr mac, struct traffic_stats *stats)
            stats->incoming.total_bytes, stats->incoming.total_packets, calc_rate_estimator(stats, true));
     printf("  Outgoing: total_bytes=%llu, total_packets=%llu, rate=%u\n",
            stats->outgoing.total_bytes, stats->outgoing.total_packets, calc_rate_estimator(stats, false));
+    printf("  Rate Limits: incoming=%u bps, outgoing=%u bps\n",
+           stats->incoming_rate_limit, stats->outgoing_rate_limit);
 }
 
 static struct json_object*
@@ -239,6 +245,7 @@ main(int argc, char **argv) {
         fprintf(stderr, "  %s <ipv4|ipv6|mac> del <IP_ADDRESS|MAC_ADDRESS>\n", argv[0]);
         fprintf(stderr, "  %s <ipv4|ipv6|mac> flush\n", argv[0]);
         fprintf(stderr, "  %s <ipv4|ipv6|mac> json\n", argv[0]);
+        fprintf(stderr, "  %s <ipv4|ipv6|mac> update <IP_ADDRESS|MAC_ADDRESS> downrate <bps> uprate <bps>\n", argv[0]);
         return EXIT_FAILURE;
     }
 
@@ -487,6 +494,73 @@ main(int argc, char **argv) {
             return EXIT_FAILURE;
         }
         printf("Flushed all entries in the map.\n");
+    } else if (strcmp(cmd, "update") == 0) {
+        if (argc != 8) {
+            fprintf(stderr, "Usage: %s %s update <IP_ADDRESS|MAC_ADDRESS> downrate <bps> uprate <bps>\n", argv[0], map_type);
+            return EXIT_FAILURE;
+        }
+
+        const char *ip_str = argv[3];
+        const char *downrate_str = argv[5];
+        const char *uprate_str = argv[7];
+        uint32_t downrate = atoi(downrate_str);
+        uint32_t uprate = atoi(uprate_str);
+
+        if (downrate == 0 || uprate == 0) {
+            fprintf(stderr, "Invalid rate value\n");
+            return EXIT_FAILURE;
+        }
+
+        void *key = NULL;
+        int key_size = 0;
+        bool success = false;
+
+        if (strcmp(map_type, "ipv4") == 0) {
+            __be32 ipv4_key = 0;
+            if (inet_pton(AF_INET, ip_str, &ipv4_key) != 1) {
+                perror("inet_pton (IPv4)");
+                return EXIT_FAILURE;
+            }
+            key = &ipv4_key;
+            key_size = sizeof(ipv4_key);
+            success = true;
+        } else if (strcmp(map_type, "mac") == 0) {
+            if (!is_valid_mac_addr(ip_str)) {
+                fprintf(stderr, "Invalid MAC address format\n");
+                return EXIT_FAILURE;
+            }
+            struct mac_addr mac_key = {0};
+            parse_mac_address(&mac_key, ip_str);
+            key = &mac_key;
+            key_size = sizeof(mac_key);
+            success = true;
+        } else if (strcmp(map_type, "ipv6") == 0) {
+            struct in6_addr ipv6_key = {0};
+            if (inet_pton(AF_INET6, ip_str, &ipv6_key) != 1) {
+                perror("inet_pton (IPv6)");
+                return EXIT_FAILURE;
+            }
+            key = &ipv6_key;
+            key_size = sizeof(ipv6_key);
+            success = true;
+        }
+
+        if (!success || !key) {
+            fprintf(stderr, "Invalid address type\n");
+            return EXIT_FAILURE;
+        }
+
+        struct traffic_stats stats = {0};
+        if (bpf_map_lookup_elem(map_fd, key, &stats) < 0) {
+            // add new entry if not found
+            if (bpf_map_update_elem(map_fd, key, &stats, BPF_NOEXIST) < 0) {
+                perror("bpf_map_update_elem");
+                return EXIT_FAILURE;
+            }
+        }
+
+        stats.incoming_rate_limit = downrate;
+        stats.outgoing_rate_limit = uprate;
     } else {
         fprintf(stderr, "Invalid command. Use 'add <IP_ADDRESS>' or 'list'.\n");
         return EXIT_FAILURE;
