@@ -17,7 +17,7 @@
 #define SMOOTH_VALUE    10
 
 struct mac_addr {
-    char h_addr[ETH_ALEN];
+    __u8 h_addr[ETH_ALEN];
 } __attribute__((packed));
 
 /**
