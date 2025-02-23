@@ -31,7 +31,14 @@ calc_rate_estimator(struct traffic_stats *val, bool is_incoming)
 	uint32_t cur_bytes = 0;
 	uint32_t delta = RATE_ESTIMATOR - (now % RATE_ESTIMATOR);
 	uint32_t ratio = RATE_ESTIMATOR * SMOOTH_VALUE / delta;
-
+#if 1
+    printf("est_slot=%u, now=%u, delta=%u, ratio=%u\n", est_slot, now, delta, ratio);
+    if (is_incoming) {
+        printf("incoming: est_slot=%u, prev_s_bytes=%u, cur_s_bytes=%u\n", val->incoming.est_slot, val->incoming.prev_s_bytes, val->incoming.cur_s_bytes);
+    } else {
+        printf("outgoing: est_slot=%u, prev_s_bytes=%u, cur_s_bytes=%u\n", val->outgoing.est_slot, val->outgoing.prev_s_bytes, val->outgoing.cur_s_bytes);
+    }
+#endif
     if (is_incoming) {
         if (val->incoming.est_slot == est_slot) {
             rate = val->incoming.prev_s_bytes;
@@ -124,12 +131,14 @@ parse_stats_ipv4_json(__be32 ip, struct traffic_stats *stats)
     json_object_object_add(incoming, "total_bytes", json_object_new_int64(stats->incoming.total_bytes));
     json_object_object_add(incoming, "total_packets", json_object_new_int64(stats->incoming.total_packets));
     json_object_object_add(incoming, "rate", json_object_new_int(calc_rate_estimator(stats, true)));
+    json_object_object_add(incoming, "incoming_rate_limit", json_object_new_int(stats->incoming_rate_limit));
     json_object_object_add(jobj, "incoming", incoming);
 
     // Add outgoing stats
     json_object_object_add(outgoing, "total_bytes", json_object_new_int64(stats->outgoing.total_bytes));
     json_object_object_add(outgoing, "total_packets", json_object_new_int64(stats->outgoing.total_packets));
     json_object_object_add(outgoing, "rate", json_object_new_int(calc_rate_estimator(stats, false)));
+    json_object_object_add(outgoing, "outgoing_rate_limit", json_object_new_int(stats->outgoing_rate_limit));
     json_object_object_add(jobj, "outgoing", outgoing);
 
     return jobj;
@@ -156,12 +165,14 @@ parse_stats_ipv6_json(struct in6_addr ip, struct traffic_stats *stats)
     json_object_object_add(incoming, "total_bytes", json_object_new_int64(stats->incoming.total_bytes));
     json_object_object_add(incoming, "total_packets", json_object_new_int64(stats->incoming.total_packets));
     json_object_object_add(incoming, "rate", json_object_new_int(calc_rate_estimator(stats, true)));
+    json_object_object_add(incoming, "incoming_rate_limit", json_object_new_int(stats->incoming_rate_limit));
     json_object_object_add(jobj, "incoming", incoming);
 
     // Add outgoing stats
     json_object_object_add(outgoing, "total_bytes", json_object_new_int64(stats->outgoing.total_bytes));
     json_object_object_add(outgoing, "total_packets", json_object_new_int64(stats->outgoing.total_packets));
     json_object_object_add(outgoing, "rate", json_object_new_int(calc_rate_estimator(stats, false)));
+    json_object_object_add(outgoing, "outgoing_rate_limit", json_object_new_int(stats->outgoing_rate_limit));
     json_object_object_add(jobj, "outgoing", outgoing);
 
     return jobj;
@@ -187,12 +198,14 @@ parse_stats_mac_json(struct mac_addr mac, struct traffic_stats *stats)
     json_object_object_add(incoming, "total_bytes", json_object_new_int64(stats->incoming.total_bytes));
     json_object_object_add(incoming, "total_packets", json_object_new_int64(stats->incoming.total_packets));
     json_object_object_add(incoming, "rate", json_object_new_int(calc_rate_estimator(stats, true)));
+    json_object_object_add(incoming, "incoming_rate_limit", json_object_new_int(stats->incoming_rate_limit));
     json_object_object_add(jobj, "incoming", incoming);
 
     // Add outgoing stats
     json_object_object_add(outgoing, "total_bytes", json_object_new_int64(stats->outgoing.total_bytes));
     json_object_object_add(outgoing, "total_packets", json_object_new_int64(stats->outgoing.total_packets));
     json_object_object_add(outgoing, "rate", json_object_new_int(calc_rate_estimator(stats, false)));
+    json_object_object_add(outgoing, "outgoing_rate_limit", json_object_new_int(stats->outgoing_rate_limit));
     json_object_object_add(jobj, "outgoing", outgoing);
 
     return jobj;
