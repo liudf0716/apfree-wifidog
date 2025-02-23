@@ -38,7 +38,7 @@ struct {
 
 static __always_inline __u32 get_current_time(void)
 {
-    __u32 val = bpf_ktime_get_ns() >> 30;
+    __u32 val = bpf_ktime_get_ns() / 1000000000;
     return val ? val : 1;
 }
 
@@ -50,7 +50,7 @@ static inline void update_stats(struct counters *cnt, __u32 len, __u32 est_slot)
     } else {
         __u32 new_prev = (old_slot == est_slot - 1) ? cnt->cur_s_bytes : 0;
         cnt->prev_s_bytes = new_prev;
-        cnt->cur_s_bytes = len;
+        cnt->cur_s_bytes = 0;
         cnt->est_slot = est_slot;
     }
 

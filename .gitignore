@@ -48,3 +48,4 @@ build/
 .tags
 tags
 
+ebpf/aw-bpfctl
