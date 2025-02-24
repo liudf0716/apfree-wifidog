@@ -508,72 +508,73 @@ main(int argc, char **argv) {
         }
         printf("Flushed all entries in the map.\n");
     } else if (strcmp(cmd, "update") == 0) {
-        if (argc != 8) {
+        if (argc != 8 || strcmp(argv[4], "downrate") != 0 || strcmp(argv[6], "uprate") != 0) {
             fprintf(stderr, "Usage: %s %s update <IP_ADDRESS|MAC_ADDRESS> downrate <bps> uprate <bps>\n", argv[0], map_type);
             return EXIT_FAILURE;
         }
 
-        const char *ip_str = argv[3];
-        const char *downrate_str = argv[5];
-        const char *uprate_str = argv[7];
-        uint32_t downrate = atoi(downrate_str);
-        uint32_t uprate = atoi(uprate_str);
+        const char *addr_str = argv[3];
+        uint32_t downrate = atoi(argv[5]);
+        uint32_t uprate = atoi(argv[7]);
 
         if (downrate == 0 || uprate == 0) {
-            fprintf(stderr, "Invalid rate value\n");
+            fprintf(stderr, "Invalid rate values - must be greater than 0\n");
             return EXIT_FAILURE;
         }
 
-        void *key = NULL;
-        int key_size = 0;
-        bool success = false;
+        // Structure to hold key information
+        struct {
+            void *ptr;
+            size_t size;
+        } key = {NULL, 0};
 
+        // Handle different address types
         if (strcmp(map_type, "ipv4") == 0) {
-            __be32 ipv4_key = 0;
-            if (inet_pton(AF_INET, ip_str, &ipv4_key) != 1) {
+            static __be32 ipv4_key;
+            if (inet_pton(AF_INET, addr_str, &ipv4_key) != 1) {
                 perror("inet_pton (IPv4)");
                 return EXIT_FAILURE;
             }
-            key = &ipv4_key;
-            key_size = sizeof(ipv4_key);
-            success = true;
+            key.ptr = &ipv4_key;
+            key.size = sizeof(ipv4_key);
         } else if (strcmp(map_type, "mac") == 0) {
-            if (!is_valid_mac_addr(ip_str)) {
+            static struct mac_addr mac_key;
+            if (!is_valid_mac_addr(addr_str)) {
                 fprintf(stderr, "Invalid MAC address format\n");
                 return EXIT_FAILURE;
             }
-            struct mac_addr mac_key = {0};
-            parse_mac_address(&mac_key, ip_str);
-            key = &mac_key;
-            key_size = sizeof(mac_key);
-            success = true;
+            parse_mac_address(&mac_key, addr_str);
+            key.ptr = &mac_key;
+            key.size = sizeof(mac_key);
         } else if (strcmp(map_type, "ipv6") == 0) {
-            struct in6_addr ipv6_key = {0};
-            if (inet_pton(AF_INET6, ip_str, &ipv6_key) != 1) {
+            static struct in6_addr ipv6_key;
+            if (inet_pton(AF_INET6, addr_str, &ipv6_key) != 1) {
                 perror("inet_pton (IPv6)");
                 return EXIT_FAILURE;
             }
-            key = &ipv6_key;
-            key_size = sizeof(ipv6_key);
-            success = true;
+            key.ptr = &ipv6_key;
+            key.size = sizeof(ipv6_key);
         }
 
-        if (!success || !key) {
+        if (!key.ptr) {
             fprintf(stderr, "Invalid address type\n");
             return EXIT_FAILURE;
         }
 
+        // Prepare stats structure
         struct traffic_stats stats = {0};
-        if (bpf_map_lookup_elem(map_fd, key, &stats) < 0) {
-            // add new entry if not found
-            if (bpf_map_update_elem(map_fd, key, &stats, BPF_NOEXIST) < 0) {
-                perror("bpf_map_update_elem");
-                return EXIT_FAILURE;
-            }
-        }
-
+        bool exists = (bpf_map_lookup_elem(map_fd, key.ptr, &stats) == 0);
+        
+        // Update or add entry
+        int update_flag = exists ? BPF_EXIST : BPF_NOEXIST;
         stats.incoming_rate_limit = downrate;
         stats.outgoing_rate_limit = uprate;
+        if (bpf_map_update_elem(map_fd, key.ptr, &stats, update_flag) < 0) {
+            perror("bpf_map_update_elem");
+            return EXIT_FAILURE;
+        }
+
+        printf("%s %s key %s successfully.\n", exists ? "Updated" : "Added", map_type, addr_str);
     } else {
         fprintf(stderr, "Invalid command. Use 'add <IP_ADDRESS>' or 'list'.\n");
         return EXIT_FAILURE;
