@@ -517,11 +517,6 @@ main(int argc, char **argv) {
         uint32_t downrate = atoi(argv[5]);
         uint32_t uprate = atoi(argv[7]);
 
-        if (downrate == 0 || uprate == 0) {
-            fprintf(stderr, "Invalid rate values - must be greater than 0\n");
-            return EXIT_FAILURE;
-        }
-
         // Structure to hold key information
         struct {
             void *ptr;
