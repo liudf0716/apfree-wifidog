@@ -51,10 +51,12 @@ if(AW_FW3)
 	)
 elseif(AW_VPP)
 	set(fw_source ${src_vpp})
+	set(fw_libs nftnl mnl)
 	add_definitions(-DAW_VPP)
 	message(STATUS "Building with VPP")
 	set(src_vpp
 		fw_vpp.c
+		fw_nft.c
 	)
 else()
 	set(fw_source ${src_fw4})
