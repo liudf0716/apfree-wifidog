@@ -27,6 +27,9 @@ unload:
 	sudo tc filter del dev eth0 egress
 	sudo tc filter del dev eth0 ingress
 	sudo tc qdisc del dev eth0 clsact
+	sudo rm -f /sys/fs/bpf/tc/globals/ipv4_map
+	sudo rm -f /sys/fs/bpf/tc/globals/ipv6_map
+	sudo rm -f /sys/fs/bpf/tc/globals/mac_map
 
 status:
 	sudo tc filter show dev eth0
