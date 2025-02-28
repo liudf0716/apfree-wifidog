@@ -806,28 +806,6 @@ int
 nft_fw_access(fw_access_t type, const char *ip, const char *mac, int tag)
 {
     char cmd[128] = {0};
-    if (is_bypass_mode()) {
-        if (!ip) {
-            debug(LOG_ERR, "Invalid parameters: ip is NULL");
-            return 1;
-        }
-
-        
-        switch(type) {
-            case FW_ACCESS_ALLOW:
-                snprintf(cmd, sizeof(cmd), "vppctl redirect set auth user %s", ip);
-                break;
-            case FW_ACCESS_DENY:
-                snprintf(cmd, sizeof(cmd), "vppctl redirect set auth user %s del", ip);
-                break;
-            default:
-                debug(LOG_ERR, "Unknown fw_access type %d", type);
-                return 1;
-        }
-        execute(cmd, 0);
-        return 0;
-    }
-
     if (!ip || !mac) {
         debug(LOG_ERR, "Invalid parameters: ip or mac is NULL");
         return 1;

@@ -15,6 +15,7 @@
 #include "conf.h"
 #include "auth.h"
 #include "debug.h"
+#include "firewall.h"
 #include "fw_vpp.h"
 
 /**
@@ -189,4 +190,35 @@ vpp_fw_counters_update()
     UNLOCK_CLIENT_LIST();
     debug(LOG_DEBUG, "vpp_fw_counters_update completed");
     return 0;
+}
+
+int 
+vpp_fw_access(fw_access_t type, const char *ip, const char *mac, int tag)
+{
+    if (!ip) {
+        debug(LOG_ERR, "Invalid parameters: ip is NULL");
+        return -1;
+    }
+
+    const char *action;
+    switch(type) {
+        case FW_ACCESS_ALLOW:
+            action = "";
+            break;
+        case FW_ACCESS_DENY:
+            action = "del";
+            break;
+        default:
+            debug(LOG_ERR, "Invalid firewall access type: %d", type);
+            return -1;
+    }
+
+    char cmd[256] = {0};
+    int ret = snprintf(cmd, sizeof(cmd), "vppctl redirect set auth user %s %s", ip, action);
+    if (ret < 0 || ret >= sizeof(cmd)) {
+        debug(LOG_ERR, "Command buffer overflow");
+        return -1;
+    }
+
+    return execute(cmd, 0);
 }

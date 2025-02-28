@@ -15,6 +15,10 @@ set(src_fw4
 	fw_nft.c
 )
 
+set(src_vpp
+	fw_vpp.c
+)
+
 set(src_dhcp
 	dhcp_cpi.c dhcp.c ipv4.c options.c
 )
@@ -51,12 +55,10 @@ if(AW_FW3)
 	)
 elseif(AW_VPP)
 	set(fw_source ${src_vpp})
-	set(fw_libs nftnl mnl)
 	add_definitions(-DAW_VPP)
 	message(STATUS "Building with VPP")
 	set(src_vpp
 		fw_vpp.c
-		fw_nft.c
 	)
 else()
 	set(fw_source ${src_fw4})

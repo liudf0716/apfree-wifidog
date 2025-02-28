@@ -291,7 +291,9 @@ handle_auth_response(json_object *j_auth)
 	if (json_object_get_boolean(once_auth)) {
 		gw_setting->auth_mode = 0;
 		debug(LOG_DEBUG, "Auth: Once-auth enabled, setting gateway %s auth mode to 0", gw_id_str);
+#ifdef AW_FW4
 		nft_reload_gw();
+#endif
 		return;
 	}
 
@@ -442,7 +444,9 @@ handle_heartbeat_response(json_object *j_heartbeat)
 	// Reload firewall if any states changed
 	if (state_changed) {
 		debug(LOG_DEBUG, "Gateway states changed, reloading firewall rules");
+#ifdef AW_FW4
 		nft_reload_gw();
+#endif
 	}
 }
 

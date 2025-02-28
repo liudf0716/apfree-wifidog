@@ -7,5 +7,6 @@
 #define _FW_VPP_H_
 
 int vpp_fw_counters_update();
+int vpp_fw_access(fw_access_t type, const char *ip, const char *mac, int tag);
 
 #endif /* _FW_VPP_H_ */

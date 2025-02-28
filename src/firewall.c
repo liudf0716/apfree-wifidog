@@ -22,7 +22,7 @@
 #elif AW_VPP
 	#include "fw_vpp.h"
 #else
-	#include "fw_nft.h"
+	#include "fw_vpp.h"
 #endif
 
 static int _fw_deny_raw(const char *, const char *, const int);
@@ -38,7 +38,7 @@ static int _fw_deny_raw(const char *, const char *, const int);
 int
 fw_allow(t_client * client, int new_fw_connection_state)
 {
-	int result;
+	int result = 0;
 	int old_state = client->fw_connection_state;
 
 	/* Deny after if needed. */
@@ -55,7 +55,7 @@ fw_allow(t_client * client, int new_fw_connection_state)
 	/* Grant first */
 #ifdef AW_FW3
 	result = iptables_fw_access(FW_ACCESS_ALLOW, client->ip, client->mac, new_fw_connection_state);
-#else
+#elif AW_FW4
 	if (client->ip6) {
 		result = nft_fw_access(FW_ACCESS_ALLOW, client->ip6, client->mac, new_fw_connection_state);
 	} 
@@ -63,6 +63,8 @@ fw_allow(t_client * client, int new_fw_connection_state)
 	if (client->ip) {
 		result = nft_fw_access(FW_ACCESS_ALLOW, client->ip, client->mac, new_fw_connection_state);
 	}
+#else
+	result = vpp_fw_access(FW_ACCESS_ALLOW, client->ip, client->mac, new_fw_connection_state);
 #endif
 
 	return result;
@@ -71,10 +73,10 @@ fw_allow(t_client * client, int new_fw_connection_state)
 int
 fw_allow_ip_mac(const char *ip, const char *mac, int fw_connection_state)
 {
-	int result;
+	int result = 0;
 #ifdef AW_FW3
 	result = iptables_fw_access(FW_ACCESS_ALLOW, ip, mac, fw_connection_state);
-#else
+#elif AW_FW4
 	result = nft_fw_access(FW_ACCESS_ALLOW, ip, mac, fw_connection_state);
 #endif
 	return result;
@@ -129,8 +131,10 @@ _fw_deny_raw(const char *ip, const char *mac, const int mark)
 {
 #ifdef AW_FW3
 	return iptables_fw_access(FW_ACCESS_DENY, ip, mac, mark);
-#else
+#elif AW_FW4
 	return nft_fw_access(FW_ACCESS_DENY, ip, mac, mark);
+#else
+	return vpp_fw_access(FW_ACCESS_DENY, ip, mac, mark);
 #endif
 }
 
@@ -141,8 +145,10 @@ fw_set_authdown(void)
 	debug(LOG_DEBUG, "Marking auth server down");
 #ifdef AW_FW3
 	return iptables_fw_auth_unreachable(FW_MARK_AUTH_IS_DOWN);
-#else
+#elif AW_FW4
 	return nft_fw_auth_unreachable(FW_MARK_AUTH_IS_DOWN);
+#else
+	return 0;
 #endif
 }
 
@@ -153,8 +159,10 @@ fw_set_authup(void)
 	debug(LOG_DEBUG, "Marking auth server up again");
 #ifdef AW_FW3
 	return iptables_fw_auth_reachable();
-#else
+#elif AW_FW4
 	return nft_fw_auth_reachable();
+#else
+	return 0;
 #endif
 }
 
@@ -239,7 +247,7 @@ fw_init(void)
 	debug(LOG_INFO, "Initializing Firewall");
 #ifdef AW_FW3
 	result = iptables_fw_init();
-#else
+#elif AW_FW4
 	result = nft_fw_init();
 
 	if (restart_orig_pid) {
@@ -265,7 +273,7 @@ fw_clear_authservers(void)
 	debug(LOG_DEBUG, "Clearing the authservers list");
 #ifdef AW_FW3
 	iptables_fw_clear_authservers();
-#else
+#elif AW_FW4
 	nft_fw_clear_authservers();
 #endif
 }
@@ -278,7 +286,7 @@ fw_set_authservers(void)
 	debug(LOG_DEBUG, "Setting the authservers list");
 #ifdef AW_FW3
 	iptables_fw_set_authservers(NULL);
-#else
+#elif AW_FW4
 	nft_fw_set_authservers();
 #endif
 }
@@ -289,7 +297,7 @@ fw_clear_pan_domains_trusted(void)
 	debug(LOG_DEBUG, "Clear pan trust domains list");
 #ifdef AW_FW3
 	iptables_fw_clear_ipset_domains_trusted();
-#else
+#elif AW_FW4
 	//nft_fw_clear_ipset_domains_trusted();
 #endif
 }
@@ -300,7 +308,7 @@ fw_set_pan_domains_trusted(void)
 	debug(LOG_DEBUG, "Set pan trust domains list");
 #ifdef AW_FW3
 	iptables_fw_set_ipset_domains_trusted();
-#else
+#elif AW_FW4
 	//nft_fw_set_ipset_domains_trusted();
 #endif
 }
@@ -311,7 +319,7 @@ fw_refresh_inner_domains_trusted(void)
 	debug(LOG_DEBUG, "Refresh inner trust domains list");
 #ifdef AW_FW3
 	iptables_fw_refresh_inner_domains_trusted();
-#else
+#elif AW_FW4
 	nft_fw_refresh_inner_domains_trusted();
 #endif
 }
@@ -322,7 +330,7 @@ fw_clear_inner_domains_trusted(void)
 	debug(LOG_DEBUG, "Clear inner trust domains list");
 #ifdef AW_FW3
 	iptables_fw_clear_inner_domains_trusted();
-#else
+#elif AW_FW4
 	nft_fw_clear_inner_domains_trusted();
 #endif
 }
@@ -337,7 +345,7 @@ fw_set_inner_domains_trusted(void)
 	debug(LOG_DEBUG, "Setting inner trust domains list");
 #ifdef AW_FW3
 	iptables_fw_set_inner_domains_trusted();
-#else
+#elif AW_FW4
 	nft_fw_set_inner_domains_trusted();
 #endif
 }
@@ -349,7 +357,7 @@ fw_refresh_user_domains_trusted(void)
 	debug(LOG_DEBUG, "Refresh user trust domains list");
 #ifdef AW_FW3
 	iptables_fw_refresh_user_domains_trusted();
-#else
+#elif AW_FW4
 	nft_fw_refresh_user_domains_trusted();
 #endif
 }
@@ -360,7 +368,7 @@ fw_clear_user_domains_trusted(void)
 	debug(LOG_DEBUG, "Clear user trust domains list");
 #ifdef AW_FW3
 	iptables_fw_clear_user_domains_trusted();
-#else
+#elif AW_FW4
 	nft_fw_clear_user_domains_trusted();
 #endif
 }
@@ -371,7 +379,7 @@ fw_set_user_domains_trusted(void)
 	debug(LOG_DEBUG, "Setting user trust domains list");
 #ifdef AW_FW3
 	iptables_fw_set_user_domains_trusted();
-#else
+#elif AW_FW4
 	nft_fw_set_user_domains_trusted();
 #endif
 }
@@ -382,7 +390,7 @@ fw_set_roam_mac(const char *mac)
 	debug(LOG_DEBUG, "Set roam mac");
 #ifdef AW_FW3
 	iptables_fw_set_roam_mac(mac);
-#else
+#elif AW_FW4
 	//nft_fw_set_roam_mac(mac);
 #endif
 }
@@ -393,7 +401,7 @@ fw_clear_roam_maclist(void)
 	debug(LOG_DEBUG, "Clear roam maclist");
 #ifdef AW_FW3
 	iptables_fw_clear_roam_maclist();
-#else
+#elif AW_FW4
 	//nft_fw_clear_roam_maclist();
 #endif
 }
@@ -404,7 +412,7 @@ fw_set_trusted_maclist()
 	debug(LOG_DEBUG, "Set trusted maclist");
 #ifdef AW_FW3
 	iptables_fw_set_trusted_maclist();
-#else
+#elif AW_FW4
 	nft_fw_set_trusted_maclist();
 #endif
 }
@@ -415,7 +423,7 @@ fw_clear_trusted_maclist()
 	debug(LOG_DEBUG, "Clear trusted maclist");
 #ifdef AW_FW3
 	iptables_fw_clear_trusted_maclist();
-#else
+#elif AW_FW4
 	nft_fw_clear_trusted_maclist();
 #endif
 }
@@ -426,7 +434,7 @@ fw_set_trusted_local_maclist()
 	debug(LOG_DEBUG, "Set trusted local maclist");
 #ifdef AW_FW3
 	iptables_fw_set_trusted_local_maclist();
-#else
+#elif AW_FW4
 	//nft_fw_set_trusted_local_maclist();
 #endif
 }
@@ -437,7 +445,7 @@ fw_clear_trusted_local_maclist()
 	debug(LOG_DEBUG, "Clear trusted local maclist");
 #ifdef AW_FW3
 	iptables_fw_clear_trusted_local_maclist();
-#else
+#elif AW_FW4
 	//nft_fw_clear_trusted_local_maclist();
 #endif
 }
@@ -449,7 +457,7 @@ fw_set_untrusted_maclist()
 	debug(LOG_DEBUG, "Set untrusted maclist");
 #ifdef AW_FW3
 	iptables_fw_set_untrusted_maclist();
-#else
+#elif AW_FW4
 	//nft_fw_set_untrusted_maclist();
 #endif
 }
@@ -460,7 +468,7 @@ fw_clear_untrusted_maclist()
 	debug(LOG_DEBUG, "Clear untrusted maclist");
 #ifdef AW_FW3
 	iptables_fw_clear_untrusted_maclist();
-#else
+#elif AW_FW4
 	//nft_fw_clear_untrusted_maclist();
 #endif
 }
@@ -471,7 +479,7 @@ fw_set_mac_temporary(const char *mac, int which)
 	debug(LOG_DEBUG, "Set trusted||untrusted mac [%s] temporary", mac);
 #ifdef AW_FW3
 	iptables_fw_set_mac_temporary(mac, which);
-#else
+#elif AW_FW4
 	nft_fw_set_mac_temporary(mac, which);
 #endif
 }
@@ -487,8 +495,10 @@ fw_destroy(void)
 	debug(LOG_DEBUG, "Removing Firewall rules");
 #ifdef AW_FW3
 	return iptables_fw_destroy();
+#elif AW_FW4
+	return nft_fw_destroy();
 #else
-	return nft_fw_destroy();	
+	return 0;
 #endif
 }
 
@@ -786,6 +796,8 @@ ev_fw_sync_with_authserver(struct wd_request_context *context)
 void 
 conntrack_flush(const char *ip)
 {
+#ifdef AW_VPP
+#else
 	debug(LOG_DEBUG, "Flush conntrack for ip [%s]", ip?ip:"all");
 	char cmd[128] = {0};
 	if (ip) {
@@ -794,6 +806,7 @@ conntrack_flush(const char *ip)
 		snprintf(cmd, sizeof(cmd), "conntrack -F");
 	}
 	execute(cmd, 0);
+#endif
 }
 
 void
@@ -802,7 +815,7 @@ fw_add_trusted_mac(const char *mac, uint32_t timeout)
 	debug(LOG_DEBUG, "Set trusted mac [%s] with timeout %d", mac, timeout);
 #ifdef AW_FW3
 	 iptables_fw_set_trusted_mac(mac);
-#else
+#elif AW_FW4
 	nft_fw_add_trusted_mac(mac, timeout);
 #endif
 }
@@ -813,7 +826,7 @@ fw_del_trusted_mac(const char *mac)
 	debug(LOG_DEBUG, "Del trusted mac [%s]", mac);
 #ifdef AW_FW3
 	iptables_fw_del_trusted_mac(mac);
-#else
+#elif AW_FW4
 	nft_fw_del_trusted_mac(mac);
 #endif
 }
@@ -824,7 +837,7 @@ fw_update_trusted_mac(const char *mac, uint32_t timeout)
 	debug(LOG_DEBUG, "Update trusted mac [%s] with timeout %d", mac, timeout);
 #ifdef AW_FW3
 	iptables_fw_update_trusted_mac(mac);
-#else
+#elif AW_FW4
 	nft_fw_update_trusted_mac(mac, timeout);
 #endif
 }
@@ -834,7 +847,7 @@ fw_add_anti_nat_permit_device(const char *mac)
 {
 	debug(LOG_DEBUG, "Add anti nat permit device [%s]", mac);
 #ifdef AW_FW3
-#else
+#elif AW_FW4
 	nft_fw_add_anti_nat_permit(mac);
 #endif
 }
@@ -844,7 +857,7 @@ fw_del_anti_nat_permit_device(const char *mac)
 {
 	debug(LOG_DEBUG, "Del anti nat permit device [%s]", mac);
 #ifdef AW_FW3
-#else
+#elif AW_FW4
 	nft_fw_del_anti_nat_permit(mac);
 #endif
 }
