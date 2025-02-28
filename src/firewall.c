@@ -19,6 +19,8 @@
 #include "wd_client.h"
 #ifdef AW_FW3
 	#include "fw_iptables.h"
+#elif AW_VPP
+	#include "fw_vpp.h"
 #else
 	#include "fw_nft.h"
 #endif
@@ -708,11 +710,7 @@ ev_fw_sync_with_authserver_v2(struct wd_request_context *context)
 	}
 	
 	debug(LOG_DEBUG, "Syncing client counters with auth server");
-#ifdef AW_FW3
-	if (-1 == iptables_fw_counters_update()) 
-#else 
-	if (-1 == nft_fw_counters_update()) 
-#endif
+	if (-1 == fw_counters_update())
 	{
 		debug(LOG_ERR, "Could not get counters from firewall!");
 		return;
@@ -740,11 +738,8 @@ ev_fw_sync_with_authserver(struct wd_request_context *context)
 	t_client *p1 = NULL, *p2 = NULL, *worklist = NULL;
 	s_config *config = config_get_config();
 
-#ifdef AW_FW3
-	if (-1 == iptables_fw_counters_update()) 
-#else
-	if (-1 == nft_fw_counters_update()) 
-#endif
+	debug(LOG_DEBUG, "Syncing client counters with auth server");
+	if (-1 == fw_counters_update())
 	{
 		debug(LOG_ERR, "Could not get counters from firewall!");
 		return;
@@ -860,6 +855,8 @@ fw_counters_update()
 	debug(LOG_DEBUG, "Update firewall counters");
 #ifdef AW_FW3
 	return iptables_fw_counters_update();
+#elif AW_VPP
+	return vpp_fw_counters_update();
 #else
 	return nft_fw_counters_update();
 #endif

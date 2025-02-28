@@ -49,6 +49,13 @@ if(AW_FW3)
 	set(src_fw3
 		fw_iptables.c fw3_iptc.c ipset.c
 	)
+elseif(AW_VPP)
+	set(fw_source ${src_vpp})
+	add_definitions(-DAW_VPP)
+	message(STATUS "Building with VPP")
+	set(src_vpp
+		fw_vpp.c
+	)
 else()
 	set(fw_source ${src_fw4})
 	set(fw_libs nftnl mnl)
@@ -57,11 +64,6 @@ else()
 	set(src_fw4
 		fw_nft.c
 	)
-endif()
-
-if (AW_VPP)
-	add_definitions(-DAW_VPP)
-	message(STATUS "Building with VPP")
 endif()
 
 # Build targets
@@ -78,10 +80,6 @@ target_link_libraries(wifidogx
 	${fw_libs}
 	${CURL_LIBRARIES}
 )
-
-if (AW_VPP)
-	target_link_libraries(wifidogx ${VPP_LIBS})
-endif()
 
 target_link_libraries(wdctlx
 	event
