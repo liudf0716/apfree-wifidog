@@ -18,14 +18,11 @@ option(AW_VPP "Build with VPP support" OFF)
 
 # VPP-specific variables (added)
 if(AW_VPP)
-    set(VPP_INCLUDE_DIR "" CACHE PATH "Path to VPP include directory")
-    set(VPP_LIBRARY_DIR "" CACHE PATH "Path to VPP library directory")
-    if(NOT VPP_INCLUDE_DIR OR NOT VPP_LIBRARY_DIR)
-        message(FATAL_ERROR "VPP_INCLUDE_DIR and VPP_LIBRARY_DIR must be set when AW_VPP is ON")
-    else()
-        message(STATUS "VPP_INCLUDE_DIR: ${VPP_INCLUDE_DIR}")
-        message(STATUS "VPP_LIBRARY_DIR: ${VPP_LIBRARY_DIR}")
-    endif()
+  set(VPP_INCLUDE_DIR "" CACHE PATH "Path to VPP include directory")
+  set(VPP_LIBRARY_DIR "" CACHE PATH "Path to VPP library directory")
+  
+  message(STATUS "VPP_INCLUDE_DIR: ${VPP_INCLUDE_DIR}")
+  message(STATUS "VPP_LIBRARY_DIR: ${VPP_LIBRARY_DIR}")
 endif()
 
 # Find requried headers file
