@@ -22,7 +22,7 @@
 #elif AW_VPP
 	#include "fw_vpp.h"
 #else
-	#include "fw_vpp.h"
+	#include "fw_nft.h"
 #endif
 
 static int _fw_deny_raw(const char *, const char *, const int);
