@@ -352,12 +352,6 @@ handle_hup(struct event_base *evbase)
     debug(LOG_INFO, "Received SIGHUP; ignoring...");
 }
 
-static void
-handle_int(struct event_base *evbase)
-{
-    debug(LOG_INFO, "Received SIGINT; ignoring...");
-}
-
 /**
  * @brief Creates a static function definition
  * 
