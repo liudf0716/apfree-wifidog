@@ -83,6 +83,16 @@ vpp_fw_counters_update()
     buf[file_size] = '\0';
     debug(LOG_DEBUG, "VPP output: %s", buf);
 
+    // Fix malformed JSON by replacing '}\n{' with '},{'
+    char *p = buf;
+    while ((p = strstr(p, "}\n{")) != NULL) {
+        p[0] = '}';
+        p[1] = ',';
+        p[2] = '{';
+        p += 3;
+    }
+    debug(LOG_DEBUG, "Fixed JSON: %s", buf);
+
     // Parse JSON array (handling potential invalid JSON)
     json_object *jobj = json_tokener_parse(buf);
     free(buf);
