@@ -840,6 +840,11 @@ nft_fw_access(fw_access_t type, const char *ip, const char *mac, int tag)
                 debug(LOG_ERR, "Invalid IP address: %s", ip);
             }
             
+            if (is_valid_mac(mac)) {
+                snprintf(cmd, sizeof(cmd), "aw-bpfctl mac add %s", mac);
+                execute(cmd, 0);
+            } 
+
             break;
 
         case FW_ACCESS_DENY:
@@ -858,6 +863,12 @@ nft_fw_access(fw_access_t type, const char *ip, const char *mac, int tag)
             } else {
                 debug(LOG_ERR, "Invalid IP address: %s", ip);
             }
+
+            if (is_valid_mac(mac)) {
+                snprintf(cmd, sizeof(cmd), "aw-bpfctl mac del %s", mac);
+                execute(cmd, 0);
+            }
+
             break;
 
         default:
