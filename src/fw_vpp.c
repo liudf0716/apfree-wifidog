@@ -42,61 +42,50 @@ vpp_fw_counters_update()
     // Reset client list online status
     reset_client_list();
 
-    // Execute vppctl command to get statistics in JSON format
-    const char *cmd = "vppctl show redirect auth users json";
-    FILE *fp = popen(cmd, "r");
-    if (!fp) {
+    // Execute vppctl command and redirect output to temporary file
+    const char *cmd = "vppctl show redirect auth users json > /tmp/auth-user.json";
+    int ret = system(cmd);
+    if (ret == -1 || WEXITSTATUS(ret) != 0) {
         UNLOCK_CLIENT_LIST();
         debug(LOG_ERR, "Failed to execute command: %s", cmd);
         return -1;
     }
 
-    // Read command output
-    char *buf = NULL;
-    size_t total_len = 0;
-    size_t chunk_size = 4096;
-    
-    while (1) {
-        char *new_buf = realloc(buf, total_len + chunk_size);
-        if (!new_buf) {
-            free(buf);
-            pclose(fp);
-            UNLOCK_CLIENT_LIST();
-            debug(LOG_ERR, "Memory allocation failed");
-            return -1;
-        }
-        
-        buf = new_buf;
-        size_t bytes_read = fread(buf + total_len, 1, chunk_size, fp);
-        total_len += bytes_read;
-
-        if (bytes_read < chunk_size) {
-            if (feof(fp)) {
-                break;
-            }
-            if (ferror(fp)) {
-                free(buf);
-                pclose(fp);
-                UNLOCK_CLIENT_LIST();
-                debug(LOG_ERR, "Error reading command output: %s", strerror(errno));
-                return -1;
-            }
-        }
-    }
-
-    pclose(fp);
-
-    // Ensure null termination
-    char *final_buf = realloc(buf, total_len + 1);
-    if (!final_buf) {
-        free(buf);
+    // Open the temporary file
+    FILE *fp = fopen("/tmp/auth-user.json", "r");
+    if (!fp) {
         UNLOCK_CLIENT_LIST();
-        debug(LOG_ERR, "Final buffer allocation failed");
+        debug(LOG_ERR, "Failed to open /tmp/auth-user.json: %s", strerror(errno));
         return -1;
     }
-    buf = final_buf;
-    buf[total_len] = '\0';
 
+    // Get file size
+    fseek(fp, 0, SEEK_END);
+    long file_size = ftell(fp);
+    fseek(fp, 0, SEEK_SET);
+
+    // Allocate buffer
+    char *buf = malloc(file_size + 1);
+    if (!buf) {
+        fclose(fp);
+        UNLOCK_CLIENT_LIST();
+        debug(LOG_ERR, "Memory allocation failed");
+        return -1;
+    }
+
+    // Read file content
+    size_t bytes_read = fread(buf, 1, file_size, fp);
+    fclose(fp);
+    unlink("/tmp/auth-user.json");  // Delete temporary file
+
+    if (bytes_read != (size_t)file_size) {
+        free(buf);
+        UNLOCK_CLIENT_LIST();
+        debug(LOG_ERR, "Failed to read file: %s", strerror(errno));
+        return -1;
+    }
+
+    buf[file_size] = '\0';
     debug(LOG_DEBUG, "VPP output: %s", buf);
 
     // Parse JSON array (handling potential invalid JSON)
