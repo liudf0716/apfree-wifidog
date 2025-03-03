@@ -43,7 +43,7 @@ vpp_fw_counters_update()
     reset_client_list();
 
     // Execute vppctl command and redirect output to temporary file
-    const char *cmd = "vppctl show redirect auth users json > /tmp/auth-user.json";
+    const char *cmd = "/usr/bin/vppctl show redirect auth users json > /tmp/auth-user.json";
     int ret = system(cmd);
     if (ret == -1 || WEXITSTATUS(ret) != 0) {
         UNLOCK_CLIENT_LIST();
