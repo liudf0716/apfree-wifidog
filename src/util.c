@@ -65,6 +65,10 @@ close_icmp_socket(void)
 void
 icmp_ping(const char *host)
 {
+	if (!icmp_fd) {
+		debug(LOG_INFO, "ICMP socket not initialized");
+		return;
+	}
     struct sockaddr_in saddr;
     struct {
         struct ip ip;
@@ -130,6 +134,10 @@ checksum(void *buf, int len) {
 
 void icmp6_ping(const char *host) 
 {
+	if (!icmp6_fd) {
+		debug(LOG_INFO, "ICMP6 socket not initialized");
+		return;
+	}
     struct sockaddr_in6 addr;
     struct icmp6_hdr icmp6_hdr;
     char sendbuf[1024];

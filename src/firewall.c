@@ -239,6 +239,10 @@ arp_get_ip(const char *req_mac)
 int
 fw_init(void)
 {
+#ifdef AW_VPP
+	return 1;
+#endif
+
 	int result = 0;
 	if (!init_icmp_socket()) {
 		return 0;
