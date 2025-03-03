@@ -43,7 +43,7 @@ vpp_fw_counters_update()
     reset_client_list();
 
     // Execute vppctl command and redirect output to temporary file
-    const char *cmd = "/usr/bin/vppctl show redirect auth users json > /tmp/auth-user.json";
+    const char *cmd = "stdbuf -oL sudo /usr/bin/vppctl show redirect auth users json > /tmp/auth-user.json 2>&1";
     execute(cmd, 0);
 
     // Open the temporary file
