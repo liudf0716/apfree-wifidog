@@ -44,12 +44,7 @@ vpp_fw_counters_update()
 
     // Execute vppctl command and redirect output to temporary file
     const char *cmd = "/usr/bin/vppctl show redirect auth users json > /tmp/auth-user.json";
-    int ret = system(cmd);
-    if (ret == -1 || WEXITSTATUS(ret) != 0) {
-        UNLOCK_CLIENT_LIST();
-        debug(LOG_ERR, "Failed to execute command: %s", cmd);
-        return -1;
-    }
+    execute(cmd, 0);
 
     // Open the temporary file
     FILE *fp = fopen("/tmp/auth-user.json", "r");
