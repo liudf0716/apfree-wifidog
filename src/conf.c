@@ -1132,7 +1132,8 @@ remove_mac(const char *mac, mac_choice_t which)
 void
 add_mac(const char *mac, mac_choice_t which)
 {
-	add_mac_from_list(mac, 0, NULL, which);
+#define MAC_TIMEOUT 24*3600
+	add_mac_from_list(mac, MAC_TIMEOUT, NULL, which);
 }
 
 
