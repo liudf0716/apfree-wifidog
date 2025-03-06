@@ -203,7 +203,7 @@ process_already_login_client(struct evhttp_request *req, const char *mac, const 
     }
 
     // Log client info for debugging
-    debug(LOG_INFO, "Found client %s: ip [%s] ip6 [%s] remote_host [%s] addr_type [%d]",
+    debug(LOG_DEBUG, "Found client %s: ip [%s] ip6 [%s] remote_host [%s] addr_type [%d]",
         mac,
         client->ip ? client->ip : "N/A",
         client->ip6 ? client->ip6 : "N/A",
@@ -551,7 +551,7 @@ ev_http_connection_get_peer(struct evhttp_connection *evcon, char **remote_host,
                 free(*remote_host);
                 return 0;
             }
-            debug(LOG_INFO, "IPv4-mapped IPv6 address detected, converted to IPv4: %s", *remote_host);
+            debug(LOG_DEBUG, "IPv4-mapped IPv6 address detected, converted to IPv4: %s", *remote_host);
             return 1; // IPv4
         } else {
             // Native IPv6 address
@@ -561,7 +561,7 @@ ev_http_connection_get_peer(struct evhttp_connection *evcon, char **remote_host,
                 free(*remote_host);
                 return 0;
             }
-            debug(LOG_INFO, "IPv6 address detected: %s", *remote_host);
+            debug(LOG_DEBUG, "IPv6 address detected: %s", *remote_host);
             return 2; // IPv6
         }
     } 
@@ -573,7 +573,7 @@ ev_http_connection_get_peer(struct evhttp_connection *evcon, char **remote_host,
             free(*remote_host);
             return 0;
         }
-        debug(LOG_INFO, "IPv4 address detected: %s", *remote_host);
+        debug(LOG_DEBUG, "IPv4 address detected: %s", *remote_host);
         return 1; // IPv4
     }
 
@@ -652,7 +652,7 @@ ev_http_callback_404(struct evhttp_request *req, void *arg)
         return;
     }
     
-    debug(LOG_INFO, "ev_http_callback_404 [%s : %s] address type [%d]", remote_host, mac, addr_type);
+    debug(LOG_DEBUG, "ev_http_callback_404 [%s : %s] address type [%d]", remote_host, mac, addr_type);
 
     if (process_already_login_client(req, mac, remote_host, addr_type, is_ssl)) return;
 
