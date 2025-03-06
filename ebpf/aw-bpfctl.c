@@ -249,16 +249,30 @@ parse_mac_address(struct mac_addr *m_addr, const char *str_val)
     }
 }
 
+static void
+aw_bpf_usage()
+{
+    fprintf(stderr, "Usage:\n");
+    fprintf(stderr, "  aw-bpfctl <ipv4|ipv6|mac> add <IP_ADDRESS|MAC_ADDRESS>\n");
+    fprintf(stderr, "  aw-bpfctl <ipv4|ipv6|mac> list\n");
+    fprintf(stderr, "  aw-bpfctl <ipv4|ipv6|mac> del <IP_ADDRESS|MAC_ADDRESS>\n");
+    fprintf(stderr, "  aw-bpfctl <ipv4|ipv6|mac> flush\n");
+    fprintf(stderr, "  aw-bpfctl <ipv4|ipv6|mac> json\n");
+    fprintf(stderr, "  aw-bpfctl <ipv4|ipv6|mac> update <IP_ADDRESS|MAC_ADDRESS> downrate <bps> uprate <bps>\n");
+    fprintf(stderr, "  aw-bpfctl <ipv4|ipv6|mac> update_all downrate <bps> uprate <bps>\n");
+}
+
+static bool
+is_valid_command(const char *cmd)
+{
+    return !strcmp(cmd, "add") || !strcmp(cmd, "list") || !strcmp(cmd, "del") || !strcmp(cmd, "flush") || !strcmp(cmd, "json") || !strcmp(cmd, "update") || !strcmp(cmd, "update_all");
+}
+
 int 
-main(int argc, char **argv) {
+main(int argc, char **argv) 
+{
     if (argc < 3) {
-        fprintf(stderr, "Usage:\n");
-        fprintf(stderr, "  %s <ipv4|ipv6|mac> add <IP_ADDRESS|MAC_ADDRESS>\n", argv[0]);
-        fprintf(stderr, "  %s <ipv4|ipv6|mac> list\n", argv[0]);
-        fprintf(stderr, "  %s <ipv4|ipv6|mac> del <IP_ADDRESS|MAC_ADDRESS>\n", argv[0]);
-        fprintf(stderr, "  %s <ipv4|ipv6|mac> flush\n", argv[0]);
-        fprintf(stderr, "  %s <ipv4|ipv6|mac> json\n", argv[0]);
-        fprintf(stderr, "  %s <ipv4|ipv6|mac> update <IP_ADDRESS|MAC_ADDRESS> downrate <bps> uprate <bps>\n", argv[0]);
+        aw_bpf_usage();
         return EXIT_FAILURE;
     }
 
@@ -286,6 +300,12 @@ main(int argc, char **argv) {
     int map_fd = bpf_obj_get(map_path);
     if (map_fd < 0) {
         perror("bpf_obj_get");
+        return EXIT_FAILURE;
+    }
+
+    if (!is_valid_command(cmd)) {
+        fprintf(stderr, "Invalid command\n");
+        aw_bpf_usage();
         return EXIT_FAILURE;
     }
 
@@ -570,6 +590,49 @@ main(int argc, char **argv) {
         }
 
         printf("%s %s key %s successfully.\n", exists ? "Updated" : "Added", map_type, addr_str);
+
+    } else if (strcmp(cmd, "update_all") == 0) {
+        if (argc != 6 || strcmp(argv[3], "downrate") != 0 || strcmp(argv[5], "uprate") != 0) {
+            fprintf(stderr, "Usage: %s %s update_all downrate <bps> uprate <bps>\n", argv[0], map_type);
+            return EXIT_FAILURE;
+        }
+    
+        uint32_t downrate = atoi(argv[4]);
+        uint32_t uprate = atoi(argv[5]);
+    
+        // Prepare stats structure
+        struct traffic_stats stats = {0};
+        stats.incoming_rate_limit = downrate;
+        stats.outgoing_rate_limit = uprate;
+    
+        // Iterate over all keys in the map
+        if (strcmp(map_type, "ipv4") == 0) {
+            __be32 next_key = 0;
+            while (bpf_map_get_next_key(map_fd, &next_key, &next_key) == 0) {
+                if (bpf_map_update_elem(map_fd, &next_key, &stats, BPF_EXIST) < 0) {
+                    perror("bpf_map_update_elem (IPv4)");
+                    return EXIT_FAILURE;
+                }
+            }
+        } else if (strcmp(map_type, "mac") == 0) {
+            struct mac_addr next_key = {0};
+            while (bpf_map_get_next_key(map_fd, &next_key, &next_key) == 0) {
+                if (bpf_map_update_elem(map_fd, &next_key, &stats, BPF_EXIST) < 0) {
+                    perror("bpf_map_update_elem (MAC)");
+                    return EXIT_FAILURE;
+                }
+            }
+        } else { // ipv6
+            struct in6_addr next_key = {0};
+            while (bpf_map_get_next_key(map_fd, &next_key, &next_key) == 0) {
+                if (bpf_map_update_elem(map_fd, &next_key, &stats, BPF_EXIST) < 0) {
+                    perror("bpf_map_update_elem (IPv6)");
+                    return EXIT_FAILURE;
+                }
+            }
+        }
+    
+        printf("Updated all %s keys successfully.\n", map_type);
     } else {
         fprintf(stderr, "Invalid command. Use 'add <IP_ADDRESS>' or 'list'.\n");
         return EXIT_FAILURE;
