@@ -198,11 +198,11 @@ vpp_fw_access(fw_access_t type, const char *ip, const char *mac, int tag)
     }
 
     char cmd[256] = {0};
-    int ret = snprintf(cmd, sizeof(cmd), "vppctl redirect set auth user %s %s", ip, action);
+    int ret = snprintf(cmd, sizeof(cmd), "stdbuf -oL sudo /usr/bin/vppctl redirect set auth user %s %s", ip, action);
     if (ret < 0 || ret >= sizeof(cmd)) {
         debug(LOG_ERR, "Command buffer overflow");
         return -1;
     }
-
+    debug(LOG_INFO, "Executing VPP command: %s", cmd);
     return execute(cmd, 0);
 }
