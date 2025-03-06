@@ -96,8 +96,6 @@ char *get_serialize_trusted_pan_domains(void);
 
 char *mqtt_get_trusted_pan_domains_text(void);
 
-char *mqtt_get_status_text(void);
-
 void trim_newline(char *);
 
 /** @brief Is mac source is wired or not */

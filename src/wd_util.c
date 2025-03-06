@@ -193,84 +193,23 @@ is_auth_online()
     }
 }
 
-char *
-mqtt_get_status_text()
+static char *
+get_aw_uptime()
 {
-	time_t uptime = 0;
+	// according to stared_time to calculate uptime of apfree wifidog
+	time_t uptime = time(NULL) - started_time;
 	unsigned int days = 0, hours = 0, minutes = 0, seconds = 0;
-	struct json_object *jstatus = json_object_new_object();
-	struct sys_info info;
-	memset(&info, 0, sizeof(info));
-		
-	get_sys_info(&info);
-
-	json_object_object_add(jstatus, "sys_uptime", json_object_new_int(info.sys_uptime));
-	json_object_object_add(jstatus, "sys_memfree", json_object_new_int(info.sys_memfree));
-	json_object_object_add(jstatus, "nf_conntrack_count", json_object_new_int(info.nf_conntrack_count));
-	json_object_object_add(jstatus, "cpu_usage", json_object_new_double(info.cpu_usage));
-	json_object_object_add(jstatus, "sys_load", json_object_new_double(info.sys_load));
-	json_object_object_add(jstatus, "boad_type", 
-	json_object_new_string(g_type?g_type:"null"));
-	json_object_object_add(jstatus, "boad_name", 
-	json_object_new_string(g_name?g_name:"null"));
-
-	uptime = time(NULL) - started_time;
-	days = (unsigned int)uptime / (24 * 60 * 60);
-	uptime -= days * (24 * 60 * 60);
-	hours = (unsigned int)uptime / (60 * 60);
-	uptime -= hours * (60 * 60);
-	minutes = (unsigned int)uptime / 60;
-	uptime -= minutes * 60;
-	seconds = (unsigned int)uptime;
+	unsigned int total_seconds = (unsigned int)uptime;
+	debug(LOG_DEBUG, "uptime: %d", total_seconds);
+	days = total_seconds / (24 * 60 * 60);
+	total_seconds %= (24 * 60 * 60);
+	hours = total_seconds / (60 * 60);
+	total_seconds %= (60 * 60);
+	minutes = total_seconds / 60;
+	seconds = total_seconds % 60;
 	char wifidog_uptime[128] = {0};
 	snprintf(wifidog_uptime, 128, "%dD %dH %dM %dS", days, hours, minutes, seconds);
-
-	json_object_object_add(jstatus, "wifidog_version", json_object_new_string(VERSION));
-	json_object_object_add(jstatus, "wifidog_uptime", json_object_new_string(wifidog_uptime));
-	json_object_object_add(jstatus, "auth_server", json_object_new_int(is_auth_online()));
-    
-	t_client *sublist = NULL, *current = NULL;
-
-	LOCK_CLIENT_LIST();
-	int count = client_list_dup(&sublist);
-	UNLOCK_CLIENT_LIST();
-	json_object_object_add(jstatus, "online_client_count", json_object_new_int(count));
-
-	current = sublist;
-
-	int active_count = 0;
-	struct json_object *jclients = NULL;
-	while (current != NULL) {
-		if (!jclients)
-			jclients = json_object_new_array();
-		struct json_object *jclient = json_object_new_object();
-		json_object_object_add(jclient, "status", json_object_new_int(current->is_online));
-		json_object_object_add(jclient, "ip", json_object_new_string(current->ip));
-		json_object_object_add(jclient, "mac", json_object_new_string(current->mac));
-		json_object_object_add(jclient, "token", json_object_new_string(current->token));
-		json_object_object_add(jclient, "name", 
-			json_object_new_string(current->name != NULL?current->name:"null"));
-		json_object_object_add(jclient, "first_login", json_object_new_int64(current->first_login));
-		json_object_object_add(jclient, "downloaded", 
-			json_object_new_int64(current->counters.incoming));
-		json_object_object_add(jclient, "uploaded",
-			json_object_new_int64(current->counters.outgoing));
-
-		json_object_array_add(jclients, jclient);
-
-		if(current->is_online)
-			active_count++;
-		current = current->next;
-	}
-
-	client_list_destroy(sublist);
-	if (jclients)
-		json_object_object_add(jstatus, "clients", jclients);
-
-	json_object_object_add(jstatus, "active_client_count", json_object_new_int(active_count));
-	char *retStr = safe_strdup(json_object_to_json_string(jstatus));
-	json_object_put(jstatus);
-	return retStr;
+	return safe_strdup(wifidog_uptime);
 }
 
 /**
@@ -309,24 +248,16 @@ get_status_text()
 	t_client *sublist, *current;
 	int count, active_count;
 	time_t uptime = 0;
-	unsigned int days = 0, hours = 0, minutes = 0, seconds = 0;
 	t_trusted_mac *p;
 	t_offline_client *oc_list;
 	char *status_text;
+	char *aw_uptime = get_aw_uptime();
 
 	evbuffer_add_printf(evb, "apfree wifidog status\n\n");
 
-	uptime = time(NULL) - started_time;
-	days = (unsigned int)uptime / (24 * 60 * 60);
-	uptime -= days * (24 * 60 * 60);
-	hours = (unsigned int)uptime / (60 * 60);
-	uptime -= hours * (60 * 60);
-	minutes = (unsigned int)uptime / 60;
-	uptime -= minutes * 60;
-	seconds = (unsigned int)uptime;
-
 	evbuffer_add_printf(evb, "Version: " VERSION "\n");
-	evbuffer_add_printf(evb, "Uptime: %ud %uh %um %us\n", days, hours, minutes, seconds);
+	evbuffer_add_printf(evb, "Uptime: %s\n", aw_uptime);
+	free(aw_uptime);
 	evbuffer_add_printf(evb, "Has been restarted: %s%s%d%s\n", 
 		restart_orig_pid ? "yes (from PID " : "no ",
 		restart_orig_pid ? "" : "",
@@ -348,13 +279,13 @@ get_status_text()
 	active_count = 0;
 	while (current != NULL) {
 		evbuffer_add_printf(evb, "\nClient %d status [%d]\n", count, current->is_online);
-		evbuffer_add_printf(evb, "  IP: %s\n", current->ip);
-		evbuffer_add_printf(evb, "  IP6: %s\n", current->ip6);
-		evbuffer_add_printf(evb, "  MAC: %s\n", current->mac);
-		evbuffer_add_printf(evb, "  Token: %s\n", current->token);
+		evbuffer_add_printf(evb, "  IP: %s\n", current->ip?current->ip:"N/A");
+		evbuffer_add_printf(evb, "  IP6: %s\n", current->ip6?current->ip6:"N/A");
+		evbuffer_add_printf(evb, "  MAC: %s\n", current->mac?current->mac:"N/A");
+		evbuffer_add_printf(evb, "  Token: %s\n", current->token?current->token:"N/A");
 		evbuffer_add_printf(evb, "  First Login: %lld\n", (long long)current->first_login);
 		evbuffer_add_printf(evb, "  Online Time: %lld\n", (long long)(time(NULL) - current->first_login));
-		evbuffer_add_printf(evb, "  Name: %s\n", current->name != NULL?current->name:"null");
+		evbuffer_add_printf(evb, "  Name: %s\n", current->name?current->name:"N/A");
 		evbuffer_add_printf(evb, "  Downloaded: %llu\n  Uploaded: %llu\n", 
 			current->counters.incoming, current->counters.outgoing);
 		evbuffer_add_printf(evb, "  Downloaded_v6: %llu\n  Uploaded_v6: %llu\n", 
@@ -422,12 +353,12 @@ get_client_status_json()
 			jclients = json_object_new_array();
 		struct json_object *jclient = json_object_new_object();
 		json_object_object_add(jclient, "status", json_object_new_int(current->is_online));
-		json_object_object_add(jclient, "ip", json_object_new_string(current->ip));
-		json_object_object_add(jclient, "ip6", json_object_new_string(current->ip6));
-		json_object_object_add(jclient, "mac", json_object_new_string(current->mac));
-		json_object_object_add(jclient, "token", json_object_new_string(current->token));
+		json_object_object_add(jclient, "ip", json_object_new_string(current->ip ? current->ip : "N/A"));
+		json_object_object_add(jclient, "ip6", json_object_new_string(current->ip6 ? current->ip6 : "N/A"));
+		json_object_object_add(jclient, "mac", json_object_new_string(current->mac ? current->mac : "N/A"));
+		json_object_object_add(jclient, "token", json_object_new_string(current->token ? current->token : "N/A"));
 		json_object_object_add(jclient, "name", 
-			json_object_new_string(current->name != NULL?current->name:"null"));
+			json_object_new_string(current->name ? current->name : "N/A"));
 		json_object_object_add(jclient, "first_login", json_object_new_int64(current->first_login));
 		json_object_object_add(jclient, "online_time", 
 			json_object_new_int64(time(NULL) - current->first_login));

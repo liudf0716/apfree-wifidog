@@ -175,10 +175,7 @@ save_rule_op(void *mosq, const char *type, const char *value, const int req_id, 
 void 
 get_status_op(void *mosq, const char *type, const char *value, const int req_id, const s_config *config)
 {
-	char *status = mqtt_get_status_text();
-	send_mqtt_response(mosq, req_id, 200, status, config);
-	if (status)
-		free(status);
+	return;
 }
 
 void 
