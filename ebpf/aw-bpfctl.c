@@ -268,6 +268,338 @@ is_valid_command(const char *cmd)
     return !strcmp(cmd, "add") || !strcmp(cmd, "list") || !strcmp(cmd, "del") || !strcmp(cmd, "flush") || !strcmp(cmd, "json") || !strcmp(cmd, "update") || !strcmp(cmd, "update_all");
 }
 
+static bool handle_add_command(int map_fd, const char *map_type, const char *addr_str) {
+    struct traffic_stats stats = {0};
+    void *key = NULL;
+    int key_size = 0;
+    
+    if (strcmp(map_type, "ipv4") == 0) {
+        __be32 ipv4_key = 0;
+        if (inet_pton(AF_INET, addr_str, &ipv4_key) != 1) {
+            perror("inet_pton (IPv4)");
+            return false;
+        }
+        key = &ipv4_key;
+        key_size = sizeof(ipv4_key);
+    } else if (strcmp(map_type, "mac") == 0) {
+        if (!is_valid_mac_addr(addr_str)) {
+            fprintf(stderr, "Invalid MAC address format\n");
+            return false;
+        }
+        struct mac_addr mac_key = {0};
+        parse_mac_address(&mac_key, addr_str);
+        key = &mac_key;
+        key_size = sizeof(mac_key);
+    } else if (strcmp(map_type, "ipv6") == 0) {
+        struct in6_addr ipv6_key = {0};
+        if (inet_pton(AF_INET6, addr_str, &ipv6_key) != 1) {
+            perror("inet_pton (IPv6)");
+            return false;
+        }
+        key = &ipv6_key;
+        key_size = sizeof(ipv6_key);
+    } else {
+        fprintf(stderr, "Invalid address type\n");
+        return false;
+    }
+
+    struct traffic_stats tmp;
+    if (bpf_map_lookup_elem(map_fd, key, &tmp) == 0) {
+        printf("%s key %s already exists in map.\n", map_type, addr_str);
+        return true;
+    }
+
+    if (bpf_map_update_elem(map_fd, key, &stats, BPF_NOEXIST) < 0) {
+        perror("bpf_map_update_elem");
+        return false;
+    }
+
+    printf("Added %s key %s successfully.\n", map_type, addr_str);
+    return true;
+}
+
+static bool handle_list_command(int map_fd, const char *map_type) {
+    int ret;
+    
+    if (strcmp(map_type, "ipv4") == 0) {
+        __be32 cur_key = 0, next_key = 0;
+        struct traffic_stats stats = {0};
+        
+        while ((ret = bpf_map_get_next_key(map_fd, cur_key ? &cur_key : NULL, &next_key)) == 0) {
+            if (bpf_map_lookup_elem(map_fd, &next_key, &stats) < 0) {
+                perror("bpf_map_lookup_elem (IPv4)");
+            } else {
+                print_stats_ipv4(next_key, &stats);
+            }
+            cur_key = next_key;
+        }
+        
+        if (ret != -ENOENT) {
+            perror("bpf_map_get_next_key (IPv4)");
+            return false;
+        }
+    } else if (strcmp(map_type, "mac") == 0) {
+        struct mac_addr cur_key = {0}, next_key = {0};
+        struct traffic_stats stats = {0};
+        
+        while ((ret = bpf_map_get_next_key(map_fd, 
+               (memcmp(&cur_key, &(struct mac_addr){0}, sizeof(cur_key)) ? &cur_key : NULL),
+               &next_key)) == 0) {
+            if (bpf_map_lookup_elem(map_fd, &next_key, &stats) < 0) {
+                perror("bpf_map_lookup_elem (MAC)");
+            } else {
+                print_stats_mac(next_key, &stats);
+            }
+            cur_key = next_key;
+        }
+        
+        if (ret != -ENOENT) {
+            perror("bpf_map_get_next_key (MAC)");
+            return false;
+        }
+    } else { // ipv6
+        struct in6_addr cur_key = {0}, next_key = {0};
+        struct traffic_stats stats = {0};
+        
+        while ((ret = bpf_map_get_next_key(map_fd, 
+               (memcmp(&cur_key, &(struct in6_addr){0}, sizeof(cur_key)) ? &cur_key : NULL),
+               &next_key)) == 0) {
+            if (bpf_map_lookup_elem(map_fd, &next_key, &stats) < 0) {
+                perror("bpf_map_lookup_elem (IPv6)");
+            } else {
+                print_stats_ipv6(next_key, &stats);
+            }
+            cur_key = next_key;
+        }
+        
+        if (ret != -ENOENT) {
+            perror("bpf_map_get_next_key (IPv6)");
+            return false;
+        }
+    }
+    
+    return true;
+}
+
+static bool handle_json_command(int map_fd, const char *map_type) {
+    struct json_object *jroot = json_object_new_object();
+    struct json_object *jdata = json_object_new_array();
+    
+    if (strcmp(map_type, "ipv4") == 0) {
+        __be32 cur_key = 0, next_key = 0;
+        struct traffic_stats stats = {0};
+        
+        while (bpf_map_get_next_key(map_fd, cur_key ? &cur_key : NULL, &next_key) == 0) {
+            if (bpf_map_lookup_elem(map_fd, &next_key, &stats) == 0) {
+                struct json_object *jentry = parse_stats_ipv4_json(next_key, &stats);
+                if (jentry) {
+                    json_object_array_add(jdata, jentry);
+                }
+            }
+            cur_key = next_key;
+        }
+    } else if (strcmp(map_type, "mac") == 0) {
+        struct mac_addr cur_key = {0}, next_key = {0};
+        struct traffic_stats stats = {0};
+
+        while (bpf_map_get_next_key(map_fd, 
+               (memcmp(&cur_key, &(struct mac_addr){0}, sizeof(cur_key)) ? &cur_key : NULL),
+               &next_key) == 0) {
+            if (bpf_map_lookup_elem(map_fd, &next_key, &stats) == 0) {
+                struct json_object *jentry = parse_stats_mac_json(next_key, &stats);
+                if (jentry) {
+                    json_object_array_add(jdata, jentry);
+                }
+            }
+            cur_key = next_key;
+        }
+    } else { // ipv6
+        struct in6_addr cur_key = {0}, next_key = {0};
+        struct traffic_stats stats = {0};
+
+        while (bpf_map_get_next_key(map_fd, 
+               (memcmp(&cur_key, &(struct in6_addr){0}, sizeof(cur_key)) ? &cur_key : NULL),
+               &next_key) == 0) {
+            if (bpf_map_lookup_elem(map_fd, &next_key, &stats) == 0) {
+                struct json_object *jentry = parse_stats_ipv6_json(next_key, &stats);
+                if (jentry) {
+                    json_object_array_add(jdata, jentry);
+                }
+            }
+            cur_key = next_key;
+        }
+    }
+
+    json_object_object_add(jroot, "status", json_object_new_string("success"));
+    json_object_object_add(jroot, "type", json_object_new_string(map_type));
+    json_object_object_add(jroot, "data", jdata);
+
+    printf("%s\n", json_object_to_json_string(jroot));
+    json_object_put(jroot);
+    return true;
+}
+
+static bool handle_del_command(int map_fd, const char *map_type, const char *addr_str) {
+    if (strcmp(map_type, "ipv4") == 0) {
+        __be32 key = 0;
+        if (inet_pton(AF_INET, addr_str, &key) != 1) {
+            perror("inet_pton (IPv4)");
+            return false;
+        }
+        if (bpf_map_delete_elem(map_fd, &key) < 0) {
+            perror("bpf_map_delete_elem (IPv4)");
+            return false;
+        }
+        printf("Deleted IPv4 key %s successfully.\n", addr_str);
+    } else if (strcmp(map_type, "mac") == 0) {
+        if (!is_valid_mac_addr(addr_str)) {
+            fprintf(stderr, "Invalid MAC address format\n");
+            return false;
+        }
+        struct mac_addr key = {0};
+        parse_mac_address(&key, addr_str);
+        if (bpf_map_delete_elem(map_fd, &key) < 0) {
+            perror("bpf_map_delete_elem (MAC)");
+            return false;
+        }
+        printf("Deleted MAC key %s successfully.\n", addr_str);
+    } else { // ipv6
+        struct in6_addr key = {0};
+        if (inet_pton(AF_INET6, addr_str, &key) != 1) {
+            perror("inet_pton (IPv6)");
+            return false;
+        }
+        if (bpf_map_delete_elem(map_fd, &key) < 0) {
+            perror("bpf_map_delete_elem (IPv6)");
+            return false;
+        }
+        printf("Deleted IPv6 key %s successfully.\n", addr_str);
+    }
+    return true;
+}
+
+static void* get_address_key(const char *map_type, const char *addr_str, void *key_storage) {
+    if (strcmp(map_type, "ipv4") == 0) {
+        __be32 *ipv4_key = (__be32*)key_storage;
+        if (inet_pton(AF_INET, addr_str, ipv4_key) != 1) {
+            perror("inet_pton (IPv4)");
+            return NULL;
+        }
+        return ipv4_key;
+    } else if (strcmp(map_type, "mac") == 0) {
+        if (!is_valid_mac_addr(addr_str)) {
+            fprintf(stderr, "Invalid MAC address format\n");
+            return NULL;
+        }
+        struct mac_addr *mac_key = (struct mac_addr*)key_storage;
+        memset(mac_key, 0, sizeof(struct mac_addr));
+        parse_mac_address(mac_key, addr_str);
+        return mac_key;
+    } else { // ipv6
+        struct in6_addr *ipv6_key = (struct in6_addr*)key_storage;
+        if (inet_pton(AF_INET6, addr_str, ipv6_key) != 1) {
+            perror("inet_pton (IPv6)");
+            return NULL;
+        }
+        return ipv6_key;
+    }
+}
+
+static bool handle_update_command(int map_fd, const char *map_type, const char *addr_str, 
+                                uint32_t downrate, uint32_t uprate) {
+    union {
+        __be32 ipv4_key;
+        struct mac_addr mac_key;
+        struct in6_addr ipv6_key;
+    } key_storage;
+    
+    void *key = get_address_key(map_type, addr_str, &key_storage);
+    if (!key) {
+        return false;
+    }
+
+    // Look up existing stats
+    struct traffic_stats stats = {0};
+    bool exists = (bpf_map_lookup_elem(map_fd, key, &stats) == 0);
+    
+    // Update rate limits
+    stats.incoming_rate_limit = downrate;
+    stats.outgoing_rate_limit = uprate;
+    
+    // Update or add the entry
+    int update_flag = exists ? BPF_EXIST : BPF_NOEXIST;
+    if (bpf_map_update_elem(map_fd, key, &stats, update_flag) < 0) {
+        perror("bpf_map_update_elem");
+        return false;
+    }
+
+    printf("%s %s key %s successfully.\n", exists ? "Updated" : "Added", map_type, addr_str);
+    return true;
+}
+
+static bool handle_update_all_command(int map_fd, const char *map_type, 
+                                    uint32_t downrate, uint32_t uprate) {
+    // Prepare stats structure with updated rate limits
+    struct traffic_stats stats = {0};
+    stats.incoming_rate_limit = downrate;
+    stats.outgoing_rate_limit = uprate;
+    
+    if (strcmp(map_type, "ipv4") == 0) {
+        __be32 cur_key = 0, next_key = 0;
+        struct traffic_stats existing;
+        
+        while (bpf_map_get_next_key(map_fd, cur_key ? &cur_key : NULL, &next_key) == 0) {
+            // Keep existing traffic stats, just update rate limits
+            if (bpf_map_lookup_elem(map_fd, &next_key, &existing) == 0) {
+                existing.incoming_rate_limit = downrate;
+                existing.outgoing_rate_limit = uprate;
+                if (bpf_map_update_elem(map_fd, &next_key, &existing, BPF_EXIST) < 0) {
+                    perror("bpf_map_update_elem (IPv4)");
+                    return false;
+                }
+            }
+            cur_key = next_key;
+        }
+    } else if (strcmp(map_type, "mac") == 0) {
+        struct mac_addr cur_key = {0}, next_key = {0};
+        struct traffic_stats existing;
+        
+        while (bpf_map_get_next_key(map_fd, 
+               (memcmp(&cur_key, &(struct mac_addr){0}, sizeof(cur_key)) ? &cur_key : NULL),
+               &next_key) == 0) {
+            if (bpf_map_lookup_elem(map_fd, &next_key, &existing) == 0) {
+                existing.incoming_rate_limit = downrate;
+                existing.outgoing_rate_limit = uprate;
+                if (bpf_map_update_elem(map_fd, &next_key, &existing, BPF_EXIST) < 0) {
+                    perror("bpf_map_update_elem (MAC)");
+                    return false;
+                }
+            }
+            cur_key = next_key;
+        }
+    } else { // ipv6
+        struct in6_addr cur_key = {0}, next_key = {0};
+        struct traffic_stats existing;
+        
+        while (bpf_map_get_next_key(map_fd, 
+               (memcmp(&cur_key, &(struct in6_addr){0}, sizeof(cur_key)) ? &cur_key : NULL),
+               &next_key) == 0) {
+            if (bpf_map_lookup_elem(map_fd, &next_key, &existing) == 0) {
+                existing.incoming_rate_limit = downrate;
+                existing.outgoing_rate_limit = uprate;
+                if (bpf_map_update_elem(map_fd, &next_key, &existing, BPF_EXIST) < 0) {
+                    perror("bpf_map_update_elem (IPv6)");
+                    return false;
+                }
+            }
+            cur_key = next_key;
+        }
+    }
+
+    printf("Updated all %s keys successfully.\n", map_type);
+    return true;
+}
+
 int 
 main(int argc, char **argv) 
 {
@@ -278,365 +610,84 @@ main(int argc, char **argv)
 
     const char *map_type = argv[1];
     const char *cmd = argv[2];
-    const char *map_path = NULL;
 
-    /* Set map path based on map type */
-    if (!strcmp(map_type, "ipv4")) {
-        map_path = "/sys/fs/bpf/tc/globals/ipv4_map";
-    } else if (!strcmp(map_type, "ipv6")) {
-        map_path = "/sys/fs/bpf/tc/globals/ipv6_map";
-    } else if (!strcmp(map_type, "mac")) {
-        map_path = "/sys/fs/bpf/tc/globals/mac_map";
-    } else {
+    // Validate map type
+    if (strcmp(map_type, "ipv4") != 0 && 
+        strcmp(map_type, "ipv6") != 0 && 
+        strcmp(map_type, "mac") != 0) {
         fprintf(stderr, "Invalid map type. Must be 'ipv4', 'ipv6', or 'mac'.\n");
         return EXIT_FAILURE;
     }
 
-    if (!map_path) {
-        fprintf(stderr, "Failed to determine map path\n");
-        return EXIT_FAILURE;
-    }
+    // Determine map path based on map type
+    char map_path[100];
+    snprintf(map_path, sizeof(map_path), "/sys/fs/bpf/tc/globals/%s_map", map_type);
 
+    // Open the BPF map
     int map_fd = bpf_obj_get(map_path);
     if (map_fd < 0) {
         perror("bpf_obj_get");
         return EXIT_FAILURE;
     }
 
+    // Validate command
     if (!is_valid_command(cmd)) {
         fprintf(stderr, "Invalid command\n");
         aw_bpf_usage();
         return EXIT_FAILURE;
     }
 
+    bool success = false;
+
+    // Handle commands
     if (strcmp(cmd, "add") == 0) {
         if (argc != 4) {
             fprintf(stderr, "Usage: %s %s add <IP_ADDRESS|MAC_ADDRESS>\n", argv[0], map_type);
             return EXIT_FAILURE;
         }
-
-        const char *addr_str = argv[3];
-        struct traffic_stats stats = {0};
-        void *key = NULL;
-        int key_size = 0;
-        bool success = false;
-
-        if (strcmp(map_type, "ipv4") == 0) {
-            __be32 ipv4_key = 0;
-            if (inet_pton(AF_INET, addr_str, &ipv4_key) != 1) {
-                perror("inet_pton (IPv4)");
-                return EXIT_FAILURE;
-            }
-            key = &ipv4_key;
-            key_size = sizeof(ipv4_key);
-            success = true;
-        } else if (strcmp(map_type, "mac") == 0) {
-            if (!is_valid_mac_addr(addr_str)) {
-                fprintf(stderr, "Invalid MAC address format\n");
-                return EXIT_FAILURE;
-            }
-            struct mac_addr mac_key = {0};
-            parse_mac_address(&mac_key, addr_str);
-            key = &mac_key;
-            key_size = sizeof(mac_key);
-            success = true;
-        } else if (strcmp(map_type, "ipv6") == 0) {
-            struct in6_addr ipv6_key = {0};
-            if (inet_pton(AF_INET6, addr_str, &ipv6_key) != 1) {
-                perror("inet_pton (IPv6)");
-                return EXIT_FAILURE;
-            }
-            key = &ipv6_key;
-            key_size = sizeof(ipv6_key);
-            success = true;
-        }
-
-        if (!success || !key) {
-            fprintf(stderr, "Invalid address type\n");
-            return EXIT_FAILURE;
-        }
-
-        struct traffic_stats tmp;
-        if (bpf_map_lookup_elem(map_fd, key, &tmp) == 0) {
-            printf("%s key %s already exists in map.\n", map_type, addr_str);
-            return EXIT_SUCCESS;
-        }
-
-        if (bpf_map_update_elem(map_fd, key, &stats, BPF_NOEXIST) < 0) {
-            perror("bpf_map_update_elem");
-            return EXIT_FAILURE;
-        }
-
-        printf("Added %s key %s successfully.\n", map_type, addr_str);
-    } else if (strcmp(cmd, "list") == 0) {
-        if (strcmp(map_type, "ipv4") == 0) {
-            __be32 cur_key = 0, next_key = 0;
-            int ret;
-            struct traffic_stats stats = {0};
-            /* Iteration: passing NULL as current key for the first call */
-            while ((ret = bpf_map_get_next_key(map_fd,
-                                                cur_key ? &cur_key : NULL,
-                                                &next_key)) == 0) {
-                if (bpf_map_lookup_elem(map_fd, &next_key, &stats) < 0) {
-                    perror("bpf_map_lookup_elem (IPv4)");
-                } else {
-                    print_stats_ipv4(next_key, &stats);
-                }
-                cur_key = next_key;
-            }
-            if (ret != -ENOENT)
-                perror("bpf_map_get_next_key (IPv4)");
-        } else if (strcmp(map_type, "mac") == 0) {
-            struct mac_addr cur_key = {0}, next_key = {0};
-            int ret;
-            struct traffic_stats stats = {0};
-            while ((ret = bpf_map_get_next_key(map_fd,
-                                        (memcmp(&cur_key, &(struct mac_addr){0}, sizeof(cur_key)) ? &cur_key : NULL),
-                                        &next_key)) == 0) {
-                if (bpf_map_lookup_elem(map_fd, &next_key, &stats) < 0) {
-                    perror("bpf_map_lookup_elem (MAC)");
-                } else {
-                    print_stats_mac(next_key, &stats);
-                }
-                cur_key = next_key;
-            }
-            if (ret != -ENOENT)
-                perror("bpf_map_get_next_key (MAC)");
-        } else { // ipv6
-            struct in6_addr cur_key = {0}, next_key = {0};
-            int ret;
-            struct traffic_stats stats = {0};
-            while ((ret = bpf_map_get_next_key(map_fd,
-                                        (memcmp(&cur_key, &(struct in6_addr){0}, sizeof(cur_key)) ? &cur_key : NULL),
-                                        &next_key)) == 0) {
-                if (bpf_map_lookup_elem(map_fd, &next_key, &stats) < 0) {
-                    perror("bpf_map_lookup_elem (IPv6)");
-                } else {
-                    print_stats_ipv6(next_key, &stats);
-                }
-                cur_key = next_key;
-            }
-            if (ret != -ENOENT)
-                perror("bpf_map_get_next_key (IPv6)");
-        }
-    } else if (strcmp(cmd, "json") == 0) {
+        success = handle_add_command(map_fd, map_type, argv[3]);
+    } 
+    else if (strcmp(cmd, "list") == 0) {
+        success = handle_list_command(map_fd, map_type);
+    } 
+    else if (strcmp(cmd, "json") == 0) {
         if (argc != 3) {
             printf("{\"error\":\"Invalid arguments\"}\n");
             return EXIT_FAILURE;
         }
-
-        struct json_object *jroot = json_object_new_object();
-        struct json_object *jdata = json_object_new_array();
-
-        if (strcmp(map_type, "ipv4") == 0) {
-            __be32 cur_key = 0, next_key = 0;
-            struct traffic_stats stats = {0};
-            
-            while (bpf_map_get_next_key(map_fd, cur_key ? &cur_key : NULL, &next_key) == 0) {
-                if (bpf_map_lookup_elem(map_fd, &next_key, &stats) == 0) {
-                    struct json_object *jentry = parse_stats_ipv4_json(next_key, &stats);
-                    if (jentry) {
-                        json_object_array_add(jdata, jentry);
-                    }
-                }
-                cur_key = next_key;
-            }
-        } else if (strcmp(map_type, "mac") == 0) {
-            struct mac_addr cur_key = {0}, next_key = {0};
-            struct traffic_stats stats = {0};
-
-            while (bpf_map_get_next_key(map_fd, 
-                   (memcmp(&cur_key, &(struct mac_addr){0}, sizeof(cur_key)) ? &cur_key : NULL),
-                   &next_key) == 0) {
-                if (bpf_map_lookup_elem(map_fd, &next_key, &stats) == 0) {
-                    struct json_object *jentry = parse_stats_mac_json(next_key, &stats);
-                    if (jentry) {
-                        json_object_array_add(jdata, jentry);
-                    }
-                }
-                cur_key = next_key;
-            }
-        } else { // ipv6
-            struct in6_addr cur_key = {0}, next_key = {0};
-            struct traffic_stats stats = {0};
-
-            while (bpf_map_get_next_key(map_fd, 
-                   (memcmp(&cur_key, &(struct in6_addr){0}, sizeof(cur_key)) ? &cur_key : NULL),
-                   &next_key) == 0) {
-                if (bpf_map_lookup_elem(map_fd, &next_key, &stats) == 0) {
-                    struct json_object *jentry = parse_stats_ipv6_json(next_key, &stats);
-                    if (jentry) {
-                        json_object_array_add(jdata, jentry);
-                    }
-                }
-                cur_key = next_key;
-            }
-        }
-
-        json_object_object_add(jroot, "status", json_object_new_string("success"));
-        json_object_object_add(jroot, "type", json_object_new_string(map_type));
-        json_object_object_add(jroot, "data", jdata);
-
-        printf("%s\n", json_object_to_json_string(jroot));
-        json_object_put(jroot);
-    } else if (strcmp(cmd, "del") == 0) {
+        success = handle_json_command(map_fd, map_type);
+    } 
+    else if (strcmp(cmd, "del") == 0) {
         if (argc != 4) {
-            fprintf(stderr, "Usage: %s %s del <IP_ADDRESS>\n", argv[0], map_type);
+            fprintf(stderr, "Usage: %s %s del <IP_ADDRESS|MAC_ADDRESS>\n", argv[0], map_type);
             return EXIT_FAILURE;
         }
-        const char *ip_str = argv[3];
-
-        if (strcmp(map_type, "ipv4") == 0) {
-            __be32 key = 0;
-            if (inet_pton(AF_INET, ip_str, &key) != 1) {
-                perror("inet_pton (IPv4)");
-                return EXIT_FAILURE;
-            }
-            if (bpf_map_delete_elem(map_fd, &key) < 0) {
-                perror("bpf_map_delete_elem (IPv4)");
-                return EXIT_FAILURE;
-            }
-            printf("Deleted IPv4 key %s successfully.\n", ip_str);
-        } else if (strcmp(map_type, "mac") == 0) {
-            if (!is_valid_mac_addr(ip_str)) {
-                fprintf(stderr, "Invalid MAC address format\n");
-                return EXIT_FAILURE;
-            }
-            struct mac_addr key = {0};
-            parse_mac_address(&key, ip_str);
-            if (bpf_map_delete_elem(map_fd, &key) < 0) {
-                perror("bpf_map_delete_elem (MAC)");
-                return EXIT_FAILURE;
-            }
-            printf("Deleted MAC key %s successfully.\n", ip_str);
-        } else { // ipv6
-            struct in6_addr key = {0};
-            if (inet_pton(AF_INET6, ip_str, &key) != 1) {
-                perror("inet_pton (IPv6)");
-                return EXIT_FAILURE;
-            }
-            if (bpf_map_delete_elem(map_fd, &key) < 0) {
-                perror("bpf_map_delete_elem (IPv6)");
-                return EXIT_FAILURE;
-            }
-            printf("Deleted IPv6 key %s successfully.\n", ip_str);
-        }
-    } else if (strcmp(cmd, "flush") == 0) {
+        success = handle_del_command(map_fd, map_type, argv[3]);
+    } 
+    else if (strcmp(cmd, "flush") == 0) {
         if (bpf_map_delete_elem(map_fd, NULL) < 0) {
             perror("bpf_map_delete_elem");
             return EXIT_FAILURE;
         }
         printf("Flushed all entries in the map.\n");
-    } else if (strcmp(cmd, "update") == 0) {
+        success = true;
+    } 
+    else if (strcmp(cmd, "update") == 0) {
         if (argc != 8 || strcmp(argv[4], "downrate") != 0 || strcmp(argv[6], "uprate") != 0) {
-            fprintf(stderr, "Usage: %s %s update <IP_ADDRESS|MAC_ADDRESS> downrate <bps> uprate <bps>\n", argv[0], map_type);
+            fprintf(stderr, "Usage: %s %s update <IP_ADDRESS|MAC_ADDRESS> downrate <bps> uprate <bps>\n", 
+                    argv[0], map_type);
             return EXIT_FAILURE;
         }
-
-        const char *addr_str = argv[3];
-        uint32_t downrate = atoi(argv[5]);
-        uint32_t uprate = atoi(argv[7]);
-
-        // Structure to hold key information
-        struct {
-            void *ptr;
-            size_t size;
-        } key = {NULL, 0};
-
-        // Handle different address types
-        if (strcmp(map_type, "ipv4") == 0) {
-            static __be32 ipv4_key;
-            if (inet_pton(AF_INET, addr_str, &ipv4_key) != 1) {
-                perror("inet_pton (IPv4)");
-                return EXIT_FAILURE;
-            }
-            key.ptr = &ipv4_key;
-            key.size = sizeof(ipv4_key);
-        } else if (strcmp(map_type, "mac") == 0) {
-            static struct mac_addr mac_key;
-            if (!is_valid_mac_addr(addr_str)) {
-                fprintf(stderr, "Invalid MAC address format\n");
-                return EXIT_FAILURE;
-            }
-            parse_mac_address(&mac_key, addr_str);
-            key.ptr = &mac_key;
-            key.size = sizeof(mac_key);
-        } else if (strcmp(map_type, "ipv6") == 0) {
-            static struct in6_addr ipv6_key;
-            if (inet_pton(AF_INET6, addr_str, &ipv6_key) != 1) {
-                perror("inet_pton (IPv6)");
-                return EXIT_FAILURE;
-            }
-            key.ptr = &ipv6_key;
-            key.size = sizeof(ipv6_key);
-        }
-
-        if (!key.ptr) {
-            fprintf(stderr, "Invalid address type\n");
-            return EXIT_FAILURE;
-        }
-
-        // Prepare stats structure
-        struct traffic_stats stats = {0};
-        bool exists = (bpf_map_lookup_elem(map_fd, key.ptr, &stats) == 0);
-        
-        // Update or add entry
-        int update_flag = exists ? BPF_EXIST : BPF_NOEXIST;
-        stats.incoming_rate_limit = downrate;
-        stats.outgoing_rate_limit = uprate;
-        if (bpf_map_update_elem(map_fd, key.ptr, &stats, update_flag) < 0) {
-            perror("bpf_map_update_elem");
-            return EXIT_FAILURE;
-        }
-
-        printf("%s %s key %s successfully.\n", exists ? "Updated" : "Added", map_type, addr_str);
-
-    } else if (strcmp(cmd, "update_all") == 0) {
+        success = handle_update_command(map_fd, map_type, argv[3], atoi(argv[5]), atoi(argv[7]));
+    } 
+    else if (strcmp(cmd, "update_all") == 0) {
         if (argc != 6 || strcmp(argv[3], "downrate") != 0 || strcmp(argv[5], "uprate") != 0) {
             fprintf(stderr, "Usage: %s %s update_all downrate <bps> uprate <bps>\n", argv[0], map_type);
             return EXIT_FAILURE;
         }
-    
-        uint32_t downrate = atoi(argv[4]);
-        uint32_t uprate = atoi(argv[5]);
-    
-        // Prepare stats structure
-        struct traffic_stats stats = {0};
-        stats.incoming_rate_limit = downrate;
-        stats.outgoing_rate_limit = uprate;
-    
-        // Iterate over all keys in the map
-        if (strcmp(map_type, "ipv4") == 0) {
-            __be32 next_key = 0;
-            while (bpf_map_get_next_key(map_fd, &next_key, &next_key) == 0) {
-                if (bpf_map_update_elem(map_fd, &next_key, &stats, BPF_EXIST) < 0) {
-                    perror("bpf_map_update_elem (IPv4)");
-                    return EXIT_FAILURE;
-                }
-            }
-        } else if (strcmp(map_type, "mac") == 0) {
-            struct mac_addr next_key = {0};
-            while (bpf_map_get_next_key(map_fd, &next_key, &next_key) == 0) {
-                if (bpf_map_update_elem(map_fd, &next_key, &stats, BPF_EXIST) < 0) {
-                    perror("bpf_map_update_elem (MAC)");
-                    return EXIT_FAILURE;
-                }
-            }
-        } else { // ipv6
-            struct in6_addr next_key = {0};
-            while (bpf_map_get_next_key(map_fd, &next_key, &next_key) == 0) {
-                if (bpf_map_update_elem(map_fd, &next_key, &stats, BPF_EXIST) < 0) {
-                    perror("bpf_map_update_elem (IPv6)");
-                    return EXIT_FAILURE;
-                }
-            }
-        }
-    
-        printf("Updated all %s keys successfully.\n", map_type);
-    } else {
-        fprintf(stderr, "Invalid command. Use 'add <IP_ADDRESS>' or 'list'.\n");
-        return EXIT_FAILURE;
+        success = handle_update_all_command(map_fd, map_type, atoi(argv[4]), atoi(argv[6]));
     }
 
-    return EXIT_SUCCESS;
+    close(map_fd);
+    return success ? EXIT_SUCCESS : EXIT_FAILURE;
 }
