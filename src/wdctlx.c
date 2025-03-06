@@ -112,6 +112,12 @@ execute_post_cmd(char *raw_cmd) {
     if (raw_cmd[0] == '[' && raw_cmd[nlen - 1] == ']') {
         raw_cmd[nlen - 1] = '\0';
         char *cmd = raw_cmd + 1;
+        // Validate command before execution to prevent command injection
+        if (strchr(cmd, ';') || strchr(cmd, '|') || strchr(cmd, '&') || 
+            strstr(cmd, "$(") || strstr(cmd, "`")) {
+            fprintf(stderr, "Error: Potentially dangerous command rejected: [%s]\n", cmd);
+            return;
+        }
         system(cmd);
         fprintf(stdout, "Executed shell command: [%s]\n", cmd);
     } else {

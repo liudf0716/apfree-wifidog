@@ -88,9 +88,9 @@ remove_captive_domains(void)
 			debug(LOG_ERR, "Command buffer too small");
 			continue;
 		}
-		system(cmd);
+		execute(cmd, 0);
 	}
-	system("uci commit dhcp && /etc/init.d/dnsmasq restart >/dev/null 2>&1");
+	execute("uci commit dhcp && /etc/init.d/dnsmasq restart >/dev/null 2>&1", 0);
 	debug(LOG_INFO, "Removed captive domains");
 }
 
@@ -110,7 +110,7 @@ update_captive_domains(void)
 			debug(LOG_ERR, "Command buffer too small %s", captive_domains[i]);
 			continue;
 		}
-		system(cmd);
+		execute(cmd, 0);
 		memset(cmd, 0, sizeof(cmd));
 		if (snprintf(cmd, sizeof(cmd),
 			"uci -q add_list dhcp.@dnsmasq[0].address=/%s/1.1.1.1",
@@ -118,9 +118,9 @@ update_captive_domains(void)
 			debug(LOG_ERR, "Command buffer too small %s", captive_domains[i]);
 			continue;
 		}
-		system(cmd);
+		execute(cmd, 0);
 	}
-	system("uci commit dhcp && /etc/init.d/dnsmasq restart >/dev/null 2>&1");
+	execute("uci commit dhcp && /etc/init.d/dnsmasq restart >/dev/null 2>&1", 0);
 	debug(LOG_INFO, "Added captive domains");
 }
 

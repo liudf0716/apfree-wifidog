@@ -97,7 +97,7 @@ fw_deny(t_client * client)
 		client->ip?client->ip:"N/A", client->ip6?client->ip6:"N/A", client->mac, client->fw_connection_state);
 
 	client->fw_connection_state = FW_MARK_NONE; /* Clear */
-	int nret;
+	int nret = 0;
 	if (client->ip6) {
 		nret = _fw_deny_raw(client->ip6, client->mac, fw_connection_state);
 		conntrack_flush(client->ip6);

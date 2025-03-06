@@ -181,7 +181,7 @@ get_status_op(void *mosq, const char *type, const char *value, const int req_id,
 void 
 reboot_device_op(void *mosq, const char *type, const char *value, const int req_id, const s_config *config)
 {
-	system("reboot");
+	return;
 }
 
 void

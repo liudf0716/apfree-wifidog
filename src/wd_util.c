@@ -247,7 +247,6 @@ get_status_text()
 	t_auth_serv *auth_server;
 	t_client *sublist, *current;
 	int count, active_count;
-	time_t uptime = 0;
 	t_trusted_mac *p;
 	t_offline_client *oc_list;
 	char *status_text;
@@ -1939,15 +1938,15 @@ init_apfree_wifidog_cert()
 		// generate ca cert
 		char cmd[256] = {0};
 		snprintf(cmd, sizeof(cmd), "openssl req -new -x509 -days 3650 -nodes -out %s -keyout %s -subj \"/C=CN/ST=Beijing/L=Beijing/O=apfree/CN=apfree.com\"", config->https_server->ca_crt_file, DEFAULT_CA_KEY_FILE);
-		system(cmd);
+		execute(cmd, 0);
 	}
 	// generate server cert
 	if (access(config->https_server->svr_crt_file, F_OK) != 0) {
 		char cmd[256] = {0};
 		snprintf(cmd, sizeof(cmd), "openssl req -new -nodes -out %s -keyout %s -subj \"/C=CN/ST=Beijing/L=Beijing/O=apfree/CN=apfree.com\"", DEFAULT_SVR_CRT_REQ_FILE, config->https_server->svr_key_file);
-		system(cmd);
+		execute(cmd, 0);
 		snprintf(cmd, sizeof(cmd), "openssl x509 -req -days 3650 -in %s -CA %s -CAkey %s -set_serial 01 -out %s", DEFAULT_SVR_CRT_REQ_FILE, DEFAULT_CA_CRT_FILE, DEFAULT_CA_KEY_FILE, config->https_server->svr_crt_file);
-		system(cmd);
+		execute(cmd, 0);
 	}
 }
 
