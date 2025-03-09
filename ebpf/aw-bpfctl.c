@@ -10,6 +10,7 @@
 #include <json-c/json.h>
 #include <ctype.h>
 #include <unistd.h>
+#include <uci.h>
 
 #include "aw-bpf.h"
 
@@ -269,6 +270,61 @@ is_valid_command(const char *cmd)
     return !strcmp(cmd, "add") || !strcmp(cmd, "list") || !strcmp(cmd, "del") || !strcmp(cmd, "flush") || !strcmp(cmd, "json") || !strcmp(cmd, "update") || !strcmp(cmd, "update_all");
 }
 
+static void get_aw_global_qos_config(uint32_t *downrate, uint32_t *uprate)
+{
+    {
+        struct uci_context *ctx;
+        struct uci_package *pkg = NULL;
+        struct uci_element *e;
+        bool found = false;
+
+        *downrate = 0;
+        *uprate = 0;
+
+        ctx = uci_alloc_context();
+        if (!ctx) {
+            fprintf(stderr, "Failed to allocate UCI context\n");
+            return;
+        }
+
+        if (uci_load(ctx, "wifidogx", &pkg) != UCI_OK) {
+            fprintf(stderr, "Failed to load wifidogx config\n");
+            uci_free_context(ctx);
+            return;
+        }
+
+        uci_foreach_element(&pkg->sections, e) {
+            struct uci_section *s = uci_to_section(e);
+            if (strcmp(s->type, "wifidogx") == 0) {
+                const char *enable_qos = uci_lookup_option_string(ctx, s, "enable_qos");
+                
+                if (enable_qos && strcmp(enable_qos, "1") == 0) {
+                    const char *qos_down = uci_lookup_option_string(ctx, s, "qos_down");
+                    const char *qos_up = uci_lookup_option_string(ctx, s, "qos_up");
+                    
+                    if (qos_down) {
+                        long val = strtol(qos_down, NULL, 10);
+                        if (val >= 0 && val <= (UINT32_MAX / (1024 * 1024)))
+                            *downrate = (uint32_t)(val * 1024 * 1024); // Convert Mbps to bps
+                    }
+                    if (qos_up) {
+                        long val = strtol(qos_up, NULL, 10);
+                        if (val >= 0 && val <= (UINT32_MAX / (1024 * 1024)))
+                            *uprate = (uint32_t)(val * 1024 * 1024);   // Convert Mbps to bps
+                    }
+                    found = true;
+                    break;
+                }
+            }
+        }
+
+        if (pkg) {
+            uci_unload(ctx, pkg);
+        }
+        uci_free_context(ctx);
+    }
+}
+
 static bool handle_add_command(int map_fd, const char *map_type, const char *addr_str) {
     struct traffic_stats stats = {0};
     void *key = NULL;
@@ -310,12 +366,18 @@ static bool handle_add_command(int map_fd, const char *map_type, const char *add
         return true;
     }
 
+    // Get global QoS configuration
+    uint32_t downrate, uprate;
+    get_aw_global_qos_config(&downrate, &uprate);
+    stats.incoming_rate_limit = downrate;
+    stats.outgoing_rate_limit = uprate;
+
     if (bpf_map_update_elem(map_fd, key, &stats, BPF_NOEXIST) < 0) {
         perror("bpf_map_update_elem");
         return false;
     }
 
-    printf("Added %s key %s successfully.\n", map_type, addr_str);
+    printf("Added %s key %s successfully with downrate %u uprate %u.\n", map_type, addr_str, downrate, uprate);
     return true;
 }
 

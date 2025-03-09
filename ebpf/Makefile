@@ -12,7 +12,7 @@ aw-bpf.o: aw-bpf.c
 
 # User space program compilation
 aw-bpfctl: aw-bpfctl.c
-	$(CC) -O2 -o $@ $< -lbpf -ljson-c
+	$(CC) -O2 -o $@ $< -lbpf -ljson-c -luci
 
 clean:
 	rm -f aw-bpf.o aw-bpfctl
