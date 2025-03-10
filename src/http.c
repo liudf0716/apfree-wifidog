@@ -80,7 +80,6 @@ const char *apple_wisper = "<!DOCTYPE html>"
 				"</html>";
 
 static void ev_http_resend(struct evhttp_request *req, const int is_ssl);
-static int process_already_login_client(struct evhttp_request *req, const char *mac, const char *remote_host, const int addr_type, const int is_ssl);
 static int process_wired_device_pass(struct evhttp_request *req, const char *mac);
 static void ev_http_respond_options(struct evhttp_request *req);
 static int process_apple_wisper(struct evhttp_request *req, const char *mac, const char *remote_host, const char *redir_url, const int mode);
@@ -89,6 +88,9 @@ static void ev_http_replay_wisper(struct evhttp_request *req);
 static void ev_http_wisper_success(struct evhttp_request *req);
 static void ev_send_http_page(struct evhttp_request *req, const char *title, const char *msg);
 static void ev_http_send_redirect(struct evhttp_request *req, const char *redir_url, const char *msg, const uint32_t delay);
+#ifndef AW_VPP
+static int process_already_login_client(struct evhttp_request *req, const char *mac, const char *remote_host, const int addr_type, const int is_ssl);
+#endif
 
 static int
 is_apple_captive(const char *domain)
@@ -174,11 +176,13 @@ ev_http_resend(struct evhttp_request *req, const int is_ssl)
     free(orig_url);
 }
 
+
 /**
  * @brief If the client already login but get different ip after reconnect gateway device
  * 
  * @return 1 end the http request or 0 continue the request
  */ 
+#ifndef AW_VPP
 static int
 process_already_login_client(struct evhttp_request *req, const char *mac, const char *remote_host, const int addr_type, const int is_ssl)
 {
@@ -258,6 +262,7 @@ process_already_login_client(struct evhttp_request *req, const char *mac, const 
 
     return action;
 }
+#endif
 
 static int
 process_wired_device_pass(struct evhttp_request *req, const char *mac)
