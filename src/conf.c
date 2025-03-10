@@ -2070,7 +2070,11 @@ mark_auth_server_bad(t_auth_serv * bad_server)
 bool
 is_bypass_mode(void)
 {
+#ifdef AW_VPP
+	return true;
+#else
 	return config.auth_server_mode == AUTH_MODE_BYPASS;
+#endif
 }
 
 bool

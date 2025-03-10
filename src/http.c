@@ -652,15 +652,17 @@ ev_http_callback_404(struct evhttp_request *req, void *arg)
         return;
     }
     
-    debug(LOG_DEBUG, "ev_http_callback_404 [%s : %s] address type [%d]", remote_host, mac, addr_type);
+    // debug(LOG_DEBUG, "ev_http_callback_404 [%s : %s] address type [%d]", remote_host, mac, addr_type);
 
+#ifndef AW_VPP
     if (process_already_login_client(req, mac, remote_host, addr_type, is_ssl)) return;
+#endif
 
     if (!is_auth_online() || is_local_auth_mode()) {
         char gw_port[8] = {0};
         snprintf(gw_port, sizeof(gw_port), "%d", config_get_config()->gw_port);
         enum reply_client_page_type r_type = get_authserver_offline_page_type();
-        debug(LOG_DEBUG, "Auth server is offline and its reply type is %d", r_type);
+        // debug(LOG_DEBUG, "Auth server is offline and its reply type is %d", r_type);
         ev_http_reply_client_error(req, r_type, 
             addr_type==1?gw_setting->gw_address_v4:gw_setting->gw_address_v6, 
             gw_port, "http", remote_host, mac);
