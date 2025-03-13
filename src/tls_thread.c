@@ -69,17 +69,36 @@ check_internet_available(t_popular_server *popular_server) {
 		return;
 
 	mark_offline_time();
+	
+#ifdef AW_VPP
+	// Configure custom DNS servers
+	if (dnsbase) {
+		// Clear any existing nameservers
+		evdns_base_clear_nameservers_and_suspend(dnsbase);
+		
+		// Add Google DNS (8.8.8.8)
+		evdns_base_nameserver_ip_add(dnsbase, "8.8.8.8");
+		
+		// Add 114 DNS (114.114.114.114)
+		evdns_base_nameserver_ip_add(dnsbase, "114.114.114.114");
+		
+		// Resume the DNS base after configuration
+		evdns_base_resume(dnsbase);
+		
+		debug(LOG_INFO, "Custom DNS servers configured: 8.8.8.8, 114.114.114.114");
+	}
+#endif
 
 	struct evutil_addrinfo hints;
 	memset(&hints, 0, sizeof(hints));
 
-    hints.ai_family = AF_UNSPEC;
-    hints.ai_flags = EVUTIL_AI_CANONNAME;
-    hints.ai_socktype = SOCK_STREAM;
-    hints.ai_protocol = IPPROTO_TCP;
-	
-	evdns_getaddrinfo( dnsbase, popular_server->hostname, NULL ,
-          &hints, check_internet_available_cb, popular_server);
+	hints.ai_family = AF_UNSPEC;
+	hints.ai_flags = EVUTIL_AI_CANONNAME;
+	hints.ai_socktype = SOCK_STREAM;
+	hints.ai_protocol = IPPROTO_TCP;
+
+	evdns_getaddrinfo(dnsbase, popular_server->hostname, NULL,
+		  &hints, check_internet_available_cb, popular_server);
 	
 }
 
