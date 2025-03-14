@@ -92,22 +92,22 @@ static inline int process_packet(struct __sk_buff *skb) {
     {
         struct traffic_stats *s_stats = bpf_map_lookup_elem(&mac_map, eth->h_source);
         if (s_stats) {
-            update_stats(&s_stats->outgoing, skb->len, est_slot);
             if (s_stats->outgoing_rate_limit && 
                 s_stats->outgoing_rate_limit < calc_rate_estimator(&s_stats->outgoing, current_time, est_slot)) {
                 return 1;
             }
+            update_stats(&s_stats->outgoing, skb->len, est_slot);
         }
     }
      
     {
         struct traffic_stats *d_stats = bpf_map_lookup_elem(&mac_map, eth->h_dest);
         if (d_stats) {
-            update_stats(&d_stats->incoming, skb->len, est_slot);
             if (d_stats->incoming_rate_limit && 
                 d_stats->incoming_rate_limit < calc_rate_estimator(&d_stats->incoming, current_time, est_slot)) {
                 return 1;
             }
+            update_stats(&d_stats->incoming, skb->len, est_slot);
         }
     }
     
@@ -120,21 +120,22 @@ static inline int process_packet(struct __sk_buff *skb) {
         // Process source IP (outgoing traffic)
         struct traffic_stats *s_stats = bpf_map_lookup_elem(&ipv4_map, &ip->saddr);
         if (s_stats) {
-            update_stats(&s_stats->outgoing, skb->len, est_slot);
             if (s_stats->outgoing_rate_limit && 
                 s_stats->outgoing_rate_limit < calc_rate_estimator(&s_stats->outgoing, current_time, est_slot)) {
                 return 1;
             }
+            update_stats(&s_stats->outgoing, skb->len, est_slot);
+            
         }
 
         // Process destination IP (incoming traffic)
         struct traffic_stats *d_stats = bpf_map_lookup_elem(&ipv4_map, &ip->daddr);
         if (d_stats) {
-            update_stats(&d_stats->incoming, skb->len, est_slot);
             if (d_stats->incoming_rate_limit && 
                 d_stats->incoming_rate_limit < calc_rate_estimator(&d_stats->incoming, current_time, est_slot)) {
                 return 1;
             }
+            update_stats(&d_stats->incoming, skb->len, est_slot);
         }
     }
     // Handle IPv6
@@ -146,21 +147,21 @@ static inline int process_packet(struct __sk_buff *skb) {
         // Process source IPv6 (outgoing traffic)
         struct traffic_stats *s_stats6 = bpf_map_lookup_elem(&ipv6_map, &ip6->saddr);
         if (s_stats6) {
-            update_stats(&s_stats6->outgoing, skb->len, est_slot);
             if (s_stats6->outgoing_rate_limit && 
                 s_stats6->outgoing_rate_limit < calc_rate_estimator(&s_stats6->outgoing, current_time, est_slot)) {
                 return 1;
             }
+            update_stats(&s_stats6->outgoing, skb->len, est_slot);
         }
 
         // Process destination IPv6 (incoming traffic)
         struct traffic_stats *d_stats6 = bpf_map_lookup_elem(&ipv6_map, &ip6->daddr);
         if (d_stats6) {
-            update_stats(&d_stats6->incoming, skb->len, est_slot);
             if (d_stats6->incoming_rate_limit && 
                 d_stats6->incoming_rate_limit < calc_rate_estimator(&d_stats6->incoming, current_time, est_slot)) {
                 return 1;
             }
+            update_stats(&d_stats6->incoming, skb->len, est_slot);
         }
     }
 
