@@ -1259,7 +1259,7 @@ br_is_device_wired(const char *mac){
 		t_gateway_setting *gw = get_gateway_settings();
 		while (gw) {
 			if (is_device_wired_intern(mac, gw->gw_interface)) {
-				debug(LOG_DEBUG,"mac %s check in bridge %s is wired", mac, gw->gw_interface);
+				debug(LOG_INFO,"mac %s check in bridge %s is wired", mac, gw->gw_interface);
 				return 1;
 			}
 			gw = gw->next;

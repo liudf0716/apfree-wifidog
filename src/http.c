@@ -270,7 +270,6 @@ process_wired_device_pass(struct evhttp_request *req, const char *mac)
 	if (!mac) return 0;
 	
     if (br_is_device_wired(mac)) {
-        debug(LOG_DEBUG, "wired_passed: add %s to trusted mac", mac);
         if (!is_trusted_mac(mac))
             add_trusted_maclist(mac);
         ev_http_resend(req, 0);
@@ -663,21 +662,21 @@ ev_http_callback_404(struct evhttp_request *req, void *arg)
     if (process_already_login_client(req, mac, remote_host, addr_type, is_ssl)) return;
 #endif
 
+    if (!is_bypass_mode() &&
+        config->wired_passed && 
+        process_wired_device_pass(req, mac))  {
+        return;
+    }
+
     if (!is_auth_online() || is_local_auth_mode()) {
         char gw_port[8] = {0};
         snprintf(gw_port, sizeof(gw_port), "%d", config_get_config()->gw_port);
         enum reply_client_page_type r_type = get_authserver_offline_page_type();
-        // debug(LOG_DEBUG, "Auth server is offline and its reply type is %d", r_type);
         ev_http_reply_client_error(req, r_type, 
             addr_type==1?gw_setting->gw_address_v4:gw_setting->gw_address_v6, 
             gw_port, "http", remote_host, mac);
         return;
     }    
-
-    if (!is_bypass_mode() &&
-        config->wired_passed && 
-        process_wired_device_pass(req, mac)) 
-        return;
 
     char *redir_url = wd_get_redir_url_to_auth(req, gw_setting, mac, remote_host, config->gw_port, config->device_id, is_ssl);
     if (!redir_url) {
