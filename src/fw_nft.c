@@ -1483,12 +1483,16 @@ __nft_fw_add_trusted_mac(const char *mac, int timeout)
         nftables_do_command("add element inet fw4 set_wifidogx_trust_clients_out { %s }", mac);
     else
         nftables_do_command("add element inet fw4 set_wifidogx_trust_clients_out { %s timeout %ds}", mac, timeout);
+    
+    execute("aw-bpfctl mac add %s", mac);
 }
 
 static void
 __nft_fw_del_trusted_mac(const char *mac)
 {
     nftables_do_command("delete element inet fw4 set_wifidogx_trust_clients_out { %s }", mac);
+
+    execute("aw-bpfctl mac del %s", mac);
 }
 
 void
