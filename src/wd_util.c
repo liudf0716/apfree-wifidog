@@ -1146,6 +1146,10 @@ is_br_port_no_wired(const char *brname, int port_no)
 			port_no == get_portno(brname, namelist[i]->d_name)) {
 			nret = 1;
 			break;
+		} else if (!memcmp(namelist[i]->d_name, "lan", 3) &&
+			port_no == get_portno(brname, namelist[i]->d_name)) {
+			nret = 1;
+			break;
 		}
     }
     for (i = 0; i < count; i++)
