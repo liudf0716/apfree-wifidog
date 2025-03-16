@@ -47,6 +47,7 @@ typedef enum {
 	oGatewayInterface,
 	oGatewayChannel,
 	oGatewaySubnetV4,
+	oGatewayAuthEnabled,
 	oAuthServer,
 	oAuthServHostname,
 	oAuthServSSLAvailable,
@@ -127,6 +128,7 @@ static const struct {
 	"gatewayinterface", oGatewayInterface}, {
 	"gatewaychannel", oGatewayChannel}, {
 	"gatewaysubnetv4", oGatewaySubnetV4}, {
+	"gatewayauthenabled", oGatewayAuthEnabled}, {
 	"gatewayport", oGatewayPort}, {
 	"gatewayhttpsport", oGatewayHttpsPort}, {
 	"gatewaysetting", oGatewaySetting}, {
@@ -428,6 +430,7 @@ parse_gateway_settings(FILE *file, const char *filename, int *linenum)
 	char *gw_subnet_v4 = NULL;
 	t_gateway_setting *new_setting = NULL;
 	t_gateway_setting *current = NULL;
+	int auth_enabled = 1;
 
 	while (memset(line, 0, MAX_BUF) && fgets(line, MAX_BUF - 1, file) && !strchr(line, '}')) {
 		(*linenum)++;
@@ -475,6 +478,9 @@ parse_gateway_settings(FILE *file, const char *filename, int *linenum)
 					case oGatewaySubnetV4:
 						gw_subnet_v4 = safe_strdup(value);
 						break;
+					case oGatewayAuthEnabled:
+						auth_enabled = parse_boolean_value(value);
+						break;
 					case oBadOption:
 					default:
 						debug(LOG_ERR, "Bad option on line %d in %s.", *linenum, filename);
@@ -503,7 +509,7 @@ parse_gateway_settings(FILE *file, const char *filename, int *linenum)
 	new_setting->gw_id = gw_id;
 	new_setting->gw_interface = gw_interface;
 	new_setting->gw_channel = gw_channel;
-	new_setting->auth_mode = 1;
+	new_setting->auth_mode = auth_enabled;
 	new_setting->next = NULL;
 
 	// Append to the gateway settings list
