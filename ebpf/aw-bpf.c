@@ -9,6 +9,8 @@
 
 #include "aw-bpf.h"
 
+extern int bpf_strstr(const char *str, __u32 str__sz, const char *substr, __u32 substr__sz) __ksym;
+
 // Map for IPv4 addresses
 struct {
     __uint(type, BPF_MAP_TYPE_HASH);
@@ -176,6 +178,17 @@ int tc_ingress(struct __sk_buff *skb) {
 SEC("tc/egress")
 int tc_egress(struct __sk_buff *skb) {
     return process_packet(skb) ? TC_ACT_SHOT : TC_ACT_OK;
+}
+
+SEC("classifier/xdpi")
+int xdpi(struct __sk_buff *skb) {
+    const char main_str[] = "Hello, xDPI!";
+    const char target_str[] = "xDPI";
+
+    int pos = bpf_strstr(main_str, sizeof(main_str), target_str, sizeof(target_str));
+    bpf_printk("pos: %d\n", pos);
+
+    return TC_ACT_OK;
 }
 
 char _license[] SEC("license") = "GPL";
