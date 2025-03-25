@@ -4,10 +4,12 @@
 #include <linux/bpf.h>
 #include <linux/btf.h>
 #include <linux/btf_ids.h>
+#include <linux/bpf_verifier.h>
+#include <linux/filter.h>
 
-__bpf_kfunc int bpf_strstr(const char *str, u32 str__sz, const char *substr, u32 substr__sz);
-
-__bpf_kfunc_start_defs();
+__diag_push();
+__diag_ignore_all("-Wmissing-prototypes",
+		  "Global functions as their definitions will be in xdpi-bpf BTF");
 
 __bpf_kfunc int bpf_strstr(const char *str, u32 str__sz, const char *substr, u32 substr__sz)
 {
@@ -34,13 +36,12 @@ __bpf_kfunc int bpf_strstr(const char *str, u32 str__sz, const char *substr, u32
     return -1;
 }
 
+__diag_pop();
 
-__bpf_kfunc_end_defs();
 
-
-BTF_KFUNCS_START(bpf_kfunc_xdpi_ids_set)
-BTF_ID_FLAGS(func, bpf_strstr)
-BTF_KFUNCS_END(bpf_kfunc_xdpi_ids_set)
+BTF_SET8_START(bpf_kfunc_xdpi_ids_set)
+BTF_ID_FLAGS(func, bpf_strstr,  KF_ACQUIRE | KF_RET_NULL)
+BTF_SET8_END(bpf_kfunc_xdpi_ids_set)
 
 static const struct btf_kfunc_id_set bpf_kfunc_xdpi_set = {
     .owner = THIS_MODULE,
@@ -52,7 +53,7 @@ static int __init xdpi_init(void)
     int ret;
 
     printk(KERN_INFO "Hello, xDPI!\n");
-    ret = register_btf_kfunc_id_set(BPF_PROG_TYPE_KPROBE, &bpf_kfunc_xdpi_set);
+    ret = register_btf_kfunc_id_set(BPF_PROG_TYPE_SCHED_CLS, &bpf_kfunc_xdpi_set);
     if (ret)
     {
         pr_err("bpf_kfunc_xdpi: Failed to register BTF kfunc ID set\n");
@@ -64,8 +65,6 @@ static int __init xdpi_init(void)
 
 static void __exit xdpi_exit(void)
 {
-    /* Unregister the BTF kfunc ID set */
-    unregister_btf_kfunc_id_set(BPF_PROG_TYPE_KPROBE, &bpf_kfunc_xdpi_set);
     printk(KERN_INFO "Goodbye, xDPI!\n");
 }
 
@@ -75,5 +74,5 @@ module_exit(xdpi_exit);
 
 MODULE_LICENSE("GPL");                 
 MODULE_AUTHOR("Dengfeng Liu <liudf0716@gmail.com>");            
-MODULE_DESCRIPTION("xDPI for apfree-wifidog"); 
+MODULE_DESCRIPTION("xDPI for apfree-wifidog in linux kernel 6.6"); 
 MODULE_VERSION("1.0");            
