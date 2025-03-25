@@ -40,7 +40,7 @@ __diag_pop();
 
 
 BTF_SET8_START(bpf_kfunc_xdpi_ids_set)
-BTF_ID_FLAGS(func, bpf_strstr,  KF_ACQUIRE | KF_RET_NULL)
+BTF_ID_FLAGS(func, bpf_strstr)
 BTF_SET8_END(bpf_kfunc_xdpi_ids_set)
 
 static const struct btf_kfunc_id_set bpf_kfunc_xdpi_set = {
