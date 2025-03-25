@@ -4,7 +4,17 @@ CC ?= gcc
 
 BPF_CFLAGS = -I$(PWD)
 
+obj-m += xdpi-bpf.o  # hello.o is the target
+
+# Enable BTF generation
+KBUILD_CFLAGS += -g -O2
+
 all: aw-bpf.o aw-bpfctl
+	@if [ -d /lib/modules/$(shell uname -r)/build ]; then \
+		make -C /lib/modules/$(shell uname -r)/build M=$(PWD) modules; \
+	else \
+		echo "Kernel build directory not found"; \
+	fi
 
 # eBPF program compilation
 aw-bpf.o: aw-bpf.c
@@ -16,6 +26,11 @@ aw-bpfctl: aw-bpfctl.c
 
 clean:
 	rm -f aw-bpf.o aw-bpfctl
+	@if [ -d /lib/modules/$(shell uname -r)/build ]; then \
+		make -C /lib/modules/$(shell uname -r)/build M=$(PWD) clean; \
+	else \
+		echo "Kernel build directory not found"; \
+	fi
 
 # load ebpf program to the kernel by tc in both egress and ingress
 load: aw-bpf.o
