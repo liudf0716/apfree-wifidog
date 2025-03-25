@@ -4,10 +4,7 @@ CC ?= gcc
 
 BPF_CFLAGS = -I$(PWD)
 
-obj-m += xdpi-bpf.o  # hello.o is the target
-
-# Enable BTF generation
-KBUILD_CFLAGS += -g -O2
+obj-m := xdpi-bpf.o  
 
 all: aw-bpf.o aw-bpfctl
 	@if [ -d /lib/modules/$(shell uname -r)/build ]; then \
