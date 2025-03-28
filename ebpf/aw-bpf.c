@@ -185,7 +185,7 @@ int xdpi(struct __sk_buff *skb) {
     const char main_str[] = "Hello, xDPI!";
     const char target_str[] = "xDPI";
 
-    int pos = bpf_strstr(main_str, sizeof(main_str), target_str, sizeof(target_str));
+    int pos = bpf_strstr(main_str, sizeof(main_str)-1, target_str, sizeof(target_str)-1);
     bpf_printk("pos: %d\n", pos);
 
     return TC_ACT_OK;
