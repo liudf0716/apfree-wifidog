@@ -49,3 +49,4 @@ build/
 tags
 
 ebpf/aw-bpfctl
+ebpf/.xdpi-bpf.o.d
