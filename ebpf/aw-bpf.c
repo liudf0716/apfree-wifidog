@@ -12,7 +12,7 @@
 
 #include "aw-bpf.h"
 
-extern int bpf_strstr(const __u8 *str, __u16 str__sz, const __u8 *substr, __u16 substr__sz) __ksym;
+extern int bpf_xdpi_match(const __u8 *str, __u16 str__sz) __ksym;
 
 // Map for IPv4 addresses
 struct {
@@ -116,26 +116,7 @@ static inline int xdpi_process_packet(struct __sk_buff *skb, struct bpf_sock_tup
         return 1;
     }
 
-    // Iterate through xdpi protocol descriptors to find a match
-    for (__u32 i = 0; i < 128; i++) {
-        struct xdpi_proto_desc *proto_desc = bpf_map_lookup_elem(&xdpi_proto_map, &i);
-        if (!proto_desc || !proto_desc->sid)
-            break;
-        
-        // Check if protocol pattern matches
-        if (proto_desc->feature_len > 0 && data_len > proto_desc->feature_len) {
-            if (bpf_strstr(data, data_len, proto_desc->feature, proto_desc->feature_len) >= 0) {
-                struct xdpi_nf_conn new_conn = {
-                    .sid = 0,
-                    .last_time = current_time
-                };
-                bpf_printk("xdpi: found protocol match with id %u", i);
-                new_conn.sid = proto_desc->sid;
-                bpf_map_update_elem(&tcp_conn_map, bpf_tuple, &new_conn, BPF_ANY);
-                return 1;
-            }
-        }
-    }
+    bpf_strstr(data, data_len, NULL, 0); // Placeholder for actual string search
 
     return 0;
 }
@@ -182,25 +163,24 @@ static inline int process_packet(struct __sk_buff *skb, direction_t dir) {
         if (ip->protocol != IPPROTO_TCP && ip->protocol != IPPROTO_UDP)
             return 0;
             
-        // Calculate the IP header length and check data length
-        int ip_hdr_len = ip->ihl * 4;
-        if ((void *)ip + ip_hdr_len + 1 > data_end) // Ensure at least 1 byte of data
+       
+        if ((void *)(ip + 1) > data_end) // Ensure at least 1 byte of data
             return 0;
 
         if (dir == INGRESS) {
             struct bpf_sock_tuple bpf_tuple = {};
             bpf_tuple.ipv4.saddr = ip->saddr;
             bpf_tuple.ipv4.daddr = ip->daddr;
-            bpf_tuple.ipv4.sport = bpf_ntohs(((struct tcphdr *)(ip + ip_hdr_len))->source);
-            bpf_tuple.ipv4.dport = bpf_ntohs(((struct tcphdr *)(ip + ip_hdr_len))->dest);
             void *payload;
             __u32 payload_len;
             
             if (ip->protocol == IPPROTO_TCP) {
-                struct tcphdr *tcp = (struct tcphdr *)((void *)ip + ip_hdr_len);
+                struct tcphdr *tcp = (struct tcphdr *)(ip + 1);
                 if ((void *)tcp + sizeof(*tcp) > data_end)
                     return 0;
-                
+                bpf_tuple.ipv4.sport = tcp->source;
+                bpf_tuple.ipv4.dport = tcp->dest;
+            
                 int tcp_hdr_len = tcp->doff * 4;
                 if ((void *)tcp + tcp_hdr_len > data_end)
                     return 0;

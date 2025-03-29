@@ -11,28 +11,8 @@ __diag_push();
 __diag_ignore_all("-Wmissing-prototypes",
 		  "Global functions as their definitions will be in xdpi-bpf BTF");
 
-__bpf_kfunc int bpf_strstr(const u8 *str, u16 str__sz, const u8 *substr, u16 substr__sz)
+__bpf_kfunc int bpf_xdpi_match(const u8 *str, u16 str__sz)
 {
-    if (substr__sz == 0)
-    {
-        return 0;
-    }
-    if (substr__sz > str__sz)
-    {
-        return -1;
-    }
-    for (size_t i = 0; i <= str__sz - substr__sz; i++)
-    {
-        size_t j = 0;
-        while (j < substr__sz && str[i + j] == substr[j])
-        {
-            j++;
-        }
-        if (j == substr__sz)
-        {
-            return i;
-        }
-    }
     return -1;
 }
 
