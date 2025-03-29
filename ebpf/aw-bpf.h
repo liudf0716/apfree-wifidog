@@ -15,6 +15,13 @@
 #define ETH_ALEN        6
 #define RATE_ESTIMATOR  4
 #define SMOOTH_VALUE    10
+#define XDPI_PROTO_TRAITS_MAX_SIZE 128
+#define XDPI_PROTO_FEATURE_MAX_SIZE 32
+
+typedef enum {
+    INGRESS,
+    EGRESS,
+} direction_t;
 
 struct mac_addr {
     __u8 h_addr[ETH_ALEN];
@@ -44,6 +51,18 @@ struct traffic_stats {
     __u32  outgoing_rate_limit;   /* Outgoing rate limit */
 } __attribute__((packed));
 
-/* Function declarations if any would go here */
+struct xdpi_nf_conn {
+    __u32  sid;
+    __u32  pkt_seen;
+    __u32  last_time;
+    struct traffic_stats stats;
+} __attribute__((packed));
+
+struct xdpi_proto_desc {
+    __u32  sid;
+    __u8   feature[XDPI_PROTO_FEATURE_MAX_SIZE];
+    __u16  feature_len;
+    __u32  feature_hits;
+} __attribute__((packed));
 
 #endif /* AW_BPF_H */

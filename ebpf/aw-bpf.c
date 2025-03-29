@@ -3,13 +3,16 @@
 #include <linux/if_ether.h>
 #include <linux/ip.h>
 #include <linux/ipv6.h>
+#include <linux/udp.h>
+#include <linux/tcp.h>
+#include <linux/in.h>
 #include <linux/pkt_cls.h>
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_endian.h>
 
 #include "aw-bpf.h"
 
-extern int bpf_strstr(const char *str, __u32 str__sz, const char *substr, __u32 substr__sz) __ksym;
+extern int bpf_strstr(const __u8 *str, __u16 str__sz, const __u8 *substr, __u16 substr__sz) __ksym;
 
 // Map for IPv4 addresses
 struct {
@@ -37,6 +40,24 @@ struct {
     __type(value, struct traffic_stats);
     __uint(max_entries, 1024);
 } mac_map SEC(".maps");
+
+// Map for TCP connections
+struct {
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __uint(pinning, 1);
+    __type(key, struct bpf_sock_tuple);
+    __type(value, struct xdpi_nf_conn);
+    __uint(max_entries, 10240);
+} tcp_conn_map SEC(".maps");
+
+// Map for xdpi protocol descriptors
+struct {
+    __uint(type, BPF_MAP_TYPE_ARRAY);
+    __uint(pinning, 1);
+    __type(key, __u32);
+    __type(value, struct xdpi_proto_desc);
+    __uint(max_entries, XDPI_PROTO_TRAITS_MAX_SIZE);
+} xdpi_proto_map SEC(".maps");
 
 static __always_inline __u32 get_current_time(void)
 {
@@ -81,7 +102,45 @@ static inline __u32 calc_rate_estimator(struct counters *cnt, __u32 now,  __u32 
 	return rate * 8 / RATE_ESTIMATOR;
 }
 
-static inline int process_packet(struct __sk_buff *skb) {
+static inline int xdpi_process_packet(struct __sk_buff *skb, struct bpf_sock_tuple *bpf_tuple, __u8 proto, __u8 *data, __u32 data_len) {
+    // Skip processing if not HTTP/HTTPS (TCP port 80 or 443)
+    if (proto != IPPROTO_TCP || (bpf_tuple->ipv4.dport != 80 && bpf_tuple->ipv4.dport != 443)) {
+        return 0;
+    }
+
+    __u32 current_time = get_current_time();
+    struct xdpi_nf_conn *xdpi_conn = bpf_map_lookup_elem(&tcp_conn_map, bpf_tuple);
+    if (xdpi_conn) {
+        bpf_printk("xdpi: found existing connection and sid is %u\n", xdpi_conn->sid);
+        xdpi_conn->last_time = current_time;
+        return 1;
+    }
+
+    // Iterate through xdpi protocol descriptors to find a match
+    for (__u32 i = 0; i < 128; i++) {
+        struct xdpi_proto_desc *proto_desc = bpf_map_lookup_elem(&xdpi_proto_map, &i);
+        if (!proto_desc || !proto_desc->sid)
+            break;
+        
+        // Check if protocol pattern matches
+        if (proto_desc->feature_len > 0 && data_len > proto_desc->feature_len) {
+            if (bpf_strstr(data, data_len, proto_desc->feature, proto_desc->feature_len) >= 0) {
+                struct xdpi_nf_conn new_conn = {
+                    .sid = 0,
+                    .last_time = current_time
+                };
+                bpf_printk("xdpi: found protocol match with id %u", i);
+                new_conn.sid = proto_desc->sid;
+                bpf_map_update_elem(&tcp_conn_map, bpf_tuple, &new_conn, BPF_ANY);
+                return 1;
+            }
+        }
+    }
+
+    return 0;
+}
+
+static inline int process_packet(struct __sk_buff *skb, direction_t dir) {
     __u32 current_time = get_current_time();
     __u32 est_slot = current_time / RATE_ESTIMATOR;
     void *data = (void *)(long)skb->data;
@@ -118,6 +177,42 @@ static inline int process_packet(struct __sk_buff *skb) {
         struct iphdr *ip = data + sizeof(*eth);
         if ((void *)ip + sizeof(*ip) > data_end)
             return 0;
+        
+        // Check if protocol is TCP or UDP
+        if (ip->protocol != IPPROTO_TCP && ip->protocol != IPPROTO_UDP)
+            return 0;
+            
+        // Calculate the IP header length and check data length
+        int ip_hdr_len = ip->ihl * 4;
+        if ((void *)ip + ip_hdr_len + 1 > data_end) // Ensure at least 1 byte of data
+            return 0;
+
+        if (dir == INGRESS) {
+            struct bpf_sock_tuple bpf_tuple = {};
+            bpf_tuple.ipv4.saddr = ip->saddr;
+            bpf_tuple.ipv4.daddr = ip->daddr;
+            bpf_tuple.ipv4.sport = bpf_ntohs(((struct tcphdr *)(ip + ip_hdr_len))->source);
+            bpf_tuple.ipv4.dport = bpf_ntohs(((struct tcphdr *)(ip + ip_hdr_len))->dest);
+            void *payload;
+            __u32 payload_len;
+            
+            if (ip->protocol == IPPROTO_TCP) {
+                struct tcphdr *tcp = (struct tcphdr *)((void *)ip + ip_hdr_len);
+                if ((void *)tcp + sizeof(*tcp) > data_end)
+                    return 0;
+                
+                int tcp_hdr_len = tcp->doff * 4;
+                if ((void *)tcp + tcp_hdr_len > data_end)
+                    return 0;
+                
+                payload = (void *)tcp + tcp_hdr_len;
+                payload_len = (void *)data_end - payload;
+                
+                if (payload_len > 0) {
+                    xdpi_process_packet(skb, &bpf_tuple, IPPROTO_TCP, payload, payload_len);
+                }
+            } 
+        }
 
         // Process source IP (outgoing traffic)
         struct traffic_stats *s_stats = bpf_map_lookup_elem(&ipv4_map, &ip->saddr);
@@ -146,6 +241,14 @@ static inline int process_packet(struct __sk_buff *skb) {
         if ((void *)ip6 + sizeof(*ip6) > data_end)
             return 0;
 
+        // Check if protocol is TCP or UDP
+        if (ip6->nexthdr != IPPROTO_TCP && ip6->nexthdr != IPPROTO_UDP)
+            return 0;
+        // Calculate the IPv6 header length and check data length
+        int ip6_hdr_len = sizeof(*ip6);
+        if ((void *)ip6 + ip6_hdr_len + 1 > data_end) // Ensure at least 1 byte of data
+            return 0;
+
         // Process source IPv6 (outgoing traffic)
         struct traffic_stats *s_stats6 = bpf_map_lookup_elem(&ipv6_map, &ip6->saddr);
         if (s_stats6) {
@@ -172,23 +275,12 @@ static inline int process_packet(struct __sk_buff *skb) {
 
 SEC("tc/ingress")
 int tc_ingress(struct __sk_buff *skb) {
-    return process_packet(skb) ? TC_ACT_SHOT : TC_ACT_OK;
+    return process_packet(skb, INGRESS) ? TC_ACT_SHOT : TC_ACT_OK;
 }
 
 SEC("tc/egress")
 int tc_egress(struct __sk_buff *skb) {
-    return process_packet(skb) ? TC_ACT_SHOT : TC_ACT_OK;
-}
-
-SEC("classifier/xdpi")
-int xdpi(struct __sk_buff *skb) {
-    const char main_str[] = "Hello, xDPI!";
-    const char target_str[] = "xDPI";
-
-    int pos = bpf_strstr(main_str, sizeof(main_str)-1, target_str, sizeof(target_str)-1);
-    bpf_printk("pos: %d\n", pos);
-
-    return TC_ACT_OK;
+    return process_packet(skb, EGRESS) ? TC_ACT_SHOT : TC_ACT_OK;
 }
 
 char _license[] SEC("license") = "GPL";
