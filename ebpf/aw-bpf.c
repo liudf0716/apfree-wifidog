@@ -116,7 +116,7 @@ static inline int xdpi_process_packet(struct __sk_buff *skb, struct bpf_sock_tup
         return 1;
     }
 
-    bpf_strstr(data, data_len, NULL, 0); // Placeholder for actual string search
+    bpf_xdpi_match(data, data_len); 
 
     return 0;
 }
