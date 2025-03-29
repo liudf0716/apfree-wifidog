@@ -116,6 +116,8 @@ static inline int xdpi_process_packet(struct __sk_buff *skb, struct bpf_sock_tup
         return 1;
     }
 
+    if (data_len > 1500)
+        data_len = 1500;
     bpf_xdpi_match(data, data_len); 
 
     return 0;
@@ -188,7 +190,8 @@ static inline int process_packet(struct __sk_buff *skb, direction_t dir) {
                 payload = (void *)tcp + tcp_hdr_len;
                 payload_len = (void *)data_end - payload;
                 
-                if (payload_len > 0) {
+                if (payload_len > 0 && payload_len < 1500) {
+                    bpf_printk("xdpi: processing TCP packet, payload length: %u\n", payload_len);
                     xdpi_process_packet(skb, &bpf_tuple, IPPROTO_TCP, payload, payload_len);
                 }
             } 
