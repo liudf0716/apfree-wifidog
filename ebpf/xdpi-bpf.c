@@ -31,6 +31,11 @@ struct domain_entry {
     bool used;
 };
 
+struct domain_update {
+    struct domain_entry entry;
+    int index;
+};
+
 // Fixed size array of domain entries
 static struct domain_entry domains[XDPI_DOMAIN_MAX];
 static DEFINE_SPINLOCK(domains_lock);
@@ -106,16 +111,16 @@ __bpf_kfunc int bpf_xdpi_skb_match(struct __sk_buff *skb_ctx, direction_t dir)
     
     for (i = 0; i < XDPI_DOMAIN_MAX; i++) {
         struct domain_entry *entry;
-        rcu_read_lock();
+        spin_lock_bh();
         entry = &domains[i];
         if (entry && entry->used && entry->domain_len <= data_len) {
             char *found = xdpi_strstr(data, data_len, entry->domain, entry->domain_len);
             if (found) {
-                rcu_read_unlock();
+                spin_unlock_bh();
                 return entry->sid;
             }
         }
-        rcu_read_unlock();
+        spin_unlock_bh();
     }
 
     return -1;
@@ -237,10 +242,10 @@ static long xdpi_proc_ioctl(struct file *file, unsigned int cmd, unsigned long a
         break;
         
     case XDPI_IOC_UPDATE:
-        if (copy_from_user(&entry, (void __user *)arg, sizeof(entry) + sizeof(index)))
-            return -EFAULT;
-        
-        ret = update_domain(&entry, index);
+        if (copy_from_user(&update, (void __user *)arg, sizeof(update)))
+        return -EFAULT;
+
+        ret = update_domain(&update.entry, update.index);
         break;
         
     default:
