@@ -19,6 +19,26 @@
 #include "conf.h"
 #include "wd_util.h"
 
+#define XDPI_DOMAIN_MAX 256
+#define MAX_DOMAIN_LEN 64
+
+#define XDPI_IOC_MAGIC 'X'
+#define XDPI_IOC_ADD    _IOW(XDPI_IOC_MAGIC, 1, struct domain_entry)
+#define XDPI_IOC_DEL    _IOW(XDPI_IOC_MAGIC, 2, int)
+#define XDPI_IOC_UPDATE _IOW(XDPI_IOC_MAGIC, 3, struct domain_update)
+
+struct domain_entry {
+    char domain[MAX_DOMAIN_LEN];
+    int domain_len;
+    int sid;
+    bool used;
+};
+
+struct domain_update {
+    struct domain_entry entry;
+    int index;
+};
+
 struct dns_query {
     int client_fd;
     struct sockaddr_in client_addr;
@@ -28,12 +48,134 @@ struct dns_query {
     struct event *dns_event;
 };
 
+/* Domain entry array to store DNS entries */
+static struct domain_entry domain_entries[XDPI_DOMAIN_MAX];
 
 static int parse_dns_header(unsigned char *response, int response_len, struct dns_header **header);
 static int parse_dns_question(unsigned char **ptr, char *query_name, int qdcount);
 static int is_trusted_domain(const char *query_name, t_domain_trusted **trusted_domain);
 static int process_dns_answers(unsigned char **ptr, int ancount, t_domain_trusted *trusted_domain);
 static int add_trusted_ip(t_domain_trusted *trusted_domain, uint16_t type, unsigned char *addr_ptr);
+
+#define MAX_PARTS 5       // 最大域名段数
+#define MAX_DOMAIN_LEN 64  // 输出缓冲区最大长度
+
+static int xdpi_short_domain(const char *full_domain, char *short_domain, int *olen) {
+    char *parts[MAX_PARTS];
+    int part_count = 0;
+    char *domain_copy = strdup(full_domain);  // 复制输入字符串以便修改
+    if (!domain_copy) {
+        strncpy(short_domain, "", MAX_DOMAIN_LEN);
+        if (olen) *olen = 0;
+        return -1;
+    }
+
+    // 分割域名到数组
+    char *token = strtok(domain_copy, ".");
+    while (token && part_count < MAX_PARTS) {
+        parts[part_count++] = token;
+        token = strtok(NULL, ".");
+    }
+
+    // 处理无效域名
+    if (part_count < 2) {
+        strncpy(short_domain, "", MAX_DOMAIN_LEN);
+        if (olen) *olen = 0;
+        free(domain_copy);
+        return -1;
+    }
+
+    // 判断主域名规则
+    if (strcmp(parts[part_count - 1], "cn") == 0) {  // 处理.cn域名
+        if (part_count >= 2 && strcmp(parts[part_count - 2], "com") == 0) {
+            // 匹配 xxx.com.cn 模式
+            if (part_count >= 3) {
+                snprintf(short_domain, MAX_DOMAIN_LEN, "%s.com.cn", parts[part_count - 3]);
+            } else {
+                snprintf(short_domain, MAX_DOMAIN_LEN, "com.cn");
+            }
+        } else {
+            // 其他.cn域名，取最后两段
+            snprintf(short_domain, MAX_DOMAIN_LEN, "%s.cn", parts[part_count - 2]);
+        }
+    } else {  // 非.cn域名，直接取最后两段
+        snprintf(short_domain, MAX_DOMAIN_LEN, "%s.%s", parts[part_count - 2], parts[part_count - 1]);
+    }
+
+    if (olen) *olen = strlen(short_domain);
+    free(domain_copy);
+    return 0;
+}
+
+static int xdpi_add_domain(const char *domain) {
+    int fd, result;
+    struct domain_entry entry;
+    
+    if (!domain || strlen(domain) >= MAX_DOMAIN_LEN) {
+        debug(LOG_WARNING, "Invalid domain or domain too long: %s", domain ? domain : "NULL");
+        return -1;
+    }
+    
+    
+    
+    // Convert domain to short domain form before adding
+    char short_domain[MAX_DOMAIN_LEN] = {0};
+    int short_domain_len = 0;
+    
+    if (xdpi_short_domain(domain, short_domain, &short_domain_len) == 0 && 
+        short_domain_len > 0) {
+        // Use short domain if conversion succeeded
+        debug(LOG_DEBUG, "Converting domain %s to short domain %s", domain, short_domain);
+        domain = short_domain;
+    } else {
+        debug(LOG_DEBUG, "Using original domain %s (conversion failed)", domain);
+    }
+    // Check if the domain is already in the list
+    int i;
+    for (i = 0; i < XDPI_DOMAIN_MAX; i++) {
+        if (domain_entries[i].used && strncmp(domain_entries[i].domain, domain, short_domain_len) == 0) {
+            debug(LOG_INFO, "Domain %s already exists in xDPI", domain);
+            return 0;
+        }
+    }
+    // if i == XDPI_DOMAIN_MAX, no free entry found
+    if (i == XDPI_DOMAIN_MAX) {
+        debug(LOG_ERR, "No free entry in xDPI domain list");
+        return -1;
+    }
+    
+
+    // Open the proc interface
+    fd = open("/proc/xdpi_domains", O_RDWR);
+    if (fd < 0) {
+        debug(LOG_ERR, "Failed to open /proc/xdpi_domains: %s", strerror(errno));
+        return -1;
+    }
+    // Prepare the domain entry
+    memset(&entry, 0, sizeof(entry));
+    strncpy(entry.domain, domain, MAX_DOMAIN_LEN - 1);
+    entry.domain_len = strlen(domain);
+    entry.sid = 1; // Set a default SID, adjust as needed
+    entry.used = true;
+    
+    // Add the domain via IOCTL
+    result = ioctl(fd, XDPI_IOC_ADD, &entry);
+    if (result < 0) {
+        debug(LOG_ERR, "Failed to add domain to xDPI: %s", strerror(errno));
+    } else {
+        debug(LOG_INFO, "Successfully added domain to xDPI: %s", domain);
+    }
+    
+    close(fd);
+    
+    // add the domain to the list
+    strncpy(domain_entries[i].domain, domain, short_domain_len);
+    domain_entries[i].domain_len = short_domain_len;
+    domain_entries[i].sid = i;
+    domain_entries[i].used = true;
+
+    return result;
+}
 
 static char *
 safe_strrstr(const char *haystack, const char *needle) {
@@ -91,6 +233,11 @@ process_dns_response(unsigned char *response, int response_len) {
 
     if (parse_dns_question(&ptr, query_name, qdcount) != 0)
         return -1;
+
+    if (!strstr(query_name, "in-addr.arpa") && !strstr(query_name, "ip6.arpa")) {
+        xdpi_add_domain(query_name);
+        debug(LOG_DEBUG, "Parsed domain: %s", query_name);
+    }
 
     if (!is_trusted_domain(query_name, &trusted_domain))
         return 0; // Not a trusted domain
