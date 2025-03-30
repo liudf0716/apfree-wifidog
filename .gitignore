@@ -1,4 +1,5 @@
 # Object files
+aw-bpfctl
 *.o
 *.ko
 *.obj
@@ -50,4 +51,8 @@ tags
 
 ebpf/aw-bpfctl
 ebpf/.xdpi-bpf.o.d
+ebpf/aw-bpfctl
+test/test_short_domain
+ebpf/aw-bpfctl
+ebpf/aw-bpfctl
 ebpf/aw-bpfctl
