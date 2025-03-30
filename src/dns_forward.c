@@ -131,18 +131,22 @@ static int xdpi_add_domain(const char *domain) {
         debug(LOG_DEBUG, "Using original domain %s (conversion failed)", domain);
     }
     // Check if the domain is already in the list
-    int i;
+    int i, free_idx = -1;
     for (i = 0; i < XDPI_DOMAIN_MAX; i++) {
         if (domain_entries[i].used && strncmp(domain_entries[i].domain, domain, short_domain_len) == 0) {
             debug(LOG_INFO, "Domain %s already exists in xDPI", domain);
             return 0;
         }
+        if (!domain_entries[i].used && free_idx == -1) {
+            free_idx = i;  // Store the first free index we find
+        }
     }
-    // if i == XDPI_DOMAIN_MAX, no free entry found
-    if (i == XDPI_DOMAIN_MAX) {
+    // If no free entry found
+    if (free_idx == -1) {
         debug(LOG_ERR, "No free entry in xDPI domain list");
         return -1;
     }
+    i = free_idx;  // Use the found free entry
     
 
     // Open the proc interface
