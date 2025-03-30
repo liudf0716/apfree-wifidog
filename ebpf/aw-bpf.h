@@ -55,14 +55,6 @@ struct xdpi_nf_conn {
     __u32  sid;
     __u32  pkt_seen;
     __u32  last_time;
-    struct traffic_stats stats;
-} __attribute__((packed));
-
-struct xdpi_proto_desc {
-    __u32  sid;
-    __u8   feature[XDPI_PROTO_FEATURE_MAX_SIZE];
-    __u16  feature_len;
-    __u32  feature_hits;
 } __attribute__((packed));
 
 #endif /* AW_BPF_H */

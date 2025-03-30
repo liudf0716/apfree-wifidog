@@ -12,6 +12,16 @@
 
 #include "aw-bpf.h"
 
+struct bpf_ct_opts {
+    __u32 netns_id;
+    __u32 error;
+    __u8 l4proto;
+    __u8 dir;
+    __u8 reserved[2];
+};
+
+extern struct nf_conn *bpf_skb_ct_lookup(struct __sk_buff *, struct bpf_sock_tuple *, __u32, struct bpf_ct_opts *, __u32) __ksym;
+extern void bpf_ct_release(struct nf_conn *) __ksym;
 extern int bpf_xdpi_skb_match(struct __sk_buff *skb, direction_t dir) __ksym;
 
 // Map for IPv4 addresses
@@ -50,13 +60,13 @@ struct {
     __uint(max_entries, 10240);
 } tcp_conn_map SEC(".maps");
 
-// Map for xdpi protocol descriptors
+// Map for xdpi protocol stats
 struct {
-    __uint(type, BPF_MAP_TYPE_ARRAY);
+    __uint(type, BPF_MAP_TYPE_HASH);
     __uint(pinning, 1);
     __type(key, __u32);
-    __type(value, struct xdpi_proto_desc);
-    __uint(max_entries, XDPI_PROTO_TRAITS_MAX_SIZE);
+    __type(value, struct traffic_stats);
+    __uint(max_entries, 1024);
 } xdpi_proto_map SEC(".maps");
 
 static __always_inline __u32 get_current_time(void)
@@ -148,8 +158,55 @@ static inline int process_packet(struct __sk_buff *skb, direction_t dir) {
     
     // Handle IPv4
     if (eth->h_proto == bpf_htons(ETH_P_IP)) {
+        struct bpf_sock_tuple bpf_tuple = {};
+        struct bpf_ct_opts opts_def = {
+                .netns_id = -1,
+        };
+        struct nf_conn *ct;
+        opts_def.l4proto = ip->protocol;
+        bpf_tuple.ipv4.saddr = dir == INGRESS? ip->saddr: ip->daddr;
+        bpf_tuple.ipv4.daddr = dir == INGRESS? ip->daddr: ip->saddr;
+        if (ip->protocol == IPPROTO_TCP) {
+            struct tcphdr *tcp = data + sizeof(*eth) + sizeof(*ip);
+            if ((void *)tcp + sizeof(*tcp) > data_end)
+                return 0;
+            bpf_tuple.ipv4.sport = dir == INGRESS ? tcp->source : tcp->dest;
+            bpf_tuple.ipv4.dport = dir == INGRESS ? tcp->dest : tcp->source;
+            ct = bpf_skb_ct_lookup(skb, &bpf_tuple, sizeof(bpf_tuple.ipv4), &opts_def, sizeof(opts_def));
+            if (ct) {
+                struct xdpi_nf_conn *conn = bpf_map_lookup_elem(&tcp_conn_map, &bpf_tuple);
+                if (conn && conn->sid > 0) {
+                    conn->last_time = current_time;
+                } else {
+                    int sid = bpf_xdpi_skb_match(skb, dir);
+                    struct xdpi_nf_conn new_conn = { .pkt_seen = 1, .last_time = current_time };
+                    if (sid >= 0) {
+                        new_conn.sid = sid;
+                    } else {
+                        new_conn.sid = UINT32_MAX;
+                    }
+                    bpf_map_update_elem(&tcp_conn_map, &bpf_tuple, &new_conn, BPF_NOEXIST);
+                    if (sid > 0) {
+                        // Update the xdpi protocol stats based on the sid
+                        struct traffic_stats *proto_stats = bpf_map_lookup_elem(&xdpi_proto_map, &sid);
+                        if (!proto_stats) {
+                            proto_stats = &(struct traffic_stats){0};
+                            bpf_map_update_elem(&xdpi_proto_map, &sid, proto_stats, BPF_ANY);
+                        }
+                        
+                        if (dir == INGRESS) {
+                            update_stats(&proto_stats->outgoing, skb->len, est_slot);
+                        } else {
+                            update_stats(&proto_stats->incoming, skb->len, est_slot);
+                        }
+                    }
+                }
+                
+                bpf_ct_release(ct);
+            }
+            
+        } 
         
-        bpf_xdpi_skb_match(skb, dir);
 
         // Process source IP (outgoing traffic)
         struct traffic_stats *s_stats = bpf_map_lookup_elem(&ipv4_map, &ip->saddr);
