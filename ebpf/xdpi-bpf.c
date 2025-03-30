@@ -13,6 +13,7 @@
 #include <linux/skbuff.h>
 #include <linux/ip.h>
 #include <linux/tcp.h>
+#include <linux/uaccess.h>
 
 
 #define XDPI_DOMAIN_MAX 256
