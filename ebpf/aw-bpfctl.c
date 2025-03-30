@@ -111,6 +111,18 @@ print_stats_mac(struct mac_addr mac, struct traffic_stats *stats)
            stats->incoming_rate_limit, stats->outgoing_rate_limit);
 }
 
+static void 
+print_stats_sid(uint32_t sid, struct traffic_stats *stats)
+{
+    printf("Key (SID): %u\n", sid);
+    printf("  Incoming: total_bytes=%llu, total_packets=%llu, rate=%u\n",
+           stats->incoming.total_bytes, stats->incoming.total_packets, calc_rate_estimator(stats, true));
+    printf("  Outgoing: total_bytes=%llu, total_packets=%llu, rate=%u\n",
+           stats->outgoing.total_bytes, stats->outgoing.total_packets, calc_rate_estimator(stats, false));
+    printf("  Rate Limits: incoming=%u bps, outgoing=%u bps\n",
+           stats->incoming_rate_limit, stats->outgoing_rate_limit);
+}
+
 static struct json_object*
 parse_stats_ipv4_json(__be32 ip, struct traffic_stats *stats) 
 {
@@ -213,6 +225,34 @@ parse_stats_mac_json(struct mac_addr mac, struct traffic_stats *stats)
     return jobj;
 }
 
+static struct json_object*
+parse_stats_sid_json(uint32_t sid, struct traffic_stats *stats)
+{
+    struct json_object *jobj = json_object_new_object();
+
+    // Add SID
+    json_object_object_add(jobj, "sid", json_object_new_int(sid));
+
+    struct json_object *incoming = json_object_new_object();
+    struct json_object *outgoing = json_object_new_object();
+    
+    // Add incoming stats
+    json_object_object_add(incoming, "total_bytes", json_object_new_int64(stats->incoming.total_bytes));
+    json_object_object_add(incoming, "total_packets", json_object_new_int64(stats->incoming.total_packets));
+    json_object_object_add(incoming, "rate", json_object_new_int(calc_rate_estimator(stats, true)));
+    json_object_object_add(incoming, "incoming_rate_limit", json_object_new_int(stats->incoming_rate_limit));
+    json_object_object_add(jobj, "incoming", incoming);
+
+    // Add outgoing stats
+    json_object_object_add(outgoing, "total_bytes", json_object_new_int64(stats->outgoing.total_bytes));
+    json_object_object_add(outgoing, "total_packets", json_object_new_int64(stats->outgoing.total_packets));
+    json_object_object_add(outgoing, "rate", json_object_new_int(calc_rate_estimator(stats, false)));
+    json_object_object_add(outgoing, "outgoing_rate_limit", json_object_new_int(stats->outgoing_rate_limit));
+    json_object_object_add(jobj, "outgoing", outgoing);
+
+    return jobj;
+}
+
 static bool
 is_valid_mac_addr(const char *mac_addr)
 {
@@ -256,12 +296,12 @@ aw_bpf_usage()
 {
     fprintf(stderr, "Usage:\n");
     fprintf(stderr, "  aw-bpfctl <ipv4|ipv6|mac> add <IP_ADDRESS|MAC_ADDRESS>\n");
-    fprintf(stderr, "  aw-bpfctl <ipv4|ipv6|mac> list\n");
+    fprintf(stderr, "  aw-bpfctl <ipv4|ipv6|mac|sid> list\n");
     fprintf(stderr, "  aw-bpfctl <ipv4|ipv6|mac> del <IP_ADDRESS|MAC_ADDRESS>\n");
     fprintf(stderr, "  aw-bpfctl <ipv4|ipv6|mac> flush\n");
-    fprintf(stderr, "  aw-bpfctl <ipv4|ipv6|mac> json\n");
-    fprintf(stderr, "  aw-bpfctl <ipv4|ipv6|mac> update <IP_ADDRESS|MAC_ADDRESS> downrate <bps> uprate <bps>\n");
-    fprintf(stderr, "  aw-bpfctl <ipv4|ipv6|mac> update_all downrate <bps> uprate <bps>\n");
+    fprintf(stderr, "  aw-bpfctl <ipv4|ipv6|mac|sid> json\n");
+    fprintf(stderr, "  aw-bpfctl <ipv4|ipv6|mac|sid> update <IP_ADDRESS|MAC_ADDRESS|SID> downrate <bps> uprate <bps>\n");
+    fprintf(stderr, "  aw-bpfctl <ipv4|ipv6|mac|sid> update_all downrate <bps> uprate <bps>\n");
 }
 
 static bool
@@ -420,7 +460,7 @@ static bool handle_list_command(int map_fd, const char *map_type) {
             perror("bpf_map_get_next_key (MAC)");
             return false;
         }
-    } else { // ipv6
+    } else if (strcmp(map_type, "ipv6") == 0){ // ipv6
         struct in6_addr cur_key = {0}, next_key = {0};
         struct traffic_stats stats = {0};
         
@@ -439,6 +479,26 @@ static bool handle_list_command(int map_fd, const char *map_type) {
             perror("bpf_map_get_next_key (IPv6)");
             return false;
         }
+    } else if (strcmp(map_type, "sid") == 0) {
+        uint32_t cur_key = 0, next_key = 0;
+        struct traffic_stats stats = {0};
+        
+        while ((ret = bpf_map_get_next_key(map_fd, cur_key ? &cur_key : NULL, &next_key)) == 0) {
+            if (bpf_map_lookup_elem(map_fd, &next_key, &stats) < 0) {
+                perror("bpf_map_lookup_elem (SID)");
+            } else {
+                print_stats_sid(next_key, &stats);
+            }
+            cur_key = next_key;
+        }
+        
+        if (ret != -ENOENT) {
+            perror("bpf_map_get_next_key (SID)");
+            return false;
+        }
+    } else {
+        fprintf(stderr, "Invalid map type: %s\n", map_type);
+        return false;
     }
     
     return true;
@@ -470,6 +530,19 @@ static bool handle_json_command(int map_fd, const char *map_type) {
                &next_key) == 0) {
             if (bpf_map_lookup_elem(map_fd, &next_key, &stats) == 0) {
                 struct json_object *jentry = parse_stats_mac_json(next_key, &stats);
+                if (jentry) {
+                    json_object_array_add(jdata, jentry);
+                }
+            }
+            cur_key = next_key;
+        }
+    } else if (strcmp(map_type, "sid") == 0) {
+        uint32_t cur_key = 0, next_key = 0;
+        struct traffic_stats stats = {0};
+
+        while (bpf_map_get_next_key(map_fd, cur_key ? &cur_key : NULL, &next_key) == 0) {
+            if (bpf_map_lookup_elem(map_fd, &next_key, &stats) == 0) {
+                struct json_object *jentry = parse_stats_sid_json(next_key, &stats);
                 if (jentry) {
                     json_object_array_add(jdata, jentry);
                 }
