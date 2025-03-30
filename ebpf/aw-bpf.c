@@ -195,8 +195,16 @@ static inline int process_packet(struct __sk_buff *skb, direction_t dir) {
                         }
                         
                         if (dir == INGRESS) {
+                            if (proto_stats->outgoing_rate_limit && 
+                                proto_stats->outgoing_rate_limit < calc_rate_estimator(&proto_stats->outgoing, current_time, est_slot)) {
+                                return 1;
+                            }
                             update_stats(&proto_stats->outgoing, skb->len, est_slot);
                         } else {
+                            if (proto_stats->incoming_rate_limit && 
+                                proto_stats->incoming_rate_limit < calc_rate_estimator(&proto_stats->incoming, current_time, est_slot)) {
+                                return 1;
+                            }
                             update_stats(&proto_stats->incoming, skb->len, est_slot);
                         }
                     }
