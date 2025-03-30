@@ -7,11 +7,16 @@
 #include <linux/bpf_verifier.h>
 #include <linux/filter.h>
 
+typedef enum {
+    INGRESS,
+    EGRESS,
+} direction_t;
+
 __diag_push();
 __diag_ignore_all("-Wmissing-prototypes",
 		  "Global functions as their definitions will be in xdpi-bpf BTF");
 
-__bpf_kfunc int bpf_xdpi_match(const u8 *str, u16 str__sz)
+__bpf_kfunc int bpf_xdpi_match(struct __sk_buff *skb_ctx, direction_t dir)
 {
     return -1;
 }

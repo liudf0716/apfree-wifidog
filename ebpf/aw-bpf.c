@@ -12,7 +12,7 @@
 
 #include "aw-bpf.h"
 
-extern int bpf_xdpi_match(const __u8 *str, __u16 str__sz) __ksym;
+extern int bpf_xdpi_skb_match(struct __sk_buff *skb, direction_t dir) __ksym;
 
 // Map for IPv4 addresses
 struct {
@@ -102,27 +102,6 @@ static inline __u32 calc_rate_estimator(struct counters *cnt, __u32 now,  __u32 
 	return rate * 8 / RATE_ESTIMATOR;
 }
 
-static inline int xdpi_process_packet(struct __sk_buff *skb, struct bpf_sock_tuple *bpf_tuple, __u8 proto, __u8 *data, __u32 data_len) {
-    // Skip processing if not HTTP/HTTPS (TCP port 80 or 443)
-    if (proto != IPPROTO_TCP || (bpf_tuple->ipv4.dport != 80 && bpf_tuple->ipv4.dport != 443)) {
-        return 0;
-    }
-
-    __u32 current_time = get_current_time();
-    struct xdpi_nf_conn *xdpi_conn = bpf_map_lookup_elem(&tcp_conn_map, bpf_tuple);
-    if (xdpi_conn) {
-        bpf_printk("xdpi: found existing connection and sid is %u\n", xdpi_conn->sid);
-        xdpi_conn->last_time = current_time;
-        return 1;
-    }
-
-    if (data_len > 1500)
-        data_len = 1500;
-    bpf_xdpi_match(data, data_len); 
-
-    return 0;
-}
-
 static inline int process_packet(struct __sk_buff *skb, direction_t dir) {
     __u32 current_time = get_current_time();
     __u32 est_slot = current_time / RATE_ESTIMATOR;
@@ -131,6 +110,18 @@ static inline int process_packet(struct __sk_buff *skb, direction_t dir) {
 
     struct ethhdr *eth = data;
     if (data + sizeof(*eth) > data_end)
+        return 0;
+
+    struct iphdr *ip = data + sizeof(*eth);
+    if ((void *)ip + sizeof(*ip) > data_end)
+        return 0;
+    
+    // Check if protocol is TCP or UDP
+    if (ip->protocol != IPPROTO_TCP && ip->protocol != IPPROTO_UDP)
+        return 0;
+        
+    
+    if ((void *)(ip + 1) > data_end) // Ensure at least 1 byte of data
         return 0;
 
     {
@@ -157,45 +148,8 @@ static inline int process_packet(struct __sk_buff *skb, direction_t dir) {
     
     // Handle IPv4
     if (eth->h_proto == bpf_htons(ETH_P_IP)) {
-        struct iphdr *ip = data + sizeof(*eth);
-        if ((void *)ip + sizeof(*ip) > data_end)
-            return 0;
         
-        // Check if protocol is TCP or UDP
-        if (ip->protocol != IPPROTO_TCP && ip->protocol != IPPROTO_UDP)
-            return 0;
-            
-       
-        if ((void *)(ip + 1) > data_end) // Ensure at least 1 byte of data
-            return 0;
-
-        if (dir == INGRESS) {
-            struct bpf_sock_tuple bpf_tuple = {};
-            bpf_tuple.ipv4.saddr = ip->saddr;
-            bpf_tuple.ipv4.daddr = ip->daddr;
-            void *payload;
-            __u32 payload_len;
-            
-            if (ip->protocol == IPPROTO_TCP) {
-                struct tcphdr *tcp = (struct tcphdr *)(ip + 1);
-                if ((void *)tcp + sizeof(*tcp) > data_end)
-                    return 0;
-                bpf_tuple.ipv4.sport = tcp->source;
-                bpf_tuple.ipv4.dport = tcp->dest;
-            
-                int tcp_hdr_len = tcp->doff * 4;
-                if ((void *)tcp + tcp_hdr_len > data_end)
-                    return 0;
-                
-                payload = (void *)tcp + tcp_hdr_len;
-                payload_len = (void *)data_end - payload;
-                
-                if (payload_len > 0 && payload_len < 1500) {
-                    bpf_printk("xdpi: processing TCP packet, payload length: %u\n", payload_len);
-                    xdpi_process_packet(skb, &bpf_tuple, IPPROTO_TCP, payload, payload_len);
-                }
-            } 
-        }
+        bpf_xdpi_skb_match(skb, dir);
 
         // Process source IP (outgoing traffic)
         struct traffic_stats *s_stats = bpf_map_lookup_elem(&ipv4_map, &ip->saddr);
