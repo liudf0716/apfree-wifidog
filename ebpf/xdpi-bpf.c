@@ -16,7 +16,7 @@ __diag_push();
 __diag_ignore_all("-Wmissing-prototypes",
 		  "Global functions as their definitions will be in xdpi-bpf BTF");
 
-__bpf_kfunc int bpf_xdpi_match(struct __sk_buff *skb_ctx, direction_t dir)
+__bpf_kfunc int bpf_xdpi_skb_match(struct __sk_buff *skb_ctx, direction_t dir)
 {
     return -1;
 }
@@ -25,7 +25,7 @@ __diag_pop();
 
 
 BTF_SET8_START(bpf_kfunc_xdpi_ids_set)
-BTF_ID_FLAGS(func, bpf_xdpi_match)
+BTF_ID_FLAGS(func, bpf_xdpi_skb_match)
 BTF_SET8_END(bpf_kfunc_xdpi_ids_set)
 
 static const struct btf_kfunc_id_set bpf_kfunc_xdpi_set = {
