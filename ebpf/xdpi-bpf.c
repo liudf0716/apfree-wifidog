@@ -111,16 +111,16 @@ __bpf_kfunc int bpf_xdpi_skb_match(struct __sk_buff *skb_ctx, direction_t dir)
     
     for (i = 0; i < XDPI_DOMAIN_MAX; i++) {
         struct domain_entry *entry;
-        spin_lock_bh();
+        spin_lock_bh(&domains_lock);
         entry = &domains[i];
         if (entry && entry->used && entry->domain_len <= data_len) {
             char *found = xdpi_strstr(data, data_len, entry->domain, entry->domain_len);
             if (found) {
-                spin_unlock_bh();
+                spin_unlock_bh(&domains_lock);
                 return entry->sid;
             }
         }
-        spin_unlock_bh();
+        spin_unlock_bh(&domains_lock);
     }
 
     return -1;
@@ -222,12 +222,14 @@ static int xdpi_proc_open(struct inode *inode, struct file *file)
 
 static long xdpi_proc_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
-    struct domain_entry entry;
+    
     int index;
     int ret = 0;
     
     switch (cmd) {
     case XDPI_IOC_ADD:
+        struct domain_entry entry;
+        memset(&entry, 0, sizeof(entry));
         if (copy_from_user(&entry, (void __user *)arg, sizeof(entry)))
             return -EFAULT;
         
@@ -242,6 +244,8 @@ static long xdpi_proc_ioctl(struct file *file, unsigned int cmd, unsigned long a
         break;
         
     case XDPI_IOC_UPDATE:
+        struct domain_update update;
+        memset(&update, 0, sizeof(update));
         if (copy_from_user(&update, (void __user *)arg, sizeof(update)))
         return -EFAULT;
 
