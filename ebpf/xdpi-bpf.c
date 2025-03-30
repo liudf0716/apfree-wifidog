@@ -10,6 +10,10 @@
 #include <linux/uaccess.h>
 #include <linux/proc_fs.h>
 #include <linux/seq_file.h>
+#include <linux/skbuff.h>
+#include <linux/ip.h>
+#include <linux/tcp.h>
+
 
 #define XDPI_DOMAIN_MAX 256
 #define MAX_DOMAIN_LEN 64
