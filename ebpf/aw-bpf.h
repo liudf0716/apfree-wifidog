@@ -18,6 +18,10 @@
 #define XDPI_PROTO_TRAITS_MAX_SIZE 128
 #define XDPI_PROTO_FEATURE_MAX_SIZE 32
 
+#ifndef UINT32_MAX
+#define UINT32_MAX 0xFFFFFFFFU
+#endif
+
 typedef enum {
     INGRESS,
     EGRESS,
