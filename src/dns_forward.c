@@ -159,7 +159,7 @@ static int xdpi_add_domain(const char *domain) {
     memset(&entry, 0, sizeof(entry));
     strncpy(entry.domain, domain, MAX_DOMAIN_LEN - 1);
     entry.domain_len = strlen(domain);
-    entry.sid = 1; // Set a default SID, adjust as needed
+    entry.sid = 1000 + i;  
     entry.used = true;
     
     // Add the domain via IOCTL
@@ -175,7 +175,7 @@ static int xdpi_add_domain(const char *domain) {
     // add the domain to the list
     strncpy(domain_entries[i].domain, domain, short_domain_len);
     domain_entries[i].domain_len = short_domain_len;
-    domain_entries[i].sid = i;
+    domain_entries[i].sid = 1000 + i;
     domain_entries[i].used = true;
 
     return result;
