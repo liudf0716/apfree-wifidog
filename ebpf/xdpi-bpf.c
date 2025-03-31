@@ -119,6 +119,7 @@ __bpf_kfunc int bpf_xdpi_skb_match(struct __sk_buff *skb_ctx, direction_t dir)
         spin_lock_bh(&domains_lock);
         entry = &domains[i];
         if (entry && entry->used && entry->domain_len <= data_len) {
+            printk(KERN_DEBUG "xdpi: domain %s, data %s\n", entry->domain, data);
             char *found = xdpi_strstr(data, data_len, entry->domain, entry->domain_len);
             if (found) {
                 spin_unlock_bh(&domains_lock);
