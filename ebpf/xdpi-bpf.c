@@ -53,14 +53,14 @@ static int add_domain(struct domain_entry *entry);
 static int del_domain(int index);
 static int update_domain(struct domain_entry *entry, int index);
 
-static inline char *xdpi_strstr(const char *haystack, int haystack_len,
-                                 const char *needle, int needle_len)
+static inline char *xdpi_strstr(const char *haystack, int haystack_sz,
+                                 const char *needle, int needle_sz)
 {
-    if (haystack_len < needle_len)
+    if (haystack_sz < needle_sz)
         return NULL;
 
-    for (int i = 0; i <= haystack_len - needle_len; i++) {
-        if (memcmp(haystack + i, needle, needle_len) == 0)
+    for (int i = 0; i <= haystack_sz - needle_sz; i++) {
+        if (memcmp(haystack + i, needle, needle_sz) == 0)
             return (char *)(haystack + i);
     }
 
