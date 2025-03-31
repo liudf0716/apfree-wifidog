@@ -65,7 +65,7 @@ struct {
     __type(key, __u32);
     __type(value, struct traffic_stats);
     __uint(max_entries, 1024);
-} xdpi_proto_map SEC(".maps");
+} xdpi_l7_map SEC(".maps");
 
 static __always_inline __u32 get_current_time(void)
 {
@@ -177,6 +177,7 @@ static inline int process_packet(struct __sk_buff *skb, direction_t dir) {
             } else {
                 int sid = bpf_xdpi_skb_match(skb, dir);
                 struct xdpi_nf_conn new_conn = { .pkt_seen = 1, .last_time = current_time };
+                bpf_printk("sid: %d", sid);
                 if (sid >= 0) {
                     new_conn.sid = sid;
                 } else {
@@ -185,10 +186,10 @@ static inline int process_packet(struct __sk_buff *skb, direction_t dir) {
                 bpf_map_update_elem(&tcp_conn_map, &bpf_tuple, &new_conn, BPF_NOEXIST);
                 if (sid > 0) {
                     // Update the xdpi protocol stats based on the sid
-                    struct traffic_stats *proto_stats = bpf_map_lookup_elem(&xdpi_proto_map, &sid);
+                    struct traffic_stats *proto_stats = bpf_map_lookup_elem(&xdpi_l7_map, &sid);
                     if (!proto_stats) {
                         proto_stats = &(struct traffic_stats){0};
-                        bpf_map_update_elem(&xdpi_proto_map, &sid, proto_stats, BPF_ANY);
+                        bpf_map_update_elem(&xdpi_l7_map, &sid, proto_stats, BPF_ANY);
                     }
                     
                     if (dir == INGRESS) {

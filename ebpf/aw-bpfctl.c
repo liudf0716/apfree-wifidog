@@ -760,7 +760,7 @@ main(int argc, char **argv)
     // Determine map path based on map type
     char map_path[100];
     if (strcmp(map_type, "sid") == 0) {
-        snprintf(map_path, sizeof(map_path), "/sys/fs/bpf/tc/globals/%s_map", "sid");
+        snprintf(map_path, sizeof(map_path), "/sys/fs/bpf/tc/globals/%s_map", "xdpi_l7");
     } else {
         snprintf(map_path, sizeof(map_path), "/sys/fs/bpf/tc/globals/%s_map", map_type);
     }
