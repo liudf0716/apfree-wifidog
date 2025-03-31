@@ -20,8 +20,6 @@ struct bpf_ct_opts {
     __u8 reserved[2];
 };
 
-extern struct nf_conn *bpf_skb_ct_lookup(struct __sk_buff *, struct bpf_sock_tuple *, __u32, struct bpf_ct_opts *, __u32) __ksym;
-extern void bpf_ct_release(struct nf_conn *) __ksym;
 extern int bpf_xdpi_skb_match(struct __sk_buff *skb, direction_t dir) __ksym;
 
 // Map for IPv4 addresses
@@ -172,47 +170,42 @@ static inline int process_packet(struct __sk_buff *skb, direction_t dir) {
                 return 0;
             bpf_tuple.ipv4.sport = dir == INGRESS ? tcp->source : tcp->dest;
             bpf_tuple.ipv4.dport = dir == INGRESS ? tcp->dest : tcp->source;
-            ct = bpf_skb_ct_lookup(skb, &bpf_tuple, sizeof(bpf_tuple.ipv4), &opts_def, sizeof(opts_def));
-            if (ct) {
-                struct xdpi_nf_conn *conn = bpf_map_lookup_elem(&tcp_conn_map, &bpf_tuple);
-                if (conn && conn->sid > 0) {
-                    conn->last_time = current_time;
+            
+            struct xdpi_nf_conn *conn = bpf_map_lookup_elem(&tcp_conn_map, &bpf_tuple);
+            if (conn && conn->sid > 0) {
+                conn->last_time = current_time;
+            } else {
+                int sid = bpf_xdpi_skb_match(skb, dir);
+                struct xdpi_nf_conn new_conn = { .pkt_seen = 1, .last_time = current_time };
+                if (sid >= 0) {
+                    new_conn.sid = sid;
                 } else {
-                    int sid = bpf_xdpi_skb_match(skb, dir);
-                    struct xdpi_nf_conn new_conn = { .pkt_seen = 1, .last_time = current_time };
-                    if (sid >= 0) {
-                        new_conn.sid = sid;
-                    } else {
-                        new_conn.sid = UINT32_MAX;
+                    new_conn.sid = UINT32_MAX;
+                }
+                bpf_map_update_elem(&tcp_conn_map, &bpf_tuple, &new_conn, BPF_NOEXIST);
+                if (sid > 0) {
+                    // Update the xdpi protocol stats based on the sid
+                    struct traffic_stats *proto_stats = bpf_map_lookup_elem(&xdpi_proto_map, &sid);
+                    if (!proto_stats) {
+                        proto_stats = &(struct traffic_stats){0};
+                        bpf_map_update_elem(&xdpi_proto_map, &sid, proto_stats, BPF_ANY);
                     }
-                    bpf_map_update_elem(&tcp_conn_map, &bpf_tuple, &new_conn, BPF_NOEXIST);
-                    if (sid > 0) {
-                        // Update the xdpi protocol stats based on the sid
-                        struct traffic_stats *proto_stats = bpf_map_lookup_elem(&xdpi_proto_map, &sid);
-                        if (!proto_stats) {
-                            proto_stats = &(struct traffic_stats){0};
-                            bpf_map_update_elem(&xdpi_proto_map, &sid, proto_stats, BPF_ANY);
+                    
+                    if (dir == INGRESS) {
+                        if (proto_stats->outgoing_rate_limit && 
+                            proto_stats->outgoing_rate_limit < calc_rate_estimator(&proto_stats->outgoing, current_time, est_slot)) {
+                            return 1;
                         }
-                        
-                        if (dir == INGRESS) {
-                            if (proto_stats->outgoing_rate_limit && 
-                                proto_stats->outgoing_rate_limit < calc_rate_estimator(&proto_stats->outgoing, current_time, est_slot)) {
-                                return 1;
-                            }
-                            update_stats(&proto_stats->outgoing, skb->len, est_slot);
-                        } else {
-                            if (proto_stats->incoming_rate_limit && 
-                                proto_stats->incoming_rate_limit < calc_rate_estimator(&proto_stats->incoming, current_time, est_slot)) {
-                                return 1;
-                            }
-                            update_stats(&proto_stats->incoming, skb->len, est_slot);
+                        update_stats(&proto_stats->outgoing, skb->len, est_slot);
+                    } else {
+                        if (proto_stats->incoming_rate_limit && 
+                            proto_stats->incoming_rate_limit < calc_rate_estimator(&proto_stats->incoming, current_time, est_slot)) {
+                            return 1;
                         }
+                        update_stats(&proto_stats->incoming, skb->len, est_slot);
                     }
                 }
-                
-                bpf_ct_release(ct);
-            }
-            
+            }  
         } 
         
 
