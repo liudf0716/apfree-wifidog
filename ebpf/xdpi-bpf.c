@@ -59,6 +59,8 @@ static inline char *xdpi_strstr(const char *haystack, int haystack_sz,
     if (haystack_sz < needle_sz)
         return NULL;
 
+    printk("KERNEL: haystack_sz: %d, needle_sz: %d\n", haystack_sz, needle_sz);
+
     for (int i = 0; i <= haystack_sz - needle_sz; i++) {
         if (memcmp(haystack + i, needle, needle_sz) == 0)
             return (char *)(haystack + i);
@@ -119,7 +121,6 @@ __bpf_kfunc int bpf_xdpi_skb_match(struct __sk_buff *skb_ctx, direction_t dir)
         spin_lock_bh(&domains_lock);
         entry = &domains[i];
         if (entry && entry->used && entry->domain_len <= data_len) {
-            printk(KERN_DEBUG "xdpi: domain %s, data %s\n", entry->domain, data);
             char *found = xdpi_strstr(data, data_len, entry->domain, entry->domain_len);
             if (found) {
                 spin_unlock_bh(&domains_lock);
