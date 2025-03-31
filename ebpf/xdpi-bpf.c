@@ -49,6 +49,10 @@ static DEFINE_SPINLOCK(domains_lock);
 // Create a proc file for userspace interaction
 static struct proc_dir_entry *xdpi_proc_file;
 
+static int add_domain(struct domain_entry *entry);
+static int del_domain(int index);
+static int update_domain(struct domain_entry *entry, int index);
+
 static inline char *xdpi_strstr(const char *haystack, int haystack_len,
                                  const char *needle, int needle_len)
 {
@@ -68,6 +72,7 @@ __diag_ignore_all("-Wmissing-prototypes",
 
 __bpf_kfunc int bpf_xdpi_skb_match(struct __sk_buff *skb_ctx, direction_t dir)
 {
+#if 0
     struct sk_buff *skb = (struct sk_buff *)skb_ctx;
     u8 *data;
     int data_len;
@@ -122,7 +127,7 @@ __bpf_kfunc int bpf_xdpi_skb_match(struct __sk_buff *skb_ctx, direction_t dir)
         }
         spin_unlock_bh(&domains_lock);
     }
-
+#endif
     return -1;
 }
 
