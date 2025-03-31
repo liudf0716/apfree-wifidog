@@ -750,14 +750,20 @@ main(int argc, char **argv)
     // Validate map type
     if (strcmp(map_type, "ipv4") != 0 && 
         strcmp(map_type, "ipv6") != 0 && 
-        strcmp(map_type, "mac") != 0) {
-        fprintf(stderr, "Invalid map type. Must be 'ipv4', 'ipv6', or 'mac'.\n");
+        strcmp(map_type, "mac") != 0 && 
+        strcmp(map_type, "sid") != 0) {
+        fprintf(stderr, "Invalid map type. Must be 'ipv4', 'ipv6', 'mac', or 'sid'.\n");
+        aw_bpf_usage();
         return EXIT_FAILURE;
     }
 
     // Determine map path based on map type
     char map_path[100];
-    snprintf(map_path, sizeof(map_path), "/sys/fs/bpf/tc/globals/%s_map", map_type);
+    if (strcmp(map_type, "sid") == 0) {
+        snprintf(map_path, sizeof(map_path), "/sys/fs/bpf/tc/globals/%s_map", "sid");
+    } else {
+        snprintf(map_path, sizeof(map_path), "/sys/fs/bpf/tc/globals/%s_map", map_type);
+    }
 
     // Open the BPF map
     int map_fd = bpf_obj_get(map_path);
