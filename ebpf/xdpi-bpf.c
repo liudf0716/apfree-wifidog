@@ -63,6 +63,7 @@ static inline char *xdpi_strstr(const char *haystack, int haystack_len,
         if (memcmp(haystack + i, needle, needle_len) == 0)
             return (char *)(haystack + i);
     }
+
     return NULL;
 }
 
@@ -72,11 +73,9 @@ __diag_ignore_all("-Wmissing-prototypes",
 
 __bpf_kfunc int bpf_xdpi_skb_match(struct __sk_buff *skb_ctx, direction_t dir)
 {
-#if 0
     struct sk_buff *skb = (struct sk_buff *)skb_ctx;
     u8 *data;
     int data_len;
-    int i;
     int min_data_len = 50;
     
     // For ingress traffic, check if destination port is 80 or 443
@@ -113,8 +112,9 @@ __bpf_kfunc int bpf_xdpi_skb_match(struct __sk_buff *skb_ctx, direction_t dir)
     // Ensure we have enough data to analyze
     if (data_len < min_data_len)
         return -1;
-    
-    for (i = 0; i < XDPI_DOMAIN_MAX; i++) {
+
+
+    for (int i = 0; i < XDPI_DOMAIN_MAX; i++) {
         struct domain_entry *entry;
         spin_lock_bh(&domains_lock);
         entry = &domains[i];
@@ -127,7 +127,7 @@ __bpf_kfunc int bpf_xdpi_skb_match(struct __sk_buff *skb_ctx, direction_t dir)
         }
         spin_unlock_bh(&domains_lock);
     }
-#endif
+
     return -1;
 }
 
