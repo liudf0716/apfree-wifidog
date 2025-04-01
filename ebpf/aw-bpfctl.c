@@ -78,8 +78,8 @@ print_stats_ipv4(__be32 ip, struct traffic_stats *stats)
            stats->incoming.total_bytes, stats->incoming.total_packets, calc_rate_estimator(stats, true));
     printf("  Outgoing: total_bytes=%llu, total_packets=%llu, rate=%u\n",
            stats->outgoing.total_bytes, stats->outgoing.total_packets, calc_rate_estimator(stats, false));
-    printf("  Rate Limits: incoming=%u bps, outgoing=%u bps\n",
-           stats->incoming_rate_limit, stats->outgoing_rate_limit);
+    printf("  Rate Limits: incoming=%llu bps, outgoing=%llu bps\n",
+           stats->incoming_rate_limit.bps, stats->outgoing_rate_limit.bps);
 }
 
 static void 
@@ -93,8 +93,8 @@ print_stats_ipv6(struct in6_addr ip, struct traffic_stats *stats)
            stats->incoming.total_bytes, stats->incoming.total_packets, calc_rate_estimator(stats, true));
     printf("  Outgoing: total_bytes=%llu, total_packets=%llu, rate=%u\n",
            stats->outgoing.total_bytes, stats->outgoing.total_packets, calc_rate_estimator(stats, false));
-    printf("  Rate Limits: incoming=%u bps, outgoing=%u bps\n",
-           stats->incoming_rate_limit, stats->outgoing_rate_limit);
+    printf("  Rate Limits: incoming=%llu bps, outgoing=%llu bps\n",
+           stats->incoming_rate_limit.bps, stats->outgoing_rate_limit.bps);
 }
 
 static void 
@@ -107,8 +107,8 @@ print_stats_mac(struct mac_addr mac, struct traffic_stats *stats)
            stats->incoming.total_bytes, stats->incoming.total_packets, calc_rate_estimator(stats, true));
     printf("  Outgoing: total_bytes=%llu, total_packets=%llu, rate=%u\n",
            stats->outgoing.total_bytes, stats->outgoing.total_packets, calc_rate_estimator(stats, false));
-    printf("  Rate Limits: incoming=%u bps, outgoing=%u bps\n",
-           stats->incoming_rate_limit, stats->outgoing_rate_limit);
+    printf("  Rate Limits: incoming=%llu bps, outgoing=%llu bps\n",
+           stats->incoming_rate_limit.bps, stats->outgoing_rate_limit.bps);
 }
 
 static void 
@@ -119,8 +119,8 @@ print_stats_sid(uint32_t sid, struct traffic_stats *stats)
            stats->incoming.total_bytes, stats->incoming.total_packets, calc_rate_estimator(stats, true));
     printf("  Outgoing: total_bytes=%llu, total_packets=%llu, rate=%u\n",
            stats->outgoing.total_bytes, stats->outgoing.total_packets, calc_rate_estimator(stats, false));
-    printf("  Rate Limits: incoming=%u bps, outgoing=%u bps\n",
-           stats->incoming_rate_limit, stats->outgoing_rate_limit);
+    printf("  Rate Limits: incoming=%llu bps, outgoing=%llu bps\n",
+           stats->incoming_rate_limit.bps, stats->outgoing_rate_limit.bps);
 }
 
 static struct json_object*
@@ -145,14 +145,14 @@ parse_stats_ipv4_json(__be32 ip, struct traffic_stats *stats)
     json_object_object_add(incoming, "total_bytes", json_object_new_int64(stats->incoming.total_bytes));
     json_object_object_add(incoming, "total_packets", json_object_new_int64(stats->incoming.total_packets));
     json_object_object_add(incoming, "rate", json_object_new_int(calc_rate_estimator(stats, true)));
-    json_object_object_add(incoming, "incoming_rate_limit", json_object_new_int(stats->incoming_rate_limit));
+    json_object_object_add(incoming, "incoming_rate_limit", json_object_new_uint64(stats->incoming_rate_limit.bps));
     json_object_object_add(jobj, "incoming", incoming);
 
     // Add outgoing stats
     json_object_object_add(outgoing, "total_bytes", json_object_new_int64(stats->outgoing.total_bytes));
     json_object_object_add(outgoing, "total_packets", json_object_new_int64(stats->outgoing.total_packets));
     json_object_object_add(outgoing, "rate", json_object_new_int(calc_rate_estimator(stats, false)));
-    json_object_object_add(outgoing, "outgoing_rate_limit", json_object_new_int(stats->outgoing_rate_limit));
+    json_object_object_add(outgoing, "outgoing_rate_limit", json_object_new_uint64(stats->outgoing_rate_limit.bps));
     json_object_object_add(jobj, "outgoing", outgoing);
 
     return jobj;
@@ -179,14 +179,14 @@ parse_stats_ipv6_json(struct in6_addr ip, struct traffic_stats *stats)
     json_object_object_add(incoming, "total_bytes", json_object_new_int64(stats->incoming.total_bytes));
     json_object_object_add(incoming, "total_packets", json_object_new_int64(stats->incoming.total_packets));
     json_object_object_add(incoming, "rate", json_object_new_int(calc_rate_estimator(stats, true)));
-    json_object_object_add(incoming, "incoming_rate_limit", json_object_new_int(stats->incoming_rate_limit));
+    json_object_object_add(incoming, "incoming_rate_limit", json_object_new_uint64(stats->incoming_rate_limit.bps));
     json_object_object_add(jobj, "incoming", incoming);
 
     // Add outgoing stats
     json_object_object_add(outgoing, "total_bytes", json_object_new_int64(stats->outgoing.total_bytes));
     json_object_object_add(outgoing, "total_packets", json_object_new_int64(stats->outgoing.total_packets));
     json_object_object_add(outgoing, "rate", json_object_new_int(calc_rate_estimator(stats, false)));
-    json_object_object_add(outgoing, "outgoing_rate_limit", json_object_new_int(stats->outgoing_rate_limit));
+    json_object_object_add(outgoing, "outgoing_rate_limit", json_object_new_uint64(stats->outgoing_rate_limit.bps));
     json_object_object_add(jobj, "outgoing", outgoing);
 
     return jobj;
@@ -212,14 +212,14 @@ parse_stats_mac_json(struct mac_addr mac, struct traffic_stats *stats)
     json_object_object_add(incoming, "total_bytes", json_object_new_int64(stats->incoming.total_bytes));
     json_object_object_add(incoming, "total_packets", json_object_new_int64(stats->incoming.total_packets));
     json_object_object_add(incoming, "rate", json_object_new_int(calc_rate_estimator(stats, true)));
-    json_object_object_add(incoming, "incoming_rate_limit", json_object_new_int(stats->incoming_rate_limit));
+    json_object_object_add(incoming, "incoming_rate_limit", json_object_new_uint64(stats->incoming_rate_limit.bps));
     json_object_object_add(jobj, "incoming", incoming);
 
     // Add outgoing stats
     json_object_object_add(outgoing, "total_bytes", json_object_new_int64(stats->outgoing.total_bytes));
     json_object_object_add(outgoing, "total_packets", json_object_new_int64(stats->outgoing.total_packets));
     json_object_object_add(outgoing, "rate", json_object_new_int(calc_rate_estimator(stats, false)));
-    json_object_object_add(outgoing, "outgoing_rate_limit", json_object_new_int(stats->outgoing_rate_limit));
+    json_object_object_add(outgoing, "outgoing_rate_limit", json_object_new_uint64(stats->outgoing_rate_limit.bps));
     json_object_object_add(jobj, "outgoing", outgoing);
 
     return jobj;
@@ -240,14 +240,14 @@ parse_stats_sid_json(uint32_t sid, struct traffic_stats *stats)
     json_object_object_add(incoming, "total_bytes", json_object_new_int64(stats->incoming.total_bytes));
     json_object_object_add(incoming, "total_packets", json_object_new_int64(stats->incoming.total_packets));
     json_object_object_add(incoming, "rate", json_object_new_int(calc_rate_estimator(stats, true)));
-    json_object_object_add(incoming, "incoming_rate_limit", json_object_new_int(stats->incoming_rate_limit));
+    json_object_object_add(incoming, "incoming_rate_limit", json_object_new_uint64(stats->incoming_rate_limit.bps));
     json_object_object_add(jobj, "incoming", incoming);
 
     // Add outgoing stats
     json_object_object_add(outgoing, "total_bytes", json_object_new_int64(stats->outgoing.total_bytes));
     json_object_object_add(outgoing, "total_packets", json_object_new_int64(stats->outgoing.total_packets));
     json_object_object_add(outgoing, "rate", json_object_new_int(calc_rate_estimator(stats, false)));
-    json_object_object_add(outgoing, "outgoing_rate_limit", json_object_new_int(stats->outgoing_rate_limit));
+    json_object_object_add(outgoing, "outgoing_rate_limit", json_object_new_uint64(stats->outgoing_rate_limit.bps));
     json_object_object_add(jobj, "outgoing", outgoing);
 
     return jobj;
@@ -409,8 +409,8 @@ static bool handle_add_command(int map_fd, const char *map_type, const char *add
     // Get global QoS configuration
     uint32_t downrate, uprate;
     get_aw_global_qos_config(&downrate, &uprate);
-    stats.incoming_rate_limit = downrate;
-    stats.outgoing_rate_limit = uprate;
+    stats.incoming_rate_limit.bps = downrate;
+    stats.outgoing_rate_limit.bps = uprate;
 
     if (bpf_map_update_elem(map_fd, key, &stats, BPF_NOEXIST) < 0) {
         perror("bpf_map_update_elem");
@@ -659,8 +659,8 @@ static bool handle_update_command(int map_fd, const char *map_type, const char *
     bool exists = (bpf_map_lookup_elem(map_fd, key, &stats) == 0);
     
     // Update rate limits
-    stats.incoming_rate_limit = downrate;
-    stats.outgoing_rate_limit = uprate;
+    stats.incoming_rate_limit.bps = downrate;
+    stats.outgoing_rate_limit.bps = uprate;
     
     // Update or add the entry
     int update_flag = exists ? BPF_EXIST : BPF_NOEXIST;
@@ -677,8 +677,8 @@ static bool handle_update_all_command(int map_fd, const char *map_type,
                                     uint32_t downrate, uint32_t uprate) {
     // Prepare stats structure with updated rate limits
     struct traffic_stats stats = {0};
-    stats.incoming_rate_limit = downrate;
-    stats.outgoing_rate_limit = uprate;
+    stats.incoming_rate_limit.bps = downrate;
+    stats.outgoing_rate_limit.bps = uprate;
     
     if (strcmp(map_type, "ipv4") == 0) {
         __be32 cur_key = 0, next_key = 0;
@@ -687,8 +687,8 @@ static bool handle_update_all_command(int map_fd, const char *map_type,
         while (bpf_map_get_next_key(map_fd, cur_key ? &cur_key : NULL, &next_key) == 0) {
             // Keep existing traffic stats, just update rate limits
             if (bpf_map_lookup_elem(map_fd, &next_key, &existing) == 0) {
-                existing.incoming_rate_limit = downrate;
-                existing.outgoing_rate_limit = uprate;
+                existing.incoming_rate_limit.bps = downrate;
+                existing.outgoing_rate_limit.bps = uprate;
                 if (bpf_map_update_elem(map_fd, &next_key, &existing, BPF_EXIST) < 0) {
                     perror("bpf_map_update_elem (IPv4)");
                     return false;
@@ -704,8 +704,8 @@ static bool handle_update_all_command(int map_fd, const char *map_type,
                (memcmp(&cur_key, &(struct mac_addr){0}, sizeof(cur_key)) ? &cur_key : NULL),
                &next_key) == 0) {
             if (bpf_map_lookup_elem(map_fd, &next_key, &existing) == 0) {
-                existing.incoming_rate_limit = downrate;
-                existing.outgoing_rate_limit = uprate;
+                existing.incoming_rate_limit.bps = downrate;
+                existing.outgoing_rate_limit.bps = uprate;
                 if (bpf_map_update_elem(map_fd, &next_key, &existing, BPF_EXIST) < 0) {
                     perror("bpf_map_update_elem (MAC)");
                     return false;
@@ -721,8 +721,8 @@ static bool handle_update_all_command(int map_fd, const char *map_type,
                (memcmp(&cur_key, &(struct in6_addr){0}, sizeof(cur_key)) ? &cur_key : NULL),
                &next_key) == 0) {
             if (bpf_map_lookup_elem(map_fd, &next_key, &existing) == 0) {
-                existing.incoming_rate_limit = downrate;
-                existing.outgoing_rate_limit = uprate;
+                existing.incoming_rate_limit.bps = downrate;
+                existing.outgoing_rate_limit.bps = uprate;
                 if (bpf_map_update_elem(map_fd, &next_key, &existing, BPF_EXIST) < 0) {
                     perror("bpf_map_update_elem (IPv6)");
                     return false;

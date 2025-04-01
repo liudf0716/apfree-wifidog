@@ -8,6 +8,7 @@
 
 #ifdef __KERNEL__
 #include <linux/types.h>
+#include <linux/compiler.h>
 #else
 #include <stdint.h>
 #endif
@@ -21,6 +22,10 @@
 #ifndef UINT32_MAX
 #define UINT32_MAX 0xFFFFFFFFU
 #endif
+
+#define DROP_HORIZON 2000000000UL  /* 2 seconds in nanoseconds */
+#define NSEC_PER_SEC 1000000000UL  /* 1 second in nanoseconds */
+
 
 typedef enum {
     INGRESS,
@@ -44,6 +49,11 @@ struct counters {
     __u32 reserved;         /* Reserved for future use */
 } __attribute__((packed));
 
+struct rate_limit {
+    __u64 bps;             /* Rate limit */
+    __u64 t_last;        /* Last time traffic was seen */
+};
+
 /**
  * @struct traffic_stats
  * @brief Structure to maintain both incoming and outgoing traffic statistics
@@ -51,9 +61,9 @@ struct counters {
 struct traffic_stats {
     struct counters incoming;    /* Incoming traffic counters */
     struct counters outgoing;    /* Outgoing traffic counters */
-    __u32  incoming_rate_limit;   /* Incoming rate limit */
-    __u32  outgoing_rate_limit;   /* Outgoing rate limit */
-} __attribute__((packed));
+    struct rate_limit incoming_rate_limit;    /* Incoming rate limit */
+    struct rate_limit outgoing_rate_limit;    /* Outgoing rate limit */
+};
 
 struct xdpi_nf_conn {
     __u32  sid;
