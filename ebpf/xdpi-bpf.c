@@ -59,8 +59,6 @@ static inline char *xdpi_strstr(const char *haystack, int haystack_sz,
     if (haystack_sz < needle_sz)
         return NULL;
 
-    printk("KERNEL: haystack_sz: %d, needle_sz: %d\n", haystack_sz, needle_sz);
-
     for (int i = 0; i <= haystack_sz - needle_sz; i++) {
         if (memcmp(haystack + i, needle, needle_sz) == 0)
             return (char *)(haystack + i);
@@ -88,6 +86,9 @@ __bpf_kfunc int bpf_xdpi_skb_match(struct __sk_buff *skb_ctx, direction_t dir)
     // Check if skb is null
     if (!skb)
         return -1;
+    
+    if (unlikely(skb_linearize(skb) != 0))
+        return -1;
 
     // Check if this is a TCP packet by examining protocol
     if (skb->protocol != htons(ETH_P_IP))
@@ -109,7 +110,7 @@ __bpf_kfunc int bpf_xdpi_skb_match(struct __sk_buff *skb_ctx, direction_t dir)
 
     // Get the data and data length from the TCP packet
     data = skb_transport_header(skb) + tcp->doff * 4;
-    data_len = skb->len - (data - skb_mac_header(skb));
+    data_len = skb->len - (data - skb->data);
 
     // Ensure we have enough data to analyze
     if (data_len < min_data_len)
