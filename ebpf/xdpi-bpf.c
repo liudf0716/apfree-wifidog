@@ -45,6 +45,7 @@ static DEFINE_SPINLOCK(domains_lock);
 #define XDPI_IOC_ADD    _IOW(XDPI_IOC_MAGIC, 1, struct domain_entry)
 #define XDPI_IOC_DEL    _IOW(XDPI_IOC_MAGIC, 2, int)
 #define XDPI_IOC_UPDATE _IOW(XDPI_IOC_MAGIC, 3, struct domain_entry)
+#define MIN_TCP_DATA_SIZE   50
 
 // Create a proc file for userspace interaction
 static struct proc_dir_entry *xdpi_proc_file;
@@ -74,9 +75,6 @@ __diag_ignore_all("-Wmissing-prototypes",
 __bpf_kfunc int bpf_xdpi_skb_match(struct __sk_buff *skb_ctx, direction_t dir)
 {
     struct sk_buff *skb = (struct sk_buff *)skb_ctx;
-    u8 *data;
-    int data_len;
-    int min_data_len = 50;
     
     // For ingress traffic, check if destination port is 80 or 443
     if (dir != INGRESS) {
@@ -86,7 +84,7 @@ __bpf_kfunc int bpf_xdpi_skb_match(struct __sk_buff *skb_ctx, direction_t dir)
     // Check if skb is null
     if (!skb)
         return -EINVAL;
-    
+#if 0
     if (unlikely(skb_linearize(skb) != 0))
         return -EFAULT;
 
@@ -109,12 +107,12 @@ __bpf_kfunc int bpf_xdpi_skb_match(struct __sk_buff *skb_ctx, direction_t dir)
         return -ENETRESET;
 
     // Get the data and data length from the TCP packet
-    data = skb_transport_header(skb) + tcp->doff * 4;
-    data_len = skb->len - (data - skb->data);
+    u8 *data = skb_transport_header(skb) + tcp->doff * 4;
+    int data_len = skb->len - (data - skb->data);
     printk("xdpi: skb data_len %d dport %d\n", data_len, dport);
 
     // Ensure we have enough data to analyze
-    if (data_len < min_data_len)
+    if (data_len < MIN_TCP_DATA_SIZE)
         return -ENODATA;
 
     spin_lock_bh(&domains_lock);
@@ -130,7 +128,7 @@ __bpf_kfunc int bpf_xdpi_skb_match(struct __sk_buff *skb_ctx, direction_t dir)
         } 
     }
     spin_unlock_bh(&domains_lock);
-
+#endif
     return -ENOENT;
 }
 
