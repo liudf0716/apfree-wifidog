@@ -195,10 +195,10 @@ static inline int process_packet(struct __sk_buff *skb, direction_t dir) {
             if (conn && conn->sid > 0) {
                 conn->last_time = current_time;
             } else {
-                #if 0   
                 int sid = bpf_xdpi_skb_match(skb, dir);
                 struct xdpi_nf_conn new_conn = { .pkt_seen = 1, .last_time = current_time };
                 bpf_printk("sid: %d dir: %d", sid, dir);
+#if 0
                 if (sid >= 0) {
                     new_conn.sid = sid;
                 } else {
@@ -228,7 +228,7 @@ static inline int process_packet(struct __sk_buff *skb, direction_t dir) {
                     }
                     update_stats(&proto_stats->incoming, skb->len, est_slot);
                 }
-                #endif
+#endif
             } 
         } 
        
