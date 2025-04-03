@@ -80,46 +80,46 @@ __bpf_kfunc int bpf_xdpi_skb_match(struct __sk_buff *skb_ctx, direction_t dir)
     
     // For ingress traffic, check if destination port is 80 or 443
     if (dir != INGRESS) {
-        return -1;
+        return -EACCESS;
     }
 
     // Check if skb is null
     if (!skb)
-        return -1;
+        return -EINVAL;
     
     if (unlikely(skb_linearize(skb) != 0))
-        return -1;
+        return -EFAULT;
 
     // Check if this is a TCP packet by examining protocol
     if (skb->protocol != htons(ETH_P_IP))
-        return -1;
+        return -EPROTONOSUPPORT;
 
     char ip_buf[sizeof(struct iphdr)] = {};
     char tcp_buf[sizeof(struct tcphdr)] = {};
     struct iphdr *ip = skb_header_pointer(skb, skb_network_offset(skb), sizeof(*ip), ip_buf);
     if (!ip || ip->protocol != IPPROTO_TCP)
-        return -1;
+        return -EPROTONOSUPPORT;
 
     struct tcphdr *tcp = skb_header_pointer(skb, skb_transport_offset(skb), sizeof(*tcp), tcp_buf);
     if (!tcp)
-        return -1;
+        return -EINVAL;
         
     u16 dport = ntohs(tcp->dest);
     if (dport != 80 && dport != 443)
-        return -1;
+        return -ENETRESET;
 
     // Get the data and data length from the TCP packet
     data = skb_transport_header(skb) + tcp->doff * 4;
     data_len = skb->len - (data - skb->data);
+    bpf_printk("xdpi: skb data_len %d dport %d\n", data_len, dport);
 
     // Ensure we have enough data to analyze
     if (data_len < min_data_len)
-        return -1;
+        return -ENODATA;
 
-
+    spin_lock_bh(&domains_lock);
     for (int i = 0; i < XDPI_DOMAIN_MAX; i++) {
         struct domain_entry *entry;
-        spin_lock_bh(&domains_lock);
         entry = &domains[i];
         if (entry && entry->used && entry->domain_len <= data_len) {
             char *found = xdpi_strstr(data, data_len, entry->domain, entry->domain_len);
@@ -127,11 +127,11 @@ __bpf_kfunc int bpf_xdpi_skb_match(struct __sk_buff *skb_ctx, direction_t dir)
                 spin_unlock_bh(&domains_lock);
                 return entry->sid;
             }
-        }
-        spin_unlock_bh(&domains_lock);
+        } 
     }
+    spin_unlock_bh(&domains_lock);
 
-    return -1;
+    return -ENOENT;
 }
 
 __diag_pop();
