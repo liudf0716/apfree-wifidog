@@ -84,7 +84,7 @@ __bpf_kfunc int bpf_xdpi_skb_match(struct __sk_buff *skb_ctx, direction_t dir)
     // Check if skb is null
     if (!skb)
         return -EINVAL;
-#if 0
+
     if (unlikely(skb_linearize(skb) != 0))
         return -EFAULT;
 
@@ -128,7 +128,7 @@ __bpf_kfunc int bpf_xdpi_skb_match(struct __sk_buff *skb_ctx, direction_t dir)
         } 
     }
     spin_unlock_bh(&domains_lock);
-#endif
+
     return -ENOENT;
 }
 
