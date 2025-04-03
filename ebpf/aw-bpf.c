@@ -143,18 +143,6 @@ static inline int process_packet(struct __sk_buff *skb, direction_t dir) {
     if (data + sizeof(*eth) > data_end)
         return 0;
 
-    struct iphdr *ip = data + sizeof(*eth);
-    if ((void *)ip + sizeof(*ip) > data_end)
-        return 0;
-    
-    // Check if protocol is TCP or UDP
-    if (ip->protocol != IPPROTO_TCP && ip->protocol != IPPROTO_UDP)
-        return 0;
-        
-    
-    if ((void *)(ip + 1) > data_end) // Ensure at least 1 byte of data
-        return 0;
-
     {
         struct traffic_stats *s_stats = bpf_map_lookup_elem(&mac_map, eth->h_source);
         if (s_stats) {
@@ -181,6 +169,13 @@ static inline int process_packet(struct __sk_buff *skb, direction_t dir) {
     
     // Handle IPv4
     if (eth->h_proto == bpf_htons(ETH_P_IP)) {
+        struct iphdr *ip = data + sizeof(*eth);
+        if ((void *)ip + sizeof(*ip) > data_end)
+            return 0;
+        
+        if ((void *)(ip + 1) > data_end) // Ensure at least 1 byte of data
+            return 0;
+#if 0
         struct bpf_sock_tuple bpf_tuple = {};
         struct bpf_ct_opts opts_def = {
                 .netns_id = -1,
@@ -234,7 +229,7 @@ static inline int process_packet(struct __sk_buff *skb, direction_t dir) {
                 }
             }  
         } 
-        
+#endif        
 
         // Process source IP (outgoing traffic)
         struct traffic_stats *s_stats = bpf_map_lookup_elem(&ipv4_map, &ip->saddr);
