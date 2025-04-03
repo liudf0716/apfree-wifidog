@@ -129,6 +129,7 @@ static __always_inline int edt_sched_departure(struct __sk_buff *skb, struct rat
     if (tokens >= skb->wire_len) {
         tokens -= skb->wire_len;
     } else {
+        bpf_printk("drop packet, tokens: %lld, skb->wire_len: %d", tokens, skb->wire_len);
         return 1;
     }
     WRITE_ONCE(info->tokens, tokens);
