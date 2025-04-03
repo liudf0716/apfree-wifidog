@@ -205,7 +205,6 @@ static inline int process_packet(struct __sk_buff *skb, direction_t dir) {
                     new_conn.sid = UINT32_MAX;
                 }
                 bpf_map_update_elem(&tcp_conn_map, &bpf_tuple, &new_conn, BPF_NOEXIST);
-#if 1
                 // Update the xdpi l7 stats based on the sid
                 struct traffic_stats *proto_stats = bpf_map_lookup_elem(&xdpi_l7_map, &sid);
                 if (!proto_stats) {
@@ -229,7 +228,6 @@ static inline int process_packet(struct __sk_buff *skb, direction_t dir) {
                     }
                     update_stats(&proto_stats->incoming, skb->len, est_slot);
                 }
-#endif
             } 
         } 
        
