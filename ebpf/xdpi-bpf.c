@@ -14,7 +14,7 @@
 #include <linux/ip.h>
 #include <linux/tcp.h>
 #include <linux/uaccess.h>
-#include <linux/bpf_helper.h>
+#include <linux/bpf_helpers.h>
 
 
 #define XDPI_DOMAIN_MAX 256
