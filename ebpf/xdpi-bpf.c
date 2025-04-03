@@ -119,7 +119,7 @@ __bpf_kfunc int bpf_xdpi_skb_match(struct __sk_buff *skb_ctx, direction_t dir)
     if (!ip || ip->protocol != IPPROTO_TCP)
         return -EPROTONOSUPPORT;
 
-    struct tcphdr *tcp = skb_header_pointer(skb, skb_transport_offset(skb), sizeof(*tcp), tcp_buf);
+    struct tcphdr *tcp = skb_header_pointer(skb, skb_network_offset(skb) + ip->ihl * 4, sizeof(*tcp), tcp_buf);
     if (!tcp)
         return -EINVAL;
         
@@ -127,8 +127,8 @@ __bpf_kfunc int bpf_xdpi_skb_match(struct __sk_buff *skb_ctx, direction_t dir)
     if (dport != 80 && dport != 443)
         return -ENETRESET;
 
-    // Get the data and data length from the TCP packet
-    u8 *data = skb_transport_header(skb) + tcp->doff * 4;
+    
+    u8 *data = skb->data + skb_network_offset(skb) + ip->ihl * 4 + tcp->doff * 4;
     int data_len = skb->len - (data - skb->data);
     printk("xdpi: skb data_len %d dport %d\n", data_len, dport);
 
