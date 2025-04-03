@@ -52,6 +52,7 @@ struct counters {
 struct rate_limit {
     __u64 bps;             /* Rate limit */
     __u64 t_last;        /* Last time traffic was seen */
+    __u64 tokens;         /* Tokens */
 };
 
 /**

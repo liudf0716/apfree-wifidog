@@ -9,6 +9,7 @@
 #include <linux/pkt_cls.h>
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_endian.h>
+#include <linux/compiler.h>
 
 #include "aw-bpf.h"
 
@@ -112,25 +113,27 @@ static __always_inline __u32 calc_rate_estimator(struct counters *cnt, __u32 now
 
 static __always_inline int edt_sched_departure(struct __sk_buff *skb, struct rate_limit *info)
 {
-	__u64 delay, now, t, t_next;
+	__u64 tokens, now, t_last, elapsed_time, bps;
 
 	now = bpf_ktime_get_ns();
-	t = skb->tstamp;
-	if (t < now)
-		t = now;
-	delay = ((__u64)skb->len) * NSEC_PER_SEC / info->bps;
-	t_next = (*(volatile __u64 *)&info->t_last) + delay;
-	if (t_next <= t) {
-		(*(volatile __u64 *)&info->t_last) = t;
-		return 0;
-	}
-	
-	if (t_next - now >= DROP_HORIZON)
-		return 1;
-    (*(volatile __u64 *)&info->t_last) = t_next;
-	skb->tstamp = t_next;
-	
-	return 0;
+	bps = READ_ONCE(info->bps);
+    t_last = READ_ONCE(info->t_last);
+    tokens = READ_ONCE(info->tokens);
+    elapsed_time = now - t_last;
+    if (elapsed_time > 0) {
+        tokens += elapsed_time * bps / NSEC_PER_SEC;
+        if (tokens > bps) {
+            tokens = bps;
+        }
+    }
+    if (tokens >= skb->wire_len) {
+        tokens -= skb->wire_len;
+    } else {
+        return 1;
+    }
+    WRITE_ONCE(info->tokens, tokens);
+    WRITE_ONCE(info->t_last, now);
+    return 0;
 }
 
 static inline int process_packet(struct __sk_buff *skb, direction_t dir) {
@@ -151,7 +154,7 @@ static inline int process_packet(struct __sk_buff *skb, direction_t dir) {
                     return 1;
                 }
             }
-            update_stats(&s_stats->outgoing, skb->len, est_slot);
+            update_stats(&s_stats->outgoing, skb->wire_len, est_slot);
         }
     }
      
@@ -163,7 +166,7 @@ static inline int process_packet(struct __sk_buff *skb, direction_t dir) {
                     return 1;
                 }
             } 
-            update_stats(&d_stats->incoming, skb->len, est_slot);
+            update_stats(&d_stats->incoming, skb->wire_len, est_slot);
         }
     }
     
