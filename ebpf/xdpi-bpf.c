@@ -14,7 +14,6 @@
 #include <linux/ip.h>
 #include <linux/tcp.h>
 #include <linux/uaccess.h>
-#include <linux/bpf_helpers.h>
 
 
 #define XDPI_DOMAIN_MAX 256
@@ -112,7 +111,7 @@ __bpf_kfunc int bpf_xdpi_skb_match(struct __sk_buff *skb_ctx, direction_t dir)
     // Get the data and data length from the TCP packet
     data = skb_transport_header(skb) + tcp->doff * 4;
     data_len = skb->len - (data - skb->data);
-    bpf_printk("xdpi: skb data_len %d dport %d\n", data_len, dport);
+    printk("xdpi: skb data_len %d dport %d\n", data_len, dport);
 
     // Ensure we have enough data to analyze
     if (data_len < min_data_len)
