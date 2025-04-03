@@ -14,6 +14,7 @@
 #include <linux/ip.h>
 #include <linux/tcp.h>
 #include <linux/uaccess.h>
+#include <linux/bpf_helpers.h>
 
 
 #define XDPI_DOMAIN_MAX 256
@@ -54,7 +55,7 @@ static int add_domain(struct domain_entry *entry);
 static int del_domain(int index);
 static int update_domain(struct domain_entry *entry, int index);
 
-static inline char *xdpi_strstr(const char *haystack, int haystack_sz,
+static __always_inline char *xdpi_strstr(const char *haystack, int haystack_sz,
                                  const char *needle, int needle_sz)
 {
     if (haystack_sz < needle_sz)
@@ -66,6 +67,26 @@ static inline char *xdpi_strstr(const char *haystack, int haystack_sz,
     }
 
     return NULL;
+}
+
+static __always_inline int is_http_request(const char *data, int data_sz)
+{
+    if (data_sz < 50)
+        return 0;
+
+    return data[0] == 'G' && data[1] == 'E' && data[2] == 'T' && data[3] == ' ';
+}
+
+static __always_inline int is_tls_hello(const char *data, int data_sz)
+{
+    if (data_sz < 50)
+        return 0;
+
+    if (data[0] == 0x16 && data[1] == 0x03) {
+        return 1;
+    }
+
+    return 0;
 }
 
 __diag_push();
