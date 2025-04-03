@@ -198,13 +198,14 @@ static inline int process_packet(struct __sk_buff *skb, direction_t dir) {
                 int sid = bpf_xdpi_skb_match(skb, dir);
                 struct xdpi_nf_conn new_conn = { .pkt_seen = 1, .last_time = current_time };
                 bpf_printk("sid: %d dir: %d", sid, dir);
-#if 0
+
                 if (sid >= 0) {
                     new_conn.sid = sid;
                 } else {
                     new_conn.sid = UINT32_MAX;
                 }
                 bpf_map_update_elem(&tcp_conn_map, &bpf_tuple, &new_conn, BPF_NOEXIST);
+#if 0
                 // Update the xdpi l7 stats based on the sid
                 struct traffic_stats *proto_stats = bpf_map_lookup_elem(&xdpi_l7_map, &sid);
                 if (!proto_stats) {
