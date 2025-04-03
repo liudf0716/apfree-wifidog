@@ -14,6 +14,7 @@
 #include <linux/ip.h>
 #include <linux/tcp.h>
 #include <linux/uaccess.h>
+#include <linux/bpf_helper.h>
 
 
 #define XDPI_DOMAIN_MAX 256
@@ -80,7 +81,7 @@ __bpf_kfunc int bpf_xdpi_skb_match(struct __sk_buff *skb_ctx, direction_t dir)
     
     // For ingress traffic, check if destination port is 80 or 443
     if (dir != INGRESS) {
-        return -EACCESS;
+        return -EACCES;
     }
 
     // Check if skb is null
