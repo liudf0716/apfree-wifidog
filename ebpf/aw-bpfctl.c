@@ -78,8 +78,8 @@ print_stats_ipv4(__be32 ip, struct traffic_stats *stats)
            stats->incoming.total_bytes, stats->incoming.total_packets, calc_rate_estimator(stats, true));
     printf("  Outgoing: total_bytes=%llu, total_packets=%llu, rate=%u\n",
            stats->outgoing.total_bytes, stats->outgoing.total_packets, calc_rate_estimator(stats, false));
-    printf("  Rate Limits: incoming=%llu bps, outgoing=%llu bps\n",
-           stats->incoming_rate_limit.bps, stats->outgoing_rate_limit.bps);
+    printf("  Rate Limits: incoming=%llu bps, tokens=%llu, t_last=%llu, outgoing=%llu bps tokens=%llu, t_last=%llu\n",
+           stats->incoming_rate_limit.bps, stats->incoming_rate_limit.tokens, stats->incoming_rate_limit.t_last, stats->outgoing_rate_limit.bps, stats->outgoing_rate_limit.tokens, stats->outgoing_rate_limit.t_last);
 }
 
 static void 
@@ -93,8 +93,8 @@ print_stats_ipv6(struct in6_addr ip, struct traffic_stats *stats)
            stats->incoming.total_bytes, stats->incoming.total_packets, calc_rate_estimator(stats, true));
     printf("  Outgoing: total_bytes=%llu, total_packets=%llu, rate=%u\n",
            stats->outgoing.total_bytes, stats->outgoing.total_packets, calc_rate_estimator(stats, false));
-    printf("  Rate Limits: incoming=%llu bps, outgoing=%llu bps\n",
-           stats->incoming_rate_limit.bps, stats->outgoing_rate_limit.bps);
+    printf("  Rate Limits: incoming=%llu bps, tokens=%llu, t_last=%llu, outgoing=%llu bps tokens=%llu, t_last=%llu\n",
+           stats->incoming_rate_limit.bps, stats->incoming_rate_limit.tokens, stats->incoming_rate_limit.t_last, stats->outgoing_rate_limit.bps, stats->outgoing_rate_limit.tokens, stats->outgoing_rate_limit.t_last);
 }
 
 static void 
@@ -107,8 +107,8 @@ print_stats_mac(struct mac_addr mac, struct traffic_stats *stats)
            stats->incoming.total_bytes, stats->incoming.total_packets, calc_rate_estimator(stats, true));
     printf("  Outgoing: total_bytes=%llu, total_packets=%llu, rate=%u\n",
            stats->outgoing.total_bytes, stats->outgoing.total_packets, calc_rate_estimator(stats, false));
-    printf("  Rate Limits: incoming=%llu bps, outgoing=%llu bps\n",
-           stats->incoming_rate_limit.bps, stats->outgoing_rate_limit.bps);
+    printf("  Rate Limits: incoming=%llu bps, tokens=%llu, t_last=%llu, outgoing=%llu bps tokens=%llu, t_last=%llu\n",
+           stats->incoming_rate_limit.bps, stats->incoming_rate_limit.tokens, stats->incoming_rate_limit.t_last, stats->outgoing_rate_limit.bps, stats->outgoing_rate_limit.tokens, stats->outgoing_rate_limit.t_last);
 }
 
 static void 
@@ -119,8 +119,8 @@ print_stats_sid(uint32_t sid, struct traffic_stats *stats)
            stats->incoming.total_bytes, stats->incoming.total_packets, calc_rate_estimator(stats, true));
     printf("  Outgoing: total_bytes=%llu, total_packets=%llu, rate=%u\n",
            stats->outgoing.total_bytes, stats->outgoing.total_packets, calc_rate_estimator(stats, false));
-    printf("  Rate Limits: incoming=%llu bps, outgoing=%llu bps\n",
-           stats->incoming_rate_limit.bps, stats->outgoing_rate_limit.bps);
+    printf("  Rate Limits: incoming=%llu bps, tokens=%llu, t_last=%llu, outgoing=%llu bps tokens=%llu, t_last=%llu\n",
+           stats->incoming_rate_limit.bps, stats->incoming_rate_limit.tokens, stats->incoming_rate_limit.t_last, stats->outgoing_rate_limit.bps, stats->outgoing_rate_limit.tokens, stats->outgoing_rate_limit.t_last);
 }
 
 static struct json_object*
