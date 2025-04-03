@@ -170,10 +170,11 @@ static inline int process_packet(struct __sk_buff *skb, direction_t dir) {
     {
         struct traffic_stats *d_stats = bpf_map_lookup_elem(&mac_map, eth->h_dest);
         if (d_stats) {
-            if (d_stats->incoming_rate_limit.bps && 
-                d_stats->incoming_rate_limit.bps < calc_rate_estimator(&d_stats->incoming, current_time, est_slot)) {
-                return 1;
-            }
+            if (d_stats->incoming_rate_limit.bps) {
+                if (edt_sched_departure(skb, &d_stats->incoming_rate_limit)) {
+                    return 1;
+                }
+            } 
             update_stats(&d_stats->incoming, skb->len, est_slot);
         }
     }
