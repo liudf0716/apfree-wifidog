@@ -121,7 +121,7 @@ static __always_inline int edt_sched_departure(struct __sk_buff *skb, struct rat
     tokens = READ_ONCE(info->tokens);
     if (t_last == 0) {
         t_last = now;
-        tokens = bps;
+        tokens = 1024000;
     }
     elapsed_time = now - t_last;
     if (elapsed_time > 0) {
