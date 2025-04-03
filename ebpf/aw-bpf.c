@@ -175,7 +175,7 @@ static inline int process_packet(struct __sk_buff *skb, direction_t dir) {
         
         if ((void *)(ip + 1) > data_end) // Ensure at least 1 byte of data
             return 0;
-#if 0
+
         struct bpf_sock_tuple bpf_tuple = {};
         struct bpf_ct_opts opts_def = {
                 .netns_id = -1,
@@ -190,7 +190,7 @@ static inline int process_packet(struct __sk_buff *skb, direction_t dir) {
                 return 0;
             bpf_tuple.ipv4.sport = dir == INGRESS ? tcp->source : tcp->dest;
             bpf_tuple.ipv4.dport = dir == INGRESS ? tcp->dest : tcp->source;
-            
+#if 0    
             struct xdpi_nf_conn *conn = bpf_map_lookup_elem(&tcp_conn_map, &bpf_tuple);
             if (conn && conn->sid > 0) {
                 conn->last_time = current_time;
@@ -227,9 +227,10 @@ static inline int process_packet(struct __sk_buff *skb, direction_t dir) {
                     }
                     update_stats(&proto_stats->incoming, skb->len, est_slot);
                 }
-            }  
+            } 
+#endif
         } 
-#endif        
+       
 
         // Process source IP (outgoing traffic)
         struct traffic_stats *s_stats = bpf_map_lookup_elem(&ipv4_map, &ip->saddr);
