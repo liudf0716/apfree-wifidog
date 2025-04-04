@@ -137,6 +137,7 @@ static __always_inline int edt_sched_departure(struct __sk_buff *skb, struct rat
     return 0;
 }
 
+#define MIN_TCP_DATA_SIZE   100
 static inline int process_packet(struct __sk_buff *skb, direction_t dir) {
     __u32 current_time = get_current_time();
     __u32 est_slot = current_time / RATE_ESTIMATOR;
@@ -174,33 +175,38 @@ static inline int process_packet(struct __sk_buff *skb, direction_t dir) {
     // Handle IPv4
     if (eth->h_proto == bpf_htons(ETH_P_IP)) {
         struct iphdr *ip = data + sizeof(*eth);
-        if ((void *)ip + sizeof(*ip) > data_end)
-            return 0;
-        
-        if ((void *)(ip + 1) > data_end) // Ensure at least 1 byte of data
+        __u32 ip_hdr_len = ip->ihl * 4;
+        if ((void *)ip + ip_hdr_len > data_end)
             return 0;
 
-        struct bpf_sock_tuple bpf_tuple = {};
-        struct bpf_ct_opts opts_def = {
-                .netns_id = -1,
-        };
-        struct nf_conn *ct;
-        opts_def.l4proto = ip->protocol;
-        bpf_tuple.ipv4.saddr = dir == INGRESS? ip->saddr: ip->daddr;
-        bpf_tuple.ipv4.daddr = dir == INGRESS? ip->daddr: ip->saddr;
+        
         if (ip->protocol == IPPROTO_TCP) {
-            struct tcphdr *tcp = data + sizeof(*eth) + sizeof(*ip);
+            
+            struct tcphdr *tcp = (struct tcphdr *)(data + sizeof(*eth) + ip_hdr_len);
             if ((void *)tcp + sizeof(*tcp) > data_end)
                 return 0;
+            __u32 tcp_hdr_len = tcp->doff * 4;
+            __s32 tcp_data_len = skb->len - sizeof(*eth) - ip_hdr_len - tcp_hdr_len;
+            if (tcp_data_len < MIN_TCP_DATA_SIZE )
+                return 0;
+            
+            struct bpf_sock_tuple bpf_tuple = {};
+            struct bpf_ct_opts opts_def = {
+                    .netns_id = -1,
+            };
+            struct nf_conn *ct;
+            opts_def.l4proto = ip->protocol;
+            bpf_tuple.ipv4.saddr = dir == INGRESS? ip->saddr: ip->daddr;
+            bpf_tuple.ipv4.daddr = dir == INGRESS? ip->daddr: ip->saddr;
             bpf_tuple.ipv4.sport = dir == INGRESS ? tcp->source : tcp->dest;
             bpf_tuple.ipv4.dport = dir == INGRESS ? tcp->dest : tcp->source;
             
             struct xdpi_nf_conn *conn = bpf_map_lookup_elem(&tcp_conn_map, &bpf_tuple);
+            int sid = 0;
             if (conn && conn->sid > 0) {
                 conn->last_time = current_time;
+                sid = conn->sid;
             } else {
-                // get tcp data length
-                __u32 tcp_data_len = skb->len - sizeof(*eth) - sizeof(*ip) - sizeof(*tcp);
                 int sid = bpf_xdpi_skb_match(skb, dir);
                 struct xdpi_nf_conn new_conn = { .pkt_seen = 1, .last_time = current_time };
                 bpf_printk("sid: %d dir: %d tcp_data_len: %d", sid, dir, tcp_data_len);
@@ -211,30 +217,31 @@ static inline int process_packet(struct __sk_buff *skb, direction_t dir) {
                     new_conn.sid = UINT32_MAX;
                 }
                 bpf_map_update_elem(&tcp_conn_map, &bpf_tuple, &new_conn, BPF_NOEXIST);
-                // Update the xdpi l7 stats based on the sid
-                struct traffic_stats *proto_stats = bpf_map_lookup_elem(&xdpi_l7_map, &sid);
-                if (!proto_stats) {
-                    proto_stats = &(struct traffic_stats){0};
-                    bpf_map_update_elem(&xdpi_l7_map, &sid, proto_stats, BPF_ANY);
-                }
+            }
 
-                if (dir == INGRESS) {
-                    if (proto_stats->outgoing_rate_limit.bps) {
-                        if (edt_sched_departure(skb, &proto_stats->outgoing_rate_limit)) {
-                            return 1;
-                        }
-                    } 
-                    update_stats(&proto_stats->outgoing, skb->len, est_slot);
-                } else {
-                    if (proto_stats->incoming_rate_limit.bps)
-                    {
-                        if (edt_sched_departure(skb, &proto_stats->incoming_rate_limit)) {
-                            return 1;
-                        }
+            // Update the xdpi l7 stats based on the sid
+            struct traffic_stats *proto_stats = bpf_map_lookup_elem(&xdpi_l7_map, &sid);
+            if (!proto_stats) {
+                proto_stats = &(struct traffic_stats){0};
+                bpf_map_update_elem(&xdpi_l7_map, &sid, proto_stats, BPF_ANY);
+            }
+
+            if (dir == INGRESS) {
+                if (proto_stats->outgoing_rate_limit.bps) {
+                    if (edt_sched_departure(skb, &proto_stats->outgoing_rate_limit)) {
+                        return 1;
                     }
-                    update_stats(&proto_stats->incoming, skb->len, est_slot);
+                } 
+                update_stats(&proto_stats->outgoing, skb->len, est_slot);
+            } else {
+                if (proto_stats->incoming_rate_limit.bps)
+                {
+                    if (edt_sched_departure(skb, &proto_stats->incoming_rate_limit)) {
+                        return 1;
+                    }
                 }
-            } 
+                update_stats(&proto_stats->incoming, skb->len, est_slot);
+            }
         } 
        
 
