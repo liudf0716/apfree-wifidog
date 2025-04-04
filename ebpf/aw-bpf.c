@@ -194,14 +194,16 @@ static inline int process_packet(struct __sk_buff *skb, direction_t dir) {
                 return 0;
             bpf_tuple.ipv4.sport = dir == INGRESS ? tcp->source : tcp->dest;
             bpf_tuple.ipv4.dport = dir == INGRESS ? tcp->dest : tcp->source;
- 
+            
             struct xdpi_nf_conn *conn = bpf_map_lookup_elem(&tcp_conn_map, &bpf_tuple);
             if (conn && conn->sid > 0) {
                 conn->last_time = current_time;
             } else {
+                // get tcp data length
+                __u32 tcp_data_len = skb->len - sizeof(*eth) - sizeof(*ip) - sizeof(*tcp);
                 int sid = bpf_xdpi_skb_match(skb, dir);
                 struct xdpi_nf_conn new_conn = { .pkt_seen = 1, .last_time = current_time };
-                bpf_printk("sid: %d dir: %d", sid, dir);
+                bpf_printk("sid: %d dir: %d tcp_data_len: %d", sid, dir, tcp_data_len);
 
                 if (sid >= 0) {
                     new_conn.sid = sid;
