@@ -14,6 +14,44 @@
 
 #include "aw-bpf.h"
 
+#define XDPI_DOMAINS "/proc/xdpi_domains"
+
+struct xdpi_domain {
+    __u32 id;
+    char name[XDPI_PROTO_FEATURE_MAX_SIZE];
+    __u32 sid;
+};
+
+static struct xdpi_domain xdpi_domains[XDPI_PROTO_TRAITS_MAX_SIZE];
+static int xdpi_domains_count = 0;
+
+static void load_xdpi_domains(void)
+{
+    FILE *fp = fopen(XDPI_DOMAINS, "r");
+    if (!fp) {
+        perror("Failed to open XDPI_DOMAINS");
+        return;
+    }
+
+    char line[128] = {0};
+    // Skip header lines
+    fgets(line, sizeof(line), fp); // Skip "Index | Domain | SID"
+    fgets(line, sizeof(line), fp); // Skip "---------------------"
+
+    while (fgets(line, sizeof(line), fp)) {
+        struct xdpi_domain domain;
+        if (sscanf(line, "%u | %63s | %u", &domain.id, domain.name, &domain.sid) == 3) {
+            xdpi_domains[xdpi_domains_count++] = domain;
+            if (xdpi_domains_count >= XDPI_PROTO_TRAITS_MAX_SIZE) {
+                break;
+            }
+        }
+        memset(line, 0, sizeof(line));
+    }
+
+    fclose(fp);
+}
+
 static uint32_t 
 aw_bpf_gettime(void)
 {
@@ -67,6 +105,15 @@ calc_rate_estimator(struct traffic_stats *val, bool is_incoming)
 	return rate * 8 / RATE_ESTIMATOR;
 }
 
+static const char* get_domain_name_by_sid(__u32 sid) {
+    for (int i = 0; i < xdpi_domains_count; i++) {
+        if (xdpi_domains[i].sid == sid) {
+            return xdpi_domains[i].name;
+        }
+    }
+    return "unknown";
+}
+
 static void 
 print_stats_ipv4(__be32 ip, struct traffic_stats *stats)
 {
@@ -114,13 +161,15 @@ print_stats_mac(struct mac_addr mac, struct traffic_stats *stats)
 static void 
 print_stats_sid(uint32_t sid, struct traffic_stats *stats)
 {
-    printf("Key (SID): %u\n", sid);
+    const char *domain_name = get_domain_name_by_sid(sid);
+    printf("Key (SID): %u (%s)\n", sid, domain_name);
     printf("  Incoming: total_bytes=%llu, total_packets=%llu, rate=%u\n",
            stats->incoming.total_bytes, stats->incoming.total_packets, calc_rate_estimator(stats, true));
     printf("  Outgoing: total_bytes=%llu, total_packets=%llu, rate=%u\n",
            stats->outgoing.total_bytes, stats->outgoing.total_packets, calc_rate_estimator(stats, false));
     printf("  Rate Limits: incoming=%llu bps, tokens=%llu, t_last=%llu, outgoing=%llu bps tokens=%llu, t_last=%llu\n",
-           stats->incoming_rate_limit.bps, stats->incoming_rate_limit.tokens, stats->incoming_rate_limit.t_last, stats->outgoing_rate_limit.bps, stats->outgoing_rate_limit.tokens, stats->outgoing_rate_limit.t_last);
+           stats->incoming_rate_limit.bps, stats->incoming_rate_limit.tokens, stats->incoming_rate_limit.t_last, 
+           stats->outgoing_rate_limit.bps, stats->outgoing_rate_limit.tokens, stats->outgoing_rate_limit.t_last);
 }
 
 static struct json_object*
@@ -229,9 +278,11 @@ static struct json_object*
 parse_stats_sid_json(uint32_t sid, struct traffic_stats *stats)
 {
     struct json_object *jobj = json_object_new_object();
+    const char *domain_name = get_domain_name_by_sid(sid);
 
-    // Add SID
+    // Add SID and domain name
     json_object_object_add(jobj, "sid", json_object_new_int(sid));
+    json_object_object_add(jobj, "domain", json_object_new_string(domain_name));
 
     struct json_object *incoming = json_object_new_object();
     struct json_object *outgoing = json_object_new_object();
@@ -749,6 +800,9 @@ main(int argc, char **argv)
         aw_bpf_usage();
         return EXIT_FAILURE;
     }
+
+    // Load xdpi domains at startup
+    load_xdpi_domains();
 
     const char *map_type = argv[1];
     const char *cmd = argv[2];
