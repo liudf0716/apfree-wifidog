@@ -175,10 +175,8 @@ static inline int process_packet(struct __sk_buff *skb, direction_t dir) {
     // Handle IPv4
     if (eth->h_proto == bpf_htons(ETH_P_IP)) {
         struct iphdr *ip = data + sizeof(*eth);
-        __u32 ip_hdr_len = ip->ihl * 4;
-        if ((void *)ip + ip_hdr_len > data_end)
+        if ((void *)ip + sizeof(*ip) > data_end)
             return 0;
-
         
         if (ip->protocol == IPPROTO_TCP) {
             
