@@ -205,7 +205,7 @@ static inline int process_packet(struct __sk_buff *skb, direction_t dir) {
                 conn->last_time = current_time;
                 sid = conn->sid;
             } else {
-                int sid = bpf_xdpi_skb_match(skb, dir);
+                sid = bpf_xdpi_skb_match(skb, dir);
                 struct xdpi_nf_conn new_conn = { .pkt_seen = 1, .last_time = current_time };
                 bpf_printk("sid: %d dir: %d tcp_data_len: %d", sid, dir, tcp_data_len);
 
@@ -213,6 +213,7 @@ static inline int process_packet(struct __sk_buff *skb, direction_t dir) {
                     new_conn.sid = sid;
                 } else {
                     new_conn.sid = 7777;
+                    sid = 7777;
                 }
                 bpf_map_update_elem(&tcp_conn_map, &bpf_tuple, &new_conn, BPF_NOEXIST);
             }
