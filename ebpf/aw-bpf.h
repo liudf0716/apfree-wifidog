@@ -24,7 +24,6 @@
 #endif
 
 #define DROP_HORIZON 2000000000UL  /* 2 seconds in nanoseconds */
-#define NSEC_PER_SEC 1000000000UL  /* 1 second in nanoseconds */
 
 
 typedef enum {

@@ -179,8 +179,7 @@ static inline int process_packet(struct __sk_buff *skb, direction_t dir) {
             return 0;
         
         if (ip->protocol == IPPROTO_TCP) {
-            
-            struct tcphdr *tcp = (struct tcphdr *)(data + sizeof(*eth) + ip_hdr_len);
+            struct tcphdr *tcp = (struct tcphdr *)(data + sizeof(*eth) + sizeof(*ip));
             if ((void *)tcp + sizeof(*tcp) > data_end)
                 return 0;
             __u32 tcp_hdr_len = tcp->doff * 4;
