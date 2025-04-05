@@ -161,12 +161,20 @@ print_stats_mac(struct mac_addr mac, struct traffic_stats *stats)
 static void 
 print_stats_sid(uint32_t sid, struct traffic_stats *stats)
 {
+    uint32_t incoming_rate = calc_rate_estimator(stats, true);
+    uint32_t outgoing_rate = calc_rate_estimator(stats, false);
+    
+    // Skip if both rates are 0
+    if (incoming_rate == 0 && outgoing_rate == 0) {
+        return;
+    }
+
     const char *domain_name = get_domain_name_by_sid(sid);
     printf("Key (SID): %u (%s)\n", sid, domain_name);
     printf("  Incoming: total_bytes=%llu, total_packets=%llu, rate=%u\n",
-           stats->incoming.total_bytes, stats->incoming.total_packets, calc_rate_estimator(stats, true));
+           stats->incoming.total_bytes, stats->incoming.total_packets, incoming_rate);
     printf("  Outgoing: total_bytes=%llu, total_packets=%llu, rate=%u\n",
-           stats->outgoing.total_bytes, stats->outgoing.total_packets, calc_rate_estimator(stats, false));
+           stats->outgoing.total_bytes, stats->outgoing.total_packets, outgoing_rate);
     printf("  Rate Limits: incoming=%llu bps, tokens=%llu, t_last=%llu, outgoing=%llu bps tokens=%llu, t_last=%llu\n",
            stats->incoming_rate_limit.bps, stats->incoming_rate_limit.tokens, stats->incoming_rate_limit.t_last, 
            stats->outgoing_rate_limit.bps, stats->outgoing_rate_limit.tokens, stats->outgoing_rate_limit.t_last);
@@ -277,6 +285,14 @@ parse_stats_mac_json(struct mac_addr mac, struct traffic_stats *stats)
 static struct json_object*
 parse_stats_sid_json(uint32_t sid, struct traffic_stats *stats)
 {
+    uint32_t incoming_rate = calc_rate_estimator(stats, true);
+    uint32_t outgoing_rate = calc_rate_estimator(stats, false);
+    
+    // Skip if both rates are 0
+    if (incoming_rate == 0 && outgoing_rate == 0) {
+        return NULL;
+    }
+
     struct json_object *jobj = json_object_new_object();
     const char *domain_name = get_domain_name_by_sid(sid);
 
@@ -290,14 +306,14 @@ parse_stats_sid_json(uint32_t sid, struct traffic_stats *stats)
     // Add incoming stats
     json_object_object_add(incoming, "total_bytes", json_object_new_int64(stats->incoming.total_bytes));
     json_object_object_add(incoming, "total_packets", json_object_new_int64(stats->incoming.total_packets));
-    json_object_object_add(incoming, "rate", json_object_new_int(calc_rate_estimator(stats, true)));
+    json_object_object_add(incoming, "rate", json_object_new_int(incoming_rate));
     json_object_object_add(incoming, "incoming_rate_limit", json_object_new_uint64(stats->incoming_rate_limit.bps));
     json_object_object_add(jobj, "incoming", incoming);
 
     // Add outgoing stats
     json_object_object_add(outgoing, "total_bytes", json_object_new_int64(stats->outgoing.total_bytes));
     json_object_object_add(outgoing, "total_packets", json_object_new_int64(stats->outgoing.total_packets));
-    json_object_object_add(outgoing, "rate", json_object_new_int(calc_rate_estimator(stats, false)));
+    json_object_object_add(outgoing, "rate", json_object_new_int(outgoing_rate));
     json_object_object_add(outgoing, "outgoing_rate_limit", json_object_new_uint64(stats->outgoing_rate_limit.bps));
     json_object_object_add(jobj, "outgoing", outgoing);
 
