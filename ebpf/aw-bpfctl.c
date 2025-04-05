@@ -347,10 +347,10 @@ aw_bpf_usage()
 {
     fprintf(stderr, "Usage:\n");
     fprintf(stderr, "  aw-bpfctl <ipv4|ipv6|mac> add <IP_ADDRESS|MAC_ADDRESS>\n");
-    fprintf(stderr, "  aw-bpfctl <ipv4|ipv6|mac|sid> list\n");
+    fprintf(stderr, "  aw-bpfctl <ipv4|ipv6|mac|sid|l7> list\n");
     fprintf(stderr, "  aw-bpfctl <ipv4|ipv6|mac> del <IP_ADDRESS|MAC_ADDRESS>\n");
     fprintf(stderr, "  aw-bpfctl <ipv4|ipv6|mac> flush\n");
-    fprintf(stderr, "  aw-bpfctl <ipv4|ipv6|mac|sid> json\n");
+    fprintf(stderr, "  aw-bpfctl <ipv4|ipv6|mac|sid|l7> json\n");
     fprintf(stderr, "  aw-bpfctl <ipv4|ipv6|mac|sid> update <IP_ADDRESS|MAC_ADDRESS|SID> downrate <bps> uprate <bps>\n");
     fprintf(stderr, "  aw-bpfctl <ipv4|ipv6|mac|sid> update_all downrate <bps> uprate <bps>\n");
 }
@@ -793,6 +793,53 @@ static bool handle_update_all_command(int map_fd, const char *map_type,
     return true;
 }
 
+static void 
+print_stats_l7(void)
+{
+    printf("Index | Domain | SID\n");
+    printf("-------------------\n");
+    for (int i = 0; i < xdpi_domains_count; i++) {
+        printf("%5u | %-63s | %u\n", 
+               xdpi_domains[i].id, 
+               xdpi_domains[i].name, 
+               xdpi_domains[i].sid);
+    }
+}
+
+static struct json_object*
+parse_stats_l7_json(void)
+{
+    struct json_object *jroot = json_object_new_object();
+    struct json_object *jdata = json_object_new_array();
+
+    for (int i = 0; i < xdpi_domains_count; i++) {
+        struct json_object *jentry = json_object_new_object();
+        json_object_object_add(jentry, "id", json_object_new_int(xdpi_domains[i].id));
+        json_object_object_add(jentry, "domain", json_object_new_string(xdpi_domains[i].name));
+        json_object_object_add(jentry, "sid", json_object_new_int(xdpi_domains[i].sid));
+        json_object_array_add(jdata, jentry);
+    }
+
+    json_object_object_add(jroot, "status", json_object_new_string("success"));
+    json_object_object_add(jroot, "type", json_object_new_string("l7"));
+    json_object_object_add(jroot, "data", jdata);
+
+    return jroot;
+}
+
+static bool handle_l7_command(const char *cmd) {
+    if (strcmp(cmd, "list") == 0) {
+        print_stats_l7();
+        return true;
+    } else if (strcmp(cmd, "json") == 0) {
+        struct json_object *jroot = parse_stats_l7_json();
+        printf("%s\n", json_object_to_json_string(jroot));
+        json_object_put(jroot);
+        return true;
+    }
+    return false;
+}
+
 int 
 main(int argc, char **argv) 
 {
@@ -811,10 +858,21 @@ main(int argc, char **argv)
     if (strcmp(map_type, "ipv4") != 0 && 
         strcmp(map_type, "ipv6") != 0 && 
         strcmp(map_type, "mac") != 0 && 
-        strcmp(map_type, "sid") != 0) {
-        fprintf(stderr, "Invalid map type. Must be 'ipv4', 'ipv6', 'mac', or 'sid'.\n");
+        strcmp(map_type, "sid") != 0 &&
+        strcmp(map_type, "l7") != 0) {
+        fprintf(stderr, "Invalid map type. Must be 'ipv4', 'ipv6', 'mac', 'sid', or 'l7'.\n");
         aw_bpf_usage();
         return EXIT_FAILURE;
+    }
+
+    // Handle l7 commands separately since they don't need BPF map access
+    if (strcmp(map_type, "l7") == 0) {
+        if (!is_valid_command(cmd)) {
+            fprintf(stderr, "Invalid command\n");
+            aw_bpf_usage();
+            return EXIT_FAILURE;
+        }
+        return handle_l7_command(cmd) ? EXIT_SUCCESS : EXIT_FAILURE;
     }
 
     // Determine map path based on map type
