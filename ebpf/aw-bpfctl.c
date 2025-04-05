@@ -480,19 +480,22 @@ static bool handle_list_command(int map_fd, const char *map_type) {
             return false;
         }
     } else if (strcmp(map_type, "sid") == 0) {
-        uint32_t cur_key = 0, next_key = 0;
+        uint32_t key = 0;
+        uint32_t next_key;
         struct traffic_stats stats = {0};
         
-        while ((ret = bpf_map_get_next_key(map_fd, cur_key ? &cur_key : NULL, &next_key)) == 0) {
+        while (bpf_map_get_next_key(map_fd, &key, &next_key) == 0) {
             if (bpf_map_lookup_elem(map_fd, &next_key, &stats) < 0) {
                 perror("bpf_map_lookup_elem (SID)");
-            } else {
-                print_stats_sid(next_key, &stats);
+                break;
             }
-            cur_key = next_key;
+            
+            print_stats_sid(next_key, &stats);
+            key = next_key;
         }
         
-        if (ret != -ENOENT) {
+        // Check if we exited due to error or end of map
+        if (errno != ENOENT) {
             perror("bpf_map_get_next_key (SID)");
             return false;
         }
