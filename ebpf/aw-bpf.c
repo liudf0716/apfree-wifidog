@@ -209,10 +209,10 @@ static inline int process_packet(struct __sk_buff *skb, direction_t dir) {
                 struct xdpi_nf_conn new_conn = { .pkt_seen = 1, .last_time = current_time };
                 bpf_printk("sid: %d dir: %d tcp_data_len: %d", sid, dir, tcp_data_len);
 
-                if (sid >= 0) {
+                if (sid > 0) {
                     new_conn.sid = sid;
                 } else {
-                    new_conn.sid = UINT32_MAX;
+                    new_conn.sid = 7777;
                 }
                 bpf_map_update_elem(&tcp_conn_map, &bpf_tuple, &new_conn, BPF_NOEXIST);
             }
