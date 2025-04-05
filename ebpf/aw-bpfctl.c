@@ -536,21 +536,24 @@ static bool handle_json_command(int map_fd, const char *map_type) {
                 if (jentry) {
                     json_object_array_add(jdata, jentry);
                 }
+            } else {
+                break;
             }
             cur_key = next_key;
         }
     } else if (strcmp(map_type, "sid") == 0) {
-        uint32_t cur_key = 0, next_key = 0;
+        __u32 key = 0;
+        __u32 next_key;
         struct traffic_stats stats = {0};
 
-        while (bpf_map_get_next_key(map_fd, cur_key ? &cur_key : NULL, &next_key) == 0) {
+        while (bpf_map_get_next_key(map_fd, &key, &next_key) == 0) {
             if (bpf_map_lookup_elem(map_fd, &next_key, &stats) == 0) {
                 struct json_object *jentry = parse_stats_sid_json(next_key, &stats);
                 if (jentry) {
                     json_object_array_add(jdata, jentry);
                 }
             }
-            cur_key = next_key;
+            key = next_key;
         }
     } else { // ipv6
         struct in6_addr cur_key = {0}, next_key = {0};
