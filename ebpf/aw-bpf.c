@@ -184,6 +184,7 @@ static inline int process_packet(struct __sk_buff *skb, direction_t dir) {
             if ((void *)tcp + sizeof(*tcp) > data_end)
                 return 0;
             __u32 tcp_hdr_len = tcp->doff * 4;
+            __u32 ip_hdr_len = ip->ihl * 4;
             __s32 tcp_data_len = skb->len - sizeof(*eth) - ip_hdr_len - tcp_hdr_len;
             if (tcp_data_len < MIN_TCP_DATA_SIZE )
                 return 0;
