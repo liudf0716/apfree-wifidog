@@ -137,6 +137,14 @@ static __always_inline int edt_sched_departure(struct __sk_buff *skb, struct rat
     return 0;
 }
 
+static __always_inline void set_ip(__u32 *dst, const struct in6_addr *src)
+{
+    dst[0] = src->in6_u.u6_addr32[0];
+    dst[1] = src->in6_u.u6_addr32[1];
+    dst[2] = src->in6_u.u6_addr32[2];
+    dst[3] = src->in6_u.u6_addr32[3];
+}
+
 #define MIN_TCP_DATA_SIZE   100
 static inline int process_packet(struct __sk_buff *skb, direction_t dir) {
     __u32 current_time = get_current_time();
@@ -272,13 +280,72 @@ static inline int process_packet(struct __sk_buff *skb, direction_t dir) {
         if ((void *)ip6 + sizeof(*ip6) > data_end)
             return 0;
 
-        // Check if protocol is TCP or UDP
-        if (ip6->nexthdr != IPPROTO_TCP && ip6->nexthdr != IPPROTO_UDP)
-            return 0;
-        // Calculate the IPv6 header length and check data length
-        int ip6_hdr_len = sizeof(*ip6);
-        if ((void *)ip6 + ip6_hdr_len + 1 > data_end) // Ensure at least 1 byte of data
-            return 0;
+        // Check if protocol is TCP
+        if (ip6->nexthdr == IPPROTO_TCP) {
+            struct tcphdr *tcp = (struct tcphdr *)(data + sizeof(*eth) + sizeof(*ip6));
+            if ((void *)tcp + sizeof(*tcp) > data_end)
+                return 0;
+            __u32 tcp_hdr_len = tcp->doff * 4;
+            __s32 tcp_data_len = skb->len - sizeof(*eth) - sizeof(*ip6) - tcp_hdr_len;
+            if (tcp_data_len < MIN_TCP_DATA_SIZE)
+                return 0;
+            
+            struct bpf_sock_tuple bpf_tuple = {};
+            struct bpf_ct_opts opts_def = {
+                    .netns_id = -1,
+            };
+            opts_def.l4proto = ip6->nexthdr;
+            if (dir == INGRESS) {
+                set_ip(bpf_tuple.ipv6.saddr, &ip6->saddr);
+                set_ip(bpf_tuple.ipv6.daddr, &ip6->daddr);
+            } else {
+                set_ip(bpf_tuple.ipv6.saddr, &ip6->daddr);
+                set_ip(bpf_tuple.ipv6.daddr, &ip6->saddr);
+            }
+            bpf_tuple.ipv6.sport = dir == INGRESS ? tcp->source : tcp->dest;
+            bpf_tuple.ipv6.dport = dir == INGRESS ? tcp->dest : tcp->source;
+            
+            struct xdpi_nf_conn *conn = bpf_map_lookup_elem(&tcp_conn_map, &bpf_tuple);
+            int sid = 0;
+            if (conn && conn->sid > 0) {
+                conn->last_time = current_time;
+                sid = conn->sid;
+            } else {
+                sid = bpf_xdpi_skb_match(skb, dir);
+                struct xdpi_nf_conn new_conn = { .pkt_seen = 1, .last_time = current_time };
+
+                if (sid > 0) {
+                    new_conn.sid = sid;
+                } else {
+                    new_conn.sid = 7777;
+                    sid = 7777;
+                }
+                bpf_map_update_elem(&tcp_conn_map, &bpf_tuple, &new_conn, BPF_NOEXIST);
+            }
+
+            // Update the xdpi l7 stats based on the sid
+            struct traffic_stats *proto_stats = bpf_map_lookup_elem(&xdpi_l7_map, &sid);
+            if (!proto_stats) {
+                proto_stats = &(struct traffic_stats){0};
+                bpf_map_update_elem(&xdpi_l7_map, &sid, proto_stats, BPF_ANY);
+            }
+
+            if (dir == INGRESS) {
+                if (proto_stats->outgoing_rate_limit.bps) {
+                    if (edt_sched_departure(skb, &proto_stats->outgoing_rate_limit)) {
+                        return 1;
+                    }
+                } 
+                update_stats(&proto_stats->outgoing, skb->len, est_slot);
+            } else {
+                if (proto_stats->incoming_rate_limit.bps) {
+                    if (edt_sched_departure(skb, &proto_stats->incoming_rate_limit)) {
+                        return 1;
+                    }
+                }
+                update_stats(&proto_stats->incoming, skb->len, est_slot);
+            }
+        }
 
         // Process source IPv6 (outgoing traffic)
         struct traffic_stats *s_stats6 = bpf_map_lookup_elem(&ipv6_map, &ip6->saddr);
@@ -304,7 +371,6 @@ static inline int process_packet(struct __sk_buff *skb, direction_t dir) {
     }
     return 0;
 }
-
 
 SEC("tc/ingress")
 int tc_ingress(struct __sk_buff *skb) {
