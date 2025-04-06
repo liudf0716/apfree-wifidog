@@ -16,6 +16,14 @@
 
 #include "aw-bpf.h"
 
+#define DEBUG 0  // Set to 1 to enable debug prints
+
+#if DEBUG
+#define BPF_DEBUG(fmt, ...) bpf_printk(fmt, ##__VA_ARGS__)
+#else
+#define BPF_DEBUG(fmt, ...) do {} while (0)
+#endif
+
 struct bpf_ct_opts {
     __u32 netns_id;
     __u32 error;
@@ -150,7 +158,7 @@ static __always_inline void set_ip(__u32 *dst, const struct in6_addr *src)
 
 static __always_inline int tcp_conn_timer_cb(void *map, struct bpf_sock_tuple *key, struct xdpi_nf_conn *val) {
     if (!key || !val) {
-        bpf_printk("Timer CB: Invalid arguments\n");
+        BPF_DEBUG("Timer CB: Invalid arguments\n");
         return 0;
     }
 
@@ -231,7 +239,7 @@ static inline int process_packet(struct __sk_buff *skb, direction_t dir) {
                 
                 // Remove the session from tcp_conn_map
                 bpf_map_delete_elem(&tcp_conn_map, &bpf_tuple);
-                bpf_printk("tcp_fin_rst: %d %d", tcp->fin, tcp->rst);
+                BPF_DEBUG("tcp_fin_rst: %d %d", tcp->fin, tcp->rst);
                 return 0;
             }
 
@@ -253,7 +261,7 @@ static inline int process_packet(struct __sk_buff *skb, direction_t dir) {
             } else {
                 sid = bpf_xdpi_skb_match(skb, dir);
                 struct xdpi_nf_conn new_conn = { .pkt_seen = 1, .last_time = current_time };
-                //bpf_printk("sid: %d dir: %d tcp_data_len: %d", sid, dir, tcp_data_len);
+                BPF_DEBUG("sid: %d dir: %d tcp_data_len: %d", sid, dir, tcp_data_len);
 
                 if (sid > 0) {
                     new_conn.sid = sid;
@@ -348,6 +356,7 @@ static inline int process_packet(struct __sk_buff *skb, direction_t dir) {
                 
                 // Remove the session from tcp_conn_map
                 bpf_map_delete_elem(&tcp_conn_map, &bpf_tuple);
+                BPF_DEBUG("tcp_fin_rst: %d %d", tcp->fin, tcp->rst);
                 return 0;
             }
 
@@ -374,6 +383,7 @@ static inline int process_packet(struct __sk_buff *skb, direction_t dir) {
             } else {
                 sid = bpf_xdpi_skb_match(skb, dir);
                 struct xdpi_nf_conn new_conn = { .pkt_seen = 1, .last_time = current_time };
+                BPF_DEBUG("sid: %d dir: %d tcp_data_len: %d", sid, dir, tcp_data_len);
 
                 if (sid > 0) {
                     new_conn.sid = sid;
