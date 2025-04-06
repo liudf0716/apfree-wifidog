@@ -72,6 +72,6 @@ struct xdpi_nf_conn {
     __u32  pkt_seen;
     __u32  last_time;
     struct bpf_timer timer;
-} __attribute__((packed));
+};
 
 #endif /* AW_BPF_H */

@@ -145,6 +145,25 @@ static __always_inline void set_ip(__u32 *dst, const struct in6_addr *src)
     dst[3] = src->in6_u.u6_addr32[3];
 }
 
+static __always_inline int tcp_conn_timer_cb(void *map, struct bpf_sock_tuple *key, struct xdpi_nf_conn *val) {
+    if (!key || !val) {
+        bpf_printk("Timer CB: Invalid arguments\n");
+        return 0;
+    }
+
+    __u32 now_sec = get_current_time();
+    now_sec = now_sec ? now_sec : 1; 
+
+    if (now_sec >= val->last_time + TCP_CONN_TIMEOUT_SEC) {
+        bpf_timer_cancel(&val->timer);
+        bpf_map_delete_elem(map, key);
+    } else {
+        bpf_timer_start(&val->timer, TCP_CONN_TIMEOUT_NS, 0);
+    }
+
+    return 0;
+}
+
 #define MIN_TCP_DATA_SIZE   100
 static inline int process_packet(struct __sk_buff *skb, direction_t dir) {
     __u32 current_time = get_current_time();
@@ -361,15 +380,6 @@ static inline int process_packet(struct __sk_buff *skb, direction_t dir) {
             if (conn && conn->sid > 0) {
                 conn->last_time = current_time;
                 sid = conn->sid;
-                err = bpf_timer_init(&conn->timer, &tcp_conn_map, CLOCK_MONOTONIC);
-                if (err) {
-                    bpf_printk("bpf_timer_init failed for existing IPV6: %ld", err);
-                } else {
-                    err = bpf_timer_start(&conn->timer, TCP_CONN_TIMEOUT_NS, 0);
-                    if (err) {
-                        bpf_printk("bpf_timer_start failed for existing IPV6: %ld", err);
-                    } 
-                }
             } else {
                 sid = bpf_xdpi_skb_match(skb, dir);
                 struct xdpi_nf_conn new_conn = { .pkt_seen = 1, .last_time = current_time };
@@ -382,16 +392,12 @@ static inline int process_packet(struct __sk_buff *skb, direction_t dir) {
                 }
                 err = bpf_map_update_elem(&tcp_conn_map, &bpf_tuple, &new_conn, BPF_NOEXIST);
                 if (err == 0) {
-                    err = bpf_timer_init(&new_conn.timer, &tcp_conn_map, CLOCK_MONOTONIC);
-                    if (err) {
-                        bpf_printk("bpf_timer_init failed for new IPV6: %ld", err);
-                    } else {
-                        err = bpf_timer_start(&new_conn.timer, TCP_CONN_TIMEOUT_NS, 0);
-                        if (err) {
-                            bpf_printk("bpf_timer_start failed for new IPV6: %ld", err);
-                        }
+                    struct xdpi_nf_conn *conn = bpf_map_lookup_elem(&tcp_conn_map, &bpf_tuple);
+                    if (conn) {
+                        bpf_timer_init(&conn->timer, &tcp_conn_map, CLOCK_MONOTONIC);
+                        bpf_timer_set_callback(&conn->timer, tcp_conn_timer_cb);
+                        bpf_timer_start(&conn->timer, TCP_CONN_TIMEOUT_NS, 0);
                     }
-                }
             }
 
             // Update the xdpi l7 stats based on the sid
@@ -453,26 +459,5 @@ int tc_egress(struct __sk_buff *skb) {
     return process_packet(skb, EGRESS) ? TC_ACT_SHOT : TC_ACT_OK;
 }
 
-SEC("ext/tcp_conn_map")
-int tcp_conn_timer_cb(void *map, struct bpf_sock_tuple *key, struct xdpi_nf_conn *val) {
-    if (!key || !val) {
-        bpf_printk("Timer CB: Invalid arguments\n");
-        return 0;
-    }
-
-    __u32 now_sec = get_current_time();
-    now_sec = now_sec ? now_sec : 1; 
-
-    if (now_sec >= val->last_time + TCP_CONN_TIMEOUT_SEC) {
-        long del_err = bpf_map_delete_elem(map, key);
-        if (del_err == 0) {
-             bpf_printk("Timer CB: Deleted stale TCP connection.\n");
-        } else {
-             bpf_printk("Timer CB: Failed to delete stale connection, err: %ld\n", del_err);
-        }
-    } 
-
-    return 0;
-}
 
 char _license[] SEC("license") = "GPL";
