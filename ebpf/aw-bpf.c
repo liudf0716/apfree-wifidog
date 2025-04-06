@@ -192,16 +192,31 @@ static inline int process_packet(struct __sk_buff *skb, direction_t dir) {
                 return 0;
             __u32 tcp_hdr_len = tcp->doff * 4;
             __u32 ip_hdr_len = ip->ihl * 4;
+            
+            // Check for TCP session termination first
+            if (tcp->fin || tcp->rst) {
+                struct bpf_sock_tuple bpf_tuple = {};
+                if (dir == INGRESS) {
+                    bpf_tuple.ipv4.saddr = ip->saddr;
+                    bpf_tuple.ipv4.daddr = ip->daddr;
+                } else {
+                    bpf_tuple.ipv4.saddr = ip->daddr;
+                    bpf_tuple.ipv4.daddr = ip->saddr;
+                }
+                bpf_tuple.ipv4.sport = dir == INGRESS ? tcp->source : tcp->dest;
+                bpf_tuple.ipv4.dport = dir == INGRESS ? tcp->dest : tcp->source;
+                
+                // Remove the session from tcp_conn_map
+                bpf_map_delete_elem(&tcp_conn_map, &bpf_tuple);
+                bpf_printk("tcp_fin_rst: %d %d", tcp->fin, tcp->rst);
+                return 0;
+            }
+
             __s32 tcp_data_len = skb->len - sizeof(*eth) - ip_hdr_len - tcp_hdr_len;
-            if (tcp_data_len < MIN_TCP_DATA_SIZE )
+            if (tcp_data_len < MIN_TCP_DATA_SIZE)
                 return 0;
             
             struct bpf_sock_tuple bpf_tuple = {};
-            struct bpf_ct_opts opts_def = {
-                    .netns_id = -1,
-            };
-            struct nf_conn *ct;
-            opts_def.l4proto = ip->protocol;
             bpf_tuple.ipv4.saddr = dir == INGRESS? ip->saddr: ip->daddr;
             bpf_tuple.ipv4.daddr = dir == INGRESS? ip->daddr: ip->saddr;
             bpf_tuple.ipv4.sport = dir == INGRESS ? tcp->source : tcp->dest;
@@ -215,7 +230,7 @@ static inline int process_packet(struct __sk_buff *skb, direction_t dir) {
             } else {
                 sid = bpf_xdpi_skb_match(skb, dir);
                 struct xdpi_nf_conn new_conn = { .pkt_seen = 1, .last_time = current_time };
-                bpf_printk("sid: %d dir: %d tcp_data_len: %d", sid, dir, tcp_data_len);
+                //bpf_printk("sid: %d dir: %d tcp_data_len: %d", sid, dir, tcp_data_len);
 
                 if (sid > 0) {
                     new_conn.sid = sid;
@@ -286,15 +301,30 @@ static inline int process_packet(struct __sk_buff *skb, direction_t dir) {
             if ((void *)tcp + sizeof(*tcp) > data_end)
                 return 0;
             __u32 tcp_hdr_len = tcp->doff * 4;
+            
+            // Check for TCP session termination first
+            if (tcp->fin || tcp->rst) {
+                struct bpf_sock_tuple bpf_tuple = {};
+                if (dir == INGRESS) {
+                    set_ip(bpf_tuple.ipv6.saddr, &ip6->saddr);
+                    set_ip(bpf_tuple.ipv6.daddr, &ip6->daddr);
+                } else {
+                    set_ip(bpf_tuple.ipv6.saddr, &ip6->daddr);
+                    set_ip(bpf_tuple.ipv6.daddr, &ip6->saddr);
+                }
+                bpf_tuple.ipv6.sport = dir == INGRESS ? tcp->source : tcp->dest;
+                bpf_tuple.ipv6.dport = dir == INGRESS ? tcp->dest : tcp->source;
+                
+                // Remove the session from tcp_conn_map
+                bpf_map_delete_elem(&tcp_conn_map, &bpf_tuple);
+                return 0;
+            }
+
             __s32 tcp_data_len = skb->len - sizeof(*eth) - sizeof(*ip6) - tcp_hdr_len;
             if (tcp_data_len < MIN_TCP_DATA_SIZE)
                 return 0;
             
             struct bpf_sock_tuple bpf_tuple = {};
-            struct bpf_ct_opts opts_def = {
-                    .netns_id = -1,
-            };
-            opts_def.l4proto = ip6->nexthdr;
             if (dir == INGRESS) {
                 set_ip(bpf_tuple.ipv6.saddr, &ip6->saddr);
                 set_ip(bpf_tuple.ipv6.daddr, &ip6->daddr);
