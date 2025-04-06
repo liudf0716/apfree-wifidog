@@ -9,6 +9,7 @@
 #ifdef __KERNEL__
 #include <linux/types.h>
 #include <linux/compiler.h>
+#include <bpf/bpf_helpers.h>
 #else
 #include <stdint.h>
 #endif
@@ -24,7 +25,8 @@
 #endif
 
 #define DROP_HORIZON 2000000000UL  /* 2 seconds in nanoseconds */
-
+#define TCP_CONN_TIMEOUT_NS 60000000000ULL /* 60 seconds in nanoseconds */
+#define TCP_CONN_TIMEOUT_SEC 60 /* 60 seconds */
 
 typedef enum {
     INGRESS,
@@ -69,6 +71,7 @@ struct xdpi_nf_conn {
     __u32  sid;
     __u32  pkt_seen;
     __u32  last_time;
+    struct bpf_timer timer;
 } __attribute__((packed));
 
 #endif /* AW_BPF_H */
