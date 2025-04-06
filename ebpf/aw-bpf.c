@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+// Copyright (C) 2025 Dengfeng Liu <liudf0716@gmail.com>
+
 #define KBUILD_MODNAME "aw-bpf"
 #include <linux/bpf.h>
 #include <linux/if_ether.h>
@@ -398,6 +401,7 @@ static inline int process_packet(struct __sk_buff *skb, direction_t dir) {
                         bpf_timer_set_callback(&conn->timer, tcp_conn_timer_cb);
                         bpf_timer_start(&conn->timer, TCP_CONN_TIMEOUT_NS, 0);
                     }
+                }
             }
 
             // Update the xdpi l7 stats based on the sid
@@ -458,6 +462,5 @@ SEC("tc/egress")
 int tc_egress(struct __sk_buff *skb) {
     return process_packet(skb, EGRESS) ? TC_ACT_SHOT : TC_ACT_OK;
 }
-
 
 char _license[] SEC("license") = "GPL";
