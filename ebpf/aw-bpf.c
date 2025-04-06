@@ -250,15 +250,6 @@ static inline int process_packet(struct __sk_buff *skb, direction_t dir) {
             if (conn && conn->sid > 0) {
                 conn->last_time = current_time;
                 sid = conn->sid;
-                err = bpf_timer_init(&conn->timer, &tcp_conn_map, CLOCK_MONOTONIC);
-                if (err) {
-                    bpf_printk("bpf_timer_init failed for existing IPV4: %ld", err);
-                } else {
-                    err = bpf_timer_start(&conn->timer, TCP_CONN_TIMEOUT_NS, 0);
-                    if (err) {
-                        bpf_printk("bpf_timer_start failed for existing IPV4: %ld", err);
-                    } 
-                }
             } else {
                 sid = bpf_xdpi_skb_match(skb, dir);
                 struct xdpi_nf_conn new_conn = { .pkt_seen = 1, .last_time = current_time };
@@ -272,16 +263,13 @@ static inline int process_packet(struct __sk_buff *skb, direction_t dir) {
                 }
                 err = bpf_map_update_elem(&tcp_conn_map, &bpf_tuple, &new_conn, BPF_NOEXIST);
                 if (err == 0) {
-                    err = bpf_timer_init(&new_conn.timer, &tcp_conn_map, CLOCK_MONOTONIC);
-                    if (err) {
-                        bpf_printk("bpf_timer_init failed for new IPV4: %ld", err);
-                    } else {
-                        err = bpf_timer_start(&new_conn.timer, TCP_CONN_TIMEOUT_NS, 0);
-                        if (err) {
-                            bpf_printk("bpf_timer_start failed for new IPV4: %ld", err);
-                        }
+                    struct xdpi_nf_conn *conn = bpf_map_lookup_elem(&tcp_conn_map, &bpf_tuple);
+                    if (conn) {
+                        bpf_timer_init(&conn->timer, &tcp_conn_map, CLOCK_MONOTONIC);
+                        bpf_timer_set_callback(&conn->timer, tcp_conn_timer_cb);
+                        bpf_timer_start(&conn->timer, TCP_CONN_TIMEOUT_NS, 0);
                     }
-                }
+                } 
             }
 
             // Update the xdpi l7 stats based on the sid
