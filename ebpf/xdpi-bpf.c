@@ -24,6 +24,14 @@ typedef enum {
     EGRESS,
 } direction_t;
 
+typedef enum {
+    L7_HTTP = 1,
+    L7_HTTPS = 2,
+    L7_MSTSC = 101,
+    L7_SSH = 103,
+    L7_SCP = 104,
+} proto_id_t;
+
 struct domain_entry {
     char domain[MAX_DOMAIN_LEN];
     int domain_len;
@@ -36,9 +44,17 @@ struct domain_update {
     int index;
 };
 
+typedef int (*l7_proto_match_t)(const char *data, int data_sz);
+
+struct l7_proto_entry {
+    char *proto_desc;
+    int  sid;
+    l7_proto_match_t match_func;
+};
+
 // Fixed size array of domain entries
 static struct domain_entry domains[XDPI_DOMAIN_MAX];
-static DEFINE_SPINLOCK(domains_lock);
+static DEFINE_SPINLOCK(xdpi_lock);
 
 // IOCTL commands
 #define XDPI_IOC_MAGIC 'X'
@@ -49,10 +65,97 @@ static DEFINE_SPINLOCK(domains_lock);
 
 // Create a proc file for userspace interaction
 static struct proc_dir_entry *xdpi_proc_file;
+static struct proc_dir_entry *xdpi_l7_proto_file;
 
 static int add_domain(struct domain_entry *entry);
 static int del_domain(int index);
 static int update_domain(struct domain_entry *entry, int index);
+
+static __always_inline int is_mstsc(const char *data, int data_sz)
+{
+    return data_sz > 3 && data[0] == 0x03 && data[1] == 0x00 && data[2] == 0x00;
+}
+
+static __always_inline int is_ssh(const char *data, int data_sz)
+{
+    return data_sz > 10 && data[0] == 'S' && data[1] == 'S' && data[2] == 'H';
+}
+
+static __always_inline int is_http(const char *data, int data_sz)
+{
+    // Check for minimum data size
+    if (data_sz < 50)
+        return 0;
+
+    // Check for HTTP methods
+    if (data[0] == 'G' && data[1] == 'E' && data[2] == 'T' && data[3] == ' ') return 1;  // GET
+    if (data[0] == 'P' && data[1] == 'O' && data[2] == 'S' && data[3] == 'T') return 1; // POST
+
+    return 0;
+}
+
+static __always_inline int is_https(const char *data, int data_sz)
+{
+    // Check for minimum data size
+    if (data_sz < 50)
+        return 0;
+
+    if (data[0] == 0x16 && data[1] == 0x03 && data[5] == 0x01) {
+        if (data[2] >= 0x00 && data[2] <= 0x04) {
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
+static __always_inline int is_scp(const char *data, int data_sz)
+{
+    // Check for minimum data size
+    if (data_sz < 50)
+        return 0;
+
+    // SCP protocol typically starts with 'C' (for file copy) or 'D' (for directory)
+    // followed by permissions and file size
+    if (data[0] == 'C' || data[0] == 'D') {
+        // Check if the next characters are digits (permissions)
+        if (data[1] >= '0' && data[1] <= '7' &&
+            data[2] >= '0' && data[2] <= '7' &&
+            data[3] >= '0' && data[3] <= '7') {
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
+static struct l7_proto_entry l7_proto_entries[] = {
+    {
+        .proto_desc = "http",
+        .sid = L7_HTTP,
+        .match_func = is_http,
+    },
+    {
+        .proto_desc = "https",
+        .sid = L7_HTTPS,
+        .match_func = is_https,
+    },
+    {
+        .proto_desc = "mstsc",
+        .sid = L7_MSTSC,
+        .match_func = is_mstsc,
+    },
+    {
+        .proto_desc = "ssh",
+        .sid = L7_SSH,
+        .match_func = is_ssh,
+    }, 
+    {
+        .proto_desc = "scp",
+        .sid = L7_SCP,
+        .match_func = is_scp,
+    },
+};
 
 static __always_inline char *xdpi_strstr(const char *haystack, int haystack_sz,
                                  const char *needle, int needle_sz)
@@ -66,26 +169,6 @@ static __always_inline char *xdpi_strstr(const char *haystack, int haystack_sz,
     }
 
     return NULL;
-}
-
-static __always_inline int is_http_request(const char *data, int data_sz)
-{
-    if (data_sz < 50)
-        return 0;
-
-    return data[0] == 'G' && data[1] == 'E' && data[2] == 'T' && data[3] == ' ';
-}
-
-static __always_inline int is_tls_hello(const char *data, int data_sz)
-{
-    if (data_sz < 50)
-        return 0;
-
-    if (data[0] == 0x16 && data[1] == 0x03) {
-        return 1;
-    }
-
-    return 0;
 }
 
 __diag_push();
@@ -129,25 +212,41 @@ __bpf_kfunc int bpf_xdpi_skb_match(struct __sk_buff *skb_ctx, direction_t dir)
     
     u8 *data = skb->data + skb_network_offset(skb) + ip->ihl * 4 + tcp->doff * 4;
     int data_len = skb->len - (data - skb->data);
-    printk("xdpi: skb data_len %d dport %d\n", data_len, dport);
+    //printk("xdpi: skb data_len %d dport %d\n", data_len, dport);
 
     // Ensure we have enough data to analyze
     if (data_len < MIN_TCP_DATA_SIZE)
         return -ENODATA;
 
-    spin_lock_bh(&domains_lock);
+    int i = 0;
+    spin_lock_bh(&xdpi_lock);
+    struct l7_proto_entry *entry;
+    for (i = 0; i < ARRAY_SIZE(l7_proto_entries); i++) {
+        entry = &l7_proto_entries[i];
+        if (entry->match_func(data, data_len)) {
+            break;
+        }
+    }
+    if (i == ARRAY_SIZE(l7_proto_entries)) {
+        spin_unlock_bh(&xdpi_lock);
+        return -ENOENT;
+    }
+    if (entry->sid != L7_HTTP || entry->sid != L7_HTTPS) {
+        spin_unlock_bh(&xdpi_lock);
+        return entry->sid;
+    }
     for (int i = 0; i < XDPI_DOMAIN_MAX; i++) {
         struct domain_entry *entry;
         entry = &domains[i];
         if (entry && entry->used && entry->domain_len <= data_len) {
             char *found = xdpi_strstr(data, data_len, entry->domain, entry->domain_len);
             if (found) {
-                spin_unlock_bh(&domains_lock);
+                spin_unlock_bh(&xdpi_lock);
                 return entry->sid;
             }
         } 
     }
-    spin_unlock_bh(&domains_lock);
+    spin_unlock_bh(&xdpi_lock);
 
     return -ENOENT;
 }
@@ -172,7 +271,7 @@ static int add_domain(struct domain_entry *entry)
     if (entry->domain_len >= MAX_DOMAIN_LEN || entry->domain_len <= 0)
         return -EINVAL;
 
-    spin_lock_bh(&domains_lock);
+    spin_lock_bh(&xdpi_lock);
     for (i = 0; i < XDPI_DOMAIN_MAX; i++) {
         if (!domains[i].used) {
             memcpy(domains[i].domain, entry->domain, entry->domain_len);
@@ -184,7 +283,7 @@ static int add_domain(struct domain_entry *entry)
             break;
         }
     }
-    spin_unlock_bh(&domains_lock);
+    spin_unlock_bh(&xdpi_lock);
     
     return ret;
 }
@@ -194,9 +293,9 @@ static int del_domain(int index)
     if (index < 0 || index >= XDPI_DOMAIN_MAX)
         return -EINVAL;
     
-    spin_lock_bh(&domains_lock);
+    spin_lock_bh(&xdpi_lock);
     domains[index].used = false;
-    spin_unlock_bh(&domains_lock);
+    spin_unlock_bh(&xdpi_lock);
     
     return 0;
 }
@@ -212,12 +311,12 @@ static int update_domain(struct domain_entry *entry, int index)
     if (entry->domain_len >= MAX_DOMAIN_LEN || entry->domain_len <= 0)
         return -EINVAL;
 
-    spin_lock_bh(&domains_lock);
+    spin_lock_bh(&xdpi_lock);
     memcpy(domains[index].domain, entry->domain, entry->domain_len);
     domains[index].domain[entry->domain_len] = '\0';
     domains[index].domain_len = entry->domain_len;
     domains[index].sid = entry->sid;
-    spin_unlock_bh(&domains_lock);
+    spin_unlock_bh(&xdpi_lock);
     
     return 0;
 }
@@ -230,13 +329,13 @@ static int xdpi_proc_show(struct seq_file *m, void *v)
     seq_printf(m, "Index | Domain | SID\n");
     seq_printf(m, "---------------------\n");
     
-    spin_lock_bh(&domains_lock);
+    spin_lock_bh(&xdpi_lock);
     for (i = 0; i < XDPI_DOMAIN_MAX; i++) {
         if (domains[i].used) {
             seq_printf(m, "%5d | %s | %d\n", i, domains[i].domain, domains[i].sid);
         }
     }
-    spin_unlock_bh(&domains_lock);
+    spin_unlock_bh(&xdpi_lock);
     
     return 0;
 }
@@ -293,6 +392,37 @@ static const struct proc_ops xdpi_proc_ops = {
     .proc_ioctl = xdpi_proc_ioctl,
 };
 
+// Proc file operations for L7 protocols
+static int xdpi_l7_proto_show(struct seq_file *m, void *v)
+{
+    int i;
+    
+    seq_printf(m, "Protocol | SID\n");
+    seq_printf(m, "----------------\n");
+    
+    spin_lock_bh(&xdpi_lock);
+    for (i = 0; i < ARRAY_SIZE(l7_proto_entries); i++) {
+        seq_printf(m, "%8s | %d\n", 
+                  l7_proto_entries[i].proto_desc,
+                  l7_proto_entries[i].sid);
+    }
+    spin_unlock_bh(&xdpi_lock);
+    
+    return 0;
+}
+
+static int xdpi_l7_proto_open(struct inode *inode, struct file *file)
+{
+    return single_open(file, xdpi_l7_proto_show, NULL);
+}
+
+static const struct proc_ops xdpi_l7_proto_ops = {
+    .proc_open = xdpi_l7_proto_open,
+    .proc_read = seq_read,
+    .proc_lseek = seq_lseek,
+    .proc_release = single_release,
+};
+
 static int __init xdpi_init(void)
 {
     int ret;
@@ -305,10 +435,17 @@ static int __init xdpi_init(void)
         domains[i].used = false;
     }
     
-    // Create proc entry
+    // Create proc entries
     xdpi_proc_file = proc_create("xdpi_domains", 0644, NULL, &xdpi_proc_ops);
     if (!xdpi_proc_file) {
         pr_err("xdpi: Failed to create proc file\n");
+        return -ENOMEM;
+    }
+
+    xdpi_l7_proto_file = proc_create("xdpi_l7_proto", 0644, NULL, &xdpi_l7_proto_ops);
+    if (!xdpi_l7_proto_file) {
+        pr_err("xdpi: Failed to create L7 protocol proc file\n");
+        proc_remove(xdpi_proc_file);
         return -ENOMEM;
     }
     
@@ -316,6 +453,7 @@ static int __init xdpi_init(void)
     if (ret) {
         pr_err("bpf_kfunc_xdpi: Failed to register BTF kfunc ID set\n");
         proc_remove(xdpi_proc_file);
+        proc_remove(xdpi_l7_proto_file);
         return ret;
     }
     
@@ -327,6 +465,8 @@ static void __exit xdpi_exit(void)
 {
     if (xdpi_proc_file)
         proc_remove(xdpi_proc_file);
+    if (xdpi_l7_proto_file)
+        proc_remove(xdpi_l7_proto_file);
     
     printk(KERN_INFO "Goodbye, xDPI!\n");
 }
