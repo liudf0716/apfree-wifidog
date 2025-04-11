@@ -15,6 +15,7 @@
 #include "aw-bpf.h"
 
 #define XDPI_DOMAINS "/proc/xdpi_domains"
+#define XDPI_L7_PROTO "/proc/xdpi_l7_proto"
 
 struct xdpi_domain {
     __u32 id;
@@ -22,8 +23,17 @@ struct xdpi_domain {
     __u32 sid;
 };
 
+struct xdpi_l7_proto {
+    __u32 id;
+    char proto_desc[XDPI_PROTO_FEATURE_MAX_SIZE];
+    __u32 sid;
+};
+
 static struct xdpi_domain xdpi_domains[XDPI_PROTO_TRAITS_MAX_SIZE];
 static int xdpi_domains_count = 0;
+
+static struct xdpi_l7_proto xdpi_l7_protos[XDPI_PROTO_TRAITS_MAX_SIZE];
+static int xdpi_l7_protos_count = 0;
 
 static void load_xdpi_domains(void)
 {
@@ -43,6 +53,33 @@ static void load_xdpi_domains(void)
         if (sscanf(line, "%u | %63s | %u", &domain.id, domain.name, &domain.sid) == 3) {
             xdpi_domains[xdpi_domains_count++] = domain;
             if (xdpi_domains_count >= XDPI_PROTO_TRAITS_MAX_SIZE) {
+                break;
+            }
+        }
+        memset(line, 0, sizeof(line));
+    }
+
+    fclose(fp);
+}
+
+static void load_xdpi_l7_protos(void)
+{
+    FILE *fp = fopen(XDPI_L7_PROTO, "r");
+    if (!fp) {
+        perror("Failed to open XDPI_L7_PROTO");
+        return;
+    }
+
+    char line[128] = {0};
+    // Skip header lines
+    fgets(line, sizeof(line), fp); // Skip "Index | Protocol | SID"
+    fgets(line, sizeof(line), fp); // Skip "----------------------"
+
+    while (fgets(line, sizeof(line), fp)) {
+        struct xdpi_l7_proto proto;
+        if (sscanf(line, "%u | %63s | %u", &proto.id, proto.proto_desc, &proto.sid) == 3) {
+            xdpi_l7_protos[xdpi_l7_protos_count++] = proto;
+            if (xdpi_l7_protos_count >= XDPI_PROTO_TRAITS_MAX_SIZE) {
                 break;
             }
         }
@@ -812,10 +849,23 @@ static bool handle_update_all_command(int map_fd, const char *map_type,
 static void 
 print_stats_l7(void)
 {
+    // 先显示 L7 协议部分
+    printf("===== L7 Protocols =====\n");
+    printf("Index | Protocol | SID\n");
+    printf("----------------------\n");
+    for (int i = 0; i < xdpi_l7_protos_count; i++) {
+        printf("%5d | %-8s | %u\n", 
+               xdpi_l7_protos[i].id, 
+               xdpi_l7_protos[i].proto_desc, 
+               xdpi_l7_protos[i].sid);
+    }
+    
+    // 再显示 Domain 部分
+    printf("\n===== Domains =====\n");
     printf("Index | Domain | SID\n");
-    printf("-------------------\n");
+    printf("---------------------\n");
     for (int i = 0; i < xdpi_domains_count; i++) {
-        printf("%5u | %-63s | %u\n", 
+        printf("%5d | %-63s | %u\n", 
                xdpi_domains[i].id, 
                xdpi_domains[i].name, 
                xdpi_domains[i].sid);
@@ -826,15 +876,31 @@ static struct json_object*
 parse_stats_l7_json(void)
 {
     struct json_object *jroot = json_object_new_object();
-    struct json_object *jdata = json_object_new_array();
-
+    
+    // 创建 L7 协议信息数组
+    struct json_object *jprotocols = json_object_new_array();
+    for (int i = 0; i < xdpi_l7_protos_count; i++) {
+        struct json_object *jentry = json_object_new_object();
+        json_object_object_add(jentry, "id", json_object_new_int(xdpi_l7_protos[i].id));
+        json_object_object_add(jentry, "protocol", json_object_new_string(xdpi_l7_protos[i].proto_desc));
+        json_object_object_add(jentry, "sid", json_object_new_int(xdpi_l7_protos[i].sid));
+        json_object_array_add(jprotocols, jentry);
+    }
+    
+    // 创建域名信息数组
+    struct json_object *jdomains = json_object_new_array();
     for (int i = 0; i < xdpi_domains_count; i++) {
         struct json_object *jentry = json_object_new_object();
         json_object_object_add(jentry, "id", json_object_new_int(xdpi_domains[i].id));
         json_object_object_add(jentry, "domain", json_object_new_string(xdpi_domains[i].name));
         json_object_object_add(jentry, "sid", json_object_new_int(xdpi_domains[i].sid));
-        json_object_array_add(jdata, jentry);
+        json_object_array_add(jdomains, jentry);
     }
+
+    // 将两种数据放入主数据对象
+    struct json_object *jdata = json_object_new_object();
+    json_object_object_add(jdata, "protocols", jprotocols);
+    json_object_object_add(jdata, "domains", jdomains);
 
     json_object_object_add(jroot, "status", json_object_new_string("success"));
     json_object_object_add(jroot, "type", json_object_new_string("l7"));
@@ -866,6 +932,7 @@ main(int argc, char **argv)
 
     // Load xdpi domains at startup
     load_xdpi_domains();
+    load_xdpi_l7_protos();
 
     const char *map_type = argv[1];
     const char *cmd = argv[2];
