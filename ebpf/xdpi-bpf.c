@@ -250,7 +250,7 @@ __bpf_kfunc int bpf_xdpi_skb_match(struct __sk_buff *skb_ctx, direction_t dir)
 
     spin_unlock_bh(&xdpi_lock);
 
-    return entry->sid;
+    return proto_entry->sid;
 }
 
 __diag_pop();
