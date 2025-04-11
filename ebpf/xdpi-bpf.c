@@ -205,50 +205,52 @@ __bpf_kfunc int bpf_xdpi_skb_match(struct __sk_buff *skb_ctx, direction_t dir)
     if (!tcp)
         return -EINVAL;
         
-    u16 dport = ntohs(tcp->dest);
-    if (dport != 80 && dport != 443)
-        return -ENETRESET;
-
-    
     u8 *data = skb->data + skb_network_offset(skb) + ip->ihl * 4 + tcp->doff * 4;
     int data_len = skb->len - (data - skb->data);
     //printk("xdpi: skb data_len %d dport %d\n", data_len, dport);
 
-    // Ensure we have enough data to analyze
-    if (data_len < MIN_TCP_DATA_SIZE)
-        return -ENODATA;
-
-    int i = 0;
     spin_lock_bh(&xdpi_lock);
-    struct l7_proto_entry *entry;
-    for (i = 0; i < ARRAY_SIZE(l7_proto_entries); i++) {
-        entry = &l7_proto_entries[i];
-        if (entry->match_func(data, data_len)) {
+
+    // Match L7 protocol
+    struct l7_proto_entry *proto_entry = NULL;
+    for (int i = 0; i < ARRAY_SIZE(l7_proto_entries); i++) {
+        if (l7_proto_entries[i].match_func(data, data_len)) {
+            proto_entry = &l7_proto_entries[i];
             break;
         }
     }
-    if (i == ARRAY_SIZE(l7_proto_entries)) {
+
+    if (!proto_entry) {
         spin_unlock_bh(&xdpi_lock);
         return -ENOENT;
     }
-    if (entry->sid != L7_HTTP || entry->sid != L7_HTTPS) {
+
+    // Return if protocol is not HTTP or HTTPS
+    if (proto_entry->sid != L7_HTTP && proto_entry->sid != L7_HTTPS) {
         spin_unlock_bh(&xdpi_lock);
-        return entry->sid;
+        return proto_entry->sid;
     }
+
+    // Return if data length is insufficient
+    if (data_len < MIN_TCP_DATA_SIZE) {
+        spin_unlock_bh(&xdpi_lock);
+        return proto_entry->sid;
+    }
+
+    // Match domain
     for (int i = 0; i < XDPI_DOMAIN_MAX; i++) {
-        struct domain_entry *entry;
-        entry = &domains[i];
-        if (entry && entry->used && entry->domain_len <= data_len) {
-            char *found = xdpi_strstr(data, data_len, entry->domain, entry->domain_len);
-            if (found) {
+        struct domain_entry *domain_entry = &domains[i];
+        if (domain_entry->used && domain_entry->domain_len <= data_len) {
+            if (xdpi_strstr(data, data_len, domain_entry->domain, domain_entry->domain_len)) {
                 spin_unlock_bh(&xdpi_lock);
-                return entry->sid;
+                return domain_entry->sid;
             }
-        } 
+        }
     }
+
     spin_unlock_bh(&xdpi_lock);
 
-    return -ENOENT;
+    return entry->sid;
 }
 
 __diag_pop();
@@ -325,6 +327,7 @@ static int update_domain(struct domain_entry *entry, int index)
 static int xdpi_proc_show(struct seq_file *m, void *v)
 {
     int i;
+    int l7_count = ARRAY_SIZE(l7_proto_entries);
     
     seq_printf(m, "Index | Domain | SID\n");
     seq_printf(m, "---------------------\n");
@@ -332,7 +335,10 @@ static int xdpi_proc_show(struct seq_file *m, void *v)
     spin_lock_bh(&xdpi_lock);
     for (i = 0; i < XDPI_DOMAIN_MAX; i++) {
         if (domains[i].used) {
-            seq_printf(m, "%5d | %s | %d\n", i, domains[i].domain, domains[i].sid);
+            seq_printf(m, "%5d | %s | %d\n", 
+                      i + l7_count + 1, // Start numbering after L7 protocols
+                      domains[i].domain, 
+                      domains[i].sid);
         }
     }
     spin_unlock_bh(&xdpi_lock);
@@ -397,12 +403,13 @@ static int xdpi_l7_proto_show(struct seq_file *m, void *v)
 {
     int i;
     
-    seq_printf(m, "Protocol | SID\n");
-    seq_printf(m, "----------------\n");
+    seq_printf(m, "Index | L7Proto | SID\n");
+    seq_printf(m, "----------------------\n");
     
     spin_lock_bh(&xdpi_lock);
     for (i = 0; i < ARRAY_SIZE(l7_proto_entries); i++) {
-        seq_printf(m, "%8s | %d\n", 
+        seq_printf(m, "%5d | %8s | %d\n", 
+                  i + 1,
                   l7_proto_entries[i].proto_desc,
                   l7_proto_entries[i].sid);
     }
