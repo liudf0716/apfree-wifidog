@@ -151,6 +151,15 @@ static const char* get_domain_name_by_sid(__u32 sid) {
     return "unknown";
 }
 
+static const char *get_l7_proto_desc_by_sid(__u32 sid) {
+    for (int i = 0; i < xdpi_l7_protos_count; i++) {
+        if (xdpi_l7_protos[i].sid == sid) {
+            return xdpi_l7_protos[i].proto_desc;
+        }
+    }
+    return "unknown";
+}
+
 static void 
 print_stats_ipv4(__be32 ip, struct traffic_stats *stats)
 {
@@ -205,9 +214,14 @@ print_stats_sid(uint32_t sid, struct traffic_stats *stats)
     if (incoming_rate == 0 && outgoing_rate == 0) {
         return;
     }
-
-    const char *domain_name = get_domain_name_by_sid(sid);
-    printf("Key (SID): %u (%s)\n", sid, domain_name);
+    if (sid <= 1000) {
+        const char *l7_proto_desc = get_l7_proto_desc_by_sid(sid);
+        printf("Key (SID): %u (%s)\n", sid, l7_proto_desc);
+    } else {
+        const char *domain_name = get_domain_name_by_sid(sid);
+        printf("Key (SID): %u (%s)\n", sid, domain_name);
+    }
+    
     printf("  Incoming: total_bytes=%llu, total_packets=%llu, rate=%u\n",
            stats->incoming.total_bytes, stats->incoming.total_packets, incoming_rate);
     printf("  Outgoing: total_bytes=%llu, total_packets=%llu, rate=%u\n",
@@ -331,12 +345,20 @@ parse_stats_sid_json(uint32_t sid, struct traffic_stats *stats)
     }
 
     struct json_object *jobj = json_object_new_object();
-    const char *domain_name = get_domain_name_by_sid(sid);
 
     // Add SID and domain name
     json_object_object_add(jobj, "sid", json_object_new_int(sid));
-    json_object_object_add(jobj, "domain", json_object_new_string(domain_name));
+    if (sid <= 1000) {
+        const char *l7_proto_desc = get_l7_proto_desc_by_sid(sid);
+        json_object_object_add(jobj, "sid_type", json_object_new_string("L7"));
+        json_object_object_add(jobj, "l7_proto_desc", json_object_new_string(l7_proto_desc));
+    } else {
+        const char *domain_name = get_domain_name_by_sid(sid);
+        json_object_object_add(jobj, "sid_type", json_object_new_string("Domain"));
+        json_object_object_add(jobj, "domain", json_object_new_string(domain_name));
 
+    }
+    
     struct json_object *incoming = json_object_new_object();
     struct json_object *outgoing = json_object_new_object();
     
