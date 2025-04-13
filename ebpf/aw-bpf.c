@@ -148,6 +148,7 @@ static __always_inline int edt_sched_departure(struct __sk_buff *skb, struct rat
     return 0;
 }
 
+#ifndef __mips__
 static __always_inline void set_ip(__u32 *dst, const struct in6_addr *src)
 {
     dst[0] = src->in6_u.u6_addr32[0];
@@ -174,6 +175,7 @@ static __always_inline int tcp_conn_timer_cb(void *map, struct bpf_sock_tuple *k
 
     return 0;
 }
+#endif // end not __mips__
 
 #define MIN_TCP_DATA_SIZE   100
 static inline int process_packet(struct __sk_buff *skb, direction_t dir) {
@@ -218,6 +220,7 @@ static inline int process_packet(struct __sk_buff *skb, direction_t dir) {
             return 0;
         
         if (ip->protocol == IPPROTO_TCP) {
+#ifndef __mips__
             struct tcphdr *tcp = (struct tcphdr *)(data + sizeof(*eth) + sizeof(*ip));
             if ((void *)tcp + sizeof(*tcp) > data_end)
                 return 0;
@@ -304,7 +307,7 @@ static inline int process_packet(struct __sk_buff *skb, direction_t dir) {
                 update_stats(&proto_stats->incoming, skb->len, est_slot);
             }
         } 
-       
+#endif // end not __mips__    
 
         // Process source IP (outgoing traffic)
         struct traffic_stats *s_stats = bpf_map_lookup_elem(&ipv4_map, &ip->saddr);
@@ -330,6 +333,7 @@ static inline int process_packet(struct __sk_buff *skb, direction_t dir) {
     }
     // Handle IPv6
     else if (eth->h_proto == bpf_htons(ETH_P_IPV6)) {
+#ifndef __mips__
         struct ipv6hdr *ip6 = data + sizeof(*eth);
         if ((void *)ip6 + sizeof(*ip6) > data_end)
             return 0;
@@ -425,6 +429,7 @@ static inline int process_packet(struct __sk_buff *skb, direction_t dir) {
                 update_stats(&proto_stats->incoming, skb->len, est_slot);
             }
         }
+#endif // end not __mips__
 
         // Process source IPv6 (outgoing traffic)
         struct traffic_stats *s_stats6 = bpf_map_lookup_elem(&ipv6_map, &ip6->saddr);
