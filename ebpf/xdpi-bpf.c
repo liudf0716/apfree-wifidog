@@ -28,8 +28,9 @@ typedef enum {
     L7_HTTP = 1,
     L7_HTTPS = 2,
     L7_MSTSC = 101,
-    L7_SSH = 103,
-    L7_SCP = 104,
+    L7_SSH = 102,
+    L7_SCP = 103,
+    L7_WECHAT = 104,
 } proto_id_t;
 
 struct domain_entry {
@@ -129,7 +130,23 @@ static __always_inline int is_scp(const char *data, int data_sz)
     return 0;
 }
 
+static __always_inline int is_wechat(const char *data, int data_sz)
+{
+    if (data_sz > 500 && memcmp(data, "POST /mmtls/", 12) == 0) {
+        if (xdpi_strstr(data+160, 64, "MicroMessenger", 14)) {
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
 static struct l7_proto_entry l7_proto_entries[] = {
+    {
+        .proto_desc = "wechat",
+        .sid = L7_WECHAT,
+        .match_func = is_wechat,
+    },
     {
         .proto_desc = "http",
         .sid = L7_HTTP,
@@ -149,12 +166,12 @@ static struct l7_proto_entry l7_proto_entries[] = {
         .proto_desc = "ssh",
         .sid = L7_SSH,
         .match_func = is_ssh,
-    }, 
+    },
     {
         .proto_desc = "scp",
         .sid = L7_SCP,
         .match_func = is_scp,
-    },
+    }, 
 };
 
 static __always_inline char *xdpi_strstr(const char *haystack, int haystack_sz,
@@ -209,9 +226,7 @@ __bpf_kfunc int bpf_xdpi_skb_match(struct __sk_buff *skb_ctx, direction_t dir)
     int data_len = skb->len - (data - skb->data);
     //printk("xdpi: skb data_len %d dport %d\n", data_len, dport);
 
-    spin_lock_bh(&xdpi_lock);
-
-    // Match L7 protocol
+    // Match L7 protocol - 不需要加锁
     struct l7_proto_entry *proto_entry = NULL;
     for (int i = 0; i < ARRAY_SIZE(l7_proto_entries); i++) {
         if (l7_proto_entries[i].match_func(data, data_len)) {
@@ -221,22 +236,16 @@ __bpf_kfunc int bpf_xdpi_skb_match(struct __sk_buff *skb_ctx, direction_t dir)
     }
 
     if (!proto_entry) {
-        spin_unlock_bh(&xdpi_lock);
         return -ENOENT;
     }
 
     // Return if protocol is not HTTP or HTTPS
     if (proto_entry->sid != L7_HTTP && proto_entry->sid != L7_HTTPS) {
-        spin_unlock_bh(&xdpi_lock);
         return proto_entry->sid;
     }
 
-    // Return if data length is insufficient
-    if (data_len < MIN_TCP_DATA_SIZE) {
-        spin_unlock_bh(&xdpi_lock);
-        return proto_entry->sid;
-    }
-
+    // 只在访问domains数组时加锁
+    spin_lock_bh(&xdpi_lock);
     // Match domain
     for (int i = 0; i < XDPI_DOMAIN_MAX; i++) {
         struct domain_entry *domain_entry = &domains[i];
@@ -247,7 +256,6 @@ __bpf_kfunc int bpf_xdpi_skb_match(struct __sk_buff *skb_ctx, direction_t dir)
             }
         }
     }
-
     spin_unlock_bh(&xdpi_lock);
 
     return proto_entry->sid;
