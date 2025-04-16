@@ -71,6 +71,8 @@ static struct proc_dir_entry *xdpi_l7_proto_file;
 static int add_domain(struct domain_entry *entry);
 static int del_domain(int index);
 static int update_domain(struct domain_entry *entry, int index);
+static char *xdpi_strstr(const char *haystack, int haystack_sz,
+                                 const char *needle, int needle_sz);
 
 static __always_inline int is_mstsc(const char *data, int data_sz)
 {
