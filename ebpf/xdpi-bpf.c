@@ -19,19 +19,23 @@
 #define XDPI_DOMAIN_MAX 256
 #define MAX_DOMAIN_LEN 64
 
-typedef enum {
+// Fix: Convert anonymous enum to named enum with valid identifiers
+enum direction {
     INGRESS,
     EGRESS,
-} direction_t;
+};
+typedef enum direction direction_t;
 
-typedef enum {
+// Fix: Convert anonymous enum to named enum with valid identifiers
+enum proto_id {
     L7_HTTP = 1,
     L7_HTTPS = 2,
     L7_MSTSC = 101,
     L7_SSH = 102,
     L7_SCP = 103,
     L7_WECHAT = 104,
-} proto_id_t;
+};
+typedef enum proto_id proto_id_t;
 
 struct domain_entry {
     char domain[MAX_DOMAIN_LEN];
