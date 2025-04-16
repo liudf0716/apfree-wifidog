@@ -15,47 +15,9 @@
 #include <linux/tcp.h>
 #include <linux/uaccess.h>
 
+#include "xdpi-bpf.h"
 
-#define XDPI_DOMAIN_MAX 256
-#define MAX_DOMAIN_LEN 64
 
-// Fix: Convert anonymous enum to named enum with valid identifiers
-enum direction {
-    INGRESS,
-    EGRESS,
-};
-typedef enum direction direction_t;
-
-// Fix: Convert anonymous enum to named enum with valid identifiers
-enum proto_id {
-    L7_HTTP = 1,
-    L7_HTTPS = 2,
-    L7_MSTSC = 101,
-    L7_SSH = 102,
-    L7_SCP = 103,
-    L7_WECHAT = 104,
-};
-typedef enum proto_id proto_id_t;
-
-struct domain_entry {
-    char domain[MAX_DOMAIN_LEN];
-    int domain_len;
-    int sid;
-    bool used;
-};
-
-struct domain_update {
-    struct domain_entry entry;
-    int index;
-};
-
-typedef int (*l7_proto_match_t)(const char *data, int data_sz);
-
-struct l7_proto_entry {
-    char *proto_desc;
-    int  sid;
-    l7_proto_match_t match_func;
-};
 
 // Fixed size array of domain entries
 static struct domain_entry domains[XDPI_DOMAIN_MAX];
@@ -139,9 +101,10 @@ static __always_inline int is_scp(const char *data, int data_sz)
 static __always_inline int is_wechat(const char *data, int data_sz)
 {
     if (data_sz > 500 && memcmp(data, "POST /mmtls/", 12) == 0) {
-        if (xdpi_strstr(data+160, 64, "MicroMessenger", 14)) {
+        if (xdpi_strstr(data, 300, "MicroMessenger", 14)) {
             return 1;
         }
+        return 1;
     }
 
     return 0;
@@ -198,7 +161,7 @@ __diag_push();
 __diag_ignore_all("-Wmissing-prototypes",
           "Global functions as their definitions will be in xdpi-bpf BTF");
 
-__bpf_kfunc int bpf_xdpi_skb_match(struct __sk_buff *skb_ctx, direction_t dir)
+__bpf_kfunc int bpf_xdpi_skb_match(struct __sk_buff *skb_ctx, int dir)
 {
     struct sk_buff *skb = (struct sk_buff *)skb_ctx;
     

@@ -35,7 +35,7 @@ struct bpf_ct_opts {
     __u8 reserved[2];
 };
 
-extern int bpf_xdpi_skb_match(struct __sk_buff *skb, direction_t dir) __ksym;
+extern int bpf_xdpi_skb_match(struct __sk_buff *skb, int dir) __ksym;
 
 // Map for IPv4 addresses
 struct {
