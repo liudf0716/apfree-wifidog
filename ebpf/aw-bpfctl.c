@@ -48,10 +48,23 @@ static void load_xdpi_domains(void)
     fgets(line, sizeof(line), fp); // Skip "Index | Domain | SID"
     fgets(line, sizeof(line), fp); // Skip "---------------------"
 
+    xdpi_domains_count = 0; // Reset counter to ensure clean reload
     while (fgets(line, sizeof(line), fp)) {
         struct xdpi_domain domain;
-        if (sscanf(line, "%u | %63s | %u", &domain.id, domain.name, &domain.sid) == 3) {
+        memset(&domain, 0, sizeof(domain));
+        
+        // Use a more robust parsing approach that can handle spaces in domain names
+        char domain_buffer[XDPI_PROTO_FEATURE_MAX_SIZE] = {0};
+        if (sscanf(line, "%u | %[^|] | %u", &domain.id, domain_buffer, &domain.sid) == 3) {
+            // Trim trailing spaces from domain name
+            char *end = domain_buffer + strlen(domain_buffer) - 1;
+            while (end > domain_buffer && isspace(*end)) {
+                *end-- = '\0';
+            }
+            
+            strncpy(domain.name, domain_buffer, sizeof(domain.name) - 1);
             xdpi_domains[xdpi_domains_count++] = domain;
+            
             if (xdpi_domains_count >= XDPI_PROTO_TRAITS_MAX_SIZE) {
                 break;
             }
@@ -214,7 +227,7 @@ print_stats_sid(uint32_t sid, struct traffic_stats *stats)
     if (incoming_rate == 0 && outgoing_rate == 0) {
         return;
     }
-    if (sid <= 1000) {
+    if (sid < 1000) {
         const char *l7_proto_desc = get_l7_proto_desc_by_sid(sid);
         printf("Key (SID): %u (%s)\n", sid, l7_proto_desc);
     } else {
@@ -348,7 +361,7 @@ parse_stats_sid_json(uint32_t sid, struct traffic_stats *stats)
 
     // Add SID and domain name
     json_object_object_add(jobj, "sid", json_object_new_int(sid));
-    if (sid <= 1000) {
+    if (sid < 1000) {
         const char *l7_proto_desc = get_l7_proto_desc_by_sid(sid);
         json_object_object_add(jobj, "sid_type", json_object_new_string("L7"));
         json_object_object_add(jobj, "l7_proto_desc", json_object_new_string(l7_proto_desc));
