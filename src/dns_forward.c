@@ -116,8 +116,6 @@ static int xdpi_add_domain(const char *domain) {
         return -1;
     }
     
-    
-    
     // Convert domain to short domain form before adding
     char short_domain[MAX_DOMAIN_LEN] = {0};
     int short_domain_len = 0;
@@ -130,54 +128,67 @@ static int xdpi_add_domain(const char *domain) {
     } else {
         debug(LOG_DEBUG, "Using original domain %s (conversion failed)", domain);
     }
-    // Check if the domain is already in the list
-    int i, free_idx = -1;
+
+    // Check if the domain is already in our local cache
+    int i, free_idx = -1, max_sid = 999;
     for (i = 0; i < XDPI_DOMAIN_MAX; i++) {
-        if (domain_entries[i].used && strncmp(domain_entries[i].domain, domain, short_domain_len) == 0) {
-            debug(LOG_INFO, "Domain %s already exists in xDPI", domain);
-            return 0;
-        }
-        if (!domain_entries[i].used && free_idx == -1) {
+        if (domain_entries[i].used) {
+            // Track highest SID to avoid duplicates
+            if (domain_entries[i].sid > max_sid) {
+                max_sid = domain_entries[i].sid;
+            }
+            
+            // Exact match check (avoid partial matches which could cause duplicates)
+            if (strcmp(domain_entries[i].domain, domain) == 0) {
+                debug(LOG_INFO, "Domain %s already exists in local cache with SID %d", 
+                      domain, domain_entries[i].sid);
+                return 0; // Domain already tracked
+            }
+        } else if (free_idx == -1) {
             free_idx = i;  // Store the first free index we find
         }
     }
+    
     // If no free entry found
     if (free_idx == -1) {
         debug(LOG_ERR, "No free entry in xDPI domain list");
         return -1;
     }
-    i = free_idx;  // Use the found free entry
     
-
     // Open the proc interface
     fd = open("/proc/xdpi_domains", O_RDWR);
     if (fd < 0) {
         debug(LOG_ERR, "Failed to open /proc/xdpi_domains: %s", strerror(errno));
         return -1;
     }
-    // Prepare the domain entry
+    
+    // Prepare the domain entry with a unique SID
+    // Use max_sid + 1 to ensure we don't reuse SIDs
     memset(&entry, 0, sizeof(entry));
     strncpy(entry.domain, domain, MAX_DOMAIN_LEN - 1);
     entry.domain_len = strlen(domain);
-    entry.sid = 1000 + i;  
+    entry.sid = max_sid + 1;  
     entry.used = true;
     
     // Add the domain via IOCTL
     result = ioctl(fd, XDPI_IOC_ADD, &entry);
     if (result < 0) {
         debug(LOG_ERR, "Failed to add domain to xDPI: %s", strerror(errno));
+        close(fd);
+        return -1;
     } else {
-        debug(LOG_INFO, "Successfully added domain to xDPI: %s", domain);
+        debug(LOG_INFO, "Successfully added domain to xDPI: %s with SID %d", domain, entry.sid);
     }
     
     close(fd);
     
-    // add the domain to the list
-    strncpy(domain_entries[i].domain, domain, short_domain_len);
-    domain_entries[i].domain_len = short_domain_len;
-    domain_entries[i].sid = 1000 + i;
+    // Update our local cache with the successful entry
+    i = free_idx;
+    strncpy(domain_entries[i].domain, domain, MAX_DOMAIN_LEN - 1);
+    domain_entries[i].domain_len = strlen(domain);
+    domain_entries[i].sid = entry.sid;
     domain_entries[i].used = true;
-
+    
     return result;
 }
 
