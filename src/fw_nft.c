@@ -1,4 +1,3 @@
-
 // SPDX-License-Identifier: GPL-3.0-only
 /*
  * Copyright (c) 2023 Dengfeng Liu <liudf0716@gmail.com>
@@ -22,6 +21,7 @@
 #include <libnftnl/set.h>
 #include <libnftnl/expr.h>
 #include <libnftnl/object.h>
+#include <bpf/bpf.h>
 
 #include "debug.h"
 #include "util.h"
@@ -33,6 +33,9 @@
 #include "dns_forward.h"
 #include "gateway.h"
 #include "safe.h"
+
+// Include the eBPF header for required structures
+#include "../ebpf/aw-bpf.h"
 
 #define NFT_FILENAME_OUT "/tmp/fw4_apfree-wifiodg_init.conf.out"
 #define NFT_WIFIDOGX_CLIENT_LIST "/tmp/nftables_wifidogx_client_list"
@@ -51,6 +54,8 @@ if (is_bypass_mode()) { \
 }
 
 static int fw_quiet = 0;
+static int nft_fw_counters_update_ebpf(void);
+static int nft_fw_counters_update_nftables(void);
 static void nft_statistical_helper(const char *tab, const char *chain, char **output, uint32_t *output_len);
 
 const char *nft_wifidogx_init_script[] = {
@@ -331,114 +336,6 @@ nft_do_init_script_command()
 }
 
 
-
-// Callback function to process Netlink responses
-static int 
-parse_nft_chain_cb(const struct nlmsghdr *nlh, void *data) 
-{
-    struct nftnl_rule *rule;
-    rule = nftnl_rule_alloc();
-    if (!rule) {
-        debug(LOG_ERR, "nftnl_rule_alloc failed");
-        return MNL_CB_ERROR;
-    }
-
-    if (nftnl_rule_nlmsg_parse(nlh, rule) < 0) {
-        debug(LOG_ERR, "nftnl_chain_nlmsg_parse failed");
-        nftnl_rule_free(rule);
-        return MNL_CB_ERROR;
-    }
-
-    nftnl_rule_free(rule);
-    return MNL_CB_OK;
-}
-
-/**
- * @brief Helper function to execute nftables commands using libnftables
- *
- * This helper function uses libnftables to execute commands and capture output
- * 
- * @param cmd The nftables command to execute
- * @param output Pointer to store the command output
- * @param output_len Pointer to store output length
- */
-static void 
-nft_mnl_statistical_helper(const char *tab, const char *chain_name, char **output, uint32_t *output_len) 
-{
-    if (!chain_name || !output || !output_len) {
-        debug(LOG_ERR, "Invalid parameters");
-        return;
-    }
-    debug(LOG_DEBUG, "nft_statistical_helper: %s", chain_name);
-
-    // Open netlink socket
-    struct mnl_socket *nl;
-    nl = mnl_socket_open(NETLINK_NETFILTER);
-    if (!nl) {
-        debug(LOG_ERR, "mnl_socket_open: %s", strerror(errno));
-        return;
-    }
-
-    // Bind to netlink
-    if (mnl_socket_bind(nl, 0, MNL_SOCKET_AUTOPID) < 0) {
-        debug(LOG_ERR, "mnl_socket_bind: %s", strerror(errno));
-        mnl_socket_close(nl);
-        return;
-    }
-
-    // Create list request message
-    char buf[MNL_SOCKET_BUFFER_SIZE];
-    struct nlmsghdr *nlh;
-    struct nftnl_chain *chain;
-    uint32_t seq = time(NULL);
-
-    chain = nftnl_chain_alloc();
-    if (!chain) {
-        debug(LOG_ERR, "nftnl_chain_alloc failed");
-        mnl_socket_close(nl);
-        return;
-    }
-
-    nftnl_chain_set_str(chain, NFTNL_CHAIN_TABLE, tab);
-    nftnl_chain_set_str(chain, NFTNL_CHAIN_NAME, chain_name);
-    nftnl_chain_set_u32(chain, NFTNL_CHAIN_FAMILY, NFPROTO_INET);
-
-    nlh = nftnl_chain_nlmsg_build_hdr(buf, NFT_MSG_GETRULE, NFPROTO_INET,
-                                     NLM_F_DUMP, seq);
-    nftnl_chain_nlmsg_build_payload(nlh, chain);
-
-    if (mnl_socket_sendto(nl, nlh, nlh->nlmsg_len) < 0) {
-        debug(LOG_ERR, "mnl_socket_sendto: %s", strerror(errno));
-        nftnl_chain_free(chain);
-        mnl_socket_close(nl);
-        return;
-    }
-
-    // Allocate buffer for output
-    struct json_object *json = json_object_new_object();
-    struct json_object *rules_array = json_object_new_array();
-    json_object_object_add(json, "nftables", rules_array);
-
-    // Receive response 
-    int ret;
-    while ((ret = mnl_socket_recvfrom(nl, buf, sizeof(buf))) > 0) {
-        ret = mnl_cb_run(buf, ret, seq, mnl_socket_get_portid(nl), parse_nft_chain_cb, rules_array);
-        if (ret <= 0)
-            break;
-    }
-
-    // Convert output to JSON string
-    const char *json_str = json_object_to_json_string_ext(json, JSON_C_TO_STRING_PRETTY);
-    debug(LOG_DEBUG, "nft_statistical_helper: %s", json_str);
-    if (json_str) {
-        *output = strdup(json_str);
-        *output_len = strlen(json_str);
-    }
-
-    json_object_put(json);
-    nftnl_chain_free(chain);
-    mnl_socket_close(nl);
-}
 
 /**
  * @brief Get outgoing traffic statistics using libnftables
@@ -1230,23 +1127,13 @@ process_nftables_json(json_object *jobj, int is_outgoing)
 }
 
 /**
- * @brief Updates firewall counters by processing nftables statistics
+ * @brief Updates firewall counters by processing eBPF map statistics or nftables
  * 
- * This function performs the following operations:
- * 1. Resets the client list
- * 2. Retrieves and processes outgoing traffic statistics from nftables
- * 3. Retrieves and processes incoming traffic statistics from nftables
- * 
- * The function uses JSON parsing to process the nftables statistics data.
- * Both incoming and outgoing traffic data are handled separately through
- * the process_nftables_json function.
+ * This function first checks if eBPF maps are available in /sys/fs/bpf/tc/globals/
+ * If eBPF maps are available, it uses them to get client traffic statistics.
+ * If not, it falls back to the original nftables implementation.
  * 
  * @return 0 on success, -1 on failure
- *         Failures can occur if:
- *         - Unable to get outgoing traffic statistics
- *         - Unable to parse outgoing traffic JSON
- *         - Unable to get incoming traffic statistics
- *         - Unable to parse incoming traffic JSON
  */
 int 
 nft_fw_counters_update()
@@ -1254,56 +1141,251 @@ nft_fw_counters_update()
     NFT_WIFIDOGX_BYPASS_MODE_RETURN(0);
 
     LOCK_CLIENT_LIST();
-
     reset_client_list();
 
+    // Check if eBPF maps are available
+    if (access("/sys/fs/bpf/tc/globals/ipv4_map", F_OK) == 0) {
+        debug(LOG_INFO, "Using eBPF maps for traffic statistics");
+        return nft_fw_counters_update_ebpf();
+    } else {
+        debug(LOG_INFO, "eBPF maps not available, using nftables for traffic statistics");
+        return nft_fw_counters_update_nftables();
+    }
+}
+
+/**
+ * @brief Updates firewall counters using eBPF map statistics
+ * 
+ * This function retrieves traffic statistics from the eBPF maps in the
+ * /sys/fs/bpf/tc/globals/ directory and updates the client list accordingly.
+ * 
+ * @return 0 on success, -1 on failure
+ */
+static int
+nft_fw_counters_update_ebpf()
+{
+    // Open IPv4 map
+    int ipv4_map_fd = bpf_obj_get("/sys/fs/bpf/tc/globals/ipv4_map");
+    if (ipv4_map_fd < 0) {
+        debug(LOG_ERR, "Failed to open IPv4 map: %s", strerror(errno));
+        UNLOCK_CLIENT_LIST();
+        return -1;
+    }
+
+    // Process IPv4 traffic statistics
+    __be32 ipv4_key = 0, next_ipv4_key = 0;
+    struct traffic_stats ipv4_stats;
+    
+    while (bpf_map_get_next_key(ipv4_map_fd, ipv4_key ? &ipv4_key : NULL, &next_ipv4_key) == 0) {
+        if (bpf_map_lookup_elem(ipv4_map_fd, &next_ipv4_key, &ipv4_stats) == 0) {
+            // Convert IPv4 address to string
+            char ip_str[INET_ADDRSTRLEN];
+            if (inet_ntop(AF_INET, &next_ipv4_key, ip_str, sizeof(ip_str))) {
+                // Find client by IP
+                t_client *client = client_list_find_by_ip(ip_str);
+                if (client) {
+                    // Update client counters
+                    client->counters.incoming_history = client->counters.incoming;
+                    client->counters.incoming = ipv4_stats.incoming.total_bytes;
+                    client->counters.incoming_packets = ipv4_stats.incoming.total_packets;
+                    
+                    client->counters.outgoing_history = client->counters.outgoing;
+                    client->counters.outgoing = ipv4_stats.outgoing.total_bytes;
+                    client->counters.outgoing_packets = ipv4_stats.outgoing.total_packets;
+                    
+                    client->counters.last_updated = time(NULL);
+                    client->is_online = 1;
+                    
+                    // Initialize name if not set
+                    if (!client->name) {
+                        get_client_name(client);
+                    }
+                    
+                    // Determine if client is on wired connection
+                    if (client->wired == -1) {
+                        client->wired = br_is_device_wired(client->mac);
+                    }
+                    
+                    debug(LOG_DEBUG, "Updated IPv4 client: %s, IN: %llu bytes, OUT: %llu bytes", 
+                          ip_str, ipv4_stats.incoming.total_bytes, ipv4_stats.outgoing.total_bytes);
+                }
+            }
+        }
+        ipv4_key = next_ipv4_key;
+    }
+    close(ipv4_map_fd);
+
+    // Open IPv6 map
+    int ipv6_map_fd = bpf_obj_get("/sys/fs/bpf/tc/globals/ipv6_map");
+    if (ipv6_map_fd >= 0) {
+        // Process IPv6 traffic statistics
+        struct in6_addr ipv6_key, next_ipv6_key;
+        struct traffic_stats ipv6_stats;
+        int first_key = 1;
+        
+        memset(&ipv6_key, 0, sizeof(ipv6_key));
+        
+        while (bpf_map_get_next_key(ipv6_map_fd, first_key ? NULL : &ipv6_key, &next_ipv6_key) == 0) {
+            first_key = 0;
+            
+            if (bpf_map_lookup_elem(ipv6_map_fd, &next_ipv6_key, &ipv6_stats) == 0) {
+                // Convert IPv6 address to string
+                char ip_str[INET6_ADDRSTRLEN];
+                if (inet_ntop(AF_INET6, &next_ipv6_key, ip_str, sizeof(ip_str))) {
+                    // Find client by IPv6
+                    t_client *client = client_list_find_by_ip(ip_str);
+                    if (client) {
+                        // Update client counters for IPv6
+                        client->counters6.incoming_history = client->counters6.incoming;
+                        client->counters6.incoming = ipv6_stats.incoming.total_bytes;
+                        client->counters6.incoming_packets = ipv6_stats.incoming.total_packets;
+                        
+                        client->counters6.outgoing_history = client->counters6.outgoing;
+                        client->counters6.outgoing = ipv6_stats.outgoing.total_bytes;
+                        client->counters6.outgoing_packets = ipv6_stats.outgoing.total_packets;
+                        
+                        client->counters6.last_updated = time(NULL);
+                        client->is_online = 1;
+                        
+                        // Initialize name if not set
+                        if (!client->name) {
+                            get_client_name(client);
+                        }
+                        
+                        // Determine if client is on wired connection
+                        if (client->wired == -1) {
+                            client->wired = br_is_device_wired(client->mac);
+                        }
+                        
+                        debug(LOG_DEBUG, "Updated IPv6 client: %s, IN: %llu bytes, OUT: %llu bytes", 
+                              ip_str, ipv6_stats.incoming.total_bytes, ipv6_stats.outgoing.total_bytes);
+                    }
+                }
+            }
+            memcpy(&ipv6_key, &next_ipv6_key, sizeof(ipv6_key));
+        }
+        close(ipv6_map_fd);
+    } else {
+        debug(LOG_WARNING, "Failed to open IPv6 map: %s", strerror(errno));
+    }
+
+    // Optionally get MAC statistics for clients without IP matches
+    int mac_map_fd = bpf_obj_get("/sys/fs/bpf/tc/globals/mac_map");
+    if (mac_map_fd >= 0) {
+        struct mac_addr mac_key, next_mac_key;
+        struct traffic_stats mac_stats;
+        int first_key = 1;
+        
+        memset(&mac_key, 0, sizeof(mac_key));
+        
+        while (bpf_map_get_next_key(mac_map_fd, first_key ? NULL : &mac_key, &next_mac_key) == 0) {
+            first_key = 0;
+            
+            if (bpf_map_lookup_elem(mac_map_fd, &next_mac_key, &mac_stats) == 0) {
+                // Format MAC address
+                char mac_str[18];
+                snprintf(mac_str, sizeof(mac_str), "%02x:%02x:%02x:%02x:%02x:%02x",
+                        next_mac_key.h_addr[0], next_mac_key.h_addr[1], next_mac_key.h_addr[2],
+                        next_mac_key.h_addr[3], next_mac_key.h_addr[4], next_mac_key.h_addr[5]);
+                
+                // Find client by MAC (only update if not already updated by IP)
+                t_client *client = client_list_find_by_mac(mac_str);
+                if (client && client->counters.last_updated < time(NULL) - 5) {
+                    // Update client name if not set
+                    if (!client->name) {
+                        get_client_name(client);
+                    }
+                    
+                    // Determine if client is on wired connection
+                    if (client->wired == -1) {
+                        client->wired = br_is_device_wired(client->mac);
+                    }
+                    
+                    // Update counters
+                    client->counters.incoming_history = client->counters.incoming;
+                    client->counters.incoming = mac_stats.incoming.total_bytes;
+                    client->counters.incoming_packets = mac_stats.incoming.total_packets;
+                    
+                    client->counters.outgoing_history = client->counters.outgoing;
+                    client->counters.outgoing = mac_stats.outgoing.total_bytes;
+                    client->counters.outgoing_packets = mac_stats.outgoing.total_packets;
+                    
+                    client->counters.last_updated = time(NULL);
+                    client->is_online = 1;
+                    
+                    debug(LOG_DEBUG, "Updated MAC client: %s, IN: %llu bytes, OUT: %llu bytes", 
+                          mac_str, mac_stats.incoming.total_bytes, mac_stats.outgoing.total_bytes);
+                }
+            }
+            memcpy(&mac_key, &next_mac_key, sizeof(mac_key));
+        }
+        close(mac_map_fd);
+    } else {
+        debug(LOG_WARNING, "Failed to open MAC map: %s", strerror(errno));
+    }
+
+    UNLOCK_CLIENT_LIST();
+    return 0;
+}
+
+/**
+ * @brief Updates firewall counters using nftables (original implementation)
+ * 
+ * This function uses the nftables JSON parsing approach to extract
+ * traffic statistics. It's used as a fallback when eBPF maps are not available.
+ * 
+ * @return 0 on success, -1 on failure
+ */
+static int
+nft_fw_counters_update_nftables()
+{
     // get client outgoing traffic
     char *outgoing = NULL;
     uint32_t outgoing_len = 0;
     nft_statistical_outgoing(&outgoing, &outgoing_len);
     if (outgoing == NULL) {
+        debug(LOG_ERR, "Failed to get outgoing traffic");
         UNLOCK_CLIENT_LIST();
-        debug(LOG_ERR, "nft_fw_counters_update(): outgoing is NULL");
         return -1;
     }
     debug(LOG_DEBUG, "outgoing: %s", outgoing);
     json_object *jobj_outgoing = json_tokener_parse(outgoing);
     if (jobj_outgoing == NULL) {
-        UNLOCK_CLIENT_LIST();
+        debug(LOG_ERR, "Failed to parse outgoing json");
         free(outgoing);
-        debug(LOG_ERR, "nft_fw_counters_update(): jobj_outgoing is NULL");
+        UNLOCK_CLIENT_LIST();
         return -1;
     }
+
+    // Process outgoing traffic statistics
+    process_nftables_json(jobj_outgoing, 0);
+    json_object_put(jobj_outgoing);
     free(outgoing);
-    process_nftables_json(jobj_outgoing, 1);
 
     // get client incoming traffic
     char *incoming = NULL;
     uint32_t incoming_len = 0;
     nft_statistical_incoming(&incoming, &incoming_len);
     if (incoming == NULL) {
+        debug(LOG_ERR, "Failed to get incoming traffic");
         UNLOCK_CLIENT_LIST();
-        debug(LOG_ERR, "nft_fw_counters_update(): incoming is NULL");
-        json_object_put(jobj_outgoing);
         return -1;
     }
     debug(LOG_DEBUG, "incoming: %s", incoming);
     json_object *jobj_incoming = json_tokener_parse(incoming);
     if (jobj_incoming == NULL) {
-        UNLOCK_CLIENT_LIST();
-        debug(LOG_ERR, "nft_fw_counters_update(): jobj_incoming is NULL");
+        debug(LOG_ERR, "Failed to parse incoming json");
         free(incoming);
-        json_object_put(jobj_outgoing);
+        UNLOCK_CLIENT_LIST();
         return -1;
     }
-    free(incoming);
-    process_nftables_json(jobj_incoming, 0);
-    
-    UNLOCK_CLIENT_LIST();
 
-    json_object_put(jobj_outgoing);
+    // Process incoming traffic statistics
+    process_nftables_json(jobj_incoming, 1);
     json_object_put(jobj_incoming);
+    free(incoming);
 
+    UNLOCK_CLIENT_LIST();
     return 0;
 }
 
