@@ -9,6 +9,10 @@
 #include <string.h>
 #include <unistd.h>
 #include <arpa/inet.h>
+
+#ifndef MIN
+#define MIN(a,b) (((a)<(b))?(a):(b))
+#endif
 #include <event2/event.h>
 #include <pthread.h>
 #include <netinet/in.h>
@@ -165,8 +169,9 @@ static int xdpi_add_domain(const char *domain) {
     // Prepare the domain entry with a unique SID
     // Use max_sid + 1 to ensure we don't reuse SIDs
     memset(&entry, 0, sizeof(entry));
-    strncpy(entry.domain, domain, MAX_DOMAIN_LEN - 1);
-    entry.domain_len = strlen(domain);
+    memcpy(entry.domain, domain, MIN(strlen(domain), MAX_DOMAIN_LEN - 1));
+    entry.domain[MAX_DOMAIN_LEN - 1] = '\0';  // Ensure null termination
+    entry.domain_len = strlen(entry.domain);
     entry.sid = max_sid + 1;  
     entry.used = true;
     
@@ -184,8 +189,9 @@ static int xdpi_add_domain(const char *domain) {
     
     // Update our local cache with the successful entry
     i = free_idx;
-    strncpy(domain_entries[i].domain, domain, MAX_DOMAIN_LEN - 1);
-    domain_entries[i].domain_len = strlen(domain);
+    memcpy(domain_entries[i].domain, domain, MIN(strlen(domain), MAX_DOMAIN_LEN - 1));
+    domain_entries[i].domain[MAX_DOMAIN_LEN - 1] = '\0';  // Ensure null termination
+    domain_entries[i].domain_len = strlen(domain_entries[i].domain);
     domain_entries[i].sid = entry.sid;
     domain_entries[i].used = true;
     

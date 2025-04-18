@@ -118,7 +118,11 @@ execute_post_cmd(char *raw_cmd) {
             fprintf(stderr, "Error: Potentially dangerous command rejected: [%s]\n", cmd);
             return;
         }
-        system(cmd);
+        int ret = system(cmd);
+        if (ret == -1) {
+            fprintf(stderr, "Error: Failed to execute command: [%s]\n", cmd);
+            return;
+        }
         fprintf(stdout, "Executed shell command: [%s]\n", cmd);
     } else {
         fprintf(stderr, "Error: [%s] is an illegal post command\n", raw_cmd);
@@ -160,12 +164,15 @@ static void
 handle_command(const char *cmd, const char *param) 
 {
     char *request = NULL;
-    if (param)
-        asprintf(&request, "%s %s", cmd, param);
-    else
-        asprintf(&request, "%s", cmd);
+    int ret;
+    
+    if (param) {
+        ret = asprintf(&request, "%s %s", cmd, param);
+    } else {
+        ret = asprintf(&request, "%s", cmd);
+    }
 
-    if (!request) {
+    if (ret == -1 || !request) {
         fprintf(stderr, "Error: Memory allocation failed\n");
         exit(EXIT_FAILURE);
     }
