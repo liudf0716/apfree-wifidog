@@ -373,7 +373,10 @@ get_auth_uri(const char *request_type, client_type_t type, void *data)
     const char *device_id = get_device_id();
     
     // Traffic and timing stats
-    unsigned long long int incoming = 0, outgoing = 0;
+    unsigned long long int incoming_bytes = 0, outgoing_bytes = 0;
+    unsigned long long int incoming_packets = 0, outgoing_packets = 0;
+    unsigned long long int incoming_bytes_v6 = 0, outgoing_bytes_v6 = 0;
+    unsigned long long int incoming_packets_v6 = 0, outgoing_packets_v6 = 0;
     time_t first_login = 0;
     uint32_t online_time = 0, wired = 0;
 
@@ -389,8 +392,14 @@ get_auth_uri(const char *request_type, client_type_t type, void *data)
         name = client->name;
         
         // Traffic stats
-        incoming = client->counters.incoming_bytes;
-        outgoing = client->counters.outgoing_bytes;
+        incoming_bytes = client->counters.incoming_bytes;
+        outgoing_bytes = client->counters.outgoing_bytes;
+        incoming_packets = client->counters.incoming_packets;
+        outgoing_packets = client->counters.outgoing_packets;
+        incoming_bytes_v6 = client->counters6.incoming_bytes;
+        outgoing_bytes_v6 = client->counters6.outgoing_bytes;
+        incoming_packets_v6 = client->counters6.incoming_packets;
+        outgoing_packets_v6 = client->counters6.outgoing_packets;
         
         // Timing and status
         first_login = client->first_login ? client->first_login : time(0);
@@ -408,48 +417,31 @@ get_auth_uri(const char *request_type, client_type_t type, void *data)
         return NULL;
     }
 
-    // Get config and auth server settings
-    s_config *config = config_get_config();
     t_auth_serv *auth_server = get_auth_server();
     char *uri = NULL;
 
-    // Build URI with or without delta traffic stats
-    if (config->deltatraffic) {
-        if (safe_asprintf(&uri, 
-            "%s%sstage=%s&ip=%s&mac=%s&token=%s"
-            "&incoming=%llu&outgoing=%llu"
-            "&first_login=%lld&online_time=%u"
-            "&gw_id=%s&gw_channel=%s"
-            "&name=%s&wired=%u&device_id=%s",
-            auth_server->authserv_path,
-            auth_server->authserv_auth_script_path_fragment,
-            request_type, ip, mac,
-            safe_token ? safe_token : "null",
-            incoming, outgoing,
-            (long long)first_login, online_time,
-            gw_id, gw_channel,
-            name ? name : "null",
-            wired, device_id) < 0) {
-            return NULL;
-        }
-    } else {
-        if (safe_asprintf(&uri,
-            "%s%sstage=%s&ip=%s&mac=%s&token=%s"
-            "&incoming=%llu&outgoing=%llu"
-            "&first_login=%lld&online_time=%u"
-            "&gw_id=%s&gw_channel=%s"
-            "&name=%s&wired=%u&device_id=%s",
-            auth_server->authserv_path,
-            auth_server->authserv_auth_script_path_fragment,
-            request_type, ip, mac,
-            safe_token ? safe_token : "null",
-            incoming, outgoing,
-            (long long)first_login, online_time, 
-            gw_id, gw_channel,
-            name ? name : "null",
-            wired, device_id) < 0) {
-            return NULL;
-        }
+    if (safe_asprintf(&uri,
+        "%s%sstage=%s&ip=%s&mac=%s&token=%s"
+        "&incoming_bytes=%llu&outgoing_bytes=%llu"
+        "&incoming_packets=%llu&outgoing_packets=%llu"
+        "&incoming_bytes_v6=%llu&outgoing_bytes_v6=%llu"
+        "&incoming_packets_v6=%llu&outgoing_packets_v6=%llu"
+        "&first_login=%lld&online_time=%u"
+        "&gw_id=%s&gw_channel=%s"
+        "&name=%s&wired=%u&device_id=%s",
+        auth_server->authserv_path,
+        auth_server->authserv_auth_script_path_fragment,
+        request_type, ip, mac,
+        safe_token ? safe_token : "null",
+        incoming_bytes, outgoing_bytes,
+        incoming_packets, outgoing_packets,
+        incoming_bytes_v6, outgoing_bytes_v6,
+        incoming_packets_v6, outgoing_packets_v6,
+        (long long)first_login, online_time, 
+        gw_id, gw_channel,
+        name ? name : "null",
+        wired, device_id) < 0) {
+        return NULL;
     }
 
     return uri;
