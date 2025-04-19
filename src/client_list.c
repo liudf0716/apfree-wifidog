@@ -135,8 +135,8 @@ client_list_add(const char *ip, const char *mac, const char *token, t_gateway_se
         debug(LOG_ERR, "Invalid IP address format [%s]", ip);
     curclient->mac = safe_strdup(mac);
     curclient->token = safe_strdup(token);
-    curclient->counters.incoming = curclient->counters.outgoing = 0;
-    curclient->counters6.incoming = curclient->counters6.outgoing = 0;
+    curclient->counters.incoming_bytes = curclient->counters.outgoing_bytes = 0;
+    curclient->counters6.incoming_bytes = curclient->counters6.outgoing_bytes = 0;
     curclient->counters.last_updated = time(NULL);
     curclient->gw_setting = gw_setting;
     curclient->first_login = time(NULL);
@@ -231,10 +231,10 @@ client_dup(const t_client * src)
     new->mac = safe_strdup(src->mac);
     new->token = safe_strdup(src->token);
 	new->fw_connection_state = src->fw_connection_state;
-    new->counters.incoming = src->counters.incoming;
-    new->counters.outgoing = src->counters.outgoing;
-    new->counters6.incoming = src->counters6.incoming;
-    new->counters6.outgoing = src->counters6.outgoing;
+    new->counters.incoming_bytes = src->counters.incoming_bytes;
+    new->counters.outgoing_bytes = src->counters.outgoing_bytes;
+    new->counters6.incoming_bytes = src->counters6.incoming_bytes;
+    new->counters6.outgoing_bytes = src->counters6.outgoing_bytes;
     new->counters.last_updated = src->counters.last_updated;
     new->counters6.last_updated = src->counters6.last_updated;
 	

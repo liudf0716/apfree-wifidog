@@ -16,11 +16,11 @@ extern pthread_mutex_t offline_client_list_mutex;
 /** Counters struct for a client's bandwidth usage (in bytes)
  */
 typedef struct _t_counters {
-    unsigned long long incoming;        /**< @brief Incoming data byte total*/
-	unsigned long long incoming_packets;        /**< @brief Incoming data packet total*/
-    unsigned long long outgoing;        /**< @brief Outgoing data total*/
-	unsigned long long outgoing_packets;        /**< @brief Outgoing data packet total*/
-    time_t last_updated;        			/**< @brief Last update of the counters */
+    unsigned long long incoming_bytes;   /**< @brief Incoming data byte total*/
+	unsigned long long incoming_packets; /**< @brief Incoming data packet total*/
+    unsigned long long outgoing_bytes;   /**< @brief Outgoing data total*/
+	unsigned long long outgoing_packets; /**< @brief Outgoing data packet total*/
+    time_t last_updated;        		 /**< @brief Last update of the counters */
 } t_counters;
 
 /** Client node for the connected client linked list.

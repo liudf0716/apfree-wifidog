@@ -831,7 +831,7 @@ nft_fw_reload_client()
                 "mark set 0x20000 accept\n",
                 current->mac, current->ip,
                 current->counters.outgoing_packets,
-                current->counters.outgoing);
+                current->counters.outgoing_bytes);
         fprintf(fp, "%s", rule);
 
         // Add incoming rule with counters
@@ -840,7 +840,7 @@ nft_fw_reload_client()
                 "ip daddr %s counter packets %llu bytes %llu accept\n",
                 current->ip,
                 current->counters.incoming_packets,
-                current->counters.incoming);
+                current->counters.incoming_bytes);
         fprintf(fp, "%s", rule);
 
         current = current->next;
@@ -924,24 +924,22 @@ update_client_counters(t_client *client, uint64_t packets, uint64_t bytes, int i
     }
 
     // Update traffic counters
-    if (is_outgoing) {
-        // Update with new values
-        if (is_ip6) {
-            client->counters6.outgoing = bytes;
-            client->counters6.outgoing_packets = packets;
-        } else {
-            client->counters.outgoing = bytes;
-            client->counters.outgoing_packets = packets;
-        }
-    } else {
-        // Update with new values
-        if (is_ip6) {
-            client->counters6.incoming = bytes;
-            client->counters6.incoming_packets = packets;
-        } else {
-            client->counters.incoming = bytes;
-            client->counters.incoming_packets = packets;
-        }
+    if (is_outgoing) {            // Update with new values
+            if (is_ip6) {
+                client->counters6.outgoing_bytes = bytes;
+                client->counters6.outgoing_packets = packets;
+            } else {
+                client->counters.outgoing_bytes = bytes;
+                client->counters.outgoing_packets = packets;
+            }
+    } else {            // Update with new values
+            if (is_ip6) {
+                client->counters6.incoming_bytes = bytes;
+                client->counters6.incoming_packets = packets;
+            } else {
+                client->counters.incoming_bytes = bytes;
+                client->counters.incoming_packets = packets;
+            }
     }
 
     // Update timestamp and online status
@@ -1181,10 +1179,10 @@ nft_fw_counters_update_ebpf()
                 t_client *client = client_list_find_by_ip(ip_str);
                 if (client) {
                     // Update client counters
-                    client->counters.incoming = ipv4_stats.incoming.total_bytes;
+                    client->counters.incoming_bytes = ipv4_stats.incoming.total_bytes;
                     client->counters.incoming_packets = ipv4_stats.incoming.total_packets;
                     
-                    client->counters.outgoing = ipv4_stats.outgoing.total_bytes;
+                    client->counters.outgoing_bytes = ipv4_stats.outgoing.total_bytes;
                     client->counters.outgoing_packets = ipv4_stats.outgoing.total_packets;
                     
                     client->counters.last_updated = time(NULL);
@@ -1230,10 +1228,10 @@ nft_fw_counters_update_ebpf()
                     t_client *client = client_list_find_by_ip(ip_str);
                     if (client) {
                         // Update client counters for IPv6
-                        client->counters6.incoming = ipv6_stats.incoming.total_bytes;
+                        client->counters6.incoming_bytes = ipv6_stats.incoming.total_bytes;
                         client->counters6.incoming_packets = ipv6_stats.incoming.total_packets;
                         
-                        client->counters6.outgoing = ipv6_stats.outgoing.total_bytes;
+                        client->counters6.outgoing_bytes = ipv6_stats.outgoing.total_bytes;
                         client->counters6.outgoing_packets = ipv6_stats.outgoing.total_packets;
                         
                         client->counters6.last_updated = time(NULL);

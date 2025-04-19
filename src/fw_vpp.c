@@ -127,8 +127,7 @@ vpp_fw_counters_update()
                     uint64_t bytes = json_object_get_int64(bytes_obj);
                     
                     // Save previous outgoing count and update with new values
-                    client->counters.outgoing_history = client->counters.outgoing;
-                    client->counters.outgoing = bytes;
+                    client->counters.outgoing_bytes = bytes;
                     client->counters.outgoing_packets = packets;
                 }
             }
@@ -145,8 +144,7 @@ vpp_fw_counters_update()
                     uint64_t bytes = json_object_get_int64(bytes_obj);
                     
                     // Save previous incoming count and update with new values
-                    client->counters.incoming_history = client->counters.incoming;
-                    client->counters.incoming = bytes;
+                    client->counters.incoming_bytes = bytes;
                     client->counters.incoming_packets = packets;
                 }
             }

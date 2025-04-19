@@ -389,8 +389,8 @@ get_auth_uri(const char *request_type, client_type_t type, void *data)
         name = client->name;
         
         // Traffic stats
-        incoming = client->counters.incoming;
-        outgoing = client->counters.outgoing;
+        incoming = client->counters.incoming_bytes;
+        outgoing = client->counters.outgoing_bytes;
         
         // Timing and status
         first_login = client->first_login ? client->first_login : time(0);

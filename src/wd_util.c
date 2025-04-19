@@ -286,9 +286,9 @@ get_status_text()
 		evbuffer_add_printf(evb, "  Online Time: %lld\n", (long long)(time(NULL) - current->first_login));
 		evbuffer_add_printf(evb, "  Name: %s\n", current->name?current->name:"N/A");
 		evbuffer_add_printf(evb, "  Downloaded: %llu\n  Uploaded: %llu\n", 
-			current->counters.incoming, current->counters.outgoing);
+			current->counters.incoming_bytes, current->counters.outgoing_bytes);
 		evbuffer_add_printf(evb, "  Downloaded_v6: %llu\n  Uploaded_v6: %llu\n", 
-			current->counters6.incoming, current->counters6.outgoing);
+			current->counters6.incoming_bytes, current->counters6.outgoing_bytes);
 		count++;
 		if(current->is_online)
 			active_count++;
@@ -362,13 +362,13 @@ get_client_status_json()
 		json_object_object_add(jclient, "online_time", 
 			json_object_new_int64(time(NULL) - current->first_login));
 		json_object_object_add(jclient, "downloaded", 
-			json_object_new_int64(current->counters.incoming));
+			json_object_new_int64(current->counters.incoming_bytes));
 		json_object_object_add(jclient, "uploaded",
-			json_object_new_int64(current->counters.outgoing));
+			json_object_new_int64(current->counters.outgoing_bytes));
 		json_object_object_add(jclient, "downloaded_v6", 
-			json_object_new_int64(current->counters6.incoming));
+			json_object_new_int64(current->counters6.incoming_bytes));
 		json_object_object_add(jclient, "uploaded_v6",
-			json_object_new_int64(current->counters6.outgoing));
+			json_object_new_int64(current->counters6.outgoing_bytes));
 
 		json_object_array_add(jclients, jclient);
 
