@@ -135,12 +135,8 @@ client_list_add(const char *ip, const char *mac, const char *token, t_gateway_se
         debug(LOG_ERR, "Invalid IP address format [%s]", ip);
     curclient->mac = safe_strdup(mac);
     curclient->token = safe_strdup(token);
-    curclient->counters.incoming_delta = curclient->counters.outgoing_delta = 
-            curclient->counters.incoming = curclient->counters.incoming_history = curclient->counters.outgoing =
-    curclient->counters.outgoing_history = 0;
-    curclient->counters6.incoming_delta = curclient->counters6.outgoing_delta = 
-            curclient->counters6.incoming = curclient->counters6.incoming_history = curclient->counters6.outgoing =
-    curclient->counters6.outgoing_history = 0;
+    curclient->counters.incoming = curclient->counters.outgoing = 0;
+    curclient->counters6.incoming = curclient->counters6.outgoing = 0;
     curclient->counters.last_updated = time(NULL);
     curclient->gw_setting = gw_setting;
     curclient->first_login = time(NULL);
@@ -236,18 +232,11 @@ client_dup(const t_client * src)
     new->token = safe_strdup(src->token);
 	new->fw_connection_state = src->fw_connection_state;
     new->counters.incoming = src->counters.incoming;
-    new->counters.incoming_history = src->counters.incoming_history;
-    new->counters.incoming_delta = src->counters.incoming_delta;
     new->counters.outgoing = src->counters.outgoing;
-    new->counters.outgoing_history = src->counters.outgoing_history;
-    new->counters.outgoing_delta = src->counters.outgoing_delta;
     new->counters6.incoming = src->counters6.incoming;
-    new->counters6.incoming_history = src->counters6.incoming_history;
-    new->counters6.incoming_delta = src->counters6.incoming_delta;
     new->counters6.outgoing = src->counters6.outgoing;
-    new->counters6.outgoing_history = src->counters6.outgoing_history;
-    new->counters6.outgoing_delta = src->counters6.outgoing_delta;
     new->counters.last_updated = src->counters.last_updated;
+    new->counters6.last_updated = src->counters6.last_updated;
 	
 	// liudf added 20160128
 	if(src->name)

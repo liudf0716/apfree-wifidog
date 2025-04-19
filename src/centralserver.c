@@ -374,7 +374,6 @@ get_auth_uri(const char *request_type, client_type_t type, void *data)
     
     // Traffic and timing stats
     unsigned long long int incoming = 0, outgoing = 0;
-    unsigned long long int incoming_delta = 0, outgoing_delta = 0;
     time_t first_login = 0;
     uint32_t online_time = 0, wired = 0;
 
@@ -392,8 +391,6 @@ get_auth_uri(const char *request_type, client_type_t type, void *data)
         // Traffic stats
         incoming = client->counters.incoming;
         outgoing = client->counters.outgoing;
-        incoming_delta = client->counters.incoming_delta;
-        outgoing_delta = client->counters.outgoing_delta;
         
         // Timing and status
         first_login = client->first_login ? client->first_login : time(0);
@@ -421,7 +418,6 @@ get_auth_uri(const char *request_type, client_type_t type, void *data)
         if (safe_asprintf(&uri, 
             "%s%sstage=%s&ip=%s&mac=%s&token=%s"
             "&incoming=%llu&outgoing=%llu"
-            "&incomingdelta=%llu&outgoingdelta=%llu"
             "&first_login=%lld&online_time=%u"
             "&gw_id=%s&gw_channel=%s"
             "&name=%s&wired=%u&device_id=%s",
@@ -430,7 +426,6 @@ get_auth_uri(const char *request_type, client_type_t type, void *data)
             request_type, ip, mac,
             safe_token ? safe_token : "null",
             incoming, outgoing,
-            incoming_delta, outgoing_delta,
             (long long)first_login, online_time,
             gw_id, gw_channel,
             name ? name : "null",

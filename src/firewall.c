@@ -572,10 +572,8 @@ fw_client_process_from_authserver_response(t_authresponse *authresponse, t_clien
 					  tmp_c->ip);
 
 				if (tmp_c->fw_connection_state != FW_MARK_PROBATION) {
-					tmp_c->counters.incoming_delta =
-					 tmp_c->counters.outgoing_delta =
-					 tmp_c->counters.incoming =
-					 tmp_c->counters.outgoing = 0;
+					tmp_c->counters.incoming =
+					tmp_c->counters.outgoing = 0;
 				} else {
 					//We don't want to clear counters if the user was in validation, it probably already transmitted data..
 					debug(LOG_INFO,

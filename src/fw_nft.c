@@ -925,24 +925,20 @@ update_client_counters(t_client *client, uint64_t packets, uint64_t bytes, int i
 
     // Update traffic counters
     if (is_outgoing) {
-        // Save previous outgoing count and update with new values
+        // Update with new values
         if (is_ip6) {
-            client->counters6.outgoing_history = client->counters6.outgoing;
             client->counters6.outgoing = bytes;
             client->counters6.outgoing_packets = packets;
         } else {
-            client->counters.outgoing_history = client->counters.outgoing;
             client->counters.outgoing = bytes;
             client->counters.outgoing_packets = packets;
         }
     } else {
-        // Save previous incoming count and update with new values
+        // Update with new values
         if (is_ip6) {
-            client->counters6.incoming_history = client->counters6.incoming;
             client->counters6.incoming = bytes;
             client->counters6.incoming_packets = packets;
         } else {
-            client->counters.incoming_history = client->counters.incoming;
             client->counters.incoming = bytes;
             client->counters.incoming_packets = packets;
         }
@@ -1185,11 +1181,9 @@ nft_fw_counters_update_ebpf()
                 t_client *client = client_list_find_by_ip(ip_str);
                 if (client) {
                     // Update client counters
-                    client->counters.incoming_history = client->counters.incoming;
                     client->counters.incoming = ipv4_stats.incoming.total_bytes;
                     client->counters.incoming_packets = ipv4_stats.incoming.total_packets;
                     
-                    client->counters.outgoing_history = client->counters.outgoing;
                     client->counters.outgoing = ipv4_stats.outgoing.total_bytes;
                     client->counters.outgoing_packets = ipv4_stats.outgoing.total_packets;
                     
@@ -1236,11 +1230,9 @@ nft_fw_counters_update_ebpf()
                     t_client *client = client_list_find_by_ip(ip_str);
                     if (client) {
                         // Update client counters for IPv6
-                        client->counters6.incoming_history = client->counters6.incoming;
                         client->counters6.incoming = ipv6_stats.incoming.total_bytes;
                         client->counters6.incoming_packets = ipv6_stats.incoming.total_packets;
                         
-                        client->counters6.outgoing_history = client->counters6.outgoing;
                         client->counters6.outgoing = ipv6_stats.outgoing.total_bytes;
                         client->counters6.outgoing_packets = ipv6_stats.outgoing.total_packets;
                         
@@ -1267,61 +1259,6 @@ nft_fw_counters_update_ebpf()
         close(ipv6_map_fd);
     } else {
         debug(LOG_WARNING, "Failed to open IPv6 map: %s", strerror(errno));
-    }
-
-    // Optionally get MAC statistics for clients without IP matches
-    int mac_map_fd = bpf_obj_get("/sys/fs/bpf/tc/globals/mac_map");
-    if (mac_map_fd >= 0) {
-        struct mac_addr mac_key, next_mac_key;
-        struct traffic_stats mac_stats;
-        int first_key = 1;
-        
-        memset(&mac_key, 0, sizeof(mac_key));
-        
-        while (bpf_map_get_next_key(mac_map_fd, first_key ? NULL : &mac_key, &next_mac_key) == 0) {
-            first_key = 0;
-            
-            if (bpf_map_lookup_elem(mac_map_fd, &next_mac_key, &mac_stats) == 0) {
-                // Format MAC address
-                char mac_str[18];
-                snprintf(mac_str, sizeof(mac_str), "%02x:%02x:%02x:%02x:%02x:%02x",
-                        next_mac_key.h_addr[0], next_mac_key.h_addr[1], next_mac_key.h_addr[2],
-                        next_mac_key.h_addr[3], next_mac_key.h_addr[4], next_mac_key.h_addr[5]);
-                
-                // Find client by MAC (only update if not already updated by IP)
-                t_client *client = client_list_find_by_mac(mac_str);
-                if (client && client->counters.last_updated < time(NULL) - 5) {
-                    // Update client name if not set
-                    if (!client->name) {
-                        get_client_name(client);
-                    }
-                    
-                    // Determine if client is on wired connection
-                    if (client->wired == -1) {
-                        client->wired = br_is_device_wired(client->mac);
-                    }
-                    
-                    // Update counters
-                    client->counters.incoming_history = client->counters.incoming;
-                    client->counters.incoming = mac_stats.incoming.total_bytes;
-                    client->counters.incoming_packets = mac_stats.incoming.total_packets;
-                    
-                    client->counters.outgoing_history = client->counters.outgoing;
-                    client->counters.outgoing = mac_stats.outgoing.total_bytes;
-                    client->counters.outgoing_packets = mac_stats.outgoing.total_packets;
-                    
-                    client->counters.last_updated = time(NULL);
-                    client->is_online = 1;
-                    
-                    debug(LOG_DEBUG, "Updated MAC client: %s, IN: %llu bytes, OUT: %llu bytes", 
-                          mac_str, mac_stats.incoming.total_bytes, mac_stats.outgoing.total_bytes);
-                }
-            }
-            memcpy(&mac_key, &next_mac_key, sizeof(mac_key));
-        }
-        close(mac_map_fd);
-    } else {
-        debug(LOG_WARNING, "Failed to open MAC map: %s", strerror(errno));
     }
 
     UNLOCK_CLIENT_LIST();
