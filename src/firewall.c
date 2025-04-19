@@ -1,4 +1,3 @@
-
 // SPDX-License-Identifier: GPL-3.0-only
 /*
  * Copyright (c) 2023 Dengfeng Liu <liudf0716@gmail.com>
@@ -661,12 +660,16 @@ get_gw_clients_counter(t_gateway_setting *gw_setting, t_client *worklist)
             json_object_object_add(clt, "name", json_object_new_string(p1->name ? p1->name : "N/A"));
             json_object_object_add(clt, "incoming_bytes", json_object_new_int64(p1->counters.incoming_bytes));
             json_object_object_add(clt, "outgoing_bytes", json_object_new_int64(p1->counters.outgoing_bytes));
-			json_object_object_add(clt, "incoming_packets", json_object_new_int64(p1->counters.incoming_packets));
-			json_object_object_add(clt, "outgoing_packets", json_object_new_int64(p1->counters.outgoing_packets));
-			json_object_object_add(clt, "incoming_bytes_v6", json_object_new_int64(p1->counters6.incoming_bytes));
-			json_object_object_add(clt, "outgoing_bytes_v6", json_object_new_int64(p1->counters6.outgoing_bytes));
-			json_object_object_add(clt, "incoming_packets_v6", json_object_new_int64(p1->counters6.incoming_packets));
-			json_object_object_add(clt, "outgoing_packets_v6", json_object_new_int64(p1->counters6.outgoing_packets));
+            json_object_object_add(clt, "incoming_rate", json_object_new_int64(p1->counters.incoming_rate));
+            json_object_object_add(clt, "outgoing_rate", json_object_new_int64(p1->counters.outgoing_rate));
+            json_object_object_add(clt, "incoming_packets", json_object_new_int64(p1->counters.incoming_packets));
+            json_object_object_add(clt, "outgoing_packets", json_object_new_int64(p1->counters.outgoing_packets));
+            json_object_object_add(clt, "incoming_bytes_v6", json_object_new_int64(p1->counters6.incoming_bytes));
+            json_object_object_add(clt, "outgoing_bytes_v6", json_object_new_int64(p1->counters6.outgoing_bytes));
+            json_object_object_add(clt, "incoming_rate_v6", json_object_new_int64(p1->counters6.incoming_rate));
+            json_object_object_add(clt, "outgoing_rate_v6", json_object_new_int64(p1->counters6.outgoing_rate));
+            json_object_object_add(clt, "incoming_packets_v6", json_object_new_int64(p1->counters6.incoming_packets));
+            json_object_object_add(clt, "outgoing_packets_v6", json_object_new_int64(p1->counters6.outgoing_packets));
             json_object_object_add(clt, "first_login", json_object_new_int64(p1->first_login));
             json_object_object_add(clt, "is_online", json_object_new_boolean(p1->is_online));
             json_object_object_add(clt, "wired", json_object_new_boolean(p1->wired));

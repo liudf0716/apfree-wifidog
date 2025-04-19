@@ -285,10 +285,21 @@ get_status_text()
 		evbuffer_add_printf(evb, "  First Login: %lld\n", (long long)current->first_login);
 		evbuffer_add_printf(evb, "  Online Time: %lld\n", (long long)(time(NULL) - current->first_login));
 		evbuffer_add_printf(evb, "  Name: %s\n", current->name?current->name:"N/A");
-		evbuffer_add_printf(evb, "  Download Bytes: %llu\n  Upload Bytes: %llu\n", 
-			current->counters.incoming_bytes, current->counters.outgoing_bytes);
-		evbuffer_add_printf(evb, "  Download Bytes v6: %llu\n  Upload Bytes V6: %llu\n", 
-			current->counters6.incoming_bytes, current->counters6.outgoing_bytes);
+		evbuffer_add_printf(evb, "  Wired: %d\n", current->wired);
+		evbuffer_add_printf(evb, "  Download Bytes: %lld\n", (long long)current->counters.incoming_bytes);
+		evbuffer_add_printf(evb, "  Upload Bytes: %lld\n", (long long)current->counters.outgoing_bytes);
+		evbuffer_add_printf(evb, "  Download Bytes v6: %lld\n", (long long)current->counters6.incoming_bytes);
+		evbuffer_add_printf(evb, "  Upload Bytes v6: %lld\n", (long long)current->counters6.outgoing_bytes);
+		evbuffer_add_printf(evb, "  Incoming Rate: %lld\n", (long long)current->counters.incoming_rate);
+		evbuffer_add_printf(evb, "  Outgoing Rate: %lld\n", (long long)current->counters.outgoing_rate);
+		evbuffer_add_printf(evb, "  Incoming Rate v6: %lld\n", (long long)current->counters6.incoming_rate);
+		evbuffer_add_printf(evb, "  Outgoing Rate v6: %lld\n", (long long)current->counters6.outgoing_rate);
+		evbuffer_add_printf(evb, "  Incoming Packets: %lld\n", (long long)current->counters.incoming_packets);
+		evbuffer_add_printf(evb, "  Outgoing Packets: %lld\n", (long long)current->counters.outgoing_packets);
+		evbuffer_add_printf(evb, "  Incoming Packets v6: %lld\n", (long long)current->counters6.incoming_packets);
+		evbuffer_add_printf(evb, "  Outgoing Packets v6: %lld\n", (long long)current->counters6.outgoing_packets);
+		evbuffer_add_printf(evb, "  GW ID: %s\n", current->gw_setting && current->gw_setting->gw_id ? current->gw_setting->gw_id : "N/A");
+		evbuffer_add_printf(evb, "  GW Channel: %s\n", current->gw_setting && current->gw_setting->gw_channel ? current->gw_setting->gw_channel : "N/A");
 		count++;
 		if(current->is_online)
 			active_count++;
@@ -361,14 +372,36 @@ get_client_status_json()
 		json_object_object_add(jclient, "first_login", json_object_new_int64(current->first_login));
 		json_object_object_add(jclient, "online_time", 
 			json_object_new_int64(time(NULL) - current->first_login));
-		json_object_object_add(jclient, "download_bytes", 
+		struct json_object *jtraffic = json_object_new_object();
+		json_object_object_add(jtraffic, "download_bytes", 
 			json_object_new_int64(current->counters.incoming_bytes));
-		json_object_object_add(jclient, "upload_bytes",
+		json_object_object_add(jtraffic, "upload_bytes",
 			json_object_new_int64(current->counters.outgoing_bytes));
-		json_object_object_add(jclient, "download_bytes_v6", 
+		json_object_object_add(jtraffic, "download_bytes_v6", 
 			json_object_new_int64(current->counters6.incoming_bytes));
-		json_object_object_add(jclient, "upload_bytes_v6",
+		json_object_object_add(jtraffic, "upload_bytes_v6",
 			json_object_new_int64(current->counters6.outgoing_bytes));
+		json_object_object_add(jtraffic, "incoming_rate", 
+			json_object_new_int64(current->counters.incoming_rate));
+		json_object_object_add(jtraffic, "outgoing_rate",
+			json_object_new_int64(current->counters.outgoing_rate));
+		json_object_object_add(jtraffic, "incoming_rate_v6",
+			json_object_new_int64(current->counters6.incoming_rate));
+		json_object_object_add(jtraffic, "outgoing_rate_v6",
+			json_object_new_int64(current->counters6.outgoing_rate));
+		json_object_object_add(jtraffic, "incoming_packets",
+			json_object_new_int64(current->counters.incoming_packets));
+		json_object_object_add(jtraffic, "outgoing_packets",
+			json_object_new_int64(current->counters.outgoing_packets));
+		json_object_object_add(jtraffic, "incoming_packets_v6",
+			json_object_new_int64(current->counters6.incoming_packets));	
+		json_object_object_add(jtraffic, "outgoing_packets_v6",
+			json_object_new_int64(current->counters6.outgoing_packets));
+		json_object_object_add(jclient, "wired", json_object_new_int(current->wired));
+		json_object_object_add(jclient, "gw_id", 
+			json_object_new_string(current->gw_setting->gw_id ? current->gw_setting->gw_id : "N/A"));
+		json_object_object_add(jclient, "gw_channel",
+			json_object_new_string(current->gw_setting->gw_channel ? current->gw_setting->gw_channel : "N/A"));
 
 		json_object_array_add(jclients, jclient);
 

@@ -41,7 +41,25 @@ client_get_new(void)
 {
     t_client *client;
     client = safe_malloc(sizeof(t_client));
-	client->wired = -1; // not get state
+    client->wired = -1; // not get state
+    
+    // Initialize all counter fields to 0
+    client->counters.incoming_bytes = 0;
+    client->counters.outgoing_bytes = 0;
+    client->counters.incoming_packets = 0;
+    client->counters.outgoing_packets = 0;
+    client->counters.incoming_rate = 0;
+    client->counters.outgoing_rate = 0;
+    client->counters.last_updated = 0;
+    
+    client->counters6.incoming_bytes = 0;
+    client->counters6.outgoing_bytes = 0;
+    client->counters6.incoming_packets = 0;
+    client->counters6.outgoing_packets = 0;
+    client->counters6.incoming_rate = 0;
+    client->counters6.outgoing_rate = 0;
+    client->counters6.last_updated = 0;
+    
     return client;
 }
 
@@ -136,7 +154,11 @@ client_list_add(const char *ip, const char *mac, const char *token, t_gateway_se
     curclient->mac = safe_strdup(mac);
     curclient->token = safe_strdup(token);
     curclient->counters.incoming_bytes = curclient->counters.outgoing_bytes = 0;
+    curclient->counters.incoming_packets = curclient->counters.outgoing_packets = 0;
+    curclient->counters.incoming_rate = curclient->counters.outgoing_rate = 0;
     curclient->counters6.incoming_bytes = curclient->counters6.outgoing_bytes = 0;
+    curclient->counters6.incoming_packets = curclient->counters6.outgoing_packets = 0;
+    curclient->counters6.incoming_rate = curclient->counters6.outgoing_rate = 0;
     curclient->counters.last_updated = time(NULL);
     curclient->gw_setting = gw_setting;
     curclient->first_login = time(NULL);
@@ -232,9 +254,17 @@ client_dup(const t_client * src)
     new->token = safe_strdup(src->token);
 	new->fw_connection_state = src->fw_connection_state;
     new->counters.incoming_bytes = src->counters.incoming_bytes;
+    new->counters.incoming_packets = src->counters.incoming_packets;
+    new->counters.incoming_rate = src->counters.incoming_rate;
     new->counters.outgoing_bytes = src->counters.outgoing_bytes;
+    new->counters.outgoing_packets = src->counters.outgoing_packets;
+    new->counters.outgoing_rate = src->counters.outgoing_rate;
     new->counters6.incoming_bytes = src->counters6.incoming_bytes;
+    new->counters6.incoming_packets = src->counters6.incoming_packets;
+    new->counters6.incoming_rate = src->counters6.incoming_rate;
     new->counters6.outgoing_bytes = src->counters6.outgoing_bytes;
+    new->counters6.outgoing_packets = src->counters6.outgoing_packets;
+    new->counters6.outgoing_rate = src->counters6.outgoing_rate;
     new->counters.last_updated = src->counters.last_updated;
     new->counters6.last_updated = src->counters6.last_updated;
 	

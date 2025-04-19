@@ -127,8 +127,20 @@ vpp_fw_counters_update()
                     uint64_t bytes = json_object_get_int64(bytes_obj);
                     
                     // Save previous outgoing count and update with new values
+                    static time_t last_out_time = 0;
+                    static uint64_t last_out_bytes = 0;
+                    time_t now = time(NULL);
+                    uint64_t delta_bytes = (last_out_time > 0) ? (bytes - last_out_bytes) : 0;
+                    time_t time_diff = (last_out_time > 0) ? (now - last_out_time) : 0;
                     client->counters.outgoing_bytes = bytes;
                     client->counters.outgoing_packets = packets;
+                    if (time_diff > 0) {
+                        client->counters.outgoing_rate = delta_bytes / time_diff;
+                    } else {
+                        client->counters.outgoing_rate = 0;
+                    }
+                    last_out_time = now;
+                    last_out_bytes = bytes;
                 }
             }
 

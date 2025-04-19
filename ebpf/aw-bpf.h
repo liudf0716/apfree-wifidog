@@ -74,4 +74,59 @@ struct xdpi_nf_conn {
     struct bpf_timer timer;
 };
 
+#ifndef __KERNEL__
+/**
+ * @brief Get current monotonic time in seconds
+ * @return Current time in seconds
+ */
+static inline uint32_t aw_bpf_gettime(void)
+{
+    struct timespec ts;
+    
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    
+    return ts.tv_sec;
+}
+
+/**
+ * @brief Calculate the data rate based on traffic statistics
+ * @param stats Pointer to traffic statistics structure
+ * @param is_incoming Flag indicating if calculating for incoming (true) or outgoing (false) traffic
+ * @return Data rate in bits per second
+ */
+static inline uint32_t calc_rate_estimator(struct traffic_stats *val, bool is_incoming)
+{
+    uint32_t now = aw_bpf_gettime();
+    uint32_t est_slot = now / RATE_ESTIMATOR;
+    uint32_t rate = 0;
+    uint32_t cur_bytes = 0;
+    uint32_t delta = RATE_ESTIMATOR - (now % RATE_ESTIMATOR);
+    uint32_t ratio = RATE_ESTIMATOR * SMOOTH_VALUE / delta;
+    if (is_incoming) {
+        if (val->incoming.est_slot == est_slot) {
+            rate = val->incoming.prev_s_bytes;
+            cur_bytes = val->incoming.cur_s_bytes;
+        } else if (val->incoming.est_slot == est_slot - 1) {
+            rate = val->incoming.cur_s_bytes;
+        } else {
+            return 0;
+        }
+    } else {
+        if (val->outgoing.est_slot == est_slot) {
+            rate = val->outgoing.prev_s_bytes;
+            cur_bytes = val->outgoing.cur_s_bytes;
+        } else if (val->outgoing.est_slot == est_slot - 1) {
+            rate = val->outgoing.cur_s_bytes;
+        } else {
+            return 0;
+        }
+    }
+
+    rate = rate * SMOOTH_VALUE / ratio;
+    rate += cur_bytes;
+
+    return rate * 8 / RATE_ESTIMATOR;
+}
+#endif
+
 #endif /* AW_BPF_H */

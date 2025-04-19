@@ -20,6 +20,8 @@ typedef struct _t_counters {
 	unsigned long long incoming_packets; /**< @brief Incoming data packet total*/
     unsigned long long outgoing_bytes;   /**< @brief Outgoing data total*/
 	unsigned long long outgoing_packets; /**< @brief Outgoing data packet total*/
+	unsigned int incoming_rate;   /**< @brief Incoming data rate*/
+	unsigned int outgoing_rate;   /**< @brief Outgoing data rate*/
     time_t last_updated;        		 /**< @brief Last update of the counters */
 } t_counters;
 

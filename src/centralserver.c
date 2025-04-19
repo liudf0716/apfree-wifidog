@@ -1,4 +1,3 @@
-
 // SPDX-License-Identifier: GPL-3.0-only
 /*
  * Copyright (c) 2023 Dengfeng Liu <liudf0716@gmail.com>
@@ -377,6 +376,8 @@ get_auth_uri(const char *request_type, client_type_t type, void *data)
     unsigned long long int incoming_packets = 0, outgoing_packets = 0;
     unsigned long long int incoming_bytes_v6 = 0, outgoing_bytes_v6 = 0;
     unsigned long long int incoming_packets_v6 = 0, outgoing_packets_v6 = 0;
+    unsigned int incoming_rate = 0, outgoing_rate = 0;
+    unsigned int incoming_rate_v6 = 0, outgoing_rate_v6 = 0;
     time_t first_login = 0;
     uint32_t online_time = 0, wired = 0;
 
@@ -396,10 +397,14 @@ get_auth_uri(const char *request_type, client_type_t type, void *data)
         outgoing_bytes = client->counters.outgoing_bytes;
         incoming_packets = client->counters.incoming_packets;
         outgoing_packets = client->counters.outgoing_packets;
+        incoming_rate = client->counters.incoming_rate;
+        outgoing_rate = client->counters.outgoing_rate;
         incoming_bytes_v6 = client->counters6.incoming_bytes;
         outgoing_bytes_v6 = client->counters6.outgoing_bytes;
         incoming_packets_v6 = client->counters6.incoming_packets;
         outgoing_packets_v6 = client->counters6.outgoing_packets;
+        incoming_rate_v6 = client->counters6.incoming_rate;
+        outgoing_rate_v6 = client->counters6.outgoing_rate;
         
         // Timing and status
         first_login = client->first_login ? client->first_login : time(0);
@@ -428,19 +433,22 @@ get_auth_uri(const char *request_type, client_type_t type, void *data)
         "&incoming_packets_v6=%llu&outgoing_packets_v6=%llu"
         "&first_login=%lld&online_time=%u"
         "&gw_id=%s&gw_channel=%s"
-        "&name=%s&wired=%u&device_id=%s",
+        "&name=%s&wired=%u&device_id=%s"
+        "&incoming_rate=%u&outgoing_rate=%u"
+        "&incoming_rate_v6=%u&outgoing_rate_v6=%u",
         auth_server->authserv_path,
         auth_server->authserv_auth_script_path_fragment,
-        request_type, ip, mac,
-        safe_token ? safe_token : "null",
+        request_type, ip ? ip : "N/A", mac ? mac : "N/A",
+        safe_token ? safe_token : "N/A",
         incoming_bytes, outgoing_bytes,
         incoming_packets, outgoing_packets,
         incoming_bytes_v6, outgoing_bytes_v6,
         incoming_packets_v6, outgoing_packets_v6,
-        (long long)first_login, online_time, 
-        gw_id, gw_channel,
-        name ? name : "null",
-        wired, device_id) < 0) {
+        (long long)first_login, online_time,
+        gw_id ? gw_id : "N/A", gw_channel ? gw_channel : "N/A",
+        name ? name : "N/A", wired, device_id ? device_id : "N/A",
+        incoming_rate, outgoing_rate,
+        incoming_rate_v6, outgoing_rate_v6) < 0) {
         return NULL;
     }
 

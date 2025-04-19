@@ -926,19 +926,59 @@ update_client_counters(t_client *client, uint64_t packets, uint64_t bytes, int i
     // Update traffic counters
     if (is_outgoing) {            // Update with new values
             if (is_ip6) {
+                uint64_t delta_bytes = bytes - client->counters6.outgoing_bytes;
                 client->counters6.outgoing_bytes = bytes;
                 client->counters6.outgoing_packets = packets;
+                
+                // Calculate outgoing rate
+                // We need to estimate the rate based on current bytes and previous values
+                // Since we don't have direct access to the traffic_stats structure here,
+                // we'll use a simple calculation based on time difference
+                time_t now = time(NULL);
+                time_t time_diff = now - client->counters6.last_updated;
+                if (time_diff > 0 && client->counters6.last_updated > 0) {
+                    // Calculate bytes per second
+                    client->counters6.outgoing_rate = delta_bytes / time_diff;
+                }
             } else {
+                uint64_t delta_bytes = bytes - client->counters.outgoing_bytes;
                 client->counters.outgoing_bytes = bytes;
                 client->counters.outgoing_packets = packets;
+                
+                // Calculate outgoing rate
+                time_t now = time(NULL);
+                time_t time_diff = now - client->counters.last_updated;
+                if (time_diff > 0 && client->counters.last_updated > 0) {
+                    // Calculate bytes per second
+                    client->counters.outgoing_rate = delta_bytes / time_diff;
+                }
             }
     } else {            // Update with new values
             if (is_ip6) {
+
+                uint64_t delta_bytes = bytes - client->counters6.incoming_bytes;
                 client->counters6.incoming_bytes = bytes;
                 client->counters6.incoming_packets = packets;
+                
+                // Calculate incoming rate
+                time_t now = time(NULL);
+                time_t time_diff = now - client->counters6.last_updated;
+                if (time_diff > 0 && client->counters6.last_updated > 0) {
+                    // Calculate bytes per second
+                    client->counters6.incoming_rate = delta_bytes / time_diff;
+                }
             } else {
+                uint64_t delta_bytes = bytes - client->counters.incoming_bytes;
                 client->counters.incoming_bytes = bytes;
                 client->counters.incoming_packets = packets;
+                
+                // Calculate incoming rate
+                time_t now = time(NULL);
+                time_t time_diff = now - client->counters.last_updated;
+                if (time_diff > 0 && client->counters.last_updated > 0) {
+                    // Calculate bytes per second
+                    client->counters.incoming_rate = delta_bytes / time_diff;
+                }
             }
     }
 
@@ -1181,9 +1221,11 @@ nft_fw_counters_update_ebpf()
                     // Update client counters
                     client->counters.incoming_bytes = ipv4_stats.incoming.total_bytes;
                     client->counters.incoming_packets = ipv4_stats.incoming.total_packets;
+                    client->counters.incoming_rate = calc_rate_estimator(&ipv4_stats, true);
                     
                     client->counters.outgoing_bytes = ipv4_stats.outgoing.total_bytes;
                     client->counters.outgoing_packets = ipv4_stats.outgoing.total_packets;
+                    client->counters.outgoing_rate = calc_rate_estimator(&ipv4_stats, false);
                     
                     client->counters.last_updated = time(NULL);
                     client->is_online = 1;
@@ -1230,9 +1272,11 @@ nft_fw_counters_update_ebpf()
                         // Update client counters for IPv6
                         client->counters6.incoming_bytes = ipv6_stats.incoming.total_bytes;
                         client->counters6.incoming_packets = ipv6_stats.incoming.total_packets;
+                        client->counters6.incoming_rate = calc_rate_estimator(&ipv6_stats, true);
                         
                         client->counters6.outgoing_bytes = ipv6_stats.outgoing.total_bytes;
                         client->counters6.outgoing_packets = ipv6_stats.outgoing.total_packets;
+                        client->counters6.outgoing_rate = calc_rate_estimator(&ipv6_stats, false);
                         
                         client->counters6.last_updated = time(NULL);
                         client->is_online = 1;

@@ -102,59 +102,6 @@ static void load_xdpi_l7_protos(void)
     fclose(fp);
 }
 
-static uint32_t 
-aw_bpf_gettime(void)
-{
-	struct timespec ts;
-
-	clock_gettime(CLOCK_MONOTONIC, &ts);
-
-	return ts.tv_sec;
-}
-
-static uint32_t
-calc_rate_estimator(struct traffic_stats *val, bool is_incoming)
-{
-	uint32_t now = aw_bpf_gettime();
-	uint32_t est_slot = now / RATE_ESTIMATOR;
-	uint32_t rate = 0;
-	uint32_t cur_bytes = 0;
-	uint32_t delta = RATE_ESTIMATOR - (now % RATE_ESTIMATOR);
-	uint32_t ratio = RATE_ESTIMATOR * SMOOTH_VALUE / delta;
-#if 0
-    printf("est_slot=%u, now=%u, delta=%u, ratio=%u\n", est_slot, now, delta, ratio);
-    if (is_incoming) {
-        printf("incoming: est_slot=%u, prev_s_bytes=%u, cur_s_bytes=%u\n", val->incoming.est_slot, val->incoming.prev_s_bytes, val->incoming.cur_s_bytes);
-    } else {
-        printf("outgoing: est_slot=%u, prev_s_bytes=%u, cur_s_bytes=%u\n", val->outgoing.est_slot, val->outgoing.prev_s_bytes, val->outgoing.cur_s_bytes);
-    }
-#endif
-    if (is_incoming) {
-        if (val->incoming.est_slot == est_slot) {
-            rate = val->incoming.prev_s_bytes;
-            cur_bytes = val->incoming.cur_s_bytes;
-        } else if (val->incoming.est_slot == est_slot - 1) {
-            rate = val->incoming.cur_s_bytes;
-        } else {
-            return 0;
-        }
-    } else {
-        if (val->outgoing.est_slot == est_slot) {
-            rate = val->outgoing.prev_s_bytes;
-            cur_bytes = val->outgoing.cur_s_bytes;
-        } else if (val->outgoing.est_slot == est_slot - 1) {
-            rate = val->outgoing.cur_s_bytes;
-        } else {
-            return 0;
-        }
-    }
-
-	rate = rate * SMOOTH_VALUE / ratio;
-	rate += cur_bytes;
-
-	return rate * 8 / RATE_ESTIMATOR;
-}
-
 static const char* get_domain_name_by_sid(__u32 sid) {
     for (int i = 0; i < xdpi_domains_count; i++) {
         if (xdpi_domains[i].sid == sid) {
