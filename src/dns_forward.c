@@ -1,4 +1,3 @@
-
 // SPDX-License-Identifier: GPL-3.0-only
 /*
  * Copyright (c) 2023 Dengfeng Liu <liudf0716@gmail.com>
@@ -111,10 +110,86 @@ static int xdpi_short_domain(const char *full_domain, char *short_domain, int *o
     return 0;
 }
 
+static const char *valid_domain_suffixes[] = {
+    ".com", ".net", ".org", ".gov", ".edu", ".cn", ".com.cn", ".co.uk", ".io", ".me", ".app", ".xyz", ".site", ".top", ".club", ".vip", ".shop", ".store", ".tech", ".dev", ".cloud", ".fun", ".online", ".pro", ".work", ".link", ".live", ".run", ".group", ".red", ".blue", ".green", ".mobi", ".asia", ".name", ".today", ".news", ".website", ".space", ".icu",
+};
+#define VALID_DOMAIN_SUFFIXES_COUNT (sizeof(valid_domain_suffixes)/sizeof(valid_domain_suffixes[0]))
+
+// 判断域名是否为有效后缀
+static int is_valid_domain_suffix(const char *domain) {
+    if (!domain) return 0;
+    size_t len = strlen(domain);
+    for (size_t i = 0; i < VALID_DOMAIN_SUFFIXES_COUNT; ++i) {
+        size_t suffix_len = strlen(valid_domain_suffixes[i]);
+        if (len > suffix_len && strcmp(domain + len - suffix_len, valid_domain_suffixes[i]) == 0) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static int get_xdpi_domain_count() {
+    FILE *fp;
+    char buf[16] = {0};
+    int count = 0;
+
+    fp = fopen("/proc/xdpi_domain_num", "r");
+    if (!fp) {
+        debug(LOG_ERR, "Failed to open /proc/xdpi_domain_num: %s", strerror(errno));
+        return -1;
+    }
+
+    if (fgets(buf, sizeof(buf), fp)) {
+        count = atoi(buf);
+    }
+
+    fclose(fp);
+    return count;
+}
+
+static void sync_xdpi_domains_2_kern(void) {
+    int fd;
+    int i;
+    int result;
+    struct domain_entry entry;
+    
+    fd = open("/proc/xdpi_domains", O_RDWR);
+    if (fd < 0) {
+        debug(LOG_ERR, "Failed to open /proc/xdpi_domains: %s", strerror(errno));
+        return;
+    }
+    
+    debug(LOG_INFO, "Syncing domain entries to kernel");
+    
+    // Iterate through all domain entries and send used ones to kernel
+    for (i = 0; i < XDPI_DOMAIN_MAX; i++) {
+        if (domain_entries[i].used) {
+            memset(&entry, 0, sizeof(entry));
+            memcpy(entry.domain, domain_entries[i].domain, MIN(domain_entries[i].domain_len, MAX_DOMAIN_LEN - 1));
+            entry.domain[MAX_DOMAIN_LEN - 1] = '\0';  // Ensure null termination
+            entry.domain_len = domain_entries[i].domain_len;
+            entry.sid = domain_entries[i].sid;
+            entry.used = true;
+            
+            // Add the domain via IOCTL
+            result = ioctl(fd, XDPI_IOC_ADD, &entry);
+            if (result < 0) {
+                debug(LOG_ERR, "Failed to sync domain %s to kernel: %s", 
+                      domain_entries[i].domain, strerror(errno));
+            } else {
+                debug(LOG_DEBUG, "Successfully synced domain %s with SID %d to kernel", 
+                      domain_entries[i].domain, domain_entries[i].sid);
+            }
+        }
+    }
+    
+    close(fd);
+    debug(LOG_INFO, "Domain sync to kernel completed");
+}
+
 static int xdpi_add_domain(const char *domain) {
     int fd, result;
     struct domain_entry entry;
-    
     if (!domain || strlen(domain) >= MAX_DOMAIN_LEN) {
         debug(LOG_WARNING, "Invalid domain or domain too long: %s", domain ? domain : "NULL");
         return -1;
@@ -123,10 +198,7 @@ static int xdpi_add_domain(const char *domain) {
     // Convert domain to short domain form before adding
     char short_domain[MAX_DOMAIN_LEN] = {0};
     int short_domain_len = 0;
-    
-    if (xdpi_short_domain(domain, short_domain, &short_domain_len) == 0 && 
-        short_domain_len > 0) {
-        // Use short domain if conversion succeeded
+    if (xdpi_short_domain(domain, short_domain, &short_domain_len) == 0 && short_domain_len > 0) {
         debug(LOG_DEBUG, "Converting domain %s to short domain %s", domain, short_domain);
         domain = short_domain;
     } else {
@@ -141,7 +213,7 @@ static int xdpi_add_domain(const char *domain) {
             if (domain_entries[i].sid > max_sid) {
                 max_sid = domain_entries[i].sid;
             }
-            
+
             // Exact match check (avoid partial matches which could cause duplicates)
             if (strcmp(domain_entries[i].domain, domain) == 0) {
                 debug(LOG_INFO, "Domain %s already exists in local cache with SID %d", 
@@ -152,20 +224,20 @@ static int xdpi_add_domain(const char *domain) {
             free_idx = i;  // Store the first free index we find
         }
     }
-    
+
     // If no free entry found
     if (free_idx == -1) {
         debug(LOG_ERR, "No free entry in xDPI domain list");
         return -1;
     }
-    
+
     // Open the proc interface
     fd = open("/proc/xdpi_domains", O_RDWR);
     if (fd < 0) {
         debug(LOG_ERR, "Failed to open /proc/xdpi_domains: %s", strerror(errno));
         return -1;
     }
-    
+
     // Prepare the domain entry with a unique SID
     // Use max_sid + 1 to ensure we don't reuse SIDs
     memset(&entry, 0, sizeof(entry));
@@ -174,7 +246,7 @@ static int xdpi_add_domain(const char *domain) {
     entry.domain_len = strlen(entry.domain);
     entry.sid = max_sid + 1;  
     entry.used = true;
-    
+
     // Add the domain via IOCTL
     result = ioctl(fd, XDPI_IOC_ADD, &entry);
     if (result < 0) {
@@ -184,9 +256,9 @@ static int xdpi_add_domain(const char *domain) {
     } else {
         debug(LOG_INFO, "Successfully added domain to xDPI: %s with SID %d", domain, entry.sid);
     }
-    
+
     close(fd);
-    
+
     // Update our local cache with the successful entry
     i = free_idx;
     memcpy(domain_entries[i].domain, domain, MIN(strlen(domain), MAX_DOMAIN_LEN - 1));
@@ -194,7 +266,7 @@ static int xdpi_add_domain(const char *domain) {
     domain_entries[i].domain_len = strlen(domain_entries[i].domain);
     domain_entries[i].sid = entry.sid;
     domain_entries[i].used = true;
-    
+
     return result;
 }
 
@@ -256,8 +328,19 @@ process_dns_response(unsigned char *response, int response_len) {
         return -1;
 
     if (!strstr(query_name, "in-addr.arpa") && !strstr(query_name, "ip6.arpa")) {
-        xdpi_add_domain(query_name);
-        debug(LOG_DEBUG, "Parsed domain: %s", query_name);
+        // 先校验域名后缀
+        if (is_valid_domain_suffix(query_name)) {
+            // get xdpi domain count
+            int xdpi_domain_count = get_xdpi_domain_count();
+            if (xdpi_domain_count == 0  ) {
+                // sync xdpi domains to kernel
+                sync_xdpi_domains_2_kern();
+            }
+            xdpi_add_domain(query_name);
+            debug(LOG_DEBUG, "Parsed domain: %s", query_name);
+        } else {
+            debug(LOG_DEBUG, "Domain %s does not have a valid suffix, skip xdpi_add_domain.", query_name);
+        }
     }
 
     if (!is_trusted_domain(query_name, &trusted_domain))
