@@ -33,6 +33,7 @@ static DEFINE_SPINLOCK(xdpi_lock);
 // Create a proc file for userspace interaction
 static struct proc_dir_entry *xdpi_proc_file;
 static struct proc_dir_entry *xdpi_l7_proto_file;
+static struct proc_dir_entry *xdpi_domain_num_file;
 
 static int add_domain(struct domain_entry *entry);
 static int del_domain(int index);
@@ -407,6 +408,37 @@ static const struct proc_ops xdpi_l7_proto_ops = {
     .proc_release = single_release,
 };
 
+// Proc file operations for domain count
+static int xdpi_domain_num_show(struct seq_file *m, void *v)
+{
+    int i;
+    int count = 0;
+    
+    spin_lock_bh(&xdpi_lock);
+    for (i = 0; i < XDPI_DOMAIN_MAX; i++) {
+        if (domains[i].used) {
+            count++;
+        }
+    }
+    spin_unlock_bh(&xdpi_lock);
+    
+    seq_printf(m, "%d\n", count);
+    
+    return 0;
+}
+
+static int xdpi_domain_num_open(struct inode *inode, struct file *file)
+{
+    return single_open(file, xdpi_domain_num_show, NULL);
+}
+
+static const struct proc_ops xdpi_domain_num_ops = {
+    .proc_open = xdpi_domain_num_open,
+    .proc_read = seq_read,
+    .proc_lseek = seq_lseek,
+    .proc_release = single_release,
+};
+
 static int __init xdpi_init(void)
 {
     int ret;
@@ -433,11 +465,20 @@ static int __init xdpi_init(void)
         return -ENOMEM;
     }
     
+    xdpi_domain_num_file = proc_create("xdpi_domain_num", 0644, NULL, &xdpi_domain_num_ops);
+    if (!xdpi_domain_num_file) {
+        pr_err("xdpi: Failed to create domain number proc file\n");
+        proc_remove(xdpi_proc_file);
+        proc_remove(xdpi_l7_proto_file);
+        return -ENOMEM;
+    }
+    
     ret = register_btf_kfunc_id_set(BPF_PROG_TYPE_SCHED_CLS, &bpf_kfunc_xdpi_set);
     if (ret) {
         pr_err("bpf_kfunc_xdpi: Failed to register BTF kfunc ID set\n");
         proc_remove(xdpi_proc_file);
         proc_remove(xdpi_l7_proto_file);
+        proc_remove(xdpi_domain_num_file);
         return ret;
     }
     
@@ -451,6 +492,8 @@ static void __exit xdpi_exit(void)
         proc_remove(xdpi_proc_file);
     if (xdpi_l7_proto_file)
         proc_remove(xdpi_l7_proto_file);
+    if (xdpi_domain_num_file)
+        proc_remove(xdpi_domain_num_file);
     
     printk(KERN_INFO "Goodbye, xDPI!\n");
 }
