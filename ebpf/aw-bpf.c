@@ -12,7 +12,11 @@
 #include <linux/udp.h>
 #include <linux/tcp.h>
 #include <linux/in.h>
-#include <linux/compiler.h>
+
+/* 定义 linux/compiler.h 中的常用宏，避免包含该头文件 */
+#ifndef __always_inline
+#define __always_inline inline __attribute__((always_inline))
+#endif
 
 #include "aw-bpf.h"
 
@@ -106,7 +110,8 @@ static __always_inline void update_stats(struct counters *cnt, __u32 len, __u32 
     cnt->total_packets += 1;
 }
 
-static __always_inline __u32 calc_rate_estimator(struct counters *cnt, __u32 now,  __u32 est_slot) {
+#ifdef __KERNEL__
+static __always_inline __u32 calc_rate_estimator(struct counters *cnt, __u32 now, __u32 est_slot) {
 	__u32 rate = 0;
 	__u32 cur_bytes = 0;
 	__u32 delta = RATE_ESTIMATOR - (now % RATE_ESTIMATOR);
@@ -126,6 +131,7 @@ static __always_inline __u32 calc_rate_estimator(struct counters *cnt, __u32 now
 
 	return rate * 8 / RATE_ESTIMATOR;
 }
+#endif
 
 static __always_inline int edt_sched_departure(struct __sk_buff *skb, struct rate_limit *info)
 {
@@ -211,7 +217,11 @@ static __always_inline int handle_tcp_packet(struct __sk_buff *skb, direction_t 
         if (err == 0) {
             struct xdpi_nf_conn *conn = bpf_map_lookup_elem(&tcp_conn_map, bpf_tuple);
             if (conn) {
+#ifdef CLOCK_MONOTONIC
                 bpf_timer_init(&conn->timer, &tcp_conn_map, CLOCK_MONOTONIC);
+#else
+                bpf_timer_init(&conn->timer, &tcp_conn_map, 0); // 使用默认时钟
+#endif
                 bpf_timer_set_callback(&conn->timer, tcp_conn_timer_cb);
                 bpf_timer_start(&conn->timer, TCP_CONN_TIMEOUT_NS, 0);
             }

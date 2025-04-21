@@ -12,6 +12,21 @@
 #include <bpf/bpf_helpers.h>
 #else
 #include <stdint.h>
+#include <stdbool.h>  /* 添加 bool 类型定义 */
+#include <time.h>     /* 添加 timespec 和 clock_gettime 定义 */
+
+/* 添加在用户空间需要的定义 */
+#ifndef READ_ONCE
+#define READ_ONCE(x) (*(volatile typeof(x) *)&(x))
+#endif
+
+#ifndef WRITE_ONCE
+#define WRITE_ONCE(x, val) (*(volatile typeof(x) *)&(x)) = (val)
+#endif
+
+#ifndef NSEC_PER_SEC
+#define NSEC_PER_SEC 1000000000UL
+#endif
 #endif
 
 #define ETH_ALEN        6
@@ -37,7 +52,7 @@ struct mac_addr {
     __u8 h_addr[ETH_ALEN];
 } __attribute__((packed));
 
-/**
+/*
  * @struct counters
  * @brief Structure to hold network traffic counters
  */

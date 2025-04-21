@@ -4,6 +4,15 @@ CC ?= gcc
 
 BPF_CFLAGS = -I$(PWD)
 
+# 检查是否安装了 libcurl
+CURL_LIBS := $(shell pkg-config --libs libcurl 2>/dev/null)
+ifneq ($(CURL_LIBS),)
+    CFLAGS += -DHAVE_LIBCURL $(shell pkg-config --cflags libcurl)
+    LDFLAGS += $(CURL_LIBS)
+else
+    CFLAGS += -DUSE_SYSTEM_CURL
+endif
+
 obj-m := xdpi-bpf.o  
 
 all: aw-bpf.o aw-bpfctl
@@ -19,7 +28,7 @@ aw-bpf.o: aw-bpf.c
 
 # User space program compilation
 aw-bpfctl: aw-bpfctl.c
-	$(CC) -O2 -o $@ $< -lbpf -ljson-c -luci
+	$(CC) -O2 $(CFLAGS) -o $@ $< -lbpf -ljson-c -luci $(LDFLAGS)
 
 # Test program for xdpi-bpf kernel function
 test_xdpi: test_xdpi-bpf.c

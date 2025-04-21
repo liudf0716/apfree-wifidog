@@ -12,16 +12,16 @@
 #include <unistd.h>
 #include <uci.h>
 
+/* 检查是否安装了 libcurl */
+#if defined(HAVE_LIBCURL) || defined(USE_LIBCURL)
+#include <curl/curl.h>  /* 添加curl支持 */
+#endif
+
 #include "aw-bpf.h"
 
 #define XDPI_DOMAINS "/proc/xdpi_domains"
 #define XDPI_L7_PROTO "/proc/xdpi_l7_proto"
-
-struct xdpi_domain {
-    __u32 id;
-    char name[XDPI_PROTO_FEATURE_MAX_SIZE];
-    __u32 sid;
-};
+#define DOMAIN_API_URL "http://seo.chawrt.com/open/api/domain/info/batch"  /* 添加API URL定义 */
 
 struct xdpi_l7_proto {
     __u32 id;
@@ -29,13 +29,28 @@ struct xdpi_l7_proto {
     __u32 sid;
 };
 
-static struct xdpi_domain xdpi_domains[XDPI_PROTO_TRAITS_MAX_SIZE];
-static int xdpi_domains_count = 0;
+// 合并后的域名信息结构体
+struct domain_entry {
+    __u32 id;                                  // 域名ID
+    char name[XDPI_PROTO_FEATURE_MAX_SIZE];    // 域名
+    __u32 sid;                                 // SID
+    char title[128];                           // 域名标题
+    char desc[256];                            // 域名描述
+    bool has_details;                          // 是否有详细信息
+};
+
+// 前向声明函数
+static bool fetch_domain_info(void);
+static void print_stats_l7(void);
+
+// 合并后的域名信息列表
+static struct domain_entry domains[XDPI_PROTO_TRAITS_MAX_SIZE];
+static int domains_count = 0;
 
 static struct xdpi_l7_proto xdpi_l7_protos[XDPI_PROTO_TRAITS_MAX_SIZE];
 static int xdpi_l7_protos_count = 0;
 
-static void load_xdpi_domains(void)
+static void load_domains(void)
 {
     FILE *fp = fopen(XDPI_DOMAINS, "r");
     if (!fp) {
@@ -45,12 +60,18 @@ static void load_xdpi_domains(void)
 
     char line[128] = {0};
     // Skip header lines
-    fgets(line, sizeof(line), fp); // Skip "Index | Domain | SID"
-    fgets(line, sizeof(line), fp); // Skip "---------------------"
+    if (fgets(line, sizeof(line), fp) == NULL) { // Skip "Index | Domain | SID"
+        fclose(fp);
+        return;
+    }
+    if (fgets(line, sizeof(line), fp) == NULL) { // Skip "---------------------"
+        fclose(fp);
+        return;
+    }
 
-    xdpi_domains_count = 0; // Reset counter to ensure clean reload
+    domains_count = 0; // Reset counter to ensure clean reload
     while (fgets(line, sizeof(line), fp)) {
-        struct xdpi_domain domain;
+        struct domain_entry domain;
         memset(&domain, 0, sizeof(domain));
         
         // Use a more robust parsing approach that can handle spaces in domain names
@@ -63,9 +84,10 @@ static void load_xdpi_domains(void)
             }
             
             strncpy(domain.name, domain_buffer, sizeof(domain.name) - 1);
-            xdpi_domains[xdpi_domains_count++] = domain;
+            domain.has_details = false; // 初始化为没有详细信息
+            domains[domains_count++] = domain;
             
-            if (xdpi_domains_count >= XDPI_PROTO_TRAITS_MAX_SIZE) {
+            if (domains_count >= XDPI_PROTO_TRAITS_MAX_SIZE) {
                 break;
             }
         }
@@ -85,8 +107,14 @@ static void load_xdpi_l7_protos(void)
 
     char line[128] = {0};
     // Skip header lines
-    fgets(line, sizeof(line), fp); // Skip "Index | Protocol | SID"
-    fgets(line, sizeof(line), fp); // Skip "----------------------"
+    if (fgets(line, sizeof(line), fp) == NULL) { // Skip "Index | Protocol | SID"
+        fclose(fp);
+        return;
+    }
+    if (fgets(line, sizeof(line), fp) == NULL) { // Skip "----------------------"
+        fclose(fp);
+        return;
+    }
 
     while (fgets(line, sizeof(line), fp)) {
         struct xdpi_l7_proto proto;
@@ -103,9 +131,9 @@ static void load_xdpi_l7_protos(void)
 }
 
 static const char* get_domain_name_by_sid(__u32 sid) {
-    for (int i = 0; i < xdpi_domains_count; i++) {
-        if (xdpi_domains[i].sid == sid) {
-            return xdpi_domains[i].name;
+    for (int i = 0; i < domains_count; i++) {
+        if (domains[i].sid == sid) {
+            return domains[i].name;
         }
     }
     return "unknown";
@@ -388,12 +416,15 @@ aw_bpf_usage()
     fprintf(stderr, "  aw-bpfctl <ipv4|ipv6|mac|sid|l7> json\n");
     fprintf(stderr, "  aw-bpfctl <ipv4|ipv6|mac|sid> update <IP_ADDRESS|MAC_ADDRESS|SID> downrate <bps> uprate <bps>\n");
     fprintf(stderr, "  aw-bpfctl <ipv4|ipv6|mac|sid> update_all downrate <bps> uprate <bps>\n");
+    fprintf(stderr, "  aw-bpfctl domain <list|json>\n");  /* 添加domain命令帮助信息 */
 }
 
 static bool
 is_valid_command(const char *cmd)
 {
-    return !strcmp(cmd, "add") || !strcmp(cmd, "list") || !strcmp(cmd, "del") || !strcmp(cmd, "flush") || !strcmp(cmd, "json") || !strcmp(cmd, "update") || !strcmp(cmd, "update_all");
+    return !strcmp(cmd, "add") || !strcmp(cmd, "list") || !strcmp(cmd, "del") || !strcmp(cmd, "flush") || 
+           !strcmp(cmd, "json") || !strcmp(cmd, "update") || !strcmp(cmd, "update_all") || 
+           !strcmp(cmd, "domain");  /* 添加domain命令 */
 }
 
 static void get_aw_global_qos_config(uint32_t *downrate, uint32_t *uprate)
@@ -829,29 +860,80 @@ static bool handle_update_all_command(int map_fd, const char *map_type,
 }
 
 static void 
-print_stats_l7(void)
+print_domain_list(void)
 {
-    // 先显示 L7 协议部分
-    printf("===== L7 Protocols =====\n");
-    printf("Index | Protocol | SID\n");
-    printf("----------------------\n");
-    for (int i = 0; i < xdpi_l7_protos_count; i++) {
-        printf("%5d | %-8s | %u\n", 
-               xdpi_l7_protos[i].id, 
-               xdpi_l7_protos[i].proto_desc, 
-               xdpi_l7_protos[i].sid);
+    printf("===== Domains =====\n");
+    printf("Index | Domain | SID | Title\n");
+    printf("---------------------\n");
+    for (int i = 0; i < domains_count; i++) {
+        printf("%5d | %-63s | %u", 
+               domains[i].id, 
+               domains[i].name, 
+               domains[i].sid);
+        
+        // 如果有详细信息，则打印标题
+        if (domains[i].has_details && strlen(domains[i].title) > 0) {
+            printf(" | %s", domains[i].title);
+        }
+        printf("\n");
+    }
+}
+
+// 将域名列表转换为json格式
+static struct json_object*
+parse_domain_json(void)
+{
+    struct json_object *jroot = json_object_new_object();
+    
+    // 创建域名信息数组
+    struct json_object *jdomains = json_object_new_array();
+    for (int i = 0; i < domains_count; i++) {
+        struct json_object *jentry = json_object_new_object();
+        json_object_object_add(jentry, "id", json_object_new_int(domains[i].id));
+        json_object_object_add(jentry, "domain", json_object_new_string(domains[i].name));
+        json_object_object_add(jentry, "sid", json_object_new_int(domains[i].sid));
+        
+        // 添加域名详细信息（如果已获取）
+        if (domains[i].has_details) {
+            if (strlen(domains[i].title) > 0) {
+                json_object_object_add(jentry, "title", json_object_new_string(domains[i].title));
+            }
+            if (strlen(domains[i].desc) > 0) {
+                json_object_object_add(jentry, "desc", json_object_new_string(domains[i].desc));
+            }
+        }
+        
+        json_object_array_add(jdomains, jentry);
+    }
+
+    json_object_object_add(jroot, "success", json_object_new_boolean(1));
+    json_object_object_add(jroot, "msg", json_object_new_string("域名查询成功"));
+    json_object_object_add(jroot, "data", jdomains);
+
+    return jroot;
+}
+
+// 处理domain命令
+static bool 
+handle_domain_command(const char *subcmd) 
+{
+    // 尝试获取域名详细信息
+    if (domains_count > 0 && !domains[0].has_details) {
+        fetch_domain_info();
     }
     
-    // 再显示 Domain 部分
-    printf("\n===== Domains =====\n");
-    printf("Index | Domain | SID\n");
-    printf("---------------------\n");
-    for (int i = 0; i < xdpi_domains_count; i++) {
-        printf("%5d | %-63s | %u\n", 
-               xdpi_domains[i].id, 
-               xdpi_domains[i].name, 
-               xdpi_domains[i].sid);
+    if (strcmp(subcmd, "list") == 0) {
+        print_domain_list();
+        return true;
+    } else if (strcmp(subcmd, "json") == 0) {
+        struct json_object *jroot = parse_domain_json();
+        printf("%s\n", json_object_to_json_string_ext(jroot, JSON_C_TO_STRING_PRETTY));
+        json_object_put(jroot);
+        return true;
     }
+    
+    fprintf(stderr, "Invalid domain subcommand. Use 'list' or 'json'.\n");
+    return false;
 }
 
 static struct json_object*
@@ -871,11 +953,22 @@ parse_stats_l7_json(void)
     
     // 创建域名信息数组
     struct json_object *jdomains = json_object_new_array();
-    for (int i = 0; i < xdpi_domains_count; i++) {
+    for (int i = 0; i < domains_count; i++) {
         struct json_object *jentry = json_object_new_object();
-        json_object_object_add(jentry, "id", json_object_new_int(xdpi_domains[i].id));
-        json_object_object_add(jentry, "domain", json_object_new_string(xdpi_domains[i].name));
-        json_object_object_add(jentry, "sid", json_object_new_int(xdpi_domains[i].sid));
+        json_object_object_add(jentry, "id", json_object_new_int(domains[i].id));
+        json_object_object_add(jentry, "domain", json_object_new_string(domains[i].name));
+        json_object_object_add(jentry, "sid", json_object_new_int(domains[i].sid));
+        
+        // 添加详细信息（如果有）
+        if (domains[i].has_details) {
+            if (strlen(domains[i].title) > 0) {
+                json_object_object_add(jentry, "title", json_object_new_string(domains[i].title));
+            }
+            if (strlen(domains[i].desc) > 0) {
+                json_object_object_add(jentry, "desc", json_object_new_string(domains[i].desc));
+            }
+        }
+        
         json_object_array_add(jdomains, jentry);
     }
 
@@ -891,17 +984,301 @@ parse_stats_l7_json(void)
     return jroot;
 }
 
+// 打印L7协议和域名信息
+static void
+print_stats_l7(void)
+{
+    // 先显示 L7 协议部分
+    printf("===== L7 Protocols =====\n");
+    printf("Index | Protocol | SID\n");
+    printf("----------------------\n");
+    for (int i = 0; i < xdpi_l7_protos_count; i++) {
+        printf("%5d | %-8s | %u\n", 
+               xdpi_l7_protos[i].id, 
+               xdpi_l7_protos[i].proto_desc, 
+               xdpi_l7_protos[i].sid);
+    }
+    
+    // 再显示 Domain 部分
+    printf("\n===== Domains =====\n");
+    printf("Index | Domain | SID\n");
+    printf("---------------------\n");
+    for (int i = 0; i < domains_count; i++) {
+        printf("%5d | %-63s | %u\n", 
+               domains[i].id, 
+               domains[i].name, 
+               domains[i].sid);
+    }
+}
+
 static bool handle_l7_command(const char *cmd) {
     if (strcmp(cmd, "list") == 0) {
         print_stats_l7();
         return true;
     } else if (strcmp(cmd, "json") == 0) {
         struct json_object *jroot = parse_stats_l7_json();
-        printf("%s\n", json_object_to_json_string(jroot));
+        printf("%s\n", json_object_to_json_string_ext(jroot, JSON_C_TO_STRING_PRETTY));
         json_object_put(jroot);
         return true;
     }
     return false;
+}
+
+// curl回调函数，用于接收HTTP响应数据
+struct MemoryStruct {
+    char *memory;
+    size_t size;
+};
+
+static size_t
+WriteMemoryCallback(void *contents, size_t size, size_t nmemb, void *userp)
+{
+    size_t realsize = size * nmemb;
+    struct MemoryStruct *mem = (struct MemoryStruct *)userp;
+    
+    char *ptr = realloc(mem->memory, mem->size + realsize + 1);
+    if (!ptr) {
+        fprintf(stderr, "Not enough memory (realloc returned NULL)\n");
+        return 0;
+    }
+    
+    mem->memory = ptr;
+    memcpy(&(mem->memory[mem->size]), contents, realsize);
+    mem->size += realsize;
+    mem->memory[mem->size] = 0;
+    
+    return realsize;
+}
+
+// 使用系统命令调用curl获取域名信息
+static bool 
+fetch_domain_info_via_cmd(void)
+{
+    char command[4096] = {0};
+    char domains_json[8192] = {0};
+    FILE *fp;
+    int i;
+    
+    // 构建域名JSON数组
+    strcat(domains_json, "[");
+    for (i = 0; i < domains_count; i++) {
+        char domain_entry[128];
+        snprintf(domain_entry, sizeof(domain_entry), 
+                "%s\"%s\"", 
+                i > 0 ? "," : "", 
+                domains[i].name);
+        strcat(domains_json, domain_entry);
+        
+        // 避免请求数据过大，每100个域名分批处理
+        if ((i + 1) % 100 == 0 || i == domains_count - 1) {
+            strcat(domains_json, "]");
+            
+            // 构建curl命令
+            snprintf(command, sizeof(command), 
+                    "curl -s -X POST %s -H \"Content-Type: application/json\" -d '{\"domains\":%s}'",
+                    DOMAIN_API_URL, domains_json);
+            
+            // 执行curl命令
+            fp = popen(command, "r");
+            if (!fp) {
+                fprintf(stderr, "Failed to execute curl command\n");
+                return false;
+            }
+            
+            char response[16384] = {0};
+            char buffer[1024];
+            while (fgets(buffer, sizeof(buffer), fp) != NULL) {
+                strcat(response, buffer);
+            }
+            pclose(fp);
+            
+            // 解析响应
+            struct json_object *jobj = json_tokener_parse(response);
+            if (!jobj) {
+                fprintf(stderr, "Failed to parse JSON response\n");
+                return false;
+            }
+            
+            // 处理响应数据
+            struct json_object *jsuccess;
+            if (json_object_object_get_ex(jobj, "success", &jsuccess) && 
+                json_object_get_boolean(jsuccess)) {
+                
+                struct json_object *jdata;
+                if (json_object_object_get_ex(jobj, "data", &jdata)) {
+                    int data_len = json_object_array_length(jdata);
+                    for (int j = 0; j < data_len; j++) {
+                        struct json_object *jitem = json_object_array_get_idx(jdata, j);
+                        
+                        struct json_object *jdomain, *jtitle, *jdesc;
+                        if (json_object_object_get_ex(jitem, "domain", &jdomain)) {
+                            const char *domain = json_object_get_string(jdomain);
+                            
+                            // 在现有域名数组中查找匹配的域名并更新信息
+                            for (int k = 0; k < domains_count; k++) {
+                                if (strcmp(domains[k].name, domain) == 0) {
+                                    if (json_object_object_get_ex(jitem, "title", &jtitle)) {
+                                        strncpy(domains[k].title, 
+                                                json_object_get_string(jtitle), 127);
+                                    }
+                                    
+                                    if (json_object_object_get_ex(jitem, "desc", &jdesc)) {
+                                        strncpy(domains[k].desc, 
+                                                json_object_get_string(jdesc), 255);
+                                    }
+                                    
+                                    domains[k].has_details = true;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            json_object_put(jobj);
+            
+            // 重置JSON数组，准备下一批
+            memset(domains_json, 0, sizeof(domains_json));
+            strcat(domains_json, "[");
+        }
+    }
+    
+    return true;
+}
+
+#ifdef HAVE_LIBCURL
+// 使用libcurl库获取域名信息
+static bool 
+fetch_domain_info_via_libcurl(void)
+{
+    CURL *curl;
+    CURLcode res;
+    struct MemoryStruct chunk;
+    struct json_object *jobj;
+    char domains_json[8192] = {0};
+    int i;
+    
+    curl_global_init(CURL_GLOBAL_ALL);
+    curl = curl_easy_init();
+    if (!curl) {
+        fprintf(stderr, "curl_easy_init() failed\n");
+        return false;
+    }
+    
+    // 设置HTTP请求参数
+    curl_easy_setopt(curl, CURLOPT_URL, DOMAIN_API_URL);
+    curl_easy_setopt(curl, CURLOPT_POST, 1L);
+    
+    struct curl_slist *headers = NULL;
+    headers = curl_slist_append(headers, "Content-Type: application/json");
+    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+    
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
+    
+    // 构建域名JSON数组
+    strcat(domains_json, "[");
+    for (i = 0; i < domains_count; i++) {
+        char domain_entry[128];
+        snprintf(domain_entry, sizeof(domain_entry), 
+                "%s\"%s\"", 
+                i > 0 ? "," : "", 
+                domains[i].name);
+        strcat(domains_json, domain_entry);
+        
+        // 避免请求数据过大，每100个域名分批处理
+        if ((i + 1) % 100 == 0 || i == domains_count - 1) {
+            strcat(domains_json, "]");
+            
+            // 构建JSON请求体
+            char postdata[8500];
+            snprintf(postdata, sizeof(postdata), "{\"domains\":%s}", domains_json);
+            
+            chunk.memory = malloc(1);
+            chunk.size = 0;
+            
+            curl_easy_setopt(curl, CURLOPT_POSTFIELDS, postdata);
+            curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&chunk);
+            
+            // 发送HTTP请求
+            res = curl_easy_perform(curl);
+            if (res != CURLE_OK) {
+                fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
+                free(chunk.memory);
+                continue;
+            }
+            
+            // 解析响应
+            jobj = json_tokener_parse(chunk.memory);
+            if (!jobj) {
+                fprintf(stderr, "Failed to parse JSON response\n");
+                free(chunk.memory);
+                continue;
+            }
+            
+            // 处理响应数据
+            struct json_object *jsuccess;
+            if (json_object_object_get_ex(jobj, "success", &jsuccess) && 
+                json_object_get_boolean(jsuccess)) {
+                
+                struct json_object *jdata;
+                if (json_object_object_get_ex(jobj, "data", &jdata)) {
+                    int data_len = json_object_array_length(jdata);
+                    for (int j = 0; j < data_len; j++) {
+                        struct json_object *jitem = json_object_array_get_idx(jdata, j);
+                        
+                        struct json_object *jdomain, *jtitle, *jdesc;
+                        if (json_object_object_get_ex(jitem, "domain", &jdomain)) {
+                            const char *domain = json_object_get_string(jdomain);
+                            
+                            // 在现有域名数组中查找匹配的域名并更新信息
+                            for (int k = 0; k < domains_count; k++) {
+                                if (strcmp(domains[k].name, domain) == 0) {
+                                    if (json_object_object_get_ex(jitem, "title", &jtitle)) {
+                                        strncpy(domains[k].title, 
+                                                json_object_get_string(jtitle), 127);
+                                    }
+                                    
+                                    if (json_object_object_get_ex(jitem, "desc", &jdesc)) {
+                                        strncpy(domains[k].desc, 
+                                                json_object_get_string(jdesc), 255);
+                                    }
+                                    
+                                    domains[k].has_details = true;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            json_object_put(jobj);
+            free(chunk.memory);
+            
+            // 重置JSON数组，准备下一批
+            memset(domains_json, 0, sizeof(domains_json));
+            strcat(domains_json, "[");
+        }
+    }
+    
+    curl_slist_free_all(headers);
+    curl_easy_cleanup(curl);
+    curl_global_cleanup();
+    
+    return true;
+}
+#endif
+
+// 获取域名详细信息
+static bool 
+fetch_domain_info(void)
+{
+#ifdef HAVE_LIBCURL
+    return fetch_domain_info_via_libcurl();
+#else
+    return fetch_domain_info_via_cmd();
+#endif
 }
 
 int 
@@ -912,12 +1289,17 @@ main(int argc, char **argv)
         return EXIT_FAILURE;
     }
 
-    // Load xdpi domains at startup
-    load_xdpi_domains();
+    // Load domains and L7 protos at startup
+    load_domains();
     load_xdpi_l7_protos();
 
     const char *map_type = argv[1];
     const char *cmd = argv[2];
+
+    // Handle domain commands
+    if (strcmp(map_type, "domain") == 0) {
+        return handle_domain_command(cmd) ? EXIT_SUCCESS : EXIT_FAILURE;
+    }
 
     // Validate map type
     if (strcmp(map_type, "ipv4") != 0 && 
@@ -925,7 +1307,7 @@ main(int argc, char **argv)
         strcmp(map_type, "mac") != 0 && 
         strcmp(map_type, "sid") != 0 &&
         strcmp(map_type, "l7") != 0) {
-        fprintf(stderr, "Invalid map type. Must be 'ipv4', 'ipv6', 'mac', 'sid', or 'l7'.\n");
+        fprintf(stderr, "Invalid map type. Must be 'ipv4', 'ipv6', 'mac', 'sid', 'l7', or 'domain'.\n");
         aw_bpf_usage();
         return EXIT_FAILURE;
     }
