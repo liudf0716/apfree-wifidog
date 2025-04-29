@@ -1,4 +1,3 @@
-
 // SPDX-License-Identifier: GPL-3.0-only
 /*
  * Copyright (c) 2023 Dengfeng Liu <liudf0716@gmail.com>
@@ -17,48 +16,53 @@
 #include "version.h"
 #include "wd_client.h"
 
-const char *captive_domains[] = {
-	"captive.apple.com",
-    "www.apple.com",
-    "connect.rom.miui.com",
-    "www.msftconnecttest.com",
-	"ipv6.msftconnecttest.com"
-    "www.gstatic.com",
-    "www.gstatic.cn",
-    "www.google.cn",
-    "www.qualcomm.cn",
-    "conn1.oppomobile.com",
-    "conn2.oppomobile.com",
-    "connectivitycheck.platform.hicloud.com",
-	"connectivitycheck.gstatic.com",
-    "cp.cloudflare.com",
-    "wifi.vivo.com.cn",
-    "connectivitycheck.platform.hihonorcloud.com",
-    "detectportal.firefox.com",
-    "services.googleapis.cn",
-	"g.cn",
-    "developer.android.google.cn",
-    "source.android.google.cn",
-    "www.google-analytics.com",
-    "clients1.google.com",
-    "clients2.google.com",
-    "clients3.google.com",
-    "clients4.google.com",
-    "clients5.google.com",
-    "goo.gl",
-    "google.cn",
-    "google.com.hk",
-    "google.com.tw",
-    "google.com",
-    "googleapis.com",
-    "play.googleapis.com",
-    "www.g.cn",
-    "www.google.com.hk",
-    "www.google.com.tw",
-    "www.google.com",
-    "www.googleapis.com",
-    "www.youtube.com",
-    "yt.be"
+struct captive_entry {
+	char *domain;
+	char *ip;
+};
+
+static struct captive_entry captive_entries[] = {
+	{"captive.apple.com", "1.1.1.1"},
+	{"www.apple.com", "1.1.1.1"},
+	{"connect.rom.miui.com", "1.1.1.1"},
+	{"www.msftconnecttest.com", "1.1.1.1"},
+	{"ipv6.msftconnecttest.com", "1.1.1.1"},
+	{"www.gstatic.com", "1.1.1.1"},
+	{"www.gstatic.cn", "1.1.1.1"},
+	{"www.google.cn", "1.1.1.1"},
+	{"www.qualcomm.cn", "1.1.1.1"},
+	{"conn1.oppomobile.com", "1.1.1.1"},
+	{"conn2.oppomobile.com", "1.1.1.1"},
+	{"connectivitycheck.platform.hicloud.com", "1.1.1.1"},
+	{"connectivitycheck.gstatic.com", "1.1.1.1"},
+	{"cp.cloudflare.com", "1.1.1.1"},
+	{"wifi.vivo.com.cn", "1.1.1.1"},
+	{"connectivitycheck.platform.hihonorcloud.com", "1.1.1.1"},
+	{"detectportal.firefox.com", "1.1.1.1"},
+	{"services.googleapis.cn", "1.1.1.1"},
+	{"g.cn", "1.1.1.1"},
+	{"developer.android.google.cn", "1.1.1.1"},
+	{"source.android.google.cn", "1.1.1.1"},
+	{"www.google-analytics.com", "1.1.1.1"},
+	{"clients1.google.com", "1.1.1.1"},
+	{"clients2.google.com", "1.1.1.1"},
+	{"clients3.google.com", "1.1.1.1"},
+	{"clients4.google.com", "1.1.1.1"},
+	{"clients5.google.com", "1.1.1.1"},
+	{"goo.gl", "1.1.1.1"},
+	{"google.cn", "1.1.1.1"},
+	{"google.com.hk", "1.1.1.1"},
+	{"google.com.tw", "1.1.1.1"},
+	{"google.com", "1.1.1.1"},
+	{"googleapis.com", "1.1.1.1"},
+	{"play.googleapis.com", "1.1.1.1"},
+	{"www.g.cn", "1.1.1.1"},
+	{"www.google.com.hk", "1.1.1.1"},
+	{"www.google.com.tw", "1.1.1.1"},
+	{"www.google.com", "1.1.1.1"},
+	{"www.googleapis.com", "1.1.1.1"},
+	{"www.youtube.com", "1.1.1.1"},
+	{"yt.be", "1.1.1.1"}
 };
 
 extern time_t started_time;
@@ -80,11 +84,11 @@ remove_captive_domains(void)
 		return;
 	}
 
-	for (int i = 0; i < (int)(sizeof(captive_domains)/sizeof(captive_domains[0])); i++) {
+	for (int i = 0; i < (int)(sizeof(captive_entries)/sizeof(captive_entries[0])); i++) {
 		char cmd[512];
 		if (snprintf(cmd, sizeof(cmd),
-			"uci -q del_list dhcp.@dnsmasq[0].address=/%s/1.1.1.1",
-			captive_domains[i]) >= (int)sizeof(cmd)) {
+			"uci -q del_list dhcp.@dnsmasq[0].address=/%s/%s",
+			captive_entries[i].domain, captive_entries[i].ip) >= (int)sizeof(cmd)) {
 			debug(LOG_ERR, "Command buffer too small");
 			continue;
 		}
@@ -94,49 +98,69 @@ remove_captive_domains(void)
 	debug(LOG_INFO, "Removed captive domains");
 }
 
-void
-update_captive_domains(void)
+static void
+update_captive_domains_with_real_ips(void)
 {
 	if (!is_openwrt_platform()) {
 		debug(LOG_INFO, "Not openwrt platform, skipping update captive domains setup");
 		return;
 	}
 
-	for (int i = 0; i < (int)(sizeof(captive_domains)/sizeof(captive_domains[0])); i++) {
+	for (int i = 0; i < (int)(sizeof(captive_entries)/sizeof(captive_entries[0])); i++) {
 		char cmd[512];
+		// First remove the old entry
 		if (snprintf(cmd, sizeof(cmd),
-			"uci -q del_list dhcp.@dnsmasq[0].address=/%s/1.1.1.1",
-			captive_domains[i]) >= (int)sizeof(cmd)) {
-			debug(LOG_ERR, "Command buffer too small %s", captive_domains[i]);
+			"uci -q del_list dhcp.@dnsmasq[0].address=/%s/%s",
+			captive_entries[i].domain, captive_entries[i].ip) >= (int)sizeof(cmd)) {
+			debug(LOG_ERR, "Command buffer too small %s", captive_entries[i].domain);
 			continue;
 		}
 		execute(cmd, 0);
 		memset(cmd, 0, sizeof(cmd));
+
+		// Get real IP for the domain
+		struct hostent *he = gethostbyname(captive_entries[i].domain);
+		if (he != NULL) {
+			struct in_addr **addr_list = (struct in_addr **)he->h_addr_list;
+			if (addr_list[0] != NULL) {
+				char real_ip[INET_ADDRSTRLEN];
+				strcpy(real_ip, inet_ntoa(*addr_list[0]));
+				
+				// Add new entry with real IP
+				if (snprintf(cmd, sizeof(cmd),
+					"uci -q add_list dhcp.@dnsmasq[0].address=/%s/%s",
+					captive_entries[i].domain, real_ip) >= (int)sizeof(cmd)) {
+					debug(LOG_ERR, "Command buffer too small %s", captive_entries[i].domain);
+					continue;
+				}
+				execute(cmd, 0);
+			}
+		}
+	}
+	execute("uci commit dhcp && /etc/init.d/dnsmasq restart >/dev/null 2>&1", 0);
+	debug(LOG_INFO, "Updated captive domains with real IPs");
+}
+
+static void
+init_captive_domains(void)
+{
+	if (!is_openwrt_platform()) {
+		debug(LOG_INFO, "Not openwrt platform, skipping init captive domains setup");
+		return;
+	}
+
+	for (int i = 0; i < (int)(sizeof(captive_entries)/sizeof(captive_entries[0])); i++) {
+		char cmd[512];
 		if (snprintf(cmd, sizeof(cmd),
-			"uci -q add_list dhcp.@dnsmasq[0].address=/%s/1.1.1.1",
-			captive_domains[i]) >= (int)sizeof(cmd)) {
-			debug(LOG_ERR, "Command buffer too small %s", captive_domains[i]);
+			"uci -q add_list dhcp.@dnsmasq[0].address=/%s/%s",
+			captive_entries[i].domain, captive_entries[i].ip) >= (int)sizeof(cmd)) {
+			debug(LOG_ERR, "Command buffer too small %s", captive_entries[i].domain);
 			continue;
 		}
 		execute(cmd, 0);
 	}
 	execute("uci commit dhcp && /etc/init.d/dnsmasq restart >/dev/null 2>&1", 0);
-	debug(LOG_INFO, "Added captive domains");
-}
-
-static void
-make_captive_domains_query_responsable(void)
-{
-	static int was_online = 0;
-	int now_online = is_online();
-
-	if (now_online && !was_online) {
-		remove_captive_domains();
-	} else if (!now_online && was_online) {
-		update_captive_domains();
-	}
-
-	was_online = now_online;
+	debug(LOG_INFO, "Initialized captive domains");
 }
 
 static void
@@ -175,7 +199,17 @@ check_wifidogx_firewall_rules(void)
 
 static void 
 ping_work_cb(evutil_socket_t fd, short event, void *arg) {
-	make_captive_domains_query_responsable();
+	static int first_online = 1;
+	int now_online = is_online();
+
+	// When internet becomes available for the first time, update captive domains with real IPs
+	if (now_online && first_online) {
+		update_captive_domains_with_real_ips();
+		first_online = 0;
+	}
+
+	// Check firewall rules in both local and cloud modes
+	check_wifidogx_firewall_rules();
 
 	struct wd_request_context *request_ctx = (struct wd_request_context *)arg;
 	t_gateway_setting *gw_settings = get_gateway_settings();
@@ -214,13 +248,13 @@ thread_ping(void *arg)
 	parse_user_trusted_domain_list();
 	parse_inner_trusted_domain_list();
 	
-	update_captive_domains();
+	// Initialize captive domains with default IPs at startup
+	init_captive_domains();
 
 	if (is_local_auth_mode()) {
 		debug(LOG_DEBUG, "auth mode is local, no need to ping auth server");
 		while(1) {
 			sleep(60);
-			make_captive_domains_query_responsable();
 			check_wifidogx_firewall_rules();
 		}
 	} else {
