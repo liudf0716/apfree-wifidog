@@ -17,8 +17,8 @@
 #include "wd_client.h"
 
 struct captive_entry {
-	char *domain;
-	char *ip;
+	char domain[64];
+	char ip[16];
 };
 
 static struct captive_entry captive_entries[] = {
@@ -106,9 +106,9 @@ update_captive_domains_with_real_ips(void)
 		return;
 	}
 
+	// Step 1: First remove all old entries
 	for (int i = 0; i < (int)(sizeof(captive_entries)/sizeof(captive_entries[0])); i++) {
 		char cmd[512];
-		// First remove the old entry
 		if (snprintf(cmd, sizeof(cmd),
 			"uci -q del_list dhcp.@dnsmasq[0].address=/%s/%s",
 			captive_entries[i].domain, captive_entries[i].ip) >= (int)sizeof(cmd)) {
@@ -116,27 +116,49 @@ update_captive_domains_with_real_ips(void)
 			continue;
 		}
 		execute(cmd, 0);
-		memset(cmd, 0, sizeof(cmd));
-
-		// Get real IP for the domain
+	}
+	
+	// Step 2: Commit changes and restart dnsmasq to clear cache
+	debug(LOG_INFO, "Committing changes and restarting dnsmasq to clear cache");
+	execute("uci commit dhcp && /etc/init.d/dnsmasq restart >/dev/null 2>&1", 0);
+	
+	// Wait a moment for dnsmasq to fully restart and clear its cache
+	sleep(2);
+	
+	// Step 3: Now get real IPs and add new entries
+	for (int i = 0; i < (int)(sizeof(captive_entries)/sizeof(captive_entries[0])); i++) {
+		char cmd[512];
+		// Get real IP for the domain (now without dnsmasq cache)
 		struct hostent *he = gethostbyname(captive_entries[i].domain);
 		if (he != NULL) {
 			struct in_addr **addr_list = (struct in_addr **)he->h_addr_list;
 			if (addr_list[0] != NULL) {
-				char real_ip[INET_ADDRSTRLEN];
-				strcpy(real_ip, inet_ntoa(*addr_list[0]));
+				inet_ntop(AF_INET, addr_list[0], captive_entries[i].ip, sizeof(captive_entries[i].ip));
 				
 				// Add new entry with real IP
 				if (snprintf(cmd, sizeof(cmd),
 					"uci -q add_list dhcp.@dnsmasq[0].address=/%s/%s",
-					captive_entries[i].domain, real_ip) >= (int)sizeof(cmd)) {
+					captive_entries[i].domain, captive_entries[i].ip) >= (int)sizeof(cmd)) {
 					debug(LOG_ERR, "Command buffer too small %s", captive_entries[i].domain);
 					continue;
 				}
 				execute(cmd, 0);
 			}
+		} else {
+			debug(LOG_WARNING, "Could not resolve domain %s, using default IP", captive_entries[i].domain);
+			
+			// If resolution failed, add entry with default IP
+			if (snprintf(cmd, sizeof(cmd),
+				"uci -q add_list dhcp.@dnsmasq[0].address=/%s/%s",
+				captive_entries[i].domain, captive_entries[i].ip) >= (int)sizeof(cmd)) {
+				debug(LOG_ERR, "Command buffer too small %s", captive_entries[i].domain);
+				continue;
+			}
+			execute(cmd, 0);
 		}
 	}
+	
+	// Step 4: Commit changes and restart dnsmasq again with new entries
 	execute("uci commit dhcp && /etc/init.d/dnsmasq restart >/dev/null 2>&1", 0);
 	debug(LOG_INFO, "Updated captive domains with real IPs");
 }
@@ -253,9 +275,17 @@ thread_ping(void *arg)
 
 	if (is_local_auth_mode()) {
 		debug(LOG_DEBUG, "auth mode is local, no need to ping auth server");
+		int first_online = 1;
 		while(1) {
 			sleep(60);
 			check_wifidogx_firewall_rules();
+			
+			// When internet becomes available for the first time in local mode, update captive domains with real IPs
+			if (is_online() && first_online) {
+				debug(LOG_INFO, "Internet is available in local mode, updating captive domains with real IPs");
+				update_captive_domains_with_real_ips();
+				first_online = 0;
+			}
 		}
 	} else {
 		debug(LOG_DEBUG, "auth mode is cloud, start to ping auth server");

@@ -1055,9 +1055,10 @@ static bool
 fetch_domain_info_via_cmd(void)
 {
     char command[4096] = {0};
-    char domains_json[8192] = {0};
+    char domains_json[4096] = {0}; // 减小缓冲区大小以防止溢出
     FILE *fp;
     int i;
+    int batch_size = 20; // 减少每批处理的域名数，从100降低到20
     
     // 构建域名JSON数组
     strcat(domains_json, "[");
@@ -1067,16 +1068,19 @@ fetch_domain_info_via_cmd(void)
                 "%s\"%s\"", 
                 i > 0 ? "," : "", 
                 domains[i].name);
-        strcat(domains_json, domain_entry);
-        
-        // 避免请求数据过大，每100个域名分批处理
-        if ((i + 1) % 100 == 0 || i == domains_count - 1) {
+                
+        // 检查添加此域名是否会导致缓冲区溢出
+        if (strlen(domains_json) + strlen(domain_entry) + 2 >= sizeof(domains_json)) {
+            // 如果会溢出，提前结束这一批次
             strcat(domains_json, "]");
             
-            // 构建curl命令
-            snprintf(command, sizeof(command), 
+            // 构建curl命令，确保不会溢出
+            if (snprintf(command, sizeof(command), 
                     "curl -s -X POST %s -H \"Content-Type: application/json\" -d '{\"domains\":%s}'",
-                    DOMAIN_API_URL, domains_json);
+                    DOMAIN_API_URL, domains_json) >= (int)sizeof(command)) {
+                fprintf(stderr, "Command buffer overflow\n");
+                return false;
+            }
             
             // 执行curl命令
             fp = popen(command, "r");
