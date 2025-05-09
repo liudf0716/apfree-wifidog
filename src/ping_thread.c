@@ -74,30 +74,10 @@ char *g_type;
 char *g_name;
 char *g_ssid;
 
+#define CUSTOM_HOSTS_FILE "/etc/aw-captive-domains-hosts"
+
 static void ping_work_cb(evutil_socket_t, short, void *);
 static void process_ping_response(struct evhttp_request *, void *);
-
-void
-remove_captive_domains(void)
-{
-	if (!is_openwrt_platform()) {
-		debug(LOG_INFO, "Not openwrt platform, skipping remove captive domains setup");
-		return;
-	}
-
-	for (int i = 0; i < (int)(sizeof(captive_entries)/sizeof(captive_entries[0])); i++) {
-		char cmd[512];
-		if (snprintf(cmd, sizeof(cmd),
-			"uci -q del_list dhcp.@dnsmasq[0].address=/%s/%s",
-			captive_entries[i].domain, captive_entries[i].ip) >= (int)sizeof(cmd)) {
-			debug(LOG_ERR, "Command buffer too small");
-			continue;
-		}
-		execute(cmd, 0);
-	}
-	execute("uci commit dhcp && /etc/init.d/dnsmasq restart >/dev/null 2>&1", 0);
-	debug(LOG_INFO, "Removed captive domains");
-}
 
 static void
 update_captive_domains_with_real_ips(void)
@@ -107,96 +87,33 @@ update_captive_domains_with_real_ips(void)
 		return;
 	}
 
-	// Step 1: First remove all old entries
-	for (int i = 0; i < (int)(sizeof(captive_entries)/sizeof(captive_entries[0])); i++) {
-		char cmd[512];
-		if (snprintf(cmd, sizeof(cmd),
-			"uci -q del_list dhcp.@dnsmasq[0].address=/%s/%s",
-			captive_entries[i].domain, captive_entries[i].ip) >= (int)sizeof(cmd)) {
-			debug(LOG_ERR, "Command buffer too small %s", captive_entries[i].domain);
-			continue;
-		}
-		execute(cmd, 0);
+	// Create or truncate the custom hosts file
+	FILE *fp = fopen(CUSTOM_HOSTS_FILE, "w");
+	if (!fp) {
+		debug(LOG_ERR, "Failed to create custom hosts file: %s", strerror(errno));
+		return;
 	}
-	
-	// Step 2: Commit changes and restart dnsmasq to clear cache
-	debug(LOG_INFO, "Committing changes and restarting dnsmasq to clear cache");
-	execute("uci commit dhcp && /etc/init.d/dnsmasq restart >/dev/null 2>&1", 0);
-	
-	// Wait a moment for dnsmasq to fully restart and clear its cache
-	sleep(2);
-	
-	// Step 3: Now get real IPs and add new entries
+
+	// Get real IPs and write to file
 	for (int i = 0; i < (int)(sizeof(captive_entries)/sizeof(captive_entries[0])); i++) {
-		char cmd[512];
-		// Get real IP for the domain (now without dnsmasq cache)
 		struct hostent *he = gethostbyname(captive_entries[i].domain);
 		if (he != NULL) {
 			struct in_addr **addr_list = (struct in_addr **)he->h_addr_list;
 			if (addr_list[0] != NULL) {
-				inet_ntop(AF_INET, addr_list[0], captive_entries[i].ip, sizeof(captive_entries[i].ip));
-				
-				// Add new entry with real IP
-				if (snprintf(cmd, sizeof(cmd),
-					"uci -q add_list dhcp.@dnsmasq[0].address=/%s/%s",
-					captive_entries[i].domain, captive_entries[i].ip) >= (int)sizeof(cmd)) {
-					debug(LOG_ERR, "Command buffer too small %s", captive_entries[i].domain);
-					continue;
-				}
-				execute(cmd, 0);
-			}
-		} else {
-			debug(LOG_WARNING, "Could not resolve domain %s, using default IP", captive_entries[i].domain);
-			
-			// If resolution failed, add entry with default IP
-			if (snprintf(cmd, sizeof(cmd),
-				"uci -q add_list dhcp.@dnsmasq[0].address=/%s/%s",
-				captive_entries[i].domain, captive_entries[i].ip) >= (int)sizeof(cmd)) {
-				debug(LOG_ERR, "Command buffer too small %s", captive_entries[i].domain);
+				char real_ip[16];
+				inet_ntop(AF_INET, addr_list[0], real_ip, sizeof(real_ip));
+				fprintf(fp, "%s %s\n", real_ip, captive_entries[i].domain);
 				continue;
 			}
-			execute(cmd, 0);
 		}
+		// If resolution failed, use default IP
+		fprintf(fp, "%s %s\n", captive_entries[i].ip, captive_entries[i].domain);
 	}
-	
-	// Step 4: Commit changes and restart dnsmasq again with new entries
-	execute("uci commit dhcp && /etc/init.d/dnsmasq restart >/dev/null 2>&1", 0);
-	debug(LOG_INFO, "Updated captive domains with real IPs");
-}
+	fclose(fp);
 
-static int
-get_domain_ip_from_dhcp(const char *domain, char *ip, size_t ip_size)
-{
-	char cmd[512];
-	char result[1024] = {0};
-	FILE *fp;
-	
-	if (snprintf(cmd, sizeof(cmd), "uci get dhcp.@dnsmasq[0].address | grep '/%s/'", domain) >= (int)sizeof(cmd)) {
-		debug(LOG_ERR, "Command buffer too small");
-		return 0;
-	}
-	
-	fp = popen(cmd, "r");
-	if (!fp) {
-		debug(LOG_ERR, "Failed to execute command: %s", cmd);
-		return 0;
-	}
-	
-	if (fgets(result, sizeof(result), fp)) {
-		char *ip_start = strrchr(result, '/');
-		if (ip_start) {
-			ip_start++; // Skip the '/'
-			char *ip_end = strchr(ip_start, '\n');
-			if (ip_end) *ip_end = '\0';
-			strncpy(ip, ip_start, ip_size - 1);
-			ip[ip_size - 1] = '\0';
-			pclose(fp);
-			return 1;
-		}
-	}
-	
-	pclose(fp);
-	return 0;
+	// Restart dnsmasq to apply changes
+	execute("/etc/init.d/dnsmasq restart >/dev/null 2>&1", 0);
+	debug(LOG_INFO, "Updated captive domains with real IPs");
 }
 
 static void
@@ -207,39 +124,29 @@ init_captive_domains(void)
 		return;
 	}
 
-	// First check and remove existing entries
-	for (int i = 0; i < (int)(sizeof(captive_entries)/sizeof(captive_entries[0])); i++) {
-		char current_ip[16] = {0};
-		if (get_domain_ip_from_dhcp(captive_entries[i].domain, current_ip, sizeof(current_ip))) {
-			char cmd[512];
-			// Remove the domain with its current IP
-			if (snprintf(cmd, sizeof(cmd),
-				"uci -q del_list dhcp.@dnsmasq[0].address=/%s/%s",
-				captive_entries[i].domain, current_ip) >= (int)sizeof(cmd)) {
-				debug(LOG_ERR, "Command buffer too small %s", captive_entries[i].domain);
-				continue;
-			}
-			execute(cmd, 0);
-			debug(LOG_DEBUG, "Removed existing domain %s with IP %s", captive_entries[i].domain, current_ip);
-		}
+	// Create or truncate the custom hosts file
+	FILE *fp = fopen(CUSTOM_HOSTS_FILE, "w");
+	if (!fp) {
+		debug(LOG_ERR, "Failed to create custom hosts file: %s", strerror(errno));
+		return;
 	}
-	
-	// Commit changes after removing all existing entries
-	execute("uci commit dhcp", 0);
-	
-	// Now add all entries
+
+	// Write all entries to the file
 	for (int i = 0; i < (int)(sizeof(captive_entries)/sizeof(captive_entries[0])); i++) {
-		char cmd[512];
-		if (snprintf(cmd, sizeof(cmd),
-			"uci -q add_list dhcp.@dnsmasq[0].address=/%s/%s",
-			captive_entries[i].domain, captive_entries[i].ip) >= (int)sizeof(cmd)) {
-			debug(LOG_ERR, "Command buffer too small %s", captive_entries[i].domain);
-			continue;
-		}
-		execute(cmd, 0);
+		fprintf(fp, "%s %s\n", captive_entries[i].ip, captive_entries[i].domain);
 	}
-	execute("uci commit dhcp && /etc/init.d/dnsmasq restart >/dev/null 2>&1", 0);
-	debug(LOG_INFO, "Initialized captive domains");
+	fclose(fp);
+
+	// Configure dnsmasq to use the custom hosts file
+	char cmd[512];
+	if (snprintf(cmd, sizeof(cmd), 
+		"uci -q set dhcp.@dnsmasq[0].addnhosts='%s' && uci commit dhcp && /etc/init.d/dnsmasq restart >/dev/null 2>&1",
+		CUSTOM_HOSTS_FILE) >= (int)sizeof(cmd)) {
+		debug(LOG_ERR, "Command buffer too small");
+		return;
+	}
+	execute(cmd, 0);
+	debug(LOG_INFO, "Initialized captive domains using custom hosts file");
 }
 
 static void
