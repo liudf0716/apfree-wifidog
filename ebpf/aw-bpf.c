@@ -77,6 +77,15 @@ struct {
     __type(value, struct xdpi_nf_conn);
     __uint(max_entries, 10240);
 } tcp_conn_map SEC(".maps");
+
+// Map for UDP connections
+struct {
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __uint(pinning, 1);
+    __type(key, struct bpf_sock_tuple);
+    __type(value, struct xdpi_nf_conn);
+    __uint(max_entries, 10240);
+} udp_conn_map SEC(".maps");
 #endif // end not __TARGET_ARCH_mips
 
 // Map for xdpi protocol stats
@@ -257,6 +266,81 @@ static __always_inline int handle_tcp_packet(struct __sk_buff *skb, direction_t 
     
     return 0;
 }
+
+static __always_inline int udp_conn_timer_cb(void *map, struct bpf_sock_tuple *key, struct xdpi_nf_conn *val) {
+    if (!key || !val) {
+        BPF_DEBUG("Timer CB: Invalid arguments\n");
+        return 0;
+    }
+
+    __u32 now_sec = get_current_time();
+    now_sec = now_sec ? now_sec : 1; 
+
+    if (now_sec >= val->last_time + UDP_CONN_TIMEOUT_SEC) {
+        bpf_timer_cancel(&val->timer);
+        bpf_map_delete_elem(map, key);
+    } else {
+        bpf_timer_start(&val->timer, UDP_CONN_TIMEOUT_NS, 0);
+    }
+
+    return 0;
+}
+
+static __always_inline int handle_udp_packet(struct __sk_buff *skb, direction_t dir, 
+                                           struct bpf_sock_tuple *bpf_tuple,
+                                           __u32 current_time, __u32 est_slot) 
+{
+    long err = 0;
+    struct xdpi_nf_conn *conn = bpf_map_lookup_elem(&udp_conn_map, bpf_tuple);
+    int sid = 0;
+    
+    // Check if we already have a connection with SID
+    if (conn && conn->sid > 0) {
+        conn->last_time = current_time;
+        sid = conn->sid;
+    } else {
+        // Try to identify protocol
+        sid = bpf_xdpi_skb_match(skb, dir);
+        struct xdpi_nf_conn new_conn = { .pkt_seen = 1, .last_time = current_time };
+        BPF_DEBUG("sid: %d dir: %d", sid, dir);
+
+        if (sid > 0) {
+            new_conn.sid = sid;
+        } else {
+            new_conn.sid = UNKNOWN_SID;
+            sid = UNKNOWN_SID;
+        }
+        
+        // Add connection to the map
+        err = bpf_map_update_elem(&udp_conn_map, bpf_tuple, &new_conn, BPF_NOEXIST);
+        if (err == 0) {
+            struct xdpi_nf_conn *conn = bpf_map_lookup_elem(&udp_conn_map, bpf_tuple);
+            if (conn) {
+#ifdef CLOCK_MONOTONIC
+                bpf_timer_init(&conn->timer, &udp_conn_map, CLOCK_MONOTONIC);
+#else
+                bpf_timer_init(&conn->timer, &udp_conn_map, 0);
+#endif
+                bpf_timer_set_callback(&conn->timer, udp_conn_timer_cb);
+                bpf_timer_start(&conn->timer, UDP_CONN_TIMEOUT_NS, 0);
+            }
+        } else {
+            BPF_DEBUG("Failed to update UDP connection map: %ld", err);
+        }
+    }
+
+    // Update protocol stats based on SID
+    struct traffic_stats *proto_stats = bpf_map_lookup_elem(&xdpi_l7_map, &sid);
+    if (proto_stats) {
+        if (dir == INGRESS) {
+            update_stats(&proto_stats->incoming, skb->len, est_slot);
+        } else {
+            update_stats(&proto_stats->outgoing, skb->len, est_slot);
+        }
+    }
+
+    return 0;
+}
 #endif // end not __TARGET_ARCH_mips
 
 static inline int process_packet(struct __sk_buff *skb, direction_t dir) {
@@ -340,7 +424,21 @@ static inline int process_packet(struct __sk_buff *skb, direction_t dir) {
             if (handle_tcp_packet(skb, dir, &bpf_tuple, tcp_data_len, current_time, est_slot)) {
                 return 1;
             }
-        } 
+        } else if (ip->protocol == IPPROTO_UDP) {
+            struct udphdr *udp = (struct udphdr *)(data + sizeof(*eth) + sizeof(*ip));
+            if ((void *)udp + sizeof(*udp) > data_end)
+                return 0;
+            
+            struct bpf_sock_tuple bpf_tuple = {};
+            bpf_tuple.ipv4.saddr = dir == INGRESS ? ip->saddr : ip->daddr;
+            bpf_tuple.ipv4.daddr = dir == INGRESS ? ip->daddr : ip->saddr;
+            bpf_tuple.ipv4.sport = dir == INGRESS ? udp->source : udp->dest;
+            bpf_tuple.ipv4.dport = dir == INGRESS ? udp->dest : udp->source;
+            
+            if (handle_udp_packet(skb, dir, &bpf_tuple, current_time, est_slot)) {
+                return 1;
+            }
+        }
 #endif // end not __TARGET_ARCH_mips    
 
         // Process source IP (outgoing traffic)
@@ -371,7 +469,6 @@ static inline int process_packet(struct __sk_buff *skb, direction_t dir) {
         if ((void *)ip6 + sizeof(*ip6) > data_end)
             return 0;
 #ifndef __TARGET_ARCH_mips
-        // Check if protocol is TCP
         if (ip6->nexthdr == IPPROTO_TCP) {
             struct tcphdr *tcp = (struct tcphdr *)(data + sizeof(*eth) + sizeof(*ip6));
             if ((void *)tcp + sizeof(*tcp) > data_end)
@@ -413,6 +510,25 @@ static inline int process_packet(struct __sk_buff *skb, direction_t dir) {
             bpf_tuple.ipv6.dport = dir == INGRESS ? tcp->dest : tcp->source;
             
             if (handle_tcp_packet(skb, dir, &bpf_tuple, tcp_data_len, current_time, est_slot)) {
+                return 1;
+            }
+        } else if (ip6->nexthdr == IPPROTO_UDP) {
+            struct udphdr *udp = (struct udphdr *)(data + sizeof(*eth) + sizeof(*ip6));
+            if ((void *)udp + sizeof(*udp) > data_end)
+                return 0;
+            
+            struct bpf_sock_tuple bpf_tuple = {};
+            if (dir == INGRESS) {
+                set_ip(bpf_tuple.ipv6.saddr, &ip6->saddr);
+                set_ip(bpf_tuple.ipv6.daddr, &ip6->daddr);
+            } else {
+                set_ip(bpf_tuple.ipv6.saddr, &ip6->daddr);
+                set_ip(bpf_tuple.ipv6.daddr, &ip6->saddr);
+            }
+            bpf_tuple.ipv6.sport = dir == INGRESS ? udp->source : udp->dest;
+            bpf_tuple.ipv6.dport = dir == INGRESS ? udp->dest : udp->source;
+            
+            if (handle_udp_packet(skb, dir, &bpf_tuple, current_time, est_slot)) {
                 return 1;
             }
         }

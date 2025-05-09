@@ -13,6 +13,7 @@
 #include <linux/skbuff.h>
 #include <linux/ip.h>
 #include <linux/tcp.h>
+#include <linux/udp.h>
 #include <linux/uaccess.h>
 
 #include "xdpi-bpf.h"
@@ -41,32 +42,121 @@ static int update_domain(struct domain_entry *entry, int index);
 static char *xdpi_strstr(const char *haystack, int haystack_sz,
                                  const char *needle, int needle_sz);
 
-static __always_inline int is_mstsc(const char *data, int data_sz)
+// Protocol identification functions
+static __always_inline int is_dns(const char *data, int data_sz, __u16 dport)
+{
+    // First check if this is a DNS port
+    if (dport != DNS_PORT)
+        return 0;
+
+    if (data_sz < 12) return 0;
+    
+    // Check DNS header format
+    // ID (2 bytes) + Flags (2 bytes) + Questions (2 bytes) + Answer RRs (2 bytes)
+    // + Authority RRs (2 bytes) + Additional RRs (2 bytes)
+    return 1;
+}
+
+static __always_inline int is_dhcp(const char *data, int data_sz, __u16 dport)
+{
+    // First check if this is a DHCP port
+    if (dport != DHCP_SERVER_PORT && dport != DHCP_CLIENT_PORT)
+        return 0;
+
+    if (data_sz < 240) return 0;  // Minimum DHCP message size
+    
+    // Check DHCP message type
+    // First byte after UDP header should be message type
+    // 1=DISCOVER, 2=OFFER, 3=REQUEST, 4=DECLINE, 5=ACK, 6=NAK, 7=RELEASE, 8=INFORM
+    __u8 msg_type = data[0];
+    return (msg_type >= 1 && msg_type <= 8);
+}
+
+static __always_inline int is_ntp(const char *data, int data_sz, __u16 dport)
+{
+    // First check if this is an NTP port
+    if (dport != NTP_PORT)
+        return 0;
+
+    if (data_sz < 48) return 0;  // Minimum NTP message size
+    
+    // Check NTP version and mode
+    // First byte: LI (2 bits) + Version (3 bits) + Mode (3 bits)
+    __u8 first_byte = data[0];
+    __u8 version = (first_byte >> 3) & 0x07;
+    __u8 mode = first_byte & 0x07;
+    
+    return (version >= 1 && version <= 4) && (mode >= 1 && mode <= 7);
+}
+
+static __always_inline int is_snmp(const char *data, int data_sz, __u16 dport)
+{
+    // First check if this is an SNMP port
+    if (dport != SNMP_PORT && dport != SNMP_TRAP_PORT)
+        return 0;
+
+    if (data_sz < 8) return 0;
+    
+    // Check SNMP version and PDU type
+    // First byte should be 0x30 (SEQUENCE)
+    // Second byte should be length
+    // Third byte should be version (0=SNMPv1, 1=SNMPv2c, 3=SNMPv3)
+    return (data[0] == 0x30);
+}
+
+static __always_inline int is_tftp(const char *data, int data_sz, __u16 dport)
+{
+    // First check if this is a TFTP port
+    if (dport != TFTP_PORT)
+        return 0;
+
+    if (data_sz < 4) return 0;
+    
+    // Check TFTP opcode
+    // First two bytes should be opcode
+    // 1=RRQ, 2=WRQ, 3=DATA, 4=ACK, 5=ERROR
+    __u16 opcode = (data[0] << 8) | data[1];
+    return (opcode >= 1 && opcode <= 5);
+}
+
+static __always_inline int is_rtp(const char *data, int data_sz, __u16 dport)
+{
+    // First check if this is an RTP port
+    if (dport != RTP_PORT)
+        return 0;
+
+    if (data_sz < 12) return 0;  // Minimum RTP header size
+    
+    // Check RTP version (should be 2)
+    // First byte: V=2, P, X, CC
+    __u8 version = (data[0] >> 6) & 0x03;
+    return (version == 2);
+}
+
+// Existing protocol identification functions
+static __always_inline int is_mstsc(const char *data, int data_sz, __u16 dport)
 {
     return data_sz > 3 && data[0] == 0x03 && data[1] == 0x00 && data[2] == 0x00;
 }
 
-static __always_inline int is_ssh(const char *data, int data_sz)
+static __always_inline int is_ssh(const char *data, int data_sz, __u16 dport)
 {
     return data_sz > 10 && data[0] == 'S' && data[1] == 'S' && data[2] == 'H';
 }
 
-static __always_inline int is_http(const char *data, int data_sz)
+static __always_inline int is_http(const char *data, int data_sz, __u16 dport)
 {
-    // Check for minimum data size
     if (data_sz < 50)
         return 0;
 
-    // Check for HTTP methods
-    if (data[0] == 'G' && data[1] == 'E' && data[2] == 'T' && data[3] == ' ') return 1;  // GET
-    if (data[0] == 'P' && data[1] == 'O' && data[2] == 'S' && data[3] == 'T') return 1; // POST
+    if (data[0] == 'G' && data[1] == 'E' && data[2] == 'T' && data[3] == ' ') return 1;
+    if (data[0] == 'P' && data[1] == 'O' && data[2] == 'S' && data[3] == 'T') return 1;
 
     return 0;
 }
 
-static __always_inline int is_https(const char *data, int data_sz)
+static __always_inline int is_https(const char *data, int data_sz, __u16 dport)
 {
-    // Check for minimum data size
     if (data_sz < 50)
         return 0;
 
@@ -79,16 +169,12 @@ static __always_inline int is_https(const char *data, int data_sz)
     return 0;
 }
 
-static __always_inline int is_scp(const char *data, int data_sz)
+static __always_inline int is_scp(const char *data, int data_sz, __u16 dport)
 {
-    // Check for minimum data size
     if (data_sz < 50)
         return 0;
 
-    // SCP protocol typically starts with 'C' (for file copy) or 'D' (for directory)
-    // followed by permissions and file size
     if (data[0] == 'C' || data[0] == 'D') {
-        // Check if the next characters are digits (permissions)
         if (data[1] >= '0' && data[1] <= '7' &&
             data[2] >= '0' && data[2] <= '7' &&
             data[3] >= '0' && data[3] <= '7') {
@@ -99,7 +185,7 @@ static __always_inline int is_scp(const char *data, int data_sz)
     return 0;
 }
 
-static __always_inline int is_wechat(const char *data, int data_sz)
+static __always_inline int is_wechat(const char *data, int data_sz, __u16 dport)
 {
     if (data_sz > 500 && memcmp(data, "POST /mmtls/", 12) == 0) {
         if (xdpi_strstr(data, 300, "MicroMessenger", 14)) {
@@ -111,37 +197,82 @@ static __always_inline int is_wechat(const char *data, int data_sz)
     return 0;
 }
 
+// Protocol entries array
 static struct l7_proto_entry l7_proto_entries[] = {
+    // TCP protocols
     {
         .proto_desc = "wechat",
         .sid = L7_WECHAT,
+        .proto_type = PROTO_TCP,
         .match_func = is_wechat,
     },
     {
         .proto_desc = "http",
         .sid = L7_HTTP,
+        .proto_type = PROTO_TCP,
         .match_func = is_http,
     },
     {
         .proto_desc = "https",
         .sid = L7_HTTPS,
+        .proto_type = PROTO_TCP,
         .match_func = is_https,
     },
     {
         .proto_desc = "mstsc",
         .sid = L7_MSTSC,
+        .proto_type = PROTO_TCP,
         .match_func = is_mstsc,
     },
     {
         .proto_desc = "ssh",
         .sid = L7_SSH,
+        .proto_type = PROTO_TCP,
         .match_func = is_ssh,
     },
     {
         .proto_desc = "scp",
         .sid = L7_SCP,
+        .proto_type = PROTO_TCP,
         .match_func = is_scp,
-    }, 
+    },
+    // UDP protocols
+    {
+        .proto_desc = "dns",
+        .sid = L7_DNS,
+        .proto_type = PROTO_UDP,
+        .match_func = is_dns,
+    },
+    {
+        .proto_desc = "dhcp",
+        .sid = L7_DHCP,
+        .proto_type = PROTO_UDP,
+        .match_func = is_dhcp,
+    },
+    {
+        .proto_desc = "ntp",
+        .sid = L7_NTP,
+        .proto_type = PROTO_UDP,
+        .match_func = is_ntp,
+    },
+    {
+        .proto_desc = "snmp",
+        .sid = L7_SNMP,
+        .proto_type = PROTO_UDP,
+        .match_func = is_snmp,
+    },
+    {
+        .proto_desc = "tftp",
+        .sid = L7_TFTP,
+        .proto_type = PROTO_UDP,
+        .match_func = is_tftp,
+    },
+    {
+        .proto_desc = "rtp",
+        .sid = L7_RTP,
+        .proto_type = PROTO_UDP,
+        .match_func = is_rtp,
+    },
 };
 
 static __always_inline char *xdpi_strstr(const char *haystack, int haystack_sz,
@@ -165,6 +296,13 @@ __diag_ignore_all("-Wmissing-prototypes",
 __bpf_kfunc int bpf_xdpi_skb_match(struct __sk_buff *skb_ctx, int dir)
 {
     struct sk_buff *skb = (struct sk_buff *)skb_ctx;
+    struct iphdr *ip = NULL;
+    struct tcphdr *tcp = NULL;
+    struct udphdr *udp = NULL;
+    void *ip_buf = NULL;
+    void *tcp_buf = NULL;
+    void *udp_buf = NULL;
+    int ret = -EINVAL;
     
     // For ingress traffic, check if destination port is 80 or 443
     if (dir != INGRESS) {
@@ -178,57 +316,122 @@ __bpf_kfunc int bpf_xdpi_skb_match(struct __sk_buff *skb_ctx, int dir)
     if (unlikely(skb_linearize(skb) != 0))
         return -EFAULT;
 
-    // Check if this is a TCP packet by examining protocol
+    // Check if this is an IP packet
     if (skb->protocol != htons(ETH_P_IP))
         return -EPROTONOSUPPORT;
 
-    char ip_buf[sizeof(struct iphdr)] = {};
-    char tcp_buf[sizeof(struct tcphdr)] = {};
-    struct iphdr *ip = skb_header_pointer(skb, skb_network_offset(skb), sizeof(*ip), ip_buf);
-    if (!ip || ip->protocol != IPPROTO_TCP)
-        return -EPROTONOSUPPORT;
+    // Allocate buffers for headers
+    ip_buf = kmalloc(sizeof(struct iphdr), GFP_ATOMIC);
+    if (!ip_buf) {
+        ret = -ENOMEM;
+        goto out;
+    }
 
-    struct tcphdr *tcp = skb_header_pointer(skb, skb_network_offset(skb) + ip->ihl * 4, sizeof(*tcp), tcp_buf);
-    if (!tcp)
-        return -EINVAL;
-        
-    u8 *data = skb->data + skb_network_offset(skb) + ip->ihl * 4 + tcp->doff * 4;
-    int data_len = skb->len - (data - skb->data);
-    //printk("xdpi: skb data_len %d dport %d\n", data_len, dport);
+    ip = skb_header_pointer(skb, skb_network_offset(skb), sizeof(*ip), ip_buf);
+    if (!ip) {
+        ret = -EINVAL;
+        goto out;
+    }
 
-    // Match L7 protocol - 不需要加锁
-    struct l7_proto_entry *proto_entry = NULL;
-    for (int i = 0; i < ARRAY_SIZE(l7_proto_entries); i++) {
-        if (l7_proto_entries[i].match_func(data, data_len)) {
-            proto_entry = &l7_proto_entries[i];
-            break;
+    // Handle TCP
+    if (ip->protocol == IPPROTO_TCP) {
+        tcp_buf = kmalloc(sizeof(struct tcphdr), GFP_ATOMIC);
+        if (!tcp_buf) {
+            ret = -ENOMEM;
+            goto out;
         }
-    }
 
-    if (!proto_entry) {
-        return -ENOENT;
-    }
+        tcp = skb_header_pointer(skb, skb_network_offset(skb) + ip->ihl * 4, sizeof(*tcp), tcp_buf);
+        if (!tcp) {
+            ret = -EINVAL;
+            goto out;
+        }
+            
+        u8 *data = skb->data + skb_network_offset(skb) + ip->ihl * 4 + tcp->doff * 4;
+        int data_len = skb->len - (data - skb->data);
 
-    // Return if protocol is not HTTP or HTTPS
-    if (proto_entry->sid != L7_HTTP && proto_entry->sid != L7_HTTPS) {
-        return proto_entry->sid;
-    }
-
-    // 只在访问domains数组时加锁
-    spin_lock_bh(&xdpi_lock);
-    // Match domain
-    for (int i = 0; i < XDPI_DOMAIN_MAX; i++) {
-        struct domain_entry *domain_entry = &domains[i];
-        if (domain_entry->used && domain_entry->domain_len <= data_len) {
-            if (xdpi_strstr(data, data_len, domain_entry->domain, domain_entry->domain_len)) {
-                spin_unlock_bh(&xdpi_lock);
-                return domain_entry->sid;
+        // Match L7 protocol
+        struct l7_proto_entry *proto_entry = NULL;
+        for (int i = 0; i < ARRAY_SIZE(l7_proto_entries); i++) {
+            if (l7_proto_entries[i].proto_type == PROTO_TCP &&
+                l7_proto_entries[i].match_func(data, data_len, 0)) {
+                proto_entry = &l7_proto_entries[i];
+                break;
             }
         }
-    }
-    spin_unlock_bh(&xdpi_lock);
 
-    return proto_entry->sid;
+        if (!proto_entry) {
+            ret = -ENOENT;
+            goto out;
+        }
+
+        // Return if protocol is not HTTP or HTTPS
+        if (proto_entry->sid != L7_HTTP && proto_entry->sid != L7_HTTPS) {
+            ret = proto_entry->sid;
+            goto out;
+        }
+
+        // Match domain for HTTP/HTTPS
+        struct domain_entry *domain_entry = NULL;
+        spin_lock_bh(&xdpi_lock);
+        for (int i = 0; i < XDPI_DOMAIN_MAX; i++) {
+            if (domains[i].used && domains[i].domain_len <= data_len) {
+                if (xdpi_strstr(data, data_len, domains[i].domain, domains[i].domain_len)) {
+                    domain_entry = &domains[i];
+                    break;
+                }
+            }
+        }
+        spin_unlock_bh(&xdpi_lock);
+
+        if (domain_entry) {
+            ret = domain_entry->sid;
+        } else {
+            ret = proto_entry->sid;
+        }
+    }
+    // Handle UDP
+    else if (ip->protocol == IPPROTO_UDP) {
+        udp_buf = kmalloc(sizeof(struct udphdr), GFP_ATOMIC);
+        if (!udp_buf) {
+            ret = -ENOMEM;
+            goto out;
+        }
+
+        udp = skb_header_pointer(skb, skb_network_offset(skb) + ip->ihl * 4, sizeof(*udp), udp_buf);
+        if (!udp) {
+            ret = -EINVAL;
+            goto out;
+        }
+            
+        u8 *data = skb->data + skb_network_offset(skb) + ip->ihl * 4 + sizeof(*udp);
+        int data_len = skb->len - (data - skb->data);
+
+        // Match L7 protocol
+        struct l7_proto_entry *proto_entry = NULL;
+        for (int i = 0; i < ARRAY_SIZE(l7_proto_entries); i++) {
+            if (l7_proto_entries[i].proto_type == PROTO_UDP &&
+                l7_proto_entries[i].match_func(data, data_len, htons(udp->dest))) {
+                proto_entry = &l7_proto_entries[i];
+                break;
+            }
+        }
+
+        if (!proto_entry) {
+            ret = -ENOENT;
+            goto out;
+        }
+
+        ret = proto_entry->sid;
+    } else {
+        ret = -EPROTONOSUPPORT;
+    }
+
+out:
+    kfree(ip_buf);
+    kfree(tcp_buf);
+    kfree(udp_buf);
+    return ret;
 }
 
 __diag_pop();

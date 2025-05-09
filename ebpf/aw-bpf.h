@@ -42,6 +42,8 @@
 #define DROP_HORIZON 2000000000UL  /* 2 seconds in nanoseconds */
 #define TCP_CONN_TIMEOUT_NS 60000000000ULL /* 60 seconds in nanoseconds */
 #define TCP_CONN_TIMEOUT_SEC 60 /* 60 seconds */
+#define UDP_CONN_TIMEOUT_NS 30000000000ULL /* 30 seconds in nanoseconds */
+#define UDP_CONN_TIMEOUT_SEC 30 /* 30 seconds */
 
 typedef enum {
     INGRESS,

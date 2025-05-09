@@ -20,6 +20,34 @@
 #define L7_SSH      102
 #define L7_SCP      103
 #define L7_WECHAT   104
+#define L7_DNS      201
+#define L7_DHCP     202
+#define L7_NTP      203
+#define L7_SNMP     204
+#define L7_TFTP     205
+#define L7_RTP      206
+#define L7_RTCP     207
+
+/* Protocol types */
+#define PROTO_TCP   1
+#define PROTO_UDP   2
+
+/* Common UDP ports */
+#define DNS_PORT 53
+#define DHCP_SERVER_PORT 67
+#define DHCP_CLIENT_PORT 68
+#define NTP_PORT 123
+#define SNMP_PORT 161
+#define SNMP_TRAP_PORT 162
+#define TFTP_PORT 69
+#define RTP_PORT 5004
+#define RTCP_PORT 5005
+
+/* Common TCP ports */
+#define HTTP_PORT 80
+#define HTTPS_PORT 443
+#define SSH_PORT 22
+#define MSTSC_PORT 3389
 
 /* Domain entry structure */
 #define MAX_DOMAIN_LEN 64
@@ -37,12 +65,13 @@ struct domain_update {
     int index;
 };
 
-typedef int (*l7_proto_match_t)(const char *data, int data_sz);
+typedef int (*l7_proto_match_t)(const char *data, int data_sz, __u16 dport);
 
 struct l7_proto_entry {
-    char                *proto_desc;
-    int                 sid;
-    l7_proto_match_t    match_func;
+    char *proto_desc;           /* Protocol description */
+    int sid;                    /* Protocol ID */
+    int proto_type;           /* Protocol type (TCP/UDP) */
+    l7_proto_match_t match_func; /* Protocol matching function */
 };
 
 /* IOCTL commands */
