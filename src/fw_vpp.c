@@ -118,46 +118,38 @@ vpp_fw_counters_update()
             // Extract and update outgoing stats
             json_object *outgoing_obj = NULL;
             if (json_object_object_get_ex(client_obj, "outgoing", &outgoing_obj)) {
-                json_object *packets_obj = NULL, *bytes_obj = NULL;
+                json_object *packets_obj = NULL, *bytes_obj = NULL, *rate_obj = NULL;
                 
                 if (json_object_object_get_ex(outgoing_obj, "packets", &packets_obj) && 
-                    json_object_object_get_ex(outgoing_obj, "bytes", &bytes_obj)) {
+                    json_object_object_get_ex(outgoing_obj, "bytes", &bytes_obj) &&
+                    json_object_object_get_ex(outgoing_obj, "rate", &rate_obj)) {
                     
                     uint64_t packets = json_object_get_int64(packets_obj);
                     uint64_t bytes = json_object_get_int64(bytes_obj);
+                    uint32_t rate = json_object_get_int(rate_obj);
                     
-                    // Save previous outgoing count and update with new values
-                    static time_t last_out_time = 0;
-                    static uint64_t last_out_bytes = 0;
-                    time_t now = time(NULL);
-                    uint64_t delta_bytes = (last_out_time > 0) ? (bytes - last_out_bytes) : 0;
-                    time_t time_diff = (last_out_time > 0) ? (now - last_out_time) : 0;
                     client->counters.outgoing_bytes = bytes;
                     client->counters.outgoing_packets = packets;
-                    if (time_diff > 0) {
-                        client->counters.outgoing_rate = delta_bytes / time_diff;
-                    } else {
-                        client->counters.outgoing_rate = 0;
-                    }
-                    last_out_time = now;
-                    last_out_bytes = bytes;
+                    client->counters.outgoing_rate = rate;
                 }
             }
 
             // Extract and update incoming stats
             json_object *incoming_obj = NULL;
             if (json_object_object_get_ex(client_obj, "incoming", &incoming_obj)) {
-                json_object *packets_obj = NULL, *bytes_obj = NULL;
+                json_object *packets_obj = NULL, *bytes_obj = NULL, *rate_obj = NULL;
                 
                 if (json_object_object_get_ex(incoming_obj, "packets", &packets_obj) && 
-                    json_object_object_get_ex(incoming_obj, "bytes", &bytes_obj)) {
+                    json_object_object_get_ex(incoming_obj, "bytes", &bytes_obj) &&
+                    json_object_object_get_ex(incoming_obj, "rate", &rate_obj)) {
                     
                     uint64_t packets = json_object_get_int64(packets_obj);
                     uint64_t bytes = json_object_get_int64(bytes_obj);
+                    uint32_t rate = json_object_get_int(rate_obj);
                     
-                    // Save previous incoming count and update with new values
                     client->counters.incoming_bytes = bytes;
                     client->counters.incoming_packets = packets;
+                    client->counters.incoming_rate = rate;
                 }
             }
 
