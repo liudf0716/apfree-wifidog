@@ -66,9 +66,6 @@ static struct captive_entry captive_entries[] = {
 	{"yt.be", "1.1.1.1"}
 };
 
-// Add static flag to track if captive domains have been updated
-static int captive_domains_updated = 0;
-
 extern time_t started_time;
 
 int g_online_clients;
@@ -100,9 +97,6 @@ remove_captive_domains(void)
 	}
 	execute("uci commit dhcp && /etc/init.d/dnsmasq restart >/dev/null 2>&1", 0);
 	debug(LOG_INFO, "Removed captive domains");
-	
-	// Reset the update flag when removing domains
-	captive_domains_updated = 0;
 }
 
 static void
@@ -110,12 +104,6 @@ update_captive_domains_with_real_ips(void)
 {
 	if (!is_openwrt_platform()) {
 		debug(LOG_INFO, "Not openwrt platform, skipping update captive domains setup");
-		return;
-	}
-
-	// Check if domains have already been updated
-	if (captive_domains_updated) {
-		debug(LOG_DEBUG, "Captive domains already updated, skipping");
 		return;
 	}
 
@@ -174,9 +162,41 @@ update_captive_domains_with_real_ips(void)
 	// Step 4: Commit changes and restart dnsmasq again with new entries
 	execute("uci commit dhcp && /etc/init.d/dnsmasq restart >/dev/null 2>&1", 0);
 	debug(LOG_INFO, "Updated captive domains with real IPs");
+}
+
+static int
+get_domain_ip_from_dhcp(const char *domain, char *ip, size_t ip_size)
+{
+	char cmd[512];
+	char result[1024] = {0};
+	FILE *fp;
 	
-	// Mark domains as updated
-	captive_domains_updated = 1;
+	if (snprintf(cmd, sizeof(cmd), "uci get dhcp.@dnsmasq[0].address | grep '/%s/'", domain) >= (int)sizeof(cmd)) {
+		debug(LOG_ERR, "Command buffer too small");
+		return 0;
+	}
+	
+	fp = popen(cmd, "r");
+	if (!fp) {
+		debug(LOG_ERR, "Failed to execute command: %s", cmd);
+		return 0;
+	}
+	
+	if (fgets(result, sizeof(result), fp)) {
+		char *ip_start = strrchr(result, '/');
+		if (ip_start) {
+			ip_start++; // Skip the '/'
+			char *ip_end = strchr(ip_start, '\n');
+			if (ip_end) *ip_end = '\0';
+			strncpy(ip, ip_start, ip_size - 1);
+			ip[ip_size - 1] = '\0';
+			pclose(fp);
+			return 1;
+		}
+	}
+	
+	pclose(fp);
+	return 0;
 }
 
 static void
@@ -187,6 +207,27 @@ init_captive_domains(void)
 		return;
 	}
 
+	// First check and remove existing entries
+	for (int i = 0; i < (int)(sizeof(captive_entries)/sizeof(captive_entries[0])); i++) {
+		char current_ip[16] = {0};
+		if (get_domain_ip_from_dhcp(captive_entries[i].domain, current_ip, sizeof(current_ip))) {
+			char cmd[512];
+			// Remove the domain with its current IP
+			if (snprintf(cmd, sizeof(cmd),
+				"uci -q del_list dhcp.@dnsmasq[0].address=/%s/%s",
+				captive_entries[i].domain, current_ip) >= (int)sizeof(cmd)) {
+				debug(LOG_ERR, "Command buffer too small %s", captive_entries[i].domain);
+				continue;
+			}
+			execute(cmd, 0);
+			debug(LOG_DEBUG, "Removed existing domain %s with IP %s", captive_entries[i].domain, current_ip);
+		}
+	}
+	
+	// Commit changes after removing all existing entries
+	execute("uci commit dhcp", 0);
+	
+	// Now add all entries
 	for (int i = 0; i < (int)(sizeof(captive_entries)/sizeof(captive_entries[0])); i++) {
 		char cmd[512];
 		if (snprintf(cmd, sizeof(cmd),
