@@ -34,6 +34,7 @@ static struct captive_entry captive_entries[] = {
 	{"conn1.oppomobile.com", "1.1.1.1"},
 	{"conn2.oppomobile.com", "1.1.1.1"},
 	{"connectivitycheck.platform.hicloud.com", "1.1.1.1"},
+	{"connectivitycheck.cbg-app.huawai.com", "1.1.1.1"},
 	{"connectivitycheck.gstatic.com", "1.1.1.1"},
 	{"cp.cloudflare.com", "1.1.1.1"},
 	{"wifi.vivo.com.cn", "1.1.1.1"},
