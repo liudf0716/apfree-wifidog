@@ -66,6 +66,9 @@ static struct captive_entry captive_entries[] = {
 	{"yt.be", "1.1.1.1"}
 };
 
+// Add static flag to track if captive domains have been updated
+static int captive_domains_updated = 0;
+
 extern time_t started_time;
 
 int g_online_clients;
@@ -97,6 +100,9 @@ remove_captive_domains(void)
 	}
 	execute("uci commit dhcp && /etc/init.d/dnsmasq restart >/dev/null 2>&1", 0);
 	debug(LOG_INFO, "Removed captive domains");
+	
+	// Reset the update flag when removing domains
+	captive_domains_updated = 0;
 }
 
 static void
@@ -104,6 +110,12 @@ update_captive_domains_with_real_ips(void)
 {
 	if (!is_openwrt_platform()) {
 		debug(LOG_INFO, "Not openwrt platform, skipping update captive domains setup");
+		return;
+	}
+
+	// Check if domains have already been updated
+	if (captive_domains_updated) {
+		debug(LOG_DEBUG, "Captive domains already updated, skipping");
 		return;
 	}
 
@@ -162,6 +174,9 @@ update_captive_domains_with_real_ips(void)
 	// Step 4: Commit changes and restart dnsmasq again with new entries
 	execute("uci commit dhcp && /etc/init.d/dnsmasq restart >/dev/null 2>&1", 0);
 	debug(LOG_INFO, "Updated captive domains with real IPs");
+	
+	// Mark domains as updated
+	captive_domains_updated = 1;
 }
 
 static void
