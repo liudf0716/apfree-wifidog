@@ -21,6 +21,7 @@
 #include "debug.h"
 #include "conf.h"
 #include "wd_util.h"
+#include "gateway.h"
 
 #define XDPI_DOMAIN_MAX 256
 #define MAX_DOMAIN_LEN 64
@@ -575,7 +576,7 @@ thread_dns_forward(void *arg) {
     // Create UDP socket
     if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
         debug(LOG_ERR, "Failed to create socket");
-        return NULL;
+        termination_handler(0);
     }
 
     // Bind to port 5353
@@ -585,35 +586,28 @@ thread_dns_forward(void *arg) {
     server_addr.sin_port = htons(DNS_FORWARD_PORT);
 
     if (bind(sockfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
-        debug(LOG_ERR, "Failed to bind to port %d", DNS_FORWARD_PORT);
-        close(sockfd);
-        return NULL;
+        debug(LOG_ERR, "Failed to bind to port %d, errro is %s", DNS_FORWARD_PORT, strerror(errno));
+        termination_handler(0);
     }
 
     // Initialize libevent
     struct event_base *base = event_base_new();
     if (!base) {
         debug(LOG_ERR, "event_base_new: %s", strerror(errno));
-        close(sockfd);
-        return NULL;
+        termination_handler(0);
     }
 
     // Create an event to listen for incoming DNS requests
     struct event *dns_event = event_new(base, sockfd, EV_READ | EV_PERSIST, read_cb, base);
     if (!dns_event) {
         debug(LOG_ERR, "event_new: %s", strerror(errno));
-        event_base_free(base);
-        close(sockfd);
-        return NULL;
+        termination_handler(0);
     }
 
     // Add the event to the event base
     if (event_add(dns_event, NULL) < 0) {
         debug(LOG_ERR, "event_add: %s", strerror(errno));
-        event_free(dns_event);
-        event_base_free(base);
-        close(sockfd);
-        return NULL;
+        termination_handler(0);
     }
 
     debug(LOG_INFO, "DNS forwarder started on port %d", DNS_FORWARD_PORT);
