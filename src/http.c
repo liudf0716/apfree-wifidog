@@ -169,7 +169,12 @@ ev_http_resend(struct evhttp_request *req, const int is_ssl)
 {
     char *orig_url = wd_get_orig_url(req, is_ssl, 0);
     if (!orig_url) {
-        orig_url = safe_strdup(config_get_config()->local_portal);
+        const char *portal = config_get_config()->local_portal;
+        if (!portal) {                     /* nothing to resend to */
+            evhttp_send_error(req, HTTP_INTERNAL, "No portal configured");
+            return;
+        }
+        orig_url = safe_strdup(portal);
     }
 
     ev_http_send_redirect(req, orig_url, "resend its request", 0);
@@ -634,6 +639,7 @@ ev_http_callback_404(struct evhttp_request *req, void *arg)
     struct bufferevent *bev = evhttp_connection_get_bufferevent(evhttp_request_get_connection(req));
     evutil_socket_t fd = bufferevent_getfd(bev);
     if (fd < 0) {
+        free(remote_host);
         debug(LOG_ERR, "bufferevent_getfd failed: %s", strerror(errno));
         evhttp_send_error(req, 200, "Cant get client's fd");
         return;
@@ -642,6 +648,7 @@ ev_http_callback_404(struct evhttp_request *req, void *arg)
     t_gateway_setting *gw_setting = get_gateway_setting_by_addr(remote_host, addr_type);
     if (!gw_setting) {
         debug(LOG_ERR, "Failed to get gateway settings for address [%s] type [%d]", remote_host, addr_type);
+        free(remote_host);
         evhttp_send_error(req, 200, "Cant get gateway setting by client's ip");
         return;
     }
@@ -652,6 +659,7 @@ ev_http_callback_404(struct evhttp_request *req, void *arg)
         snprintf(mac, sizeof(mac), "%s", "00:00:00:00:00:00");
     } else if (!br_arp_get_mac(gw_setting, remote_host, mac)) {
         debug(LOG_INFO, "get client's mac by ip [%s] failed", remote_host);
+        free(remote_host);
         evhttp_send_error(req, 200, "Cant get client's mac by its ip");
         return;
     }
@@ -659,12 +667,15 @@ ev_http_callback_404(struct evhttp_request *req, void *arg)
     // debug(LOG_DEBUG, "ev_http_callback_404 [%s : %s] address type [%d]", remote_host, mac, addr_type);
 
 #ifndef AW_VPP
-    if (process_already_login_client(req, mac, remote_host, addr_type, is_ssl)) return;
+    if (process_already_login_client(req, mac, remote_host, addr_type, is_ssl)) {
+        free(remote_host);
+        return;
+    }
 #endif
-
-    if (!is_bypass_mode() &&
-        config->wired_passed && 
-        process_wired_device_pass(req, mac))  {
+     if (!is_bypass_mode() &&
+         config->wired_passed && 
+         process_wired_device_pass(req, mac))  {
+        free(remote_host);
         return;
     }
 
@@ -675,11 +686,13 @@ ev_http_callback_404(struct evhttp_request *req, void *arg)
         ev_http_reply_client_error(req, r_type, 
             addr_type==1?gw_setting->gw_address_v4:gw_setting->gw_address_v6, 
             gw_port, "http", remote_host, mac);
+        free(remote_host);
         return;
     }    
 
     char *redir_url = wd_get_redir_url_to_auth(req, gw_setting, mac, remote_host, config->gw_port, config->device_id, is_ssl);
     if (!redir_url) {
+        free(remote_host);
         evhttp_send_error(req, 200, "Cant get client's redirect to auth server's url");
         return;
     }
@@ -695,6 +708,7 @@ ev_http_callback_404(struct evhttp_request *req, void *arg)
         ev_http_send_redirect(req, redir_url, "Redirect to login page", 0);
 
 END:
+    free(remote_host);
     free(redir_url);
 }
 

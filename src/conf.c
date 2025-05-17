@@ -478,9 +478,16 @@ parse_gateway_settings(FILE *file, const char *filename, int *linenum)
 					case oGatewaySubnetV4:
 						gw_subnet_v4 = safe_strdup(value);
 						break;
-					case oGatewayAuthEnabled:
-						auth_enabled = parse_boolean_value(value);
-						break;
+    case oGatewayAuthEnabled:
+        auth_enabled = parse_boolean_value(value);
+        if (auth_enabled == -1) {
+            debug(LOG_ERR,
+                  "Bad syntax for GatewayAuthEnabled on line %d in %s. "
+                  "Expected yes/no/0/1.",
+                  *linenum, filename);
+            goto ERR;
+        }
+        break;
 					case oBadOption:
 					default:
 						debug(LOG_ERR, "Bad option on line %d in %s.", *linenum, filename);
@@ -1138,8 +1145,8 @@ remove_mac(const char *mac, mac_choice_t which)
 void
 add_mac(const char *mac, mac_choice_t which)
 {
-#define MAC_TIMEOUT 24*3600
-	add_mac_from_list(mac, MAC_TIMEOUT, NULL, which);
+#define MAC_TIMEOUT (24*3600)
+    add_mac_from_list(mac, MAC_TIMEOUT, NULL, which);
 }
 
 

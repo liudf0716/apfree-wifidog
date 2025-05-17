@@ -41,25 +41,8 @@ client_get_new(void)
 {
     t_client *client;
     client = safe_malloc(sizeof(t_client));
-    client->wired = -1; // not get state
-    
-    // Initialize all counter fields to 0
-    client->counters.incoming_bytes = 0;
-    client->counters.outgoing_bytes = 0;
-    client->counters.incoming_packets = 0;
-    client->counters.outgoing_packets = 0;
-    client->counters.incoming_rate = 0;
-    client->counters.outgoing_rate = 0;
-    client->counters.last_updated = 0;
-    
-    client->counters6.incoming_bytes = 0;
-    client->counters6.outgoing_bytes = 0;
-    client->counters6.incoming_packets = 0;
-    client->counters6.outgoing_packets = 0;
-    client->counters6.incoming_rate = 0;
-    client->counters6.outgoing_rate = 0;
-    client->counters6.last_updated = 0;
-    
+    client->wired = -1;                   /* keep existing semantic */
+
     return client;
 }
 
