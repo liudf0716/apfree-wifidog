@@ -133,19 +133,33 @@ init_captive_domains(void)
 
 	// Write all entries to the file
 	for (int i = 0; i < (int)(sizeof(captive_entries)/sizeof(captive_entries[0])); i++) {
-		fprintf(fp, "%s %s\n", captive_entries[i].ip, captive_entries[i].domain);
+		if (fprintf(fp, "%s %s\n", captive_entries[i].ip, captive_entries[i].domain) < 0) {
+			debug(LOG_ERR, "Failed to write to custom hosts file: %s", strerror(errno));
+			fclose(fp);
+			return;
+		}
 	}
 	fclose(fp);
 
 	// Configure dnsmasq to use the custom hosts file
-	char cmd[512];
-	if (snprintf(cmd, sizeof(cmd), 
-		"uci -q set dhcp.@dnsmasq[0].addnhosts='%s' && uci commit dhcp && /etc/init.d/dnsmasq restart >/dev/null 2>&1",
-		CUSTOM_HOSTS_FILE) >= (int)sizeof(cmd)) {
-		debug(LOG_ERR, "Command buffer too small");
+	// First, only delete CUSTOM_HOSTS_FILE entry if it exists
+	if (execute("uci -q del_list dhcp.@dnsmasq[0].addnhosts='" CUSTOM_HOSTS_FILE "' >/dev/null 2>&1", 0) != 0) {
+		debug(LOG_ERR, "Failed to delete existing custom hosts file from dnsmasq config");
 		return;
 	}
-	execute(cmd, 0);
+	
+	// Add new addnhosts entry as a list
+	if (execute("uci -q add_list dhcp.@dnsmasq[0].addnhosts='" CUSTOM_HOSTS_FILE "' >/dev/null 2>&1", 0) != 0) {
+		debug(LOG_ERR, "Failed to add custom hosts file to dnsmasq config");
+		return;
+	}
+
+	// Commit changes and restart dnsmasq
+	if (execute("uci commit dhcp && /etc/init.d/dnsmasq restart >/dev/null 2>&1", 0) != 0) {
+		debug(LOG_ERR, "Failed to commit changes and restart dnsmasq");
+		return;
+	}
+
 	debug(LOG_INFO, "Initialized captive domains using custom hosts file");
 }
 
