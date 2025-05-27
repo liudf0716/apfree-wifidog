@@ -6,5 +6,5 @@
 
 #ifndef _VERSION_
 #define _VERSION_
-#define VERSION "8.05.2565"
+#define VERSION "8.05.2566"
 #endif

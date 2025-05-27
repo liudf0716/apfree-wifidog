@@ -26,7 +26,6 @@ static struct captive_entry captive_entries[] = {
 	{"www.apple.com", "1.1.1.1"},
 	{"connect.rom.miui.com", "1.1.1.1"},
 	{"www.msftconnecttest.com", "1.1.1.1"},
-	{"ipv6.msftconnecttest.com", "1.1.1.1"},
 	{"www.gstatic.com", "1.1.1.1"},
 	{"www.gstatic.cn", "1.1.1.1"},
 	{"www.google.cn", "1.1.1.1"},
@@ -87,6 +86,15 @@ update_captive_domains_with_real_ips(void)
 		return;
 	}
 
+	// First, delete existing addnhosts entries and restart dnsmasq to clear cache
+	if (execute("uci -q delete dhcp.@dnsmasq[0].addnhosts && uci commit dhcp && /etc/init.d/dnsmasq restart >/dev/null 2>&1", 0) != 0) {
+		debug(LOG_ERR, "Failed to remove existing addnhosts configuration");
+		return;
+	}
+
+	// Wait a short moment for dnsmasq to fully restart
+	usleep(100000);  // 100ms delay
+
 	// Create or truncate the custom hosts file
 	FILE *fp = fopen(CUSTOM_HOSTS_FILE, "w");
 	if (!fp) {
@@ -111,8 +119,13 @@ update_captive_domains_with_real_ips(void)
 	}
 	fclose(fp);
 
-	// Restart dnsmasq to apply changes
-	execute("/etc/init.d/dnsmasq restart >/dev/null 2>&1", 0);
+	// Add new addnhosts entry as a list and restart dnsmasq
+	if (execute("uci -q add_list dhcp.@dnsmasq[0].addnhosts='" CUSTOM_HOSTS_FILE "' && "
+				"uci commit dhcp && /etc/init.d/dnsmasq restart >/dev/null 2>&1", 0) != 0) {
+		debug(LOG_ERR, "Failed to update dnsmasq configuration");
+		return;
+	}
+
 	debug(LOG_INFO, "Updated captive domains with real IPs");
 }
 
