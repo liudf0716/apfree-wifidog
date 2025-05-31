@@ -8,6 +8,9 @@
 #include <string.h>
 #include <unistd.h>
 #include <arpa/inet.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <sys/ioctl.h>
 
 #ifndef MIN
 #define MIN(a,b) (((a)<(b))?(a):(b))

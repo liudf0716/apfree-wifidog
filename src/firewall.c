@@ -76,8 +76,10 @@ fw_allow_ip_mac(const char *ip, const char *mac, int fw_connection_state)
 #ifdef AW_FW3
 	result = iptables_fw_access(FW_ACCESS_ALLOW, ip, mac, fw_connection_state);
 #elif AW_FW4
-	result = nft_fw_access(FW_ACCESS_ALLOW, ip, mac, fw_connection_state);
-#endif
+     result = nft_fw_access(FW_ACCESS_ALLOW, ip, mac, fw_connection_state);
+#elif AW_VPP
+    result = vpp_fw_access(FW_ACCESS_ALLOW, ip, mac, fw_connection_state);
+ #endif
 	return result;
 }
 
