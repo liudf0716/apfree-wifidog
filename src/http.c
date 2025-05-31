@@ -810,6 +810,15 @@ ev_http_send_redirect(struct evhttp_request * req, const char *url, const char *
 void 
 ev_http_callback_auth(struct evhttp_request *req, void *arg)
 {
+    char *token = NULL;
+    char *gw_id = NULL;
+    char *remote_host = NULL;
+    char *mac = NULL;
+    char *logout = NULL;
+    t_gateway_setting *gw_setting = NULL;
+    int new_client = 0;
+    t_client *client = NULL;
+
     struct wd_request_context *context = (struct wd_request_context *)arg;
     debug(LOG_DEBUG, "ev_http_callback_auth: the request is %s", evhttp_request_get_uri(req));
     if (evhttp_request_get_command(req) == EVHTTP_REQ_OPTIONS) {
@@ -818,27 +827,26 @@ ev_http_callback_auth(struct evhttp_request *req, void *arg)
         return;
     }
 
-	evhttp_add_header(evhttp_request_get_output_headers(req), "Access-Control-Allow-Origin", "*");
+    evhttp_add_header(evhttp_request_get_output_headers(req), "Access-Control-Allow-Origin", "*");
     evhttp_add_header(evhttp_request_get_output_headers(req), "Access-Control-Allow-Methods", "GET,POST,OPTIONS,DELETE,PUT");
-	
-    char *token = ev_http_find_query(req, "token");
-    if (!token) {
+    
+    if (!(token = ev_http_find_query(req, "token"))) {
         evhttp_send_error(req, 200, "Invalid token");
-        return;
-    } 
+        goto CLEAN_UP;
+    }
 
-    char *remote_host = ev_http_find_query(req, "client_ip");
-    char *mac = ev_http_find_query(req, "client_mac");
-    char *gw_id = ev_http_find_query(req, "gw_id");
-    t_gateway_setting *gw_setting = get_gateway_setting_by_id(gw_id);
-    if (!gw_setting) {
+    if (!(gw_id = ev_http_find_query(req, "gw_id"))) {
         evhttp_send_error(req, 200, "Invalid gateway id");
-        free(token);
-        if (remote_host) free(remote_host);
-        if (mac) free(mac);
-        return;
+        goto CLEAN_UP;
+    }
+
+    if (!(gw_setting = get_gateway_setting_by_id(gw_id))) {
+        evhttp_send_error(req, 200, "Invalid gateway id");
+        goto CLEAN_UP;
     }
     
+    remote_host = ev_http_find_query(req, "client_ip");
+    mac = ev_http_find_query(req, "client_mac");
     if (!remote_host || !mac) {
         char *remote_ip = NULL;
         uint16_t port;
@@ -852,16 +860,12 @@ ev_http_callback_auth(struct evhttp_request *req, void *arg)
     }
     
     if (!mac || !remote_host) {
-        free(token);
-        if (mac) free(mac);
-        if (remote_host) free(remote_host);
         evhttp_send_error(req, 200, "Failed to retrieve your MAC address");
-        return;
-    }  
+        goto CLEAN_UP;
+    }
 
-    int new_client = 0;
     LOCK_CLIENT_LIST();
-    t_client *client = client_list_find(remote_host, mac);
+    client = client_list_find(remote_host, mac);
     if (!client) {
         client = client_list_find_by_mac(mac);
         if (!client) {
@@ -876,12 +880,9 @@ ev_http_callback_auth(struct evhttp_request *req, void *arg)
         }
     }
     UNLOCK_CLIENT_LIST();
-    free(mac);
-    free(remote_host);
-
-    char *logout = ev_http_find_query(req, "logout");
+    
+    logout = ev_http_find_query(req, "logout");
     if (logout) {
-        free(logout);
         if (new_client) {
             debug(LOG_INFO, "Logout request from %s, but client not found, impossible here!", client->ip);
             safe_client_list_delete(client);
@@ -894,7 +895,14 @@ ev_http_callback_auth(struct evhttp_request *req, void *arg)
         debug(LOG_INFO, "Login request from %s", client->ip);
         ev_authenticate_client(req, context, client);
     }
-    free(token);
+
+CLEAN_UP:
+    // Clean up allocated memory
+    if (mac) free(mac);
+    if (remote_host) free(remote_host);
+    if (gw_id) free(gw_id);
+    if (token) free(token);
+    if (logout) free(logout);
 }
 
 /**
@@ -917,7 +925,7 @@ ev_http_callback_disconnect(struct evhttp_request *req, void *arg)
     if (!token || !mac) {
         debug(LOG_INFO, "Disconnect called without both token and MAC given");
         evhttp_send_error(req, HTTP_OK, "Both the token and MAC need to be specified");
-        return;
+        goto CLEAN_UP;
     }
 
     LOCK_CLIENT_LIST();
@@ -930,6 +938,11 @@ ev_http_callback_disconnect(struct evhttp_request *req, void *arg)
         debug(LOG_INFO, "Disconnect %s with incorrect token %s", mac, token);
         evhttp_send_error(req, HTTP_OK, "Invalid token for MAC");
     }
+
+CLEAN_UP:
+    // Clean up allocated memory
+    if (token) free((void *)token);
+    if (mac) free((void *)mac);
 }
 
 static void
@@ -1056,9 +1069,9 @@ ev_http_callback_local_auth(struct evhttp_request *req, void *arg)
         }
         fw_allow_ip_mac(ip, mac , FW_MARK_KNOWN);
     } else {
-        UNLOCK_CLIENT_LIST();
         // Existing client with same IP - just allow
         debug(LOG_INFO, "Local pass %s %s already login", mac, ip);
+        UNLOCK_CLIENT_LIST();
         ev_http_send_user_redirect_page(req, config->local_portal);
         goto END;
     }
@@ -1095,8 +1108,8 @@ ev_http_callback_temporary_pass(struct evhttp_request *req, void *arg)
     
     const char *mac = ev_http_find_query(req, "mac");
     const char *timeout = ev_http_find_query(req, "timeout");
-    if (!timeout) timeout = "0"; // default 5 minutes
-	
+    if (!timeout) timeout = strdup("0"); // default 5 minutes
+
 	evhttp_add_header(evhttp_request_get_output_headers(req), "Access-Control-Allow-Origin", "*");
     evhttp_add_header(evhttp_request_get_output_headers(req), "Access-Control-Allow-Methods", "GET,POST,OPTIONS,DELETE,PUT");
 	
@@ -1111,6 +1124,9 @@ ev_http_callback_temporary_pass(struct evhttp_request *req, void *arg)
         debug(LOG_INFO, "Temporary pass called without  MAC given");
         evhttp_send_error(req, HTTP_OK, "MAC need to be specified");
     }
+
+    if (mac) free((void *)mac);
+    if (timeout) free((void *)timeout);
 } 
 
 /**
@@ -1120,64 +1136,86 @@ ev_http_callback_temporary_pass(struct evhttp_request *req, void *arg)
  * @param arg useless
  *
  */
+/**
+ * @brief Process client's device request to check bypass user status
+ * 
+ * @param req Client's HTTP request
+ * @param arg Callback argument (unused)
+ * 
+ * This function:
+ * 1. Gets client IP from query string
+ * 2. Finds network interface for the client IP
+ * 3. Looks up gateway settings for that interface
+ * 4. Queries and returns bypass user status as JSON
+ */
 void
 ev_http_callback_device(struct evhttp_request *req, void *arg)
 {
+    char *client_ip = NULL;
+    const char *json_result = NULL;
+    struct evbuffer *evb = NULL;
+
+    // Handle CORS preflight request
     if (evhttp_request_get_command(req) == EVHTTP_REQ_OPTIONS) {
         ev_http_respond_options(req);
         return;
     }
 
-    evhttp_add_header(evhttp_request_get_output_headers(req), "Access-Control-Allow-Origin", "*");
-    evhttp_add_header(evhttp_request_get_output_headers(req), "Access-Control-Allow-Methods", "GET,POST,OPTIONS,DELETE,PUT");
+    // Set CORS headers
+    evhttp_add_header(evhttp_request_get_output_headers(req), 
+                     "Access-Control-Allow-Origin", "*");
+    evhttp_add_header(evhttp_request_get_output_headers(req), 
+                     "Access-Control-Allow-Methods", "GET,POST,OPTIONS,DELETE,PUT");
 
-    // Get client IP from query string
-    char *client_ip = ev_http_find_query(req, "client_ip");
-    if (!client_ip) {
-        evhttp_send_error(req, HTTP_OK, "Client IP need to be specified");
+    // Get and validate client IP
+    if (!(client_ip = ev_http_find_query(req, "client_ip"))) {
+        evhttp_send_error(req, HTTP_OK, "Client IP must be specified");
         return;
     }
 
+    // Get network interface for client IP
     char if_name[IFNAMSIZ] = {0};
     if (!get_ifname_by_address(client_ip, if_name)) {
-        debug(LOG_ERR, "get_ifname_by_address [%s] failed", client_ip);
-        evhttp_send_error(req, 200, "Cant get client's interface name");
-        free(client_ip);
-        return;
+        debug(LOG_ERR, "Failed to get interface name for IP [%s]", client_ip);
+        evhttp_send_error(req, HTTP_OK, "Unable to determine client interface");
+        goto cleanup;
     }
 
-
-    if_name[IFNAMSIZ-1] = '\0';
+    // Get gateway settings for interface
     t_gateway_setting *gw_setting = get_gateway_setting_by_ifname(if_name);
     if (!gw_setting) {
-        debug(LOG_ERR, "get_gateway_setting_by_ifname [%s] failed", if_name);
-        evhttp_send_error(req, 200, "Cant get gateway setting by interface name");
-        free(client_ip);
-        return;
+        debug(LOG_ERR, "Failed to get gateway settings for interface [%s]", if_name);
+        evhttp_send_error(req, HTTP_OK, "Unable to get gateway configuration");
+        goto cleanup;
     }
 
-    const char *json_query_result = query_bypass_user_status(client_ip, gw_setting->gw_id, gw_setting->gw_address_v4, QUERY_BY_IP);
-    if (!json_query_result) {
-        free(client_ip);
-        evhttp_send_error(req, HTTP_OK, "Failed to query bypass user status");
-        return;
+    // Query bypass user status
+    json_result = query_bypass_user_status(client_ip, 
+                                         gw_setting->gw_id,
+                                         gw_setting->gw_address_v4, 
+                                         QUERY_BY_IP);
+    if (!json_result) {
+        evhttp_send_error(req, HTTP_OK, "Failed to query user status");
+        goto cleanup;
     }
-    free(client_ip);
 
-    struct evbuffer *ev = evbuffer_new();
-    if (!ev) {
-        free((void *)json_query_result);
+    // Create and send response
+    if (!(evb = evbuffer_new())) {
         evhttp_send_error(req, HTTP_INTERNAL, "Failed to create response buffer");
-        return;
+        goto cleanup;
     }
 
-    evbuffer_add(ev, json_query_result, strlen(json_query_result));
-    evhttp_add_header(evhttp_request_get_output_headers(req), "Content-Type", "application/json");
-    evhttp_add_header(evhttp_request_get_output_headers(req), "Connection", "close");
-    evhttp_send_reply(req, HTTP_OK, "OK", ev);
+    evbuffer_add(evb, json_result, strlen(json_result));
+    evhttp_add_header(evhttp_request_get_output_headers(req), 
+                     "Content-Type", "application/json");
+    evhttp_add_header(evhttp_request_get_output_headers(req), 
+                     "Connection", "close");
+    evhttp_send_reply(req, HTTP_OK, "OK", evb);
 
-    free((void *)json_query_result);
-    evbuffer_free(ev);
+cleanup:
+    if (client_ip) free(client_ip);
+    if (json_result) free((void *)json_result);
+    if (evb) evbuffer_free(evb);
 }
 
 /**
