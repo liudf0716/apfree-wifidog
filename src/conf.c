@@ -408,7 +408,11 @@ parse_subnet_v4(const char *subnet, uint32_t *addr, uint32_t *mask)
 	}
 
 	*addr = ntohl(in.s_addr);
-	*mask = 0xFFFFFFFF << (32 - masklen);
+    if (masklen == 0) {
+        *mask = 0;
+    } else {
+        *mask = 0xFFFFFFFFu << (32 - masklen);
+    }
 
 	return true;
 }
