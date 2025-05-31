@@ -425,31 +425,36 @@ get_auth_uri(const char *request_type, client_type_t type, void *data)
     t_auth_serv *auth_server = get_auth_server();
     char *uri = NULL;
 
-    if (safe_asprintf(&uri,
-        "%s%sstage=%s&ip=%s&mac=%s&token=%s"
-        "&incoming_bytes=%llu&outgoing_bytes=%llu"
-        "&incoming_packets=%llu&outgoing_packets=%llu"
-        "&incoming_bytes_v6=%llu&outgoing_bytes_v6=%llu"
-        "&incoming_packets_v6=%llu&outgoing_packets_v6=%llu"
-        "&first_login=%lld&online_time=%u"
-        "&gw_id=%s&gw_channel=%s"
-        "&name=%s&wired=%u&device_id=%s"
-        "&incoming_rate=%u&outgoing_rate=%u"
-        "&incoming_rate_v6=%u&outgoing_rate_v6=%u",
-        auth_server->authserv_path,
-        auth_server->authserv_auth_script_path_fragment,
-        request_type, ip ? ip : "N/A", mac ? mac : "N/A",
-        safe_token ? safe_token : "N/A",
-        incoming_bytes, outgoing_bytes,
-        incoming_packets, outgoing_packets,
-        incoming_bytes_v6, outgoing_bytes_v6,
-        incoming_packets_v6, outgoing_packets_v6,
-        (long long)first_login, online_time,
-        gw_id ? gw_id : "N/A", gw_channel ? gw_channel : "N/A",
-        name ? name : "N/A", wired, device_id ? device_id : "N/A",
-        incoming_rate, outgoing_rate,
-        incoming_rate_v6, outgoing_rate_v6) < 0) {
-        return NULL;
+if (safe_asprintf(&uri,
+         "%s%sstage=%s&ip=%s&mac=%s&token=%s"
+         "&incoming_bytes=%llu&outgoing_bytes=%llu"
+         "&incoming_packets=%llu&outgoing_packets=%llu"
+         "&incoming_bytes_v6=%llu&outgoing_bytes_v6=%llu"
+         "&incoming_packets_v6=%llu&outgoing_packets_v6=%llu"
+         "&first_login=%lld&online_time=%u"
+         "&gw_id=%s&gw_channel=%s"
+         "&name=%s&wired=%u&device_id=%s"
+         "&incoming_rate=%u&outgoing_rate=%u"
+         "&incoming_rate_v6=%u&outgoing_rate_v6=%u",
+         auth_server->authserv_path,
+         auth_server->authserv_auth_script_path_fragment,
+         request_type, ip ? ip : "N/A", mac ? mac : "N/A",
+         safe_token ? safe_token : "N/A",
+         incoming_bytes, outgoing_bytes,
+         incoming_packets, outgoing_packets,
+         incoming_bytes_v6, outgoing_bytes_v6,
+         incoming_packets_v6, outgoing_packets_v6,
+         (long long)first_login, online_time,
+         gw_id ? gw_id : "N/A", gw_channel ? gw_channel : "N/A",
+         name ? name : "N/A", wired, device_id ? device_id : "N/A",
+         incoming_rate, outgoing_rate,
+         incoming_rate_v6, outgoing_rate_v6) < 0) {
+         return NULL;
+     }
+    
+    // Check if URI exceeds reasonable length limit
+    if (strlen(uri) > 2048) {
+        debug(LOG_WARNING, "Authentication URI exceeds 2048 characters (%zu), may cause issues with some servers", strlen(uri));
     }
 
     return uri;
