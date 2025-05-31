@@ -132,8 +132,11 @@ client_list_add(const char *ip, const char *mac, const char *token, t_gateway_se
         curclient->ip = safe_strdup(ip);
     else if (is_valid_ip6(ip))
         curclient->ip6 = safe_strdup(ip);
-    else
+    else {
         debug(LOG_ERR, "Invalid IP address format [%s]", ip);
+        free(curclient);
+        return NULL;
+    }
     curclient->mac = safe_strdup(mac);
     curclient->token = safe_strdup(token);
     curclient->counters.incoming_bytes = curclient->counters.outgoing_bytes = 0;
