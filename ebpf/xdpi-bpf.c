@@ -411,7 +411,7 @@ __bpf_kfunc int bpf_xdpi_skb_match(struct __sk_buff *skb_ctx, int dir)
         struct l7_proto_entry *proto_entry = NULL;
         for (int i = 0; i < ARRAY_SIZE(l7_proto_entries); i++) {
             if (l7_proto_entries[i].proto_type == PROTO_UDP &&
-                l7_proto_entries[i].match_func(data, data_len, htons(udp->dest))) {
+                l7_proto_entries[i].match_func(data, data_len, ntohs(udp->dest))) {
                 proto_entry = &l7_proto_entries[i];
                 break;
             }
