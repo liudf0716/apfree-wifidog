@@ -169,6 +169,12 @@ This section provides a brief overview of ApFree WiFiDog's internal workings.
     2.  **Authentication Server Communication:** The client interacts with the authentication server (e.g., enters credentials, clicks a button, or makes a payment). The authentication server then validates the client.
     3.  **Firewall Update:** Upon successful authentication, the authentication server notifies ApFree WiFiDog. ApFree WiFiDog then updates the firewall rules (e.g., adds the client's IP or MAC address to an allowed list or marks their connections) to grant the client internet access for a specified duration or according to the defined policy. Client status and session validity are periodically checked.
 
+### Authentication Server API
+
+For developers looking to integrate ApFree WiFiDog with a custom authentication server, or to understand the communication protocol in detail, a dedicated API documentation is available. This document outlines the Ping, Counters (V2), and WebSocket interfaces used for communication between WiFiDog and the authentication server.
+
+[View the Authentication Server API Documentation (English)](AUTH_SERVER_API_EN.md)
+
 ### Using ApFree WiFiDog in Cloud Auth Mode
 
 To operate ApFree WiFiDog in cloud auth mode, you must first establish an authentication server. Once set up, configure ApFree WiFiDog to connect to your server by specifying its IP address or domain in the configuration file.
