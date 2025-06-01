@@ -847,20 +847,43 @@ ev_http_callback_auth(struct evhttp_request *req, void *arg)
     
     remote_host = ev_http_find_query(req, "client_ip");
     mac = ev_http_find_query(req, "client_mac");
+
     if (!remote_host || !mac) {
-        char *remote_ip = NULL;
-        uint16_t port;
-        if (mac) free(mac);
-        if (remote_host) free(remote_host);
-        mac = NULL;
-        remote_host = NULL;
-        evhttp_connection_get_peer(evhttp_request_get_connection(req), &remote_ip, &port);
-        remote_host = safe_strdup(remote_ip);
-        mac = arp_get(remote_host);
+        char *peer_ip_temp = NULL;
+        uint16_t port_temp;
+
+        if (remote_host) { free(remote_host); remote_host = NULL; }
+        if (mac) { free(mac); mac = NULL; }
+
+        // gw_setting is assumed to be valid here from earlier gw_id processing.
+        // If gw_id wasn't found, it would have gone to CLEAN_UP.
+
+        int addr_type = ev_http_connection_get_peer(evhttp_request_get_connection(req), &peer_ip_temp, &port_temp);
+        if (addr_type == 0 || !peer_ip_temp) {
+            evhttp_send_error(req, 200, "Failed to retrieve your IP address from connection");
+            goto CLEAN_UP;
+        }
+        remote_host = safe_strdup(peer_ip_temp); // remote_host is now alloc'd
+
+        char actual_mac_buffer[MAC_LENGTH];
+        // Ensure gw_setting is not NULL before dereferencing
+        if (gw_setting && br_arp_get_mac(gw_setting, remote_host, actual_mac_buffer)) {
+            mac = safe_strdup(actual_mac_buffer); // mac is now alloc'd
+        } else {
+            // Provide a more specific error if gw_setting was the issue
+            if (!gw_setting) { // This case should ideally be caught by gw_id check
+                 evhttp_send_error(req, 200, "Gateway configuration missing for MAC retrieval");
+            } else {
+                 evhttp_send_error(req, 200, "Failed to retrieve your MAC address (ARP/NDP failed)");
+            }
+            // remote_host will be freed at CLEAN_UP
+            goto CLEAN_UP;
+        }
     }
     
-    if (!mac || !remote_host) {
-        evhttp_send_error(req, 200, "Failed to retrieve your MAC address");
+    if (!remote_host || !mac) {
+        // This is a safeguard; previous block should ensure both are set or jump to CLEAN_UP
+        evhttp_send_error(req, 200, "Failed to determine client IP or MAC address");
         goto CLEAN_UP;
     }
 
@@ -1108,7 +1131,7 @@ ev_http_callback_temporary_pass(struct evhttp_request *req, void *arg)
     
     const char *mac = ev_http_find_query(req, "mac");
     const char *timeout = ev_http_find_query(req, "timeout");
-    if (!timeout) timeout = strdup("0"); // default 5 minutes
+    if (!timeout) timeout = safe_strdup("0"); // default 5 minutes
 
 	evhttp_add_header(evhttp_request_get_output_headers(req), "Access-Control-Allow-Origin", "*");
     evhttp_add_header(evhttp_request_get_output_headers(req), "Access-Control-Allow-Methods", "GET,POST,OPTIONS,DELETE,PUT");
