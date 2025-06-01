@@ -9,7 +9,7 @@
 [![OpenWRT](https://img.shields.io/badge/Platform-%20OpenWRT%20-brightgreen.svg?style=plastic)](https://github.com/openwrt) 
 [![Join the QQ Group](https://img.shields.io/badge/chat-qq%20group-brightgreen.svg)](https://jq.qq.com/?_wv=1027&k=4ADDSev)
 
-[English Version](README.md) | [中文版本](README-zh.md)
+[English Version](README.md) | [中文版本](README-zh.md) | [认证服务器API](AUTH_SERVER_API_ZH.md)
 
 ## ApFree WiFiDog: 高性能 HTTP(S) 认证门户解决方案
 

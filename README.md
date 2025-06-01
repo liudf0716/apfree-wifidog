@@ -10,7 +10,7 @@
 [![OpenWRT](https://img.shields.io/badge/Platform-%20OpenWRT%20-brightgreen.svg?style=plastic)](https://github.com/openwrt) 
 [![Join the QQ Group](https://img.shields.io/badge/chat-qq%20group-brightgreen.svg)](https://jq.qq.com/?_wv=1027&k=4ADDSev)
 
-[English Version](README.md) | [中文版本](README-zh.md)
+[English Version](README.md) | [中文版本](README-zh.md) | [Auth Server API](AUTH_SERVER_API_EN.md)
 
 ## ApFree WiFiDog: A High-Performance Captive Portal Solution for HTTP(S)
 
