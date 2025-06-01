@@ -1833,7 +1833,8 @@ arp_get_mac(const char *dev_name, const char *i_ip, char *o_mac)
 		return 0;
 	}
 
-	strcpy(arpreq.arp_dev, dev_name);
+	strncpy(arpreq.arp_dev, dev_name, sizeof(arpreq.arp_dev) - 1);
+	arpreq.arp_dev[sizeof(arpreq.arp_dev) - 1] = '\0';
 	if (ioctl(s, SIOCGARP, &arpreq) < 0) {
 		close(s);
 		return 0;
