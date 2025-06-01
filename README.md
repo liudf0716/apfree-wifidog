@@ -32,53 +32,70 @@ ApFree WiFiDog is an open-source, high-performance captive portal solution for H
 4. **Long Connection Support**: Accommodates long connections, including WebSocket and MQTT, for real-time communication.
 5. **Flexible Authentication**: Offers both local and cloud-based authentication methods, catering to diverse user needs.
 6. **Advanced Rules Management**: Enables dynamic management of access rules, including MAC address and IP/domain management, without requiring restarts.
+7. **Active Support**: Benefits from active community support and responsive issue resolution.
+8. **eBPF-based Traffic Control & DPI**: Leverages eBPF for efficient traffic control and Deep Packet Inspection (DPI) capabilities.
 
 ### Installation
 
-Before installing any packages, it's recommended to update the package lists:
-```bash
-opkg update
-```
+The package manager commands for OpenWrt vary depending on the version.
 
-To install ApFree WiFiDog on OpenWrt, use the following command:
-```bash
-opkg install apfree-wifidog
-```
+**For latest OpenWrt versions (typically using `apk`):**
+1. Update package lists:
+   ```bash
+   apk update
+   ```
+2. Install ApFree WiFiDog:
+   ```bash
+   apk add apfree-wifidog
+   ```
 
-For the LuCI web interface, install the following package:
-```bash
-opkg install luci-app-apfree-wifidog
-```
+**For older OpenWrt versions (typically using `opkg`):**
+1. Update package lists:
+   ```bash
+   opkg update
+   ```
+2. Install ApFree WiFiDog:
+   ```bash
+   opkg install apfree-wifidog
+   ```
+
+**LuCI Web Interface:**
+The `luci-app-apfree-wifidog` package is **not** installed using the commands above. For guidance on setting up the LuCI web interface, please refer to the "LuCI Integration" section, which recommends using the `chawrt` project or integrating LuCI from the main `luci` repository if you are building your own firmware.
 
 ### LuCI Integration
 
-For simplified configuration, ApFree WiFiDog includes a LuCI interface. Manage your settings easily through a user-friendly web interface via the [luci-app-apfree-wifidog repository](https://github.com/liudf0716/luci-app-apfree-wifidog).
+For simplified configuration, ApFree WiFiDog has a LuCI interface. While the `luci-app-apfree-wifidog` package was previously standalone, it is now integrated into the main `luci` repository available at [https://github.com/liudf0716/luci](https://github.com/liudf0716/luci).
+
+**Recommended Setup:**
+We recommend users adopt the **`chawrt`** project for their OpenWrt setup, which can be found at [https://github.com/liudf0716/chawrt](https://github.com/liudf0716/chawrt). The `chawrt` project includes `luci-app-apfree-wifidog` and provides a comprehensive, ready-to-use OpenWrt firmware solution with ApFree WiFiDog integrated. Using `chawrt` is the easiest way to get started with a fully configured system.
+
+If you are building your own firmware or prefer manual installation, you can find the LuCI application as part of the `luci` repository mentioned above. However, for most users, **`chawrt`** offers a more streamlined experience.
 
 ### Basic Usage Example: Guest Network
 
-A common use case for ApFree WiFiDog is to set up a guest WiFi network that requires users to authenticate via a captive portal before gaining full internet access. Here's a general outline of the steps involved:
+Configuring ApFree WiFiDog is best done using the `luci-app-apfree-wifidog` web interface, which provides a user-friendly way to manage all settings. Manual editing of configuration files is discouraged.
 
-1.  **Set up a Guest Network Interface in OpenWrt:**
-    *   This typically involves creating a new network interface (e.g., `guestnet`) in your OpenWrt router's network configuration.
-    *   You might assign this interface to a separate VLAN or a different WiFi SSID specifically for guests.
-    *   Ensure this guest network has DHCP enabled to assign IP addresses to clients but initially does not allow general internet access through firewall rules (ApFree WiFiDog will manage this).
+Here are two common scenarios:
 
-2.  **Configure ApFree WiFiDog:**
-    *   Edit the ApFree WiFiDog configuration file (e.g., `/etc/wifidog.conf` or `/etc/wifidogx.conf`).
-    *   Set the `GatewayInterface` option to the name of your guest network interface (e.g., `GatewayInterface guestnet`).
-    *   Configure the authentication server details by setting `AuthServerHostname`, `AuthServerPort`, and `AuthServerPath` to point to your captive portal's authentication service. For example:
-        ```
-        AuthServerHostname auth.example.com
-        AuthServerPort 80
-        AuthServerPath /wifidog/
-        ```
+1.  **Cloud Authentication Mode:**
+    *   This mode requires an external authentication server.
+    *   **Steps via LuCI:**
+        *   Navigate to the ApFree WiFiDog configuration page in LuCI.
+        *   **Authentication Server Settings:** Configure the `Hostname`, `Port`, and `Path` for your authentication server.
+        *   **Gateway Settings:** Ensure the `Gateway Interface` is correctly set to your guest network interface (e.g., `br-guest`).
+        *   **Advanced Settings:** For real-time communication and status updates (often needed by cloud solutions), enable and configure `WebSocket Support` (e.g., specify WebSocket URL/Path).
+    *   Clients connecting to the guest network will be redirected to your cloud authentication portal. After successful authentication, they will be granted internet access.
 
-3.  **Client Connection and Redirection:**
-    *   When a client connects to your guest WiFi network, their HTTP(S) traffic will be intercepted by ApFree WiFiDog.
-    *   They will be redirected to the authentication portal specified by your `AuthServer` settings.
-    *   After successful authentication, ApFree WiFiDog will allow them internet access based on the rules and duration provided by the authentication server.
+2.  **Local Authentication Mode (Splash Page Only):**
+    *   This mode does not require an external authentication server and is typically used for simpler scenarios like displaying a welcome page or terms of service before granting access.
+    *   **Steps via LuCI:**
+        *   Navigate to the ApFree WiFiDog configuration page in LuCI.
+        *   **Gateway Settings:** Ensure the `Gateway Interface` is correctly set to your guest network interface (e.g., `br-guest`).
+        *   **Authentication Mode:** Select a local or splash page mode if available, or ensure no external `AuthServer` is configured.
+        *   **Redirect URL / Splash Page URL:** Configure the `Redirect URL` (or similar field) to point to your desired local splash page or an external informational page. This is the page users will see before being granted access. For a simple "click-to-continue" setup, this might be a page you host on the router itself or a simple external site.
+    *   Clients connecting to the guest network will be redirected to this specified URL. Depending on the specific local authentication setup (which might vary by firmware or custom configurations), they might be granted access immediately after viewing the page or after a simple action like clicking a button.
 
-This setup provides a controlled and isolated network for guests while requiring them to pass through your portal for access.
+This approach provides a controlled and isolated network for guests while requiring them to pass through your configured portal or splash page for access. Remember to save and apply your changes in LuCI.
 
 ### Troubleshooting
 
@@ -104,8 +121,7 @@ ApFree WiFiDog logs messages that can provide valuable insights into its operati
 
 *   **Device-Specific Portal or Authentication Issues:**
     *   **MAC Address Lists:** ApFree WiFiDog can have lists of trusted (whitelisted) and untrusted (blacklisted) MAC addresses.
-        *   Use `wdctlx show_trusted_mac` to see MAC addresses that are always allowed.
-        *   Use `wdctlx show_untrusted_mac` to see MAC addresses that are always blocked.
+        *   Use `wdctlx show mac` to see MAC addresses that are configured (e.g., trusted or blocked based on system setup).
         Check these lists if a specific device is behaving unexpectedly.
 
 #### Using `wdctlx` for Diagnostics
@@ -116,7 +132,7 @@ ApFree WiFiDog comes with a command-line utility called `wdctlx` (WiFiDog Contro
 *   `wdctlx status client`: Lists all connected and authenticated clients.
 *   `wdctlx show domain`: Displays the current list of trusted domains.
 *   `wdctlx show wildcard_domain`: Displays the current list of trusted wildcard domains.
-*   `wdctlx show mac`: Displays trusted MAC addresses.
+*   `wdctlx show mac`: Displays the MAC address list.
 *   `wdctlx add <domain|wildcard_domain|mac> <value1,value2...>`: Adds specified values to the trusted domain, wildcard domain, or MAC list.
 *   `wdctlx del <domain|wildcard_domain|mac> <value1,value2...>`: Deletes specified values from the trusted domain, wildcard domain, or MAC list.
 *   `wdctlx clear <domain|wildcard_domain|mac>`: Clears all entries from the specified trusted list (domain, wildcard domain, or MAC).

@@ -31,53 +31,70 @@ ApFree WiFiDog 是一个开源的高性能认证门户解决方案，专门用�
 4. **长连接支持**：支持长连接，包括 WebSocket 和 MQTT，实现实时通信。
 5. **灵活的认证方式**：提供本地和云端认证，满足不同用户需求。
 6. **高级规则管理**：支持动态管理访问规则，包括 MAC 地址和 IP/域名，无需重启。
+7. **积极支持**：拥有积极活跃的社区支持及快速的问题响应。
+8. **eBPF流控与DPI**：利用eBPF实现高效的流量控制和深度包检测(DPI)功能。
 
 ### 安装
 
-在安装任何软件包之前，建议更新软件包列表：
-```bash
-opkg update
-```
+OpenWrt 的包管理器命令因版本而异。
 
-要在 OpenWrt 上安装 ApFree WiFiDog，请使用以下命令：
-```bash
-opkg install apfree-wifidog
-```
+**对于最新的 OpenWrt 版本 (通常使用 `apk`):**
+1. 更新软件包列表:
+   ```bash
+   apk update
+   ```
+2. 安装 ApFree WiFiDog:
+   ```bash
+   apk add apfree-wifidog
+   ```
 
-对于 LuCI Web 界面，请安装以下软件包：
-```bash
-opkg install luci-app-apfree-wifidog
-```
+**对于较旧的 OpenWrt 版本 (通常使用 `opkg`):**
+1. 更新软件包列表:
+   ```bash
+   opkg update
+   ```
+2. 安装 ApFree WiFiDog:
+   ```bash
+   opkg install apfree-wifidog
+   ```
+
+**LuCI Web 界面:**
+`luci-app-apfree-wifidog` 软件包 **不能** 使用上述命令安装。有关设置 LuCI Web 界面的指导，请参阅“LuCI 集成”部分，其中推荐使用 `chawrt` 项目，或者如果您正在构建自己的固件，则从主 `luci` 仓库集成 LuCI。
 
 ### LuCI 集成
 
-为简化配置，ApFree WiFiDog 包含 LuCI 界面。您可以通过 [luci-app-apfree-wifidog 仓库](https://github.com/liudf0716/luci-app-apfree-wifidog) 轻松管理设置。
+为了简化配置，ApFree WiFiDog 提供了 LuCI 界面。`luci-app-apfree-wifidog` 软件包之前是独立的，但现在已集成到主 `luci` 仓库中，地址为 [https://github.com/liudf0716/luci](https://github.com/liudf0716/luci)。
+
+**推荐设置:**
+我们建议用户采用 **`chawrt`** 项目来设置您的 OpenWrt 环境，该项目位于 [https://github.com/liudf0716/chawrt](https://github.com/liudf0716/chawrt)。`chawrt` 项目包含了 `luci-app-apfree-wifidog`，并提供了一个全面、即用型的 OpenWrt 固件解决方案，其中已集成了 ApFree WiFiDog。使用 `chawrt` 是开始使用完整配置系统的最简单方法。
+
+如果您正在构建自己的固件或偏好手动安装，您可以在上面提到的 `luci` 仓库中找到该 LuCI 应用程序。然而，对于大多数用户来说，**`chawrt`** 提供了更简化的体验。
 
 ### 基本用法示例：访客网络
 
-ApFree WiFiDog 的一个常见用例是设置访客 WiFi 网络，要求用户在获得完全互联网访问权限之前通过强制门户进行身份验证。以下是所涉及步骤的概述：
+推荐使用 `luci-app-apfree-wifidog` 网页界面来配置 ApFree WiFiDog，它提供了一种用户友好的方式来管理所有设置。不鼓励手动编辑配置文件。
 
-1.  **在 OpenWrt 中设置访客网络接口：**
-    *   这通常涉及在 OpenWrt 路由器的网络配置中创建一个新的网络接口（例如，`guestnet`）。
-    *   您可以将此接口分配给一个单独的 VLAN 或一个专门为访客提供的不同 WiFi SSID。
-    *   确保此访客网络已启用 DHCP 以向客户端分配 IP 地址，但最初不允许通过防火墙规则进行常规互联网访问（ApFree WiFiDog 将管理此问题）。
+以下是两种常见的应用场景：
 
-2.  **配置 ApFree WiFiDog：**
-    *   编辑 ApFree WiFiDog 配置文件（例如，`/etc/wifidog.conf` 或 `/etc/wifidogx.conf`）。
-    *   将 `GatewayInterface` 选项设置为您的访客网络接口的名称（例如，`GatewayInterface guestnet`）。
-    *   通过设置 `AuthServerHostname`、`AuthServerPort` 和 `AuthServerPath` 指向您的强制门户的认证服务来配置认证服务器详细信息。例如：
-        ```
-        AuthServerHostname auth.example.com
-        AuthServerPort 80
-        AuthServerPath /wifidog/
-        ```
+1.  **云认证方式:**
+    *   此模式需要外部认证服务器。
+    *   **通过 LuCI 配置步骤:**
+        *   在 LuCI 中导航到 ApFree WiFiDog 配置页面。
+        *   **认证服务器设置:** 配置认证服务器的 `主机名` (Hostname)、`端口` (Port) 和 `路径` (Path)。
+        *   **网关配置:** 确保 `网关接口` (Gateway Interface) 正确设置为您的访客网络接口 (例如 `br-guest`)。
+        *   **高级设置:** 为了支持实时通信和状态更新（云端方案通常需要），启用并配置 `WebSocket支持` (WebSocket Support) (例如，指定 WebSocket URL/路径)。
+    *   连接到访客网络的客户端将被重定向到您的云认证门户。成功认证后，他们将被授予互联网访问权限。
 
-3.  **客户端连接和重定向：**
-    *   当客户端连接到您的访客 WiFi 网络时，其 HTTP(S) 流量将被 ApFree WiFiDog 拦截。
-    *   他们将被重定向到您的 `AuthServer` 设置指定的认证门户。
-    *   成功认证后，ApFree WiFiDog 将根据认证服务器提供的规则和持续时间允许他们访问互联网。
+2.  **本地认证方式 (仅展示页面):**
+    *   此模式不需要外部认证服务器，通常用于较简单的场景，例如在授予访问权限之前显示欢迎页面或服务条款。
+    *   **通过 LuCI 配置步骤:**
+        *   在 LuCI 中导航到 ApFree WiFiDog 配置页面。
+        *   **网关配置:** 确保 `网关接口` (Gateway Interface) 正确设置为您的访客网络接口 (例如 `br-guest`)。
+        *   **认证模式:** 选择本地或展示页面模式（如果可用），或者确保没有配置外部 `AuthServer`。
+        *   **跳转URL / 展示页面URL:** 配置 `跳转URL` (Redirect URL) (或类似字段) 指向您期望的本地展示页面或外部信息页面。这是用户在被授予访问权限之前将看到的页面。对于简单的“点击继续”设置，这可能是您在路由器本身上托管的页面或一个简单的外部站点。
+    *   连接到访客网络的客户端将被重定向到此指定URL。根据具体的本地认证设置（可能因固件或自定义配置而异），他们可能在查看页面后或执行简单操作（如单击按钮）后立即获得访问权限。
 
-此设置可为访客提供受控且隔离的网络，同时要求他们通过您的门户才能访问。
+这种方法为访客提供了一个受控且隔离的网络，同时要求他们通过您配置的门户或展示页面才能访问。记住在 LuCI 中保存并应用您的更改。
 
 ### 问题排查
 
@@ -103,8 +120,7 @@ ApFree WiFiDog 会记录日志消息，这些消息可以为其操作和任何�
 
 *   **特定设备的门户或认证问题：**
     *   **MAC 地址列表：** ApFree WiFiDog 可以包含受信任（白名单）和不受信任（黑名单）的 MAC 地址列表。
-        *   使用 `wdctlx show_trusted_mac` 查看始终允许的 MAC 地址。
-        *   使用 `wdctlx show_untrusted_mac` 查看始终阻止的 MAC 地址。
+        *   使用 `wdctlx show mac` 查看已配置的 MAC 地址 (例如，根据系统设置可能是受信任的或已阻止的)。
         如果特定设备的行为异常，请检查这些列表。
 
 #### 使用 `wdctlx` 进行诊断
@@ -115,7 +131,7 @@ ApFree WiFiDog 附带一个名为 `wdctlx` (WiFiDog Control) 的命令行实用�
 *   `wdctlx status client`：列出所有已连接和已认证的客户端。
 *   `wdctlx show domain`：显示当前的受信任域列表。
 *   `wdctlx show wildcard_domain`：显示当前的受信任通配符域列表。
-*   `wdctlx show mac`：显示受信任的 MAC 地址。
+*   `wdctlx show mac`：显示 MAC 地址列表。
 *   `wdctlx add <domain|wildcard_domain|mac> <value1,value2...>`: 添加指定的值到信任的域名、通配符域名或 MAC 地址列表。
 *   `wdctlx del <domain|wildcard_domain|mac> <value1,value2...>`: 从信任的域名、通配符域名或 MAC 地址列表中删除指定的值。
 *   `wdctlx clear <domain|wildcard_domain|mac>`: 清除指定的信任列表（域名、通配符域名或 MAC 地址）中的所有条目。
