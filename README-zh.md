@@ -1,4 +1,3 @@
-
 <div align="center">
     <img src="https://user-images.githubusercontent.com/1182593/213065247-9a3cb0a5-dd08-4383-b217-b141ad32e88a.png" alt="ApFree WiFiDog Logo" width="400" height="400"/>
 </div>
@@ -33,13 +32,136 @@ ApFree WiFiDog 是一个开源的高性能认证门户解决方案，专门用�
 5. **灵活的认证方式**：提供本地和云端认证，满足不同用户需求。
 6. **高级规则管理**：支持动态管理访问规则，包括 MAC 地址和 IP/域名，无需重启。
 
+### 安装
+
+在安装任何软件包之前，建议更新软件包列表：
+```bash
+opkg update
+```
+
+要在 OpenWrt 上安装 ApFree WiFiDog，请使用以下命令：
+```bash
+opkg install apfree-wifidog
+```
+
+对于 LuCI Web 界面，请安装以下软件包：
+```bash
+opkg install luci-app-apfree-wifidog
+```
+
 ### LuCI 集成
 
 为简化配置，ApFree WiFiDog 包含 LuCI 界面。您可以通过 [luci-app-apfree-wifidog 仓库](https://github.com/liudf0716/luci-app-apfree-wifidog) 轻松管理设置。
 
+### 基本用法示例：访客网络
+
+ApFree WiFiDog 的一个常见用例是设置访客 WiFi 网络，要求用户在获得完全互联网访问权限之前通过强制门户进行身份验证。以下是所涉及步骤的概述：
+
+1.  **在 OpenWrt 中设置访客网络接口：**
+    *   这通常涉及在 OpenWrt 路由器的网络配置中创建一个新的网络接口（例如，`guestnet`）。
+    *   您可以将此接口分配给一个单独的 VLAN 或一个专门为访客提供的不同 WiFi SSID。
+    *   确保此访客网络已启用 DHCP 以向客户端分配 IP 地址，但最初不允许通过防火墙规则进行常规互联网访问（ApFree WiFiDog 将管理此问题）。
+
+2.  **配置 ApFree WiFiDog：**
+    *   编辑 ApFree WiFiDog 配置文件（例如，`/etc/wifidog.conf` 或 `/etc/wifidogx.conf`）。
+    *   将 `GatewayInterface` 选项设置为您的访客网络接口的名称（例如，`GatewayInterface guestnet`）。
+    *   通过设置 `AuthServerHostname`、`AuthServerPort` 和 `AuthServerPath` 指向您的强制门户的认证服务来配置认证服务器详细信息。例如：
+        ```
+        AuthServerHostname auth.example.com
+        AuthServerPort 80
+        AuthServerPath /wifidog/
+        ```
+
+3.  **客户端连接和重定向：**
+    *   当客户端连接到您的访客 WiFi 网络时，其 HTTP(S) 流量将被 ApFree WiFiDog 拦截。
+    *   他们将被重定向到您的 `AuthServer` 设置指定的认证门户。
+    *   成功认证后，ApFree WiFiDog 将根据认证服务器提供的规则和持续时间允许他们访问互联网。
+
+此设置可为访客提供受控且隔离的网络，同时要求他们通过您的门户才能访问。
+
+### 问题排查
+
+遇到问题了？这里有一些步骤和常见问题可以帮助您排查 ApFree WiFiDog 设置。
+
+#### 检查日志
+
+ApFree WiFiDog 会记录日志消息，这些消息可以为其操作和任何错误提供有价值的见解。
+
+*   **日志输出：** 默认情况下，ApFree WiFiDog 将日志消息输出到 `stderr`。如果您通过 OpenWrt 上的 init 脚本或服务管理器运行它，这些日志可能会被定向到系统日志 (syslog)，通常可以使用 `logread` 命令查看。某些配置可能允许直接指定日志文件。
+*   **日志详细程度（调试级别）：** 您可以增加日志消息的详细程度以获取更多详细信息。这通常由 `wifidog.conf` / `wifidogx.conf` 文件中的 `DaemonLogLevel` 或类似设置控制。将其设置为更高级别（例如，7 表示调试）将产生更多输出。有关日志记录的具体选项，请查阅示例配置文件。
+
+#### 常见问题和解决方案
+
+*   **客户端未重定向到强制门户：**
+    *   **服务状态：** 确保 ApFree WiFiDog 服务正在运行。您可以通过 LuCI 或在命令行中使用 `ps | grep wifidog` 来检查。
+    *   **`GatewayInterface`：** 验证配置文件中的 `GatewayInterface` 是否与客户端所在的网络接口正确匹配（例如，`br-lan` 或您的特定访客接口）。
+    *   **防火墙规则：** ApFree WiFiDog 依赖防火墙规则来拦截流量。检查是否存在必要的 iptables 规则 (`iptables -L -t nat`)。有时，自定义防火墙配置或其他服务可能会造成干扰。
+    *   **DNS 解析：** 确保客户端使用的 DNS 服务器可以解析您的认证服务器的主机名。此外，路由器本身必须能够解析 DNS 以支持域名白名单功能。
+
+*   **客户端已认证但无法访问特定网站/服务：**
+    *   **受信任的域/主机：** ApFree WiFiDog 维护一个受信任的域和 IP 地址列表，客户端可以在认证前访问这些域和 IP 地址（有时在认证后也可以，具体取决于策略）。使用 `wdctl show_trusted_domains` 命令查看当前活动的受信任域/IP 列表。如果某个站点无法正常工作，则其域或其资源（CDN、API）的域可能需要添加到配置中的受信任列表。
+
+*   **特定设备的门户或认证问题：**
+    *   **MAC 地址列表：** ApFree WiFiDog 可以包含受信任（白名单）和不受信任（黑名单）的 MAC 地址列表。
+        *   使用 `wdctl show_trusted_mac` 查看始终允许的 MAC 地址。
+        *   使用 `wdctl show_untrusted_mac` 查看始终阻止的 MAC 地址。
+        如果特定设备的行为异常，请检查这些列表。
+
+#### 使用 `wdctl` 进行诊断
+
+ApFree WiFiDog 附带一个名为 `wdctl` (WiFiDog Control) 的命令行实用程序，它对于诊断非常有用。它允许您检查 WiFiDog 的当前状态，而无需重新启动服务。一些有用的命令包括：
+
+*   `wdctl status`：显示守护进程的常规状态。
+*   `wdctl show_clients`：列出所有已连接和已认证的客户端。
+*   `wdctl show_trusted_domains`：显示当前的受信任域和 IP 列表。
+*   `wdctl show_trusted_mac`：显示受信任的 MAC 地址。
+*   `wdctl show_untrusted_mac`：显示不受信任的 MAC 地址。
+*   `wdctl show_remote_trusted_mac`：显示远程受信任的 MAC 地址。
+*   `wdctl show_local_trusted_mac`：显示本地受信任的 MAC 地址。
+
+有关更多命令和选项，请参阅 `wdctl --help` 或文档。
+
+### 技术细节
+
+本节简要概述了 ApFree WiFiDog 的内部工作原理。
+
+*   **核心组件：**
+    *   **主网关进程：** 管理客户端连接、流量以及与其他模块交互的中央守护进程。
+    *   **认证模块：** 处理客户端认证逻辑，包括与外部认证服务器的通信。
+    *   **防火墙交互模块：** 负责根据客户端的认证状态动态更新防火墙规则以控制客户端访问。
+
+*   **事件驱动架构：** ApFree WiFiDog 采用事件驱动模型构建，主要利用 `libevent2` 库。这使其能够以较低的资源开销高效处理大量并发客户端连接，从而实现高性能。
+
+*   **防火墙交互：**
+    *   ApFree WiFiDog 通过与 Linux netfilter 框架交互来动态管理网络访问。它通常为此目的使用 `iptables`，但在较新版本或特定构建中可能提供或可配置对 `nftables` 的支持。系统可能会自动检测可用的防火墙实用程序。
+    *   它通过添加和删除规则来控制客户端访问，例如，这些规则可以标记来自已认证客户端的数据包以供防火墙接受，或使用连接跟踪状态来管理访问。未经认证的客户端通常会受到将其网络流量重定向到强制门户的规则的约束。
+
+*   **高级认证流程：**
+    1.  **重定向：** 当未经认证的客户端尝试访问互联网（通常通过 HTTP/HTTPS）时，ApFree WiFiDog 的防火墙规则会拦截该流量。然后，客户端将被重定向到强制门户 URL，该 URL 通常托管在外部认证服务器上。
+    2.  **认证服务器通信：** 客户端与认证服务器交互（例如，输入凭据、单击按钮或付款）。然后，认证服务器验证客户端。
+    3.  **防火墙更新：** 成功认证后，认证服务器会通知 ApFree WiFiDog。然后，ApFree WiFiDog 会更新防火墙规则（例如，将客户端的 IP 或 MAC 地址添加到允许列表或标记其连接），以在指定持续时间内或根据定义的策略授予客户端互联网访问权限。客户端状态和会话有效性会定期检查。
+
 ### 在云认证模式下使用 ApFree WiFiDog
 
-要在云认证模式下运行 ApFree WiFiDog，您需要先建立一个认证服务器。设置完成后，通过在配置文件中指定服务器的 IP 地址或域名来配置 ApFree WiFiDog 连接到服务器。
+要在云认证模式下运行 ApFree WiFiDog，您必须首先建立一个认证服务器。设置完成后，通过在配置文件中指定其 IP 地址或域名来配置 ApFree WiFiDog 连接到您的服务器。
+
+ApFree WiFiDog 使用纯文本文件进行配置，通常命名为 `wifidog.conf` 或 `wifidogx.conf`（当使用包含 HTTPS 支持的 `apfree-wifidogx` 变体时）。此文件包含控制强制门户行为的各种参数。
+
+以下是一些关键配置选项：
+*   `GatewayInterface`：指定强制门户的网络接口（例如，`br-lan`）。
+*   `AuthServerHostname`：您的认证服务器的主机名或 IP 地址。
+*   `AuthServerPort`：您的认证服务器正在侦听的端口号。
+*   `AuthServerPath`：您的服务器上认证服务的路径（例如，`/wifidog/`）。
+*   `CheckInterval`：ApFree WiFiDog 检查已连接客户端状态的时间间隔（以秒为单位）。
+*   `ClientTimeout`：不活动客户端被取消认证的时间（以秒为单位）。
+
+源代码的 `doc/` 目录中提供了一个示例配置文件 `wifidogx.conf`，您可以将其用作起点。
+
+此外，ApFree WiFiDog 引入了几个重要的参数来微调其操作：
+*   `UpdateDomainInterval`：当设置为非零值时，此选项启用域白名单的定期 DNS 解析，确保允许域的 IP 地址保持最新。
+*   `DNSTimeout`：设置用于域白名单解析的非阻塞 DNS 查询的超时时间（以秒为单位，默认为 1 秒）。这可以防止守护进程因 DNS 查询缓慢而挂起。
+*   `bypassAppleCNA`：如果启用，ApFree WiFiDog 将处理 iOS “whisper” 或强制网络助手 (CNA) 检测过程。这有助于确保 Apple 设备顺利连接到 WiFi 并按预期触发强制门户。
+*   `JsFilter`：启用后，此功能使用基于 JavaScript 的重定向。这主要用于过滤掉非浏览器 HTTP 请求，从而减少认证服务器的负载。但是，请注意，这可能会干扰某些移动应用程序的应用内认证机制。禁用时，将使用标准的 HTTP 307 重定向。
 
 #### 构建认证服务器
 
