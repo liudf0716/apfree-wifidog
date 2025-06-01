@@ -100,27 +100,38 @@ ApFree WiFiDog logs messages that can provide valuable insights into its operati
     *   **DNS Resolution:** Ensure clients are using a DNS server that can resolve your authentication server's hostname. Also, the router itself must be able to resolve DNS for domain whitelisting features.
 
 *   **Client Authenticated but Can't Access Specific Websites/Services:**
-    *   **Trusted Domains/Hosts:** ApFree WiFiDog maintains a list of trusted domains and IP addresses that clients can access before authentication (and sometimes after, depending on policy). Use the `wdctl show_trusted_domains` command to view the currently active trusted domain/IP list. If a site is not working, its domain or the domains of its resources (CDNs, APIs) might need to be added to your trusted lists in the configuration.
+    *   **Trusted Domains/Hosts:** ApFree WiFiDog maintains a list of trusted domains and IP addresses that clients can access before authentication (and sometimes after, depending on policy). Use the `wdctlx show_trusted_domains` command to view the currently active trusted domain/IP list. If a site is not working, its domain or the domains of its resources (CDNs, APIs) might need to be added to your trusted lists in the configuration.
 
 *   **Device-Specific Portal or Authentication Issues:**
     *   **MAC Address Lists:** ApFree WiFiDog can have lists of trusted (whitelisted) and untrusted (blacklisted) MAC addresses.
-        *   Use `wdctl show_trusted_mac` to see MAC addresses that are always allowed.
-        *   Use `wdctl show_untrusted_mac` to see MAC addresses that are always blocked.
+        *   Use `wdctlx show_trusted_mac` to see MAC addresses that are always allowed.
+        *   Use `wdctlx show_untrusted_mac` to see MAC addresses that are always blocked.
         Check these lists if a specific device is behaving unexpectedly.
 
-#### Using `wdctl` for Diagnostics
+#### Using `wdctlx` for Diagnostics
 
-ApFree WiFiDog comes with a command-line utility called `wdctl` (WiFiDog Control) that is very useful for diagnostics. It allows you to inspect the current state of WiFiDog without needing to restart the service. Some helpful commands include:
+ApFree WiFiDog comes with a command-line utility called `wdctlx` (WiFiDog Control) that is very useful for diagnostics. It allows you to inspect the current state of WiFiDog without needing to restart the service. Some helpful commands include:
 
-*   `wdctl status`: Shows the general status of the daemon.
-*   `wdctl show_clients`: Lists all connected and authenticated clients.
-*   `wdctl show_trusted_domains`: Displays the current list of trusted domains and IPs.
-*   `wdctl show_trusted_mac`: Displays trusted MAC addresses.
-*   `wdctl show_untrusted_mac`: Displays untrusted MAC addresses.
-*   `wdctl show_remote_trusted_mac`: Displays remote trusted MAC addresses.
-*   `wdctl show_local_trusted_mac`: Displays local trusted MAC addresses.
+*   `wdctlx status [client|auth|wifidogx]`: Shows the general status of the daemon.
+*   `wdctlx status client`: Lists all connected and authenticated clients.
+*   `wdctlx show domain`: Displays the current list of trusted domains.
+*   `wdctlx show wildcard_domain`: Displays the current list of trusted wildcard domains.
+*   `wdctlx show mac`: Displays trusted MAC addresses.
+*   `wdctlx add <domain|wildcard_domain|mac> <value1,value2...>`: Adds specified values to the trusted domain, wildcard domain, or MAC list.
+*   `wdctlx del <domain|wildcard_domain|mac> <value1,value2...>`: Deletes specified values from the trusted domain, wildcard domain, or MAC list.
+*   `wdctlx clear <domain|wildcard_domain|mac>`: Clears all entries from the specified trusted list (domain, wildcard domain, or MAC).
+*   `wdctlx stop`: Stops the wifidogx daemon.
+*   `wdctlx reset <value>`: Resets specified wifidogx parameter or component.
+*   `wdctlx refresh`: Refreshes wifidogx (e.g., reloads configurations or rules).
+*   `wdctlx apfree <user_list|user_info|user_auth|save_user|restore_user> [values]`: Manages ApFree user sessions.
+    *   `user_list`: Shows the list of online users.
+    *   `user_info <MAC>`: Shows information for a specific user.
+    *   `user_auth <MAC>`: Authenticates a user.
+    *   `save_user`: Saves current user data.
+    *   `restore_user`: Restores user data.
+*   `wdctlx hotplugin <json_value>`: Sends a JSON configuration to the hotplugin system.
 
-Refer to `wdctl --help` or the documentation for more commands and options.
+Refer to `wdctlx help` (or `wdctlx ?`) for more commands and options.
 
 ### Technical Details
 

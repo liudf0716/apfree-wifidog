@@ -99,27 +99,38 @@ ApFree WiFiDog 会记录日志消息，这些消息可以为其操作和任何�
     *   **DNS 解析：** 确保客户端使用的 DNS 服务器可以解析您的认证服务器的主机名。此外，路由器本身必须能够解析 DNS 以支持域名白名单功能。
 
 *   **客户端已认证但无法访问特定网站/服务：**
-    *   **受信任的域/主机：** ApFree WiFiDog 维护一个受信任的域和 IP 地址列表，客户端可以在认证前访问这些域和 IP 地址（有时在认证后也可以，具体取决于策略）。使用 `wdctl show_trusted_domains` 命令查看当前活动的受信任域/IP 列表。如果某个站点无法正常工作，则其域或其资源（CDN、API）的域可能需要添加到配置中的受信任列表。
+    *   **受信任的域/主机：** ApFree WiFiDog 维护一个受信任的域和 IP 地址列表，客户端可以在认证前访问这些域和 IP 地址（有时在认证后也可以，具体取决于策略）。使用 `wdctlx show_trusted_domains` 命令查看当前活动的受信任域/IP 列表。如果某个站点无法正常工作，则其域或其资源（CDN、API）的域可能需要添加到配置中的受信任列表。
 
 *   **特定设备的门户或认证问题：**
     *   **MAC 地址列表：** ApFree WiFiDog 可以包含受信任（白名单）和不受信任（黑名单）的 MAC 地址列表。
-        *   使用 `wdctl show_trusted_mac` 查看始终允许的 MAC 地址。
-        *   使用 `wdctl show_untrusted_mac` 查看始终阻止的 MAC 地址。
+        *   使用 `wdctlx show_trusted_mac` 查看始终允许的 MAC 地址。
+        *   使用 `wdctlx show_untrusted_mac` 查看始终阻止的 MAC 地址。
         如果特定设备的行为异常，请检查这些列表。
 
-#### 使用 `wdctl` 进行诊断
+#### 使用 `wdctlx` 进行诊断
 
-ApFree WiFiDog 附带一个名为 `wdctl` (WiFiDog Control) 的命令行实用程序，它对于诊断非常有用。它允许您检查 WiFiDog 的当前状态，而无需重新启动服务。一些有用的命令包括：
+ApFree WiFiDog 附带一个名为 `wdctlx` (WiFiDog Control) 的命令行实用程序，它对于诊断非常有用。它允许您检查 WiFiDog 的当前状态，而无需重新启动服务。一些有用的命令包括：
 
-*   `wdctl status`：显示守护进程的常规状态。
-*   `wdctl show_clients`：列出所有已连接和已认证的客户端。
-*   `wdctl show_trusted_domains`：显示当前的受信任域和 IP 列表。
-*   `wdctl show_trusted_mac`：显示受信任的 MAC 地址。
-*   `wdctl show_untrusted_mac`：显示不受信任的 MAC 地址。
-*   `wdctl show_remote_trusted_mac`：显示远程受信任的 MAC 地址。
-*   `wdctl show_local_trusted_mac`：显示本地受信任的 MAC 地址。
+*   `wdctlx status [client|auth|wifidogx]`：显示守护进程的常规状态。
+*   `wdctlx status client`：列出所有已连接和已认证的客户端。
+*   `wdctlx show domain`：显示当前的受信任域列表。
+*   `wdctlx show wildcard_domain`：显示当前的受信任通配符域列表。
+*   `wdctlx show mac`：显示受信任的 MAC 地址。
+*   `wdctlx add <domain|wildcard_domain|mac> <value1,value2...>`: 添加指定的值到信任的域名、通配符域名或 MAC 地址列表。
+*   `wdctlx del <domain|wildcard_domain|mac> <value1,value2...>`: 从信任的域名、通配符域名或 MAC 地址列表中删除指定的值。
+*   `wdctlx clear <domain|wildcard_domain|mac>`: 清除指定的信任列表（域名、通配符域名或 MAC 地址）中的所有条目。
+*   `wdctlx stop`: 停止 wifidogx 守护进程。
+*   `wdctlx reset <value>`: 重置指定的 wifidogx 参数或组件。
+*   `wdctlx refresh`: 刷新 wifidogx (例如，重新加载配置或规则)。
+*   `wdctlx apfree <user_list|user_info|user_auth|save_user|restore_user> [values]`: 管理 ApFree 用户会话。
+    *   `user_list`: 显示在线用户列表。
+    *   `user_info <MAC>`: 显示特定用户的信息。
+    *   `user_auth <MAC>`: 认证一个用户。
+    *   `save_user`: 保存当前用户数据。
+    *   `restore_user`: 恢复用户数据。
+*   `wdctlx hotplugin <json_value>`: 发送 JSON 配置到热插件系统。
 
-有关更多命令和选项，请参阅 `wdctl --help` 或文档。
+有关更多命令和选项，请参阅 `wdctlx help` (或 `wdctlx ?`) 或文档。
 
 ### 技术细节
 
