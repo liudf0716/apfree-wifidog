@@ -289,6 +289,7 @@ void free_auth_servers_list(t_auth_serv *list_head);
 void free_popular_servers_list(t_popular_server *list_head);
 void free_domain_trusted_list(t_domain_trusted *list_head);
 void free_trusted_mac_list(t_trusted_mac *list_head);
+void free_ip_trusted_list(t_ip_trusted *list_head);
 void config_cleanup(void);
 
 /** Authentication Server Management */

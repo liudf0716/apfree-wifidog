@@ -1350,7 +1350,7 @@ __clear_trusted_domain_ip(t_ip_trusted *ipt)
 static void
 __clear_trusted_domains(void)
 {
-	t_domain_trusted *p, *p1;
+	t_domain_trusted *p1;
 	int has_iplist = 0;
 	t_domain_trusted *current = config.domains_trusted;
 	t_domain_trusted *prev = NULL;
@@ -1996,7 +1996,7 @@ void free_popular_servers_list(t_popular_server *list_head) {
     }
 }
 
-static void free_ip_trusted_list(t_ip_trusted *list_head) {
+void free_ip_trusted_list(t_ip_trusted *list_head) {
     t_ip_trusted *current = list_head;
     t_ip_trusted *next;
     while (current != NULL) {
