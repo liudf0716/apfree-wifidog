@@ -174,13 +174,21 @@ wd_get_redir_url_to_auth(struct evhttp_request *req,
 }
 
 /**
- * @brief free wifidog request context
+ * @brief destroy wifidog request context
  * 
  */ 
 void
-wd_request_context_free(struct wd_request_context *context)
+wd_request_context_destroy(struct wd_request_context *context)
 {
-	if (context) free(context);
+    if (context) {
+        if (context->bev) {
+            bufferevent_free(context->bev); // This should free context->ssl too
+            context->bev = NULL;
+        }
+        // context->ssl is managed by bev, no need to free here explicitly
+        // context->base is managed elsewhere
+        free(context);
+    }
 }
 
 /**
@@ -326,7 +334,7 @@ cleanup:
 	if (base) event_base_free(base);
 	if (ssl) SSL_free(ssl);
 	if (ssl_ctx) SSL_CTX_free(ssl_ctx);
-	if (request_ctx) wd_request_context_free(request_ctx);
+	if (request_ctx) wd_request_context_destroy(request_ctx);
 	
 	termination_handler(0);
 }
