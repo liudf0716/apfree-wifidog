@@ -31,6 +31,7 @@ struct evbuffer *evb_internet_offline_page = NULL;
 struct evbuffer *evb_authserver_offline_page = NULL;
 redir_file_buffer_t *wifidog_redir_html = NULL;
 time_t started_time = 0;
+static struct wd_request_context *s_auth_request_ctx = NULL;
 
 /* Thread identifiers for various services */
 static pthread_t tid_fw_counter = 0;    /* Firewall counter thread */
@@ -685,22 +686,32 @@ setup_http_server(struct evhttp *http, struct event_base *base)
     if (config->auth_server_mode == AUTH_MODE_CLOUD) {
         t_auth_serv *auth_server = get_auth_server();
         SSL_CTX *ssl_ctx = SSL_CTX_new(SSLv23_method());
-        if (!ssl_ctx) return 0;
+        if (!ssl_ctx) return 0; // Should already be a critical error
 
         SSL *ssl = SSL_new(ssl_ctx);
-        if (!ssl) return 0;
+        if (!ssl) {
+            SSL_CTX_free(ssl_ctx);
+            return 0;
+        }
 
         if (!SSL_set_tlsext_host_name(ssl, auth_server->authserv_hostname)) {
             debug(LOG_ERR, "SSL_set_tlsext_host_name failed");
+            SSL_free(ssl);
+            SSL_CTX_free(ssl_ctx);
             return 0;
         }
     
-        struct wd_request_context *request_ctx = wd_request_context_new(
+        // Assign to the static pointer after successful creation
+        s_auth_request_ctx = wd_request_context_new(
             base, ssl, auth_server->authserv_use_ssl);
-        if (!request_ctx) return 0;
+        if (!s_auth_request_ctx) {
+            SSL_free(ssl);
+            SSL_CTX_free(ssl_ctx);
+            return 0;
+        }
 
         evhttp_set_cb(http, "/wifidog", ev_http_callback_wifidog, NULL);
-        evhttp_set_cb(http, "/wifidog/auth", ev_http_callback_auth, request_ctx);
+        evhttp_set_cb(http, "/wifidog/auth", ev_http_callback_auth, s_auth_request_ctx);
         evhttp_set_cb(http, "/wifidog/temporary_pass", ev_http_callback_temporary_pass, NULL);
     } else if (config->auth_server_mode == AUTH_MODE_LOCAL) {
         evhttp_set_cb(http, "/wifidog/local_auth", ev_http_callback_local_auth, NULL);
@@ -802,6 +813,10 @@ http_redir_loop(s_config *config)
     debug(LOG_INFO, "HTTP server started on port %d", config->gw_port);
     event_base_dispatch(base);
 
+    if (s_auth_request_ctx) {
+        wd_request_context_destroy(s_auth_request_ctx);
+        s_auth_request_ctx = NULL;
+    }
     evhttp_free(http);
     event_base_free(base);
 }
@@ -809,6 +824,33 @@ http_redir_loop(s_config *config)
 static void
 aw_clean_before_exit(void)
 {
+    config_cleanup(); // Clean up global configuration resources
+
+    if (evb_internet_offline_page) {
+        evbuffer_free(evb_internet_offline_page);
+        evb_internet_offline_page = NULL;
+    }
+    if (evb_authserver_offline_page) {
+        evbuffer_free(evb_authserver_offline_page);
+        evb_authserver_offline_page = NULL;
+    }
+    if (wifidog_redir_html) {
+        if (wifidog_redir_html->front) {
+            free(wifidog_redir_html->front);
+            wifidog_redir_html->front = NULL;
+        }
+        if (wifidog_redir_html->rear) {
+            free(wifidog_redir_html->rear);
+            wifidog_redir_html->rear = NULL;
+        }
+        free(wifidog_redir_html);
+        wifidog_redir_html = NULL;
+    }
+
+    // Clean up client lists
+    client_list_destroy(client_get_first_client());
+    offline_client_list_destroy(client_get_first_offline_client());
+
     fw_destroy();
 }
 

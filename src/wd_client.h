@@ -51,10 +51,10 @@ char *wd_get_redir_url_to_auth(struct evhttp_request *request, t_gateway_setting
                               const char *url, int is_ssl);
 
 /**
- * @brief Free request context and associated resources
- * @param context Request context to free
+ * @brief Destroy request context and associated resources
+ * @param context Request context to destroy
  */
-void wd_request_context_free(struct wd_request_context *context);
+void wd_request_context_destroy(struct wd_request_context *context);
 
 /**
  * @brief Set required headers for auth server request
