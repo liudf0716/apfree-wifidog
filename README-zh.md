@@ -168,6 +168,12 @@ ApFree WiFiDog 附带一个名为 `wdctlx` (WiFiDog Control) 的命令行实用�
     2.  **认证服务器通信：** 客户端与认证服务器交互（例如，输入凭据、单击按钮或付款）。然后，认证服务器验证客户端。
     3.  **防火墙更新：** 成功认证后，认证服务器会通知 ApFree WiFiDog。然后，ApFree WiFiDog 会更新防火墙规则（例如，将客户端的 IP 或 MAC 地址添加到允许列表或标记其连接），以在指定持续时间内或根据定义的策略授予客户端互联网访问权限。客户端状态和会话有效性会定期检查。
 
+### 认证服务器API
+
+对于希望将 ApFree WiFiDog 与自定义认证服务器集成，或希望详细了解通信协议的开发人员，我们提供了专门的 API 文档。该文档概述了 WiFiDog 与认证服务器之间通信所使用的 Ping (心跳)、Counters (计数器 V2) 和 WebSocket 接口。
+
+[查看认证服务器API文档 (中文)](AUTH_SERVER_API_ZH.md)
+
 ### 在云认证模式下使用 ApFree WiFiDog
 
 要在云认证模式下运行 ApFree WiFiDog，您必须首先建立一个认证服务器。设置完成后，通过在配置文件中指定其 IP 地址或域名来配置 ApFree WiFiDog 连接到您的服务器。
