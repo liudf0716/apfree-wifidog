@@ -24,7 +24,9 @@ struct wd_request_context {
     struct event_base *base;
     struct bufferevent *bev;
     struct evhttp_request *clt_req;
-    void *data;
+    void *data; /**< Additional user data. Its lifecycle is managed by the user of this context,
+                     *   not by wd_request_context_destroy(). The callback or the setup code
+                     *   is responsible for allocating and freeing this data if necessary. */
 };
 
 /**
@@ -53,6 +55,8 @@ char *wd_get_redir_url_to_auth(struct evhttp_request *request, t_gateway_setting
 /**
  * @brief Destroy request context and associated resources
  * @param context Request context to destroy
+ * @note This function does NOT free the memory pointed to by context->data.
+ *       The lifecycle of context->data must be managed externally.
  */
 void wd_request_context_destroy(struct wd_request_context *context);
 

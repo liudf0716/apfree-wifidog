@@ -794,7 +794,7 @@ client_counter_request_reply(t_authresponse *authresponse,
     }
 
     // Free the duplicate client data
-    // client_free_node(client); // Removed
+    client_free_node(client);
 }
 
 /**
@@ -830,7 +830,10 @@ process_auth_server_counter(struct evhttp_request *req, void *ctx)
         debug(LOG_ERR, "Failed to parse auth server response for client %s", 
               client ? client->ip : "unknown");
         
-        // if (client) { // client_free_node(client); } // Removed
+        t_client *client_to_free = (t_client *)((struct wd_request_context *)ctx)->data;
+        if (client_to_free) {
+            client_free_node(client_to_free);
+        }
         ((struct wd_request_context *)ctx)->data = NULL;
     }
 }

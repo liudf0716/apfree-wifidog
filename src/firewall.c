@@ -792,7 +792,7 @@ ev_fw_sync_with_authserver(struct wd_request_context *context)
 		if (config->auth_servers != NULL) {
 			char *uri = get_auth_uri(REQUEST_TYPE_COUNTERS, ONLINE_CLIENT, p1);
 			if (!uri) {
-				debug(LOG_ERR, "Could not get auth uri!");
+				debug(LOG_ERR, "Could not get auth uri for client %s!", p1->mac); // Added more info to log
 				continue;
 			} 
 
@@ -800,9 +800,25 @@ ev_fw_sync_with_authserver(struct wd_request_context *context)
 
 			struct evhttp_connection *evcon = NULL;
 			struct evhttp_request *req = NULL;
-			context->data = p1; // free p1 in process_auth_server_counter
+
+			t_client *client_for_context = client_dup(p1); // Create a second duplicate
+			if (!client_for_context) {
+				debug(LOG_ERR, "Failed to duplicate client %s for context!", p1->mac);
+				free(uri); // Free the allocated URI before continuing
+				continue;  // Skip to the next client
+			}
+			context->data = client_for_context; // Assign the new duplicate to context->data
+
+			// Pass the original context (which now contains client_for_context)
 			if (!wd_make_request(context, &evcon, &req, process_auth_server_counter)) {
 				evhttp_make_request(evcon, req, EVHTTP_REQ_GET, uri);
+			} else {
+				// If wd_make_request fails, the context->data (client_for_context) was set
+				// but the request wasn't made. It needs to be freed here to prevent a leak,
+				// as process_auth_server_counter won't be called.
+				debug(LOG_ERR, "wd_make_request failed for client %s. Freeing duplicated client for context.", client_for_context->mac);
+				client_free_node(client_for_context);
+				context->data = NULL; // Defensive nulling
 			}
 			free(uri);
 		}
