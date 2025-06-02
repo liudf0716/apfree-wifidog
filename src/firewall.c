@@ -634,6 +634,10 @@ get_gw_clients_counter(t_gateway_setting *gw_setting, t_client *worklist)
 
     while (gw_setting) {
         json_object *gw_obj = json_object_new_object();
+        if (!gw_obj) {
+            debug(LOG_ERR, "Could not create gw_obj for gateway %s", gw_setting->gw_id);
+            continue;
+        }
         json_object_object_add(gw_obj, "gw_id", json_object_new_string(gw_setting->gw_id));
 		json_object_object_add(gw_obj, "gw_channel", json_object_new_string(gw_setting->gw_channel));
         json_object *client_array = json_object_new_array();
@@ -789,7 +793,6 @@ ev_fw_sync_with_authserver(struct wd_request_context *context)
 			char *uri = get_auth_uri(REQUEST_TYPE_COUNTERS, ONLINE_CLIENT, p1);
 			if (!uri) {
 				debug(LOG_ERR, "Could not get auth uri!");
-				client_free_node(p1);
 				continue;
 			} 
 
@@ -798,13 +801,13 @@ ev_fw_sync_with_authserver(struct wd_request_context *context)
 			struct evhttp_connection *evcon = NULL;
 			struct evhttp_request *req = NULL;
 			context->data = p1; // free p1 in process_auth_server_counter
-			if (!wd_make_request(context, &evcon, &req, process_auth_server_counter))
+			if (!wd_make_request(context, &evcon, &req, process_auth_server_counter)) {
 				evhttp_make_request(evcon, req, EVHTTP_REQ_GET, uri);
-			else
-				client_free_node(p1);
+			}
 			free(uri);
 		}
 	}
+	client_list_destroy(worklist);
 }
 
 void 
