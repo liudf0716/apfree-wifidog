@@ -588,8 +588,10 @@ handle_auth_allowed(t_client *client, struct evhttp_request *req,
     UNLOCK_OFFLINE_CLIENT_LIST();
 
     // Handle WeChat auth or normal portal redirect
-    if(ev_http_find_query(req, "type")) {
+    char *type_query_result = ev_http_find_query(req, "type");
+    if(type_query_result) {
         evhttp_send_error(req, 200, "WeChat auth success!");
+        free(type_query_result); // Free the allocated string
     } else {
         assert(client->gw_setting);
         safe_asprintf(&url_fragment, "%sgw_id=%s&gw_channel=%s&mac=%s&name=%s", 
