@@ -767,8 +767,7 @@ ev_fw_sync_with_authserver(struct wd_request_context *context)
 	s_config *config = config_get_config();
 
 	debug(LOG_DEBUG, "Syncing client counters with auth server");
-	if (-1 == fw_counters_update())
-	{
+	if (-1 == fw_counters_update()) {
 		debug(LOG_ERR, "Could not get counters from firewall!");
 		return;
 	}
@@ -777,7 +776,10 @@ ev_fw_sync_with_authserver(struct wd_request_context *context)
 	g_online_clients = client_list_dup(&worklist);
 	UNLOCK_CLIENT_LIST();
 
-	
+	if (!worklist) {
+		debug(LOG_DEBUG, "No clients to sync with auth server");
+		return;
+	}
 
 	for (p1 = p2 = worklist; NULL != p1; p1 = p2) {
 		p2 = p1->next;	
@@ -786,7 +788,9 @@ ev_fw_sync_with_authserver(struct wd_request_context *context)
 		 * However, if the firewall blocks it, it will not help.  The suggested
 		 * way to deal witht his is to keep the DHCP lease time extremely
 		 * short:  Shorter than config->checkinterval * config->clienttimeout */
-		icmp_ping(p1->ip);
+		if (p1->ip) {
+			icmp_ping(p1->ip);
+		}
 
 		/* Update the counters on the remote server only if we have an auth server */
 		if (config->auth_servers != NULL) {
