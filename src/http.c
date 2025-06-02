@@ -869,6 +869,7 @@ ev_http_callback_auth(struct evhttp_request *req, void *arg)
         // Ensure gw_setting is not NULL before dereferencing
         if (gw_setting && br_arp_get_mac(gw_setting, remote_host, actual_mac_buffer)) {
             mac = safe_strdup(actual_mac_buffer); // mac is now alloc'd
+            free(peer_ip_temp); // Free peer_ip_temp after successful MAC retrieval
         } else {
             // Provide a more specific error if gw_setting was the issue
             if (!gw_setting) { // This case should ideally be caught by gw_id check
@@ -876,6 +877,7 @@ ev_http_callback_auth(struct evhttp_request *req, void *arg)
             } else {
                  evhttp_send_error(req, 200, "Failed to retrieve your MAC address (ARP/NDP failed)");
             }
+            free(peer_ip_temp); // Free peer_ip_temp in the error path
             // remote_host will be freed at CLEAN_UP
             goto CLEAN_UP;
         }
