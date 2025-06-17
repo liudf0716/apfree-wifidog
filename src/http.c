@@ -22,7 +22,7 @@
 #include "gateway.h"
 #include "safe.h"
 #include "util.h"
-#include "wdctl_thread.h"
+#include "wdctlx_thread.h"
 #include "wd_util.h"
 #include "version.h"
 #include "wd_client.h"

@@ -6,7 +6,7 @@
 
 #include "common.h"
 #include "mqtt_thread.h"
-#include "wdctl_thread.h"
+#include "wdctlx_thread.h"
 #include "conf.h"
 #include "debug.h"
 #include "safe.h"

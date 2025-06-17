@@ -7,7 +7,6 @@
 #ifndef	_MQTT_THREAD_H_
 #define	_MQTT_THREAD_H_
 
-#include "wdctl_thread.h"
 #include "conf.h"
 
 void set_trusted_op(void *mosq, const char *type, const char *value, const int req_id, const s_config *config);
