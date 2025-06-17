@@ -14,7 +14,7 @@
 #include "auth.h"
 #include "http.h"
 #include "client_list.h"
-#include "wdctl_thread.h"
+#include "wdctlx_thread.h"
 #include "ping_thread.h"
 #include "util.h"
 #include "tls_thread.h"
