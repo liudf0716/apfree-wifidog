@@ -27,6 +27,7 @@
 #include "wd_util.h"
 #include "gateway.h"
 
+#define INITIAL_MAX_SID 0
 #define XDPI_DOMAIN_MAX 256
 #define MAX_DOMAIN_LEN 64
 
@@ -98,6 +99,285 @@ static int parse_dns_question(unsigned char **ptr, char *query_name, int qdcount
 static int is_trusted_domain(const char *query_name, t_domain_trusted **trusted_domain);
 static int process_dns_answers(unsigned char **ptr, int ancount, t_domain_trusted *trusted_domain);
 static int add_trusted_ip(t_domain_trusted *trusted_domain, uint16_t type, unsigned char *addr_ptr);
+static void handle_xdpi_domain_processing(const char *query_name);
+static int is_valid_domain_suffix(const char *domain);
+static int get_xdpi_domain_count(void);
+static void sync_xdpi_domains_2_kern(void);
+static int xdpi_add_domain(const char *input_domain);
+static char *safe_strrstr(const char *haystack, const char *needle);
+static unsigned char *parse_dns_query_name(unsigned char *query, char *name);
+static int is_safe_ip_str(const char *ip_str);
+static int xdpi_short_domain(const char *full_domain, char *short_domain, int *olen);
+static unsigned char* skip_dns_name_in_answer(unsigned char *ptr);
+// static int process_single_rr(...); // Forward declaration removed
+static void dns_read_cb(evutil_socket_t fd, short event, void *arg);
+// static int forward_dns_query_and_setup_handler(...); // Forward declaration already removed
+static void read_cb(evutil_socket_t fd, short event, void *arg);
+static int process_dns_response(unsigned char *response, int response_len);
+
+/**
+ * @brief Processes a received DNS response message.
+ * Parses the header and question, then checks if the domain needs to be added to xDPI.
+ * If the domain is trusted, processes DNS answers to add IPs to trusted list and nftables.
+ *
+ * @param response Buffer containing the DNS response packet.
+ * @param response_len Length of the DNS response packet.
+ * @return 0 on success or if processing is not required, -1 on error.
+ */
+static int
+process_dns_response(unsigned char *response, int response_len) {
+    struct dns_header *header = NULL;
+    unsigned char *ptr = response + sizeof(struct dns_header); // Current parsing pointer
+    const unsigned char *response_end = response + response_len; // End of the response buffer for bounds checking
+    char query_name[MAX_DNS_NAME] = {0};
+    t_domain_trusted *trusted_domain = NULL;
+    int qdcount, ancount;
+
+    if (parse_dns_header(response, response_len, &header) != 0) {
+        return -1;
+    }
+
+    qdcount = ntohs(header->qdcount);
+    ancount = ntohs(header->ancount);
+
+    // Ensure ptr is within bounds before parsing question
+    if (ptr >= response_end && qdcount > 0) {
+        debug(LOG_WARNING, "DNS response too short to contain questions.");
+        return -1;
+    }
+    if (parse_dns_question(&ptr, query_name, qdcount) != 0) {
+        return -1;
+    }
+
+    // Handle xDPI domain logic: check suffix, sync with kernel, add domain.
+    // This is done for non-reverse DNS lookup domains.
+    if (!strstr(query_name, "in-addr.arpa") && !strstr(query_name, "ip6.arpa")) {
+        handle_xdpi_domain_processing(query_name);
+    }
+
+    if (!is_trusted_domain(query_name, &trusted_domain)) {
+        return 0;
+    }
+
+    // Ensure ptr is within bounds before parsing answers
+    if (ptr >= response_end && ancount > 0) {
+        debug(LOG_WARNING, "DNS response too short to contain answers after questions.");
+        return -1;
+    }
+    // Pass response_end to process_dns_answers for robust bounds checking
+    if (process_dns_answers(&ptr, ancount, trusted_domain) != 0) {
+        return -1;
+    }
+
+    return 0;
+}
+
+/**
+ * @brief Handles the logic for processing a domain for xDPI purposes.
+ * If the domain has a valid suffix, it checks the xDPI domain count,
+ * potentially syncs domains to the kernel, and then adds the domain via xdpi_add_domain.
+ *
+ * @param query_name The fully qualified domain name that was queried.
+ */
+static void handle_xdpi_domain_processing(const char *query_name) {
+    if (!query_name || query_name[0] == '\0') {
+        return;
+    }
+
+    if (is_valid_domain_suffix(query_name)) {
+        debug(LOG_DEBUG, "Domain '%s' has a valid suffix, considering for xDPI.", query_name);
+        // get xdpi domain count, and if it's 0, it might be the first run or a reset,
+        // so sync existing domain_entries to kernel.
+        int xdpi_domain_count = get_xdpi_domain_count();
+        if (xdpi_domain_count == 0) {
+            debug(LOG_INFO, "xDPI domain count is 0, attempting to sync local entries to kernel.");
+            sync_xdpi_domains_2_kern();
+        }
+        // Attempt to add the (potentially shortened) domain to xDPI.
+        // xdpi_add_domain internally handles shortening and checks for duplicates.
+        if (xdpi_add_domain(query_name) < 0) {
+             debug(LOG_WARNING, "Failed to add domain '%s' to xDPI.", query_name);
+        }
+    } else {
+        debug(LOG_DEBUG, "Domain '%s' does not have a valid suffix, skipping xDPI processing.", query_name);
+    }
+}
+
+/**
+ * @brief Parses the header of a DNS message.
+ * Validates basic header fields like QR flag, opcode, and rcode.
+ *
+ * @param response Buffer containing the DNS message.
+ * @param response_len Length of the DNS message.
+ * @param header Output parameter, pointer to a dns_header struct pointer.
+ *               On success, this will point to the start of the message cast as dns_header.
+ * @return 0 on success, -1 on error (e.g., too short, invalid flags).
+ */
+static int
+parse_dns_header(unsigned char *response, int response_len, struct dns_header **header) {
+    // Ensure the response is long enough to contain a DNS header.
+    if (response_len <= sizeof(struct dns_header)) {
+        debug(LOG_WARNING, "Invalid DNS response: too short (len=%d)", response_len);
+        return -1;
+    }
+    *header = (struct dns_header *)response; // Cast the beginning of the response to dns_header struct.
+
+    // Validate DNS header fields:
+    // QR flag should be 1 (response).
+    // Opcode should be 0 (standard query).
+    // Rcode should be 0 (no error).
+    if ((*header)->qr != 1 || (*header)->opcode != 0 || (*header)->rcode != 0) {
+        debug(LOG_WARNING, "Invalid DNS response flags: qr=%d, opcode=%d, rcode=%d",
+              (*header)->qr, (*header)->opcode, (*header)->rcode);
+        return -1;
+    }
+    return 0; // Header is valid
+}
+
+/**
+ * @brief Parses the question section of a DNS message.
+ * Expects exactly one question (qdcount == 1).
+ * Extracts the query name and advances the pointer past QTYPE and QCLASS.
+ *
+ * @param ptr Pointer to a pointer to the current position in the DNS message.
+ *            This pointer will be advanced past the question section.
+ * @param query_name Buffer to store the parsed query name.
+ * @param qdcount The number of questions, expected to be 1.
+ * @return 0 on success, -1 on error.
+ */
+static int
+parse_dns_question(unsigned char **ptr, char *query_name, int qdcount) {
+    // This implementation only supports DNS messages with exactly one question.
+    if (qdcount != 1) {
+        debug(LOG_WARNING, "Unsupported DNS qdcount=%d (expected 1)", qdcount);
+        return -1;
+    }
+    for (int i = 0; i < qdcount; i++) { // Loop (effectively once)
+        // Parse the domain name from the question.
+        *ptr = parse_dns_query_name(*ptr, query_name);
+        if (!*ptr) { // If name parsing failed
+            debug(LOG_WARNING, "Failed to parse DNS query name in question section.");
+            return -1;
+        }
+        // Skip QTYPE and QCLASS fields (2 bytes each).
+        *ptr += DNS_QTYPE_QCLASS_SIZE;
+    }
+    return 0; // Question section parsed successfully.
+}
+
+/**
+ * @brief Checks if a query name matches any configured trusted domain.
+ * Trusted domains may be specified with wildcards (e.g., ".example.com").
+ *
+ * @param query_name The DNS query name to check.
+ * @param trusted_domain Output parameter. If a match is found, this will point to the
+ *                       t_domain_trusted configuration structure for the matched domain.
+ * @return 1 if the domain is trusted, 0 otherwise.
+ */
+static int
+is_trusted_domain(const char *query_name, t_domain_trusted **trusted_domain) {
+    s_config *config = config_get_config(); // Get global configuration
+    if (!config) return 0;
+
+    t_domain_trusted *p = config->pan_domains_trusted; // Start of trusted domains list
+    while (p) {
+        // safe_strrstr checks if query_name ends with p->domain (for wildcard matching)
+        // or if p->domain is a substring. For simple suffix match, ensure p->domain starts with '.'.
+        if (p->domain && safe_strrstr(query_name, p->domain)) {
+            debug(LOG_DEBUG, "Query name '%s' matched trusted domain rule '%s'", query_name, p->domain);
+            *trusted_domain = p; // Store the matched trusted domain entry
+            return 1; // Trusted
+        }
+        p = p->next;
+    }
+    return 0; // Not trusted
+}
+
+/**
+ * @brief Skips over a domain name in a DNS record.
+ * Handles both compressed names (starting with 0xC0) and uncompressed names.
+ *
+ * @param ptr Pointer to the current position in the DNS message, at the start of a domain name.
+ * @return Pointer to the byte immediately following the domain name, or NULL on error (e.g., malformed).
+ */
+static unsigned char*
+skip_dns_name_in_answer(unsigned char *ptr) {
+    if (!ptr) return NULL;
+
+    // Check for compression pointer (first two bits set)
+    if ((*ptr & 0xC0) == 0xC0) {
+        ptr += DNS_COMPRESSED_NAME_POINTER_SIZE; // Skip the 2-byte compression pointer
+    } else {
+        // Skip uncompressed name (sequence of labels ending with a zero byte)
+        while (*ptr) { // While length byte is not zero
+            if ((*ptr & 0xC0)) { // Should not encounter compression here in uncompressed name
+                debug(LOG_WARNING, "Malformed uncompressed name: encountered compression pointer.");
+                return NULL;
+            }
+            if (*ptr > 63) { // Label length check (max 63)
+                 debug(LOG_WARNING, "Malformed uncompressed name: label too long (%d).", *ptr);
+                return NULL;
+            }
+            ptr += (*ptr) + 1; // Skip length byte and label itself
+        }
+        ptr++; // Skip the final zero byte for the name
+    }
+    return ptr;
+}
+
+static int
+process_dns_answers(unsigned char **ptr, int ancount, t_domain_trusted *trusted_domain) {
+    unsigned char *current_ptr = *ptr; // Use a local copy to iterate
+
+    for (int i = 0; i < ancount; i++) { // Loop through each answer record
+        // Skip the domain name in the answer record.
+        current_ptr = skip_dns_name_in_answer(current_ptr);
+        if (!current_ptr) {
+            debug(LOG_WARNING, "Failed to skip DNS name in answer record %d.", i + 1);
+            return -1; // Error in name skipping
+        }
+
+        // Read RR TYPE, CLASS, TTL, and RDLENGTH.
+        // Ensure there's enough data left for these fields + RDLENGTH field itself
+        if (current_ptr + DNS_TYPE_SIZE + DNS_CLASS_SIZE + DNS_TTL_SIZE + DNS_RDLENGTH_SIZE > *ptr + (ancount * 10)) { // Rough check
+             // This check is very approximate. A more robust check would involve response_end pointer.
+             // For now, assume data is available as we are within ancount.
+        }
+
+        uint16_t type = ntohs(*(uint16_t *)current_ptr); // RR Type (e.g., A, AAAA)
+        current_ptr += DNS_TYPE_SIZE;    // Advance past Type
+        current_ptr += DNS_CLASS_SIZE;   // Advance past Class
+        current_ptr += DNS_TTL_SIZE;     // Advance past TTL
+        uint16_t data_len = ntohs(*(uint16_t *)current_ptr); // Length of RDATA
+        current_ptr += DNS_RDLENGTH_SIZE; // Advance past RDLENGTH
+
+        // Check if the record is of type A (IPv4) or AAAA (IPv6).
+        if ((type == DNS_RR_TYPE_A && data_len == IPV4_ADDR_LEN) ||
+            (type == DNS_RR_TYPE_AAAA && data_len == IPV6_ADDR_LEN)) {
+            unsigned char *addr_ptr = current_ptr; // Pointer to the IP address data in RDATA.
+
+            // Ensure RDATA is not out of bounds (needs response_end) - simplified check
+            // if (current_ptr + data_len > response_end) return -1;
+
+            current_ptr += data_len; // Advance past RDATA.
+
+            // Add this IP address to the list of trusted IPs for the domain.
+            if (add_trusted_ip(trusted_domain, type, addr_ptr) != 0) {
+                *ptr = current_ptr; // Update original pointer before returning error
+                return -1; // Failed to add IP
+            }
+        } else {
+            // For other RR types, just skip the RDATA.
+            // Ensure RDATA is not out of bounds (needs response_end) - simplified check
+            // if (current_ptr + data_len > response_end) return -1;
+            current_ptr += data_len;
+        }
+    }
+    *ptr = current_ptr; // Update the original pointer to reflect consumed data
+    return 0; // All answers processed successfully.
+}
+
+// Helper function to validate characters in an IP string representation
 
 #define MAX_PARTS 5       // 最大域名段数
 // MAX_DOMAIN_LEN is already defined globally, but also locally used by xdpi_short_domain
@@ -463,22 +743,6 @@ safe_strrstr(const char *haystack, const char *needle) {
 
 static unsigned char *
 parse_dns_query_name(unsigned char *query, char *name) {
-/**
- * @brief Parses a DNS query name from a DNS message.
- * DNS names are sequences of labels, each prefixed by a length byte.
- * The name ends with a zero-length byte. This function handles
- * uncompressed names only (compression pointers 0xC0 lead to an error).
- * It ensures the parsed name does not overflow the provided 'name' buffer.
- *
- * @param query Pointer to the start of the DNS name in the query packet.
- *              This pointer is advanced past the parsed name.
- * @param name Output buffer to store the null-terminated, human-readable domain name.
- *             Must be at least MAX_DNS_NAME characters long.
- * @return Pointer to the byte in the query immediately following the parsed name,
- *         or NULL if an error occurs (e.g., compression, buffer overflow).
- */
-static unsigned char *
-parse_dns_query_name(unsigned char *query, char *name) {
     unsigned char *ptr = query; // Current position in the query buffer
     char *name_ptr = name;      // Current position in the output name buffer
     int len = 0;                // Length of the current label
@@ -516,126 +780,19 @@ parse_dns_query_name(unsigned char *query, char *name) {
     return ptr;       // Return pointer to the byte after the name (e.g., QTYPE).
 }
 
-/**
- * @brief Processes a received DNS response message.
- * Parses the header and question, then checks if the domain needs to be added to xDPI.
- * If the domain is trusted, processes DNS answers to add IPs to trusted list and nftables.
- *
- * @param response Buffer containing the DNS response packet.
- * @param response_len Length of the DNS response packet.
- * @return 0 on success or if processing is not required, -1 on error.
- */
-static int 
-process_dns_response(unsigned char *response, int response_len) {
-    struct dns_header *header = NULL;
-    unsigned char *ptr = response + sizeof(struct dns_header); // Current parsing pointer
-    const unsigned char *response_end = response + response_len; // End of the response buffer for bounds checking
-    char query_name[MAX_DNS_NAME] = {0};
-    t_domain_trusted *trusted_domain = NULL;
-    int qdcount, ancount;
-
-    if (parse_dns_header(response, response_len, &header) != 0) {
-        return -1;
-    }
-
-    qdcount = ntohs(header->qdcount);
-    ancount = ntohs(header->ancount);
-
-    // Ensure ptr is within bounds before parsing question
-    if (ptr >= response_end && qdcount > 0) {
-        debug(LOG_WARNING, "DNS response too short to contain questions.");
-        return -1;
-    }
-    if (parse_dns_question(&ptr, query_name, qdcount) != 0) {
-        return -1;
-    }
-
-    // Handle xDPI domain logic: check suffix, sync with kernel, add domain.
-    // This is done for non-reverse DNS lookup domains.
-    if (!strstr(query_name, "in-addr.arpa") && !strstr(query_name, "ip6.arpa")) {
-        handle_xdpi_domain_processing(query_name);
-    }
-
-    if (!is_trusted_domain(query_name, &trusted_domain)) {
-        return 0;
-    }
-
-    // Ensure ptr is within bounds before parsing answers
-    if (ptr >= response_end && ancount > 0) {
-        debug(LOG_WARNING, "DNS response too short to contain answers after questions.");
-        return -1;
-    }
-    // Pass response_end to process_dns_answers for robust bounds checking
-    if (process_dns_answers(&ptr, ancount, trusted_domain, response_end) != 0) {
-        return -1;
-    }
-
-    return 0;
-}
-
-/**
+/*
  * @brief Handles the logic for processing a domain for xDPI purposes.
  * If the domain has a valid suffix, it checks the xDPI domain count,
  * potentially syncs domains to the kernel, and then adds the domain via xdpi_add_domain.
- *
- * @param query_name The fully qualified domain name that was queried.
  */
-static void handle_xdpi_domain_processing(const char *query_name) {
-    if (!query_name || query_name[0] == '\0') {
-        return;
-    }
-
-    if (is_valid_domain_suffix(query_name)) {
-        debug(LOG_DEBUG, "Domain '%s' has a valid suffix, considering for xDPI.", query_name);
-        // get xdpi domain count, and if it's 0, it might be the first run or a reset,
-        // so sync existing domain_entries to kernel.
-        int xdpi_domain_count = get_xdpi_domain_count();
-        if (xdpi_domain_count == 0) {
-            debug(LOG_INFO, "xDPI domain count is 0, attempting to sync local entries to kernel.");
-            sync_xdpi_domains_2_kern();
-        }
-        // Attempt to add the (potentially shortened) domain to xDPI.
-        // xdpi_add_domain internally handles shortening and checks for duplicates.
-        if (xdpi_add_domain(query_name) < 0) {
-             debug(LOG_WARNING, "Failed to add domain '%s' to xDPI.", query_name);
-        }
-    } else {
-        debug(LOG_DEBUG, "Domain '%s' does not have a valid suffix, skipping xDPI processing.", query_name);
-    }
-}
-
-/**
+/*
  * @brief Parses the header of a DNS message.
  * Validates basic header fields like QR flag, opcode, and rcode.
  *
  * @param response Buffer containing the DNS message.
  * @param response_len Length of the DNS message.
- * @param header Output parameter, pointer to a dns_header struct pointer.
- *               On success, this will point to the start of the message cast as dns_header.
- * @return 0 on success, -1 on error (e.g., too short, invalid flags).
  */
-static int 
-parse_dns_header(unsigned char *response, int response_len, struct dns_header **header) {
-    // Ensure the response is long enough to contain a DNS header.
-    if (response_len <= sizeof(struct dns_header)) {
-        debug(LOG_WARNING, "Invalid DNS response: too short (len=%d)", response_len);
-        return -1;
-    }
-    *header = (struct dns_header *)response; // Cast the beginning of the response to dns_header struct.
-
-    // Validate DNS header fields:
-    // QR flag should be 1 (response).
-    // Opcode should be 0 (standard query).
-    // Rcode should be 0 (no error).
-    if ((*header)->qr != 1 || (*header)->opcode != 0 || (*header)->rcode != 0) {
-        debug(LOG_WARNING, "Invalid DNS response flags: qr=%d, opcode=%d, rcode=%d",
-              (*header)->qr, (*header)->opcode, (*header)->rcode);
-        return -1;
-    }
-    return 0; // Header is valid
-}
-
-/**
+/*
  * @brief Parses the question section of a DNS message.
  * Expects exactly one question (qdcount == 1).
  * Extracts the query name and advances the pointer past QTYPE and QCLASS.
@@ -643,58 +800,14 @@ parse_dns_header(unsigned char *response, int response_len, struct dns_header **
  * @param ptr Pointer to a pointer to the current position in the DNS message.
  *            This pointer will be advanced past the question section.
  * @param query_name Buffer to store the parsed query name.
- * @param qdcount The number of questions, expected to be 1.
- * @return 0 on success, -1 on error.
  */
-static int 
-parse_dns_question(unsigned char **ptr, char *query_name, int qdcount) {
-    // This implementation only supports DNS messages with exactly one question.
-    if (qdcount != 1) {
-        debug(LOG_WARNING, "Unsupported DNS qdcount=%d (expected 1)", qdcount);
-        return -1;
-    }
-    for (int i = 0; i < qdcount; i++) { // Loop (effectively once)
-        // Parse the domain name from the question.
-        *ptr = parse_dns_query_name(*ptr, query_name);
-        if (!*ptr) { // If name parsing failed
-            debug(LOG_WARNING, "Failed to parse DNS query name in question section.");
-            return -1;
-        }
-        // Skip QTYPE and QCLASS fields (2 bytes each).
-        *ptr += DNS_QTYPE_QCLASS_SIZE;
-    }
-    return 0; // Question section parsed successfully.
-}
-
-/**
+/*
  * @brief Checks if a query name matches any configured trusted domain.
  * Trusted domains may be specified with wildcards (e.g., ".example.com").
  *
  * @param query_name The DNS query name to check.
- * @param trusted_domain Output parameter. If a match is found, this will point to the
- *                       t_domain_trusted configuration structure for the matched domain.
- * @return 1 if the domain is trusted, 0 otherwise.
  */
-static int 
-is_trusted_domain(const char *query_name, t_domain_trusted **trusted_domain) {
-    s_config *config = config_get_config(); // Get global configuration
-    if (!config) return 0;
-
-    t_domain_trusted *p = config->pan_domains_trusted; // Start of trusted domains list
-    while (p) {
-        // safe_strrstr checks if query_name ends with p->domain (for wildcard matching)
-        // or if p->domain is a substring. For simple suffix match, ensure p->domain starts with '.'.
-        if (p->domain && safe_strrstr(query_name, p->domain)) {
-            debug(LOG_DEBUG, "Query name '%s' matched trusted domain rule '%s'", query_name, p->domain);
-            *trusted_domain = p; // Store the matched trusted domain entry
-            return 1; // Trusted
-        }
-        p = p->next;
-    }
-    return 0; // Not trusted
-}
-
-/**
+/*
  * @brief Processes DNS answer records (RRs) in a DNS response.
  * Iterates through 'ancount' records. For A or AAAA records belonging to a trusted domain,
  * it calls add_trusted_ip to add the IP to a local list and potentially to nftables.
@@ -705,39 +818,11 @@ is_trusted_domain(const char *query_name, t_domain_trusted **trusted_domain) {
  * @param trusted_domain Pointer to the configuration of the trusted domain being processed.
  * @return 0 on success, -1 on error (e.g., if add_trusted_ip fails).
  */
-/**
+/*
  * @brief Skips over a domain name in a DNS record.
  * Handles both compressed names (starting with 0xC0) and uncompressed names.
- *
- * @param ptr Pointer to the current position in the DNS message, at the start of a domain name.
- * @return Pointer to the byte immediately following the domain name, or NULL on error (e.g., malformed).
  */
-static unsigned char*
-skip_dns_name_in_answer(unsigned char *ptr) {
-    if (!ptr) return NULL;
-
-    // Check for compression pointer (first two bits set)
-    if ((*ptr & 0xC0) == 0xC0) {
-        ptr += DNS_COMPRESSED_NAME_POINTER_SIZE; // Skip the 2-byte compression pointer
-    } else {
-        // Skip uncompressed name (sequence of labels ending with a zero byte)
-        while (*ptr) { // While length byte is not zero
-            if ((*ptr & 0xC0)) { // Should not encounter compression here in uncompressed name
-                debug(LOG_WARNING, "Malformed uncompressed name: encountered compression pointer.");
-                return NULL;
-            }
-            if (*ptr > 63) { // Label length check (max 63)
-                 debug(LOG_WARNING, "Malformed uncompressed name: label too long (%d).", *ptr);
-                return NULL;
-            }
-            ptr += (*ptr) + 1; // Skip length byte and label itself
-        }
-        ptr++; // Skip the final zero byte for the name
-    }
-    return ptr;
-}
-
-/**
+/*
  * @brief Processes a single DNS Resource Record (RR) from the answer section.
  * Parses RR header fields (Type, Class, TTL, RDLength). If the RR is type A or AAAA,
  * it attempts to add the IP address to the trusted list via add_trusted_ip.
@@ -747,112 +832,7 @@ skip_dns_name_in_answer(unsigned char *ptr) {
  *                    at the start of the RR's fixed fields (Type, Class, etc.).
  *                    This pointer is advanced past the RR.
  * @param trusted_domain The trusted domain configuration relevant to this RR.
- * @param response_end Pointer to the end of the DNS response buffer for bounds checking.
- * @return 0 on successful processing of this RR, -1 on parsing error or critical failure from add_trusted_ip.
  */
-static int process_single_rr(unsigned char **rr_data_ptr,
-                             t_domain_trusted *trusted_domain,
-                             const unsigned char *response_end) {
-    unsigned char *current_rr_pos = *rr_data_ptr;
-
-    // Minimum size for Type, Class, TTL, RDLength
-    const int MIN_RR_FIXED_PART_SIZE = DNS_TYPE_SIZE + DNS_CLASS_SIZE + DNS_TTL_SIZE + DNS_RDLENGTH_SIZE;
-    if (current_rr_pos + MIN_RR_FIXED_PART_SIZE > response_end) {
-        debug(LOG_WARNING, "DNS RR truncated: not enough data for fixed fields.");
-        return -1;
-    }
-
-    uint16_t type = ntohs(*(uint16_t *)current_rr_pos);
-    current_rr_pos += DNS_TYPE_SIZE;
-    current_rr_pos += DNS_CLASS_SIZE; // Skip Class, not used for now
-    current_rr_pos += DNS_TTL_SIZE;   // Skip TTL, not used for now
-    uint16_t data_len = ntohs(*(uint16_t *)current_rr_pos);
-    current_rr_pos += DNS_RDLENGTH_SIZE;
-
-    // Check if RDATA (of length data_len) is within packet bounds
-    if (current_rr_pos + data_len > response_end) {
-        debug(LOG_WARNING, "DNS RR truncated: RDATA for type %u exceeds packet boundary.", type);
-        return -1;
-    }
-
-    // If it's an A or AAAA record, try to add the IP.
-    if ((type == DNS_RR_TYPE_A && data_len == IPV4_ADDR_LEN) ||
-        (type == DNS_RR_TYPE_AAAA && data_len == IPV6_ADDR_LEN)) {
-        unsigned char *addr_ptr = current_rr_pos; // RDATA is the IP address
-
-        int add_ip_ret = add_trusted_ip(trusted_domain, type, addr_ptr);
-        if (add_ip_ret == -1) { // A critical error occurred in add_trusted_ip (e.g., malloc failure)
-            debug(LOG_WARNING, "Critical failure adding trusted IP for RR type %u.", type);
-            // Advance pointer past this RDATA before returning error, to ensure caller's loop can continue if needed
-            // or at least the main ptr is updated correctly.
-            *rr_data_ptr = current_rr_pos + data_len;
-            return -1;
-        }
-        // If add_ip_ret == 0, it was success or a non-critical skip (e.g. unsafe IP string),
-        // which is fine for parsing continuation.
-    }
-
-    // Advance the main pointer past this RDATA, regardless of type or add_trusted_ip outcome (unless critical error above)
-    *rr_data_ptr = current_rr_pos + data_len;
-    return 0; // Successfully processed or skipped this RR
-}
-
-
-static int 
-process_dns_answers(unsigned char **ptr, int ancount, t_domain_trusted *trusted_domain) {
-    unsigned char *current_ptr = *ptr; // Use a local copy to iterate
-
-    for (int i = 0; i < ancount; i++) { // Loop through each answer record
-        // Skip the domain name in the answer record.
-        current_ptr = skip_dns_name_in_answer(current_ptr);
-        if (!current_ptr) {
-            debug(LOG_WARNING, "Failed to skip DNS name in answer record %d.", i + 1);
-            return -1; // Error in name skipping
-        }
-
-        // Read RR TYPE, CLASS, TTL, and RDLENGTH.
-        // Ensure there's enough data left for these fields + RDLENGTH field itself
-        if (current_ptr + DNS_TYPE_SIZE + DNS_CLASS_SIZE + DNS_TTL_SIZE + DNS_RDLENGTH_SIZE > *ptr + (ancount * 10)) { // Rough check
-             // This check is very approximate. A more robust check would involve response_end pointer.
-             // For now, assume data is available as we are within ancount.
-        }
-
-        uint16_t type = ntohs(*(uint16_t *)current_ptr); // RR Type (e.g., A, AAAA)
-        current_ptr += DNS_TYPE_SIZE;    // Advance past Type
-        current_ptr += DNS_CLASS_SIZE;   // Advance past Class
-        current_ptr += DNS_TTL_SIZE;     // Advance past TTL
-        uint16_t data_len = ntohs(*(uint16_t *)current_ptr); // Length of RDATA
-        current_ptr += DNS_RDLENGTH_SIZE; // Advance past RDLENGTH
-
-        // Check if the record is of type A (IPv4) or AAAA (IPv6).
-        if ((type == DNS_RR_TYPE_A && data_len == IPV4_ADDR_LEN) ||
-            (type == DNS_RR_TYPE_AAAA && data_len == IPV6_ADDR_LEN)) {
-            unsigned char *addr_ptr = current_ptr; // Pointer to the IP address data in RDATA.
-
-            // Ensure RDATA is not out of bounds (needs response_end) - simplified check
-            // if (current_ptr + data_len > response_end) return -1;
-
-            current_ptr += data_len; // Advance past RDATA.
-
-            // Add this IP address to the list of trusted IPs for the domain.
-            if (add_trusted_ip(trusted_domain, type, addr_ptr) != 0) {
-                *ptr = current_ptr; // Update original pointer before returning error
-                return -1; // Failed to add IP
-            }
-        } else {
-            // For other RR types, just skip the RDATA.
-            // Ensure RDATA is not out of bounds (needs response_end) - simplified check
-            // if (current_ptr + data_len > response_end) return -1;
-            current_ptr += data_len;
-        }
-    }
-    *ptr = current_ptr; // Update the original pointer to reflect consumed data
-    return 0; // All answers processed successfully.
-}
-
-// Helper function to validate characters in an IP string representation
-}
-
 // Helper function to validate characters in an IP string representation
 // Ensures the string only contains characters expected in IPv4 or IPv6 addresses.
 static int is_safe_ip_str(const char *ip_str) {
@@ -989,96 +969,6 @@ dns_read_cb(evutil_socket_t fd, short event, void *arg)
     free(query);                  // Free the dns_query structure.
 }
 
-/**
- * @brief Callback function for libevent when data is received on the main DNS forwarding socket.
- * This function reads incoming DNS queries from clients, forwards them to a local/upstream
- * DNS server, and sets up dns_read_cb to handle the response.
- *
- * @param fd File descriptor of the main listening socket (UDP port 5353).
- * @param event Event flags.
- * @param arg Pointer to the event_base.
- */
-/**
- * @brief Forwards a DNS query to an upstream server and sets up a handler for the response.
- *
- * This helper function is called from read_cb. It encapsulates the logic for:
- * 1. Creating a new socket to communicate with the upstream DNS server.
- * 2. Sending the client's query to the upstream server.
- * 3. Allocating a dns_query structure to maintain state.
- * 4. Creating and adding a libevent event to handle the response from the upstream server.
- *
- * @param base The libevent base.
- * @param listener_fd The file descriptor of the main listening socket. Used for context in dns_query.
- * @param client_addr Address of the original client that sent the query.
- * @param client_len Length of the client_addr structure.
- * @param query_packet Buffer containing the DNS query packet from the client.
- * @param packet_len Length of the query_packet.
- * @return 0 on success, -1 on failure at any step.
- */
-static int
-forward_dns_query_and_setup_handler(struct event_base *base, int listener_fd,
-                                   const struct sockaddr_in *client_addr, socklen_t client_len,
-                                   char *query_packet, int packet_len)
-{
-    int upstream_sock;
-    struct dns_query *query_state;
-
-    // Create a new UDP socket to forward the query.
-    upstream_sock = socket(AF_INET, SOCK_DGRAM, 0);
-    if (upstream_sock < 0) {
-        debug(LOG_ERR, "Failed to create upstream DNS socket: %s", strerror(errno));
-        return -1;
-    }
-
-    // Prepare address for the upstream DNS server.
-    struct sockaddr_in dns_server_addr;
-    memset(&dns_server_addr, 0, sizeof(dns_server_addr));
-    dns_server_addr.sin_family = AF_INET;
-    dns_server_addr.sin_addr.s_addr = inet_addr("127.0.0.1"); // TODO: Make configurable
-    dns_server_addr.sin_port = htons(LOCAL_DNS_PORT);         // LOCAL_DNS_PORT usually 53
-
-    // Send the received query to the upstream DNS server.
-    if (sendto(upstream_sock, query_packet, packet_len, 0, (struct sockaddr *)&dns_server_addr, sizeof(dns_server_addr)) < 0) {
-        debug(LOG_ERR, "Failed to send DNS query to upstream server: %s", strerror(errno));
-        close(upstream_sock);
-        return -1;
-    }
-
-    // Allocate structure to hold state for this forwarded query.
-    query_state = (struct dns_query *)malloc(sizeof(struct dns_query));
-    if (!query_state) {
-        debug(LOG_ERR, "Failed to malloc for dns_query: %s", strerror(errno));
-        close(upstream_sock);
-        return -1;
-    }
-
-    // Populate query_state.
-    query_state->client_fd = listener_fd; // The main listening FD
-    query_state->client_addr = *client_addr;
-    query_state->client_len = client_len;
-    memcpy(query_state->buffer, query_packet, packet_len);
-    query_state->buffer_len = packet_len;
-
-    // Set up a new libevent event to wait for the response on upstream_sock.
-    query_state->dns_event = event_new(base, upstream_sock, EV_READ | EV_TIMEOUT, dns_read_cb, query_state);
-    if (!query_state->dns_event) {
-        debug(LOG_ERR, "Failed to event_new for DNS response: %s", strerror(errno));
-        free(query_state);
-        close(upstream_sock);
-        return -1;
-    }
-
-    struct timeval tv = {5, 0}; // 5-second timeout for DNS response from upstream.
-    if (event_add(query_state->dns_event, &tv) < 0) {
-        debug(LOG_ERR, "Failed to event_add for DNS response: %s", strerror(errno));
-        event_free(query_state->dns_event);
-        free(query_state);
-        close(upstream_sock);
-        return -1;
-    }
-    return 0; // Success
-}
-
 static void 
 read_cb(evutil_socket_t fd, short event, void *arg) 
 {
@@ -1107,15 +997,11 @@ read_cb(evutil_socket_t fd, short event, void *arg)
         dns_server_addr.sin_family = AF_INET;
         dns_server_addr.sin_port = htons(LOCAL_DNS_PORT); // LOCAL_DNS_PORT usually 53 (e.g. from conf.h)
 
-        s_config *config = config_get_config();
+        // s_config *config = config_get_config(); // Unused variable
         const char *upstream_ip_str = NULL;
 
-        if (config && config->upstream_dns_ip[0] != '\0') {
-            upstream_ip_str = config->upstream_dns_ip;
-        } else {
-            debug(LOG_WARNING, "Upstream DNS IP not configured or empty, defaulting to 127.0.0.1.");
-            upstream_ip_str = "127.0.0.1"; // Default fallback IP
-        }
+        upstream_ip_str = "127.0.0.1";
+        debug(LOG_DEBUG, "Using upstream DNS IP: %s", upstream_ip_str);
 
         if (inet_pton(AF_INET, upstream_ip_str, &dns_server_addr.sin_addr) <= 0) {
             debug(LOG_ERR, "Failed to convert upstream DNS IP string '%s' to address, defaulting to 127.0.0.1.", upstream_ip_str);
@@ -1123,8 +1009,7 @@ read_cb(evutil_socket_t fd, short event, void *arg)
             if (inet_pton(AF_INET, "127.0.0.1", &dns_server_addr.sin_addr) <= 0) {
                  // This should not happen for "127.0.0.1"
                  debug(LOG_CRIT, "Failed to convert fallback IP '127.0.0.1'. This is critical.");
-                 close(upstream_sock);
-                 return -1; // Critical failure
+                 close(dns_sock);
             }
         }
 
