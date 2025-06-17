@@ -13,7 +13,7 @@
 #include "centralserver.h"
 #include "firewall.h"
 #include "client_list.h"
-#include "wdctl_thread.h"
+#include "wdctlx_thread.h"
 #include "commandline.h"
 #include "gateway.h"
 #include "safe.h"
