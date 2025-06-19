@@ -9,25 +9,31 @@
 #include <linux/types.h>
 #include <sys/stat.h> // Added for S_IRUSR, S_IWUSR etc. and umask
 #include <fcntl.h>   // Added for O_RDWR, O_CREAT etc.
+#include <errno.h>   // Added for errno and EINTR
+#include "aw-bpf.h" // Include aw-bpf.h for session_data_t definition
 
 static volatile sig_atomic_t exiting = 0;
 
-struct conn_event_t {
-    __u32 saddr;
-    __u32 daddr;
-    __u16 sport;
-    __u16 dport;
-};
-
 static int handle_event(void *ctx, void *data, size_t len) {
-    struct conn_event_t *e = data;
+    struct session_data_t *e = data;
 
-    char s_ip[INET_ADDRSTRLEN], d_ip[INET_ADDRSTRLEN];
-    inet_ntop(AF_INET, &e->saddr, s_ip, sizeof(s_ip));
-    inet_ntop(AF_INET, &e->daddr, d_ip, sizeof(d_ip));
-
-    syslog(LOG_INFO, "New TCP connection: %s:%d -> %s:%d",
-           s_ip, ntohs(e->sport), d_ip, ntohs(e->dport));
+    char s_ip[INET6_ADDRSTRLEN], d_ip[INET6_ADDRSTRLEN];
+    
+    if (e->ip_version == 4) {
+        // Handle IPv4
+        inet_ntop(AF_INET, &e->addrs.v4.saddr_v4, s_ip, sizeof(s_ip));
+        inet_ntop(AF_INET, &e->addrs.v4.daddr_v4, d_ip, sizeof(d_ip));
+        syslog(LOG_INFO, "New session [SID:%u] IPv4: %s:%d -> %s:%d",
+               e->sid, s_ip, ntohs(e->sport), d_ip, ntohs(e->dport));
+    } else if (e->ip_version == 6) {
+        // Handle IPv6
+        inet_ntop(AF_INET6, e->addrs.v6.saddr_v6, s_ip, sizeof(s_ip));
+        inet_ntop(AF_INET6, e->addrs.v6.daddr_v6, d_ip, sizeof(d_ip));
+        syslog(LOG_INFO, "New session [SID:%u] IPv6: %s:%d -> %s:%d",
+               e->sid, s_ip, ntohs(e->sport), d_ip, ntohs(e->dport));
+    } else {
+        syslog(LOG_WARNING, "Unknown IP version: %d", e->ip_version);
+    }
 
     return 0;
 }
@@ -38,10 +44,7 @@ static void sigint_handler(int sig) {
 
 int main() {
     struct ring_buffer *rb = NULL;
-    struct bpf_object *obj;
-    struct bpf_program *prog;
-    struct bpf_map *map;
-    int prog_fd, map_fd;
+    int map_fd;
     pid_t pid;
 
     // Open syslog before forking to catch early errors, or after fork in child for correct PID.
@@ -98,48 +101,31 @@ int main() {
 
     syslog(LOG_INFO, "Daemon started. PID: %d", getpid());
 
-
-    // Load BPF object from file
-    obj = bpf_object__open("aw-bpf.o");
-    if (libbpf_get_error(obj)) {
-        syslog(LOG_ERR, "Failed to open BPF object aw-bpf.o: %s", strerror(errno)); // strerror for libbpf_get_error is not direct
-        goto cleanup_syslog; // Changed goto to ensure closelog is called
+    // Try to find the pinned ring buffer map from already loaded aw-bpf program
+    // The map should be pinned at /sys/fs/bpf/session_events_map if aw-bpf is loaded
+    map_fd = bpf_obj_get("/sys/fs/bpf/tc/globals/session_events_map");
+    if (map_fd < 0) {
+        syslog(LOG_ERR, "Failed to find pinned session_events_map. Is aw-bpf program loaded? Error: %s", strerror(errno));
+        syslog(LOG_ERR, "Please load aw-bpf.o first using tc command:");
+        syslog(LOG_ERR, "  tc qdisc add dev <interface> clsact");
+        syslog(LOG_ERR, "  tc filter add dev <interface> ingress bpf da obj aw-bpf.o sec tc/ingress");
+        syslog(LOG_ERR, "  tc filter add dev <interface> egress bpf da obj aw-bpf.o sec tc/egress");
+        goto cleanup_syslog;
     }
-
-    // Load BPF object into kernel
-    if (bpf_object__load(obj)) {
-        syslog(LOG_ERR, "Failed to load BPF object: %s", strerror(errno)); // strerror for libbpf_get_error is not direct
-        goto cleanup_obj;
-    }
-
-    // Find the BPF program
-    prog = bpf_object__find_program_by_name(obj, "handle_tc");
-    if (!prog) {
-        syslog(LOG_ERR, "Failed to find BPF program 'handle_tc'");
-        goto cleanup_obj;
-    }
-
-    prog_fd = bpf_program__fd(prog);
-
-    // Find the ring buffer map
-    map = bpf_object__find_map_by_name(obj, "conn_events");
-    if (!map) {
-        syslog(LOG_ERR, "Failed to find BPF map 'conn_events'");
-        goto cleanup_obj;
-    }
-
-    map_fd = bpf_map__fd(map);
 
     // Create ring buffer
     rb = ring_buffer__new(map_fd, handle_event, NULL, NULL);
     if (!rb) {
         syslog(LOG_ERR, "Failed to create ring buffer: %s", strerror(errno)); // strerror for libbpf_get_error is not direct
-        goto cleanup_obj;
+        close(map_fd);
+        goto cleanup_syslog;
     }
 
-    syslog(LOG_INFO, "Listening for new connections from aw-bpf.o...");
+    syslog(LOG_INFO, "Listening for new session events from aw-bpf.o...");
     syslog(LOG_INFO, "Note: You need to manually attach the TC program using tc command");
-    syslog(LOG_INFO, "Example: tc qdisc add dev eth0 clsact && tc filter add dev eth0 ingress bpf da obj aw-bpf.o sec tc");
+    syslog(LOG_INFO, "Example: tc qdisc add dev eth0 clsact");
+    syslog(LOG_INFO, "         tc filter add dev eth0 ingress bpf da obj ../ebpf/aw-bpf.o sec tc/ingress");
+    syslog(LOG_INFO, "         tc filter add dev eth0 egress bpf da obj ../ebpf/aw-bpf.o sec tc/egress");
 
     while (!exiting) {
         // Poll with a timeout. ring_buffer__poll returns number of records consumed or negative on error.
@@ -150,9 +136,10 @@ int main() {
         }
     }
 
-cleanup_obj:
     ring_buffer__free(rb);
-    bpf_object__close(obj);
+    if (map_fd >= 0) {
+        close(map_fd);
+    }
 cleanup_syslog: // New label for cleanup before closelog
     syslog(LOG_INFO, "Exiting daemon. PID: %d", getpid());
     closelog();

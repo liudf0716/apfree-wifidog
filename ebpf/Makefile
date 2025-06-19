@@ -15,7 +15,7 @@ endif
 
 obj-m := xdpi-bpf.o  
 
-all: aw-bpf.o aw-bpfctl
+all: aw-bpf.o aw-bpfctl event_daemon
 	@if [ -d /lib/modules/$(shell uname -r)/build ]; then \
 		make -C /lib/modules/$(shell uname -r)/build M=$(PWD) modules; \
 	else \
@@ -30,6 +30,10 @@ aw-bpf.o: aw-bpf.c
 aw-bpfctl: aw-bpfctl.c
 	$(CC) -O2 $(CFLAGS) -o $@ $< -lbpf -ljson-c -luci $(LDFLAGS)
 
+# Event daemon compilation
+event_daemon: event_daemon.c
+	$(CC) -O2 $(CFLAGS) -o $@ $< -lbpf -lelf -lpthread $(LDFLAGS)
+
 # Test program for xdpi-bpf kernel function
 test_xdpi: test_xdpi-bpf.c
 	$(CC) -o $@ $< -Wall -Werror -O2
@@ -37,7 +41,7 @@ test_xdpi: test_xdpi-bpf.c
 	@./test_xdpi
 
 clean:
-	rm -f aw-bpf.o aw-bpfctl test_xdpi
+	rm -f aw-bpf.o aw-bpfctl event_daemon test_xdpi
 	@if [ -d /lib/modules/$(shell uname -r)/build ]; then \
 		make -C /lib/modules/$(shell uname -r)/build M=$(PWD) clean; \
 	else \
