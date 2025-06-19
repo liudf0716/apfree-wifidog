@@ -92,6 +92,27 @@ struct xdpi_nf_conn {
     __u8   event_sent; // New field
 };
 
+/**
+ * @struct session_data_t
+ * @brief Structure to hold session event data for ring buffer
+ */
+struct session_data_t {
+    __u32 sid;          /* Session ID */
+    __u8  ip_version;   /* IP version (4 or 6) */
+    union {
+        struct {
+            __u32 saddr_v4; /* IPv4 source address */
+            __u32 daddr_v4; /* IPv4 destination address */
+        } v4;
+        struct {
+            __u8 saddr_v6[16]; /* IPv6 source address */
+            __u8 daddr_v6[16]; /* IPv6 destination address */
+        } v6;
+    } addrs;
+    __u16 sport;        /* Source port */
+    __u16 dport;        /* Destination port */
+} __attribute__((packed));
+
 #ifndef __KERNEL__
 /**
  * @brief Get current monotonic time in seconds
