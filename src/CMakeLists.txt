@@ -27,6 +27,10 @@ set(src_wdctlx
 	wdctlx.c util.c debug.c
 )
 
+set(src_event_daemon
+    event_daemon.c
+)
+
 # Define common libraries
 set(common_libs
 	pthread m z json-c ssl crypto
@@ -79,6 +83,8 @@ add_executable(wifidogx
 	${src_dhcp}
 )
 
+add_executable(event_daemon ${src_event_daemon})
+
 target_link_libraries(wifidogx
 	${common_libs}
 	${fw_libs}
@@ -89,7 +95,11 @@ target_link_libraries(wdctlx
 	event
 )
 
+target_link_libraries(event_daemon
+    bpf elf z pthread syslog
+)
+
 # Installation
-install(TARGETS wifidogx wdctlx
+install(TARGETS wifidogx wdctlx event_daemon
 	RUNTIME DESTINATION bin
 )
