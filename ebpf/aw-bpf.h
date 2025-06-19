@@ -89,6 +89,7 @@ struct xdpi_nf_conn {
     __u32  pkt_seen;
     __u32  last_time;
     struct bpf_timer timer;
+    __u8   event_sent; // New field
 };
 
 #ifndef __KERNEL__

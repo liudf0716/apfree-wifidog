@@ -97,6 +97,11 @@ struct {
     __uint(max_entries, 1024);
 } xdpi_l7_map SEC(".maps");
 
+struct {
+    __uint(type, BPF_MAP_TYPE_RINGBUF);
+    __uint(max_entries, 1 << 24);
+} session_events_map SEC(".maps");
+
 static __always_inline __u32 get_current_time(void)
 {
     __u32 val = bpf_ktime_get_ns() / 1000000000;
@@ -198,7 +203,8 @@ static __always_inline int tcp_conn_timer_cb(void *map, struct bpf_sock_tuple *k
 
 static __always_inline int handle_tcp_packet(struct __sk_buff *skb, direction_t dir, 
                                             struct bpf_sock_tuple *bpf_tuple,
-                                            int tcp_data_len, __u32 current_time, __u32 est_slot) 
+                                            int tcp_data_len, __u32 current_time, __u32 est_slot,
+                                            __u8 ip_version)
 {
     long err = 0;
     struct xdpi_nf_conn *conn = bpf_map_lookup_elem(&tcp_conn_map, bpf_tuple);
@@ -207,18 +213,65 @@ static __always_inline int handle_tcp_packet(struct __sk_buff *skb, direction_t 
     // Check if we already have a connection with SID
     if (conn && conn->sid > 0) {
         conn->last_time = current_time;
-        sid = conn->sid;
+        sid = conn->sid; // sid is from existing connection
+
+        if (!conn->event_sent) { // Check if event has been sent
+            if (bpf_tuple && sid != 0) { // Ensure sid is valid (it should be, as conn->sid > 0)
+                struct session_data_t *event_data;
+                event_data = bpf_ringbuf_reserve(&session_events_map, sizeof(*event_data), 0);
+                if (event_data) {
+                    event_data->sid = sid;
+                    event_data->ip_version = ip_version;
+                    if (ip_version == 4) {
+                        event_data->addrs.v4.saddr_v4 = bpf_tuple->ipv4.saddr;
+                        event_data->addrs.v4.daddr_v4 = bpf_tuple->ipv4.daddr;
+                        event_data->sport = bpf_tuple->ipv4.sport;
+                        event_data->dport = bpf_tuple->ipv4.dport;
+                    } else if (ip_version == 6) {
+                        __builtin_memcpy(event_data->addrs.v6.saddr_v6, bpf_tuple->ipv6.saddr, 16);
+                        __builtin_memcpy(event_data->addrs.v6.daddr_v6, bpf_tuple->ipv6.daddr, 16);
+                        event_data->sport = bpf_tuple->ipv6.sport;
+                        event_data->dport = bpf_tuple->ipv6.dport;
+                    }
+                    bpf_ringbuf_submit(event_data, 0);
+                    conn->event_sent = 1; // Mark as sent for existing connection
+                }
+            }
+        }
     } else {
         // Try to identify protocol
-        sid = bpf_xdpi_skb_match(skb, dir);
-        struct xdpi_nf_conn new_conn = { .pkt_seen = 1, .last_time = current_time };
+        sid = bpf_xdpi_skb_match(skb, dir); // local sid variable
+        struct xdpi_nf_conn new_conn = { .pkt_seen = 1, .last_time = current_time, .event_sent = 0 };
         BPF_DEBUG("sid: %d dir: %d tcp_data_len: %d", sid, dir, tcp_data_len);
 
         if (sid > 0) {
             new_conn.sid = sid;
         } else {
             new_conn.sid = UNKNOWN_SID;
-            sid = UNKNOWN_SID;
+            sid = UNKNOWN_SID; // Ensure local sid variable also holds UNKNOWN_SID
+        }
+
+        // Send event for new connection if SID is valid, before adding to map
+        if (bpf_tuple && new_conn.sid != 0) {
+            struct session_data_t *event_data;
+            event_data = bpf_ringbuf_reserve(&session_events_map, sizeof(*event_data), 0);
+            if (event_data) {
+                event_data->sid = sid;
+                event_data->ip_version = ip_version;
+                if (ip_version == 4) {
+                    event_data->addrs.v4.saddr_v4 = bpf_tuple->ipv4.saddr;
+                    event_data->addrs.v4.daddr_v4 = bpf_tuple->ipv4.daddr;
+                    event_data->sport = bpf_tuple->ipv4.sport;
+                    event_data->dport = bpf_tuple->ipv4.dport;
+                } else if (ip_version == 6) {
+                    __builtin_memcpy(event_data->addrs.v6.saddr_v6, bpf_tuple->ipv6.saddr, 16);
+                    __builtin_memcpy(event_data->addrs.v6.daddr_v6, bpf_tuple->ipv6.daddr, 16);
+                    event_data->sport = bpf_tuple->ipv6.sport;
+                    event_data->dport = bpf_tuple->ipv6.dport;
+                }
+                bpf_ringbuf_submit(event_data, 0);
+                new_conn.event_sent = 1; // Mark as sent before adding to map
+            }
         }
         
         // Add connection to the map
@@ -240,6 +293,7 @@ static __always_inline int handle_tcp_packet(struct __sk_buff *skb, direction_t 
     }
 
     // Update protocol stats based on SID
+    // Note: The local 'sid' variable is correctly set by the logic above for both existing and new connections.
     struct traffic_stats *proto_stats = bpf_map_lookup_elem(&xdpi_l7_map, &sid);
     if (!proto_stats) {
         struct traffic_stats new_proto_stats = { 0 };
@@ -288,20 +342,43 @@ static __always_inline int udp_conn_timer_cb(void *map, struct bpf_sock_tuple *k
 
 static __always_inline int handle_udp_packet(struct __sk_buff *skb, direction_t dir, 
                                            struct bpf_sock_tuple *bpf_tuple,
-                                           __u32 current_time, __u32 est_slot) 
+                                           __u32 current_time, __u32 est_slot,
+                                           __u8 ip_version)
 {
     long err = 0;
     struct xdpi_nf_conn *conn = bpf_map_lookup_elem(&udp_conn_map, bpf_tuple);
     int sid = 0;
     
-    // Check if we already have a connection with SID
     if (conn && conn->sid > 0) {
         conn->last_time = current_time;
         sid = conn->sid;
+
+        if (!conn->event_sent) {
+            if (bpf_tuple && sid != 0) {
+                struct session_data_t *event_data;
+                event_data = bpf_ringbuf_reserve(&session_events_map, sizeof(*event_data), 0);
+                if (event_data) {
+                    event_data->sid = sid;
+                    event_data->ip_version = ip_version;
+                    if (ip_version == 4) {
+                        event_data->addrs.v4.saddr_v4 = bpf_tuple->ipv4.saddr;
+                        event_data->addrs.v4.daddr_v4 = bpf_tuple->ipv4.daddr;
+                        event_data->sport = bpf_tuple->ipv4.sport;
+                        event_data->dport = bpf_tuple->ipv4.dport;
+                    } else if (ip_version == 6) {
+                        __builtin_memcpy(event_data->addrs.v6.saddr_v6, bpf_tuple->ipv6.saddr, 16);
+                        __builtin_memcpy(event_data->addrs.v6.daddr_v6, bpf_tuple->ipv6.daddr, 16);
+                        event_data->sport = bpf_tuple->ipv6.sport;
+                        event_data->dport = bpf_tuple->ipv6.dport;
+                    }
+                    bpf_ringbuf_submit(event_data, 0);
+                    conn->event_sent = 1;
+                }
+            }
+        }
     } else {
-        // Try to identify protocol
         sid = bpf_xdpi_skb_match(skb, dir);
-        struct xdpi_nf_conn new_conn = { .pkt_seen = 1, .last_time = current_time };
+        struct xdpi_nf_conn new_conn = { .pkt_seen = 1, .last_time = current_time, .event_sent = 0 };
         BPF_DEBUG("sid: %d dir: %d", sid, dir);
 
         if (sid > 0) {
@@ -310,26 +387,46 @@ static __always_inline int handle_udp_packet(struct __sk_buff *skb, direction_t 
             new_conn.sid = UNKNOWN_SID;
             sid = UNKNOWN_SID;
         }
+
+        if (bpf_tuple && new_conn.sid != 0) {
+            struct session_data_t *event_data;
+            event_data = bpf_ringbuf_reserve(&session_events_map, sizeof(*event_data), 0);
+            if (event_data) {
+                event_data->sid = sid;
+                event_data->ip_version = ip_version;
+                if (ip_version == 4) {
+                    event_data->addrs.v4.saddr_v4 = bpf_tuple->ipv4.saddr;
+                    event_data->addrs.v4.daddr_v4 = bpf_tuple->ipv4.daddr;
+                    event_data->sport = bpf_tuple->ipv4.sport;
+                    event_data->dport = bpf_tuple->ipv4.dport;
+                } else if (ip_version == 6) {
+                    __builtin_memcpy(event_data->addrs.v6.saddr_v6, bpf_tuple->ipv6.saddr, 16);
+                    __builtin_memcpy(event_data->addrs.v6.daddr_v6, bpf_tuple->ipv6.daddr, 16);
+                    event_data->sport = bpf_tuple->ipv6.sport;
+                    event_data->dport = bpf_tuple->ipv6.dport;
+                }
+                bpf_ringbuf_submit(event_data, 0);
+                new_conn.event_sent = 1;
+            }
+        }
         
-        // Add connection to the map
         err = bpf_map_update_elem(&udp_conn_map, bpf_tuple, &new_conn, BPF_NOEXIST);
         if (err == 0) {
-            struct xdpi_nf_conn *conn = bpf_map_lookup_elem(&udp_conn_map, bpf_tuple);
-            if (conn) {
+            struct xdpi_nf_conn *ret_conn = bpf_map_lookup_elem(&udp_conn_map, bpf_tuple); // Renamed to avoid conflict
+            if (ret_conn) { // Check if ret_conn is valid
 #ifdef CLOCK_MONOTONIC
-                bpf_timer_init(&conn->timer, &udp_conn_map, CLOCK_MONOTONIC);
+                bpf_timer_init(&ret_conn->timer, &udp_conn_map, CLOCK_MONOTONIC);
 #else
-                bpf_timer_init(&conn->timer, &udp_conn_map, 0);
+                bpf_timer_init(&ret_conn->timer, &udp_conn_map, 0);
 #endif
-                bpf_timer_set_callback(&conn->timer, udp_conn_timer_cb);
-                bpf_timer_start(&conn->timer, UDP_CONN_TIMEOUT_NS, 0);
+                bpf_timer_set_callback(&ret_conn->timer, udp_conn_timer_cb);
+                bpf_timer_start(&ret_conn->timer, UDP_CONN_TIMEOUT_NS, 0);
             }
         } else {
             BPF_DEBUG("Failed to update UDP connection map: %ld", err);
         }
     }
 
-    // Update protocol stats based on SID
     struct traffic_stats *proto_stats = bpf_map_lookup_elem(&xdpi_l7_map, &sid);
     if (proto_stats) {
         if (dir == INGRESS) {
@@ -421,7 +518,7 @@ static inline int process_packet(struct __sk_buff *skb, direction_t dir) {
             bpf_tuple.ipv4.sport = dir == INGRESS ? tcp->source : tcp->dest;
             bpf_tuple.ipv4.dport = dir == INGRESS ? tcp->dest : tcp->source;
             
-            if (handle_tcp_packet(skb, dir, &bpf_tuple, tcp_data_len, current_time, est_slot)) {
+            if (handle_tcp_packet(skb, dir, &bpf_tuple, tcp_data_len, current_time, est_slot, 4)) { // Pass 4 for IPv4
                 return 1;
             }
         } else if (ip->protocol == IPPROTO_UDP) {
@@ -435,7 +532,7 @@ static inline int process_packet(struct __sk_buff *skb, direction_t dir) {
             bpf_tuple.ipv4.sport = dir == INGRESS ? udp->source : udp->dest;
             bpf_tuple.ipv4.dport = dir == INGRESS ? udp->dest : udp->source;
             
-            if (handle_udp_packet(skb, dir, &bpf_tuple, current_time, est_slot)) {
+            if (handle_udp_packet(skb, dir, &bpf_tuple, current_time, est_slot, 4)) { // Pass 4 for IPv4
                 return 1;
             }
         }
@@ -509,7 +606,7 @@ static inline int process_packet(struct __sk_buff *skb, direction_t dir) {
             bpf_tuple.ipv6.sport = dir == INGRESS ? tcp->source : tcp->dest;
             bpf_tuple.ipv6.dport = dir == INGRESS ? tcp->dest : tcp->source;
             
-            if (handle_tcp_packet(skb, dir, &bpf_tuple, tcp_data_len, current_time, est_slot)) {
+            if (handle_tcp_packet(skb, dir, &bpf_tuple, tcp_data_len, current_time, est_slot, 6)) { // Pass 6 for IPv6
                 return 1;
             }
         } else if (ip6->nexthdr == IPPROTO_UDP) {
@@ -528,7 +625,7 @@ static inline int process_packet(struct __sk_buff *skb, direction_t dir) {
             bpf_tuple.ipv6.sport = dir == INGRESS ? udp->source : udp->dest;
             bpf_tuple.ipv6.dport = dir == INGRESS ? udp->dest : udp->source;
             
-            if (handle_udp_packet(skb, dir, &bpf_tuple, current_time, est_slot)) {
+            if (handle_udp_packet(skb, dir, &bpf_tuple, current_time, est_slot, 6)) { // Pass 6 for IPv6
                 return 1;
             }
         }
