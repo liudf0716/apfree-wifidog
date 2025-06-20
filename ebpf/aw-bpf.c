@@ -99,6 +99,7 @@ struct {
 
 struct {
     __uint(type, BPF_MAP_TYPE_RINGBUF);
+    __uint(pinning, 1);
     __uint(max_entries, 1 << 24);
 } session_events_map SEC(".maps");
 
@@ -227,14 +228,21 @@ static __always_inline int handle_tcp_packet(struct __sk_buff *skb, direction_t 
                         event_data->addrs.v4.daddr_v4 = bpf_tuple->ipv4.daddr;
                         event_data->sport = bpf_tuple->ipv4.sport;
                         event_data->dport = bpf_tuple->ipv4.dport;
+                        bpf_ringbuf_submit(event_data, 0);
+                        conn->event_sent = 1; // Mark as sent for existing connection
                     } else if (ip_version == 6) {
                         __builtin_memcpy(event_data->addrs.v6.saddr_v6, bpf_tuple->ipv6.saddr, 16);
                         __builtin_memcpy(event_data->addrs.v6.daddr_v6, bpf_tuple->ipv6.daddr, 16);
                         event_data->sport = bpf_tuple->ipv6.sport;
                         event_data->dport = bpf_tuple->ipv6.dport;
+                        bpf_ringbuf_submit(event_data, 0);
+                        conn->event_sent = 1; // Mark as sent for existing connection
+                    } else {
+                        // Invalid IP version, discard the reserved space
+                        bpf_ringbuf_discard(event_data, 0);
                     }
-                    bpf_ringbuf_submit(event_data, 0);
-                    conn->event_sent = 1; // Mark as sent for existing connection
+                } else {
+                    BPF_DEBUG("Failed to reserve ring buffer space for event");
                 }
             }
         }
@@ -263,14 +271,21 @@ static __always_inline int handle_tcp_packet(struct __sk_buff *skb, direction_t 
                     event_data->addrs.v4.daddr_v4 = bpf_tuple->ipv4.daddr;
                     event_data->sport = bpf_tuple->ipv4.sport;
                     event_data->dport = bpf_tuple->ipv4.dport;
+                    bpf_ringbuf_submit(event_data, 0);
+                    new_conn.event_sent = 1; // Mark as sent before adding to map
                 } else if (ip_version == 6) {
                     __builtin_memcpy(event_data->addrs.v6.saddr_v6, bpf_tuple->ipv6.saddr, 16);
                     __builtin_memcpy(event_data->addrs.v6.daddr_v6, bpf_tuple->ipv6.daddr, 16);
                     event_data->sport = bpf_tuple->ipv6.sport;
                     event_data->dport = bpf_tuple->ipv6.dport;
+                    bpf_ringbuf_submit(event_data, 0);
+                    new_conn.event_sent = 1; // Mark as sent before adding to map
+                } else {
+                    // Invalid IP version, discard the reserved space
+                    bpf_ringbuf_discard(event_data, 0);
                 }
-                bpf_ringbuf_submit(event_data, 0);
-                new_conn.event_sent = 1; // Mark as sent before adding to map
+            } else {
+                BPF_DEBUG("Failed to reserve ring buffer space for new connection event");
             }
         }
         
@@ -365,14 +380,21 @@ static __always_inline int handle_udp_packet(struct __sk_buff *skb, direction_t 
                         event_data->addrs.v4.daddr_v4 = bpf_tuple->ipv4.daddr;
                         event_data->sport = bpf_tuple->ipv4.sport;
                         event_data->dport = bpf_tuple->ipv4.dport;
+                        bpf_ringbuf_submit(event_data, 0);
+                        conn->event_sent = 1;
                     } else if (ip_version == 6) {
                         __builtin_memcpy(event_data->addrs.v6.saddr_v6, bpf_tuple->ipv6.saddr, 16);
                         __builtin_memcpy(event_data->addrs.v6.daddr_v6, bpf_tuple->ipv6.daddr, 16);
                         event_data->sport = bpf_tuple->ipv6.sport;
                         event_data->dport = bpf_tuple->ipv6.dport;
+                        bpf_ringbuf_submit(event_data, 0);
+                        conn->event_sent = 1;
+                    } else {
+                        // Invalid IP version, discard the reserved space
+                        bpf_ringbuf_discard(event_data, 0);
                     }
-                    bpf_ringbuf_submit(event_data, 0);
-                    conn->event_sent = 1;
+                } else {
+                    BPF_DEBUG("Failed to reserve ring buffer space for UDP event");
                 }
             }
         }
@@ -399,14 +421,21 @@ static __always_inline int handle_udp_packet(struct __sk_buff *skb, direction_t 
                     event_data->addrs.v4.daddr_v4 = bpf_tuple->ipv4.daddr;
                     event_data->sport = bpf_tuple->ipv4.sport;
                     event_data->dport = bpf_tuple->ipv4.dport;
+                    bpf_ringbuf_submit(event_data, 0);
+                    new_conn.event_sent = 1;
                 } else if (ip_version == 6) {
                     __builtin_memcpy(event_data->addrs.v6.saddr_v6, bpf_tuple->ipv6.saddr, 16);
                     __builtin_memcpy(event_data->addrs.v6.daddr_v6, bpf_tuple->ipv6.daddr, 16);
                     event_data->sport = bpf_tuple->ipv6.sport;
                     event_data->dport = bpf_tuple->ipv6.dport;
+                    bpf_ringbuf_submit(event_data, 0);
+                    new_conn.event_sent = 1;
+                } else {
+                    // Invalid IP version, discard the reserved space
+                    bpf_ringbuf_discard(event_data, 0);
                 }
-                bpf_ringbuf_submit(event_data, 0);
-                new_conn.event_sent = 1;
+            } else {
+                BPF_DEBUG("Failed to reserve ring buffer space for new UDP connection event");
             }
         }
         
