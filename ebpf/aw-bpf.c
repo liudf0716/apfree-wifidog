@@ -68,7 +68,7 @@ struct {
     __uint(max_entries, 1024);
 } mac_map SEC(".maps");
 
-#ifndef __TARGET_ARCH_mips
+#ifdef ENABLE_XDPI_FEATURE
 // Map for TCP connections
 struct {
     __uint(type, BPF_MAP_TYPE_HASH);
@@ -86,7 +86,7 @@ struct {
     __type(value, struct xdpi_nf_conn);
     __uint(max_entries, 10240);
 } udp_conn_map SEC(".maps");
-#endif // end not __TARGET_ARCH_mips
+#endif // ENABLE_XDPI_FEATURE
 
 // Map for xdpi protocol stats
 struct {
@@ -174,7 +174,7 @@ static __always_inline int edt_sched_departure(struct __sk_buff *skb, struct rat
     return 0;
 }
 
-#ifndef __TARGET_ARCH_mips
+#ifdef ENABLE_XDPI_FEATURE
 static __always_inline void set_ip(__u32 *dst, const struct in6_addr *src)
 {
     dst[0] = src->in6_u.u6_addr32[0];
@@ -467,7 +467,7 @@ static __always_inline int handle_udp_packet(struct __sk_buff *skb, direction_t 
 
     return 0;
 }
-#endif // end not __TARGET_ARCH_mips
+#endif // ENABLE_XDPI_FEATURE
 
 static inline int process_packet(struct __sk_buff *skb, direction_t dir) {
     __u32 current_time = get_current_time();
@@ -510,7 +510,7 @@ static inline int process_packet(struct __sk_buff *skb, direction_t dir) {
         if ((void *)ip + sizeof(*ip) > data_end)
             return 0;
 
-#ifndef __TARGET_ARCH_mips
+#ifdef ENABLE_XDPI_FEATURE
         if (ip->protocol == IPPROTO_TCP) {
             struct tcphdr *tcp = (struct tcphdr *)(data + sizeof(*eth) + sizeof(*ip));
             if ((void *)tcp + sizeof(*tcp) > data_end)
@@ -565,7 +565,7 @@ static inline int process_packet(struct __sk_buff *skb, direction_t dir) {
                 return 1;
             }
         }
-#endif // end not __TARGET_ARCH_mips    
+#endif // ENABLE_XDPI_FEATURE
 
         // Process source IP (outgoing traffic)
         struct traffic_stats *s_stats = bpf_map_lookup_elem(&ipv4_map, &ip->saddr);
@@ -594,7 +594,7 @@ static inline int process_packet(struct __sk_buff *skb, direction_t dir) {
         struct ipv6hdr *ip6 = data + sizeof(*eth);
         if ((void *)ip6 + sizeof(*ip6) > data_end)
             return 0;
-#ifndef __TARGET_ARCH_mips
+#ifdef ENABLE_XDPI_FEATURE
         if (ip6->nexthdr == IPPROTO_TCP) {
             struct tcphdr *tcp = (struct tcphdr *)(data + sizeof(*eth) + sizeof(*ip6));
             if ((void *)tcp + sizeof(*tcp) > data_end)
@@ -658,7 +658,7 @@ static inline int process_packet(struct __sk_buff *skb, direction_t dir) {
                 return 1;
             }
         }
-#endif // end not __TARGET_ARCH_mips
+#endif // ENABLE_XDPI_FEATURE
 
         // Process source IPv6 (outgoing traffic)
         struct traffic_stats *s_stats6 = bpf_map_lookup_elem(&ipv6_map, &ip6->saddr);

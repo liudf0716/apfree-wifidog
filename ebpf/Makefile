@@ -4,6 +4,17 @@ CC ?= gcc
 
 BPF_CFLAGS = -I$(PWD)
 
+# xDPI功能控制 (默认启用)
+# 设置 ENABLE_XDPI_FEATURE=0 来禁用xDPI功能
+ENABLE_XDPI_FEATURE ?= 1
+
+ifeq ($(ENABLE_XDPI_FEATURE),1)
+    BPF_CFLAGS += -DENABLE_XDPI_FEATURE
+    $(info xDPI feature enabled)
+else
+    $(info xDPI feature disabled)
+endif
+
 # 检查是否安装了 libcurl
 CURL_LIBS := $(shell pkg-config --libs libcurl 2>/dev/null)
 ifneq ($(CURL_LIBS),)

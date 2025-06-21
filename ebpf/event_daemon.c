@@ -17,22 +17,36 @@ static volatile sig_atomic_t exiting = 0;
 static int handle_event(void *ctx, void *data, size_t len) {
     struct session_data_t *e = data;
 
+    // Validate data length
+    if (len < sizeof(struct session_data_t)) {
+        syslog(LOG_WARNING, "Received incomplete session data: expected %zu bytes, got %zu bytes", 
+               sizeof(struct session_data_t), len);
+        return -1;
+    }
+
     char s_ip[INET6_ADDRSTRLEN], d_ip[INET6_ADDRSTRLEN];
     
     if (e->ip_version == 4) {
         // Handle IPv4
-        inet_ntop(AF_INET, &e->addrs.v4.saddr_v4, s_ip, sizeof(s_ip));
-        inet_ntop(AF_INET, &e->addrs.v4.daddr_v4, d_ip, sizeof(d_ip));
+        if (inet_ntop(AF_INET, &e->addrs.v4.saddr_v4, s_ip, sizeof(s_ip)) == NULL ||
+            inet_ntop(AF_INET, &e->addrs.v4.daddr_v4, d_ip, sizeof(d_ip)) == NULL) {
+            syslog(LOG_WARNING, "Failed to convert IPv4 addresses to string");
+            return -1;
+        }
         syslog(LOG_INFO, "New session [SID:%u] IPv4: %s:%d -> %s:%d",
                e->sid, s_ip, ntohs(e->sport), d_ip, ntohs(e->dport));
     } else if (e->ip_version == 6) {
         // Handle IPv6
-        inet_ntop(AF_INET6, e->addrs.v6.saddr_v6, s_ip, sizeof(s_ip));
-        inet_ntop(AF_INET6, e->addrs.v6.daddr_v6, d_ip, sizeof(d_ip));
+        if (inet_ntop(AF_INET6, e->addrs.v6.saddr_v6, s_ip, sizeof(s_ip)) == NULL ||
+            inet_ntop(AF_INET6, e->addrs.v6.daddr_v6, d_ip, sizeof(d_ip)) == NULL) {
+            syslog(LOG_WARNING, "Failed to convert IPv6 addresses to string");
+            return -1;
+        }
         syslog(LOG_INFO, "New session [SID:%u] IPv6: %s:%d -> %s:%d",
                e->sid, s_ip, ntohs(e->sport), d_ip, ntohs(e->dport));
     } else {
-        syslog(LOG_WARNING, "Unknown IP version: %d", e->ip_version);
+        syslog(LOG_WARNING, "Unknown IP version: %d for session SID:%u", e->ip_version, e->sid);
+        return -1;
     }
 
     return 0;
@@ -130,10 +144,21 @@ int main() {
     while (!exiting) {
         // Poll with a timeout. ring_buffer__poll returns number of records consumed or negative on error.
         int ret = ring_buffer__poll(rb, 100); // 100 ms timeout
-        if (ret < 0 && ret != -EINTR) { // EINTR is expected on signal
-            syslog(LOG_ERR, "Error polling ring buffer: %s", strerror(-ret));
-            // Depending on the error, you might want to break or continue
+        if (ret < 0) {
+            if (ret == -EINTR) {
+                // Interrupted by signal, this is expected
+                syslog(LOG_DEBUG, "Ring buffer polling interrupted by signal");
+                continue;
+            } else {
+                syslog(LOG_ERR, "Error polling ring buffer: %s", strerror(-ret));
+                // Depending on the error, you might want to break or continue
+                break;
+            }
+        } else if (ret > 0) {
+            // Successfully processed events
+            syslog(LOG_DEBUG, "Processed %d events from ring buffer", ret);
         }
+        // ret == 0 means timeout, no events, continue polling
     }
 
     ring_buffer__free(rb);

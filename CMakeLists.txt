@@ -15,6 +15,7 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 option(AW_DEBUG "Build with debug support" OFF)
 option(AW_FW3 "Build with iptables support" OFF)
 option(AW_VPP "Build with VPP support" OFF)
+option(ENABLE_XDPI_FEATURE "Enable xDPI protocol detection and session tracking" ON)
 
 # VPP-specific variables (added)
 if(AW_VPP)
