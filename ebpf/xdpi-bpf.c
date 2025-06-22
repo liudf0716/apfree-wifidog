@@ -18,6 +18,12 @@
 
 #include "xdpi-bpf.h"
 
+/* Module metadata */
+MODULE_LICENSE("GPL");                 
+MODULE_AUTHOR("Dengfeng Liu <liudf0716@gmail.com>");            
+MODULE_DESCRIPTION("xDPI kernel module for apfree-wifidog"); 
+MODULE_VERSION("1.0");
+
 
 
 // Fixed size array of domain entries
@@ -436,13 +442,14 @@ out:
 
 __diag_pop();
 
-BTF_SET8_START(bpf_kfunc_xdpi_ids_set)
-BTF_ID_FLAGS(func, bpf_xdpi_skb_match)
-BTF_SET8_END(bpf_kfunc_xdpi_ids_set)
+/* BTF kfunc set registration - simplified version */
+BTF_SET8_START(bpf_xdpi_kfunc_ids)
+BTF_ID_FLAGS(func, bpf_xdpi_skb_match, 0)
+BTF_SET8_END(bpf_xdpi_kfunc_ids)
 
-static const struct btf_kfunc_id_set bpf_kfunc_xdpi_set = {
+static const struct btf_kfunc_id_set bpf_xdpi_kfunc_set = {
     .owner = THIS_MODULE,
-    .set = &bpf_kfunc_xdpi_ids_set,
+    .set = &bpf_xdpi_kfunc_ids,
 };
 
 // Functions to manage the domain array
@@ -676,9 +683,9 @@ static int __init xdpi_init(void)
         return -ENOMEM;
     }
     
-    ret = register_btf_kfunc_id_set(BPF_PROG_TYPE_SCHED_CLS, &bpf_kfunc_xdpi_set);
+    ret = register_btf_kfunc_id_set(BPF_PROG_TYPE_SCHED_CLS, &bpf_xdpi_kfunc_set);
     if (ret) {
-        pr_err("bpf_kfunc_xdpi: Failed to register BTF kfunc ID set\n");
+        pr_err("xdpi_bpf: Failed to register BTF kfunc ID set: %d\n", ret);
         proc_remove(xdpi_proc_file);
         proc_remove(xdpi_l7_proto_file);
         proc_remove(xdpi_domain_num_file);
@@ -703,8 +710,3 @@ static void __exit xdpi_exit(void)
 
 module_init(xdpi_init);
 module_exit(xdpi_exit);
-
-MODULE_LICENSE("GPL");                 
-MODULE_AUTHOR("Dengfeng Liu <liudf0716@gmail.com>");            
-MODULE_DESCRIPTION("xDPI for apfree-wifidog in linux kernel 6.6"); 
-MODULE_VERSION("1.0");
