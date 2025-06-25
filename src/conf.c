@@ -890,6 +890,10 @@ parse_ws_server(FILE * file, const char *filename, int *linenum)
 		exit(-1);
 	}
 
+	if (port == 443) {
+		ssl = 1; // Default to SSL if port is 443
+	}
+
 	debug(LOG_DEBUG, "Adding %s:%d to the ws server", host, port);
 	t_ws_server *ws = (t_ws_server *)malloc(sizeof(t_ws_server));
 	ws->hostname = host;
