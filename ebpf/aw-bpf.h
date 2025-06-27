@@ -99,6 +99,8 @@ struct xdpi_nf_conn {
 struct session_data_t {
     __u32 sid;          /* Session ID */
     __u8  ip_version;   /* IP version (4 or 6) */
+    __u8  proto;        /* Protocol type (IPPROTO_TCP=6 or IPPROTO_UDP=17) */
+    __u8  reserved[2];  /* Reserved for alignment */
     union {
         struct {
             __u32 saddr_v4; /* IPv4 source address */

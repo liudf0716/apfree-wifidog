@@ -223,6 +223,7 @@ static __always_inline int handle_tcp_packet(struct __sk_buff *skb, direction_t 
                 if (event_data) {
                     event_data->sid = sid;
                     event_data->ip_version = ip_version;
+                    event_data->proto = IPPROTO_TCP;
                     if (ip_version == 4) {
                         event_data->addrs.v4.saddr_v4 = bpf_tuple->ipv4.saddr;
                         event_data->addrs.v4.daddr_v4 = bpf_tuple->ipv4.daddr;
@@ -266,6 +267,7 @@ static __always_inline int handle_tcp_packet(struct __sk_buff *skb, direction_t 
             if (event_data) {
                 event_data->sid = sid;
                 event_data->ip_version = ip_version;
+                event_data->proto = IPPROTO_TCP;
                 if (ip_version == 4) {
                     event_data->addrs.v4.saddr_v4 = bpf_tuple->ipv4.saddr;
                     event_data->addrs.v4.daddr_v4 = bpf_tuple->ipv4.daddr;
@@ -375,6 +377,7 @@ static __always_inline int handle_udp_packet(struct __sk_buff *skb, direction_t 
                 if (event_data) {
                     event_data->sid = sid;
                     event_data->ip_version = ip_version;
+                    event_data->proto = IPPROTO_UDP;
                     if (ip_version == 4) {
                         event_data->addrs.v4.saddr_v4 = bpf_tuple->ipv4.saddr;
                         event_data->addrs.v4.daddr_v4 = bpf_tuple->ipv4.daddr;
@@ -416,6 +419,7 @@ static __always_inline int handle_udp_packet(struct __sk_buff *skb, direction_t 
             if (event_data) {
                 event_data->sid = sid;
                 event_data->ip_version = ip_version;
+                event_data->proto = IPPROTO_UDP;
                 if (ip_version == 4) {
                     event_data->addrs.v4.saddr_v4 = bpf_tuple->ipv4.saddr;
                     event_data->addrs.v4.daddr_v4 = bpf_tuple->ipv4.daddr;

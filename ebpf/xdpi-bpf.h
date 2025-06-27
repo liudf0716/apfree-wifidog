@@ -14,19 +14,20 @@
 #define EGRESS 1
 
 /* L7 Protocol IDs - Using #define instead of enum */
-#define L7_HTTP     1
-#define L7_HTTPS    2
-#define L7_MSTSC    101
-#define L7_SSH      102
-#define L7_SCP      103
-#define L7_WECHAT   104
-#define L7_DNS      201
-#define L7_DHCP     202
-#define L7_NTP      203
-#define L7_SNMP     204
-#define L7_TFTP     205
-#define L7_RTP      206
-#define L7_RTCP     207
+#define L7_HTTP     8001
+#define L7_HTTPS    8002
+#define L7_MSTSC    8001
+#define L7_SSH      8002
+#define L7_SCP      8003
+#define L7_WECHAT   8004
+#define L7_DNS      8005
+#define L7_DHCP     8006
+#define L7_NTP      8007
+#define L7_SNMP     8008
+#define L7_TFTP     8009
+#define L7_RTP      8010
+#define L7_RTCP     8011
+#define L7_UNKNOWN  9999  /* Default SID for unidentified protocols */
 
 /* Protocol types */
 #define PROTO_TCP   1
