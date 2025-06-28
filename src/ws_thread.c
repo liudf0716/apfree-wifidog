@@ -755,8 +755,9 @@ start_ws_heartbeat(struct bufferevent *b_ws)
  * Supported message types:
  * - `"heartbeat"`: Handles gateway status updates. (Responds with heartbeat)
  * - `"connect"`: Handles initial connection response. (Responds with heartbeat)
- * - `"auth"`: Handles client authentication responses.
- * - `"kickoff"`: Handles client disconnection requests.
+ * - `"auth"`: Handles client authentication requests.
+ * - `"kickoff"`: Handles client disconnection requests. Responds with "kickoff_response"
+ *                for success or "kickoff_error" for validation failures.
  * - `"tmp_pass"`: Handles requests for temporary client access.
  * - `"get_firmware_info"`: Triggers a request for firmware information. The device
  *                          responds with a "firmware_info_response" message
