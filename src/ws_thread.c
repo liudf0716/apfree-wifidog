@@ -90,7 +90,7 @@ static char WS_ACCEPT[WS_ACCEPT_LEN+1];
 static void ws_heartbeat_cb(evutil_socket_t fd, short events, void *arg);
 static void wsevent_connection_cb(struct bufferevent *bev, short events, void *ctx);
 static void handle_auth_request(json_object *j_auth);
-static void handle_kickoff_request(json_object *j_auth);
+static void handle_kickoff_request(json_object *j_auth, struct bufferevent *bev);
 static void handle_get_firmware_info_request(json_object *j_req, struct bufferevent *bev);
 static void handle_firmware_upgrade_request(json_object *j_req, struct bufferevent *bev);
 static void cleanup_connection(struct bufferevent *bev);
@@ -369,17 +369,42 @@ generate_sec_websocket_accept(const char *key, char *accept, size_t length)
  *   "gw_id": "<gateway_id>"
  * }
  *
+ * Success response:
+ * {
+ *   "type": "kickoff_response",
+ *   "status": "success",
+ *   "client_ip": "<ip_address>",
+ *   "client_mac": "<mac_address>",
+ *   "message": "Client kicked off successfully"
+ * }
+ *
+ * Error responses:
+ * {
+ *   "type": "kickoff_error",
+ *   "error": "Missing required fields in request"
+ * }
+ * {
+ *   "type": "kickoff_error",
+ *   "error": "Client not found",
+ *   "client_ip": "<ip_address>",
+ *   "client_mac": "<mac_address>"
+ * }
+ *
  * Validates the request and removes the client by:
  * 1. Verifying all required fields are present
  * 2. Checking client exists in local database
  * 3. Validating device ID and gateway ID match
  * 4. Removing firewall rules and client entry
+ * 5. Sending appropriate response back to server
  *
  * @param j_auth JSON object containing the kickoff request
+ * @param bev The bufferevent associated with the WebSocket connection for responses
  */
 static void
-handle_kickoff_request(json_object *j_auth)
+handle_kickoff_request(json_object *j_auth, struct bufferevent *bev)
 {
+	json_object *j_response = json_object_new_object();
+	
 	// Extract and validate required fields
 	json_object *client_ip = json_object_object_get(j_auth, "client_ip");
 	json_object *client_mac = json_object_object_get(j_auth, "client_mac");
@@ -388,6 +413,14 @@ handle_kickoff_request(json_object *j_auth)
 
 	if (!client_ip || !client_mac || !device_id || !gw_id) {
 		debug(LOG_ERR, "Kickoff: Missing required fields in request");
+		
+		// Send error response
+		json_object_object_add(j_response, "type", json_object_new_string("kickoff_error"));
+		json_object_object_add(j_response, "error", json_object_new_string("Missing required fields in request"));
+		
+		const char *response_str = json_object_to_json_string(j_response);
+		ws_send(bufferevent_get_output(bev), response_str, strlen(response_str), TEXT_FRAME);
+		json_object_put(j_response);
 		return;
 	}
 
@@ -402,6 +435,16 @@ handle_kickoff_request(json_object *j_auth)
 	if (!client) {
 		debug(LOG_ERR, "Kickoff: Client %s (%s) not found", 
 			  client_mac_str, client_ip_str);
+		
+		// Send error response with client info
+		json_object_object_add(j_response, "type", json_object_new_string("kickoff_error"));
+		json_object_object_add(j_response, "error", json_object_new_string("Client not found"));
+		json_object_object_add(j_response, "client_ip", json_object_new_string(client_ip_str));
+		json_object_object_add(j_response, "client_mac", json_object_new_string(client_mac_str));
+		
+		const char *response_str = json_object_to_json_string(j_response);
+		ws_send(bufferevent_get_output(bev), response_str, strlen(response_str), TEXT_FRAME);
+		json_object_put(j_response);
 		return;
 	}
 
@@ -409,6 +452,16 @@ handle_kickoff_request(json_object *j_auth)
 	const char *local_device_id = get_device_id();
 	if (!local_device_id || strcmp(local_device_id, device_id_str) != 0) {
 		debug(LOG_ERR, "Kickoff: Device ID mismatch - expected %s", device_id_str);
+		
+		// Send error response
+		json_object_object_add(j_response, "type", json_object_new_string("kickoff_error"));
+		json_object_object_add(j_response, "error", json_object_new_string("Device ID mismatch"));
+		json_object_object_add(j_response, "expected_device_id", json_object_new_string(device_id_str));
+		json_object_object_add(j_response, "actual_device_id", json_object_new_string(local_device_id ? local_device_id : "null"));
+		
+		const char *response_str = json_object_to_json_string(j_response);
+		ws_send(bufferevent_get_output(bev), response_str, strlen(response_str), TEXT_FRAME);
+		json_object_put(j_response);
 		return;
 	}
 
@@ -416,6 +469,17 @@ handle_kickoff_request(json_object *j_auth)
 	if (!client->gw_setting || strcmp(client->gw_setting->gw_id, gw_id_str) != 0) {
 		debug(LOG_ERR, "Kickoff: Gateway mismatch for client %s - expected %s",
 			  client_mac_str, gw_id_str);
+		
+		// Send error response
+		json_object_object_add(j_response, "type", json_object_new_string("kickoff_error"));
+		json_object_object_add(j_response, "error", json_object_new_string("Gateway ID mismatch"));
+		json_object_object_add(j_response, "client_mac", json_object_new_string(client_mac_str));
+		json_object_object_add(j_response, "expected_gw_id", json_object_new_string(gw_id_str));
+		json_object_object_add(j_response, "actual_gw_id", json_object_new_string(client->gw_setting ? client->gw_setting->gw_id : "null"));
+		
+		const char *response_str = json_object_to_json_string(j_response);
+		ws_send(bufferevent_get_output(bev), response_str, strlen(response_str), TEXT_FRAME);
+		json_object_put(j_response);
 		return;
 	}
 
@@ -427,6 +491,17 @@ handle_kickoff_request(json_object *j_auth)
 	UNLOCK_CLIENT_LIST();
 
 	debug(LOG_DEBUG, "Kicked off client %s (%s)", client_mac_str, client_ip_str);
+	
+	// Send success response
+	json_object_object_add(j_response, "type", json_object_new_string("kickoff_response"));
+	json_object_object_add(j_response, "status", json_object_new_string("success"));
+	json_object_object_add(j_response, "client_ip", json_object_new_string(client_ip_str));
+	json_object_object_add(j_response, "client_mac", json_object_new_string(client_mac_str));
+	json_object_object_add(j_response, "message", json_object_new_string("Client kicked off successfully"));
+	
+	const char *response_str = json_object_to_json_string(j_response);
+	ws_send(bufferevent_get_output(bev), response_str, strlen(response_str), TEXT_FRAME);
+	json_object_put(j_response);
 }
 
 /**
@@ -721,7 +796,7 @@ process_ws_msg(struct bufferevent *bev, const char *msg)
 	} else if (!strcmp(type_str, "auth")) {
 		handle_auth_request(jobj);
 	} else if (!strcmp(type_str, "kickoff")) {
-		handle_kickoff_request(jobj);
+		handle_kickoff_request(jobj, bev);
 	} else if (!strcmp(type_str, "tmp_pass")) {
 		handle_tmp_pass_response(jobj);
 	} else if (!strcmp(type_str, "get_firmware_info")) {
