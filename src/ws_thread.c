@@ -89,8 +89,8 @@ static char WS_ACCEPT[WS_ACCEPT_LEN+1];
 /* Forward declarations for callback functions */
 static void ws_heartbeat_cb(evutil_socket_t fd, short events, void *arg);
 static void wsevent_connection_cb(struct bufferevent *bev, short events, void *ctx);
-static void handle_auth_response(json_object *j_auth);
-static void handle_kickoff_response(json_object *j_auth);
+static void handle_auth_request(json_object *j_auth);
+static void handle_kickoff_request(json_object *j_auth);
 static void handle_get_firmware_info_request(json_object *j_req, struct bufferevent *bev);
 static void handle_firmware_upgrade_request(json_object *j_req, struct bufferevent *bev);
 static void cleanup_connection(struct bufferevent *bev);
@@ -359,7 +359,7 @@ generate_sec_websocket_accept(const char *key, char *accept, size_t length)
 }
 
 /**
- * Handle client kickoff response from WebSocket server
+ * Handle client kickoff request from WebSocket server
  *
  * Processes client disconnection requests with format:
  * {
@@ -378,7 +378,7 @@ generate_sec_websocket_accept(const char *key, char *accept, size_t length)
  * @param j_auth JSON object containing the kickoff request
  */
 static void
-handle_kickoff_response(json_object *j_auth)
+handle_kickoff_request(json_object *j_auth)
 {
 	// Extract and validate required fields
 	json_object *client_ip = json_object_object_get(j_auth, "client_ip");
@@ -430,9 +430,9 @@ handle_kickoff_response(json_object *j_auth)
 }
 
 /**
- * Handle authentication response from WebSocket server
+ * Handle authentication request from WebSocket server
  *
- * Processes client authentication responses with format:
+ * Processes client authentication requests with format:
  * {
  *   "token": "<auth_token>",
  *   "client_ip": "<ip_address>",
@@ -446,10 +446,10 @@ handle_kickoff_response(json_object *j_auth)
  * 1. Once-auth: Updates gateway auth mode to 0 and reloads firewall
  * 2. Regular auth: Adds client to allowed list with firewall rules
  *
- * @param j_auth JSON object containing the auth response
+ * @param j_auth JSON object containing the auth request
  */
 static void
-handle_auth_response(json_object *j_auth)
+handle_auth_request(json_object *j_auth)
 {
 	// Extract required fields
 	json_object *token = json_object_object_get(j_auth, "token");
@@ -719,9 +719,9 @@ process_ws_msg(struct bufferevent *bev, const char *msg)
 	if (!strcmp(type_str, "heartbeat") || !strcmp(type_str, "connect")) {
 		handle_heartbeat_response(jobj);
 	} else if (!strcmp(type_str, "auth")) {
-		handle_auth_response(jobj);
+		handle_auth_request(jobj);
 	} else if (!strcmp(type_str, "kickoff")) {
-		handle_kickoff_response(jobj);
+		handle_kickoff_request(jobj);
 	} else if (!strcmp(type_str, "tmp_pass")) {
 		handle_tmp_pass_response(jobj);
 	} else if (!strcmp(type_str, "get_firmware_info")) {
