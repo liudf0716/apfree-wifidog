@@ -91,9 +91,10 @@ static void ws_heartbeat_cb(evutil_socket_t fd, short events, void *arg);
 static void wsevent_connection_cb(struct bufferevent *bev, short events, void *ctx);
 static void handle_auth_response(json_object *j_auth);
 static void handle_kickoff_response(json_object *j_auth);
-static void handle_get_firmware_info_request(json_object *j_req, struct bufferevent *bev); // Already added, ensure forward declaration
+static void handle_get_firmware_info_request(json_object *j_req, struct bufferevent *bev);
 static void cleanup_connection(struct bufferevent *bev);
 static void reconnect_websocket(void);
+static void ws_send(struct evbuffer *buf, const char *msg, const size_t len, enum WebSocketFrameType frame_type);
 
 /**
  * @brief Generates a secure WebSocket key for WebSocket handshake
