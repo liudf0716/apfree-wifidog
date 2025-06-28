@@ -221,39 +221,100 @@ static void handle_get_firmware_info_request(json_object *j_req, struct bufferev
  * @brief Handles a request for firmware upgrade.
  *
  * This function is called by process_ws_msg() when a "firmware_upgrade"
- * message is received. It extracts the "url" from the JSON request,
- * constructs a "sysupgrade <url>" command, and executes it using popen().
+ * message is received. It processes firmware upgrade requests and provides
+ * appropriate JSON responses based on the operation outcome.
  *
- * @param j_req The incoming JSON request object, expected to contain a "url" field.
- * @param bev The bufferevent associated with the WebSocket connection.
+ * Request format:
+ * {
+ *   "type": "firmware_upgrade",
+ *   "url": "<firmware_url>",      // Required: URL to firmware image
+ *   "force": <boolean>            // Optional: Force upgrade without checks (default: false)
+ * }
+ *
+ * Success response (sent before reboot):
+ * {
+ *   "type": "firmware_upgrade_response",
+ *   "status": "success",
+ *   "message": "Firmware upgrade initiated successfully"
+ * }
+ *
+ * Error responses:
+ * {
+ *   "type": "firmware_upgrade_error",
+ *   "error": "Missing or invalid 'url' field"
+ * }
+ * {
+ *   "type": "firmware_upgrade_error", 
+ *   "error": "Failed to execute sysupgrade command"
+ * }
+ *
+ * @param j_req The incoming JSON request object containing upgrade parameters
+ * @param bev The bufferevent associated with the WebSocket connection for responses
  */
 static void handle_firmware_upgrade_request(json_object *j_req, struct bufferevent *bev) {
-    json_object *j_url;
+    json_object *j_response = json_object_new_object();
+    json_object *j_url, *j_force;
+    
+    // Validate required URL field
     if (!json_object_object_get_ex(j_req, "url", &j_url) || !json_object_is_type(j_url, json_type_string)) {
-        debug(LOG_ERR, "Firmware upgrade request missing or invalid 'url' field.");
-        // Optionally, send an error response back to the client
+        debug(LOG_ERR, "Firmware upgrade request missing or invalid 'url' field");
+        json_object_object_add(j_response, "type", json_object_new_string("firmware_upgrade_error"));
+        json_object_object_add(j_response, "error", json_object_new_string("Missing or invalid 'url' field"));
+        
+        const char *response_str = json_object_to_json_string(j_response);
+        ws_send(bufferevent_get_output(bev), response_str, strlen(response_str), TEXT_FRAME);
+        json_object_put(j_response);
         return;
     }
 
     const char *url_str = json_object_get_string(j_url);
-    debug(LOG_INFO, "Firmware upgrade request received with URL: %s", url_str);
+    
+    // Get optional force parameter
+    bool force_upgrade = false;
+    if (json_object_object_get_ex(j_req, "force", &j_force) && json_object_is_type(j_force, json_type_boolean)) {
+        force_upgrade = json_object_get_boolean(j_force);
+    }
+    
+    debug(LOG_INFO, "Firmware upgrade request received - URL: %s, Force: %s", 
+          url_str, force_upgrade ? "true" : "false");
 
+    // Construct sysupgrade command with appropriate flags
     char command[512];
-    snprintf(command, sizeof(command), "sysupgrade %s", url_str);
+    if (force_upgrade) {
+        snprintf(command, sizeof(command), "sysupgrade -F %s", url_str);
+    } else {
+        snprintf(command, sizeof(command), "sysupgrade %s", url_str);
+    }
 
     debug(LOG_INFO, "Executing firmware upgrade command: %s", command);
 
+    // Execute the upgrade command
     FILE *fp = popen(command, "r");
     if (fp == NULL) {
         debug(LOG_ERR, "Failed to execute sysupgrade command: %s", command);
-        // Optionally, send an error response back to the client
-    } else {
-        // We don't expect to read output as the system will likely reboot.
-        // However, it's good practice to close the pipe.
-        pclose(fp);
-        debug(LOG_INFO, "Sysupgrade command executed.");
+        
+        // Send error response
+        json_object_object_add(j_response, "type", json_object_new_string("firmware_upgrade_error"));
+        json_object_object_add(j_response, "error", json_object_new_string("Failed to execute sysupgrade command"));
+        
+        const char *response_str = json_object_to_json_string(j_response);
+        ws_send(bufferevent_get_output(bev), response_str, strlen(response_str), TEXT_FRAME);
+        json_object_put(j_response);
+        return;
     }
-    // Note: No response is sent back as the device is expected to reboot.
+
+    // Command executed successfully - send success response before potential reboot
+    json_object_object_add(j_response, "type", json_object_new_string("firmware_upgrade_response"));
+    json_object_object_add(j_response, "status", json_object_new_string("success"));
+    json_object_object_add(j_response, "message", json_object_new_string("Firmware upgrade initiated successfully"));
+    
+    const char *response_str = json_object_to_json_string(j_response);
+    ws_send(bufferevent_get_output(bev), response_str, strlen(response_str), TEXT_FRAME);
+    json_object_put(j_response);
+    
+    // Close the pipe - system will likely reboot during or after this
+    pclose(fp);
+    debug(LOG_INFO, "Firmware upgrade command executed successfully - system may reboot");
 }
 
 /**
@@ -625,6 +686,9 @@ start_ws_heartbeat(struct bufferevent *b_ws)
  * - `"get_firmware_info"`: Triggers a request for firmware information. The device
  *                          responds with a "firmware_info_response" message
  *                          containing details from /etc/openwrt_release.
+ * - `"firmware_upgrade"`: Handles firmware upgrade requests. Executes sysupgrade
+ *                         command with the provided URL and responds with success
+ *                         or error status before potential system reboot.
  *
  * @param bev The bufferevent associated with the WebSocket connection,
  *            passed to message handlers for sending responses.
