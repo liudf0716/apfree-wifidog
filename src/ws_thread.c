@@ -16,6 +16,10 @@
 #include "fw_iptables.h"
 #include "fw_nft.h"
 #include "wd_util.h"
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h> // For calloc and free
+
 
 /**
  * Maximum size of WebSocket output buffer in bytes
@@ -87,6 +91,7 @@ static void ws_heartbeat_cb(evutil_socket_t fd, short events, void *arg);
 static void wsevent_connection_cb(struct bufferevent *bev, short events, void *ctx);
 static void handle_auth_response(json_object *j_auth);
 static void handle_kickoff_response(json_object *j_auth);
+static void handle_get_firmware_info_request(json_object *j_req, struct bufferevent *bev); // Already added, ensure forward declaration
 static void cleanup_connection(struct bufferevent *bev);
 static void reconnect_websocket(void);
 
@@ -130,6 +135,84 @@ generate_sec_websocket_key(char *key, size_t length)
 	key[24] = '\0';
 
 	debug(LOG_DEBUG, "Generated WebSocket key: %s", key);
+}
+
+/**
+ * @brief Handles a request for firmware information.
+ *
+ * This function is called by process_ws_msg() when a "get_firmware_info"
+ * message is received. It executes the command "cat /etc/openwrt_release"
+ * to retrieve firmware details, parses the key-value output, and sends
+ * this information back to the client in a JSON response.
+ *
+ * The JSON response format is:
+ * {
+ *   "type": "firmware_info_response",
+ *   "data": {
+ *     "DISTRIB_ID": "ChaWrt",
+ *     "DISTRIB_RELEASE": "24.10-SNAPSHOT",
+ *     // ... other key-value pairs from /etc/openwrt_release
+ *   }
+ * }
+ *
+ * If the command execution fails, an error response is sent:
+ * {
+ *   "type": "firmware_info_error",
+ *   "error": "Failed to execute command"
+ * }
+ *
+ * @param j_req The incoming JSON request object. Currently unused for this
+ *              specific request type but included for API consistency.
+ * @param bev The bufferevent associated with the WebSocket connection, used
+ *            for sending the response.
+ */
+static void handle_get_firmware_info_request(json_object *j_req, struct bufferevent *bev) {
+    FILE *fp;
+    char buffer[256];
+    json_object *j_response = json_object_new_object();
+    json_object *j_data = json_object_new_object();
+
+    // Execute command
+    fp = popen("cat /etc/openwrt_release", "r");
+    if (fp == NULL) {
+        debug(LOG_ERR, "Failed to run command /etc/openwrt_release");
+        json_object_object_add(j_response, "type", json_object_new_string("firmware_info_error"));
+        json_object_object_add(j_response, "error", json_object_new_string("Failed to execute command"));
+        const char *response_str = json_object_to_json_string(j_response);
+        ws_send(bufferevent_get_output(bev), response_str, strlen(response_str), TEXT_FRAME);
+        json_object_put(j_response);
+        return;
+    }
+
+    // Read command output line by line
+    while (fgets(buffer, sizeof(buffer), fp) != NULL) {
+        // Remove trailing newline
+        buffer[strcspn(buffer, "\n")] = 0;
+
+        char *key = strtok(buffer, "=");
+        char *value_with_quotes = strtok(NULL, "=");
+
+        if (key && value_with_quotes) {
+            // Remove single quotes from value
+            char *value = value_with_quotes;
+            if (value[0] == '\'' && value[strlen(value) - 1] == '\'') {
+                value = value + 1;
+                value[strlen(value) - 1] = '\0';
+            }
+            json_object_object_add(j_data, key, json_object_new_string(value));
+        }
+    }
+    pclose(fp);
+
+    // Construct response
+    json_object_object_add(j_response, "type", json_object_new_string("firmware_info_response"));
+    json_object_object_add(j_response, "data", j_data); // j_data is already an object
+
+    const char *response_str = json_object_to_json_string(j_response);
+    ws_send(bufferevent_get_output(bev), response_str, strlen(response_str), TEXT_FRAME);
+
+    // Cleanup
+    json_object_put(j_response); // This will also free j_data as it's part of j_response
 }
 
 /**
@@ -488,19 +571,26 @@ start_ws_heartbeat(struct bufferevent *b_ws)
 }
 
 /**
- * Process incoming WebSocket messages
+ * @brief Processes incoming WebSocket messages.
  *
- * Parses and handles JSON messages received over WebSocket. Supported message types:
- * - heartbeat: Gateway status updates
- * - connect: Initial connection response
- * - auth: Client authentication response
- * - kickoff: Client disconnection request
- * - tmp_pass: Temporary client access grant
+ * Parses and handles JSON messages received over WebSocket. This function acts as
+ * a dispatcher, routing messages to specific handlers based on their "type" field.
+ * Supported message types:
+ * - `"heartbeat"`: Handles gateway status updates. (Responds with heartbeat)
+ * - `"connect"`: Handles initial connection response. (Responds with heartbeat)
+ * - `"auth"`: Handles client authentication responses.
+ * - `"kickoff"`: Handles client disconnection requests.
+ * - `"tmp_pass"`: Handles requests for temporary client access.
+ * - `"get_firmware_info"`: Triggers a request for firmware information. The device
+ *                          responds with a "firmware_info_response" message
+ *                          containing details from /etc/openwrt_release.
  *
- * @param msg The JSON message string to process
+ * @param bev The bufferevent associated with the WebSocket connection,
+ *            passed to message handlers for sending responses.
+ * @param msg The raw JSON message string to process.
  */
 static void
-process_ws_msg(const char *msg)
+process_ws_msg(struct bufferevent *bev, const char *msg)
 {
 	debug(LOG_DEBUG, "Processing WebSocket message: %s", msg);
 
@@ -529,6 +619,8 @@ process_ws_msg(const char *msg)
 		handle_kickoff_response(jobj);
 	} else if (!strcmp(type_str, "tmp_pass")) {
 		handle_tmp_pass_response(jobj);
+	} else if (!strcmp(type_str, "get_firmware_info")) {
+		handle_get_firmware_info_request(jobj, bev);
 	} else {
 		debug(LOG_ERR, "Unknown message type: %s", type_str);
 	}
@@ -599,19 +691,22 @@ ws_send(struct evbuffer *buf, const char *msg, const size_t len, enum WebSocketF
 }
 
 /**
- * Process received WebSocket frame
+ * @brief Processes a received WebSocket frame.
  *
- * Parses and handles an incoming WebSocket frame according to RFC 6455:
- * - Validates frame header and length fields
- * - Handles message fragmentation
- * - Unmasks payload if masked
- * - Processes text frame payloads
+ * Parses and handles an incoming WebSocket frame according to RFC 6455.
+ * This includes:
+ * - Validating frame header and payload length fields.
+ * - Handling extended payload lengths.
+ * - Unmasking the payload if it is masked.
+ * - Extracting the message from text frames and passing it to process_ws_msg().
  *
- * @param data Raw frame data buffer
- * @param data_len Length of data buffer
+ * @param bev The bufferevent associated with the WebSocket connection,
+ *            passed to process_ws_msg() for context.
+ * @param data Pointer to the raw frame data buffer.
+ * @param data_len Length of the data in the buffer.
  */
 static void 
-ws_receive(unsigned char *data, const size_t data_len)
+ws_receive(struct bufferevent *bev, unsigned char *data, const size_t data_len)
 {
 	if (data_len < 2) {
 		return;
@@ -652,7 +747,16 @@ ws_receive(unsigned char *data, const size_t data_len)
 	// Process text frames
 	if (opcode == TEXT_FRAME) {
 		const char *msg = (const char *)(data + header_len);
-		process_ws_msg(msg);
+		// Ensure null termination for safety, though payload_len should be accurate
+		char *safe_msg = calloc(1, payload_len + 1);
+		if (safe_msg) {
+			memcpy(safe_msg, msg, payload_len);
+			safe_msg[payload_len] = '\0';
+			process_ws_msg(bev, safe_msg);
+			free(safe_msg);
+		} else {
+			debug(LOG_ERR, "Failed to allocate memory for message buffer in ws_receive");
+		}
 	} else {
 		debug(LOG_ERR, "Unsupported WebSocket opcode: %d", opcode);
 	}
@@ -826,7 +930,7 @@ ws_read_cb(struct bufferevent *b_ws, void *ctx)
 	}
 
 	// Process WebSocket frames after upgrade
-	ws_receive(data, total_len);
+	ws_receive(b_ws, data, total_len);
 }
 
 /**
