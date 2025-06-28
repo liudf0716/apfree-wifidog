@@ -92,6 +92,7 @@ static void wsevent_connection_cb(struct bufferevent *bev, short events, void *c
 static void handle_auth_response(json_object *j_auth);
 static void handle_kickoff_response(json_object *j_auth);
 static void handle_get_firmware_info_request(json_object *j_req, struct bufferevent *bev);
+static void handle_firmware_upgrade_request(json_object *j_req, struct bufferevent *bev);
 static void cleanup_connection(struct bufferevent *bev);
 static void reconnect_websocket(void);
 static void ws_send(struct evbuffer *buf, const char *msg, const size_t len, enum WebSocketFrameType frame_type);
@@ -214,6 +215,45 @@ static void handle_get_firmware_info_request(json_object *j_req, struct bufferev
 
     // Cleanup
     json_object_put(j_response); // This will also free j_data as it's part of j_response
+}
+
+/**
+ * @brief Handles a request for firmware upgrade.
+ *
+ * This function is called by process_ws_msg() when a "firmware_upgrade"
+ * message is received. It extracts the "url" from the JSON request,
+ * constructs a "sysupgrade <url>" command, and executes it using popen().
+ *
+ * @param j_req The incoming JSON request object, expected to contain a "url" field.
+ * @param bev The bufferevent associated with the WebSocket connection.
+ */
+static void handle_firmware_upgrade_request(json_object *j_req, struct bufferevent *bev) {
+    json_object *j_url;
+    if (!json_object_object_get_ex(j_req, "url", &j_url) || !json_object_is_type(j_url, json_type_string)) {
+        debug(LOG_ERR, "Firmware upgrade request missing or invalid 'url' field.");
+        // Optionally, send an error response back to the client
+        return;
+    }
+
+    const char *url_str = json_object_get_string(j_url);
+    debug(LOG_INFO, "Firmware upgrade request received with URL: %s", url_str);
+
+    char command[512];
+    snprintf(command, sizeof(command), "sysupgrade %s", url_str);
+
+    debug(LOG_INFO, "Executing firmware upgrade command: %s", command);
+
+    FILE *fp = popen(command, "r");
+    if (fp == NULL) {
+        debug(LOG_ERR, "Failed to execute sysupgrade command: %s", command);
+        // Optionally, send an error response back to the client
+    } else {
+        // We don't expect to read output as the system will likely reboot.
+        // However, it's good practice to close the pipe.
+        pclose(fp);
+        debug(LOG_INFO, "Sysupgrade command executed.");
+    }
+    // Note: No response is sent back as the device is expected to reboot.
 }
 
 /**
@@ -622,6 +662,8 @@ process_ws_msg(struct bufferevent *bev, const char *msg)
 		handle_tmp_pass_response(jobj);
 	} else if (!strcmp(type_str, "get_firmware_info")) {
 		handle_get_firmware_info_request(jobj, bev);
+	} else if (!strcmp(type_str, "firmware_upgrade")) {
+		handle_firmware_upgrade_request(jobj, bev);
 	} else {
 		debug(LOG_ERR, "Unknown message type: %s", type_str);
 	}
