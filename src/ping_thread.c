@@ -434,11 +434,39 @@ get_sys_info(struct sys_info *info)
 	}
 	
 	if(!g_version) {
-		char version[32] = {0};
-		if (uci_get_value("firmwareinfo", "firmware_version", version, 31)) {			
-			trim_newline(version);
-			if(strlen(version) > 0)
-				g_version = safe_strdup(version);
+		FILE *release_file = fopen("/etc/openwrt_release", "r");
+		if (release_file) {
+			char line[256];
+			while (fgets(line, sizeof(line), release_file)) {
+				// Look for DISTRIB_REVISION line
+				if (strncmp(line, "DISTRIB_REVISION=", 17) == 0) {
+					char *value = line + 17;
+					// Remove quotes if present
+					if (value[0] == '\'' && strlen(value) > 1) {
+						value++; // Skip opening quote
+						char *end_quote = strchr(value, '\'');
+						if (end_quote) {
+							*end_quote = '\0'; // Terminate at closing quote
+						}
+					}
+					// Remove newline
+					char *newline = strchr(value, '\n');
+					if (newline) {
+						*newline = '\0';
+					}
+					
+					// Extract revision number (e.g., r28790 from r28790-848c5902de)
+					if (value[0] == 'r') {
+						char *dash = strchr(value, '-');
+						if (dash) {
+							*dash = '\0'; // Terminate at dash to get just r28790
+						}
+						g_version = safe_strdup(value);
+					}
+					break;
+				}
+			}
+			fclose(release_file);
 		}
 	}
 	
