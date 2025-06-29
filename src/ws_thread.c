@@ -1143,18 +1143,30 @@ create_ws_bufferevent(void)
 
 	// Create appropriate bufferevent based on SSL setting
 	if (ws_server->use_ssl) {
-		if (!ssl_state.ssl) {
-			debug(LOG_ERR, "SSL context not initialized");
+		// Create a new SSL object for this specific connection
+		SSL *ssl = SSL_new(ssl_state.ctx);
+		if (!ssl) {
+			debug(LOG_ERR, "SSL_new() failed in create_ws_bufferevent");
+			// Note: ssl_state.ctx would be freed eventually by the main thread cleanup
+			return NULL;
+		}
+
+		// Set SNI
+		if (!SSL_set_tlsext_host_name(ssl, ws_server->hostname)) {
+			debug(LOG_ERR, "SSL_set_tlsext_host_name failed in create_ws_bufferevent for hostname %s", ws_server->hostname);
+			SSL_free(ssl); // Free the newly created SSL object as it won't be used
 			return NULL;
 		}
 		
 		bev = bufferevent_openssl_socket_new(
 			ws_state.base,
 			-1,
-			ssl_state.ssl,
+			ssl, // Pass the newly created and configured SSL object
 			BUFFEREVENT_SSL_CONNECTING,
 			options
 		);
+		// SSL object 'ssl' is now managed by the bufferevent,
+		// and will be freed in cleanup_connection using bufferevent_openssl_get_ssl
 	} else {
 		bev = bufferevent_socket_new(
 			ws_state.base,
@@ -1252,9 +1264,18 @@ cleanup_connection(struct bufferevent *bev)
 	// Reset connection state
 	ws_state.upgraded = false;
 
-	// Free the bufferevent
+	// Free the bufferevent and associated SSL object
 	if (bev) {
-		bufferevent_free(bev);
+		// If this was an SSL bufferevent, retrieve and free the SSL object
+		// bufferevent_openssl_get_ssl() returns the SSL * used by this bufferevent.
+		// This is the SSL * that we created in create_ws_bufferevent.
+		SSL *ssl = bufferevent_openssl_get_ssl(bev);
+		if (ssl) {
+			// SSL_free() decrements the reference count of the SSL object
+			// and removes it if the reference count drops to 0.
+			SSL_free(ssl);
+		}
+		bufferevent_free(bev); // This will close the socket fd
 	}
 }
 
@@ -1296,7 +1317,7 @@ reconnect_websocket(void)
  * @note This is a static function and its scope is limited to the current file
  */
 static int 
-setup_ssl(const char *hostname)
+setup_ssl(const char *hostname) // hostname parameter is no longer strictly needed here but can be kept for now
 {
 	if (!RAND_poll()) {
 		debug(LOG_ERR, "RAND_poll() failed");
@@ -1309,19 +1330,8 @@ setup_ssl(const char *hostname)
 		return -1;
 	}
 
-	ssl_state.ssl = SSL_new(ssl_state.ctx);
-	if (!ssl_state.ssl) {
-		debug(LOG_ERR, "SSL_new() failed");
-		SSL_CTX_free(ssl_state.ctx);
-		return -1;
-	}
-
-	if (!SSL_set_tlsext_host_name(ssl_state.ssl, hostname)) {
-		debug(LOG_ERR, "SSL_set_tlsext_host_name failed");
-		SSL_free(ssl_state.ssl);
-		SSL_CTX_free(ssl_state.ctx);
-		return -1;
-	}
+	// The SSL object (ssl_state.ssl) will be created per connection in create_ws_bufferevent.
+	// The SSL_set_tlsext_host_name() will also be called there.
 
 	return 0;
 }
@@ -1448,6 +1458,7 @@ thread_websocket(void *arg)
 cleanup:
 	if (ws_state.base) event_base_free(ws_state.base);
 	if (ws_state.dnsbase) evdns_base_free(ws_state.dnsbase, 0);
-	if (ssl_state.ssl) SSL_free(ssl_state.ssl);
-	if (ssl_state.ctx) SSL_CTX_free(ssl_state.ctx);
+	// ssl_state.ssl is no longer a global SSL object pointer;
+	// individual SSL objects are freed in cleanup_connection.
+	if (ssl_state.ctx) SSL_CTX_free(ssl_state.ctx); // SSL_CTX is still global and needs freeing.
 }
