@@ -101,8 +101,8 @@ static int parse_wifidogx_config(void) {
         s = uci_to_section(e);
         if (strcmp(s->type, "wifidogx") == 0 && strcmp(s->e.name, "common") == 0) {
             
-            // Parse location_id (device_id)
-            o = uci_lookup_option(ctx, s, "device_id");
+            // Parse location_id
+            o = uci_lookup_option(ctx, s, "location_id");
             if (o && o->type == UCI_TYPE_STRING) {
                 value = o->v.string;
                 if (value && strlen(value) < sizeof(location_id)) {
