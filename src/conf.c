@@ -109,6 +109,12 @@ typedef enum {
 	oEnableUserReload,
 	oTTLValues,
 	oAntiNatPermitMacs,
+	oDeviceInfo,
+	oApDeviceId,
+	oApMacAddress,
+	oApLongitude,
+	oApLatitude,
+	oLocationId,
 } OpCodes;
 
 /** @internal
@@ -187,6 +193,12 @@ static const struct {
 	"enableuserreload", oEnableUserReload}, {
 	"ttlvalues", oTTLValues}, {
 	"antinatpermitmacs", oAntiNatPermitMacs}, {
+	"deviceinfo", oDeviceInfo}, {
+	"apdeviceid", oApDeviceId}, {
+	"apmacaddress", oApMacAddress}, {
+	"aplongitude", oApLongitude}, {
+	"aplatitude", oApLatitude}, {
+	"locationid", oLocationId}, {
 	NULL, oBadOption},
 };
 
@@ -197,6 +209,7 @@ static void parse_mqtt_server(FILE *, const char *, int *);
 static void parse_popular_servers(const char *);
 static void validate_popular_servers(void);
 static void add_popular_server(const char *);
+static void parse_device_info(FILE *, const char *, int *);
 
 static OpCodes config_parse_token(const char *, const char *, int);
 
@@ -226,6 +239,12 @@ t_mqtt_server *
 get_mqtt_server(void)
 {
 	return config.mqtt_server;
+}
+
+t_device_info *
+get_device_info(void)
+{
+	return config.device_info;
 }
 
 const char *
@@ -333,6 +352,9 @@ void config_init(void)
 	config.enable_user_reload 	= 1;
 	config.ttl_values 			= safe_strdup(DEFAULT_TTL_VALUES);
 	config.anti_nat_permit_macs = NULL;
+
+	// Initialize device info
+	config.device_info = NULL;
 
 	// Initialize debugging configuration
 	debugconf.log_stderr     	= 1;
@@ -550,6 +572,121 @@ ERR:
 	if (gw_channel) free(gw_channel);
 	// new_setting is not freed here, potential leak if error occurs after its allocation
 	// but before being added to the list. However, current fix is targeted at gw_subnet_v4.
+}
+
+/** @internal
+Parses device info information
+*/
+static void
+parse_device_info(FILE *file, const char *filename, int *linenum)
+{
+	char line[MAX_BUF];
+	char *ap_device_id = NULL;
+	char *ap_mac_address = NULL;
+	char *ap_longitude = NULL;
+	char *ap_latitude = NULL;
+	char *location_id = NULL;
+	t_device_info *new_device_info = NULL;
+
+	while (memset(line, 0, MAX_BUF) && fgets(line, MAX_BUF - 1, file) && !strchr(line, '}')) {
+		(*linenum)++;
+
+		// Trim leading whitespace
+		char *p = line;
+		while (isblank(*p)) p++;
+
+		// Remove comments and trailing whitespace
+		char *end = strpbrk(p, "#\r\n");
+		if (end) *end = '\0';
+
+		// Trim trailing whitespace
+		end = p + strlen(p) - 1;
+		while (end > p && isblank(*end)) {
+			*end = '\0';
+			end--;
+		}
+
+		if (strlen(p) > 0) {
+			// Extract key and value
+			char *key = p;
+			char *value = NULL;
+
+			char *space = strpbrk(p, " \t");
+			if (space) {
+				*space = '\0';
+				value = space + 1;
+
+				while (isblank(*value)) value++;
+			}
+
+			if (value) {
+				OpCodes opcode = config_parse_token(key, filename, *linenum);
+				switch (opcode) {
+					case oApDeviceId:
+						ap_device_id = safe_strdup(value);
+						break;
+					case oApMacAddress:
+						ap_mac_address = safe_strdup(value);
+						break;
+					case oApLongitude:
+						ap_longitude = safe_strdup(value);
+						break;
+					case oApLatitude:
+						ap_latitude = safe_strdup(value);
+						break;
+					case oLocationId:
+						location_id = safe_strdup(value);
+						break;
+					case oBadOption:
+					default:
+						debug(LOG_ERR, "Bad option on line %d in %s.", *linenum, filename);
+						debug(LOG_ERR, "Exiting...");
+						goto ERR;
+				}
+			}
+		}
+	}
+
+	// Validate mandatory fields
+	if (ap_device_id == NULL || ap_mac_address == NULL || location_id == NULL) {
+		debug(LOG_ERR, "Missing mandatory parameters for device info (ap_device_id, ap_mac_address, location_id)");
+		goto ERR;
+	}
+
+	debug(LOG_DEBUG, "Adding device info: ap_device_id=%s, ap_mac_address=%s, location_id=%s", 
+		  ap_device_id ? ap_device_id : "null", 
+		  ap_mac_address ? ap_mac_address : "null", 
+		  location_id ? location_id : "null");
+
+	// Allocate and initialize new device info
+	new_device_info = safe_malloc(sizeof(t_device_info));
+	new_device_info->ap_device_id = ap_device_id;
+	new_device_info->ap_mac_address = ap_mac_address;
+	new_device_info->ap_longitude = ap_longitude;
+	new_device_info->ap_latitude = ap_latitude;
+	new_device_info->location_id = location_id;
+
+	// Set the device info (only one instance allowed)
+	if (config.device_info != NULL) {
+		debug(LOG_WARNING, "Device info already exists, replacing with new one");
+		free(config.device_info->ap_device_id);
+		free(config.device_info->ap_mac_address);
+		free(config.device_info->ap_longitude);
+		free(config.device_info->ap_latitude);
+		free(config.device_info->location_id);
+		free(config.device_info);
+	}
+	config.device_info = new_device_info;
+
+	return;
+
+ERR:
+	if (ap_device_id) free(ap_device_id);
+	if (ap_mac_address) free(ap_mac_address);
+	if (ap_longitude) free(ap_longitude);
+	if (ap_latitude) free(ap_latitude);
+	if (location_id) free(location_id);
+	if (new_device_info) free(new_device_info);
 }
 
 /** @internal
@@ -1010,6 +1147,9 @@ config_read()
 					break; // Added break, was missing
 				case oWebSocket:
 					parse_ws_server(fd, filename, &linenum);
+					break;
+				case oDeviceInfo:
+					parse_device_info(fd, filename, &linenum);
 					break;
 				case oCheckInterval:
 					sscanf(p1, "%d", &config.checkinterval);
@@ -2089,6 +2229,16 @@ void config_cleanup(void) {
         if (cfg->ws_server->path) { free(cfg->ws_server->path); cfg->ws_server->path = NULL; }
         free(cfg->ws_server);
         cfg->ws_server = NULL;
+    }
+
+    if (cfg->device_info) {
+        if (cfg->device_info->ap_device_id) { free(cfg->device_info->ap_device_id); cfg->device_info->ap_device_id = NULL; }
+        if (cfg->device_info->ap_mac_address) { free(cfg->device_info->ap_mac_address); cfg->device_info->ap_mac_address = NULL; }
+        if (cfg->device_info->ap_longitude) { free(cfg->device_info->ap_longitude); cfg->device_info->ap_longitude = NULL; }
+        if (cfg->device_info->ap_latitude) { free(cfg->device_info->ap_latitude); cfg->device_info->ap_latitude = NULL; }
+        if (cfg->device_info->location_id) { free(cfg->device_info->location_id); cfg->device_info->location_id = NULL; }
+        free(cfg->device_info);
+        cfg->device_info = NULL;
     }
 
     if (cfg->gateway_settings) {

@@ -184,6 +184,14 @@ typedef struct _ws_server_t {
 	uint16_t 	use_ssl;
 } t_ws_server;
 
+typedef struct _device_info_t {
+	char 		*ap_device_id;
+	char 		*ap_mac_address;
+	char 		*ap_longitude;
+	char 		*ap_latitude;
+	char 		*location_id;
+} t_device_info;
+
 typedef struct _gateway_setting_t {
 	char 		*gw_id;
 	char 		*gw_interface;
@@ -230,6 +238,7 @@ typedef struct {
 	t_http_server *http_server;
 	t_mqtt_server *mqtt_server;
 	t_ws_server *ws_server;
+	t_device_info *device_info;
 	
 	// Trust lists
 	t_domain_trusted *pan_domains_trusted;
@@ -277,6 +286,7 @@ s_config *config_get_config(void);
 t_gateway_setting *get_gateway_settings(void);
 t_ws_server *get_ws_server(void);
 t_mqtt_server *get_mqtt_server(void);
+t_device_info *get_device_info(void);
 int get_gateway_count(void);
 const char *get_device_id(void);
 
