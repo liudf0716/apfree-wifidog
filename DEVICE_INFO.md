@@ -60,7 +60,21 @@ if (device_info) {
 The device info is automatically integrated into:
 
 1. **Event Daemon**: Session logging includes location_id and other device info
-2. **WebSocket Communication**: Device identification in WebSocket messages
+2. **WebSocket Communication**: Device info included as a structured object in WebSocket messages:
+   ```json
+   {
+     "type": "connect",
+     "device_id": "<device_id>",
+     "device_info": {
+       "ap_device_id": "<ap_device_id>",
+       "ap_mac_address": "<ap_mac_address>",
+       "ap_longitude": "<ap_longitude>",
+       "ap_latitude": "<ap_latitude>", 
+       "location_id": "<location_id>"
+     },
+     "gateway": [...]
+   }
+   ```
 3. **MQTT Reporting**: Device info included in MQTT message payloads
 4. **General Logging**: Available for inclusion in system logs
 

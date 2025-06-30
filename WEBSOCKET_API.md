@@ -23,11 +23,13 @@ Sent automatically when WebSocket connection is established.
 {
   "type": "connect",
   "device_id": "<device_identifier>",
-  "ap_device_id": "<ap_device_id>",
-  "ap_mac_address": "<ap_mac_address>", 
-  "ap_longitude": "<ap_longitude>",
-  "ap_latitude": "<ap_latitude>",
-  "location_id": "<location_id>",
+  "device_info": {
+    "ap_device_id": "<ap_device_id>",
+    "ap_mac_address": "<ap_mac_address>", 
+    "ap_longitude": "<ap_longitude>",
+    "ap_latitude": "<ap_latitude>",
+    "location_id": "<location_id>"
+  },
   "gateway": [
     {
       "gw_id": "<gateway_id>",
@@ -49,11 +51,13 @@ Sent every 60 seconds to maintain connection and sync gateway states.
 {
   "type": "heartbeat",
   "device_id": "<device_identifier>",
-  "ap_device_id": "<ap_device_id>",
-  "ap_mac_address": "<ap_mac_address>", 
-  "ap_longitude": "<ap_longitude>",
-  "ap_latitude": "<ap_latitude>",
-  "location_id": "<location_id>",
+  "device_info": {
+    "ap_device_id": "<ap_device_id>",
+    "ap_mac_address": "<ap_mac_address>", 
+    "ap_longitude": "<ap_longitude>",
+    "ap_latitude": "<ap_latitude>",
+    "location_id": "<location_id>"
+  },
   "gateway": [
     {
       "gw_id": "<gateway_id>",

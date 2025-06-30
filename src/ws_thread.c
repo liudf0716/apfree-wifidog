@@ -986,7 +986,7 @@ ws_request(struct bufferevent* b_ws)
  * Constructs and sends a JSON message containing:
  * - Message type (heartbeat/connect)
  * - Device ID
- * - Device info fields (if available):
+ * - Device info object (if available) containing:
  *   - ap_device_id: Access Point Device ID
  *   - ap_mac_address: Access Point MAC Address
  *   - ap_longitude: Access Point GPS longitude coordinate
@@ -1007,24 +1007,28 @@ send_msg(struct evbuffer *out, const char *type)
 	json_object_object_add(root, "type", json_object_new_string(type));
 	json_object_object_add(root, "device_id", json_object_new_string(get_device_id()));
 
-	// Add device info if available
+	// Add device info as an object if available
 	t_device_info *device_info = get_device_info();
 	if (device_info) {
+		json_object *device_info_obj = json_object_new_object();
+		
 		if (device_info->ap_device_id) {
-			json_object_object_add(root, "ap_device_id", json_object_new_string(device_info->ap_device_id));
+			json_object_object_add(device_info_obj, "ap_device_id", json_object_new_string(device_info->ap_device_id));
 		}
 		if (device_info->ap_mac_address) {
-			json_object_object_add(root, "ap_mac_address", json_object_new_string(device_info->ap_mac_address));
+			json_object_object_add(device_info_obj, "ap_mac_address", json_object_new_string(device_info->ap_mac_address));
 		}
 		if (device_info->ap_longitude) {
-			json_object_object_add(root, "ap_longitude", json_object_new_string(device_info->ap_longitude));
+			json_object_object_add(device_info_obj, "ap_longitude", json_object_new_string(device_info->ap_longitude));
 		}
 		if (device_info->ap_latitude) {
-			json_object_object_add(root, "ap_latitude", json_object_new_string(device_info->ap_latitude));
+			json_object_object_add(device_info_obj, "ap_latitude", json_object_new_string(device_info->ap_latitude));
 		}
 		if (device_info->location_id) {
-			json_object_object_add(root, "location_id", json_object_new_string(device_info->location_id));
+			json_object_object_add(device_info_obj, "location_id", json_object_new_string(device_info->location_id));
 		}
+		
+		json_object_object_add(root, "device_info", device_info_obj);
 	}
 
 	// Create gateway array
