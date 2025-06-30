@@ -986,6 +986,12 @@ ws_request(struct bufferevent* b_ws)
  * Constructs and sends a JSON message containing:
  * - Message type (heartbeat/connect)
  * - Device ID
+ * - Device info fields (if available):
+ *   - ap_device_id: Access Point Device ID
+ *   - ap_mac_address: Access Point MAC Address
+ *   - ap_longitude: Access Point GPS longitude coordinate
+ *   - ap_latitude: Access Point GPS latitude coordinate
+ *   - location_id: Location identifier
  * - Array of gateway configurations including:
  *   - Gateway ID, channel, IPv4/IPv6 addresses
  *   - Authentication mode and interface
@@ -1000,6 +1006,26 @@ send_msg(struct evbuffer *out, const char *type)
 	json_object *root = json_object_new_object();
 	json_object_object_add(root, "type", json_object_new_string(type));
 	json_object_object_add(root, "device_id", json_object_new_string(get_device_id()));
+
+	// Add device info if available
+	t_device_info *device_info = get_device_info();
+	if (device_info) {
+		if (device_info->ap_device_id) {
+			json_object_object_add(root, "ap_device_id", json_object_new_string(device_info->ap_device_id));
+		}
+		if (device_info->ap_mac_address) {
+			json_object_object_add(root, "ap_mac_address", json_object_new_string(device_info->ap_mac_address));
+		}
+		if (device_info->ap_longitude) {
+			json_object_object_add(root, "ap_longitude", json_object_new_string(device_info->ap_longitude));
+		}
+		if (device_info->ap_latitude) {
+			json_object_object_add(root, "ap_latitude", json_object_new_string(device_info->ap_latitude));
+		}
+		if (device_info->location_id) {
+			json_object_object_add(root, "location_id", json_object_new_string(device_info->location_id));
+		}
+	}
 
 	// Create gateway array
 	json_object *gw_array = json_object_new_array();
