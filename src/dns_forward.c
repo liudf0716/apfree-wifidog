@@ -634,10 +634,8 @@ static int xdpi_add_domain(const char *input_domain) {
     char short_domain_buf[MAX_DOMAIN_LEN] = {0};
     int short_domain_len = 0;
     if (xdpi_short_domain(input_domain, short_domain_buf, &short_domain_len) == 0 && short_domain_len > 0) {
-        debug(LOG_DEBUG, "Converting domain %s to short domain %s", input_domain, short_domain_buf);
         strncpy(domain_to_process, short_domain_buf, MAX_DOMAIN_LEN - 1);
     } else {
-        debug(LOG_DEBUG, "Using original domain %s (conversion failed or not shorter)", input_domain);
         strncpy(domain_to_process, input_domain, MAX_DOMAIN_LEN - 1);
     }
     domain_to_process[MAX_DOMAIN_LEN-1] = '\0'; // Ensure null termination
@@ -650,8 +648,6 @@ static int xdpi_add_domain(const char *input_domain) {
                 local_max_sid = domain_entries[i].sid;
             }
             if (strcmp(domain_entries[i].domain, domain_to_process) == 0) {
-                debug(LOG_INFO, "Domain %s already exists in local cache with SID %d.",
-                      domain_to_process, domain_entries[i].sid);
                 pthread_mutex_unlock(&domain_entries_mutex);
                 return 0; // Domain already tracked
             }
@@ -661,8 +657,8 @@ static int xdpi_add_domain(const char *input_domain) {
     }
 
     if (local_free_idx == -1) {
-        debug(LOG_ERR, "No free entry in local xDPI domain list for %s", domain_to_process);
         pthread_mutex_unlock(&domain_entries_mutex);
+        debug(LOG_ERR, "No free entry in local xDPI domain list for %s", domain_to_process);
         return -1; // No space left
     }
     // Values local_free_idx and local_max_sid are now determined.
@@ -691,23 +687,15 @@ static int xdpi_add_domain(const char *input_domain) {
         debug(LOG_ERR, "Failed to add domain %s to xDPI via IOCTL: %s", entry_for_ioctl.domain, strerror(errno));
         return -1;
     } else {
-        debug(LOG_INFO, "Successfully added domain to xDPI via IOCTL: %s with SID %d", entry_for_ioctl.domain, entry_for_ioctl.sid);
+        debug(LOG_DEBUG, "Successfully added domain to xDPI via IOCTL: %s with SID %d", entry_for_ioctl.domain, entry_for_ioctl.sid);
     }
 
     // 5. Update shared domain_entries cache (lock needed)
     pthread_mutex_lock(&domain_entries_mutex);
-    // It's important to verify that local_free_idx is still valid if other threads could be concurrently adding.
-    // For this specific code, xdpi_add_domain is the only writer, and libevent serializes calls to it.
-    // However, if that assumption changes, this check becomes critical.
     if (domain_entries[local_free_idx].used) {
-        // This indicates a race condition if another thread/process modified domain_entries
-        // after we released the lock and before re-acquiring it.
-        // Or, if the same thread re-entered due to some complex callback logic (unlikely here).
+        pthread_mutex_unlock(&domain_entries_mutex);
         debug(LOG_ERR, "Concurrency issue: free_idx %d for domain %s was taken before final cache update.",
               local_free_idx, domain_to_process);
-        pthread_mutex_unlock(&domain_entries_mutex);
-        // The domain was added to kernel, but we can't update our cache consistently.
-        // This is an inconsistent state.
         return -2; // Specific error code for this state
     }
 
