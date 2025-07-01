@@ -160,8 +160,9 @@ static void scheduled_reconnect_cb(evutil_socket_t fd, short events, void *arg)
 	debug(LOG_DEBUG, "Scheduled reconnect triggered via timer.");
 	reconnect_websocket();
 
+	// Use event_free() instead of free() for events created with event_new()
 	if (timer_event_ptr) {
-		free(timer_event_ptr); // Free the event structure allocated with calloc
+		event_free(timer_event_ptr);
 	}
 }
 
@@ -1211,17 +1212,17 @@ create_ws_bufferevent(void)
 		SSL *ssl = SSL_new(ssl_state.ctx);
 		if (!ssl) {
 			debug(LOG_ERR, "SSL_new() failed in create_ws_bufferevent");
-			// Note: ssl_state.ctx would be freed eventually by the main thread cleanup
 			return NULL;
 		}
 
-		// Set SNI
+		// Set SNI and verify it succeeds
 		if (!SSL_set_tlsext_host_name(ssl, ws_server->hostname)) {
 			debug(LOG_ERR, "SSL_set_tlsext_host_name failed in create_ws_bufferevent for hostname %s", ws_server->hostname);
-			SSL_free(ssl); // Free the newly created SSL object as it won't be used
+			SSL_free(ssl);
 			return NULL;
 		}
 		
+		// Create SSL bufferevent
 		bev = bufferevent_openssl_socket_new(
 			ws_state.base,
 			-1,
@@ -1229,8 +1230,16 @@ create_ws_bufferevent(void)
 			BUFFEREVENT_SSL_CONNECTING,
 			options
 		);
+		
+		// Check if bufferevent creation failed
+		if (!bev) {
+			debug(LOG_ERR, "bufferevent_openssl_socket_new() failed");
+			SSL_free(ssl); // Clean up the SSL object if bufferevent creation failed
+			return NULL;
+		}
+		
 		// SSL object 'ssl' is now managed by the bufferevent,
-		// and will be freed in cleanup_connection using bufferevent_openssl_get_ssl
+		// and will be automatically freed when bufferevent_free() is called
 	} else {
 		bev = bufferevent_socket_new(
 			ws_state.base,
@@ -1291,8 +1300,14 @@ wsevent_connection_cb(struct bufferevent* b_ws, short events, void *ctx)
 			debug(LOG_ERR, "WebSocket connection error: %s", evutil_socket_error_to_string(errno));
 		}
 
-		// Clean up existing connection state
-		cleanup_ws_connection();
+		// Only clean up heartbeat timer and reset state, don't free the bufferevent 
+		// from within its own callback as that can cause segfaults
+		if (ws_state.heartbeat_ev) {
+			event_del(ws_state.heartbeat_ev);
+			event_free(ws_state.heartbeat_ev);
+			ws_state.heartbeat_ev = NULL;
+		}
+		ws_state.upgraded = false;
 
 		// Calculate reconnect delay - longer for EOF
 		int delay = (events & BEV_EVENT_EOF) ? 5 : 2;
@@ -1303,14 +1318,16 @@ wsevent_connection_cb(struct bufferevent* b_ws, short events, void *ctx)
 			delay_tv.tv_sec = delay;
 			delay_tv.tv_usec = 0;
 
-			struct event *reconnect_timer_ev_heap = calloc(1, sizeof(struct event));
+			// Create timer event with callback that will handle its own cleanup
+			struct event *reconnect_timer_ev_heap = event_new(ws_state.base, -1, 0, scheduled_reconnect_cb, NULL);
 			if (reconnect_timer_ev_heap) {
+				// Update the callback argument to point to the event itself so it can free itself
 				event_assign(reconnect_timer_ev_heap, ws_state.base, -1, 0, scheduled_reconnect_cb, (void *)reconnect_timer_ev_heap);
 				if (event_add(reconnect_timer_ev_heap, &delay_tv) == 0) {
 					debug(LOG_DEBUG, "Successfully scheduled reconnection in %d seconds.", delay);
 				} else {
 					debug(LOG_ERR, "Failed to add reconnect timer event to pending list.");
-					free(reconnect_timer_ev_heap); // Clean up if event_add fails
+					event_free(reconnect_timer_ev_heap);
 				}
 			} else {
 				debug(LOG_ERR, "Failed to allocate memory for reconnect timer event.");
@@ -1347,18 +1364,9 @@ cleanup_ws_connection(void)
 	// Reset connection state
 	ws_state.upgraded = false;
 
-	// Free the bufferevent and associated SSL object
+	// Free the bufferevent - this will automatically free any associated SSL object
 	if (ws_state.current_bev) {
-		// If this was an SSL bufferevent, retrieve and free the SSL object
-		// bufferevent_openssl_get_ssl() returns the SSL * used by this bufferevent.
-		// This is the SSL * that we created in create_ws_bufferevent.
-		SSL *ssl = bufferevent_openssl_get_ssl(ws_state.current_bev);
-		if (ssl) {
-			// SSL_free() decrements the reference count of the SSL object
-			// and removes it if the reference count drops to 0.
-			SSL_free(ssl);
-		}
-		bufferevent_free(ws_state.current_bev); // This will close the socket fd
+		bufferevent_free(ws_state.current_bev); // This will close the socket fd and free SSL
 		ws_state.current_bev = NULL;
 	}
 }
@@ -1372,47 +1380,45 @@ cleanup_ws_connection(void)
 static void 
 reconnect_websocket(void)
 {
+	// First, clean up any existing connection properly
+	if (ws_state.current_bev) {
+		// Disable callbacks to prevent them from firing during cleanup
+		bufferevent_setcb(ws_state.current_bev, NULL, NULL, NULL, NULL);
+		bufferevent_disable(ws_state.current_bev, EV_READ | EV_WRITE);
+		
+		// For SSL bufferevents, let bufferevent_free() handle SSL cleanup
+		// Don't manually free SSL objects as it can cause double-free issues
+		bufferevent_free(ws_state.current_bev);
+		ws_state.current_bev = NULL;
+	}
+
 	struct bufferevent *bev = create_ws_bufferevent();
 	if (!bev) {
 		debug(LOG_ERR, "Failed to create new bufferevent for reconnection");
 		return;
 	}
 
-	if (!ws_state.dnsbase) {
-		debug(LOG_ERR, "reconnect_websocket: ws_state.dnsbase is NULL. Aborting reconnection attempt.");
-		if (bev) { // Should be non-NULL if we passed the initial check.
-			SSL *ssl = bufferevent_openssl_get_ssl(bev);
-			if (ssl) {
-				SSL_free(ssl);
-			}
-			bufferevent_free(bev);
-		}
-		return;
-	}
-
 	t_ws_server *server = get_ws_server();
 	if (!server) {
 		debug(LOG_ERR, "reconnect_websocket: WebSocket server configuration (server) is NULL. Aborting.");
-		if (bev) {
-			SSL *ssl = bufferevent_openssl_get_ssl(bev);
-			if (ssl) {
-				SSL_free(ssl);
-			}
-			bufferevent_free(bev);
-		}
+		bufferevent_free(bev);
+		return;
+	}
+
+	if (!ws_state.dnsbase) {
+		debug(LOG_ERR, "reconnect_websocket: ws_state.dnsbase is NULL. Aborting reconnection attempt.");
+		bufferevent_free(bev);
 		return;
 	}
 	if (!server->hostname) {
 		debug(LOG_ERR, "reconnect_websocket: WebSocket server hostname is NULL. Aborting.");
-		if (bev) {
-			SSL *ssl = bufferevent_openssl_get_ssl(bev);
-			if (ssl) {
-				SSL_free(ssl);
-			}
-			bufferevent_free(bev);
-		}
+		bufferevent_free(bev);
 		return;
 	}
+
+	// Set the new bufferevent before attempting connection
+	ws_state.current_bev = bev;
+	
 	int ret = bufferevent_socket_connect_hostname(
 		bev,
 		ws_state.dnsbase,
@@ -1424,8 +1430,8 @@ reconnect_websocket(void)
 	if (ret < 0) {
 		debug(LOG_ERR, "Reconnection failed: %s", evutil_socket_error_to_string(errno));
 		bufferevent_free(bev);
+		ws_state.current_bev = NULL;
 	} else {
-		ws_state.current_bev = bev;
 		debug(LOG_DEBUG, "Reconnection attempt initiated");
 	}
 }
