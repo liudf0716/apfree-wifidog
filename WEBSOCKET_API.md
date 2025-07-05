@@ -284,6 +284,44 @@ Server initiates firmware upgrade on the device.
 
 ---
 
+### 7. Update Device Info
+
+#### 7.1 Update Device Info Request (Server → Device)
+Server requests to update the device's information.
+
+**Request:**
+```json
+{
+  "type": "update_device_info",
+  "device_info": {
+    "ap_device_id": "<new_ap_device_id>",      // Optional
+    "ap_mac_address": "<new_ap_mac_address>", // Optional
+    "ap_longitude": "<new_ap_longitude>",     // Optional
+    "ap_latitude": "<new_ap_latitude>",       // Optional
+    "location_id": "<new_location_id>"        // Optional
+  }
+}
+```
+
+**Success Response (Device → Server):**
+```json
+{
+  "type": "update_device_info_response",
+  "status": "success",
+  "message": "Device info updated successfully"
+}
+```
+
+**Error Response (Device → Server):**
+```json
+{
+  "type": "update_device_info_error",
+  "error": "Missing 'device_info' field"
+}
+```
+
+---
+
 ## Error Handling
 
 ### General Error Scenarios

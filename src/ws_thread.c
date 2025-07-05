@@ -16,6 +16,7 @@
 #include "fw_iptables.h"
 #include "fw_nft.h"
 #include "wd_util.h"
+#include "safe.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h> // For calloc and free
@@ -95,6 +96,7 @@ static void handle_auth_request(json_object *j_auth);
 static void handle_kickoff_request(json_object *j_auth, struct bufferevent *bev);
 static void handle_get_firmware_info_request(json_object *j_req, struct bufferevent *bev);
 static void handle_firmware_upgrade_request(json_object *j_req, struct bufferevent *bev);
+static void handle_update_device_info_request(json_object *j_req, struct bufferevent *bev);
 static void cleanup_ws_connection(void);
 static void reconnect_websocket(void);
 static void scheduled_reconnect_cb(evutil_socket_t fd, short events, void *arg);
@@ -342,6 +344,70 @@ static void handle_firmware_upgrade_request(json_object *j_req, struct buffereve
     // Close the pipe - system will likely reboot during or after this
     pclose(fp);
     debug(LOG_INFO, "Firmware upgrade command executed successfully - system may reboot");
+}
+
+static void
+handle_update_device_info_request(json_object *j_req, struct bufferevent *bev)
+{
+	json_object *j_response = json_object_new_object();
+	json_object *j_device_info;
+
+	if (!json_object_object_get_ex(j_req, "device_info", &j_device_info)) {
+		debug(LOG_ERR, "Update device info request missing 'device_info' field");
+		json_object_object_add(j_response, "type", json_object_new_string("update_device_info_error"));
+		json_object_object_add(j_response, "error", json_object_new_string("Missing 'device_info' field"));
+		const char *response_str = json_object_to_json_string(j_response);
+		ws_send(bufferevent_get_output(bev), response_str, strlen(response_str), TEXT_FRAME);
+		json_object_put(j_response);
+		return;
+	}
+
+	t_device_info *device_info = get_device_info();
+	if (!device_info) {
+		device_info = safe_malloc(sizeof(t_device_info));
+		memset(device_info, 0, sizeof(t_device_info));
+		config_get_config()->device_info = device_info;
+	}
+
+	json_object *j_ap_device_id, *j_ap_mac_address, *j_ap_longitude, *j_ap_latitude, *j_location_id;
+
+	if (json_object_object_get_ex(j_device_info, "ap_device_id", &j_ap_device_id)) {
+		const char *ap_device_id = json_object_get_string(j_ap_device_id);
+		if (device_info->ap_device_id) free(device_info->ap_device_id);
+		device_info->ap_device_id = safe_strdup(ap_device_id);
+		uci_set_value("wifidogx", "deviceinfo", "apdeviceid", ap_device_id);
+	}
+	if (json_object_object_get_ex(j_device_info, "ap_mac_address", &j_ap_mac_address)) {
+		const char *ap_mac_address = json_object_get_string(j_ap_mac_address);
+		if (device_info->ap_mac_address) free(device_info->ap_mac_address);
+		device_info->ap_mac_address = safe_strdup(ap_mac_address);
+		uci_set_value("wifidogx", "deviceinfo", "apmacaddress", ap_mac_address);
+	}
+	if (json_object_object_get_ex(j_device_info, "ap_longitude", &j_ap_longitude)) {
+		const char *ap_longitude = json_object_get_string(j_ap_longitude);
+		if (device_info->ap_longitude) free(device_info->ap_longitude);
+		device_info->ap_longitude = safe_strdup(ap_longitude);
+		uci_set_value("wifidogx", "deviceinfo", "aplongitude", ap_longitude);
+	}
+	if (json_object_object_get_ex(j_device_info, "ap_latitude", &j_ap_latitude)) {
+		const char *ap_latitude = json_object_get_string(j_ap_latitude);
+		if (device_info->ap_latitude) free(device_info->ap_latitude);
+		device_info->ap_latitude = safe_strdup(ap_latitude);
+		uci_set_value("wifidogx", "deviceinfo", "aplatitude", ap_latitude);
+	}
+	if (json_object_object_get_ex(j_device_info, "location_id", &j_location_id)) {
+		const char *location_id = json_object_get_string(j_location_id);
+		if (device_info->location_id) free(device_info->location_id);
+		device_info->location_id = safe_strdup(location_id);
+		uci_set_value("wifidogx", "deviceinfo", "locationid", location_id);
+	}
+
+	json_object_object_add(j_response, "type", json_object_new_string("update_device_info_response"));
+	json_object_object_add(j_response, "status", json_object_new_string("success"));
+	json_object_object_add(j_response, "message", json_object_new_string("Device info updated successfully"));
+	const char *response_str = json_object_to_json_string(j_response);
+	ws_send(bufferevent_get_output(bev), response_str, strlen(response_str), TEXT_FRAME);
+	json_object_put(j_response);
 }
 
 /**
@@ -831,6 +897,8 @@ process_ws_msg(struct bufferevent *bev, const char *msg)
 		handle_get_firmware_info_request(jobj, bev);
 	} else if (!strcmp(type_str, "firmware_upgrade")) {
 		handle_firmware_upgrade_request(jobj, bev);
+	} else if (!strcmp(type_str, "update_device_info")) {
+		handle_update_device_info_request(jobj, bev);
 	} else {
 		debug(LOG_ERR, "Unknown message type: %s", type_str);
 	}

@@ -270,6 +270,44 @@ WebSocket 连接建立时自动发送。
 
 ---
 
+### 7. 更新设备信息
+
+#### 7.1 更新设备信息请求 (服务器 → 设备)
+服务器请求更新设备的信息。
+
+**请求:**
+```json
+{
+  "type": "update_device_info",
+  "device_info": {
+    "ap_device_id": "<new_ap_device_id>",      // 可选
+    "ap_mac_address": "<new_ap_mac_address>", // 可选
+    "ap_longitude": "<new_ap_longitude>",     // 可选
+    "ap_latitude": "<new_ap_latitude>",       // 可选
+    "location_id": "<new_location_id>"        // 可选
+  }
+}
+```
+
+**成功响应 (设备 → 服务器):**
+```json
+{
+  "type": "update_device_info_response",
+  "status": "success",
+  "message": "设备信息更新成功"
+}
+```
+
+**错误响应 (设备 → 服务器):**
+```json
+{
+  "type": "update_device_info_error",
+  "error": "缺少 'device_info' 字段"
+}
+```
+
+---
+
 ## 错误处理
 
 ### 常规错误场景
