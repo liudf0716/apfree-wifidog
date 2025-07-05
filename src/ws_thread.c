@@ -375,31 +375,31 @@ handle_update_device_info_request(json_object *j_req, struct bufferevent *bev)
 		const char *ap_device_id = json_object_get_string(j_ap_device_id);
 		if (device_info->ap_device_id) free(device_info->ap_device_id);
 		device_info->ap_device_id = safe_strdup(ap_device_id);
-		uci_set_value("wifidogx", "deviceinfo", "apdeviceid", ap_device_id);
+		uci_set_value("wifidogx", "common", "apdeviceid", ap_device_id);
 	}
 	if (json_object_object_get_ex(j_device_info, "ap_mac_address", &j_ap_mac_address)) {
 		const char *ap_mac_address = json_object_get_string(j_ap_mac_address);
 		if (device_info->ap_mac_address) free(device_info->ap_mac_address);
 		device_info->ap_mac_address = safe_strdup(ap_mac_address);
-		uci_set_value("wifidogx", "deviceinfo", "apmacaddress", ap_mac_address);
+		uci_set_value("wifidogx", "common", "apmacaddress", ap_mac_address);
 	}
 	if (json_object_object_get_ex(j_device_info, "ap_longitude", &j_ap_longitude)) {
 		const char *ap_longitude = json_object_get_string(j_ap_longitude);
 		if (device_info->ap_longitude) free(device_info->ap_longitude);
 		device_info->ap_longitude = safe_strdup(ap_longitude);
-		uci_set_value("wifidogx", "deviceinfo", "aplongitude", ap_longitude);
+		uci_set_value("wifidogx", "common", "aplongitude", ap_longitude);
 	}
 	if (json_object_object_get_ex(j_device_info, "ap_latitude", &j_ap_latitude)) {
 		const char *ap_latitude = json_object_get_string(j_ap_latitude);
 		if (device_info->ap_latitude) free(device_info->ap_latitude);
 		device_info->ap_latitude = safe_strdup(ap_latitude);
-		uci_set_value("wifidogx", "deviceinfo", "aplatitude", ap_latitude);
+		uci_set_value("wifidogx", "common", "aplatitude", ap_latitude);
 	}
 	if (json_object_object_get_ex(j_device_info, "location_id", &j_location_id)) {
 		const char *location_id = json_object_get_string(j_location_id);
 		if (device_info->location_id) free(device_info->location_id);
 		device_info->location_id = safe_strdup(location_id);
-		uci_set_value("wifidogx", "deviceinfo", "locationid", location_id);
+		uci_set_value("wifidogx", "common", "locationid", location_id);
 	}
 
 	json_object_object_add(j_response, "type", json_object_new_string("update_device_info_response"));
