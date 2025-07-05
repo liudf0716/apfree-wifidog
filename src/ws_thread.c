@@ -1022,8 +1022,9 @@ ws_receive(struct bufferevent *bev, unsigned char *data, const size_t data_len)
 		}
 	}
 
-	// Process text frames
-	if (opcode == TEXT_FRAME) {
+	// Process frames based on opcode
+	switch (opcode) {
+	case TEXT_FRAME: {
 		const char *msg = (const char *)(data + header_len);
 		// Ensure null termination for safety, though payload_len should be accurate
 		char *safe_msg = calloc(1, payload_len + 1);
@@ -1035,8 +1036,83 @@ ws_receive(struct bufferevent *bev, unsigned char *data, const size_t data_len)
 		} else {
 			debug(LOG_ERR, "Failed to allocate memory for message buffer in ws_receive");
 		}
-	} else {
-		debug(LOG_ERR, "Unsupported WebSocket opcode: %d", opcode);
+		break;
+	}
+	case BINARY_FRAME:
+		// Handle binary data frames
+		debug(LOG_DEBUG, "Received binary frame with %llu bytes", (unsigned long long)payload_len);
+		// Binary frames are not currently supported in this implementation
+		debug(LOG_WARNING, "Binary frames not supported, ignoring");
+		break;
+		
+	case PING_FRAME: {
+		// Respond to ping with pong frame containing same payload
+		debug(LOG_DEBUG, "Received ping frame, sending pong response");
+		struct evbuffer *out = bufferevent_get_output(bev);
+		if (payload_len > 0) {
+			// Echo back the ping payload in pong response
+			char *ping_data = malloc(payload_len);
+			if (ping_data) {
+				memcpy(ping_data, data + header_len, payload_len);
+				ws_send(out, ping_data, payload_len, PONG_FRAME);
+				free(ping_data);
+			} else {
+				debug(LOG_ERR, "Failed to allocate memory for ping data");
+				ws_send(out, "", 0, PONG_FRAME);
+			}
+		} else {
+			ws_send(out, "", 0, PONG_FRAME);
+		}
+		break;
+	}
+	case PONG_FRAME:
+		// Handle pong response (usually in response to our ping)
+		debug(LOG_DEBUG, "Received pong frame with %llu bytes", (unsigned long long)payload_len);
+		// Pong frames are typically used for keep-alive, no action needed
+		break;
+		
+	case CLOSING_FRAME: {
+		// Handle connection close frame
+		debug(LOG_DEBUG, "Received close frame, initiating connection closure");
+		
+		// Extract close code and reason if present
+		uint16_t close_code = 1000; // Normal closure
+		const char *close_reason = "";
+		
+		if (payload_len >= 2) {
+			close_code = ntohs(*(uint16_t*)(data + header_len));
+			if (payload_len > 2) {
+				close_reason = (const char*)(data + header_len + 2);
+			}
+		}
+		
+		debug(LOG_DEBUG, "Close code: %u, reason: %.100s", close_code, close_reason);
+		
+		// Send close frame acknowledgment
+		struct evbuffer *out = bufferevent_get_output(bev);
+		uint16_t close_response = htons(1000); // Normal closure
+		ws_send(out, (const char*)&close_response, 2, CLOSING_FRAME);
+		
+		// Clean up connection
+		cleanup_ws_connection();
+		break;
+	}
+	case 0x0:
+		// Continuation frame - handle fragmented messages
+		debug(LOG_DEBUG, "Received continuation frame with %llu bytes", (unsigned long long)payload_len);
+		// For now, continuation frames are not fully supported
+		debug(LOG_WARNING, "Continuation frames not fully supported, ignoring");
+		break;
+		
+	default:
+		// Handle unknown/unsupported opcodes
+		debug(LOG_ERR, "Unsupported WebSocket opcode: 0x%x", opcode);
+		
+		// Send close frame with unsupported data error code
+		struct evbuffer *out = bufferevent_get_output(bev);
+		uint16_t close_code = htons(1003); // Unsupported data
+		ws_send(out, (const char*)&close_code, 2, CLOSING_FRAME);
+		break;
 	}
 }
 
