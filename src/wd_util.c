@@ -38,6 +38,8 @@
 #include <dirent.h>
 #include <linux/if_bridge.h>
 
+#include <uci.h>
+
 #include "wd_util.h"
 #include "gateway.h"
 #include "commandline.h"
@@ -1487,26 +1489,119 @@ evdns_parse_trusted_domain_2_ip(trusted_domain_t which)
     pthread_detach(tid_evdns_parse);
 }
 
+
+
 int
-uci_del_value(const char *c_filename, const char *section, const char *name)
+uci_del_value(const char *package, const char *section, const char *option)
 {
-	// TODO
-	return 0;
+    struct uci_context *ctx;
+    struct uci_ptr ptr;
+    int ret = UCI_OK;
+
+    ctx = uci_alloc_context();
+    if (!ctx) {
+        return -1;
+    }
+
+    char str[256];
+    snprintf(str, sizeof(str), "%s.%s.%s", package, section, option);
+
+    if (uci_lookup_ptr(ctx, &ptr, str, true) != UCI_OK) {
+        ret = -1;
+        goto cleanup;
+    }
+
+    if (uci_delete(ctx, &ptr) != UCI_OK) {
+        ret = -1;
+        goto cleanup;
+    }
+
+    if (uci_save(ctx, ptr.p) != UCI_OK) {
+        ret = -1;
+        goto cleanup;
+    }
+
+    if (uci_commit(ctx, &ptr.p, false) != UCI_OK) {
+        ret = -1;
+    }
+
+cleanup:
+    uci_free_context(ctx);
+    return ret;
 }
 
 int
-uci_set_value(const char *c_filename, const char *section, const char *name, const char *value)
+uci_set_value(const char *package, const char *section, const char *option, const char *value)
 {
-	// TODO
-	return 0;
+    struct uci_context *ctx;
+    struct uci_ptr ptr;
+    int ret = UCI_OK;
+
+    ctx = uci_alloc_context();
+    if (!ctx) {
+        return -1;
+    }
+
+    char str[256];
+    snprintf(str, sizeof(str), "%s.%s.%s=%s", package, section, option, value);
+
+    if (uci_lookup_ptr(ctx, &ptr, str, true) != UCI_OK) {
+        ret = -1;
+        goto cleanup;
+    }
+
+    if (uci_set(ctx, &ptr) != UCI_OK) {
+        ret = -1;
+        goto cleanup;
+    }
+
+    if (uci_save(ctx, ptr.p) != UCI_OK) {
+        ret = -1;
+        goto cleanup;
+    }
+
+    if (uci_commit(ctx, &ptr.p, false) != UCI_OK) {
+        ret = -1;
+    }
+
+cleanup:
+    uci_free_context(ctx);
+    return ret;
 }
 
 int
-uci_get_value(const char *c_filename, const char *name, char *value, int v_len)
+uci_get_value(const char *package, const char *section, const char *option, char *value, int v_len)
 {
-	// TODO
-	return 0;
+    struct uci_context *ctx;
+    struct uci_ptr ptr;
+    int ret = UCI_OK;
+
+    ctx = uci_alloc_context();
+    if (!ctx) {
+        return -1;
+    }
+
+    char str[256];
+    snprintf(str, sizeof(str), "%s.%s.%s", package, section, option);
+
+    if (uci_lookup_ptr(ctx, &ptr, str, true) != UCI_OK) {
+        ret = -1;
+        goto cleanup;
+    }
+
+    if (ptr.o && ptr.o->type == UCI_TYPE_STRING) {
+        strncpy(value, ptr.o->v.string, v_len - 1);
+        value[v_len - 1] = '\0';
+    } else {
+        ret = -1;
+    }
+
+cleanup:
+    uci_free_context(ctx);
+    return ret;
 }
+
+
 
 /** Fork a child and execute a shell command, the parent
  * process waits for the child to return and returns the child's exit()

@@ -424,7 +424,7 @@ get_sys_info(struct sys_info *info)
     }
 	
 	// get first ssid
-	if (uci_get_value("wireless", "ssid", ssid, 31)) {
+	if (uci_get_value("wireless", "wifi-iface", "ssid", ssid, 31)) {
 		trim_newline(ssid);
 		if(strlen(ssid) > 0) {
 			if(g_ssid) 
