@@ -322,97 +322,167 @@ Server requests to update the device's information.
 
 ---
 
-## Error Handling
+### 7. Domain Management
 
-### General Error Scenarios
-1. **JSON Parse Errors**: Invalid JSON format will be logged but no response sent
-2. **Missing Message Type**: Missing `type` field will be logged but no response sent
-3. **Unknown Message Type**: Unknown message types will be logged but no response sent
+Domain management functionality allows dynamic management of trusted domain lists through WebSocket connections, including exact-match domains and wildcard domains. Network traffic to these domains can pass through the firewall without user authentication.
 
-### Validation Errors
-- Missing required fields result in specific error responses
-- Invalid field types or values result in specific error responses
-- Authentication/authorization failures include detailed error information
+#### 7.1 Synchronize Trusted Domains List (Server → Device)
 
----
+Completely replaces the current trusted domains list.
 
-## Implementation Notes
-
-### For Server Developers
-
-1. **Connection Management**:
-   - Device sends `connect` message immediately after WebSocket upgrade
-   - Heartbeat messages are sent every 60 seconds
-   - Server should respond to heartbeat with gateway configuration updates
-
-2. **Message Ordering**:
-   - No guaranteed message ordering
-   - Each request-response pair is independent
-   - Server should handle out-of-order or duplicate messages
-
-3. **Response Handling**:
-   - Some commands (`auth`, `tmp_pass`) don't send responses
-   - Error responses always include descriptive error messages
-   - Success responses include relevant context data
-
-4. **Connection Recovery**:
-   - Device automatically reconnects on connection failure
-   - Reconnection intervals: 2 seconds for errors, 5 seconds for EOF
-   - Maximum 5 retry attempts before giving up
-
-5. **Firmware Upgrade**:
-   - Response is sent before system reboot
-   - Server should monitor connection status to detect successful upgrade
-   - Device will reconnect after successful reboot with new firmware
-
-### Security Considerations
-
-1. **Authentication**: Device identification is based on `device_id`
-2. **Validation**: All client operations validate device and gateway IDs
-3. **Access Control**: Temporary access grants are time-limited
-4. **Command Verification**: Firmware upgrade commands are validated before execution
-
----
-
-## Example Workflows
-
-### Client Authentication Flow
-1. Device receives `auth` request from server
-2. Device validates gateway and client information
-3. Device adds client to firewall allow list
-4. No response sent to server
-
-### Client Kickoff Flow
-1. Server sends `kickoff` request with client details
-2. Device validates request parameters
-3. Device removes client from firewall and client list
-4. Device sends success or error response to server
-
-### Firmware Upgrade Flow
-1. Server sends `firmware_upgrade` request with firmware URL
-2. Device validates URL parameter
-3. Device executes `sysupgrade` command
-4. Device sends success response
-5. Device reboots (connection lost)
-6. Device reconnects after successful upgrade
-
----
-
-## Testing and Development
-
-### WebSocket Client Testing
-Use tools like `wscat` or browser WebSocket APIs to test:
-
-```bash
-# Connect to device WebSocket (if device acts as server)
-wscat -c ws://device-ip:port/path
-
-# Send test message
-{"type": "get_firmware_info"}
+**Request:**
+```json
+{
+  "type": "sync_trusted_domain",
+  "domains": [
+    "example.com",
+    "trusted-site.org", 
+    "api.service.com"
+  ]
+}
 ```
 
-### Message Validation
-Ensure all JSON messages conform to the documented schemas and include required fields.
+**Response:**
+```json
+{
+  "type": "sync_trusted_domain_response",
+  "status": "success",
+  "message": "Trusted domains synchronized successfully"
+}
+```
 
-### Error Simulation
-Test error scenarios by sending malformed requests or invalid parameters to verify proper error handling and response generation.
+**Features:**
+- Clears all existing trusted domains
+- Adds all domains provided in the request
+- Updates UCI configuration for persistence
+- Changes take effect immediately
+
+#### 7.2 Get Trusted Domains List (Server → Device)
+
+Retrieves the complete list of currently configured trusted domains.
+
+**Request:**
+```json
+{
+  "type": "get_trusted_domains"
+}
+```
+
+**Response:**
+```json
+{
+  "type": "get_trusted_domains_response",
+  "domains": [
+    "example.com",
+    "api.service.com",
+    "cdn.provider.net"
+  ]
+}
+```
+
+**Features:**
+- Returns all currently configured exact-match domains
+- Returns empty array if no domains are configured
+- Domain order in response may not match configuration order
+
+#### 7.3 Synchronize Trusted Wildcard Domains List (Server → Device)
+
+Completely replaces the current trusted wildcard domains list.
+
+**Request:**
+```json
+{
+  "type": "sync_trusted_wildcard_domains", 
+  "domains": [
+    "*.googleapis.com",
+    "*.cloudflare.com",
+    "*.github.io",
+    "*.example.org"
+  ]
+}
+```
+
+**Response:**
+```json
+{
+  "type": "sync_trusted_wildcard_domains_response",
+  "status": "success", 
+  "message": "Trusted wildcard domains synchronized successfully"
+}
+```
+
+**Features:**
+- Clears all existing trusted wildcard domains
+- Adds all wildcard domain patterns provided in the request
+- Wildcards typically use `*.` prefix to match subdomains
+- Updates UCI configuration for persistence
+- Changes take effect immediately
+
+**Wildcard Domain Examples:**
+- `*.example.com` - matches api.example.com, cdn.example.com, etc.
+- `*.github.io` - matches username.github.io, project.github.io, etc.
+- `*.googleapis.com` - matches maps.googleapis.com, fonts.googleapis.com, etc.
+
+#### 7.4 Get Trusted Wildcard Domains List (Server → Device)
+
+Retrieves the complete list of currently configured trusted wildcard domains.
+
+**Request:**
+```json
+{
+  "type": "get_trusted_wildcard_domains"
+}
+```
+
+**Response:**
+```json
+{
+  "type": "get_trusted_wildcard_domains_response",
+  "domains": [
+    "*.googleapis.com",
+    "*.cloudflare.com",
+    "*.github.io"
+  ]
+}
+```
+
+**Features:**
+- Returns all currently configured wildcard domain patterns
+- Returns empty array if no wildcard domains are configured
+- Domain order in response may not match configuration order
+
+#### Domain Management Technical Implementation
+
+**Data Persistence:**
+- All domain configurations are synchronized to UCI configuration system
+- Configuration automatically restored after system restart
+- Regular domains stored in `wifidogx.common.trusted_domains`
+- Wildcard domains stored in `wifidogx.common.trusted_wildcard_domains`
+
+**Memory Management:**
+- Uses linked list structures to manage domain data
+- Synchronization operations clear existing data before adding new data
+- Automatic memory allocation and deallocation handling
+
+**Error Handling:**
+- JSON parsing errors are logged to debug logs
+- Invalid request formats are ignored
+- UCI configuration update failures are logged but don't affect in-memory configuration
+
+**Performance Considerations:**
+- Domain matching is used frequently in network traffic processing
+- Recommend placing most commonly used domains at the front of the list
+- Wildcard matching consumes more resources than exact matching
+
+**Usage Recommendations:**
+1. **Batch Updates**: Use synchronization interfaces to update all domains at once, avoiding frequent individual updates
+2. **Wildcard Usage**: For services with many subdomains, using wildcard domains is more efficient
+3. **Monitoring and Validation**: Use get interfaces to validate configuration after updates
+4. **Backup and Recovery**: Important domain configurations should be regularly backed up to external systems
+
+**Compatibility:**
+- Supports IPv4 and IPv6 networks
+- Compatible with standard domain resolution mechanisms
+- Wildcard patterns depend on underlying domain resolution implementation
+- Recommend validating wildcard matching behavior in test environments
+````

@@ -308,6 +308,160 @@ WebSocket 连接建立时自动发送。
 
 ---
 
+### 8. 域名管理
+
+域名管理功能允许通过 WebSocket 连接动态管理受信任的域名列表，包括精确匹配的域名和通配符域名。这些域名的网络流量可以在不需要用户认证的情况下通过防火墙。
+
+#### 8.1 同步受信任域名列表 (服务器 → 设备)
+
+完全替换当前的受信任域名列表。
+
+**请求:**
+```json
+{
+  "type": "sync_trusted_domain",
+  "domains": [
+    "example.com",
+    "trusted-site.org", 
+    "api.service.com"
+  ]
+}
+```
+
+**响应:**
+```json
+{
+  "type": "sync_trusted_domain_response",
+  "status": "success",
+  "message": "Trusted domains synchronized successfully"
+}
+```
+
+**功能说明:**
+- 清除所有现有的受信任域名
+- 添加请求中提供的所有域名
+- 更新 UCI 配置以保持持久化
+- 更改立即生效
+
+#### 8.2 获取受信任域名列表 (服务器 → 设备)
+
+获取当前配置的所有受信任域名。
+
+**请求:**
+```json
+{
+  "type": "get_trusted_domains"
+}
+```
+
+**响应:**
+```json
+{
+  "type": "get_trusted_domains_response",
+  "domains": [
+    "example.com",
+    "api.service.com",
+    "cdn.provider.net"
+  ]
+}
+```
+
+**功能说明:**
+- 返回当前所有精确匹配的域名
+- 如果没有配置域名，返回空数组
+- 响应中的域名顺序可能与配置顺序不同
+
+#### 8.3 同步受信任通配符域名列表 (服务器 → 设备)
+
+完全替换当前的受信任通配符域名列表。
+
+**请求:**
+```json
+{
+  "type": "sync_trusted_wildcard_domains", 
+  "domains": [
+    "*.googleapis.com",
+    "*.cloudflare.com",
+    "*.github.io",
+    "*.example.org"
+  ]
+}
+```
+
+**响应:**
+```json
+{
+  "type": "sync_trusted_wildcard_domains_response",
+  "status": "success", 
+  "message": "Trusted wildcard domains synchronized successfully"
+}
+```
+
+**功能说明:**
+- 清除所有现有的受信任通配符域名
+- 添加请求中提供的所有通配符域名模式
+- 通配符通常使用 `*.` 前缀匹配子域名
+- 更新 UCI 配置以保持持久化
+- 更改立即生效
+
+**通配符域名示例:**
+- `*.example.com` - 匹配 api.example.com, cdn.example.com 等
+- `*.github.io` - 匹配 username.github.io, project.github.io 等  
+- `*.googleapis.com` - 匹配 maps.googleapis.com, fonts.googleapis.com 等
+
+#### 8.4 获取受信任通配符域名列表 (服务器 → 设备)
+
+获取当前配置的所有受信任通配符域名。
+
+**请求:**
+```json
+{
+  "type": "get_trusted_wildcard_domains"
+}
+```
+
+**响应:**
+```json
+{
+  "type": "get_trusted_wildcard_domains_response",
+  "domains": [
+    "*.googleapis.com",
+    "*.cloudflare.com",
+    "*.github.io"
+  ]
+}
+```
+
+**功能说明:**
+- 返回当前所有通配符域名模式
+- 如果没有配置通配符域名，返回空数组
+- 响应中的域名顺序可能与配置顺序不同
+
+#### 域名管理技术实现细节
+
+**数据持久化:**
+- 所有域名配置都会同步更新到 UCI 配置系统
+- 配置在系统重启后自动恢复
+- 普通域名存储在 `wifidogx.common.trusted_domains` 
+- 通配符域名存储在 `wifidogx.common.trusted_wildcard_domains`
+
+**内存管理:**
+- 使用链表结构管理域名数据
+- 同步操作会先清除现有数据再添加新数据
+- 自动处理内存分配和释放
+
+**错误处理:**
+- JSON 解析错误会记录到调试日志
+- 无效的请求格式会被忽略
+- UCI 配置更新失败会记录错误但不影响内存中的配置
+
+**性能考虑:**
+- 域名匹配在网络流量处理中频繁使用
+- 建议将最常用的域名放在列表前面
+- 通配符匹配比精确匹配消耗更多资源
+
+---
+
 ## 错误处理
 
 ### 常规错误场景

@@ -101,6 +101,7 @@ static void handle_update_device_info_request(json_object *j_req, struct buffere
 static void handle_sync_trusted_domain_request(json_object *j_req, struct bufferevent *bev);
 static void handle_get_trusted_domains_request(json_object *j_req, struct bufferevent *bev);
 static void handle_get_trusted_wildcard_domains_request(json_object *j_req, struct bufferevent *bev);
+static void handle_sync_trusted_wildcard_domains_request(json_object *j_req, struct bufferevent *bev);
 static void cleanup_ws_connection(void);
 static void reconnect_websocket(void);
 static void scheduled_reconnect_cb(evutil_socket_t fd, short events, void *arg);
@@ -414,6 +415,44 @@ handle_update_device_info_request(json_object *j_req, struct bufferevent *bev)
 	json_object_put(j_response);
 }
 
+/**
+ * @brief Handles request to synchronize trusted domains list.
+ *
+ * This function processes a WebSocket request to update the complete list of trusted domains.
+ * It clears all existing trusted domains and replaces them with the new list provided.
+ * Trusted domains allow network traffic to pass through without authentication.
+ *
+ * Request format:
+ * {
+ *   "type": "sync_trusted_domain",
+ *   "domains": [
+ *     "example.com",
+ *     "trusted-site.org",
+ *     "api.service.com"
+ *   ]
+ * }
+ *
+ * Success response:
+ * {
+ *   "type": "sync_trusted_domain_response",
+ *   "status": "success", 
+ *   "message": "Trusted domains synchronized successfully"
+ * }
+ *
+ * The function performs the following operations:
+ * 1. Clears all existing trusted domains from memory and UCI config
+ * 2. Iterates through the provided domains array
+ * 3. Adds each valid domain to the trusted domains list
+ * 4. Updates UCI configuration for persistence
+ * 5. Sends success response back to the client
+ *
+ * @param j_req The incoming JSON request object containing the domains array
+ * @param bev The bufferevent associated with the WebSocket connection for sending response
+ *
+ * @note This operation completely replaces the existing trusted domains list
+ * @note Domain validation is minimal - any string value in the array is accepted
+ * @note Changes are immediately effective and persist across system reboots via UCI
+ */
 static void handle_sync_trusted_domain_request(json_object *j_req, struct bufferevent *bev) {
     json_object *j_response = json_object_new_object();
     json_object *j_domains;
@@ -441,6 +480,40 @@ static void handle_sync_trusted_domain_request(json_object *j_req, struct buffer
     json_object_put(j_response);
 }
 
+/**
+ * @brief Handles request to retrieve current trusted domains list.
+ *
+ * This function processes a WebSocket request to get the complete list of currently
+ * configured trusted domains. Trusted domains are exact domain matches that allow
+ * network traffic to pass through without user authentication.
+ *
+ * Request format:
+ * {
+ *   "type": "get_trusted_domains"
+ * }
+ *
+ * Response format:
+ * {
+ *   "type": "get_trusted_domains_response",
+ *   "domains": [
+ *     "example.com",
+ *     "api.service.com",
+ *     "cdn.provider.net"
+ *   ]
+ * }
+ *
+ * The function:
+ * 1. Creates a new JSON response object
+ * 2. Iterates through the linked list of trusted domains
+ * 3. Adds each domain name to the response array
+ * 4. Sends the complete list back to the client
+ *
+ * @param j_req The incoming JSON request object (content not used for this request type)
+ * @param bev The bufferevent associated with the WebSocket connection for sending response
+ *
+ * @note Returns an empty array if no trusted domains are configured
+ * @note Domain order in response may not match configuration order
+ */
 static void handle_get_trusted_domains_request(json_object *j_req, struct bufferevent *bev) {
     json_object *j_response = json_object_new_object();
     json_object *j_domains = json_object_new_array();
@@ -458,6 +531,43 @@ static void handle_get_trusted_domains_request(json_object *j_req, struct buffer
     json_object_put(j_response);
 }
 
+/**
+ * @brief Handles request to retrieve current trusted wildcard domains list.
+ *
+ * This function processes a WebSocket request to get the complete list of currently
+ * configured trusted wildcard domains. Wildcard domains use pattern matching to allow
+ * traffic to multiple subdomains (e.g., "*.example.com" matches "api.example.com", 
+ * "cdn.example.com", etc.).
+ *
+ * Request format:
+ * {
+ *   "type": "get_trusted_wildcard_domains"
+ * }
+ *
+ * Response format:
+ * {
+ *   "type": "get_trusted_wildcard_domains_response",
+ *   "domains": [
+ *     "*.googleapis.com",
+ *     "*.cloudflare.com", 
+ *     "*.github.io"
+ *   ]
+ * }
+ *
+ * The function:
+ * 1. Creates a new JSON response object and domains array
+ * 2. Retrieves the linked list of trusted wildcard domains
+ * 3. Iterates through each wildcard domain entry
+ * 4. Adds each domain pattern to the response array
+ * 5. Sends the complete list back to the client
+ *
+ * @param j_req The incoming JSON request object (content not used for this request type)  
+ * @param bev The bufferevent associated with the WebSocket connection for sending response
+ *
+ * @note Returns an empty array if no wildcard domains are configured
+ * @note Wildcard patterns typically use "*." prefix for subdomain matching
+ * @note Domain order in response may not match configuration order
+ */
 static void handle_get_trusted_wildcard_domains_request(json_object *j_req, struct bufferevent *bev) {
     json_object *j_response = json_object_new_object();
     json_object *j_domains = json_object_new_array();
@@ -475,6 +585,53 @@ static void handle_get_trusted_wildcard_domains_request(json_object *j_req, stru
     json_object_put(j_response);
 }
 
+/**
+ * @brief Handles request to synchronize trusted wildcard domains list.
+ *
+ * This function processes a WebSocket request to update the complete list of trusted
+ * wildcard domains. It clears all existing wildcard domains and replaces them with
+ * the new list provided. Wildcard domains allow pattern-based domain matching,
+ * typically using "*." prefix to match all subdomains.
+ *
+ * Request format:
+ * {
+ *   "type": "sync_trusted_wildcard_domains",
+ *   "domains": [
+ *     "*.googleapis.com",
+ *     "*.cloudflare.com",
+ *     "*.github.io",
+ *     "*.example.org"
+ *   ]
+ * }
+ *
+ * Success response:
+ * {
+ *   "type": "sync_trusted_wildcard_domains_response",
+ *   "status": "success",
+ *   "message": "Trusted wildcard domains synchronized successfully"
+ * }
+ *
+ * The function performs the following operations:
+ * 1. Clears all existing trusted wildcard domains from memory and UCI config
+ * 2. Validates the incoming request contains a domains array
+ * 3. Iterates through each domain pattern in the array
+ * 4. Adds each valid wildcard domain to the trusted list
+ * 5. Updates UCI configuration for system persistence
+ * 6. Sends success response back to the client
+ *
+ * Examples of wildcard domain patterns:
+ * - "*.example.com" - matches api.example.com, cdn.example.com, etc.
+ * - "*.github.io" - matches username.github.io, project.github.io, etc.
+ * - "*.googleapis.com" - matches maps.googleapis.com, fonts.googleapis.com, etc.
+ *
+ * @param j_req The incoming JSON request object containing the wildcard domains array
+ * @param bev The bufferevent associated with the WebSocket connection for sending response
+ *
+ * @note This operation completely replaces the existing wildcard domains list
+ * @note Pattern validation is minimal - any string value in the array is accepted
+ * @note Changes take effect immediately and persist across system reboots via UCI
+ * @note Wildcard matching depends on the underlying domain resolution implementation
+ */
 static void handle_sync_trusted_wildcard_domains_request(json_object *j_req, struct bufferevent *bev) {
     json_object *j_response = json_object_new_object();
     json_object *j_domains;
@@ -938,18 +1095,33 @@ start_ws_heartbeat(struct bufferevent *b_ws)
  * Parses and handles JSON messages received over WebSocket. This function acts as
  * a dispatcher, routing messages to specific handlers based on their "type" field.
  * Supported message types:
- * - `"heartbeat"`: Handles gateway status updates. (Responds with heartbeat)
- * - `"connect"`: Handles initial connection response. (Responds with heartbeat)
- * - `"auth"`: Handles client authentication requests.
- * - `"kickoff"`: Handles client disconnection requests. Responds with "kickoff_response"
- *                for success or "kickoff_error" for validation failures.
- * - `"tmp_pass"`: Handles requests for temporary client access.
- * - `"get_firmware_info"`: Triggers a request for firmware information. The device
- *                          responds with a "firmware_info_response" message
- *                          containing details from /etc/openwrt_release.
- * - `"firmware_upgrade"`: Handles firmware upgrade requests. Executes sysupgrade
- *                         command with the provided URL and responds with success
- *                         or error status before potential system reboot.
+ * - "heartbeat": Handles gateway status updates. (Responds with heartbeat)
+ * - "connect": Handles initial connection response. (Responds with heartbeat)
+ * - "auth": Handles client authentication requests.
+ * - "kickoff": Handles client disconnection requests. Responds with "kickoff_response"
+ *              for success or "kickoff_error" for validation failures.
+ * - "tmp_pass": Handles requests for temporary client access.
+ * - "get_firmware_info": Triggers a request for firmware information. The device
+ *                        responds with a "firmware_info_response" message
+ *                        containing details from /etc/openwrt_release.
+ * - "firmware_upgrade": Handles firmware upgrade requests. Executes sysupgrade
+ *                       command with the provided URL and responds with success
+ *                       or error status before potential system reboot.
+ * - "update_device_info": Handles device information update requests. Updates
+ *                         local device configuration and UCI settings.
+ * - "sync_trusted_domain": Handles trusted domains synchronization. Completely
+ *                          replaces the current trusted domains list with the
+ *                          provided list. Responds with "sync_trusted_domain_response".
+ * - "get_trusted_domains": Retrieves the current list of trusted domains.
+ *                          Responds with "get_trusted_domains_response" containing
+ *                          an array of exact-match domain names.
+ * - "sync_trusted_wildcard_domains": Handles wildcard domains synchronization.
+ *                                    Replaces current wildcard domains list with
+ *                                    the provided patterns (e.g., "*.example.com").
+ *                                    Responds with "sync_trusted_wildcard_domains_response".
+ * - "get_trusted_wildcard_domains": Retrieves the current list of wildcard domains.
+ *                                   Responds with "get_trusted_wildcard_domains_response"
+ *                                   containing an array of wildcard patterns.
  *
  * @param bev The bufferevent associated with the WebSocket connection,
  *            passed to message handlers for sending responses.
