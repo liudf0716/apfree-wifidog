@@ -319,6 +319,8 @@ void add_domain_ip_pair(const char *, trusted_domain_t);
 void clear_trusted_domains(void);
 void clear_trusted_pan_domains(void);
 t_domain_trusted *get_trusted_domains(void);
+t_domain_trusted *get_trusted_pan_domains(void);
+void add_trusted_pan_domains(const char *domains);
 
 /** Roam MAC List operation */
 void parse_roam_mac_list(const char *); 

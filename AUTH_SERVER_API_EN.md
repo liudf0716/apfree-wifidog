@@ -243,4 +243,23 @@ WiFiDog parses incoming messages based on the `"type"` field in the JSON payload
         }
         ```
     *   **WiFiDog Action:** Clears the existing trusted domains list and replaces it with the domains provided in the `domains` array.
+
+7.  **Type: "get_trusted_wildcard_domains" (Server Requests Trusted Wildcard Domains)**
+    *   **JSON Structure:**
+        ```json
+        {
+          "type": "get_trusted_wildcard_domains"
+        }
+        ```
+    *   **WiFiDog Action:** Responds with a `get_trusted_wildcard_domains_response` message containing the current list of trusted wildcard domains.
+
+8.  **Type: "sync_trusted_wildcard_domain" (Server Synchronizes Trusted Wildcard Domains)**
+    *   **JSON Structure:**
+        ```json
+        {
+          "type": "sync_trusted_wildcard_domain",
+          "domains": [".domain1.com", ".domain2.com"]
+        }
+        ```
+    *   **WiFiDog Action:** Clears the existing trusted wildcard domains list and replaces it with the domains provided in the `domains` array.
 ```

@@ -210,6 +210,7 @@ static void parse_popular_servers(const char *);
 static void validate_popular_servers(void);
 static void add_popular_server(const char *);
 static void parse_device_info(FILE *, const char *, int *);
+static void parse_domain_string_common(const char *ptr, trusted_domain_t which);
 
 static OpCodes config_parse_token(const char *, const char *, int);
 
@@ -271,6 +272,18 @@ t_domain_trusted *
 get_trusted_domains(void)
 {
 	return config.domains_trusted;
+}
+
+t_domain_trusted *
+get_trusted_pan_domains(void)
+{
+	return config.pan_domains_trusted;
+}
+
+void
+add_trusted_pan_domains(const char *domains)
+{
+    parse_domain_string_common(domains, TRUSTED_PAN_DOMAIN);
 }
 
 /**
