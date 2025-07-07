@@ -17,6 +17,7 @@
 #include "fw_nft.h"
 #include "wd_util.h"
 #include "safe.h"
+#include "wdctlx_thread.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h> // For calloc and free
@@ -97,6 +98,8 @@ static void handle_kickoff_request(json_object *j_auth, struct bufferevent *bev)
 static void handle_get_firmware_info_request(json_object *j_req, struct bufferevent *bev);
 static void handle_firmware_upgrade_request(json_object *j_req, struct bufferevent *bev);
 static void handle_update_device_info_request(json_object *j_req, struct bufferevent *bev);
+static void handle_sync_trusted_domain_request(json_object *j_req, struct bufferevent *bev);
+static void handle_get_trusted_domains_request(json_object *j_req, struct bufferevent *bev);
 static void cleanup_ws_connection(void);
 static void reconnect_websocket(void);
 static void scheduled_reconnect_cb(evutil_socket_t fd, short events, void *arg);
@@ -408,6 +411,50 @@ handle_update_device_info_request(json_object *j_req, struct bufferevent *bev)
 	const char *response_str = json_object_to_json_string(j_response);
 	ws_send(bufferevent_get_output(bev), response_str, strlen(response_str), TEXT_FRAME);
 	json_object_put(j_response);
+}
+
+static void handle_sync_trusted_domain_request(json_object *j_req, struct bufferevent *bev) {
+    json_object *j_response = json_object_new_object();
+    json_object *j_domains;
+
+    // Clear existing trusted domains
+    clear_trusted_domains();
+
+    if (json_object_object_get_ex(j_req, "domains", &j_domains) && json_object_is_type(j_domains, json_type_array)) {
+        int array_len = json_object_array_length(j_domains);
+        for (int i = 0; i < array_len; i++) {
+            json_object *j_domain = json_object_array_get_idx(j_domains, i);
+            if (json_object_is_type(j_domain, json_type_string)) {
+                const char *domain_str = json_object_get_string(j_domain);
+                add_trusted_domains(domain_str);
+                uci_add_list_value("wifidogx", "common", "trusted_domains", domain_str);
+            }
+        }
+    }
+
+    json_object_object_add(j_response, "type", json_object_new_string("sync_trusted_domain_response"));
+    json_object_object_add(j_response, "status", json_object_new_string("success"));
+    json_object_object_add(j_response, "message", json_object_new_string("Trusted domains synchronized successfully"));
+    const char *response_str = json_object_to_json_string(j_response);
+    ws_send(bufferevent_get_output(bev), response_str, strlen(response_str), TEXT_FRAME);
+    json_object_put(j_response);
+}
+
+static void handle_get_trusted_domains_request(json_object *j_req, struct bufferevent *bev) {
+    json_object *j_response = json_object_new_object();
+    json_object *j_domains = json_object_new_array();
+
+    t_domain_trusted *trusted_domains = get_trusted_domains();
+    for (t_domain_trusted *d = trusted_domains; d; d = d->next) {
+        json_object_array_add(j_domains, json_object_new_string(d->domain));
+    }
+
+    json_object_object_add(j_response, "type", json_object_new_string("get_trusted_domains_response"));
+    json_object_object_add(j_response, "domains", j_domains);
+
+    const char *response_str = json_object_to_json_string(j_response);
+    ws_send(bufferevent_get_output(bev), response_str, strlen(response_str), TEXT_FRAME);
+    json_object_put(j_response);
 }
 
 /**
@@ -899,6 +946,10 @@ process_ws_msg(struct bufferevent *bev, const char *msg)
 		handle_firmware_upgrade_request(jobj, bev);
 	} else if (!strcmp(type_str, "update_device_info")) {
 		handle_update_device_info_request(jobj, bev);
+	} else if (!strcmp(type_str, "sync_trusted_domain")) {
+		handle_sync_trusted_domain_request(jobj, bev);
+	} else if (!strcmp(type_str, "get_trusted_domains")) {
+		handle_get_trusted_domains_request(jobj, bev);
 	} else {
 		debug(LOG_ERR, "Unknown message type: %s", type_str);
 	}

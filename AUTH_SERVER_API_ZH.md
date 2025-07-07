@@ -225,6 +225,25 @@ WiFiDog 根据 JSON 载荷中的 `"type"` 字段解析传入消息。
         ```
     *   **WiFiDog 操作:** 通过更新防火墙规则，为指定的 MAC 地址授予指定超时时间的临时网络访问权限。
 
+5.  **Type: "get_trusted_domains" (服务器请求受信任的域)**
+    *   **JSON 结构:**
+        ```json
+        {
+          "type": "get_trusted_domains"
+        }
+        ```
+    *   **WiFiDog 操作:** 使用包含当前受信任域列表的 `get_trusted_domains_response` 消息进行响应。
+
+6.  **Type: "sync_trusted_domain" (服务器同步受信任的域)**
+    *   **JSON 结构:**
+        ```json
+        {
+          "type": "sync_trusted_domain",
+          "domains": ["domain1.com", "domain2.com"]
+        }
+        ```
+    *   **WiFiDog 操作:** 清除现有的受信任域列表，并用 `domains` 数组中提供的域替换它。
+
 5.  **Type: "firmware_upgrade" (固件升级指令)**
     *   服务器发送此消息以指示设备下载并应用新的固件。
     *   **JSON 结构:**

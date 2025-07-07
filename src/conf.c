@@ -267,6 +267,12 @@ get_gateway_count(void)
 	return count;
 }
 
+t_domain_trusted *
+get_trusted_domains(void)
+{
+	return config.domains_trusted;
+}
+
 /**
  * @brief Initializes the gateway configuration with default parameters.
  *

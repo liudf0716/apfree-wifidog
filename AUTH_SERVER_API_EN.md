@@ -224,4 +224,23 @@ WiFiDog parses incoming messages based on the `"type"` field in the JSON payload
         }
         ```
     *   **WiFiDog Action:** Grants temporary network access to the specified MAC address for the duration of the timeout by updating firewall rules.
+
+5.  **Type: "get_trusted_domains" (Server Requests Trusted Domains)**
+    *   **JSON Structure:**
+        ```json
+        {
+          "type": "get_trusted_domains"
+        }
+        ```
+    *   **WiFiDog Action:** Responds with a `get_trusted_domains_response` message containing the current list of trusted domains.
+
+6.  **Type: "sync_trusted_domain" (Server Synchronizes Trusted Domains)**
+    *   **JSON Structure:**
+        ```json
+        {
+          "type": "sync_trusted_domain",
+          "domains": ["domain1.com", "domain2.com"]
+        }
+        ```
+    *   **WiFiDog Action:** Clears the existing trusted domains list and replaces it with the domains provided in the `domains` array.
 ```
