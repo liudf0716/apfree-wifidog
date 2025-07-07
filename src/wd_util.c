@@ -1531,6 +1531,47 @@ cleanup:
 }
 
 int
+uci_add_list_value(const char *package, const char *section, const char *option, const char *value)
+{
+    struct uci_context *ctx;
+    struct uci_ptr ptr;
+    int ret = UCI_OK;
+
+    ctx = uci_alloc_context();
+    if (!ctx) {
+        return -1;
+    }
+
+    char str[256];
+    snprintf(str, sizeof(str), "%s.%s.%s", package, section, option);
+
+    if (uci_lookup_ptr(ctx, &ptr, str, true) != UCI_OK) {
+        ret = -1;
+        goto cleanup;
+    }
+
+    ptr.value = value;
+
+    if (uci_add_list(ctx, &ptr) != UCI_OK) {
+        ret = -1;
+        goto cleanup;
+    }
+
+    if (uci_save(ctx, ptr.p) != UCI_OK) {
+        ret = -1;
+        goto cleanup;
+    }
+
+    if (uci_commit(ctx, &ptr.p, false) != UCI_OK) {
+        ret = -1;
+    }
+
+cleanup:
+    uci_free_context(ctx);
+    return ret;
+}
+
+int
 uci_set_value(const char *package, const char *section, const char *option, const char *value)
 {
     struct uci_context *ctx;
