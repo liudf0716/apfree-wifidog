@@ -381,8 +381,6 @@ int main() {
     openlog("event-daemon", LOG_PID | LOG_CONS | LOG_PERROR, LOG_DAEMON);
     
     printf("Starting event_daemon (PID: %d)\n", getpid());
-    syslog(LOG_INFO, "Starting event_daemon (PID: %d)", getpid());
-
 
     // Signal handling
     signal(SIGINT, sigint_handler);
@@ -391,7 +389,6 @@ int main() {
     // Parse configuration from UCI
     if (parse_wifidogx_config() != 0) {
         fprintf(stderr, "Warning: Failed to parse wifidogx config, using defaults\n");
-        syslog(LOG_WARNING, "Failed to parse wifidogx config, using defaults");
     }
 
     // Try to find the pinned ring buffer map from already loaded aw-bpf program
@@ -399,7 +396,6 @@ int main() {
     map_fd = bpf_obj_get("/sys/fs/bpf/tc/globals/session_events_map");
     if (map_fd < 0) {
         fprintf(stderr, "Failed to get BPF map: %s\n", strerror(errno));
-        syslog(LOG_ERR, "Failed to get BPF map: %s", strerror(errno));
         goto cleanup_syslog;
     }
 
@@ -407,13 +403,11 @@ int main() {
     rb = ring_buffer__new(map_fd, handle_event, NULL, NULL);
     if (!rb) {
         fprintf(stderr, "Failed to create ring buffer\n");
-        syslog(LOG_ERR, "Failed to create ring buffer");
         close(map_fd);
         goto cleanup_syslog;
     }
 
     printf("Event daemon started successfully, monitoring events...\n");
-    syslog(LOG_INFO, "Event daemon started successfully, monitoring events");
 
     while (!exiting) {
         // Poll with a timeout. ring_buffer__poll returns number of records consumed or negative on error.
@@ -424,7 +418,6 @@ int main() {
                 continue;
             } else {
                 fprintf(stderr, "Error polling ring buffer: %d\n", ret);
-                syslog(LOG_ERR, "Error polling ring buffer: %d", ret);
                 break;
             }
         }
@@ -433,7 +426,6 @@ int main() {
     }
 
     printf("Event daemon shutting down...\n");
-    syslog(LOG_INFO, "Event daemon shutting down");
 
     ring_buffer__free(rb);
     if (map_fd >= 0) {
