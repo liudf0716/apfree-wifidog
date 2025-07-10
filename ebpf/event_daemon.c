@@ -293,53 +293,95 @@ static void sigint_handler(int sig) {
     exiting = 1;
 }
 
+#define PID_FILE "/var/run/event_daemon.pid"
+
+/**
+ * @brief Check if another instance of event_daemon is already running using pid file
+ * @return 1 if another instance is running, 0 if not, -1 on error
+ */
+static int check_existing_process(void) {
+    FILE *pid_file;
+    pid_t existing_pid;
+    char proc_path[64];
+    
+    // Try to open existing pid file
+    pid_file = fopen(PID_FILE, "r");
+    if (pid_file == NULL) {
+        // No pid file exists, so no instance is running
+        return 0;
+    }
+    
+    // Read the PID from the file
+    if (fscanf(pid_file, "%d", &existing_pid) != 1) {
+        fclose(pid_file);
+        // Invalid pid file, remove it
+        unlink(PID_FILE);
+        return 0;
+    }
+    fclose(pid_file);
+    
+    // Check if the process with this PID actually exists
+    snprintf(proc_path, sizeof(proc_path), "/proc/%d", existing_pid);
+    if (access(proc_path, F_OK) == 0) {
+        // Process exists
+        fprintf(stderr, "Another event_daemon process (PID: %d) is already running\n", existing_pid);
+        return 1;
+    } else {
+        // Process doesn't exist, remove stale pid file
+        unlink(PID_FILE);
+        return 0;
+    }
+}
+
+/**
+ * @brief Create pid file for current process
+ * @return 0 on success, -1 on error
+ */
+static int create_pid_file(void) {
+    FILE *pid_file;
+    
+    pid_file = fopen(PID_FILE, "w");
+    if (pid_file == NULL) {
+        fprintf(stderr, "Failed to create pid file %s: %s\n", PID_FILE, strerror(errno));
+        return -1;
+    }
+    
+    fprintf(pid_file, "%d\n", getpid());
+    fclose(pid_file);
+    
+    return 0;
+}
+
+/**
+ * @brief Remove pid file
+ */
+static void remove_pid_file(void) {
+    unlink(PID_FILE);
+}
+
 int main() {
     struct ring_buffer *rb = NULL;
     int map_fd;
-    pid_t pid;
-
-    // Open syslog before forking to catch early errors, or after fork in child for correct PID.
-    // For now, keeping it here. The PID logged will be the parent's if it's here.
-    // Alternatively, move openlog() after the fork in the child process.
-    openlog("event-daemon", LOG_PID | LOG_CONS, LOG_DAEMON); // Changed ident slightly
-
-    // Fork off the parent process
-    pid = fork();
-    if (pid < 0) {
+    
+    // Check if another instance is already running
+    int check_result = check_existing_process();
+    if (check_result == 1) {
+        fprintf(stderr, "Exiting: Another event_daemon instance is already running\n");
         exit(EXIT_FAILURE);
-    }
-    // If we got a good PID, then we can exit the parent process.
-    if (pid > 0) {
-        exit(EXIT_SUCCESS);
+    } else if (check_result == -1) {
+        fprintf(stderr, "Warning: Failed to check for existing processes\n");
     }
 
-    // Change the file mode mask
-    umask(0); // Clear file mode creation mask
-
-    // Create a new SID for the child process
-    if (setsid() < 0) {
-        exit(EXIT_FAILURE);
+    // Create pid file
+    if (create_pid_file() != 0) {
+        fprintf(stderr, "Failed to create pid file, continuing anyway...\n");
     }
 
-    // Change the current working directory
-    if ((chdir("/")) < 0) {
-        exit(EXIT_FAILURE);
-    }
-
-    // Close out the standard file descriptors
-    close(STDIN_FILENO);
-    close(STDOUT_FILENO);
-    close(STDERR_FILENO);
-
-    // Redirect standard file descriptors to /dev/null
-    // Note: Some daemons open them to /dev/null explicitly.
-    // Here, we are just closing them. For robust redirection:
-    int fd0 = open("/dev/null", O_RDWR); // stdin
-    int fd1 = open("/dev/null", O_RDWR); // stdout
-    int fd2 = open("/dev/null", O_RDWR); // stderr
-    if (fd0 == -1 || fd1 == -1 || fd2 == -1) {
-         // Not exiting here, as syslog might still work if it was opened before redirection.
-    }
+    // Initialize logging (no longer daemonized, so we can use both stderr and syslog)
+    openlog("event-daemon", LOG_PID | LOG_CONS | LOG_PERROR, LOG_DAEMON);
+    
+    printf("Starting event_daemon (PID: %d)\n", getpid());
+    syslog(LOG_INFO, "Starting event_daemon (PID: %d)", getpid());
 
 
     // Signal handling
@@ -348,6 +390,7 @@ int main() {
 
     // Parse configuration from UCI
     if (parse_wifidogx_config() != 0) {
+        fprintf(stderr, "Warning: Failed to parse wifidogx config, using defaults\n");
         syslog(LOG_WARNING, "Failed to parse wifidogx config, using defaults");
     }
 
@@ -355,15 +398,22 @@ int main() {
     // The map should be pinned at /sys/fs/bpf/session_events_map if aw-bpf is loaded
     map_fd = bpf_obj_get("/sys/fs/bpf/tc/globals/session_events_map");
     if (map_fd < 0) {
+        fprintf(stderr, "Failed to get BPF map: %s\n", strerror(errno));
+        syslog(LOG_ERR, "Failed to get BPF map: %s", strerror(errno));
         goto cleanup_syslog;
     }
 
     // Create ring buffer
     rb = ring_buffer__new(map_fd, handle_event, NULL, NULL);
     if (!rb) {
+        fprintf(stderr, "Failed to create ring buffer\n");
+        syslog(LOG_ERR, "Failed to create ring buffer");
         close(map_fd);
         goto cleanup_syslog;
     }
+
+    printf("Event daemon started successfully, monitoring events...\n");
+    syslog(LOG_INFO, "Event daemon started successfully, monitoring events");
 
     while (!exiting) {
         // Poll with a timeout. ring_buffer__poll returns number of records consumed or negative on error.
@@ -373,7 +423,8 @@ int main() {
                 // Interrupted by signal, this is expected
                 continue;
             } else {
-                // Depending on the error, you might want to break or continue
+                fprintf(stderr, "Error polling ring buffer: %d\n", ret);
+                syslog(LOG_ERR, "Error polling ring buffer: %d", ret);
                 break;
             }
         }
@@ -381,11 +432,18 @@ int main() {
         // ret > 0 means successfully processed events
     }
 
+    printf("Event daemon shutting down...\n");
+    syslog(LOG_INFO, "Event daemon shutting down");
+
     ring_buffer__free(rb);
     if (map_fd >= 0) {
         close(map_fd);
     }
-cleanup_syslog: // New label for cleanup before closelog
+    
+    // Clean up pid file
+    remove_pid_file();
+    
+cleanup_syslog:
     closelog();
-    return 0; // Should be EXIT_SUCCESS or EXIT_FAILURE based on outcome
+    return 0;
 }

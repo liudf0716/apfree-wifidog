@@ -43,7 +43,7 @@ aw-bpfctl: aw-bpfctl.c
 
 # Event daemon compilation
 event_daemon: event_daemon.c
-	$(CC) -O2 $(CFLAGS) -o $@ $< -lbpf -lelf -lpthread $(LDFLAGS)
+	$(CC) -O2 $(CFLAGS) -o $@ $< -lbpf -lelf -lpthread -luci $(LDFLAGS)
 
 # Test program for xdpi-bpf kernel function
 test_xdpi: test_xdpi-bpf.c
