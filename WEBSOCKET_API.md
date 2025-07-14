@@ -284,9 +284,50 @@ Server initiates firmware upgrade on the device.
 
 ---
 
-### 7. Update Device Info
+### 7. Device Reboot
 
-#### 7.1 Update Device Info Request (Server → Device)
+#### 7.1 Reboot Device Request (Server → Device)
+Server requests an immediate device reboot for maintenance or configuration changes.
+
+**Request:**
+```json
+{
+  "type": "reboot_device"
+}
+```
+
+**Success Behavior:**
+- Device begins reboot process immediately
+- No response is sent back to server as the device shuts down
+- WebSocket connection is terminated by system shutdown
+- All running processes and network connections will be terminated
+
+**Error Response (Device → Server):**
+Only sent if the reboot command fails to execute:
+```json
+{
+  "type": "reboot_device_error", 
+  "error": "Failed to execute reboot command"
+}
+```
+
+**Important Notes:**
+- This is a privileged operation requiring root system access
+- All unsaved data and active connections will be lost
+- Device follows normal boot sequence after restart
+- Use with caution as it interrupts all ongoing operations
+- Should only be used by authenticated management connections
+
+**Security Considerations:**
+- Implement proper authorization checks before processing reboot requests
+- Consider rate limiting to prevent abuse
+- Log all reboot requests for audit purposes
+
+---
+
+### 8. Update Device Info
+
+#### 8.1 Update Device Info Request (Server → Device)
 Server requests to update the device's information.
 
 **Request:**
@@ -322,11 +363,11 @@ Server requests to update the device's information.
 
 ---
 
-### 7. Domain Management
+### 9. Domain Management
 
 Domain management functionality allows dynamic management of trusted domain lists through WebSocket connections, including exact-match domains and wildcard domains. Network traffic to these domains can pass through the firewall without user authentication.
 
-#### 7.1 Synchronize Trusted Domains List (Server → Device)
+#### 9.1 Synchronize Trusted Domains List (Server → Device)
 
 Completely replaces the current trusted domains list.
 
@@ -357,7 +398,7 @@ Completely replaces the current trusted domains list.
 - Updates UCI configuration for persistence
 - Changes take effect immediately
 
-#### 7.2 Get Trusted Domains List (Server → Device)
+#### 9.2 Get Trusted Domains List (Server → Device)
 
 Retrieves the complete list of currently configured trusted domains.
 
@@ -385,7 +426,7 @@ Retrieves the complete list of currently configured trusted domains.
 - Returns empty array if no domains are configured
 - Domain order in response may not match configuration order
 
-#### 7.3 Synchronize Trusted Wildcard Domains List (Server → Device)
+#### 9.3 Synchronize Trusted Wildcard Domains List (Server → Device)
 
 Completely replaces the current trusted wildcard domains list.
 
@@ -423,7 +464,7 @@ Completely replaces the current trusted wildcard domains list.
 - `*.github.io` - matches username.github.io, project.github.io, etc.
 - `*.googleapis.com` - matches maps.googleapis.com, fonts.googleapis.com, etc.
 
-#### 7.4 Get Trusted Wildcard Domains List (Server → Device)
+#### 9.4 Get Trusted Wildcard Domains List (Server → Device)
 
 Retrieves the complete list of currently configured trusted wildcard domains.
 

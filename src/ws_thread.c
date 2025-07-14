@@ -102,6 +102,7 @@ static void handle_sync_trusted_domain_request(json_object *j_req, struct buffer
 static void handle_get_trusted_domains_request(json_object *j_req, struct bufferevent *bev);
 static void handle_get_trusted_wildcard_domains_request(json_object *j_req, struct bufferevent *bev);
 static void handle_sync_trusted_wildcard_domains_request(json_object *j_req, struct bufferevent *bev);
+static void handle_reboot_device_request(json_object *j_req, struct bufferevent *bev);
 static void cleanup_ws_connection(void);
 static void reconnect_websocket(void);
 static void scheduled_reconnect_cb(evutil_socket_t fd, short events, void *arg);
@@ -660,6 +661,72 @@ static void handle_sync_trusted_wildcard_domains_request(json_object *j_req, str
 }
 
 /**
+ * @brief Handles a request to reboot the device.
+ *
+ * This function is called by process_ws_msg() when a "reboot_device"
+ * message is received. It executes the system reboot command to restart
+ * the device. This is typically used for remote device management,
+ * firmware updates, or configuration changes that require a restart.
+ *
+ * Request format:
+ * {
+ *   "type": "reboot_device"
+ * }
+ *
+ * Success behavior:
+ * - Device immediately begins reboot process
+ * - No response is sent back as the device shuts down
+ * - WebSocket connection is terminated by system shutdown
+ *
+ * Error response (if reboot command fails):
+ * {
+ *   "type": "reboot_device_error",
+ *   "error": "Failed to execute reboot command"
+ * }
+ *
+ * Security considerations:
+ * - This is a privileged operation that should only be allowed for
+ *   authenticated and authorized management connections
+ * - The reboot command requires root privileges to execute
+ * - All running processes and network connections will be terminated
+ *
+ * Implementation details:
+ * - Uses system("reboot") to trigger immediate device restart
+ * - On success, the device will shut down within seconds
+ * - All unsaved data and active connections will be lost
+ * - Boot process follows normal system startup sequence
+ *
+ * @param j_req The incoming JSON request object. The request content is not
+ *              used for this operation as no parameters are required, but
+ *              the parameter is included for API consistency across handlers.
+ * @param bev The bufferevent associated with the WebSocket connection, used
+ *            for sending error responses if the reboot command fails.
+ *
+ * @note This function will cause the device to restart immediately on success
+ * @note Use with caution as it will interrupt all ongoing operations
+ * @note The WebSocket connection will be forcibly closed during reboot
+ */
+static void handle_reboot_device_request(json_object *j_req, struct bufferevent *bev) {
+    debug(LOG_INFO, "Reboot device request received");
+
+	// Execute the reboot command
+	if (system("reboot") != 0) {
+		debug(LOG_ERR, "Failed to execute reboot command");
+		// Optionally, send an error response back to the client
+		json_object *j_response = json_object_new_object();
+		json_object_object_add(j_response, "type", json_object_new_string("reboot_device_error"));
+		json_object_object_add(j_response, "error", json_object_new_string("Failed to execute reboot command"));
+		const char *response_str = json_object_to_json_string(j_response);
+		ws_send(bufferevent_get_output(bev), response_str, strlen(response_str), TEXT_FRAME);
+		json_object_put(j_response);
+		return;
+	}
+
+	// No response sent back as the device will reboot immediately
+	debug(LOG_INFO, "Device is rebooting now");
+}
+
+/**
  * @brief Generates the Sec-WebSocket-Accept header value for WebSocket handshake
  *
  * This function implements the WebSocket handshake process by:
@@ -1122,6 +1189,10 @@ start_ws_heartbeat(struct bufferevent *b_ws)
  * - "get_trusted_wildcard_domains": Retrieves the current list of wildcard domains.
  *                                   Responds with "get_trusted_wildcard_domains_response"
  *                                   containing an array of wildcard patterns.
+ * - "reboot_device": Handles device reboot requests. Executes system reboot command
+ *                    to restart the device immediately. No response is sent on success
+ *                    as the device shuts down. Responds with "reboot_device_error" 
+ *                    if the reboot command fails to execute.
  *
  * @param bev The bufferevent associated with the WebSocket connection,
  *            passed to message handlers for sending responses.
@@ -1171,6 +1242,8 @@ process_ws_msg(struct bufferevent *bev, const char *msg)
 		handle_sync_trusted_wildcard_domains_request(jobj, bev);
 	} else if (!strcmp(type_str, "get_trusted_wildcard_domains")) {
 		handle_get_trusted_wildcard_domains_request(jobj, bev);
+	} else if (!strcmp(type_str, "reboot_device")) {
+		handle_reboot_device_request(jobj, bev);
 	} else {
 		debug(LOG_ERR, "Unknown message type: %s", type_str);
 	}
