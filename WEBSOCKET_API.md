@@ -78,7 +78,7 @@ Sent every 60 seconds to maintain connection and sync gateway states.
   "gateway": [
     {
       "gw_id": "<gateway_id>",
-      "auth_mode": <new_auth_mode>
+      "auth_mode": "<new_auth_mode>"
     }
   ]
 }
@@ -363,11 +363,85 @@ Server requests to update the device's information.
 
 ---
 
-### 9. Domain Management
+### 9. Wi-Fi Information
+
+#### 9.1 Get Wi-Fi Info Request (Server → Device)
+Server requests current Wi-Fi information from the device.
+
+**Request:**
+```json
+{
+  "type": "get_wifi_info"
+}
+```
+
+**Success Response (Device → Server):**
+```json
+{
+  "type": "get_wifi_info_response",
+  "data": {
+    "default_radio0": {
+      "ssid": "OpenWrt",
+      "mesh_id": "chawrt-aw-mesh"
+    },
+    "default_radio1": {
+      "ssid": "OpenWrt",
+      "mesh_id": "chawrt-aw-mesh"
+    }
+  }
+}
+```
+
+**Error Response (Device → Server):**
+```json
+{
+  "type": "get_wifi_info_error",
+  "error": "Failed to execute command"
+}
+```
+
+#### 9.2 Set Wi-Fi Info Request (Server → Device)
+Server requests to update the device's Wi-Fi information.
+
+**Request:**
+```json
+{
+  "type": "set_wifi_info",
+  "data": {
+    "default_radio0": {
+      "ssid": "new_ssid",
+      "mesh_id": "new_mesh_id"
+    }
+  }
+}
+```
+
+**Success Response (Device → Server):**
+```json
+{
+  "type": "set_wifi_info_response",
+  "data": {
+    "status": "success",
+    "message": "Wi-Fi info updated successfully"
+  }
+}
+```
+
+**Error Response (Device → Server):**
+```json
+{
+  "type": "set_wifi_info_error",
+  "error": "Failed to execute command"
+}
+```
+
+---
+
+### 10. Domain Management
 
 Domain management functionality allows dynamic management of trusted domain lists through WebSocket connections, including exact-match domains and wildcard domains. Network traffic to these domains can pass through the firewall without user authentication.
 
-#### 9.1 Synchronize Trusted Domains List (Server → Device)
+#### 10.1 Synchronize Trusted Domains List (Server → Device)
 
 Completely replaces the current trusted domains list.
 
@@ -398,7 +472,7 @@ Completely replaces the current trusted domains list.
 - Updates UCI configuration for persistence
 - Changes take effect immediately
 
-#### 9.2 Get Trusted Domains List (Server → Device)
+#### 10.2 Get Trusted Domains List (Server → Device)
 
 Retrieves the complete list of currently configured trusted domains.
 
@@ -426,7 +500,7 @@ Retrieves the complete list of currently configured trusted domains.
 - Returns empty array if no domains are configured
 - Domain order in response may not match configuration order
 
-#### 9.3 Synchronize Trusted Wildcard Domains List (Server → Device)
+#### 10.3 Synchronize Trusted Wildcard Domains List (Server → Device)
 
 Completely replaces the current trusted wildcard domains list.
 
@@ -464,7 +538,7 @@ Completely replaces the current trusted wildcard domains list.
 - `*.github.io` - matches username.github.io, project.github.io, etc.
 - `*.googleapis.com` - matches maps.googleapis.com, fonts.googleapis.com, etc.
 
-#### 9.4 Get Trusted Wildcard Domains List (Server → Device)
+#### 10.4 Get Trusted Wildcard Domains List (Server → Device)
 
 Retrieves the complete list of currently configured trusted wildcard domains.
 
@@ -526,4 +600,5 @@ Retrieves the complete list of currently configured trusted wildcard domains.
 - Compatible with standard domain resolution mechanisms
 - Wildcard patterns depend on underlying domain resolution implementation
 - Recommend validating wildcard matching behavior in test environments
+
 ````

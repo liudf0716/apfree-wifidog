@@ -103,6 +103,8 @@ static void handle_get_trusted_domains_request(json_object *j_req, struct buffer
 static void handle_get_trusted_wildcard_domains_request(json_object *j_req, struct bufferevent *bev);
 static void handle_sync_trusted_wildcard_domains_request(json_object *j_req, struct bufferevent *bev);
 static void handle_reboot_device_request(json_object *j_req, struct bufferevent *bev);
+static void handle_get_wifi_info_request(json_object *j_req, struct bufferevent *bev);
+static void handle_set_wifi_info_request(json_object *j_req, struct bufferevent *bev);
 static void cleanup_ws_connection(void);
 static void reconnect_websocket(void);
 static void scheduled_reconnect_cb(evutil_socket_t fd, short events, void *arg);
@@ -727,8 +729,188 @@ static void handle_reboot_device_request(json_object *j_req, struct bufferevent 
 }
 
 /**
+ * @brief Handles a request to get Wi-Fi information.
+ *
+ * This function is called by process_ws_msg() when a "get_wifi_info"
+ * message is received. It executes the command "uci show wireless"
+ * to retrieve Wi-Fi details, parses the output, and sends
+ * this information back to the client in a JSON response.
+ *
+ * The JSON response format is:
+ * {
+ *   "type": "get_wifi_info_response",
+ *   "data": {
+ *     "radio0": {
+ *       "ssid": "OpenWrt",
+ *       "mesh_id": "chawrt-aw-mesh"
+ *     },
+ *     "radio1": {
+ *       "ssid": "OpenWrt",
+ *       "mesh_id": "chawrt-aw-mesh"
+ *     }
+ *   }
+ * }
+ *
+ * If the command execution fails, an error response is sent:
+ * {
+ *   "type": "get_wifi_info_error",
+ *   "error": "Failed to execute command"
+ * }
+ *
+ * @param j_req The incoming JSON request object. Currently unused for this
+ *              specific request type but included for API consistency.
+ * @param bev The bufferevent associated with the WebSocket connection, used
+ *            for sending the response.
+ */
+static void handle_get_wifi_info_request(json_object *j_req, struct bufferevent *bev) {
+    FILE *fp;
+    char buffer[256];
+    json_object *j_response = json_object_new_object();
+    json_object *j_data = json_object_new_object();
+
+    // Execute command
+    fp = popen("uci show wireless", "r");
+    if (fp == NULL) {
+        debug(LOG_ERR, "Failed to run command uci show wireless");
+        json_object_object_add(j_response, "type", json_object_new_string("get_wifi_info_error"));
+        json_object_object_add(j_response, "error", json_object_new_string("Failed to execute command"));
+        const char *response_str = json_object_to_json_string(j_response);
+        ws_send(bufferevent_get_output(bev), response_str, strlen(response_str), TEXT_FRAME);
+        json_object_put(j_response);
+        return;
+    }
+
+    // Read command output line by line
+    while (fgets(buffer, sizeof(buffer), fp) != NULL) {
+        // Remove trailing newline
+        buffer[strcspn(buffer, "\n")] = 0;
+
+        char *key = strtok(buffer, "=");
+        char *value_with_quotes = strtok(NULL, "=");
+
+        if (key && value_with_quotes) {
+            // Remove single quotes from value
+            char *value = value_with_quotes;
+            if (value[0] == '\'' && value[strlen(value) - 1] == '\'') {
+                value = value + 1;
+                value[strlen(value) - 1] = '\0';
+            }
+
+            char *section = strtok(key, ".");
+            char *option = strtok(NULL, ".");
+
+            if (section && option) {
+                json_object *j_section;
+                if (!json_object_object_get_ex(j_data, section, &j_section)) {
+                    j_section = json_object_new_object();
+                    json_object_object_add(j_data, section, j_section);
+                }
+                json_object_object_add(j_section, option, json_object_new_string(value));
+            }
+        }
+    }
+    pclose(fp);
+
+    // Construct response
+    json_object_object_add(j_response, "type", json_object_new_string("get_wifi_info_response"));
+    json_object_object_add(j_response, "data", j_data);
+
+    const char *response_str = json_object_to_json_string(j_response);
+    ws_send(bufferevent_get_output(bev), response_str, strlen(response_str), TEXT_FRAME);
+
+    // Cleanup
+    json_object_put(j_response);
+}
+
+/**
+ * @brief Handles a request to set Wi-Fi information.
+ *
+ * This function is called by process_ws_msg() when a "set_wifi_info"
+ * message is received. It executes the command "uci set"
+ * to set Wi-Fi details, and sends
+ * this information back to the client in a JSON response.
+ *
+ * The JSON request format is:
+ * {
+ *   "type": "set_wifi_info",
+ *   "data": {
+ *     "default_radio0": {
+ *       "ssid": "new_ssid",
+ *       "mesh_id": "new_mesh_id"
+ *     }
+ *   }
+ * }
+ *
+ * The JSON response format is:
+ * {
+ *   "type": "set_wifi_info_response",
+ *   "data": {
+ *     "status": "success",
+ *     "message": "Wi-Fi info updated successfully"
+ *   }
+ * }
+ *
+ * If the command execution fails, an error response is sent:
+ * {
+ *   "type": "set_wifi_info_error",
+ *   "error": "Failed to execute command"
+ * }
+ *
+ * @param j_req The incoming JSON request object.
+ * @param bev The bufferevent associated with the WebSocket connection, used
+ *            for sending the response.
+ */
+static void handle_set_wifi_info_request(json_object *j_req, struct bufferevent *bev) {
+    json_object *j_response = json_object_new_object();
+    json_object *j_data;
+
+    if (!json_object_object_get_ex(j_req, "data", &j_data)) {
+        debug(LOG_ERR, "Set wifi info request missing 'data' field");
+        json_object_object_add(j_response, "type", json_object_new_string("set_wifi_info_error"));
+        json_object_object_add(j_response, "error", json_object_new_string("Missing 'data' field"));
+        const char *response_str = json_object_to_json_string(j_response);
+        ws_send(bufferevent_get_output(bev), response_str, strlen(response_str), TEXT_FRAME);
+        json_object_put(j_response);
+        return;
+    }
+
+    json_object_object_foreach(j_data, section, j_section) {
+        json_object_object_foreach(j_section, option, j_value) {
+            uci_set_value("wireless", section, option, json_object_get_string(j_value));
+        }
+    }
+
+    // Reload wifi to apply changes
+    FILE *fp = popen("wifi reload", "r");
+    if (fp == NULL) {
+        debug(LOG_ERR, "Failed to run command wifi reload");
+        json_object_object_add(j_response, "type", json_object_new_string("set_wifi_info_error"));
+        json_object_object_add(j_response, "error", json_object_new_string("Failed to execute command"));
+        const char *response_str = json_object_to_json_string(j_response);
+        ws_send(bufferevent_get_output(bev), response_str, strlen(response_str), TEXT_FRAME);
+        json_object_put(j_response);
+        return;
+    }
+    pclose(fp);
+
+    // Construct response
+    json_object *j_resp_data = json_object_new_object();
+    json_object_object_add(j_resp_data, "status", json_object_new_string("success"));
+    json_object_object_add(j_resp_data, "message", json_object_new_string("Wi-Fi info updated successfully"));
+    json_object_object_add(j_response, "type", json_object_new_string("set_wifi_info_response"));
+    json_object_object_add(j_response, "data", j_resp_data);
+
+    const char *response_str = json_object_to_json_string(j_response);
+    ws_send(bufferevent_get_output(bev), response_str, strlen(response_str), TEXT_FRAME);
+
+    // Cleanup
+    json_object_put(j_response);
+}
+
+/**
  * @brief Generates the Sec-WebSocket-Accept header value for WebSocket handshake
  *
+
  * This function implements the WebSocket handshake process by:
  * 1. Concatenating the client's Sec-WebSocket-Key with the WebSocket GUID
  * 2. Computing the SHA-1 hash of the concatenated string
@@ -1244,6 +1426,10 @@ process_ws_msg(struct bufferevent *bev, const char *msg)
 		handle_get_trusted_wildcard_domains_request(jobj, bev);
 	} else if (!strcmp(type_str, "reboot_device")) {
 		handle_reboot_device_request(jobj, bev);
+	} else if (!strcmp(type_str, "get_wifi_info")) {
+		handle_get_wifi_info_request(jobj, bev);
+	} else if (!strcmp(type_str, "set_wifi_info")) {
+		handle_set_wifi_info_request(jobj, bev);
 	} else {
 		debug(LOG_ERR, "Unknown message type: %s", type_str);
 	}

@@ -23,6 +23,13 @@ WebSocket 连接建立时自动发送。
 {
   "type": "connect",
   "device_id": "<device_identifier>",
+  "device_info": {
+    "ap_device_id": "<ap_device_id>",
+    "ap_mac_address": "<ap_mac_address>", 
+    "ap_longitude": "<ap_longitude>",
+    "ap_latitude": "<ap_latitude>",
+    "location_id": "<location_id>"
+  },
   "gateway": [
     {
       "gw_id": "<gateway_id>",
@@ -44,6 +51,13 @@ WebSocket 连接建立时自动发送。
 {
   "type": "heartbeat",
   "device_id": "<device_identifier>",
+  "device_info": {
+    "ap_device_id": "<ap_device_id>",
+    "ap_mac_address": "<ap_mac_address>", 
+    "ap_longitude": "<ap_longitude>",
+    "ap_latitude": "<ap_latitude>",
+    "location_id": "<location_id>"
+  },
   "gateway": [
     {
       "gw_id": "<gateway_id>",
@@ -64,7 +78,7 @@ WebSocket 连接建立时自动发送。
   "gateway": [
     {
       "gw_id": "<gateway_id>",
-      "auth_mode": <new_auth_mode>
+      "auth_mode": "<new_auth_mode>"
     }
   ]
 }
@@ -349,11 +363,85 @@ WebSocket 连接建立时自动发送。
 
 ---
 
-### 9. 域名管理
+### 9. Wi-Fi 信息
+
+#### 9.1 获取 Wi-Fi 信息请求 (服务器 → 设备)
+服务器请求获取设备当前的 Wi-Fi 信息。
+
+**请求:**
+```json
+{
+  "type": "get_wifi_info"
+}
+```
+
+**成功响应 (设备 → 服务器):**
+```json
+{
+  "type": "get_wifi_info_response",
+  "data": {
+    "default_radio0": {
+      "ssid": "OpenWrt",
+      "mesh_id": "chawrt-aw-mesh"
+    },
+    "default_radio1": {
+      "ssid": "OpenWrt",
+      "mesh_id": "chawrt-aw-mesh"
+    }
+  }
+}
+```
+
+**错误响应 (设备 → 服务器):**
+```json
+{
+  "type": "get_wifi_info_error",
+  "error": "执行命令失败"
+}
+```
+
+#### 9.2 设置 Wi-Fi 信息请求 (服务器 → 设备)
+服务器请求更新设备的 Wi-Fi 信息。
+
+**请求:**
+```json
+{
+  "type": "set_wifi_info",
+  "data": {
+    "default_radio0": {
+      "ssid": "new_ssid",
+      "mesh_id": "new_mesh_id"
+    }
+  }
+}
+```
+
+**成功响应 (设备 → 服务器):**
+```json
+{
+  "type": "set_wifi_info_response",
+  "data": {
+    "status": "success",
+    "message": "Wi-Fi 信息更新成功"
+  }
+}
+```
+
+**错误响应 (设备 → 服务器):**
+```json
+{
+  "type": "set_wifi_info_error",
+  "error": "执行命令失败"
+}
+```
+
+---
+
+### 10. 域名管理
 
 域名管理功能允许通过 WebSocket 连接动态管理受信任的域名列表，包括精确匹配的域名和通配符域名。这些域名的网络流量可以在不需要用户认证的情况下通过防火墙。
 
-#### 8.1 同步受信任域名列表 (服务器 → 设备)
+#### 10.1 同步受信任域名列表 (服务器 → 设备)
 
 完全替换当前的受信任域名列表。
 
@@ -374,7 +462,7 @@ WebSocket 连接建立时自动发送。
 {
   "type": "sync_trusted_domain_response",
   "status": "success",
-  "message": "Trusted domains synchronized successfully"
+  "message": "受信任域名同步成功"
 }
 ```
 
@@ -384,7 +472,7 @@ WebSocket 连接建立时自动发送。
 - 更新 UCI 配置以保持持久化
 - 更改立即生效
 
-#### 8.2 获取受信任域名列表 (服务器 → 设备)
+#### 10.2 获取受信任域名列表 (服务器 → 设备)
 
 获取当前配置的所有受信任域名。
 
@@ -412,7 +500,7 @@ WebSocket 连接建立时自动发送。
 - 如果没有配置域名，返回空数组
 - 响应中的域名顺序可能与配置顺序不同
 
-#### 8.3 同步受信任通配符域名列表 (服务器 → 设备)
+#### 10.3 同步受信任通配符域名列表 (服务器 → 设备)
 
 完全替换当前的受信任通配符域名列表。
 
@@ -434,7 +522,7 @@ WebSocket 连接建立时自动发送。
 {
   "type": "sync_trusted_wildcard_domains_response",
   "status": "success", 
-  "message": "Trusted wildcard domains synchronized successfully"
+  "message": "受信任通配符域名同步成功"
 }
 ```
 
@@ -450,7 +538,7 @@ WebSocket 连接建立时自动发送。
 - `*.github.io` - 匹配 username.github.io, project.github.io 等  
 - `*.googleapis.com` - 匹配 maps.googleapis.com, fonts.googleapis.com 等
 
-#### 8.4 获取受信任通配符域名列表 (服务器 → 设备)
+#### 10.4 获取受信任通配符域名列表 (服务器 → 设备)
 
 获取当前配置的所有受信任通配符域名。
 
@@ -500,6 +588,18 @@ WebSocket 连接建立时自动发送。
 - 域名匹配在网络流量处理中频繁使用
 - 建议将最常用的域名放在列表前面
 - 通配符匹配比精确匹配消耗更多资源
+
+**使用建议:**
+1. **批量更新**: 使用同步接口一次性更新所有域名，避免频繁的单独更新
+2. **通配符使用**: 对于有很多子域名的服务，使用通配符域名更高效
+3. **监控和验证**: 使用获取接口来验证更新后的配置
+4. **备份和恢复**: 重要的域名配置应定期备份到外部系统
+
+**兼容性:**
+- 支持 IPv4 和 IPv6 网络
+- 兼容标准的域名解析机制
+- 通配符模式依赖于底层的域名解析实现
+- 建议在测试环境中验证通配符匹配行为
 
 ---
 
