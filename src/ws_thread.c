@@ -110,6 +110,17 @@ static void reconnect_websocket(void);
 static void scheduled_reconnect_cb(evutil_socket_t fd, short events, void *arg);
 static void ws_send(struct evbuffer *buf, const char *msg, const size_t len, enum WebSocketFrameType frame_type);
 
+/* Helper structure for Wi-Fi interface information */
+struct wifi_interface_info {
+    char interface_name[64];
+    char device[16];
+    char mode[16];
+};
+
+/* Helper function for setting Wi-Fi configuration */
+static int set_radio_wifi_config(json_object *j_radio, const char *target_device,
+                                 struct wifi_interface_info *interfaces, int interface_count);
+
 /**
  * @brief Generates a secure WebSocket key for WebSocket handshake
  *
@@ -736,17 +747,26 @@ static void handle_reboot_device_request(json_object *j_req, struct bufferevent 
  * to retrieve Wi-Fi details, parses the output, and sends
  * this information back to the client in a JSON response.
  *
+ * The function extracts 2.4G and 5G radio information including:
+ * - SSID and Key from AP interfaces (mode='ap')
+ * - Mesh ID and Mesh Key from mesh interfaces (mode='mesh')
+ * - Supports any interface names, not just default_radio0/1
+ *
  * The JSON response format is:
  * {
  *   "type": "get_wifi_info_response",
  *   "data": {
  *     "radio0": {
- *       "ssid": "OpenWrt",
- *       "mesh_id": "chawrt-aw-mesh"
+ *       "ssid": "OpenWrt_2G",
+ *       "key": "password123",
+ *       "mesh_id": "mesh_network_2g",
+ *       "mesh_key": "mesh_password123"
  *     },
  *     "radio1": {
- *       "ssid": "OpenWrt",
- *       "mesh_id": "chawrt-aw-mesh"
+ *       "ssid": "OpenWrt_5G", 
+ *       "key": "password123",
+ *       "mesh_id": "mesh_network_5g",
+ *       "mesh_key": "mesh_password123"
  *     }
  *   }
  * }
@@ -764,9 +784,21 @@ static void handle_reboot_device_request(json_object *j_req, struct bufferevent 
  */
 static void handle_get_wifi_info_request(json_object *j_req, struct bufferevent *bev) {
     FILE *fp;
-    char buffer[256];
+    char buffer[512];
     json_object *j_response = json_object_new_object();
     json_object *j_data = json_object_new_object();
+    json_object *j_radio0 = json_object_new_object();
+    json_object *j_radio1 = json_object_new_object();
+
+    // Temporary storage for interface information
+    struct {
+        char *device;
+        char *mode;
+        char *ssid;
+        char *key;
+        char *mesh_id;
+    } interfaces[32];
+    int interface_count = 0;
 
     // Execute command
     fp = popen("uci show wireless", "r");
@@ -779,6 +811,9 @@ static void handle_get_wifi_info_request(json_object *j_req, struct bufferevent 
         json_object_put(j_response);
         return;
     }
+
+    // Initialize interface storage
+    memset(interfaces, 0, sizeof(interfaces));
 
     // Read command output line by line
     while (fgets(buffer, sizeof(buffer), fp) != NULL) {
@@ -796,20 +831,118 @@ static void handle_get_wifi_info_request(json_object *j_req, struct bufferevent 
                 value[strlen(value) - 1] = '\0';
             }
 
-            char *section = strtok(key, ".");
-            char *option = strtok(NULL, ".");
-
-            if (section && option) {
-                json_object *j_section;
-                if (!json_object_object_get_ex(j_data, section, &j_section)) {
-                    j_section = json_object_new_object();
-                    json_object_object_add(j_data, section, j_section);
+            // Parse interface information
+            // Format: wireless.<interface_name>.<option>
+            if (strstr(key, "wireless.") == key) {
+                char *key_copy = strdup(key);
+                char *parts[4];
+                int part_count = 0;
+                
+                char *token = strtok(key_copy, ".");
+                while (token && part_count < 4) {
+                    parts[part_count++] = token;
+                    token = strtok(NULL, ".");
                 }
-                json_object_object_add(j_section, option, json_object_new_string(value));
+
+                if (part_count >= 3) {
+                    char *interface_name = parts[1];
+                    char *option = parts[2];
+
+                    // Find or create interface entry
+                    int idx = -1;
+                    for (int i = 0; i < interface_count; i++) {
+                        if (interfaces[i].device && strcmp(interfaces[i].device, interface_name) == 0) {
+                            idx = i;
+                            break;
+                        }
+                    }
+                    if (idx == -1 && interface_count < 32) {
+                        idx = interface_count++;
+                        interfaces[idx].device = strdup(interface_name);
+                    }
+
+                    if (idx >= 0) {
+                        if (strcmp(option, "device") == 0) {
+                            // Skip device lines, we care about wifi-iface sections
+                        } else if (strcmp(option, "mode") == 0) {
+                            if (interfaces[idx].mode) free(interfaces[idx].mode);
+                            interfaces[idx].mode = (strlen(value) > 0) ? strdup(value) : NULL;
+                        } else if (strcmp(option, "ssid") == 0) {
+                            if (interfaces[idx].ssid) free(interfaces[idx].ssid);
+                            interfaces[idx].ssid = (strlen(value) > 0) ? strdup(value) : NULL;
+                        } else if (strcmp(option, "key") == 0) {
+                            if (interfaces[idx].key) free(interfaces[idx].key);
+                            interfaces[idx].key = (strlen(value) > 0) ? strdup(value) : NULL;
+                        } else if (strcmp(option, "mesh_id") == 0) {
+                            if (interfaces[idx].mesh_id) free(interfaces[idx].mesh_id);
+                            interfaces[idx].mesh_id = (strlen(value) > 0) ? strdup(value) : NULL;
+                        }
+                    }
+                }
+                free(key_copy);
             }
         }
     }
     pclose(fp);
+
+    // Process interfaces and categorize by radio
+    for (int i = 0; i < interface_count; i++) {
+        if (!interfaces[i].device || !interfaces[i].mode) continue;
+
+        // Determine which radio this interface belongs to
+        json_object *target_radio = NULL;
+        
+        // Check device assignment through a separate uci call
+        char cmd[256];
+        snprintf(cmd, sizeof(cmd), "uci get wireless.%s.device 2>/dev/null", interfaces[i].device);
+        FILE *device_fp = popen(cmd, "r");
+        if (device_fp) {
+            char device_buffer[64];
+            if (fgets(device_buffer, sizeof(device_buffer), device_fp)) {
+                device_buffer[strcspn(device_buffer, "\n")] = 0;
+                if (strcmp(device_buffer, "radio0") == 0) {
+                    target_radio = j_radio0;
+                } else if (strcmp(device_buffer, "radio1") == 0) {
+                    target_radio = j_radio1;
+                }
+            }
+            pclose(device_fp);
+        }
+
+        if (!target_radio) continue;
+
+        // Add interface data based on mode
+        if (strcmp(interfaces[i].mode, "ap") == 0) {
+            // AP interface - add SSID and key
+            if (interfaces[i].ssid) {
+                json_object_object_add(target_radio, "ssid", json_object_new_string(interfaces[i].ssid));
+            }
+            if (interfaces[i].key) {
+                json_object_object_add(target_radio, "key", json_object_new_string(interfaces[i].key));
+            }
+        } else if (strcmp(interfaces[i].mode, "mesh") == 0) {
+            // Mesh interface - add mesh_id and mesh_key
+            if (interfaces[i].mesh_id) {
+                json_object_object_add(target_radio, "mesh_id", json_object_new_string(interfaces[i].mesh_id));
+            }
+            if (interfaces[i].key) {
+                json_object_object_add(target_radio, "mesh_key", json_object_new_string(interfaces[i].key));
+            }
+        }
+    }
+
+    // Cleanup interface storage
+    for (int i = 0; i < interface_count; i++) {
+        if (interfaces[i].device) free(interfaces[i].device);
+        if (interfaces[i].mode) free(interfaces[i].mode);
+        if (interfaces[i].ssid) free(interfaces[i].ssid);
+        if (interfaces[i].key) free(interfaces[i].key);
+        if (interfaces[i].mesh_id) free(interfaces[i].mesh_id);
+    }
+
+    // Add radio objects to data
+    json_object_object_add(j_data, "radio0", j_radio0);
+    json_object_object_add(j_data, "radio1", j_radio1);
 
     // Construct response
     json_object_object_add(j_response, "type", json_object_new_string("get_wifi_info_response"));
@@ -860,6 +993,161 @@ static void handle_get_wifi_info_request(json_object *j_req, struct bufferevent 
  * @param bev The bufferevent associated with the WebSocket connection, used
  *            for sending the response.
  */
+/**
+ * @brief Helper function to set Wi-Fi configuration for a specific radio device.
+ * 
+ * This function searches for interfaces belonging to the specified radio device
+ * and updates their configuration based on the interface mode (AP or mesh).
+ * 
+ * @param j_radio JSON object containing radio configuration (ssid, key, mesh_id, mesh_key)
+ * @param target_device Target radio device name (e.g., "radio0", "radio1")
+ * @param interfaces Array of interface information structures
+ * @param interface_count Number of interfaces in the array
+ * @return 0 on success, -1 on failure
+ */
+static int set_radio_wifi_config(json_object *j_radio, const char *target_device,
+                                 struct wifi_interface_info *interfaces, int interface_count) {
+    if (!j_radio || !target_device || !interfaces) {
+        return 0; // No error if no config provided
+    }
+    
+    json_object *j_ssid, *j_key, *j_mesh_id, *j_mesh_key;
+    const char *ssid = NULL, *key = NULL, *mesh_id = NULL, *mesh_key = NULL;
+    int success = 1;
+    
+    // Extract values from JSON
+    if (json_object_object_get_ex(j_radio, "ssid", &j_ssid)) {
+        ssid = json_object_get_string(j_ssid);
+        // Skip empty strings
+        if (ssid && strlen(ssid) == 0) {
+            ssid = NULL;
+        }
+    }
+    if (json_object_object_get_ex(j_radio, "key", &j_key)) {
+        key = json_object_get_string(j_key);
+        // Skip empty strings
+        if (key && strlen(key) == 0) {
+            key = NULL;
+        }
+    }
+    if (json_object_object_get_ex(j_radio, "mesh_id", &j_mesh_id)) {
+        mesh_id = json_object_get_string(j_mesh_id);
+        // Skip empty strings
+        if (mesh_id && strlen(mesh_id) == 0) {
+            mesh_id = NULL;
+        }
+    }
+    if (json_object_object_get_ex(j_radio, "mesh_key", &j_mesh_key)) {
+        mesh_key = json_object_get_string(j_mesh_key);
+        // Skip empty strings
+        if (mesh_key && strlen(mesh_key) == 0) {
+            mesh_key = NULL;
+        }
+    }
+    
+    // Find interfaces for this device and update them
+    for (int i = 0; i < interface_count; i++) {
+        if (strcmp(interfaces[i].device, target_device) == 0) {
+            if (strcmp(interfaces[i].mode, "ap") == 0) {
+                // Update AP interface
+                if (ssid) {
+                    debug(LOG_INFO, "Setting SSID for AP interface %s: %s", interfaces[i].interface_name, ssid);
+                    if (uci_set_value("wireless", interfaces[i].interface_name, "ssid", ssid) != 0) {
+                        debug(LOG_ERR, "Failed to set SSID for %s", interfaces[i].interface_name);
+                        success = 0;
+                    }
+                } else {
+                    debug(LOG_DEBUG, "Skipping empty SSID for AP interface %s", interfaces[i].interface_name);
+                }
+                if (key) {
+                    debug(LOG_INFO, "Setting key for AP interface %s", interfaces[i].interface_name);
+                    if (uci_set_value("wireless", interfaces[i].interface_name, "key", key) != 0) {
+                        debug(LOG_ERR, "Failed to set key for %s", interfaces[i].interface_name);
+                        success = 0;
+                    }
+                } else {
+                    debug(LOG_DEBUG, "Skipping empty key for AP interface %s", interfaces[i].interface_name);
+                }
+            } else if (strcmp(interfaces[i].mode, "mesh") == 0) {
+                // Update mesh interface
+                if (mesh_id) {
+                    debug(LOG_INFO, "Setting mesh_id for mesh interface %s: %s", interfaces[i].interface_name, mesh_id);
+                    if (uci_set_value("wireless", interfaces[i].interface_name, "mesh_id", mesh_id) != 0) {
+                        debug(LOG_ERR, "Failed to set mesh_id for %s", interfaces[i].interface_name);
+                        success = 0;
+                    }
+                } else {
+                    debug(LOG_DEBUG, "Skipping empty mesh_id for mesh interface %s", interfaces[i].interface_name);
+                }
+                if (mesh_key) {
+                    debug(LOG_INFO, "Setting mesh key for mesh interface %s", interfaces[i].interface_name);
+                    if (uci_set_value("wireless", interfaces[i].interface_name, "key", mesh_key) != 0) {
+                        debug(LOG_ERR, "Failed to set mesh key for %s", interfaces[i].interface_name);
+                        success = 0;
+                    }
+                } else {
+                    debug(LOG_DEBUG, "Skipping empty mesh_key for mesh interface %s", interfaces[i].interface_name);
+                }
+            }
+        }
+    }
+    
+    return success ? 0 : -1;
+}
+
+/**
+ * @brief Handles a request to set Wi-Fi information.
+ *
+ * This function is called by process_ws_msg() when a "set_wifi_info"
+ * message is received. It accepts Wi-Fi configuration data for both
+ * 2.4G and 5G radios, updates the UCI wireless configuration,
+ * and restarts the Wi-Fi to apply changes.
+ *
+ * Expected JSON request format:
+ * {
+ *   "type": "set_wifi_info",
+ *   "data": {
+ *     "radio0": {
+ *       "ssid": "New_2G_SSID",
+ *       "key": "new_password123",
+ *       "mesh_id": "new_mesh_2g",
+ *       "mesh_key": "new_mesh_password123"
+ *     },
+ *     "radio1": {
+ *       "ssid": "New_5G_SSID",
+ *       "key": "new_password123",
+ *       "mesh_id": "new_mesh_5g",
+ *       "mesh_key": "new_mesh_password123"
+ *     }
+ *   }
+ * }
+ *
+ * The function will:
+ * 1. Find the appropriate AP interfaces for each radio
+ * 2. Find the appropriate mesh interfaces for each radio  
+ * 3. Update SSID/key for AP interfaces
+ * 4. Update mesh_id/mesh_key for mesh interfaces
+ * 5. Commit UCI changes and restart Wi-Fi
+ *
+ * Success response:
+ * {
+ *   "type": "set_wifi_info_response",
+ *   "data": {
+ *     "status": "success",
+ *     "message": "Wi-Fi configuration updated successfully"
+ *   }
+ * }
+ *
+ * Error response:
+ * {
+ *   "type": "set_wifi_info_error",
+ *   "error": "Error description"
+ * }
+ *
+ * @param j_req The incoming JSON request object containing Wi-Fi config data.
+ * @param bev The bufferevent associated with the WebSocket connection, used
+ *            for sending the response.
+ */
 static void handle_set_wifi_info_request(json_object *j_req, struct bufferevent *bev) {
     json_object *j_response = json_object_new_object();
     json_object *j_data;
@@ -874,31 +1162,121 @@ static void handle_set_wifi_info_request(json_object *j_req, struct bufferevent 
         return;
     }
 
-    json_object_object_foreach(j_data, section, j_section) {
-        json_object_object_foreach(j_section, option, j_value) {
-            uci_set_value("wireless", section, option, json_object_get_string(j_value));
-        }
-    }
+    // Structure to hold interface information
+    struct wifi_interface_info interfaces[32];
+    int interface_count = 0;
 
-    // Reload wifi to apply changes
-    FILE *fp = popen("wifi reload", "r");
-    if (fp == NULL) {
-        debug(LOG_ERR, "Failed to run command wifi reload");
+    // First, discover existing interfaces and their assignments
+    FILE *fp = popen("uci show wireless | grep -E '\\.(device|mode)='", "r");
+    if (!fp) {
+        debug(LOG_ERR, "Failed to query wireless interfaces");
         json_object_object_add(j_response, "type", json_object_new_string("set_wifi_info_error"));
-        json_object_object_add(j_response, "error", json_object_new_string("Failed to execute command"));
+        json_object_object_add(j_response, "error", json_object_new_string("Failed to query wireless interfaces"));
         const char *response_str = json_object_to_json_string(j_response);
         ws_send(bufferevent_get_output(bev), response_str, strlen(response_str), TEXT_FRAME);
         json_object_put(j_response);
         return;
     }
+
+    char buffer[256];
+    while (fgets(buffer, sizeof(buffer), fp) != NULL) {
+        buffer[strcspn(buffer, "\n")] = 0;
+        
+        char *key = strtok(buffer, "=");
+        char *value_with_quotes = strtok(NULL, "=");
+        
+        if (key && value_with_quotes) {
+            char *value = value_with_quotes;
+            if (value[0] == '\'' && value[strlen(value) - 1] == '\'') {
+                value = value + 1;
+                value[strlen(value) - 1] = '\0';
+            }
+            
+            // Parse wireless.<interface>.<property>
+            if (strstr(key, "wireless.") == key) {
+                char *key_copy = strdup(key);
+                char *parts[4];
+                int part_count = 0;
+                
+                char *token = strtok(key_copy, ".");
+                while (token && part_count < 4) {
+                    parts[part_count++] = token;
+                    token = strtok(NULL, ".");
+                }
+                
+                if (part_count >= 3) {
+                    char *interface_name = parts[1];
+                    char *property = parts[2];
+                    
+                    // Find or create interface entry
+                    int idx = -1;
+                    for (int i = 0; i < interface_count; i++) {
+                        if (strcmp(interfaces[i].interface_name, interface_name) == 0) {
+                            idx = i;
+                            break;
+                        }
+                    }
+                    if (idx == -1 && interface_count < 32) {
+                        idx = interface_count++;
+                        strncpy(interfaces[idx].interface_name, interface_name, sizeof(interfaces[idx].interface_name) - 1);
+                        interfaces[idx].interface_name[sizeof(interfaces[idx].interface_name) - 1] = '\0';
+                    }
+                    
+                    if (idx >= 0) {
+                        if (strcmp(property, "device") == 0) {
+                            strncpy(interfaces[idx].device, value, sizeof(interfaces[idx].device) - 1);
+                            interfaces[idx].device[sizeof(interfaces[idx].device) - 1] = '\0';
+                        } else if (strcmp(property, "mode") == 0) {
+                            strncpy(interfaces[idx].mode, value, sizeof(interfaces[idx].mode) - 1);
+                            interfaces[idx].mode[sizeof(interfaces[idx].mode) - 1] = '\0';
+                        }
+                    }
+                }
+                free(key_copy);
+            }
+        }
+    }
     pclose(fp);
 
-    // Construct response
-    json_object *j_resp_data = json_object_new_object();
-    json_object_object_add(j_resp_data, "status", json_object_new_string("success"));
-    json_object_object_add(j_resp_data, "message", json_object_new_string("Wi-Fi info updated successfully"));
-    json_object_object_add(j_response, "type", json_object_new_string("set_wifi_info_response"));
-    json_object_object_add(j_response, "data", j_resp_data);
+    // Get radio configuration objects
+    json_object *j_radio0 = NULL, *j_radio1 = NULL;
+    json_object_object_get_ex(j_data, "radio0", &j_radio0);
+    json_object_object_get_ex(j_data, "radio1", &j_radio1);
+
+    // Set configuration for each radio
+    int success = 1;
+    if (set_radio_wifi_config(j_radio0, "radio0", interfaces, interface_count) != 0) {
+        success = 0;
+    }
+    if (set_radio_wifi_config(j_radio1, "radio1", interfaces, interface_count) != 0) {
+        success = 0;
+    }
+
+    if (success) {
+        // Reload wifi to apply changes
+        FILE *reload_fp = popen("wifi reload", "r");
+        if (reload_fp == NULL) {
+            debug(LOG_ERR, "Failed to run command wifi reload");
+            json_object_object_add(j_response, "type", json_object_new_string("set_wifi_info_error"));
+            json_object_object_add(j_response, "error", json_object_new_string("Failed to execute wifi reload"));
+            const char *response_str = json_object_to_json_string(j_response);
+            ws_send(bufferevent_get_output(bev), response_str, strlen(response_str), TEXT_FRAME);
+            json_object_put(j_response);
+            return;
+        }
+        pclose(reload_fp);
+
+        // Construct success response
+        json_object *j_resp_data = json_object_new_object();
+        json_object_object_add(j_resp_data, "status", json_object_new_string("success"));
+        json_object_object_add(j_resp_data, "message", json_object_new_string("Wi-Fi info updated successfully"));
+        json_object_object_add(j_response, "type", json_object_new_string("set_wifi_info_response"));
+        json_object_object_add(j_response, "data", j_resp_data);
+    } else {
+        // Construct error response
+        json_object_object_add(j_response, "type", json_object_new_string("set_wifi_info_error"));
+        json_object_object_add(j_response, "error", json_object_new_string("Failed to update one or more Wi-Fi settings"));
+    }
 
     const char *response_str = json_object_to_json_string(j_response);
     ws_send(bufferevent_get_output(bev), response_str, strlen(response_str), TEXT_FRAME);

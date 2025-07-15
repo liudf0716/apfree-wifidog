@@ -380,17 +380,31 @@ WebSocket 连接建立时自动发送。
 {
   "type": "get_wifi_info_response",
   "data": {
-    "default_radio0": {
-      "ssid": "OpenWrt",
-      "mesh_id": "chawrt-aw-mesh"
+    "radio0": {
+      "ssid": "OpenWrt_2G",
+      "key": "password123",
+      "mesh_id": "mesh_network_2g",
+      "mesh_key": "mesh_password123"
     },
-    "default_radio1": {
-      "ssid": "OpenWrt",
-      "mesh_id": "chawrt-aw-mesh"
+    "radio1": {
+      "ssid": "OpenWrt_5G",
+      "key": "password456",
+      "mesh_id": "mesh_network_5g",
+      "mesh_key": "mesh_password456"
     }
   }
 }
 ```
+
+**响应字段:**
+- `radio0`: 2.4GHz 频段配置
+  - `ssid`: AP 接口的 SSID (如果 radio0 存在 AP 接口)
+  - `key`: AP 接口的密码/密钥
+  - `mesh_id`: Mesh 接口的网络 ID (如果 radio0 存在 mesh 接口)
+  - `mesh_key`: Mesh 接口的密码/密钥
+- `radio1`: 5GHz 频段配置 (结构与 radio0 相同)
+
+**注意:** 响应中只包含非空值。如果某个字段（ssid、key、mesh_id、mesh_key）为空或未配置，它将完全从 JSON 响应中省略。
 
 **错误响应 (设备 → 服务器):**
 ```json
@@ -401,20 +415,46 @@ WebSocket 连接建立时自动发送。
 ```
 
 #### 9.2 设置 Wi-Fi 信息请求 (服务器 → 设备)
-服务器请求更新设备的 Wi-Fi 信息。
+服务器请求更新设备的 Wi-Fi 信息。设备会自动查找每个无线电的适当接口并更新其配置。
 
 **请求:**
 ```json
 {
   "type": "set_wifi_info",
   "data": {
-    "default_radio0": {
-      "ssid": "new_ssid",
-      "mesh_id": "new_mesh_id"
+    "radio0": {
+      "ssid": "New_2G_SSID",
+      "key": "new_password123",
+      "mesh_id": "new_mesh_2g",
+      "mesh_key": "new_mesh_password123"
+    },
+    "radio1": {
+      "ssid": "New_5G_SSID",
+      "key": "new_password456",
+      "mesh_id": "new_mesh_5g",
+      "mesh_key": "new_mesh_password456"
     }
   }
 }
 ```
+
+**请求字段:**
+- `radio0`: 2.4GHz 频段配置 (所有字段都是可选的)
+  - `ssid`: AP 接口的新 SSID (应用于分配给 radio0 的任何 AP 模式接口)
+  - `key`: AP 接口的新密码/密钥
+  - `mesh_id`: Mesh 接口的新网络 ID (应用于分配给 radio0 的任何 mesh 模式接口)
+  - `mesh_key`: Mesh 接口的新密码/密钥
+- `radio1`: 5GHz 频段配置 (结构与 radio0 相同)
+
+**重要说明:** 空字符串值（""）被视为"不更改"，将被忽略。要更新字段，请提供非空值。请求中未包含的字段或设置为空字符串的字段将不会被修改。
+
+**处理逻辑:**
+1. 设备查询 UCI 无线配置以发现现有接口
+2. 对于每个接口，确定其分配的无线电设备和模式 (AP 或 mesh)
+3. 如果提供了非空的 `ssid` 和 `key`，则更新 AP 接口
+4. 如果提供了非空的 `mesh_id` 和 `mesh_key`，则更新 mesh 接口
+5. 忽略空字符串值（不对这些字段进行 UCI 更改）
+6. 提交 UCI 更改并重新加载 Wi-Fi 以应用配置
 
 **成功响应 (设备 → 服务器):**
 ```json
@@ -431,7 +471,7 @@ WebSocket 连接建立时自动发送。
 ```json
 {
   "type": "set_wifi_info_error",
-  "error": "执行命令失败"
+  "error": "更新一个或多个 Wi-Fi 设置失败"
 }
 ```
 

@@ -380,17 +380,31 @@ Server requests current Wi-Fi information from the device.
 {
   "type": "get_wifi_info_response",
   "data": {
-    "default_radio0": {
-      "ssid": "OpenWrt",
-      "mesh_id": "chawrt-aw-mesh"
+    "radio0": {
+      "ssid": "OpenWrt_2G",
+      "key": "password123",
+      "mesh_id": "mesh_network_2g",
+      "mesh_key": "mesh_password123"
     },
-    "default_radio1": {
-      "ssid": "OpenWrt",
-      "mesh_id": "chawrt-aw-mesh"
+    "radio1": {
+      "ssid": "OpenWrt_5G",
+      "key": "password456",
+      "mesh_id": "mesh_network_5g",
+      "mesh_key": "mesh_password456"
     }
   }
 }
 ```
+
+**Response Fields:**
+- `radio0`: 2.4GHz band configuration
+  - `ssid`: SSID of the AP interface (if any AP interface exists for radio0)
+  - `key`: Password/key of the AP interface 
+  - `mesh_id`: Mesh network ID of the mesh interface (if any mesh interface exists for radio0)
+  - `mesh_key`: Password/key of the mesh interface
+- `radio1`: 5GHz band configuration (same structure as radio0)
+
+**Note:** Only non-empty values are included in the response. If a field (ssid, key, mesh_id, mesh_key) is empty or not configured, it will be omitted from the JSON response entirely.
 
 **Error Response (Device → Server):**
 ```json
@@ -401,27 +415,53 @@ Server requests current Wi-Fi information from the device.
 ```
 
 #### 9.2 Set Wi-Fi Info Request (Server → Device)
-Server requests to update the device's Wi-Fi information.
+Server requests to update the device's Wi-Fi information. The device will automatically find the appropriate interfaces for each radio and update their configuration.
 
 **Request:**
 ```json
 {
   "type": "set_wifi_info",
   "data": {
-    "default_radio0": {
-      "ssid": "new_ssid",
-      "mesh_id": "new_mesh_id"
+    "radio0": {
+      "ssid": "New_2G_SSID",
+      "key": "new_password123",
+      "mesh_id": "new_mesh_2g",
+      "mesh_key": "new_mesh_password123"
+    },
+    "radio1": {
+      "ssid": "New_5G_SSID", 
+      "key": "new_password456",
+      "mesh_id": "new_mesh_5g",
+      "mesh_key": "new_mesh_password456"
     }
   }
 }
 ```
+
+**Request Fields:**
+- `radio0`: 2.4GHz band configuration (all fields optional)
+  - `ssid`: New SSID for AP interface (applied to any AP mode interface assigned to radio0)
+  - `key`: New password/key for AP interface
+  - `mesh_id`: New mesh network ID for mesh interface (applied to any mesh mode interface assigned to radio0)
+  - `mesh_key`: New password/key for mesh interface
+- `radio1`: 5GHz band configuration (same structure as radio0)
+
+**Important:** Empty string values ("") are treated as "no change" and will be ignored. To update a field, provide a non-empty value. Fields not included in the request or set to empty strings will not be modified.
+
+**Processing Logic:**
+1. Device queries UCI wireless configuration to discover existing interfaces
+2. For each interface, determines its assigned radio device and mode (AP or mesh)  
+3. Updates AP interfaces with `ssid` and `key` if provided and non-empty
+4. Updates mesh interfaces with `mesh_id` and `mesh_key` if provided and non-empty
+5. Empty string values are ignored (no UCI changes made for those fields)
+6. Commits UCI changes and reloads Wi-Fi to apply configuration
 
 **Success Response (Device → Server):**
 ```json
 {
   "type": "set_wifi_info_response",
   "data": {
-    "status": "success",
+    "status": "success", 
     "message": "Wi-Fi info updated successfully"
   }
 }
@@ -431,7 +471,7 @@ Server requests to update the device's Wi-Fi information.
 ```json
 {
   "type": "set_wifi_info_error",
-  "error": "Failed to execute command"
+  "error": "Failed to update one or more Wi-Fi settings"
 }
 ```
 
