@@ -1838,8 +1838,7 @@ add_domain_ip_pair(const char *args, trusted_domain_t which)
 static void
 parse_common_trusted_domain_list(trusted_domain_t which)
 {
-	// evdns_parse_trusted_domain_2_ip(which); // This function is likely in another file
-                                            // For now, this parsing is part of config_read
+	evdns_parse_trusted_domain_2_ip(which);
 }
 
 void 

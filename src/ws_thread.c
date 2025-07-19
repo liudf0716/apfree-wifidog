@@ -949,6 +949,7 @@ static void handle_get_wifi_info_request(json_object *j_req, struct bufferevent 
     json_object_object_add(j_response, "data", j_data);
 
     const char *response_str = json_object_to_json_string(j_response);
+	debug(LOG_INFO, "Sending Wi-Fi info response: %s", response_str);
     ws_send(bufferevent_get_output(bev), response_str, strlen(response_str), TEXT_FRAME);
 
     // Cleanup
