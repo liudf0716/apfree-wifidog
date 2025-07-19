@@ -224,23 +224,27 @@ check_auth_server_available() {
  */ 
 static void 
 schedule_work_cb(evutil_socket_t fd, short event, void *arg) {
-	static uint32_t update_domain_interval = 1;
+	static uint32_t update_domain_interval = 0;
+	static int first_run = 1;
 
-	debug(LOG_DEBUG, "check internet and auth server periodically %u", update_domain_interval);
+	debug(LOG_INFO, "check internet and auth server periodically %u config update domain interval is %u", 
+		update_domain_interval,  config_get_config()->update_domain_interval);
 
 	check_internet_available(config_get_config()->popular_servers);
 	check_auth_server_available();
 	
-	// if config->update_domain_interval not 0
-	if (update_domain_interval == config_get_config()->update_domain_interval) {
-		// reparse trusted domain and refresh its firewall rule every 
-		// update_domain_interval * checkinterval seconds
+	// Execute domain parsing on first run or every update_domain_interval times
+	if (first_run || (config_get_config()->update_domain_interval > 0 && 
+		update_domain_interval >= config_get_config()->update_domain_interval)) {
+		// reparse trusted domain and refresh its firewall rule
 		parse_user_trusted_domain_list();
 		parse_inner_trusted_domain_list();
 
-		update_domain_interval = 1;
-	} else
-		update_domain_interval++;
+		first_run = 0;
+		update_domain_interval = 0;
+	}
+	
+	update_domain_interval++;
 }
 
 static int 
