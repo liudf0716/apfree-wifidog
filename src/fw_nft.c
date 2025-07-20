@@ -61,14 +61,16 @@ static void nft_statistical_helper(const char *tab, const char *chain, char **ou
 const char *nft_wifidogx_init_script[] = {
     "add table inet wifidogx",
     "add set inet wifidogx set_wifidogx_local_trust_clients { type ether_addr; counter; }",
-    "add chain inet wifidogx prerouting{ type nat hook prerouting priority 0; policy accept; }",
-    "add chain inet wifidogx mangle_prerouting { type filter hook postrouting priority 0; policy accept; }",
+    "add chain inet wifidogx prerouting { type nat hook prerouting priority -100; policy accept; }",
+    "add chain inet wifidogx mangle_prerouting { type filter hook prerouting priority -50; policy accept; }",
     "add set inet fw4 set_wifidogx_auth_servers { type ipv4_addr; }",
     "add set inet fw4 set_wifidogx_auth_servers_v6 { type ipv6_addr; }",
     "add set inet fw4 set_wifidogx_gateway { type ipv4_addr; }",
     "add set inet fw4 set_wifidogx_gateway_v6 { type ipv6_addr; }",
     "add set inet fw4 set_wifidogx_trust_domains { type ipv4_addr; }",
     "add set inet fw4 set_wifidogx_trust_domains_v6 { type ipv6_addr; }",
+    "add set inet fw4 set_wifidogx_wildcard_trust_domains { type ipv4_addr; }",
+    "add set inet fw4 set_wifidogx_wildcard_trust_domains_v6 { type ipv6_addr; }",
     "add set inet fw4 set_wifidogx_inner_trust_domains { type ipv4_addr; }",
     "add set inet fw4 set_wifidogx_inner_trust_domains_v6 { type ipv6_addr; }",
     "add set inet fw4 set_wifidogx_bypass_clients { type ipv4_addr; flags interval; }",
@@ -79,6 +81,7 @@ const char *nft_wifidogx_init_script[] = {
     "add chain inet fw4 dstnat_wifidogx_wan",
     "add chain inet fw4 dstnat_wifidogx_outgoing",
     "add chain inet fw4 dstnat_wifidogx_trust_domains",
+    "add chain inet fw4 dstnat_wifidogx_wildcard_trust_domains",
     "add chain inet fw4 dstnat_wifidogx_unknown",
     "add rule inet fw4 dstnat_wifidogx_outgoing ip daddr @set_wifidogx_gateway accept",
     "add rule inet fw4 dstnat_wifidogx_outgoing ip6 daddr @set_wifidogx_gateway_v6 accept",
@@ -92,9 +95,10 @@ const char *nft_wifidogx_init_script[] = {
     "add rule inet fw4 dstnat_wifidogx_wan jump dstnat_wifidogx_unknown",
     "add rule inet fw4 dstnat_wifidogx_unknown jump dstnat_wifidogx_auth_server",
     "add rule inet fw4 dstnat_wifidogx_unknown jump dstnat_wifidogx_trust_domains",
-    "add rule inet fw4 dstnat_wifidogx_unknown tcp dport 443 redirect to  8443",
+    "add rule inet fw4 dstnat_wifidogx_unknown jump dstnat_wifidogx_wildcard_trust_domains",
+    "add rule inet fw4 dstnat_wifidogx_unknown tcp dport 443 redirect to $HTTPS_PORT$",
     "add rule inet fw4 dstnat_wifidogx_unknown udp dport 443 drop",
-    "add rule inet fw4 dstnat_wifidogx_unknown tcp dport 80 redirect to  2060",
+    "add rule inet fw4 dstnat_wifidogx_unknown tcp dport 80 redirect to $HTTP_PORT$",
     "add rule inet fw4 dstnat_wifidogx_unknown udp dport 80 drop",
     "add rule inet fw4 dstnat_wifidogx_auth_server ip daddr @set_wifidogx_auth_servers accept",
     "add rule inet fw4 dstnat_wifidogx_auth_server ip6 daddr @set_wifidogx_auth_servers_v6 accept",
@@ -102,6 +106,8 @@ const char *nft_wifidogx_init_script[] = {
     "add rule inet fw4 dstnat_wifidogx_trust_domains ip6 daddr @set_wifidogx_trust_domains_v6 accept",
     "add rule inet fw4 dstnat_wifidogx_trust_domains ip daddr @set_wifidogx_inner_trust_domains accept",
     "add rule inet fw4 dstnat_wifidogx_trust_domains ip6 daddr @set_wifidogx_inner_trust_domains_v6 accept",
+    "add rule inet fw4 dstnat_wifidogx_wildcard_trust_domains ip daddr @set_wifidogx_wildcard_trust_domains accept",
+    "add rule inet fw4 dstnat_wifidogx_wildcard_trust_domains ip6 daddr @set_wifidogx_wildcard_trust_domains_v6 accept",
     "add chain inet fw4 forward_wifidogx_auth_servers",
     "add chain inet fw4 forward_wifidogx_wan",
     "add chain inet fw4 forward_wifidogx_trust_domains",
@@ -117,7 +123,7 @@ const char *nft_wifidogx_init_script[] = {
     "add rule inet fw4 forward_wifidogx_wan meta mark 0x10000 accept",
     "add rule inet fw4 forward_wifidogx_wan meta mark 0x20000 accept",
     "add rule inet fw4 forward_wifidogx_wan jump forward_wifidogx_unknown",
-    "add rule inet fw4 forward_wifidogx_unknown jump handle_reject",
+    "add rule inet fw4 forward_wifidogx_unknown reject",
     "add rule inet fw4 forward_wifidogx_auth_servers ip daddr @set_wifidogx_auth_servers accept",
     "add rule inet fw4 forward_wifidogx_auth_servers ip6 daddr @set_wifidogx_auth_servers_v6 accept",
     "add rule inet fw4 forward_wifidogx_trust_domains ip daddr @set_wifidogx_trust_domains accept",
@@ -223,9 +229,34 @@ generate_nft_wifidogx_init_script()
         termination_handler(0);
     }
 
-    // Write base initialization rules
+    // Write base initialization rules with port substitution
     for (size_t i = 0; i < sizeof(nft_wifidogx_init_script) / sizeof(nft_wifidogx_init_script[0]); i++) {
-        fprintf(output_file, "%s\n", nft_wifidogx_init_script[i]);
+        const char *rule = nft_wifidogx_init_script[i];
+        memset(buf, 0, sizeof(buf));
+        
+        if (strstr(rule, "$HTTPS_PORT$") && strstr(rule, "$HTTP_PORT$")) {
+            // Replace both ports in same rule (shouldn't happen with current rules)
+            char tmp[1024] = {0};
+            snprintf(tmp, sizeof(tmp), "%d", config->gw_https_port);
+            replace_str(rule, "$HTTPS_PORT$", tmp, buf, sizeof(buf));
+            memset(tmp, 0, sizeof(tmp));
+            snprintf(tmp, sizeof(tmp), "%d", config->gw_port);
+            char final_rule[1024] = {0};
+            replace_str(buf, "$HTTP_PORT$", tmp, final_rule, sizeof(final_rule));
+            fprintf(output_file, "%s\n", final_rule);
+        } else if (strstr(rule, "$HTTPS_PORT$")) {
+            char port_str[16] = {0};
+            snprintf(port_str, sizeof(port_str), "%d", config->gw_https_port);
+            replace_str(rule, "$HTTPS_PORT$", port_str, buf, sizeof(buf));
+            fprintf(output_file, "%s\n", buf);
+        } else if (strstr(rule, "$HTTP_PORT$")) {
+            char port_str[16] = {0};
+            snprintf(port_str, sizeof(port_str), "%d", config->gw_port);
+            replace_str(rule, "$HTTP_PORT$", port_str, buf, sizeof(buf));
+            fprintf(output_file, "%s\n", buf);
+        } else {
+            fprintf(output_file, "%s\n", rule);
+        }
     }
 
     // Add DNS pass rules
