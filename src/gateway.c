@@ -628,10 +628,11 @@ threads_init(s_config *config)
     // Optional service threads based on configuration
     if (config->enable_dns_forward) {
         create_detached_thread(&tid_dns_forward, (void *)thread_dns_forward, NULL, "dns_forward");
+    } else {
+        // DNS monitor thread - monitors DNS responses from eBPF program
+        // Only start if DNS forward is not enabled
+        create_detached_thread(&tid_dns_monitor, (void *)thread_dns_monitor, NULL, "dns_monitor");
     }
-
-    // DNS monitor thread - monitors DNS responses from eBPF program
-    create_detached_thread(&tid_dns_monitor, (void *)thread_dns_monitor, NULL, "dns_monitor");
 
     if (config->enable_dhcp_cpi) {
         create_detached_thread(&tid_fw_counter, (void *)thread_dhcp_cpi, NULL, "dhcp_cpi");
