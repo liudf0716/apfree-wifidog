@@ -224,18 +224,22 @@ static __always_inline int dns_monitor_main(struct __sk_buff *skb)
     
     // 将DNS负载的原始字节安全地拷贝到ring buffer
     if (dns_payload_len > 0 && dns_payload_len <= MAX_DNS_PAYLOAD_LEN) {
-        // 计算DNS负载在skb中的偏移量
-        __u32 dns_offset = sizeof(struct ethhdr) + ip_hdr_len + sizeof(struct udphdr);
+        // 使用直接包访问方式拷贝DNS数据
+        // 这比bpf_skb_load_bytes更高效，且对BPF验证器更友好
         
-        // 额外的长度检查，确保长度至少为1且不超过最大值
-        if (dns_payload_len >= 1 && dns_payload_len <= 512) {
-            // 使用bpf_skb_load_bytes替代bpf_probe_read_kernel
-            // 这对BPF验证器更友好，因为它专门用于从skb读取数据
-            int ret = bpf_skb_load_bytes(skb, dns_offset, output_data->dns_payload, dns_payload_len);
-            if (ret < 0) {
-                // 如果读取失败，仍然提交数据但DNS负载为空
-                output_data->pkt_len = 0;
+        // 确保我们不会越界读取
+        if ((void *)dns_payload_start + dns_payload_len <= data_end) {
+            // 限制拷贝长度以满足验证器要求
+            __u32 copy_len = dns_payload_len;
+            if (copy_len > MAX_DNS_PAYLOAD_LEN) {
+                copy_len = MAX_DNS_PAYLOAD_LEN;
             }
+            
+            // 使用内置的memcpy进行安全拷贝
+            __builtin_memcpy(output_data->dns_payload, dns_payload_start, copy_len);
+        } else {
+            // 如果长度超出包边界，设置长度为0
+            output_data->pkt_len = 0;
         }
     }
 
