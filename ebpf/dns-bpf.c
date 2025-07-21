@@ -227,12 +227,15 @@ static __always_inline int dns_monitor_main(struct __sk_buff *skb)
         // 计算DNS负载在skb中的偏移量
         __u32 dns_offset = sizeof(struct ethhdr) + ip_hdr_len + sizeof(struct udphdr);
         
-        // 使用bpf_skb_load_bytes替代bpf_probe_read_kernel
-        // 这对BPF验证器更友好，因为它专门用于从skb读取数据
-        int ret = bpf_skb_load_bytes(skb, dns_offset, output_data->dns_payload, dns_payload_len);
-        if (ret < 0) {
-            // 如果读取失败，仍然提交数据但DNS负载为空
-            output_data->pkt_len = 0;
+        // 额外的长度检查，确保长度至少为1且不超过最大值
+        if (dns_payload_len >= 1 && dns_payload_len <= 512) {
+            // 使用bpf_skb_load_bytes替代bpf_probe_read_kernel
+            // 这对BPF验证器更友好，因为它专门用于从skb读取数据
+            int ret = bpf_skb_load_bytes(skb, dns_offset, output_data->dns_payload, dns_payload_len);
+            if (ret < 0) {
+                // 如果读取失败，仍然提交数据但DNS负载为空
+                output_data->pkt_len = 0;
+            }
         }
     }
 
