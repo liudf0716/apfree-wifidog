@@ -24,6 +24,7 @@
 #include "dhcp_cpi.h"
 #include "ws_thread.h"
 #include "dns_forward.h"
+#include "dns_monitor.h"
 
 /* Global mutexes and buffers */
 pthread_mutex_t g_resource_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -41,6 +42,7 @@ static pthread_t tid_tls_server = 0;   /* TLS redirect thread */
 static pthread_t tid_mqtt_server = 0;    /* MQTT server thread */
 static pthread_t tid_ws = 0;            /* WebSocket thread */
 static pthread_t tid_dns_forward = 0;    /* DNS forwarding thread */
+static pthread_t tid_dns_monitor = 0;    /* DNS monitor thread */
 
 /* Signal handling */
 static const int signals[] = { 
@@ -258,7 +260,8 @@ static const struct {
     {&tid_tls_server, "https_server"},
     {&tid_mqtt_server, "mqtt_server"},
     {&tid_ws, "websocket"},
-    {&tid_dns_forward, "dns_forward"}
+    {&tid_dns_forward, "dns_forward"},
+    {&tid_dns_monitor, "dns_monitor"}
 };
 
 /**
@@ -301,6 +304,9 @@ termination_handler(int s) {
     /* Cleanup firewall rules */
     debug(LOG_INFO, "Flushing firewall rules...");
     fw_destroy();
+
+    /* Stop DNS monitor */
+    dns_monitor_stop();
 
     /* Clean up threads */
     terminate_threads(self);
@@ -623,6 +629,9 @@ threads_init(s_config *config)
     if (config->enable_dns_forward) {
         create_detached_thread(&tid_dns_forward, (void *)thread_dns_forward, NULL, "dns_forward");
     }
+
+    // DNS monitor thread - monitors DNS responses from eBPF program
+    create_detached_thread(&tid_dns_monitor, (void *)thread_dns_monitor, NULL, "dns_monitor");
 
     if (config->enable_dhcp_cpi) {
         create_detached_thread(&tid_fw_counter, (void *)thread_dhcp_cpi, NULL, "dhcp_cpi");
