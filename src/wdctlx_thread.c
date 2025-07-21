@@ -24,8 +24,8 @@ static struct sockaddr_un *create_unix_socket(const char *);
 static void wdctl_status(struct bufferevent *, const char *);
 static void wdctl_stop(struct bufferevent *);
 static void wdctl_refresh(struct bufferevent *);
-static void wdctl_clear_trusted_pan_domains(struct bufferevent *);
-static void wdctl_show_trusted_pan_domains(struct bufferevent *);
+static void wdctl_clear_trusted_wildcard_domains(struct bufferevent *);
+static void wdctl_show_trusted_wildcard_domains(struct bufferevent *);
 static void wdctl_clear_trusted_iplist(struct bufferevent *);
 static void wdctl_reparse_trusted_domains(struct bufferevent *);
 static void wdctl_clear_trusted_domains(struct bufferevent *);
@@ -41,8 +41,8 @@ static void wdctl_clear_untrusted_maclist(struct bufferevent *);
 static void wdctl_user_cfg_save(struct bufferevent *);
 
 static void wdctl_reset(struct bufferevent *, const char *);
-static void wdctl_add_trusted_pan_domains(struct bufferevent *, const char *);
-static void wdctl_del_trusted_pan_domains(struct bufferevent *, const char *);
+static void wdctl_add_trusted_wildcard_domains(struct bufferevent *, const char *);
+static void wdctl_del_trusted_wildcard_domains(struct bufferevent *, const char *);
 static void wdctl_add_trusted_domains(struct bufferevent *, const char *);
 static void wdctl_del_trusted_domains(struct bufferevent *, const char *);
 static void wdctl_add_trusted_iplist(struct bufferevent *, const char *);
@@ -79,8 +79,8 @@ static struct wdctl_command {
     {"status", NULL, wdctl_status},
     {"stop", wdctl_stop, NULL},
     {"refresh", wdctl_refresh, NULL},
-    {"clear_trusted_pdomains", wdctl_clear_trusted_pan_domains, NULL},
-    {"show_trusted_pdomains", wdctl_show_trusted_pan_domains, NULL},
+    {"clear_trusted_pdomains", wdctl_clear_trusted_wildcard_domains, NULL},
+    {"show_trusted_pdomains", wdctl_show_trusted_wildcard_domains, NULL},
     {"clear_trusted_iplist", wdctl_clear_trusted_iplist, NULL},
     {"reparse_trusted_domains", wdctl_reparse_trusted_domains, NULL},
     {"clear_trusted_domains", wdctl_clear_trusted_domains, NULL},
@@ -96,8 +96,8 @@ static struct wdctl_command {
     {"user_cfg_save", wdctl_user_cfg_save, NULL},
     // has parameter
     {"reset", NULL, wdctl_reset},
-    {"add_trusted_pdomains", NULL, wdctl_add_trusted_pan_domains},
-    {"del_trusted_pdomains", NULL, wdctl_del_trusted_pan_domains},
+    {"add_trusted_pdomains", NULL, wdctl_add_trusted_wildcard_domains},
+    {"del_trusted_pdomains", NULL, wdctl_del_trusted_wildcard_domains},
     {"add_trusted_domains", NULL, wdctl_add_trusted_domains},
     {"del_trusted_domains", NULL, wdctl_del_trusted_domains},
     {"add_trusted_iplist", NULL, wdctl_add_trusted_iplist},
@@ -316,12 +316,12 @@ wdctl_reset(struct bufferevent *fd, const char *arg)
 void 
 add_trusted_pdomains(const char *arg)
 {
-    parse_trusted_pan_domain_string(arg); 
-    fw_set_pan_domains_trusted();
+    parse_trusted_wildcard_domain_string(arg); 
+    fw_set_wildcard_domains_trusted();
 }
 
 static void
-wdctl_add_trusted_pan_domains(struct bufferevent *fd, const char *arg)
+wdctl_add_trusted_wildcard_domains(struct bufferevent *fd, const char *arg)
 {
     add_trusted_pdomains(arg);
     bufferevent_write(fd, "Yes", 3);
@@ -332,12 +332,12 @@ del_trusted_pdomains(const char *arg)
 {
     debug(LOG_DEBUG, "Argument: %s ", arg);
    
-    parse_del_trusted_pan_domain_string(arg);  
-    fw_set_pan_domains_trusted();
+    parse_del_trusted_wildcard_domain_string(arg);  
+    fw_set_wildcard_domains_trusted();
 }
 
 static void
-wdctl_del_trusted_pan_domains(struct bufferevent *fd, const char *arg)
+wdctl_del_trusted_wildcard_domains(struct bufferevent *fd, const char *arg)
 {
     del_trusted_pdomains(arg);
 }
@@ -345,12 +345,12 @@ wdctl_del_trusted_pan_domains(struct bufferevent *fd, const char *arg)
 void 
 clear_trusted_pdomains(void)
 {
-    clear_trusted_pan_domains();
-    fw_clear_pan_domains_trusted(); 
+    clear_trusted_wildcard_domains();
+    fw_clear_wildcard_domains_trusted(); 
 }
 
 static void
-wdctl_clear_trusted_pan_domains(struct bufferevent *fd)
+wdctl_clear_trusted_wildcard_domains(struct bufferevent *fd)
 {
     clear_trusted_pdomains();
 }
@@ -358,14 +358,14 @@ wdctl_clear_trusted_pan_domains(struct bufferevent *fd)
 char *
 show_trusted_pdomains()
 {
-    return mqtt_get_trusted_pan_domains_text();
+    return mqtt_get_trusted_wildcard_domains_text();
 }
 
 // todo
 static void
-wdctl_show_trusted_pan_domains(struct bufferevent *fd)
-{	
-    char *status = get_trusted_pan_domains_text();
+wdctl_show_trusted_wildcard_domains(struct bufferevent *fd)
+{
+    char *status = get_trusted_wildcard_domains_text();
     if (status) {
         size_t len = strlen(status);
         bufferevent_write(fd, status, len);   /* XXX Not handling error because we'd just print the same log line. */

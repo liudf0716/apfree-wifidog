@@ -586,7 +586,7 @@ static void handle_get_trusted_wildcard_domains_request(json_object *j_req, stru
     json_object *j_response = json_object_new_object();
     json_object *j_domains = json_object_new_array();
 
-    t_domain_trusted *trusted_domains = get_trusted_pan_domains();
+    t_domain_trusted *trusted_domains = get_trusted_wildcard_domains();
     for (t_domain_trusted *d = trusted_domains; d; d = d->next) {
         json_object_array_add(j_domains, json_object_new_string(d->domain));
     }
@@ -651,7 +651,7 @@ static void handle_sync_trusted_wildcard_domains_request(json_object *j_req, str
     json_object *j_domains;
 
     // Clear existing trusted domains
-    clear_trusted_pan_domains();
+    clear_trusted_wildcard_domains();
 
     if (json_object_object_get_ex(j_req, "domains", &j_domains) && json_object_is_type(j_domains, json_type_array)) {
         int array_len = json_object_array_length(j_domains);
@@ -659,7 +659,7 @@ static void handle_sync_trusted_wildcard_domains_request(json_object *j_req, str
             json_object *j_domain = json_object_array_get_idx(j_domains, i);
             if (json_object_is_type(j_domain, json_type_string)) {
                 const char *domain_str = json_object_get_string(j_domain);
-                add_trusted_pan_domains(domain_str);
+                add_trusted_wildcard_domains(domain_str);
                 uci_add_list_value("wifidogx", "common", "trusted_wildcard_domains", domain_str);
             }
         }

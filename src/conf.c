@@ -76,7 +76,7 @@ typedef enum {
 	oPopularServers,
 	oHtmlMessageFile,
 	oProxyPort,
-	oTrustedPanDomains,
+	oTrustedWildcardDomains,
 	oTrustedDomains,
 	oInnerTrustedDomains,
 	oUntrustedMACList,
@@ -161,7 +161,7 @@ static const struct {
 	"popularservers", oPopularServers}, {
 	"htmlmessagefile", oHtmlMessageFile}, {
 	"proxyport", oProxyPort}, {
-	"trustedPanDomains", oTrustedPanDomains}, {
+	"trustedWildcardDomains", oTrustedWildcardDomains}, {
 	"trustedDomains", oTrustedDomains}, {
 	"untrustedmaclist", oUntrustedMACList}, {
 	"jsFilter", oJsFilter}, {
@@ -275,15 +275,15 @@ get_trusted_domains(void)
 }
 
 t_domain_trusted *
-get_trusted_pan_domains(void)
+get_trusted_wildcard_domains(void)
 {
-	return config.pan_domains_trusted;
+	return config.wildcard_domains_trusted;
 }
 
 void
-add_trusted_pan_domains(const char *domains)
+add_trusted_wildcard_domains(const char *domains)
 {
-    parse_domain_string_common(domains, TRUSTED_PAN_DOMAIN);
+    parse_domain_string_common(domains, TRUSTED_WILDCARD_DOMAIN);
 }
 
 /**
@@ -327,7 +327,7 @@ void config_init(void)
 	config.update_domain_interval   = 60; // Update trusted domains every 60 seconds
 	config.dns_timeout              = safe_strdup("1.0"); // DNS parsing timeout set to 1.0 seconds
 	config.bypass_apple_cna         = 1; // Enable Apple CNA bypass by default
-	config.pan_domains_trusted      = NULL;
+	config.wildcard_domains_trusted      = NULL;
 	config.domains_trusted          = NULL;
 	config.inner_domains_trusted    = NULL;
 	config.roam_maclist             = NULL;
@@ -1190,8 +1190,8 @@ config_read()
 				case oProxyPort:
 					sscanf(p1, "%d", &config.proxy_port);
 					break;
-				case oTrustedPanDomains:
-					parse_trusted_pan_domain_string(rawarg);
+				case oTrustedWildcardDomains:
+					parse_trusted_wildcard_domain_string(rawarg);
 					break;
 				case oTrustedDomains:
 					parse_user_trusted_domain_string(rawarg);
@@ -1576,7 +1576,7 @@ __del_domain_common(const char *domain, trusted_domain_t which)
 	switch(which) {
 		case USER_TRUSTED_DOMAIN: list_head_ptr = &config.domains_trusted; break;
 		case INNER_TRUSTED_DOMAIN: list_head_ptr = &config.inner_domains_trusted; break;
-		case TRUSTED_PAN_DOMAIN: list_head_ptr = &config.pan_domains_trusted; break;
+		case TRUSTED_WILDCARD_DOMAIN: list_head_ptr = &config.wildcard_domains_trusted; break;
 		default: return NULL;
 	}
 
@@ -1607,7 +1607,7 @@ __del_ip_domain_common(const char *domain, trusted_domain_t which)
 	switch(which) {
 		case USER_TRUSTED_DOMAIN: list_head_ptr = &config.domains_trusted; break;
 		case INNER_TRUSTED_DOMAIN: list_head_ptr = &config.inner_domains_trusted; break;
-		case TRUSTED_PAN_DOMAIN: list_head_ptr = &config.pan_domains_trusted; break;
+		case TRUSTED_WILDCARD_DOMAIN: list_head_ptr = &config.wildcard_domains_trusted; break;
 		default: return NULL;
 	}
 	
@@ -1630,7 +1630,7 @@ __add_domain_common(const char *domain, trusted_domain_t which)
 	switch(which) {
 		case USER_TRUSTED_DOMAIN: list_head_ptr = &config.domains_trusted; break;
 		case INNER_TRUSTED_DOMAIN: list_head_ptr = &config.inner_domains_trusted; break;
-		case TRUSTED_PAN_DOMAIN: list_head_ptr = &config.pan_domains_trusted; break;
+		case TRUSTED_WILDCARD_DOMAIN: list_head_ptr = &config.wildcard_domains_trusted; break;
 		default: return NULL;
 	}
 
@@ -1719,9 +1719,9 @@ parse_domain_string_common_action(const char *ptr, trusted_domain_t which, int a
 }
 
 void
-parse_del_trusted_pan_domain_string(const char *ptr)
+parse_del_trusted_wildcard_domain_string(const char *ptr)
 {
-	parse_domain_string_common_action(ptr, TRUSTED_PAN_DOMAIN, 0);
+	parse_domain_string_common_action(ptr, TRUSTED_WILDCARD_DOMAIN, 0);
 }
 
 void
@@ -1742,13 +1742,11 @@ parse_user_trusted_domain_string(const char *domain_list)
 	parse_domain_string_common(domain_list, USER_TRUSTED_DOMAIN);
 }
 
-void 
-parse_trusted_pan_domain_string(const char *domain_list)
+void
+parse_trusted_wildcard_domain_string(const char *domain_list)
 {
-	parse_domain_string_common(domain_list, TRUSTED_PAN_DOMAIN);
-}
-
-// add ip to domain list
+	parse_domain_string_common(domain_list, TRUSTED_WILDCARD_DOMAIN);
+}// add ip to domain list
 static t_ip_trusted *
 __add_ip_2_domain(t_domain_trusted *dt, const char *ip)
 {
@@ -1943,24 +1941,24 @@ void add_trusted_ip_list(const char *ptr)
 }
 
 static void
-__clear_trusted_pan_domains(void)
+__clear_trusted_wildcard_domains(void)
 {
 	t_domain_trusted *p, *p1;
-	for (p = config.pan_domains_trusted; p != NULL;) {
+	for (p = config.wildcard_domains_trusted; p != NULL;) {
 		p1 = p;
 	   	p = p->next;
 		if (p1->domain) free(p1->domain);
 		__clear_trusted_domain_ip(p1->ips_trusted); // Free associated IPs
 	   	free(p1);
 	}
-   	config.pan_domains_trusted = NULL;
+   	config.wildcard_domains_trusted = NULL;
 }
 
 void
-clear_trusted_pan_domains(void)
+clear_trusted_wildcard_domains(void)
 {
 	LOCK_DOMAIN();
-	__clear_trusted_pan_domains(); // This will be replaced by free_domain_trusted_list
+	__clear_trusted_wildcard_domains(); // This will be replaced by free_domain_trusted_list
 	UNLOCK_DOMAIN();
 }
 
@@ -2271,9 +2269,9 @@ void config_cleanup(void) {
         free_popular_servers_list(cfg->popular_servers);
         cfg->popular_servers = NULL;
     }
-    if (cfg->pan_domains_trusted) {
-        free_domain_trusted_list(cfg->pan_domains_trusted);
-        cfg->pan_domains_trusted = NULL;
+    if (cfg->wildcard_domains_trusted) {
+        free_domain_trusted_list(cfg->wildcard_domains_trusted);
+        cfg->wildcard_domains_trusted = NULL;
     }
     if (cfg->domains_trusted) {
         free_domain_trusted_list(cfg->domains_trusted);

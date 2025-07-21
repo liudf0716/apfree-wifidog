@@ -1569,6 +1569,52 @@ nft_fw_refresh_user_domains_trusted()
 }
 
 static void
+__nft_fw_clear_wildcard_domains_trusted()
+{
+    nftables_do_command("flush set inet fw4 set_wifidogx_wildcard_trust_domains");
+    nftables_do_command("flush set inet fw4 set_wifidogx_wildcard_trust_domains_v6");
+}
+
+static void
+__nft_fw_set_wildcard_domains_trusted()
+{
+    const s_config *config = config_get_config();
+    t_domain_trusted *domain_trusted = NULL;
+
+    for (domain_trusted = config->wildcard_domains_trusted; domain_trusted != NULL; domain_trusted = domain_trusted->next) {
+        t_ip_trusted *ip_trusted = NULL;
+        for(ip_trusted = domain_trusted->ips_trusted; ip_trusted != NULL; ip_trusted = ip_trusted->next) {
+            if (ip_trusted->ip_type == IP_TYPE_IPV4) {
+                nftables_do_command("add element inet fw4 set_wifidogx_wildcard_trust_domains { %s }", ip_trusted->ip);
+            } else if (ip_trusted->ip_type == IP_TYPE_IPV6) {
+                nftables_do_command("add element inet fw4 set_wifidogx_wildcard_trust_domains_v6 { %s }", ip_trusted->ip);
+            }
+        }
+    }
+}
+
+void
+nft_fw_clear_wildcard_domains_trusted()
+{
+    NFT_WIFIDOGX_BYPASS_MODE();
+
+    LOCK_DOMAIN();
+    __nft_fw_clear_wildcard_domains_trusted();
+    UNLOCK_DOMAIN();
+}
+
+void
+nft_fw_set_wildcard_domains_trusted()
+{
+    NFT_WIFIDOGX_BYPASS_MODE();
+
+    LOCK_DOMAIN();
+    __nft_fw_clear_wildcard_domains_trusted();
+    __nft_fw_set_wildcard_domains_trusted();
+    UNLOCK_DOMAIN();
+}
+
+static void
 __nft_fw_add_trusted_mac(const char *mac, int timeout)
 {
     if (timeout == 0)

@@ -86,7 +86,7 @@
 typedef enum trusted_domain_t_ {
 	USER_TRUSTED_DOMAIN,
 	INNER_TRUSTED_DOMAIN,
-	TRUSTED_PAN_DOMAIN,
+	TRUSTED_WILDCARD_DOMAIN,
 } trusted_domain_t;
 
 typedef enum ip_type_t_ {
@@ -241,7 +241,7 @@ typedef struct {
 	t_device_info *device_info;
 	
 	// Trust lists
-	t_domain_trusted *pan_domains_trusted;
+	t_domain_trusted *wildcard_domains_trusted;
 	t_domain_trusted *domains_trusted;
 	t_domain_trusted *inner_domains_trusted;
 	t_trusted_mac *trustedmaclist;
@@ -308,19 +308,19 @@ void mark_auth_server_bad(t_auth_serv *);
 
 /** Domain String Parsing */
 void parse_user_trusted_domain_string(const char *);
-void parse_trusted_pan_domain_string(const char *);
+void parse_trusted_wildcard_domain_string(const char *);
 void parse_del_trusted_domain_string(const char *);
-void parse_del_trusted_pan_domain_string(const char *);
+void parse_del_trusted_wildcard_domain_string(const char *);
 
 /** Domain List Management */
 void parse_user_trusted_domain_list(void);
 void parse_inner_trusted_domain_list(void);
 void add_domain_ip_pair(const char *, trusted_domain_t);
 void clear_trusted_domains(void);
-void clear_trusted_pan_domains(void);
+void clear_trusted_wildcard_domains(void);
 t_domain_trusted *get_trusted_domains(void);
-t_domain_trusted *get_trusted_pan_domains(void);
-void add_trusted_pan_domains(const char *domains);
+t_domain_trusted *get_trusted_wildcard_domains(void);
+void add_trusted_wildcard_domains(const char *domains);
 
 /** Roam MAC List operation */
 void parse_roam_mac_list(const char *); 

@@ -297,24 +297,24 @@ fw_set_authservers(void)
 }
 
 void
-fw_clear_pan_domains_trusted(void)
+fw_clear_wildcard_domains_trusted(void)
 {
-	debug(LOG_DEBUG, "Clear pan trust domains list");
+	debug(LOG_DEBUG, "Clear wildcard trust domains list");
 #ifdef AW_FW3
 	iptables_fw_clear_ipset_domains_trusted();
 #elif AW_FW4
-	//nft_fw_clear_ipset_domains_trusted();
+	nft_fw_clear_wildcard_domains_trusted();
 #endif
 }
 
 void
-fw_set_pan_domains_trusted(void)
+fw_set_wildcard_domains_trusted(void)
 {
-	debug(LOG_DEBUG, "Set pan trust domains list");
+	debug(LOG_DEBUG, "Set wildcard trust domains list");
 #ifdef AW_FW3
 	iptables_fw_set_ipset_domains_trusted();
 #elif AW_FW4
-	//nft_fw_set_ipset_domains_trusted();
+	nft_fw_set_wildcard_domains_trusted();
 #endif
 }
 

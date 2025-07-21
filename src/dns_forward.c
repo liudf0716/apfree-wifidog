@@ -279,7 +279,7 @@ is_trusted_domain(const char *query_name, t_domain_trusted **trusted_domain) {
     s_config *config = config_get_config(); // Get global configuration
     if (!config) return 0;
 
-    t_domain_trusted *p = config->pan_domains_trusted; // Start of trusted domains list
+    t_domain_trusted *p = config->wildcard_domains_trusted; // Start of trusted domains list
     while (p) {
         // safe_strrstr checks if query_name ends with p->domain (for wildcard matching)
         // or if p->domain is a substring. For simple suffix match, ensure p->domain starts with '.'.

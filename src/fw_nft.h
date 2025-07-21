@@ -49,6 +49,12 @@ void nft_fw_refresh_inner_domains_trusted();
 void nft_fw_clear_inner_domains_trusted();
 
 /**
+ * @brief wildcard domains trusted operations
+ */
+void nft_fw_set_wildcard_domains_trusted();
+void nft_fw_clear_wildcard_domains_trusted();
+
+/**
  * @brief trusted temporary mac operations
  */
 void nft_fw_set_mac_temporary(const char *mac, int which);

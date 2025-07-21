@@ -600,14 +600,14 @@ get_serialize_trusted_domains()
  *         The caller is responsible for freeing the returned string.
  */
 char *
-get_serialize_trusted_pan_domains()
+get_serialize_trusted_wildcard_domains()
 {
 	s_config *config = config_get_config();
 	t_domain_trusted *domain_trusted = NULL;
 	struct evbuffer *evb = NULL;
 	int first_domain = 1;
 
-	if (!config || !config->pan_domains_trusted) {
+	if (!config || !config->wildcard_domains_trusted) {
 		return NULL;
 	}
 
@@ -619,7 +619,7 @@ get_serialize_trusted_pan_domains()
 	LOCK_DOMAIN();
 
 	// Build comma-separated string of domain names
-	for (domain_trusted = config->pan_domains_trusted; 
+	for (domain_trusted = config->wildcard_domains_trusted; 
 		 domain_trusted != NULL; 
 		 domain_trusted = domain_trusted->next) {
 		
@@ -649,14 +649,14 @@ get_serialize_trusted_pan_domains()
  *         The caller is responsible for freeing the returned string.
  */
 char *
-mqtt_get_trusted_pan_domains_text()
+mqtt_get_trusted_wildcard_domains_text()
 {
 	s_config *config = config_get_config();
 	t_domain_trusted *domain_trusted = NULL;
 	struct evbuffer *evb = NULL;
 	int first = 1;
 
-	if (!config || !config->pan_domains_trusted) {
+	if (!config || !config->wildcard_domains_trusted) {
 		return NULL;
 	}
 
@@ -668,7 +668,7 @@ mqtt_get_trusted_pan_domains_text()
 	LOCK_DOMAIN();
 
 	// Build comma-separated string of domain names
-	for (domain_trusted = config->pan_domains_trusted; 
+	for (domain_trusted = config->wildcard_domains_trusted; 
 		 domain_trusted != NULL; 
 		 domain_trusted = domain_trusted->next) {
 		
@@ -874,7 +874,7 @@ get_trusted_domains_text(void)
  *         Returns NULL if no trusted pan domains exist or on memory allocation failure.
  */
 char *
-get_trusted_pan_domains_text(void)
+get_trusted_wildcard_domains_text(void)
 {
 	struct evbuffer *evb = evbuffer_new();
 	if (!evb) {
@@ -882,7 +882,7 @@ get_trusted_pan_domains_text(void)
 	}
 
 	s_config *config = config_get_config();
-	if (!config || !config->pan_domains_trusted) {
+	if (!config || !config->wildcard_domains_trusted) {
 		evbuffer_free(evb);
 		return NULL;
 	}
@@ -892,7 +892,7 @@ get_trusted_pan_domains_text(void)
 	LOCK_DOMAIN();
 
 	t_domain_trusted *domain_trusted;
-	for (domain_trusted = config->pan_domains_trusted; 
+	for (domain_trusted = config->wildcard_domains_trusted; 
 		 domain_trusted != NULL; 
 		 domain_trusted = domain_trusted->next) {
 		

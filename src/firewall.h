@@ -70,8 +70,8 @@ void fw_set_user_domains_trusted(void);
 void fw_refresh_user_domains_trusted(void);
 
 /** pan domains */
-void fw_clear_pan_domains_trusted(void);
-void fw_set_pan_domains_trusted(void);
+void fw_clear_wildcard_domains_trusted(void);
+void fw_set_wildcard_domains_trusted(void);
 
 /** inner trusted domains */
 
