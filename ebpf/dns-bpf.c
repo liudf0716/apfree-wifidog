@@ -235,8 +235,17 @@ static __always_inline int dns_monitor_main(struct __sk_buff *skb)
                 copy_len = MAX_DNS_PAYLOAD_LEN;
             }
             
-            // 使用内置的memcpy进行安全拷贝
-            __builtin_memcpy(output_data->dns_payload, dns_payload_start, copy_len);
+            // 手动字节拷贝，因为BPF不支持__builtin_memcpy
+            char *src = (char *)dns_payload_start;
+            char *dst = output_data->dns_payload;
+            
+            // 使用编译时常量限制循环次数以满足BPF验证器
+            #pragma unroll
+            for (int i = 0; i < MAX_DNS_PAYLOAD_LEN; i++) {
+                if (i >= copy_len) break;
+                if ((void *)(src + i + 1) > data_end) break;
+                dst[i] = src[i];
+            }
         } else {
             // 如果长度超出包边界，设置长度为0
             output_data->pkt_len = 0;
