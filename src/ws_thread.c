@@ -106,6 +106,7 @@ static void handle_sync_trusted_wildcard_domains_request(json_object *j_req, str
 static void handle_reboot_device_request(json_object *j_req, struct bufferevent *bev);
 static void handle_get_wifi_info_request(json_object *j_req, struct bufferevent *bev);
 static void handle_set_wifi_info_request(json_object *j_req, struct bufferevent *bev);
+static void handle_get_sys_info_request(json_object *j_req, struct bufferevent *bev);
 static void cleanup_ws_connection(void);
 static void reconnect_websocket(void);
 static void scheduled_reconnect_cb(evutil_socket_t fd, short events, void *arg);
@@ -1294,6 +1295,75 @@ static void handle_set_wifi_info_request(json_object *j_req, struct bufferevent 
 }
 
 /**
+ * @brief Handles a request to get system information.
+ *
+ * This function is called by process_ws_msg() when a "get_sys_info"
+ * message is received. It retrieves comprehensive system information
+ * including uptime, memory usage, CPU statistics, and temperature,
+ * then sends this data back to the client in JSON format.
+ *
+ * Request format:
+ * {
+ *   "type": "get_sys_info"
+ * }
+ *
+ * Response format:
+ * {
+ *   "type": "get_sys_info_response",
+ *   "data": {
+ *     "sys_uptime": 12345,        // System uptime in seconds
+ *     "sys_memfree": 512000,      // Free memory in KB  
+ *     "sys_load": 0.25,           // System load average
+ *     "nf_conntrack_count": 100,  // Number of tracked connections
+ *     "cpu_usage": 15.5,          // CPU usage percentage
+ *     "wifidog_uptime": 3600,     // WiFidog process uptime in seconds
+ *     "cpu_temp": 45              // CPU temperature in Celsius
+ *   }
+ * }
+ *
+ * If system information retrieval fails, an error response is sent:
+ * {
+ *   "type": "get_sys_info_error",
+ *   "error": "Failed to retrieve system information"
+ * }
+ *
+ * @param j_req The incoming JSON request object. Currently unused for this
+ *              specific request type but included for API consistency.
+ * @param bev The bufferevent associated with the WebSocket connection, used
+ *            for sending the response.
+ */
+static void handle_get_sys_info_request(json_object *j_req, struct bufferevent *bev) {
+    json_object *j_response = json_object_new_object();
+    json_object *j_data = json_object_new_object();
+    
+    debug(LOG_INFO, "System info request received");
+    
+    // Get system information
+    struct sys_info sysinfo;
+    get_sys_info(&sysinfo);
+    
+    // Build JSON response with system information
+    json_object_object_add(j_data, "sys_uptime", json_object_new_int64(sysinfo.sys_uptime));
+    json_object_object_add(j_data, "sys_memfree", json_object_new_int(sysinfo.sys_memfree));
+    json_object_object_add(j_data, "sys_load", json_object_new_double(sysinfo.sys_load));
+    json_object_object_add(j_data, "nf_conntrack_count", json_object_new_int64(sysinfo.nf_conntrack_count));
+    json_object_object_add(j_data, "cpu_usage", json_object_new_double(sysinfo.cpu_usage));
+    json_object_object_add(j_data, "wifidog_uptime", json_object_new_int64(sysinfo.wifidog_uptime));
+    json_object_object_add(j_data, "cpu_temp", json_object_new_int(sysinfo.cpu_temp));
+    
+    // Construct response
+    json_object_object_add(j_response, "type", json_object_new_string("get_sys_info_response"));
+    json_object_object_add(j_response, "data", j_data);
+    
+    const char *response_str = json_object_to_json_string(j_response);
+    debug(LOG_INFO, "Sending system info response: %s", response_str);
+    ws_send(bufferevent_get_output(bev), response_str, strlen(response_str), TEXT_FRAME);
+    
+    // Cleanup
+    json_object_put(j_response);
+}
+
+/**
  * @brief Generates the Sec-WebSocket-Accept header value for WebSocket handshake
  *
 
@@ -1816,6 +1886,8 @@ process_ws_msg(struct bufferevent *bev, const char *msg)
 		handle_get_wifi_info_request(jobj, bev);
 	} else if (!strcmp(type_str, "set_wifi_info")) {
 		handle_set_wifi_info_request(jobj, bev);
+	} else if (!strcmp(type_str, "get_sys_info")) {
+		handle_get_sys_info_request(jobj, bev);
 	} else {
 		debug(LOG_ERR, "Unknown message type: %s", type_str);
 	}
