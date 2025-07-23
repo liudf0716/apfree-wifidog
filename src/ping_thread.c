@@ -372,6 +372,51 @@ get_ping_uri(const struct sys_info *info, t_gateway_setting *gw_setting)
 }
 
 /**
+ * @brief Get CPU temperature from thermal sensors
+ * 
+ * @return CPU temperature in Celsius, or -1 if unable to read
+ */ 
+static int
+get_cpu_temperature(void)
+{
+	const char *thermal_paths[] = {
+		"/sys/class/thermal/thermal_zone0/temp",
+		"/sys/class/thermal/thermal_zone1/temp",
+		"/sys/class/thermal/thermal_zone2/temp",
+		"/sys/class/hwmon/hwmon0/temp1_input",
+		"/sys/class/hwmon/hwmon1/temp1_input",
+		"/sys/class/hwmon/hwmon2/temp1_input",
+		NULL
+	};
+	
+	FILE *fh = NULL;
+	int raw_temp = 0;
+	int temp_celsius = -1;
+	
+	// Try each possible thermal sensor path
+	for (int i = 0; thermal_paths[i] != NULL; i++) {
+		fh = fopen(thermal_paths[i], "r");
+		if (fh) {
+			if (fscanf(fh, "%d", &raw_temp) == 1) {
+				// Most thermal sensors report in millidegrees Celsius
+				// Convert to degrees Celsius with proper rounding
+				temp_celsius = (raw_temp + 500) / 1000;
+				fclose(fh);
+				debug(LOG_DEBUG, "CPU temperature read from %s: %d°C", thermal_paths[i], temp_celsius);
+				break;
+			}
+			fclose(fh);
+		}
+	}
+	
+	if (temp_celsius == -1) {
+		debug(LOG_DEBUG, "Unable to read CPU temperature from any thermal sensor");
+	}
+	
+	return temp_celsius;
+}
+
+/**
  * @brief get system info to info param
  * 
  * @param info Out param to store system info
@@ -387,6 +432,7 @@ get_sys_info(struct sys_info *info)
 		return;
 	
 	info->cpu_usage = get_cpu_usage();
+	info->cpu_temp = get_cpu_temperature();
 	
     if ((fh = fopen("/proc/uptime", "r"))) {
         if (fscanf(fh, "%lu", &info->sys_uptime) != 1)

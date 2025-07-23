@@ -17,6 +17,7 @@ struct sys_info {
     unsigned long int   wifidog_uptime;
     float   sys_load;
     float   cpu_usage;
+    int     cpu_temp;      // CPU temperature in Celsius
 };
 
 /** @brief get system info */

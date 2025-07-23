@@ -18,6 +18,7 @@
 #include "wd_util.h"
 #include "safe.h"
 #include "wdctlx_thread.h"
+#include "ping_thread.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h> // For calloc and free
@@ -2082,6 +2083,16 @@ ws_request(struct bufferevent* b_ws)
  * - Array of gateway configurations including:
  *   - Gateway ID, channel, IPv4/IPv6 addresses
  *   - Authentication mode and interface
+ * - System info object (for heartbeat messages only) containing:
+ *   - sys_uptime: System uptime in seconds
+ *   - sys_memfree: Free memory in KB
+ *   - sys_load: System load average
+ *   - nf_conntrack_count: Netfilter connection tracking count
+ *   - cpu_usage: CPU usage percentage
+ *   - cpu_temp: CPU temperature in Celsius (-1 if unable to read)
+ *   - wifidog_uptime: Wifidog process uptime in seconds
+ *   - online_clients: Number of online clients
+ *   - offline_clients: Number of offline clients
  *
  * @param out The output evbuffer to write the message to
  * @param type The message type ("heartbeat" or "connect")
@@ -2144,6 +2155,50 @@ send_msg(struct evbuffer *out, const char *type)
 	}
 
 	json_object_object_add(root, "gateway", gw_array);
+
+	// Add system information for heartbeat messages
+	if (strcmp(type, "heartbeat") == 0) {
+		struct sys_info info;
+		memset(&info, 0, sizeof(info));
+		get_sys_info(&info);
+		
+		// Create system info object
+		json_object *sys_info_obj = json_object_new_object();
+		
+		// Add system uptime
+		json_object_object_add(sys_info_obj, "sys_uptime", json_object_new_int64(info.sys_uptime));
+		
+		// Add system memory free (in KB)
+		json_object_object_add(sys_info_obj, "sys_memfree", json_object_new_int64(info.sys_memfree));
+		
+		// Add system load average
+		json_object_object_add(sys_info_obj, "sys_load", json_object_new_double(info.sys_load));
+		
+		// Add netfilter connection tracking count
+		json_object_object_add(sys_info_obj, "nf_conntrack_count", json_object_new_int64(info.nf_conntrack_count));
+		
+		// Add CPU usage percentage
+		json_object_object_add(sys_info_obj, "cpu_usage", json_object_new_double(info.cpu_usage));
+		
+		// Add CPU temperature (in Celsius, -1 if unable to read)
+		json_object_object_add(sys_info_obj, "cpu_temp", json_object_new_int(info.cpu_temp));
+		
+		// Add wifidog uptime (calculated in ping_thread.c logic)
+		extern time_t started_time;
+		long wifidog_uptime = time(NULL) - started_time;
+		if (wifidog_uptime > (long)info.sys_uptime) {
+			wifidog_uptime = 0;  // Reset if inconsistent
+		}
+		json_object_object_add(sys_info_obj, "wifidog_uptime", json_object_new_int64(wifidog_uptime));
+		
+		// Add online and offline client counts
+		extern int g_online_clients;
+		json_object_object_add(sys_info_obj, "online_clients", json_object_new_int(g_online_clients));
+		json_object_object_add(sys_info_obj, "offline_clients", json_object_new_int(offline_client_ageout()));
+		
+		// Add system info to root object
+		json_object_object_add(root, "sys_info", sys_info_obj);
+	}
 
 	// Send formatted JSON message
 	const char *json_str = json_object_to_json_string(root);
