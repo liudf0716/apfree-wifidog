@@ -477,11 +477,81 @@ Server requests to update the device's Wi-Fi information. The device will automa
 
 ---
 
-### 10. Domain Management
+### 10. System Information
+
+#### 10.1 Get System Info Request (Server → Device)
+Server requests current system information from the device. This provides comprehensive monitoring data including system resource usage, process status, and hardware metrics.
+
+**Request:**
+```json
+{
+  "type": "get_sys_info"
+}
+```
+
+**Success Response (Device → Server):**
+```json
+{
+  "type": "get_sys_info_response",
+  "data": {
+    "sys_uptime": 12345,
+    "sys_memfree": 512000,
+    "sys_load": 0.25,
+    "nf_conntrack_count": 100,
+    "cpu_usage": 15.5,
+    "wifidog_uptime": 3600,
+    "cpu_temp": 45
+  }
+}
+```
+
+**Response Fields:**
+- `sys_uptime`: System uptime in seconds since last boot
+- `sys_memfree`: Available free memory in KB
+- `sys_load`: System load average (1-minute average)
+- `nf_conntrack_count`: Number of active network connection tracking entries
+- `cpu_usage`: Current CPU usage percentage (0.0-100.0)
+- `wifidog_uptime`: WiFidog process uptime in seconds since process start
+- `cpu_temp`: CPU temperature in degrees Celsius
+
+**Data Collection Details:**
+- **System Uptime**: Retrieved from `/proc/uptime`
+- **Memory Information**: Retrieved from `/proc/meminfo` (MemFree field)
+- **Load Average**: Retrieved from `/proc/loadavg` (1-minute average)
+- **Connection Tracking**: Retrieved from `/proc/sys/net/netfilter/nf_conntrack_count`
+- **CPU Usage**: Calculated from `/proc/stat` sampling
+- **Process Uptime**: Calculated from WiFidog process start time
+- **CPU Temperature**: Retrieved from thermal sensors in `/sys/class/thermal/thermal_zone*/temp` or `/sys/class/hwmon/hwmon*/temp1_input`
+
+**Error Response (Device → Server):**
+```json
+{
+  "type": "get_sys_info_error",
+  "error": "Failed to retrieve system information"
+}
+```
+
+**Usage Scenarios:**
+- **System Monitoring**: Real-time monitoring of device health and performance
+- **Resource Management**: Tracking memory and CPU usage for capacity planning  
+- **Performance Analysis**: Monitoring system load and connection counts
+- **Temperature Monitoring**: Hardware health monitoring and thermal management
+- **Process Monitoring**: Tracking WiFidog process status and uptime
+
+**Implementation Notes:**
+- All system information is collected in real-time when the request is received
+- Temperature reading attempts multiple thermal sensor paths for compatibility
+- CPU usage calculation involves sampling `/proc/stat` at intervals
+- Error handling ensures partial data collection if some metrics are unavailable
+- Response includes all available metrics even if some collection methods fail
+
+---
+
+### 11. Domain Management
 
 Domain management functionality allows dynamic management of trusted domain lists through WebSocket connections, including exact-match domains and wildcard domains. Network traffic to these domains can pass through the firewall without user authentication.
 
-#### 10.1 Synchronize Trusted Domains List (Server → Device)
+#### 11.1 Synchronize Trusted Domains List (Server → Device)
 
 Completely replaces the current trusted domains list.
 
@@ -512,7 +582,7 @@ Completely replaces the current trusted domains list.
 - Updates UCI configuration for persistence
 - Changes take effect immediately
 
-#### 10.2 Get Trusted Domains List (Server → Device)
+#### 11.2 Get Trusted Domains List (Server → Device)
 
 Retrieves the complete list of currently configured trusted domains.
 
@@ -540,7 +610,7 @@ Retrieves the complete list of currently configured trusted domains.
 - Returns empty array if no domains are configured
 - Domain order in response may not match configuration order
 
-#### 10.3 Synchronize Trusted Wildcard Domains List (Server → Device)
+#### 11.3 Synchronize Trusted Wildcard Domains List (Server → Device)
 
 Completely replaces the current trusted wildcard domains list.
 
@@ -578,7 +648,7 @@ Completely replaces the current trusted wildcard domains list.
 - `*.github.io` - matches username.github.io, project.github.io, etc.
 - `*.googleapis.com` - matches maps.googleapis.com, fonts.googleapis.com, etc.
 
-#### 10.4 Get Trusted Wildcard Domains List (Server → Device)
+#### 11.4 Get Trusted Wildcard Domains List (Server → Device)
 
 Retrieves the complete list of currently configured trusted wildcard domains.
 
