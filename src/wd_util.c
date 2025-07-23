@@ -1531,6 +1531,82 @@ cleanup:
 }
 
 int
+uci_del_list_option(const char *package, const char *section, const char *option)
+{
+    struct uci_context *ctx;
+    struct uci_ptr ptr;
+    int ret = UCI_OK;
+
+    ctx = uci_alloc_context();
+    if (!ctx) {
+        return -1;
+    }
+
+    // First, try to load the package
+    char package_str[128];
+    snprintf(package_str, sizeof(package_str), "%s", package);
+    
+    if (uci_load(ctx, package_str, NULL) != UCI_OK) {
+        debug(LOG_ERR, "Failed to load UCI package: %s", package);
+        ret = -1;
+        goto cleanup;
+    }
+
+    char str[256];
+    snprintf(str, sizeof(str), "%s.%s.%s", package, section, option);
+
+    if (uci_lookup_ptr(ctx, &ptr, str, true) != UCI_OK) {
+        // Option doesn't exist, consider it already deleted
+        debug(LOG_DEBUG, "UCI option %s doesn't exist, consider it deleted", str);
+        goto cleanup;
+    }
+
+    // Check if the option exists
+    if (ptr.o) {
+        if (ptr.o->type == UCI_TYPE_LIST) {
+            // For list type, we need to delete all list items
+            struct uci_element *e, *tmp;
+            struct uci_list *list = &ptr.o->v.list;
+            
+            // Delete all list items first
+            uci_foreach_element_safe(list, tmp, e) {
+                struct uci_ptr del_ptr;
+                memset(&del_ptr, 0, sizeof(del_ptr));
+                del_ptr.package = ptr.package;
+                del_ptr.section = ptr.section;  
+                del_ptr.option = ptr.option;
+                del_ptr.value = e->name;
+                
+                if (uci_del_list(ctx, &del_ptr) != UCI_OK) {
+                    debug(LOG_ERR, "Failed to delete list item: %s", e->name);
+                }
+            }
+        } else {
+            // For non-list type, delete the entire option
+            if (uci_delete(ctx, &ptr) != UCI_OK) {
+                ret = -1;
+                goto cleanup;
+            }
+        }
+
+        // Save and commit changes
+        if (uci_save(ctx, ptr.p) != UCI_OK) {
+            ret = -1;
+            goto cleanup;
+        }
+
+        if (uci_commit(ctx, &ptr.p, false) != UCI_OK) {
+            ret = -1;
+        }
+    }
+    // If option doesn't exist, consider it successful (already deleted)
+
+cleanup:
+    uci_free_context(ctx);
+    return ret;
+}
+
+int
 uci_add_list_value(const char *package, const char *section, const char *option, const char *value)
 {
     struct uci_context *ctx;

@@ -120,6 +120,10 @@ int uci_del_value(const char *, const char *, const char *);
 
 int uci_add_list_value(const char *, const char *, const char *, const char *);
 
+int uci_del_list_option(const char *, const char *, const char *);
+
+int uci_add_list_value(const char *, const char *, const char *, const char *);
+
 /** @brief Execute a shell command */
 int execute(const char *, int);
 
