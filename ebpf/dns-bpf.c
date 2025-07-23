@@ -112,6 +112,7 @@ static __always_inline int dns_monitor_main(struct __sk_buff *skb)
     void *data_end = (void *)(long)skb->data_end;
     void *data = (void *)(long)skb->data;
 
+    bpf_printk("[DNS-BPF] DNS monitor started");
 
     // 解析以太网头
     struct ethhdr *eth = data;
