@@ -112,8 +112,6 @@ static __always_inline int dns_monitor_main(struct __sk_buff *skb)
     void *data_end = (void *)(long)skb->data_end;
     void *data = (void *)(long)skb->data;
 
-    bpf_printk("[DNS-BPF] DNS monitor started");
-
     // 解析以太网头
     struct ethhdr *eth = data;
     if ((void *)(eth + 1) > data_end) {
@@ -168,7 +166,6 @@ static __always_inline int dns_monitor_main(struct __sk_buff *skb)
 
     // 只处理UDP协议
     if (ip_proto != IPPROTO_UDP) {
-        bpf_printk("[DNS-BPF] drop: not UDP");
         return TC_ACT_OK;
     }
 
@@ -185,7 +182,7 @@ static __always_inline int dns_monitor_main(struct __sk_buff *skb)
 
 
     // 检查是否为DNS流量（端口53）
-    if (src_port != 53 && dst_port != 53) {
+    if (src_port != 53) {
         bpf_printk("[DNS-BPF] drop: not DNS port src=%d dst=%d", src_port, dst_port);
         return TC_ACT_OK;
     }
@@ -221,8 +218,6 @@ static __always_inline int dns_monitor_main(struct __sk_buff *skb)
     if (dns_payload_len > MAX_DNS_PAYLOAD_LEN) {
         dns_payload_len = MAX_DNS_PAYLOAD_LEN; // 截断到最大允许长度
     }
-    bpf_printk("[DNS-BPF] DNS response: payload_len=%d", dns_payload_len);
-
 
     // 分配ring buffer空间
     struct raw_dns_data *output_data = bpf_ringbuf_reserve(&dns_ringbuf, sizeof(*output_data), 0);
@@ -266,23 +261,21 @@ static __always_inline int dns_monitor_main(struct __sk_buff *skb)
                 if ((void *)(src + i + 1) > data_end) break;
                 dst[i] = src[i];
             }
-            bpf_printk("[DNS-BPF] payload copied: len=%d", copy_len);
         } else {
             output_data->pkt_len = 0;
-            bpf_printk("[DNS-BPF] drop: payload out of bounds");
         }
     }
 
 
     // 提交数据到ring buffer
     bpf_ringbuf_submit(output_data, 0);
-    bpf_printk("[DNS-BPF] ringbuf submitted");
+    bpf_printk("[DNS-BPF] ringbuf submitted with len=%d", output_data->pkt_len);
 
     return TC_ACT_OK; // 继续处理数据包
 }
 
-// TC ingress程序入口点 - 专门监控DNS响应
-SEC("tc/dns/ingress")
+// TC egress程序入口点 - 专门监控DNS响应
+SEC("tc/dns/egress")
 int dns_monitor_ingress(struct __sk_buff *skb)
 {
     return dns_monitor_main(skb);
