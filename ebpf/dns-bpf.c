@@ -269,7 +269,7 @@ static __always_inline int dns_monitor_main(struct __sk_buff *skb)
 
     // 提交数据到ring buffer
     bpf_ringbuf_submit(output_data, 0);
-    bpf_printk("[DNS-BPF] ringbuf submitted with len=%d", output_data->pkt_len);
+    
 
     return TC_ACT_OK; // 继续处理数据包
 }
