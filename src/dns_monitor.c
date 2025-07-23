@@ -448,14 +448,22 @@ static int parse_dns_header(const struct dns_hdr *dns_hdr, __u16 *flags, __u16 *
     *qdcount = ntohs(dns_hdr->qdcount);
     *ancount = ntohs(dns_hdr->ancount);
     
-    // 验证DNS头部
+    // 验证DNS头部 - 放宽验证条件，只检查必要的字段
     __u8 qr = (*flags >> 15) & 0x1;
     __u8 opcode = (*flags >> 11) & 0xF;
     __u8 rcode = *flags & 0xF;
     
-    if (qr != 1 || opcode != 0 || rcode != 0) {
-        debug(LOG_DEBUG, "DNS header validation: qr=%d, opcode=%d, rcode=%d", qr, opcode, rcode);
+    debug(LOG_DEBUG, "DNS header validation: qr=%d, opcode=%d, rcode=%d", qr, opcode, rcode);
+    
+    // 只要求是响应(QR=1)和标准查询(opcode=0)，允许各种响应码
+    if (qr != 1 || opcode != 0) {
+        debug(LOG_DEBUG, "DNS header validation failed: qr=%d (should be 1), opcode=%d (should be 0)", qr, opcode);
         return -1;
+    }
+    
+    // 允许有错误响应码的DNS响应，因为我们仍然需要处理这些响应
+    if (rcode != 0) {
+        debug(LOG_DEBUG, "DNS response has error code: %d", rcode);
     }
     
     return 0;
@@ -472,11 +480,15 @@ static int parse_dns_name(const unsigned char *payload, int payload_len, int off
     int max_jumps = 5;
     int jumps = 0;
     
-    if (!payload || !name || offset >= payload_len) {
+    if (!payload || offset >= payload_len) {
         return -1;
     }
     
-    name[0] = '\0';
+    // 如果name为NULL，说明调用者只想跳过域名，不需要解析内容
+    int skip_only = (name == NULL || max_len == 0);
+    if (!skip_only) {
+        name[0] = '\0';
+    }
     
     while (pos < payload_len && jumps < max_jumps) {
         int len = payload[pos];
@@ -505,18 +517,24 @@ static int parse_dns_name(const unsigned char *payload, int payload_len, int off
             return -1;
         }
         
-        if (name_pos > 0 && name_pos < max_len - 1) {
-            name[name_pos++] = '.';
-        }
-        
-        for (int i = 0; i < len && name_pos < max_len - 1; i++) {
-            name[name_pos++] = payload[pos + 1 + i];
+        // 只在需要解析域名时才进行字符串操作
+        if (!skip_only) {
+            if (name_pos > 0 && name_pos < max_len - 1) {
+                name[name_pos++] = '.';
+            }
+            
+            for (int i = 0; i < len && name_pos < max_len - 1; i++) {
+                name[name_pos++] = payload[pos + 1 + i];
+            }
         }
         
         pos += len + 1;
     }
     
-    name[name_pos] = '\0';
+    if (!skip_only) {
+        name[name_pos] = '\0';
+    }
+    
     return jumped ? jumped : pos;
 }
 
@@ -827,39 +845,66 @@ static int process_dns_answers(const unsigned char *payload, int payload_len, in
 {
     int pos = offset;
     
+    debug(LOG_DEBUG, "Processing %d DNS answers starting at offset %d, payload_len=%d", ancount, offset, payload_len);
+    
     for (int i = 0; i < ancount && pos < payload_len; i++) {
-        // 跳过域名
+        debug(LOG_DEBUG, "Processing answer %d/%d at position %d", i+1, ancount, pos);
+        
+        // 跳过域名 - 现在可以安全使用NULL参数
         int name_end = parse_dns_name(payload, payload_len, pos, NULL, 0);
         if (name_end < 0) {
+            debug(LOG_DEBUG, "Failed to parse DNS name at position %d", pos);
             return -1;
         }
         pos = name_end;
         
+        debug(LOG_DEBUG, "Skipped answer name, new position: %d", pos);
+        
+        // 检查是否有足够的空间读取资源记录头部 (type + class + ttl + rdlength = 10 bytes)
         if (pos + 10 > payload_len) {
+            debug(LOG_DEBUG, "Not enough space for RR header at position %d (need 10 bytes, have %d)", 
+                  pos, payload_len - pos);
             return -1;
         }
         
         __u16 type = ntohs(*((__u16 *)(payload + pos)));
-        // __u16 class = ntohs(*((__u16 *)(payload + pos + 2))); // 暂时不使用
-        // __u32 ttl = ntohl(*((__u32 *)(payload + pos + 4))); // 暂时不使用
+        __u16 class = ntohs(*((__u16 *)(payload + pos + 2)));
+        __u32 ttl = ntohl(*((__u32 *)(payload + pos + 4)));
         __u16 rdlength = ntohs(*((__u16 *)(payload + pos + 8)));
+        
+        debug(LOG_DEBUG, "RR: type=%d, class=%d, ttl=%u, rdlength=%d", type, class, ttl, rdlength);
         
         pos += 10;
         
+        // 检查是否有足够的空间读取资源数据
         if (pos + rdlength > payload_len) {
+            debug(LOG_DEBUG, "Not enough space for RR data at position %d (need %d bytes, have %d)", 
+                  pos, rdlength, payload_len - pos);
             return -1;
         }
         
-        if ((type == DNS_RR_TYPE_A && rdlength == IPV4_ADDR_LEN) ||
-            (type == DNS_RR_TYPE_AAAA && rdlength == IPV6_ADDR_LEN)) {
+        // 只处理A记录和AAAA记录，且长度必须正确
+        if (type == DNS_RR_TYPE_A && rdlength == IPV4_ADDR_LEN) {
+            debug(LOG_DEBUG, "Processing A record with %d bytes", rdlength);
             if (add_trusted_ip(trusted_domain, type, payload + pos) != 0) {
+                debug(LOG_DEBUG, "Failed to add IPv4 trusted IP");
                 return -1;
             }
+        } else if (type == DNS_RR_TYPE_AAAA && rdlength == IPV6_ADDR_LEN) {
+            debug(LOG_DEBUG, "Processing AAAA record with %d bytes", rdlength);
+            if (add_trusted_ip(trusted_domain, type, payload + pos) != 0) {
+                debug(LOG_DEBUG, "Failed to add IPv6 trusted IP");
+                return -1;
+            }
+        } else {
+            debug(LOG_DEBUG, "Skipping RR type %d with rdlength %d", type, rdlength);
         }
         
         pos += rdlength;
+        debug(LOG_DEBUG, "Advanced to position %d after processing RR data", pos);
     }
     
+    debug(LOG_DEBUG, "Successfully processed all %d DNS answers", ancount);
     return 0;
 }
 
@@ -1004,18 +1049,25 @@ static void handle_xdpi_domain_processing(const char *query_name)
 static int process_dns_response_extended(const struct raw_dns_data *dns_data)
 {
     if (!dns_data || dns_data->pkt_len < sizeof(struct dns_hdr)) {
+        debug(LOG_DEBUG, "Invalid DNS data: ptr=%p, len=%d, min_len=%zu", 
+              dns_data, dns_data ? dns_data->pkt_len : 0, sizeof(struct dns_hdr));
         return -1;
     }
     
     const struct dns_hdr *dns_hdr = (const struct dns_hdr *)dns_data->dns_payload;
     __u16 flags, qdcount, ancount;
     
+    debug(LOG_DEBUG, "Processing DNS response with payload length: %d", dns_data->pkt_len);
+    
     if (parse_dns_header(dns_hdr, &flags, &qdcount, &ancount) != 0) {
+        debug(LOG_DEBUG, "DNS header parsing failed");
         return -1;
     }
     
+    debug(LOG_DEBUG, "DNS header parsed: qdcount=%d, ancount=%d", qdcount, ancount);
+    
     if (qdcount != 1) {
-        debug(LOG_DEBUG, "Unsupported qdcount: %d", qdcount);
+        debug(LOG_DEBUG, "Unsupported qdcount: %d (expected 1)", qdcount);
         return 0;
     }
     
@@ -1027,7 +1079,8 @@ static int process_dns_response_extended(const struct raw_dns_data *dns_data)
         return -1;
     }
     
-    debug(LOG_DEBUG, "Parsed DNS query: %s (type=%d)", name_info.query_name, name_info.qtype);
+    debug(LOG_DEBUG, "Parsed DNS query: '%s' (type=%d), answers start at offset %d", 
+          name_info.query_name, name_info.qtype, answers_offset);
     
     // xDPI域名处理（排除反向DNS查询）
     if (!strstr(name_info.query_name, "in-addr.arpa") && !strstr(name_info.query_name, "ip6.arpa")) {
@@ -1036,12 +1089,20 @@ static int process_dns_response_extended(const struct raw_dns_data *dns_data)
     
     // 可信域名处理
     t_domain_trusted *trusted_domain = NULL;
-    if (is_trusted_domain(name_info.query_name, &trusted_domain) && ancount > 0) {
-        debug(LOG_DEBUG, "Processing answers for trusted domain: %s", name_info.query_name);
-        if (process_dns_answers(dns_data->dns_payload, dns_data->pkt_len, answers_offset, ancount, trusted_domain) != 0) {
-            debug(LOG_DEBUG, "Failed to process DNS answers");
-            return -1;
+    if (is_trusted_domain(name_info.query_name, &trusted_domain)) {
+        debug(LOG_DEBUG, "Domain '%s' is trusted, ancount=%d", name_info.query_name, ancount);
+        if (ancount > 0) {
+            debug(LOG_DEBUG, "Processing %d answers for trusted domain: %s", ancount, name_info.query_name);
+            if (process_dns_answers(dns_data->dns_payload, dns_data->pkt_len, answers_offset, ancount, trusted_domain) != 0) {
+                debug(LOG_DEBUG, "Failed to process DNS answers for domain: %s", name_info.query_name);
+                return -1;
+            }
+            debug(LOG_DEBUG, "Successfully processed DNS answers for domain: %s", name_info.query_name);
+        } else {
+            debug(LOG_DEBUG, "Trusted domain '%s' has no answers to process", name_info.query_name);
         }
+    } else {
+        debug(LOG_DEBUG, "Domain '%s' is not in trusted domain list", name_info.query_name);
     }
     
     return 0;
