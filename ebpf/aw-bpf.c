@@ -103,6 +103,15 @@ struct {
     __uint(max_entries, 1 << 24);
 } session_events_map SEC(".maps");
 
+// Program array map for tail calls to dns-bpf
+struct {
+    __uint(type, BPF_MAP_TYPE_PROG_ARRAY);
+    __uint(pinning, 1);
+    __uint(max_entries, 8);
+    __type(key, __u32);
+    __type(value, __u32);
+} prog_array_map SEC(".maps");
+
 static __always_inline __u32 get_current_time(void)
 {
     __u32 val = bpf_ktime_get_ns() / 1000000000;
@@ -691,12 +700,28 @@ static inline int process_packet(struct __sk_buff *skb, direction_t dir) {
 
 SEC("tc/ingress")
 int tc_ingress(struct __sk_buff *skb) {
-    return process_packet(skb, INGRESS) ? TC_ACT_SHOT : TC_ACT_OK;
+    int result = process_packet(skb, INGRESS);
+    if (result) {
+        return TC_ACT_SHOT;
+    }
+    
+    // No DNS processing needed for ingress (DNS responses come from egress)
+    return TC_ACT_OK;
 }
 
 SEC("tc/egress")
 int tc_egress(struct __sk_buff *skb) {
-    return process_packet(skb, EGRESS) ? TC_ACT_SHOT : TC_ACT_OK;
+    int result = process_packet(skb, EGRESS);
+    if (result) {
+        return TC_ACT_SHOT;
+    }
+    
+    // Tail call to dns-bpf program for DNS response processing
+    // Index 0 is reserved for DNS egress handler (DNS responses)
+    bpf_tail_call(skb, &prog_array_map, 0);
+    
+    // If tail call fails, continue with normal processing
+    return TC_ACT_OK;
 }
 
 char _license[] SEC("license") = "GPL";
