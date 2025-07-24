@@ -275,7 +275,7 @@ static __always_inline int dns_monitor_main(struct __sk_buff *skb)
 
 // DNS egress handler - called via tail call from aw-bpf  
 // DNS responses are typically processed in egress direction
-SEC("dns_egress")
+SEC("tc/egress")
 int dns_handler_egress(struct __sk_buff *skb)
 {
     return dns_monitor_main(skb);
