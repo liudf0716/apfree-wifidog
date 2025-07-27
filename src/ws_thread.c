@@ -1013,26 +1013,28 @@ static void handle_get_wifi_info_request(json_object *j_req, struct bufferevent 
         json_object_object_add(j_data, devices[d].device_name, j_radio);
     }
 
-    // Get available network interfaces list for WiFi configuration
+    // Get available network interfaces list for WiFi configuration (only static proto)
     json_object *j_networks = json_object_new_array();
-    fp = popen("uci show network | grep -E '^network\\.[^.]*=' | grep -v '=interface'", "r");
+    
+    // First, get all network interfaces with proto=static
+    fp = popen("uci show network | grep '\\.proto=.static.'", "r");
     if (fp) {
         while (fgets(buffer, sizeof(buffer), fp) != NULL) {
             buffer[strcspn(buffer, "\n")] = 0;
             char *key = strtok(buffer, "=");
             
-            if (key && strstr(key, "network.") == key) {
+            if (key && strstr(key, "network.") == key && strstr(key, ".proto")) {
                 char *key_copy = strdup(key);
-                char *parts[3];
+                char *parts[4];
                 int part_count = 0;
                 
                 char *token = strtok(key_copy, ".");
-                while (token && part_count < 3) {
+                while (token && part_count < 4) {
                     parts[part_count++] = token;
                     token = strtok(NULL, ".");
                 }
                 
-                if (part_count >= 2) {
+                if (part_count >= 3 && strcmp(parts[2], "proto") == 0) {
                     char *interface_name = parts[1];
                     // Skip system interfaces
                     if (strcmp(interface_name, "loopback") != 0 && 
