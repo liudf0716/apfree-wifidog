@@ -798,11 +798,7 @@ static void handle_reboot_device_request(json_object *j_req, struct bufferevent 
  *         }
  *       ]
  *     },
- *     "networks": {
- *       "lan": {"ipaddr": "192.168.1.254"},
- *       "lan2": {"ipaddr": "192.168.67.1"},
- *       "lan3": {"ipaddr": "169.254.31.1"}
- *     }
+ *     "available_networks": ["lan", "lan2", "lan3", "wan", "wan6"]
  *   }
  * }
  *
@@ -1017,50 +1013,54 @@ static void handle_get_wifi_info_request(json_object *j_req, struct bufferevent 
         json_object_object_add(j_data, devices[d].device_name, j_radio);
     }
 
-    // Get network interface information
-    json_object *j_networks = json_object_new_object();
-    fp = popen("uci show network | grep -E 'interface\\.|device\\.'", "r");
+    // Get available network interfaces list for WiFi configuration
+    json_object *j_networks = json_object_new_array();
+    fp = popen("uci show network | grep -E '^network\\.[^.]*=' | grep -v '=interface'", "r");
     if (fp) {
         while (fgets(buffer, sizeof(buffer), fp) != NULL) {
             buffer[strcspn(buffer, "\n")] = 0;
             char *key = strtok(buffer, "=");
-            char *value_with_quotes = strtok(NULL, "=");
             
-            if (key && value_with_quotes) {
-                char *value = value_with_quotes;
-                if (value[0] == '\'' && value[strlen(value) - 1] == '\'') {
-                    value = value + 1;
-                    value[strlen(value) - 1] = '\0';
+            if (key && strstr(key, "network.") == key) {
+                char *key_copy = strdup(key);
+                char *parts[3];
+                int part_count = 0;
+                
+                char *token = strtok(key_copy, ".");
+                while (token && part_count < 3) {
+                    parts[part_count++] = token;
+                    token = strtok(NULL, ".");
                 }
                 
-                // Parse network configuration for interface IP addresses
-                if (strstr(key, "network.") == key && strstr(key, ".ipaddr")) {
-                    char *key_copy = strdup(key);
-                    char *parts[4];
-                    int part_count = 0;
-                    
-                    char *token = strtok(key_copy, ".");
-                    while (token && part_count < 4) {
-                        parts[part_count++] = token;
-                        token = strtok(NULL, ".");
-                    }
-                    
-                    if (part_count >= 3) {
-                        char *interface_name = parts[1];
-                        json_object *j_net_iface = NULL;
-                        if (!json_object_object_get_ex(j_networks, interface_name, &j_net_iface)) {
-                            j_net_iface = json_object_new_object();
-                            json_object_object_add(j_networks, interface_name, j_net_iface);
+                if (part_count >= 2) {
+                    char *interface_name = parts[1];
+                    // Skip system interfaces
+                    if (strcmp(interface_name, "loopback") != 0 && 
+                        strcmp(interface_name, "globals") != 0) {
+                        
+                        // Check if this interface is already in the array
+                        int found = 0;
+                        int array_len = json_object_array_length(j_networks);
+                        for (int i = 0; i < array_len; i++) {
+                            json_object *existing = json_object_array_get_idx(j_networks, i);
+                            const char *existing_name = json_object_get_string(existing);
+                            if (strcmp(existing_name, interface_name) == 0) {
+                                found = 1;
+                                break;
+                            }
                         }
-                        json_object_object_add(j_net_iface, "ipaddr", json_object_new_string(value));
+                        
+                        if (!found) {
+                            json_object_array_add(j_networks, json_object_new_string(interface_name));
+                        }
                     }
-                    free(key_copy);
                 }
+                free(key_copy);
             }
         }
         pclose(fp);
     }
-    json_object_object_add(j_data, "networks", j_networks);
+    json_object_object_add(j_data, "available_networks", j_networks);
 
     // Construct response
     json_object_object_add(j_response, "type", json_object_new_string("get_wifi_info_response"));
@@ -1115,12 +1115,12 @@ static void handle_get_wifi_info_request(json_object *j_req, struct bufferevent 
 
 
 /**
- * @brief Handles a request to set complete Wi-Fi and network configuration.
+ * @brief Handles a request to set complete Wi-Fi configuration.
  *
  * This function is called by process_ws_msg() when a "set_wifi_info"
- * message is received. It accepts comprehensive wireless and network
- * configuration data, updates UCI configuration using helper functions,
- * commits changes, and reloads services to apply the new settings.
+ * message is received. It accepts comprehensive wireless configuration
+ * data, updates UCI wireless configuration using helper functions,
+ * commits changes, and reloads wifi service to apply the new settings.
  *
  * Expected JSON request format:
  * {
@@ -1170,8 +1170,7 @@ static void handle_get_wifi_info_request(json_object *j_req, struct bufferevent 
  * The function processes:
  * 1. Radio device settings: channel, htmode, cell_density
  * 2. Interface configurations: mode, ssid, key, encryption, network, mesh_id, disabled
- * 3. Network interface settings: ipaddr, netmask
- * 4. Commits all UCI changes and reloads wifi/network services
+ * 3. Commits UCI wireless changes and reloads wifi service
  *
  * Supported interface modes:
  * - AP mode: Requires ssid, key, encryption
@@ -1183,7 +1182,7 @@ static void handle_get_wifi_info_request(json_object *j_req, struct bufferevent 
  *   "type": "set_wifi_info_response",
  *   "data": {
  *     "status": "success",
- *     "message": "Wi-Fi and network configuration updated successfully"
+ *     "message": "Wi-Fi configuration updated successfully"
  *   }
  * }
  *
@@ -1223,7 +1222,7 @@ static int set_uci_config(const char *config_path, const char *value) {
  * @brief Helper function to commit UCI changes
  */
 static int commit_uci_changes(void) {
-    FILE *fp = popen("uci commit wireless && uci commit network", "r");
+    FILE *fp = popen("uci commit wireless", "r");
     if (!fp) {
         debug(LOG_ERR, "Failed to commit UCI changes");
         return -1;
@@ -1385,30 +1384,7 @@ static void handle_set_wifi_info_request(json_object *j_req, struct bufferevent 
         }
     }
 
-    // Configure network interfaces if provided
-    json_object *j_networks;
-    if (json_object_object_get_ex(j_data, "networks", &j_networks)) {
-        json_object_object_foreach(j_networks, network_name, j_network_config) {
-            json_object *j_value;
-            if (json_object_object_get_ex(j_network_config, "ipaddr", &j_value)) {
-                char config_path[128];
-                snprintf(config_path, sizeof(config_path), "network.%s.ipaddr", network_name);
-                if (set_uci_config(config_path, json_object_get_string(j_value)) != 0) {
-                    success = 0;
-                    snprintf(error_msg, sizeof(error_msg), "Failed to set IP address for network %s", network_name);
-                }
-            }
 
-            if (json_object_object_get_ex(j_network_config, "netmask", &j_value)) {
-                char config_path[128];
-                snprintf(config_path, sizeof(config_path), "network.%s.netmask", network_name);
-                if (set_uci_config(config_path, json_object_get_string(j_value)) != 0) {
-                    success = 0;
-                    snprintf(error_msg, sizeof(error_msg), "Failed to set netmask for network %s", network_name);
-                }
-            }
-        }
-    }
 
     if (success) {
         // Commit UCI changes
@@ -1419,8 +1395,8 @@ static void handle_set_wifi_info_request(json_object *j_req, struct bufferevent 
     }
 
     if (success) {
-        // Reload wifi and network to apply changes
-        FILE *reload_fp = popen("wifi reload && /etc/init.d/network reload", "r");
+        // Reload wifi to apply changes
+        FILE *reload_fp = popen("wifi reload", "r");
         if (reload_fp == NULL) {
             debug(LOG_ERR, "Failed to run reload commands");
             json_object_object_add(j_response, "type", json_object_new_string("set_wifi_info_error"));
@@ -1431,7 +1407,7 @@ static void handle_set_wifi_info_request(json_object *j_req, struct bufferevent 
             // Construct success response
             json_object *j_resp_data = json_object_new_object();
             json_object_object_add(j_resp_data, "status", json_object_new_string("success"));
-            json_object_object_add(j_resp_data, "message", json_object_new_string("Wi-Fi and network configuration updated successfully"));
+            json_object_object_add(j_resp_data, "message", json_object_new_string("Wi-Fi configuration updated successfully"));
             json_object_object_add(j_response, "type", json_object_new_string("set_wifi_info_response"));
             json_object_object_add(j_response, "data", j_resp_data);
         }
