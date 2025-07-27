@@ -434,6 +434,10 @@ get_sys_info(struct sys_info *info)
 	info->cpu_usage = get_cpu_usage();
 	info->cpu_temp = get_cpu_temperature();
 	
+	// Set wifidog uptime based on started_time
+	extern time_t started_time;
+	info->wifidog_uptime = time(NULL) - started_time;
+	
     if ((fh = fopen("/proc/uptime", "r"))) {
         if (fscanf(fh, "%lu", &info->sys_uptime) != 1)
             debug(LOG_CRIT, "Failed to read uptime");
