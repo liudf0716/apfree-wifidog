@@ -112,16 +112,7 @@ static void reconnect_websocket(void);
 static void scheduled_reconnect_cb(evutil_socket_t fd, short events, void *arg);
 static void ws_send(struct evbuffer *buf, const char *msg, const size_t len, enum WebSocketFrameType frame_type);
 
-/* Helper structure for Wi-Fi interface information */
-struct wifi_interface_info {
-    char interface_name[64];
-    char device[16];
-    char mode[16];
-};
 
-/* Helper function for setting Wi-Fi configuration */
-static int set_radio_wifi_config(json_object *j_radio, const char *target_device,
-                                 struct wifi_interface_info *interfaces, int interface_count);
 
 /**
  * @brief Generates a secure WebSocket key for WebSocket handshake
@@ -748,33 +739,69 @@ static void handle_reboot_device_request(json_object *j_req, struct bufferevent 
 }
 
 /**
- * @brief Handles a request to get Wi-Fi information.
+ * @brief Handles a request to get complete Wi-Fi configuration information.
  *
  * This function is called by process_ws_msg() when a "get_wifi_info"
- * message is received. It executes the command "uci show wireless"
- * to retrieve Wi-Fi details, parses the output, and sends
- * this information back to the client in a JSON response.
+ * message is received. It executes "uci show wireless" and "uci show network"
+ * to retrieve complete wireless and network configuration, parses the output,
+ * and sends comprehensive information back to the client in a structured JSON response.
  *
- * The function extracts 2.4G and 5G radio information including:
- * - SSID and Key from AP interfaces (mode='ap')
- * - Mesh ID and Mesh Key from mesh interfaces (mode='mesh')
- * - Supports any interface names, not just default_radio0/1
+ * The function extracts complete radio device and interface information including:
+ * - Radio device settings: type, path, band, channel, htmode, cell_density
+ * - Interface configurations: mode, ssid, key, encryption, network, mesh_id, disabled status
+ * - Network interface IP addresses
+ *
+ * Supported interface modes:
+ * - AP mode: Creates WiFi access point with SSID and password
+ * - Mesh mode: Creates mesh network with mesh_id and encryption
+ * - STA mode: Client mode for connecting to other networks
  *
  * The JSON response format is:
  * {
  *   "type": "get_wifi_info_response",
  *   "data": {
  *     "radio0": {
- *       "ssid": "OpenWrt_2G",
- *       "key": "password123",
- *       "mesh_id": "mesh_network_2g",
- *       "mesh_key": "mesh_password123"
+ *       "type": "mac80211",
+ *       "path": "platform/soc/18000000.wifi",
+ *       "band": "2g",
+ *       "channel": 8,
+ *       "htmode": "HT20",
+ *       "cell_density": 0,
+ *       "interfaces": [
+ *         {
+ *           "interface_name": "wifinet3",
+ *           "mode": "ap",
+ *           "ssid": "MyWiFi-2.4G",
+ *           "key": "password123",
+ *           "encryption": "psk2",
+ *           "network": "lan2",
+ *           "disabled": false
+ *         }
+ *       ]
  *     },
  *     "radio1": {
- *       "ssid": "OpenWrt_5G", 
- *       "key": "password123",
- *       "mesh_id": "mesh_network_5g",
- *       "mesh_key": "mesh_password123"
+ *       "type": "mac80211",
+ *       "path": "platform/soc/18000000.wifi+1",
+ *       "band": "5g",
+ *       "channel": 36,
+ *       "htmode": "HE80",
+ *       "cell_density": 0,
+ *       "interfaces": [
+ *         {
+ *           "interface_name": "default_radio1",
+ *           "mode": "mesh",
+ *           "mesh_id": "my-mesh-network",
+ *           "key": "meshkey123",
+ *           "encryption": "sae",
+ *           "network": "lan3",
+ *           "disabled": false
+ *         }
+ *       ]
+ *     },
+ *     "networks": {
+ *       "lan": {"ipaddr": "192.168.1.254"},
+ *       "lan2": {"ipaddr": "192.168.67.1"},
+ *       "lan3": {"ipaddr": "169.254.31.1"}
  *     }
  *   }
  * }
@@ -1085,158 +1112,88 @@ static void handle_get_wifi_info_request(json_object *j_req, struct bufferevent 
  * @param bev The bufferevent associated with the WebSocket connection, used
  *            for sending the response.
  */
-/**
- * @brief Helper function to set Wi-Fi configuration for a specific radio device.
- * 
- * This function searches for interfaces belonging to the specified radio device
- * and updates their configuration based on the interface mode (AP or mesh).
- * 
- * @param j_radio JSON object containing radio configuration (ssid, key, mesh_id, mesh_key)
- * @param target_device Target radio device name (e.g., "radio0", "radio1")
- * @param interfaces Array of interface information structures
- * @param interface_count Number of interfaces in the array
- * @return 0 on success, -1 on failure
- */
-static int set_radio_wifi_config(json_object *j_radio, const char *target_device,
-                                 struct wifi_interface_info *interfaces, int interface_count) {
-    if (!j_radio || !target_device || !interfaces) {
-        return 0; // No error if no config provided
-    }
-    
-    json_object *j_ssid, *j_key, *j_mesh_id, *j_mesh_key;
-    const char *ssid = NULL, *key = NULL, *mesh_id = NULL, *mesh_key = NULL;
-    int success = 1;
-    
-    // Extract values from JSON
-    if (json_object_object_get_ex(j_radio, "ssid", &j_ssid)) {
-        ssid = json_object_get_string(j_ssid);
-        // Skip empty strings
-        if (ssid && strlen(ssid) == 0) {
-            ssid = NULL;
-        }
-    }
-    if (json_object_object_get_ex(j_radio, "key", &j_key)) {
-        key = json_object_get_string(j_key);
-        // Skip empty strings
-        if (key && strlen(key) == 0) {
-            key = NULL;
-        }
-    }
-    if (json_object_object_get_ex(j_radio, "mesh_id", &j_mesh_id)) {
-        mesh_id = json_object_get_string(j_mesh_id);
-        // Skip empty strings
-        if (mesh_id && strlen(mesh_id) == 0) {
-            mesh_id = NULL;
-        }
-    }
-    if (json_object_object_get_ex(j_radio, "mesh_key", &j_mesh_key)) {
-        mesh_key = json_object_get_string(j_mesh_key);
-        // Skip empty strings
-        if (mesh_key && strlen(mesh_key) == 0) {
-            mesh_key = NULL;
-        }
-    }
-    
-    // Find interfaces for this device and update them
-    for (int i = 0; i < interface_count; i++) {
-        if (strcmp(interfaces[i].device, target_device) == 0) {
-            if (strcmp(interfaces[i].mode, "ap") == 0) {
-                // Update AP interface
-                if (ssid) {
-                    debug(LOG_INFO, "Setting SSID for AP interface %s: %s", interfaces[i].interface_name, ssid);
-                    if (uci_set_value("wireless", interfaces[i].interface_name, "ssid", ssid) != 0) {
-                        debug(LOG_ERR, "Failed to set SSID for %s", interfaces[i].interface_name);
-                        success = 0;
-                    }
-                } else {
-                    debug(LOG_DEBUG, "Skipping empty SSID for AP interface %s", interfaces[i].interface_name);
-                }
-                if (key) {
-                    debug(LOG_INFO, "Setting key for AP interface %s", interfaces[i].interface_name);
-                    if (uci_set_value("wireless", interfaces[i].interface_name, "key", key) != 0) {
-                        debug(LOG_ERR, "Failed to set key for %s", interfaces[i].interface_name);
-                        success = 0;
-                    }
-                } else {
-                    debug(LOG_DEBUG, "Skipping empty key for AP interface %s", interfaces[i].interface_name);
-                }
-            } else if (strcmp(interfaces[i].mode, "mesh") == 0) {
-                // Update mesh interface
-                if (mesh_id) {
-                    debug(LOG_INFO, "Setting mesh_id for mesh interface %s: %s", interfaces[i].interface_name, mesh_id);
-                    if (uci_set_value("wireless", interfaces[i].interface_name, "mesh_id", mesh_id) != 0) {
-                        debug(LOG_ERR, "Failed to set mesh_id for %s", interfaces[i].interface_name);
-                        success = 0;
-                    }
-                } else {
-                    debug(LOG_DEBUG, "Skipping empty mesh_id for mesh interface %s", interfaces[i].interface_name);
-                }
-                if (mesh_key) {
-                    debug(LOG_INFO, "Setting mesh key for mesh interface %s", interfaces[i].interface_name);
-                    if (uci_set_value("wireless", interfaces[i].interface_name, "key", mesh_key) != 0) {
-                        debug(LOG_ERR, "Failed to set mesh key for %s", interfaces[i].interface_name);
-                        success = 0;
-                    }
-                } else {
-                    debug(LOG_DEBUG, "Skipping empty mesh_key for mesh interface %s", interfaces[i].interface_name);
-                }
-            }
-        }
-    }
-    
-    return success ? 0 : -1;
-}
+
 
 /**
- * @brief Handles a request to set Wi-Fi information.
+ * @brief Handles a request to set complete Wi-Fi and network configuration.
  *
  * This function is called by process_ws_msg() when a "set_wifi_info"
- * message is received. It accepts Wi-Fi configuration data for both
- * 2.4G and 5G radios, updates the UCI wireless configuration,
- * and restarts the Wi-Fi to apply changes.
+ * message is received. It accepts comprehensive wireless and network
+ * configuration data, updates UCI configuration using helper functions,
+ * commits changes, and reloads services to apply the new settings.
  *
  * Expected JSON request format:
  * {
  *   "type": "set_wifi_info",
  *   "data": {
  *     "radio0": {
- *       "ssid": "New_2G_SSID",
- *       "key": "new_password123",
- *       "mesh_id": "new_mesh_2g",
- *       "mesh_key": "new_mesh_password123"
+ *       "channel": "8",
+ *       "htmode": "HT20",
+ *       "cell_density": 0,
+ *       "interfaces": [
+ *         {
+ *           "interface_name": "wifinet3",
+ *           "mode": "ap",
+ *           "ssid": "MyWiFi-2.4G",
+ *           "key": "password123",
+ *           "encryption": "psk2",
+ *           "network": "lan2",
+ *           "disabled": false
+ *         }
+ *       ]
  *     },
  *     "radio1": {
- *       "ssid": "New_5G_SSID",
- *       "key": "new_password123",
- *       "mesh_id": "new_mesh_5g",
- *       "mesh_key": "new_mesh_password123"
+ *       "channel": "36",
+ *       "htmode": "HE80",
+ *       "cell_density": 0,
+ *       "interfaces": [
+ *         {
+ *           "interface_name": "default_radio1",
+ *           "mode": "mesh",
+ *           "mesh_id": "my-mesh-network",
+ *           "key": "meshkey123",
+ *           "encryption": "sae",
+ *           "network": "lan3",
+ *           "disabled": false
+ *         }
+ *       ]
+ *     },
+ *     "networks": {
+ *       "lan2": {
+ *         "ipaddr": "192.168.100.1",
+ *         "netmask": "255.255.255.0"
+ *       }
  *     }
  *   }
  * }
  *
- * The function will:
- * 1. Find the appropriate AP interfaces for each radio
- * 2. Find the appropriate mesh interfaces for each radio  
- * 3. Update SSID/key for AP interfaces
- * 4. Update mesh_id/mesh_key for mesh interfaces
- * 5. Commit UCI changes and restart Wi-Fi
+ * The function processes:
+ * 1. Radio device settings: channel, htmode, cell_density
+ * 2. Interface configurations: mode, ssid, key, encryption, network, mesh_id, disabled
+ * 3. Network interface settings: ipaddr, netmask
+ * 4. Commits all UCI changes and reloads wifi/network services
+ *
+ * Supported interface modes:
+ * - AP mode: Requires ssid, key, encryption
+ * - Mesh mode: Requires mesh_id, key, encryption (typically "sae")
+ * - STA mode: For client connections
  *
  * Success response:
  * {
  *   "type": "set_wifi_info_response",
  *   "data": {
  *     "status": "success",
- *     "message": "Wi-Fi configuration updated successfully"
+ *     "message": "Wi-Fi and network configuration updated successfully"
  *   }
  * }
  *
  * Error response:
  * {
  *   "type": "set_wifi_info_error",
- *   "error": "Error description"
+ *   "error": "Specific error description"
  * }
  *
- * @param j_req The incoming JSON request object containing Wi-Fi config data.
+ * @param j_req The incoming JSON request object containing complete config data.
  * @param bev The bufferevent associated with the WebSocket connection, used
  *            for sending the response.
  */
