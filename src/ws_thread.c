@@ -802,8 +802,6 @@ struct wifi_interface_info {
     char encryption[32];       // Encryption type (psk2, sae, none)
     char network[32];          // Network interface (lan, lan2, lan3)
     char mesh_id[64];          // Mesh ID for mesh mode
-    int mesh_fwding;           // Mesh forwarding (0/1)
-    int mesh_rssi_threshold;   // Mesh RSSI threshold
     int disabled;              // Interface disabled (0/1)
 };
 
@@ -938,10 +936,6 @@ static void handle_get_wifi_info_request(json_object *j_req, struct bufferevent 
                                 strncpy(interfaces[idx].network, value, sizeof(interfaces[idx].network) - 1);
                             } else if (strcmp(option, "mesh_id") == 0) {
                                 strncpy(interfaces[idx].mesh_id, value, sizeof(interfaces[idx].mesh_id) - 1);
-                            } else if (strcmp(option, "mesh_fwding") == 0) {
-                                interfaces[idx].mesh_fwding = atoi(value);
-                            } else if (strcmp(option, "mesh_rssi_threshold") == 0) {
-                                interfaces[idx].mesh_rssi_threshold = atoi(value);
                             } else if (strcmp(option, "disabled") == 0) {
                                 interfaces[idx].disabled = atoi(value);
                             }
@@ -985,8 +979,6 @@ static void handle_get_wifi_info_request(json_object *j_req, struct bufferevent 
                 }
                 if (strlen(interfaces[i].mesh_id) > 0) {
                     json_object_object_add(j_iface, "mesh_id", json_object_new_string(interfaces[i].mesh_id));
-                    json_object_object_add(j_iface, "mesh_fwding", json_object_new_int(interfaces[i].mesh_fwding));
-                    json_object_object_add(j_iface, "mesh_rssi_threshold", json_object_new_int(interfaces[i].mesh_rssi_threshold));
                 }
                 
                 json_object_array_add(j_interfaces, j_iface);
@@ -1421,25 +1413,7 @@ static void handle_set_wifi_info_request(json_object *j_req, struct bufferevent 
                     }
                 }
 
-                if (json_object_object_get_ex(j_interface, "mesh_fwding", &j_value)) {
-                    snprintf(config_path, sizeof(config_path), "wireless.%s.mesh_fwding", interface_name);
-                    char value_str[16];
-                    snprintf(value_str, sizeof(value_str), "%d", json_object_get_int(j_value));
-                    if (set_uci_config(config_path, value_str) != 0) {
-                        success = 0;
-                        snprintf(error_msg, sizeof(error_msg), "Failed to set mesh_fwding for interface %s", interface_name);
-                    }
-                }
 
-                if (json_object_object_get_ex(j_interface, "mesh_rssi_threshold", &j_value)) {
-                    snprintf(config_path, sizeof(config_path), "wireless.%s.mesh_rssi_threshold", interface_name);
-                    char value_str[16];
-                    snprintf(value_str, sizeof(value_str), "%d", json_object_get_int(j_value));
-                    if (set_uci_config(config_path, value_str) != 0) {
-                        success = 0;
-                        snprintf(error_msg, sizeof(error_msg), "Failed to set mesh_rssi_threshold for interface %s", interface_name);
-                    }
-                }
 
                 if (json_object_object_get_ex(j_interface, "disabled", &j_value)) {
                     snprintf(config_path, sizeof(config_path), "wireless.%s.disabled", interface_name);
