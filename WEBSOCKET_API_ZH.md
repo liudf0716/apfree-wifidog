@@ -366,7 +366,7 @@ WebSocket 连接建立时自动发送。
 ### 9. Wi-Fi 信息
 
 #### 9.1 获取 Wi-Fi 信息请求 (服务器 → 设备)
-服务器请求获取设备当前的 Wi-Fi 信息。
+服务器请求设备的完整 Wi-Fi 配置信息。设备会返回所有radio设备的详细配置、接口信息和可用网络接口列表。
 
 **请求:**
 ```json
@@ -381,41 +381,97 @@ WebSocket 连接建立时自动发送。
   "type": "get_wifi_info_response",
   "data": {
     "radio0": {
-      "ssid": "OpenWrt_2G",
-      "key": "password123",
-      "mesh_id": "mesh_network_2g",
-      "mesh_key": "mesh_password123"
+      "type": "mac80211",
+      "path": "platform/soc/18000000.wifi",
+      "band": "2g",
+      "channel": 8,
+      "htmode": "HT20",
+      "cell_density": 0,
+      "interfaces": [
+        {
+          "interface_name": "wifinet3",
+          "mode": "ap",
+          "ssid": "MyWiFi-2.4G",
+          "key": "password123",
+          "encryption": "psk2",
+          "network": "lan2",
+          "disabled": false
+        }
+      ]
     },
     "radio1": {
-      "ssid": "OpenWrt_5G",
-      "key": "password456",
-      "mesh_id": "mesh_network_5g",
-      "mesh_key": "mesh_password456"
-    }
+      "type": "mac80211",
+      "path": "platform/soc/18000000.wifi+1",
+      "band": "5g",
+      "channel": 36,
+      "htmode": "HE80",
+      "cell_density": 0,
+      "interfaces": [
+        {
+          "interface_name": "default_radio1",
+          "mode": "mesh",
+          "mesh_id": "my-mesh-network",
+          "key": "meshkey123",
+          "encryption": "sae",
+          "network": "lan3",
+          "disabled": false
+        },
+        {
+          "interface_name": "wifinet2",
+          "mode": "ap",
+          "ssid": "MyWiFi-5G",
+          "key": "password123",
+          "encryption": "psk2",
+          "network": "lan",
+          "disabled": false
+        }
+      ]
+    },
+    "available_networks": ["lan", "lan2", "lan3"]
   }
 }
 ```
 
 **响应字段:**
-- `radio0`: 2.4GHz 频段配置
-  - `ssid`: AP 接口的 SSID (如果 radio0 存在 AP 接口)
-  - `key`: AP 接口的密码/密钥
-  - `mesh_id`: Mesh 接口的网络 ID (如果 radio0 存在 mesh 接口)
-  - `mesh_key`: Mesh 接口的密码/密钥
-- `radio1`: 5GHz 频段配置 (结构与 radio0 相同)
 
-**注意:** 响应中只包含非空值。如果某个字段（ssid、key、mesh_id、mesh_key）为空或未配置，它将完全从 JSON 响应中省略。
+**Radio设备信息:**
+- `type`: 设备类型，通常为"mac80211"
+- `path`: 设备路径
+- `band`: 频段，"2g"或"5g"
+- `channel`: 信道号
+- `htmode`: HT模式，如"HT20"、"HE80"、"VHT80"等
+- `cell_density`: 小区密度，0-3
+
+**接口信息:**
+- `interface_name`: 接口名称
+- `mode`: 接口模式，"ap"（接入点）、"mesh"（网状网络）、"sta"（客户端）
+- `ssid`: WiFi网络名称（AP模式，仅在非空时包含）
+- `key`: 密码/密钥（仅在非空时包含）
+- `encryption`: 加密方式，"psk2"、"sae"、"none"等
+- `network`: 绑定的网络接口
+- `mesh_id`: Mesh网络ID（Mesh模式，仅在非空时包含）
+- `disabled`: 是否禁用（布尔值）
+
+**可用网络接口:**
+- `available_networks`: 字符串数组，包含协议类型为`static`的网络接口名称，用于WiFi接口绑定选择，排除系统接口（loopback、globals）
+
+**实现细节:**
+- 通过`uci show wireless`命令获取完整的无线配置
+- 解析UCI配置，区分radio设备和接口配置
+- 只有非空字段才会包含在响应中（ssid、key、mesh_id）
+- 自动发现每个接口所属的radio设备
+- 通过`uci show network | grep '\.proto=.static.'`获取可用网络接口
 
 **错误响应 (设备 → 服务器):**
 ```json
 {
   "type": "get_wifi_info_error",
-  "error": "执行命令失败"
+  "error": "Failed to execute command"
 }
 ```
 
 #### 9.2 设置 Wi-Fi 信息请求 (服务器 → 设备)
-服务器请求更新设备的 Wi-Fi 信息。设备会自动查找每个无线电的适当接口并更新其配置。
+服务器请求更新设备的完整 Wi-Fi 配置信息，包括radio设备参数和接口配置。配置更改后会自动重载WiFi服务使配置生效。
 
 **请求:**
 ```json
@@ -423,38 +479,90 @@ WebSocket 连接建立时自动发送。
   "type": "set_wifi_info",
   "data": {
     "radio0": {
-      "ssid": "New_2G_SSID",
-      "key": "new_password123",
-      "mesh_id": "new_mesh_2g",
-      "mesh_key": "new_mesh_password123"
+      "channel": "8",
+      "htmode": "HT20",
+      "cell_density": 0,
+      "interfaces": [
+        {
+          "interface_name": "wifinet3",
+          "mode": "ap",
+          "ssid": "NewWiFi-2.4G",
+          "key": "newpassword123",
+          "encryption": "psk2",
+          "network": "lan2",
+          "disabled": false
+        }
+      ]
     },
     "radio1": {
-      "ssid": "New_5G_SSID",
-      "key": "new_password456",
-      "mesh_id": "new_mesh_5g",
-      "mesh_key": "new_mesh_password456"
+      "channel": "36",
+      "htmode": "HE80",
+      "cell_density": 0,
+      "interfaces": [
+        {
+          "interface_name": "default_radio1",
+          "mode": "mesh",
+          "mesh_id": "my-mesh-network",
+          "key": "meshkey123",
+          "encryption": "sae",
+          "network": "lan3",
+          "disabled": false
+        },
+        {
+          "interface_name": "wifinet2",
+          "mode": "ap",
+          "ssid": "NewWiFi-5G",
+          "key": "newpassword123",
+          "encryption": "psk2",
+          "network": "lan",
+          "disabled": false
+        }
+      ]
     }
   }
 }
 ```
 
 **请求字段:**
-- `radio0`: 2.4GHz 频段配置 (所有字段都是可选的)
-  - `ssid`: AP 接口的新 SSID (应用于分配给 radio0 的任何 AP 模式接口)
-  - `key`: AP 接口的新密码/密钥
-  - `mesh_id`: Mesh 接口的新网络 ID (应用于分配给 radio0 的任何 mesh 模式接口)
-  - `mesh_key`: Mesh 接口的新密码/密钥
-- `radio1`: 5GHz 频段配置 (结构与 radio0 相同)
 
-**重要说明:** 空字符串值（""）被视为"不更改"，将被忽略。要更新字段，请提供非空值。请求中未包含的字段或设置为空字符串的字段将不会被修改。
+**Radio设备配置:**
+- `channel`: 信道号
+- `htmode`: HT模式（HT20, HT40, VHT80, HE80等）
+- `cell_density`: 小区密度（0-3）
+
+**接口配置:**
+- `interface_name`: 接口名称（必需，必须与现有UCI配置匹配）
+- `mode`: 接口模式（"ap", "mesh", "sta"）
+- `ssid`: WiFi网络名称（AP模式）
+- `key`: 密码/密钥
+- `encryption`: 加密方式（"psk2", "sae", "none"等）
+- `network`: 绑定的网络接口（必须是proto=static的接口）
+- `mesh_id`: Mesh网络ID（Mesh模式）
+- `disabled`: 是否禁用（true/false）
+
+**配置模式:**
+
+1. **AP模式**: 创建WiFi热点
+   - 必需字段: `mode`="ap", `ssid`, `key`, `encryption`, `network`
+
+2. **Mesh模式**: 创建网状网络
+   - 必需字段: `mode`="mesh", `mesh_id`, `key`, `encryption`, `network`
+   - 推荐使用`encryption`="sae"（WPA3）
+
+**支持的加密方式:**
+- `none`: 无加密
+- `psk`: WPA-PSK
+- `psk2`: WPA2-PSK
+- `sae`: WPA3-SAE（推荐用于Mesh）
+- `psk-mixed`: WPA/WPA2混合
 
 **处理逻辑:**
-1. 设备查询 UCI 无线配置以发现现有接口
-2. 对于每个接口，确定其分配的无线电设备和模式 (AP 或 mesh)
-3. 如果提供了非空的 `ssid` 和 `key`，则更新 AP 接口
-4. 如果提供了非空的 `mesh_id` 和 `mesh_key`，则更新 mesh 接口
-5. 忽略空字符串值（不对这些字段进行 UCI 更改）
-6. 提交 UCI 更改并重新加载 Wi-Fi 以应用配置
+1. 验证请求数据格式和必需字段
+2. 配置radio设备参数（channel、htmode、cell_density）
+3. 配置每个接口的属性（mode、ssid、key、encryption、network、mesh_id、disabled）
+4. 设置接口与radio设备的关联关系
+5. 提交UCI配置更改
+6. 重载WiFi服务使配置生效
 
 **成功响应 (设备 → 服务器):**
 ```json
@@ -462,7 +570,7 @@ WebSocket 连接建立时自动发送。
   "type": "set_wifi_info_response",
   "data": {
     "status": "success",
-    "message": "Wi-Fi 信息更新成功"
+    "message": "Wi-Fi configuration updated successfully"
   }
 }
 ```
@@ -471,9 +579,17 @@ WebSocket 连接建立时自动发送。
 ```json
 {
   "type": "set_wifi_info_error",
-  "error": "更新一个或多个 Wi-Fi 设置失败"
+  "error": "Failed to set SSID for interface wifinet2"
 }
 ```
+
+**注意事项:**
+1. 配置更改后需要等待约10-30秒WiFi服务重启
+2. 接口名称必须与现有UCI配置中的section名称匹配
+3. 信道选择需要符合当前地区的法规要求
+4. Mesh模式需要所有参与设备使用相同的mesh_id和加密配置
+5. WiFi接口只能绑定到available_networks中列出的静态网络接口
+6. 只有proto=static的网络接口才可用于WiFi绑定
 
 ---
 

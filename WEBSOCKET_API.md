@@ -366,7 +366,7 @@ Server requests to update the device's information.
 ### 9. Wi-Fi Information
 
 #### 9.1 Get Wi-Fi Info Request (Server → Device)
-Server requests current Wi-Fi information from the device.
+Server requests complete Wi-Fi configuration information from the device. The device returns detailed configuration for all radio devices, interface information, and available network interfaces list.
 
 **Request:**
 ```json
@@ -381,30 +381,86 @@ Server requests current Wi-Fi information from the device.
   "type": "get_wifi_info_response",
   "data": {
     "radio0": {
-      "ssid": "OpenWrt_2G",
-      "key": "password123",
-      "mesh_id": "mesh_network_2g",
-      "mesh_key": "mesh_password123"
+      "type": "mac80211",
+      "path": "platform/soc/18000000.wifi",
+      "band": "2g",
+      "channel": 8,
+      "htmode": "HT20",
+      "cell_density": 0,
+      "interfaces": [
+        {
+          "interface_name": "wifinet3",
+          "mode": "ap",
+          "ssid": "MyWiFi-2.4G",
+          "key": "password123",
+          "encryption": "psk2",
+          "network": "lan2",
+          "disabled": false
+        }
+      ]
     },
     "radio1": {
-      "ssid": "OpenWrt_5G",
-      "key": "password456",
-      "mesh_id": "mesh_network_5g",
-      "mesh_key": "mesh_password456"
-    }
+      "type": "mac80211",
+      "path": "platform/soc/18000000.wifi+1",
+      "band": "5g",
+      "channel": 36,
+      "htmode": "HE80",
+      "cell_density": 0,
+      "interfaces": [
+        {
+          "interface_name": "default_radio1",
+          "mode": "mesh",
+          "mesh_id": "my-mesh-network",
+          "key": "meshkey123",
+          "encryption": "sae",
+          "network": "lan3",
+          "disabled": false
+        },
+        {
+          "interface_name": "wifinet2",
+          "mode": "ap",
+          "ssid": "MyWiFi-5G",
+          "key": "password123",
+          "encryption": "psk2",
+          "network": "lan",
+          "disabled": false
+        }
+      ]
+    },
+    "available_networks": ["lan", "lan2", "lan3"]
   }
 }
 ```
 
 **Response Fields:**
-- `radio0`: 2.4GHz band configuration
-  - `ssid`: SSID of the AP interface (if any AP interface exists for radio0)
-  - `key`: Password/key of the AP interface 
-  - `mesh_id`: Mesh network ID of the mesh interface (if any mesh interface exists for radio0)
-  - `mesh_key`: Password/key of the mesh interface
-- `radio1`: 5GHz band configuration (same structure as radio0)
 
-**Note:** Only non-empty values are included in the response. If a field (ssid, key, mesh_id, mesh_key) is empty or not configured, it will be omitted from the JSON response entirely.
+**Radio Device Information:**
+- `type`: Device type, typically "mac80211"
+- `path`: Device path
+- `band`: Frequency band, "2g" or "5g"
+- `channel`: Channel number
+- `htmode`: HT mode, such as "HT20", "HE80", "VHT80", etc.
+- `cell_density`: Cell density, 0-3
+
+**Interface Information:**
+- `interface_name`: Interface name
+- `mode`: Interface mode, "ap" (access point), "mesh" (mesh network), "sta" (station)
+- `ssid`: WiFi network name (AP mode, included only when non-empty)
+- `key`: Password/key (included only when non-empty)
+- `encryption`: Encryption type, "psk2", "sae", "none", etc.
+- `network`: Bound network interface
+- `mesh_id`: Mesh network ID (mesh mode, included only when non-empty)
+- `disabled`: Whether disabled (boolean value)
+
+**Available Network Interfaces:**
+- `available_networks`: String array containing network interface names with protocol type `static`, used for WiFi interface binding selection, excluding system interfaces (loopback, globals)
+
+**Implementation Details:**
+- Retrieves complete wireless configuration via `uci show wireless` command
+- Parses UCI configuration, distinguishing between radio devices and interface configurations
+- Only non-empty fields are included in the response (ssid, key, mesh_id)
+- Automatically discovers the radio device each interface belongs to
+- Obtains available network interfaces via `uci show network | grep '\.proto=.static.'`
 
 **Error Response (Device → Server):**
 ```json
@@ -415,7 +471,7 @@ Server requests current Wi-Fi information from the device.
 ```
 
 #### 9.2 Set Wi-Fi Info Request (Server → Device)
-Server requests to update the device's Wi-Fi information. The device will automatically find the appropriate interfaces for each radio and update their configuration.
+Server requests to update the device's complete Wi-Fi configuration information, including radio device parameters and interface configurations. After configuration changes, the WiFi service will be automatically reloaded to apply the settings.
 
 **Request:**
 ```json
@@ -423,46 +479,98 @@ Server requests to update the device's Wi-Fi information. The device will automa
   "type": "set_wifi_info",
   "data": {
     "radio0": {
-      "ssid": "New_2G_SSID",
-      "key": "new_password123",
-      "mesh_id": "new_mesh_2g",
-      "mesh_key": "new_mesh_password123"
+      "channel": "8",
+      "htmode": "HT20",
+      "cell_density": 0,
+      "interfaces": [
+        {
+          "interface_name": "wifinet3",
+          "mode": "ap",
+          "ssid": "NewWiFi-2.4G",
+          "key": "newpassword123",
+          "encryption": "psk2",
+          "network": "lan2",
+          "disabled": false
+        }
+      ]
     },
     "radio1": {
-      "ssid": "New_5G_SSID", 
-      "key": "new_password456",
-      "mesh_id": "new_mesh_5g",
-      "mesh_key": "new_mesh_password456"
+      "channel": "36",
+      "htmode": "HE80",
+      "cell_density": 0,
+      "interfaces": [
+        {
+          "interface_name": "default_radio1",
+          "mode": "mesh",
+          "mesh_id": "my-mesh-network",
+          "key": "meshkey123",
+          "encryption": "sae",
+          "network": "lan3",
+          "disabled": false
+        },
+        {
+          "interface_name": "wifinet2",
+          "mode": "ap",
+          "ssid": "NewWiFi-5G",
+          "key": "newpassword123",
+          "encryption": "psk2",
+          "network": "lan",
+          "disabled": false
+        }
+      ]
     }
   }
 }
 ```
 
 **Request Fields:**
-- `radio0`: 2.4GHz band configuration (all fields optional)
-  - `ssid`: New SSID for AP interface (applied to any AP mode interface assigned to radio0)
-  - `key`: New password/key for AP interface
-  - `mesh_id`: New mesh network ID for mesh interface (applied to any mesh mode interface assigned to radio0)
-  - `mesh_key`: New password/key for mesh interface
-- `radio1`: 5GHz band configuration (same structure as radio0)
 
-**Important:** Empty string values ("") are treated as "no change" and will be ignored. To update a field, provide a non-empty value. Fields not included in the request or set to empty strings will not be modified.
+**Radio Device Configuration:**
+- `channel`: Channel number
+- `htmode`: HT mode (HT20, HT40, VHT80, HE80, etc.)
+- `cell_density`: Cell density (0-3)
+
+**Interface Configuration:**
+- `interface_name`: Interface name (required, must match existing UCI configuration)
+- `mode`: Interface mode ("ap", "mesh", "sta")
+- `ssid`: WiFi network name (AP mode)
+- `key`: Password/key
+- `encryption`: Encryption type ("psk2", "sae", "none", etc.)
+- `network`: Bound network interface (must be proto=static interface)
+- `mesh_id`: Mesh network ID (mesh mode)
+- `disabled`: Whether disabled (true/false)
+
+**Configuration Modes:**
+
+1. **AP Mode**: Create WiFi hotspot
+   - Required fields: `mode`="ap", `ssid`, `key`, `encryption`, `network`
+
+2. **Mesh Mode**: Create mesh network
+   - Required fields: `mode`="mesh", `mesh_id`, `key`, `encryption`, `network`
+   - Recommended to use `encryption`="sae" (WPA3)
+
+**Supported Encryption Types:**
+- `none`: No encryption
+- `psk`: WPA-PSK
+- `psk2`: WPA2-PSK
+- `sae`: WPA3-SAE (recommended for mesh)
+- `psk-mixed`: WPA/WPA2 mixed
 
 **Processing Logic:**
-1. Device queries UCI wireless configuration to discover existing interfaces
-2. For each interface, determines its assigned radio device and mode (AP or mesh)  
-3. Updates AP interfaces with `ssid` and `key` if provided and non-empty
-4. Updates mesh interfaces with `mesh_id` and `mesh_key` if provided and non-empty
-5. Empty string values are ignored (no UCI changes made for those fields)
-6. Commits UCI changes and reloads Wi-Fi to apply configuration
+1. Validate request data format and required fields
+2. Configure radio device parameters (channel, htmode, cell_density)
+3. Configure each interface properties (mode, ssid, key, encryption, network, mesh_id, disabled)
+4. Set interface-to-radio device associations
+5. Commit UCI configuration changes
+6. Reload WiFi service to apply configuration
 
 **Success Response (Device → Server):**
 ```json
 {
   "type": "set_wifi_info_response",
   "data": {
-    "status": "success", 
-    "message": "Wi-Fi info updated successfully"
+    "status": "success",
+    "message": "Wi-Fi configuration updated successfully"
   }
 }
 ```
@@ -471,9 +579,17 @@ Server requests to update the device's Wi-Fi information. The device will automa
 ```json
 {
   "type": "set_wifi_info_error",
-  "error": "Failed to update one or more Wi-Fi settings"
+  "error": "Failed to set SSID for interface wifinet2"
 }
 ```
+
+**Important Notes:**
+1. Configuration changes require approximately 10-30 seconds for WiFi service restart
+2. Interface names must match section names in existing UCI configuration
+3. Channel selection must comply with current regional regulatory requirements
+4. Mesh mode requires all participating devices to use the same mesh_id and encryption configuration
+5. WiFi interfaces can only be bound to static network interfaces listed in available_networks
+6. Only proto=static network interfaces are available for WiFi binding
 
 ---
 
