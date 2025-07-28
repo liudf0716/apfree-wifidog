@@ -107,6 +107,7 @@ static void handle_reboot_device_request(json_object *j_req, struct bufferevent 
 static void handle_get_wifi_info_request(json_object *j_req, struct bufferevent *bev);
 static void handle_set_wifi_info_request(json_object *j_req, struct bufferevent *bev);
 static void handle_get_sys_info_request(json_object *j_req, struct bufferevent *bev);
+static void handle_get_client_info_request(json_object *j_req, struct bufferevent *bev);
 static void cleanup_ws_connection(void);
 static void reconnect_websocket(void);
 static void scheduled_reconnect_cb(evutil_socket_t fd, short events, void *arg);
@@ -2021,6 +2022,8 @@ process_ws_msg(struct bufferevent *bev, const char *msg)
 		handle_set_wifi_info_request(jobj, bev);
 	} else if (!strcmp(type_str, "get_sys_info")) {
 		handle_get_sys_info_request(jobj, bev);
+	} else if (!strcmp(type_str, "get_client_info")) {
+		handle_get_client_info_request(jobj, bev);
 	} else {
 		debug(LOG_ERR, "Unknown message type: %s", type_str);
 	}
@@ -2920,4 +2923,191 @@ cleanup:
 		SSL_CTX_free(ssl_state.ctx);
 		ssl_state.ctx = NULL;
 	}
+}
+
+/**
+ * @brief Handles a request to get authenticated client information by MAC address.
+ *
+ * This function is called by process_ws_msg() when a "get_client_info"
+ * message is received. It searches for a client by MAC address and returns
+ * detailed information about the authenticated client.
+ *
+ * Request format:
+ * {
+ *   "type": "get_client_info",
+ *   "mac": "aa:bb:cc:dd:ee:ff"
+ * }
+ *
+ * Success response format:
+ * {
+ *   "type": "get_client_info_response",
+ *   "data": {
+ *     "id": 12345,
+ *     "ip": "192.168.1.100",
+ *     "ip6": "fe80::1234:5678:9abc:def0",
+ *     "mac": "aa:bb:cc:dd:ee:ff",
+ *     "token": "auth_token_string",
+ *     "fw_connection_state": 1,
+ *     "name": "Device Name",
+ *     "is_online": 1,
+ *     "wired": 0,
+ *     "first_login": 1640995200,
+ *     "counters": {
+ *       "incoming_bytes": 1048576,
+ *       "incoming_packets": 1024,
+ *       "outgoing_bytes": 2097152,
+ *       "outgoing_packets": 2048,
+ *       "incoming_rate": 1000,
+ *       "outgoing_rate": 2000,
+ *       "last_updated": 1640995800
+ *     },
+ *     "counters6": {
+ *       "incoming_bytes": 524288,
+ *       "incoming_packets": 512,
+ *       "outgoing_bytes": 1048576,
+ *       "outgoing_packets": 1024,
+ *       "incoming_rate": 500,
+ *       "outgoing_rate": 1000,
+ *       "last_updated": 1640995800
+ *     }
+ *   }
+ * }
+ *
+ * Error response format:
+ * {
+ *   "type": "get_client_info_error",
+ *   "error": "Client not found"
+ * }
+ *
+ * @param j_req The JSON request object containing the MAC address
+ * @param bev The bufferevent associated with the WebSocket connection
+ *            for sending the response.
+ */
+static void handle_get_client_info_request(json_object *j_req, struct bufferevent *bev) {
+    json_object *j_response = json_object_new_object();
+    json_object *j_mac;
+    
+    debug(LOG_INFO, "Get client info request received");
+    
+    // Extract MAC address from request
+    if (!json_object_object_get_ex(j_req, "mac", &j_mac)) {
+        debug(LOG_ERR, "Missing 'mac' field in get_client_info request");
+        
+        json_object *j_type = json_object_new_string("get_client_info_error");
+        json_object *j_error = json_object_new_string("Missing 'mac' field in request");
+        json_object_object_add(j_response, "type", j_type);
+        json_object_object_add(j_response, "error", j_error);
+        
+        const char *response_str = json_object_to_json_string(j_response);
+        ws_send(bufferevent_get_output(bev), response_str, strlen(response_str), TEXT_FRAME);
+        json_object_put(j_response);
+        return;
+    }
+    
+    const char *mac_str = json_object_get_string(j_mac);
+    if (!mac_str || strlen(mac_str) == 0) {
+        debug(LOG_ERR, "Invalid MAC address in get_client_info request");
+        
+        json_object *j_type = json_object_new_string("get_client_info_error");
+        json_object *j_error = json_object_new_string("Invalid MAC address");
+        json_object_object_add(j_response, "type", j_type);
+        json_object_object_add(j_response, "error", j_error);
+        
+        const char *response_str = json_object_to_json_string(j_response);
+        ws_send(bufferevent_get_output(bev), response_str, strlen(response_str), TEXT_FRAME);
+        json_object_put(j_response);
+        return;
+    }
+    
+    debug(LOG_DEBUG, "Looking for client with MAC: %s", mac_str);
+    
+    // Search for client by MAC address
+    LOCK_CLIENT_LIST();
+    t_client *client = client_list_find_by_mac(mac_str);
+    
+    if (!client) {
+        UNLOCK_CLIENT_LIST();
+        debug(LOG_INFO, "Client with MAC %s not found", mac_str);
+        
+        json_object *j_type = json_object_new_string("get_client_info_error");
+        json_object *j_error = json_object_new_string("Client not found");
+        json_object_object_add(j_response, "type", j_type);
+        json_object_object_add(j_response, "error", j_error);
+        
+        const char *response_str = json_object_to_json_string(j_response);
+        ws_send(bufferevent_get_output(bev), response_str, strlen(response_str), TEXT_FRAME);
+        json_object_put(j_response);
+        return;
+    }
+    
+    // Create response data object
+    json_object *j_data = json_object_new_object();
+    
+    // Add client basic information
+    json_object_object_add(j_data, "id", json_object_new_int64(client->id));
+    
+    if (client->ip) {
+        json_object_object_add(j_data, "ip", json_object_new_string(client->ip));
+    }
+    
+    if (client->ip6) {
+        json_object_object_add(j_data, "ip6", json_object_new_string(client->ip6));
+    }
+    
+    if (client->mac) {
+        json_object_object_add(j_data, "mac", json_object_new_string(client->mac));
+    }
+    
+    if (client->token) {
+        json_object_object_add(j_data, "token", json_object_new_string(client->token));
+    }
+    
+    json_object_object_add(j_data, "fw_connection_state", json_object_new_int(client->fw_connection_state));
+    
+    if (client->name) {
+        json_object_object_add(j_data, "name", json_object_new_string(client->name));
+    }
+    
+    json_object_object_add(j_data, "is_online", json_object_new_int(client->is_online));
+    json_object_object_add(j_data, "wired", json_object_new_int(client->wired));
+    json_object_object_add(j_data, "first_login", json_object_new_int64(client->first_login));
+    
+    // Add IPv4 counters
+    json_object *j_counters = json_object_new_object();
+    json_object_object_add(j_counters, "incoming_bytes", json_object_new_int64(client->counters.incoming_bytes));
+    json_object_object_add(j_counters, "incoming_packets", json_object_new_int64(client->counters.incoming_packets));
+    json_object_object_add(j_counters, "outgoing_bytes", json_object_new_int64(client->counters.outgoing_bytes));
+    json_object_object_add(j_counters, "outgoing_packets", json_object_new_int64(client->counters.outgoing_packets));
+    json_object_object_add(j_counters, "incoming_rate", json_object_new_int(client->counters.incoming_rate));
+    json_object_object_add(j_counters, "outgoing_rate", json_object_new_int(client->counters.outgoing_rate));
+    json_object_object_add(j_counters, "last_updated", json_object_new_int64(client->counters.last_updated));
+    json_object_object_add(j_data, "counters", j_counters);
+    
+    // Add IPv6 counters
+    json_object *j_counters6 = json_object_new_object();
+    json_object_object_add(j_counters6, "incoming_bytes", json_object_new_int64(client->counters6.incoming_bytes));
+    json_object_object_add(j_counters6, "incoming_packets", json_object_new_int64(client->counters6.incoming_packets));
+    json_object_object_add(j_counters6, "outgoing_bytes", json_object_new_int64(client->counters6.outgoing_bytes));
+    json_object_object_add(j_counters6, "outgoing_packets", json_object_new_int64(client->counters6.outgoing_packets));
+    json_object_object_add(j_counters6, "incoming_rate", json_object_new_int(client->counters6.incoming_rate));
+    json_object_object_add(j_counters6, "outgoing_rate", json_object_new_int(client->counters6.outgoing_rate));
+    json_object_object_add(j_counters6, "last_updated", json_object_new_int64(client->counters6.last_updated));
+    json_object_object_add(j_data, "counters6", j_counters6);
+    
+    UNLOCK_CLIENT_LIST();
+    
+    // Build success response
+    json_object *j_type = json_object_new_string("get_client_info_response");
+    json_object_object_add(j_response, "type", j_type);
+    json_object_object_add(j_response, "data", j_data);
+    
+    // Send response
+    const char *response_str = json_object_to_json_string(j_response);
+    debug(LOG_DEBUG, "Sending client info response: %s", response_str);
+    ws_send(bufferevent_get_output(bev), response_str, strlen(response_str), TEXT_FRAME);
+    
+    // Cleanup
+    json_object_put(j_response);
+    
+    debug(LOG_INFO, "Client info for MAC %s sent successfully", mac_str);
 }

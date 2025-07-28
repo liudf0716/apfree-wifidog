@@ -827,4 +827,120 @@ Retrieves the complete list of currently configured trusted wildcard domains.
 - Wildcard patterns depend on underlying domain resolution implementation
 - Recommend validating wildcard matching behavior in test environments
 
+---
+
+### 12. Client Information
+
+Client information functionality allows retrieving detailed information about authenticated clients through WebSocket connections. This enables real-time monitoring of client status, traffic statistics, and connection details.
+
+#### 12.1 Get Client Information by MAC Address (Server → Device)
+
+Retrieves detailed information about a specific authenticated client by MAC address.
+
+**Request:**
+```json
+{
+  "type": "get_client_info",
+  "mac": "aa:bb:cc:dd:ee:ff"
+}
+```
+
+**Success Response:**
+```json
+{
+  "type": "get_client_info_response",
+  "data": {
+    "id": 12345,
+    "ip": "192.168.1.100",
+    "ip6": "fe80::1234:5678:9abc:def0",
+    "mac": "aa:bb:cc:dd:ee:ff",
+    "token": "auth_token_string",
+    "fw_connection_state": 1,
+    "name": "Device Name",
+    "is_online": 1,
+    "wired": 0,
+    "first_login": 1640995200,
+    "counters": {
+      "incoming_bytes": 1048576,
+      "incoming_packets": 1024,
+      "outgoing_bytes": 2097152,
+      "outgoing_packets": 2048,
+      "incoming_rate": 1000,
+      "outgoing_rate": 2000,
+      "last_updated": 1640995800
+    },
+    "counters6": {
+      "incoming_bytes": 524288,
+      "incoming_packets": 512,
+      "outgoing_bytes": 1048576,
+      "outgoing_packets": 1024,
+      "incoming_rate": 500,
+      "outgoing_rate": 1000,
+      "last_updated": 1640995800
+    }
+  }
+}
+```
+
+**Error Response:**
+```json
+{
+  "type": "get_client_info_error",
+  "error": "Client not found"
+}
+```
+
+**Response Fields:**
+
+**Basic Client Information:**
+- `id`: Unique client identifier (64-bit integer)
+- `ip`: IPv4 address of the client
+- `ip6`: IPv6 address of the client (optional)
+- `mac`: MAC address of the client
+- `token`: Authentication token assigned to the client
+- `fw_connection_state`: Firewall connection state (integer)
+- `name`: Device name (optional, if available)
+- `is_online`: Online status (1 = online, 0 = offline)
+- `wired`: Connection type (0 = wireless, 1 = wired)
+- `first_login`: Unix timestamp of first login
+
+**IPv4 Traffic Counters (`counters`):**
+- `incoming_bytes`: Total incoming data in bytes
+- `incoming_packets`: Total incoming packet count
+- `outgoing_bytes`: Total outgoing data in bytes
+- `outgoing_packets`: Total outgoing packet count
+- `incoming_rate`: Current incoming data rate (bytes/second)
+- `outgoing_rate`: Current outgoing data rate (bytes/second)
+- `last_updated`: Unix timestamp of last counter update
+
+**IPv6 Traffic Counters (`counters6`):**
+- Same structure as IPv4 counters but for IPv6 traffic
+- Provides separate statistics for IPv6 connections
+- Useful for dual-stack network monitoring
+
+**Error Conditions:**
+- **Missing MAC field**: Request does not contain required 'mac' field
+- **Invalid MAC address**: MAC address is empty or malformed
+- **Client not found**: No authenticated client found with the specified MAC address
+
+**Usage Scenarios:**
+- **Client Monitoring**: Real-time monitoring of specific client status and traffic
+- **Troubleshooting**: Detailed client information for network issue diagnosis
+- **Bandwidth Analysis**: Traffic statistics for individual clients
+- **Security Auditing**: Authentication status and connection details verification
+- **Network Management**: Client lifecycle and usage pattern analysis
+
+**Implementation Notes:**
+- Client information is retrieved from the active client list in real-time
+- Thread-safe access using client list mutex protection
+- Both IPv4 and IPv6 statistics are provided when available
+- Traffic counters are updated continuously during client session
+- Client must be currently authenticated to appear in results
+
+**Security Considerations:**
+- Only authenticated clients are included in the search
+- MAC address validation prevents malformed requests
+- Client token information should be handled securely
+- Access to client information should be properly authorized
+
 ````

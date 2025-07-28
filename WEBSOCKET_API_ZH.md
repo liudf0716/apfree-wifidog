@@ -829,6 +829,122 @@ WebSocket 连接建立时自动发送。
 
 ---
 
+### 12. 客户端信息
+
+客户端信息功能允许通过 WebSocket 连接检索已认证客户端的详细信息。这使得能够实时监控客户端状态、流量统计和连接详情。
+
+#### 12.1 通过 MAC 地址获取客户端信息 (服务器 → 设备)
+
+通过 MAC 地址检索特定已认证客户端的详细信息。
+
+**请求:**
+```json
+{
+  "type": "get_client_info",
+  "mac": "aa:bb:cc:dd:ee:ff"
+}
+```
+
+**成功响应:**
+```json
+{
+  "type": "get_client_info_response",
+  "data": {
+    "id": 12345,
+    "ip": "192.168.1.100",
+    "ip6": "fe80::1234:5678:9abc:def0",
+    "mac": "aa:bb:cc:dd:ee:ff",
+    "token": "auth_token_string",
+    "fw_connection_state": 1,
+    "name": "设备名称",
+    "is_online": 1,
+    "wired": 0,
+    "first_login": 1640995200,
+    "counters": {
+      "incoming_bytes": 1048576,
+      "incoming_packets": 1024,
+      "outgoing_bytes": 2097152,
+      "outgoing_packets": 2048,
+      "incoming_rate": 1000,
+      "outgoing_rate": 2000,
+      "last_updated": 1640995800
+    },
+    "counters6": {
+      "incoming_bytes": 524288,
+      "incoming_packets": 512,
+      "outgoing_bytes": 1048576,
+      "outgoing_packets": 1024,
+      "incoming_rate": 500,
+      "outgoing_rate": 1000,
+      "last_updated": 1640995800
+    }
+  }
+}
+```
+
+**错误响应:**
+```json
+{
+  "type": "get_client_info_error",
+  "error": "Client not found"
+}
+```
+
+**响应字段:**
+
+**基本客户端信息:**
+- `id`: 唯一客户端标识符 (64位整数)
+- `ip`: 客户端的 IPv4 地址
+- `ip6`: 客户端的 IPv6 地址 (可选)
+- `mac`: 客户端的 MAC 地址
+- `token`: 分配给客户端的认证令牌
+- `fw_connection_state`: 防火墙连接状态 (整数)
+- `name`: 设备名称 (可选，如果可用)
+- `is_online`: 在线状态 (1 = 在线, 0 = 离线)
+- `wired`: 连接类型 (0 = 无线, 1 = 有线)
+- `first_login`: 首次登录的 Unix 时间戳
+
+**IPv4 流量计数器 (`counters`):**
+- `incoming_bytes`: 总接收数据字节数
+- `incoming_packets`: 总接收数据包数
+- `outgoing_bytes`: 总发送数据字节数
+- `outgoing_packets`: 总发送数据包数
+- `incoming_rate`: 当前接收数据速率 (字节/秒)
+- `outgoing_rate`: 当前发送数据速率 (字节/秒)
+- `last_updated`: 计数器最后更新的 Unix 时间戳
+
+**IPv6 流量计数器 (`counters6`):**
+- 与 IPv4 计数器结构相同，但用于 IPv6 流量
+- 为 IPv6 连接提供单独的统计信息
+- 用于双栈网络监控
+
+**错误条件:**
+- **缺少 MAC 字段**: 请求不包含必需的 'mac' 字段
+- **无效 MAC 地址**: MAC 地址为空或格式错误
+- **客户端未找到**: 未找到具有指定 MAC 地址的已认证客户端
+
+**使用场景:**
+- **客户端监控**: 特定客户端状态和流量的实时监控
+- **故障排除**: 用于网络问题诊断的详细客户端信息
+- **带宽分析**: 单个客户端的流量统计
+- **安全审计**: 认证状态和连接详情验证
+- **网络管理**: 客户端生命周期和使用模式分析
+
+**实现注意事项:**
+- 客户端信息从活动客户端列表中实时检索
+- 使用客户端列表互斥锁保护的线程安全访问
+- 在可用时提供 IPv4 和 IPv6 统计信息
+- 流量计数器在客户端会话期间持续更新
+- 客户端必须当前已认证才能出现在结果中
+
+**安全考虑:**
+- 搜索中仅包含已认证的客户端
+- MAC 地址验证防止格式错误的请求
+- 客户端令牌信息应安全处理
+- 对客户端信息的访问应得到适当授权
+
+---
+
 ## 错误处理
 
 ### 常规错误场景
