@@ -256,7 +256,11 @@ void handle_get_client_info_request(json_object *j_req, api_transport_context_t 
         return;
     }
     
-    debug(LOG_DEBUG, "Looking for client with MAC: %s", mac_str);
+    // Update client counters before retrieving information
+    debug(LOG_DEBUG, "Updating client counters before retrieving info for MAC: %s", mac_str);
+    if (fw_counters_update() == -1) {
+        debug(LOG_WARNING, "Failed to update client counters, proceeding with cached data");
+    }
     
     // Search for client by MAC address
     LOCK_CLIENT_LIST();
