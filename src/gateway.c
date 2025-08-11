@@ -21,7 +21,6 @@
 #include "mqtt_thread.h"
 #include "wd_util.h"
 #include "wd_client.h"
-#include "dhcp_cpi.h"
 #include "ws_thread.h"
 #include "dns_monitor.h"
 
@@ -623,10 +622,6 @@ threads_init(s_config *config)
                           (void *)safe_strdup(config->wdctl_sock), "wdctl");
 
     create_detached_thread(&tid_dns_monitor, (void *)thread_dns_monitor, NULL, "dns_monitor");
-
-    if (config->enable_dhcp_cpi) {
-        create_detached_thread(&tid_fw_counter, (void *)thread_dhcp_cpi, NULL, "dhcp_cpi");
-    }
 
     create_detached_thread(&tid_ping, (void *)thread_ping, NULL, "ping");
 

@@ -20,9 +20,7 @@ set(src_vpp
 	fw_vpp.c
 )
 
-set(src_dhcp
-	dhcp_cpi.c dhcp.c ipv4.c options.c
-)
+
 
 set(src_wdctlx 
 	wdctlx.c util.c debug.c
@@ -77,7 +75,6 @@ add_executable(wdctlx ${src_wdctlx})
 add_executable(wifidogx 
 	${src_apfreewifidog}
 	${fw_source}
-	${src_dhcp}
 )
 
 target_link_libraries(wifidogx

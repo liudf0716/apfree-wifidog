@@ -132,25 +132,6 @@ const char *nft_wifidogx_init_script[] = {
     "insert rule inet fw4 accept_to_wan jump forward_wifidogx_wan",
 };
 
-const char *nft_wifidogx_dhcp_pass_script[] = {
-    "insert rule inet fw4 forward_wifidogx_unknown udp dport 67 counter accept",
-    "insert rule inet fw4 forward_wifidogx_unknown tcp dport 67 counter accept",
-};
-
-const char *nft_wifidogx_dns_pass_script[] = {
-    "insert rule inet fw4 forward_wifidogx_unknown udp dport 53 counter accept",
-    "insert rule inet fw4 forward_wifidogx_unknown tcp dport 53 counter accept",
-};
-
-const char *nft_wifidogx_dhcp_redirect_script[] = {
-    "add rule inet wifidogx prerouting iifname $interface$ udp dport 67 counter redirect to  15867",
-    "add rule inet wifidogx prerouting iifname $interface$ tcp dport 67 counter redirect to  15867",
-};
-
-
-
-
-
 const char *nft_wifidogx_anti_nat_script[] = {
     "add rule inet wifidogx prerouting iifname $interface$ ether saddr @set_wifidogx_local_trust_clients accept",
     "add rule inet wifidogx prerouting iifname $interface$ ip ttl != { $ttlvalues$ } counter drop",
@@ -255,16 +236,6 @@ generate_nft_wifidogx_init_script()
         } else {
             fprintf(output_file, "%s\n", rule);
         }
-    }
-
-    // Add DNS pass rules
-    for (size_t i = 0; i < sizeof(nft_wifidogx_dns_pass_script) / sizeof(nft_wifidogx_dns_pass_script[0]); i++) {
-        fprintf(output_file, "%s\n", nft_wifidogx_dns_pass_script[i]);
-    }
-
-    // Add DHCP pass rules 
-    for (size_t i = 0; i < sizeof(nft_wifidogx_dhcp_pass_script) / sizeof(nft_wifidogx_dhcp_pass_script[0]); i++) {
-        fprintf(output_file, "%s\n", nft_wifidogx_dhcp_pass_script[i]);
     }
     
     if (config->enable_anti_nat) {

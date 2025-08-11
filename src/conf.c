@@ -94,8 +94,6 @@ typedef enum {
 	oMQTTPassword,
 	oDNSTimeout,
 	oFW4Enable,
-	oDhcpOptionCpi,
-	oEnableDhcpOptionCpi,
 	oEnableBypassAuth,
 	oWebSocket,
 	oWSServer,
@@ -177,8 +175,6 @@ static const struct {
 	"mqttPassword", oMQTTPassword}, {
 	"dnstimeout",oDNSTimeout},{
 	"fw4enable",oFW4Enable},{
-	"dhcpoptioncpi",oDhcpOptionCpi},{
-	"enabledhcpoptioncpi",oEnableDhcpOptionCpi},{
 	"enablebypassauth",oEnableBypassAuth},{
 	"websocket",oWebSocket},{
 	"wsserver",oWSServer},{
@@ -360,7 +356,6 @@ void config_init(void)
 	// Initialize firewall and feature flags
 	config.fw4_enable           = 1;
 	config.enable_bypass_auth   = 0;
-	config.enable_dhcp_cpi      = 0;
 	config.enable_del_conntrack = 1;
 	config.auth_server_mode 	= 0;
 	config.enable_anti_nat 		= 0;
@@ -1221,13 +1216,7 @@ config_read()
 				case oFW4Enable:
 					config.fw4_enable = parse_boolean_value(p1);
 					break;
-				case oDhcpOptionCpi:
-					if(config.dhcp_cpi_uri) free(config.dhcp_cpi_uri);
-					config.dhcp_cpi_uri = safe_strdup(p1);
-					break;
-				case oEnableDhcpOptionCpi:
-					config.enable_dhcp_cpi = parse_boolean_value(p1);
-					break;
+
 				case oEnableBypassAuth:
 					config.enable_bypass_auth = parse_boolean_value(p1);
 					break;
@@ -2204,7 +2193,6 @@ void config_cleanup(void) {
     if (cfg->local_portal) { free(cfg->local_portal); cfg->local_portal = NULL; }
     if (cfg->arp_table_path) { free(cfg->arp_table_path); cfg->arp_table_path = NULL; }
     if (cfg->dns_timeout) { free(cfg->dns_timeout); cfg->dns_timeout = NULL; }
-    if (cfg->dhcp_cpi_uri) { free(cfg->dhcp_cpi_uri); cfg->dhcp_cpi_uri = NULL; }
     if (cfg->device_id) { free(cfg->device_id); cfg->device_id = NULL; }
     if (cfg->ttl_values) { free(cfg->ttl_values); cfg->ttl_values = NULL; }
     if (cfg->anti_nat_permit_macs) { free(cfg->anti_nat_permit_macs); cfg->anti_nat_permit_macs = NULL; }
