@@ -23,6 +23,7 @@
 #include "wdctlx_thread.h"
 #include "ping_thread.h"
 #include "api_handlers.h"
+#include "wd_util.h"
 
 /**
  * Global WebSocket connection state
@@ -775,6 +776,9 @@ ws_read_cb(struct bufferevent *b_ws, void *ctx)
 		debug(LOG_DEBUG, "WebSocket upgrade successful");
 		ws_state.upgraded = true;
 
+		// Mark auth server as online when WebSocket connection is established
+		mark_auth_online();
+
 		// Send initial connect message
 		struct evbuffer *output = bufferevent_get_output(b_ws);
 		send_msg(output, "connect");
@@ -907,6 +911,9 @@ wsevent_connection_cb(struct bufferevent* b_ws, short events, void *ctx)
 
 	// Handle connection failure cases
 	if (events & (BEV_EVENT_ERROR | BEV_EVENT_EOF)) {
+		// Mark auth server as offline when WebSocket connection fails
+		mark_auth_offline();
+		
 		// Get specific error details
 		int err = bufferevent_socket_get_dns_error(b_ws);
 		if (err) {
@@ -969,6 +976,11 @@ wsevent_connection_cb(struct bufferevent* b_ws, short events, void *ctx)
 static void
 cleanup_ws_connection(void)
 {
+	// Mark auth server as offline when cleaning up WebSocket connection
+	if (ws_state.upgraded) {
+		mark_auth_offline();
+	}
+
 	// Stop heartbeat timer
 	if (ws_state.heartbeat_ev) {
 		event_del(ws_state.heartbeat_ev);

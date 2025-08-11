@@ -136,6 +136,9 @@ static int commit_uci_changes(void) {
 
 void handle_heartbeat_request(json_object *j_heartbeat)
 {
+	// Mark auth server as online when receiving heartbeat response
+	mark_auth_online();
+	
 	// Extract gateway array from response
 	json_object *gw_array = json_object_object_get(j_heartbeat, "gateway");
 	if (!gw_array || !json_object_is_type(gw_array, json_type_array)) {
