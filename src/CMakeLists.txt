@@ -5,7 +5,7 @@ set(src_apfreewifidog
 	util.c wdctlx_thread.c ping_thread.c safe.c
 	tls_thread.c wd_client.c wd_util.c mqtt_thread.c
 	ws_thread.c api_handlers.c
-	dns_forward.c bypass_user.c dns_monitor.c
+	bypass_user.c dns_monitor.c
 )
 
 set(src_fw3

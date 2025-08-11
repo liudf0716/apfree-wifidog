@@ -267,7 +267,6 @@ typedef struct {
 	short fw4_enable;
 	short enable_dhcp_cpi;
 	short enable_bypass_auth;
-	short enable_dns_forward;
 	short enable_del_conntrack;
 	short auth_server_mode; /* 0, cloud auth mode; 1, cloud auth bypass mode; 2, local auth mod*/
 	short enable_anti_nat; /* 1, enable anti nat */

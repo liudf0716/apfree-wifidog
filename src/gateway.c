@@ -23,7 +23,6 @@
 #include "wd_client.h"
 #include "dhcp_cpi.h"
 #include "ws_thread.h"
-#include "dns_forward.h"
 #include "dns_monitor.h"
 
 /* Global mutexes and buffers */
@@ -41,7 +40,6 @@ static pthread_t tid_wdctl = 0;         /* Control interface thread */
 static pthread_t tid_tls_server = 0;   /* TLS redirect thread */
 static pthread_t tid_mqtt_server = 0;    /* MQTT server thread */
 static pthread_t tid_ws = 0;            /* WebSocket thread */
-static pthread_t tid_dns_forward = 0;    /* DNS forwarding thread */
 static pthread_t tid_dns_monitor = 0;    /* DNS monitor thread */
 
 /* Signal handling */
@@ -260,7 +258,6 @@ static const struct {
     {&tid_tls_server, "https_server"},
     {&tid_mqtt_server, "mqtt_server"},
     {&tid_ws, "websocket"},
-    {&tid_dns_forward, "dns_forward"},
     {&tid_dns_monitor, "dns_monitor"}
 };
 
@@ -625,14 +622,7 @@ threads_init(s_config *config)
     create_detached_thread(&tid_wdctl, (void *)thread_wdctl, 
                           (void *)safe_strdup(config->wdctl_sock), "wdctl");
 
-    // Optional service threads based on configuration
-    if (config->enable_dns_forward) {
-        create_detached_thread(&tid_dns_forward, (void *)thread_dns_forward, NULL, "dns_forward");
-    } else {
-        // DNS monitor thread - monitors DNS responses from eBPF program
-        // Only start if DNS forward is not enabled
-        create_detached_thread(&tid_dns_monitor, (void *)thread_dns_monitor, NULL, "dns_monitor");
-    }
+    create_detached_thread(&tid_dns_monitor, (void *)thread_dns_monitor, NULL, "dns_monitor");
 
     if (config->enable_dhcp_cpi) {
         create_detached_thread(&tid_fw_counter, (void *)thread_dhcp_cpi, NULL, "dhcp_cpi");

@@ -97,7 +97,6 @@ typedef enum {
 	oDhcpOptionCpi,
 	oEnableDhcpOptionCpi,
 	oEnableBypassAuth,
-	oEnableDNSForward,
 	oWebSocket,
 	oWSServer,
 	oWSServerPort,
@@ -181,7 +180,6 @@ static const struct {
 	"dhcpoptioncpi",oDhcpOptionCpi},{
 	"enabledhcpoptioncpi",oEnableDhcpOptionCpi},{
 	"enablebypassauth",oEnableBypassAuth},{
-	"enablednsforward",oEnableDNSForward},{
 	"websocket",oWebSocket},{
 	"wsserver",oWSServer},{
 	"wsserverport",oWSServerPort},{
@@ -363,7 +361,6 @@ void config_init(void)
 	config.fw4_enable           = 1;
 	config.enable_bypass_auth   = 0;
 	config.enable_dhcp_cpi      = 0;
-	config.enable_dns_forward   = 1;
 	config.enable_del_conntrack = 1;
 	config.auth_server_mode 	= 0;
 	config.enable_anti_nat 		= 0;
@@ -1233,9 +1230,6 @@ config_read()
 					break;
 				case oEnableBypassAuth:
 					config.enable_bypass_auth = parse_boolean_value(p1);
-					break;
-				case oEnableDNSForward:
-					config.enable_dns_forward = parse_boolean_value(p1);
 					break;
 				case oEnableDelConntrack:
 					config.enable_del_conntrack = parse_boolean_value(p1);

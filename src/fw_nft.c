@@ -30,7 +30,6 @@
 #include "fw_nft.h"
 #include "client_list.h"
 #include "conf.h"
-#include "dns_forward.h"
 #include "gateway.h"
 #include "safe.h"
 
@@ -148,10 +147,9 @@ const char *nft_wifidogx_dhcp_redirect_script[] = {
     "add rule inet wifidogx prerouting iifname $interface$ tcp dport 67 counter redirect to  15867",
 };
 
-const char *nft_wifidogx_dns_redirect_script[] = {
-    "add rule inet wifidogx prerouting iifname $interface$ udp dport 53 counter redirect to  " DNS_FORWARD_PORT_STR,
-    "add rule inet wifidogx prerouting iifname $interface$ tcp dport 53 counter redirect to " DNS_FORWARD_PORT_STR,
-};
+
+
+
 
 const char *nft_wifidogx_anti_nat_script[] = {
     "add rule inet wifidogx prerouting iifname $interface$ ether saddr @set_wifidogx_local_trust_clients accept",
@@ -291,26 +289,6 @@ generate_nft_wifidogx_init_script()
                     fprintf(output_file, "%s\n", buf);
                 } else {
                     fprintf(output_file, "%s\n", p);
-                }
-            }
-            gw_settings = gw_settings->next;
-        }
-    }
-
-    gw_settings = get_gateway_settings();
-
-    // Add DNS redirection rules if enabled
-    if (config->enable_dns_forward) {
-        while (gw_settings) {
-            for (size_t i = 0; i < sizeof(nft_wifidogx_dns_redirect_script) / sizeof(nft_wifidogx_dns_redirect_script[0]); i++) {
-                const char *rule = nft_wifidogx_dns_redirect_script[i];
-                if (strstr(rule, "$interface$")) {
-                    // Replace interface placeholder with actual interface
-                    replace_str(rule, "$interface$", gw_settings->gw_interface, buf, sizeof(buf));
-                    fprintf(output_file, "%s\n", buf);
-                    memset(buf, 0, sizeof(buf));
-                } else {
-                    fprintf(output_file, "%s\n", rule);
                 }
             }
             gw_settings = gw_settings->next;
