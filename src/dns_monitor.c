@@ -168,20 +168,20 @@ static int is_safe_ip_str(const char *ip_str);
 static int process_dns_response_extended(const struct raw_dns_data *dns_data);
 
 // 打印IPv4地址
-static void print_ipv4_addr(__be32 addr, char *buf, size_t buf_size)
+static void __attribute__((unused)) print_ipv4_addr(__be32 addr, char *buf, size_t buf_size)
 {
     struct in_addr in_addr = { .s_addr = addr };
     inet_ntop(AF_INET, &in_addr, buf, buf_size);
 }
 
 // 打印IPv6地址
-static void print_ipv6_addr(const struct in6_addr *addr, char *buf, size_t buf_size)
+static void __attribute__((unused)) print_ipv6_addr(const struct in6_addr *addr, char *buf, size_t buf_size)
 {
     inet_ntop(AF_INET6, addr, buf, buf_size);
 }
 
 // 打印时间戳
-static void print_timestamp(__u32 timestamp)
+static void __attribute__((unused)) print_timestamp(__u32 timestamp)
 {
     time_t t = (time_t)timestamp;
     struct tm *tm_info = localtime(&t);
@@ -215,16 +215,16 @@ static void process_dns_header(const struct dns_hdr *dns_hdr)
 static int handle_dns_event(void *ctx, void *data, size_t data_sz)
 {
     const struct raw_dns_data *dns_data = data;
-    char src_ip_str[INET6_ADDRSTRLEN];
-    char dst_ip_str[INET6_ADDRSTRLEN];
+    char src_ip_str[INET6_ADDRSTRLEN] __attribute__((unused));
+    char dst_ip_str[INET6_ADDRSTRLEN] __attribute__((unused));
     
     if (data_sz < sizeof(*dns_data)) {
         debug(LOG_ERR, "Invalid DNS data size: %zu", data_sz);
         return 0;
     }
     
-    // 简化数据包信息显示
-    debug(LOG_DEBUG, "DNS Packet: %u bytes", dns_data->pkt_len);
+    // 简化数据包信息显示 - 移除频繁的数据包日志
+    // debug(LOG_DEBUG, "DNS Packet: %u bytes", dns_data->pkt_len);
     
     // 解析DNS头
     if (dns_data->pkt_len >= sizeof(struct dns_hdr)) {
@@ -246,13 +246,13 @@ static void print_dns_stats(int stats_map_fd)
     struct dns_stats stats;
     
     if (bpf_map_lookup_elem(stats_map_fd, &key, &stats) == 0) {
-        debug(LOG_INFO, "=== DNS Statistics ===");
-        debug(LOG_INFO, "Queries: %llu", (unsigned long long)stats.dns_queries);
-        debug(LOG_INFO, "Responses: %llu", (unsigned long long)stats.dns_responses);
-        debug(LOG_INFO, "Errors: %llu", (unsigned long long)stats.dns_errors);
-        debug(LOG_INFO, "IPv4 Packets: %llu", (unsigned long long)stats.ipv4_packets);
-        debug(LOG_INFO, "IPv6 Packets: %llu", (unsigned long long)stats.ipv6_packets);
-        debug(LOG_INFO, "======================");
+        debug(LOG_DEBUG, "=== DNS Statistics ===");
+        debug(LOG_DEBUG, "Queries: %llu", (unsigned long long)stats.dns_queries);
+        debug(LOG_DEBUG, "Responses: %llu", (unsigned long long)stats.dns_responses);
+        debug(LOG_DEBUG, "Errors: %llu", (unsigned long long)stats.dns_errors);
+        debug(LOG_DEBUG, "IPv4 Packets: %llu", (unsigned long long)stats.ipv4_packets);
+        debug(LOG_DEBUG, "IPv6 Packets: %llu", (unsigned long long)stats.ipv6_packets);
+        debug(LOG_DEBUG, "======================");
     }
 }
 
@@ -288,7 +288,7 @@ static void *dns_monitor_thread(void *arg)
         goto cleanup;
     }
     
-    debug(LOG_INFO, "DNS monitor initialized, waiting for DNS packets...");
+    debug(LOG_DEBUG, "DNS monitor initialized, waiting for DNS packets...");
     
     // 主循环
     while (dns_monitor_running) {
@@ -309,7 +309,7 @@ static void *dns_monitor_thread(void *arg)
         }
     }
     
-    debug(LOG_INFO, "DNS monitor thread shutting down...");
+    debug(LOG_DEBUG, "DNS monitor thread shutting down...");
     
     // 最后打印一次统计信息
     if (stats_map_fd >= 0) {
@@ -359,7 +359,7 @@ int dns_monitor_start(void)
     // 分离线程，不需要join
     pthread_detach(dns_monitor_tid);
     
-    debug(LOG_INFO, "DNS monitor thread created successfully");
+    debug(LOG_DEBUG, "DNS monitor thread created successfully");
     return 1;
 }
 
@@ -370,7 +370,7 @@ void dns_monitor_stop(void)
         return;
     }
     
-    debug(LOG_INFO, "Stopping DNS monitor...");
+    debug(LOG_DEBUG, "Stopping DNS monitor...");
     dns_monitor_running = 0;
     
     // 等待线程结束（最多等待2秒）
@@ -378,7 +378,7 @@ void dns_monitor_stop(void)
     // 这里只是标记停止，线程会自然退出
     sleep(1); // 简单等待1秒让线程有时间退出
     
-    debug(LOG_INFO, "DNS monitor stop requested");
+    debug(LOG_DEBUG, "DNS monitor stop requested");
 }
 
 // 检查DNS监控是否运行
@@ -405,7 +405,7 @@ static int parse_dns_header(const struct dns_hdr *dns_hdr, __u16 *flags, __u16 *
     // 验证DNS头部 - 放宽验证条件，只检查必要的字段
     __u8 qr = (*flags >> 15) & 0x1;
     __u8 opcode = (*flags >> 11) & 0xF;
-    __u8 rcode = *flags & 0xF;
+    __u8 rcode __attribute__((unused)) = *flags & 0xF;
     
     // 只要求是响应(QR=1)和标准查询(opcode=0)，允许各种响应码
     if (qr != 1 || opcode != 0) {
@@ -548,7 +548,7 @@ static void sync_xdpi_domains_2_kern(void)
         return;
     }
     
-    debug(LOG_INFO, "Syncing domain entries to kernel");
+    debug(LOG_DEBUG, "Syncing domain entries to kernel");
     
     for (int i = 0; i < XDPI_DOMAIN_MAX; i++) {
         if (domain_entries[i].used) {
@@ -562,7 +562,7 @@ static void sync_xdpi_domains_2_kern(void)
     
     close(fd);
     pthread_mutex_unlock(&domain_entries_mutex);
-    debug(LOG_INFO, "Domain sync to kernel completed");
+    debug(LOG_DEBUG, "Domain sync to kernel completed");
 }
 
 /**
@@ -649,7 +649,7 @@ static int xdpi_add_domain(const char *input_domain)
     }
     pthread_mutex_unlock(&domain_entries_mutex);
     
-    debug(LOG_INFO, "Added domain %s to xDPI (SID: %d)", domain_to_process, entry_for_ioctl.sid);
+    debug(LOG_DEBUG, "Added domain %s to xDPI (SID: %d)", domain_to_process, entry_for_ioctl.sid);
     return result;
 }
 
@@ -691,7 +691,7 @@ static int is_trusted_domain(const char *query_name, t_domain_trusted **trusted_
             // 注意：不支持完整域名格式（如 example.com）
             
             if (matched) {
-                debug(LOG_INFO, "Query name '%s' matched trusted domain rule '%s'", query_name, domain_pattern);
+                debug(LOG_DEBUG, "Query name '%s' matched trusted domain rule '%s'", query_name, domain_pattern);
                 *trusted_domain = p;
                 return 1;
             }
@@ -750,7 +750,7 @@ static int add_trusted_ip(t_domain_trusted *trusted_domain, __u16 type, const un
             inet_ntop(AF_INET6, addr_ptr, ip_str, sizeof(ip_str));
         }
         
-        debug(LOG_INFO, "Adding trusted IP for domain '%s': %s", trusted_domain->domain, ip_str);
+        debug(LOG_DEBUG, "Adding trusted IP for domain '%s': %s", trusted_domain->domain, ip_str);
         
         t_ip_trusted *new_ip_trusted = (t_ip_trusted *)malloc(sizeof(t_ip_trusted));
         if (!new_ip_trusted) {
@@ -804,8 +804,8 @@ static int process_dns_answers(const unsigned char *payload, int payload_len, in
         }
         
         __u16 type = ntohs(*((__u16 *)(payload + pos)));
-        __u16 class = ntohs(*((__u16 *)(payload + pos + 2)));
-        __u32 ttl = ntohl(*((__u32 *)(payload + pos + 4)));
+        __u16 class __attribute__((unused)) = ntohs(*((__u16 *)(payload + pos + 2)));
+        __u32 ttl __attribute__((unused)) = ntohl(*((__u32 *)(payload + pos + 4)));
         __u16 rdlength = ntohs(*((__u16 *)(payload + pos + 8)));
         
         pos += 10;
