@@ -1748,6 +1748,11 @@ nft_fw_init()
     __nft_fw_set_authservers();
     __nft_fw_set_trusted_maclist();
     __nft_fw_set_anti_nat_permit();
+    
+    // Add domain whitelist settings
+    __nft_fw_set_user_domains_trusted();
+    __nft_fw_set_wildcard_domains_trusted();
+    __nft_fw_set_inner_domains_trusted();
 
     return 1;
 }
