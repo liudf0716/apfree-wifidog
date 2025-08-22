@@ -218,24 +218,46 @@ static int handle_dns_event(void *ctx, void *data, size_t data_sz)
     char src_ip_str[INET6_ADDRSTRLEN] __attribute__((unused));
     char dst_ip_str[INET6_ADDRSTRLEN] __attribute__((unused));
     
-    if (data_sz < sizeof(*dns_data)) {
-        debug(LOG_ERR, "Invalid DNS data size: %zu", data_sz);
+    // 验证输入参数
+    if (!data || data_sz < sizeof(*dns_data)) {
+        debug(LOG_ERR, "Invalid DNS data: ptr=%p, size=%zu", data, data_sz);
+        return 0;
+    }
+    
+    // 验证DNS数据包长度
+    if (dns_data->pkt_len == 0 || dns_data->pkt_len > MAX_DNS_PAYLOAD_LEN) {
+        debug(LOG_WARNING, "Invalid DNS packet length: %u", dns_data->pkt_len);
+        return 0;
+    }
+    
+    // 确保payload指针有效性和大小一致性
+    if (data_sz < sizeof(*dns_data) + dns_data->pkt_len) {
+        debug(LOG_WARNING, "DNS data size mismatch: data_sz=%zu, expected=%zu", 
+              data_sz, sizeof(*dns_data) + dns_data->pkt_len);
         return 0;
     }
     
     // 简化数据包信息显示 - 移除频繁的数据包日志
     // debug(LOG_DEBUG, "DNS Packet: %u bytes", dns_data->pkt_len);
     
-    // 解析DNS头
+    // 解析DNS头 - 添加额外的长度检查
     if (dns_data->pkt_len >= sizeof(struct dns_hdr)) {
         const struct dns_hdr *dns_hdr = (const struct dns_hdr *)dns_data->dns_payload;
+        
+        // 验证DNS头部指针对齐
+        if ((uintptr_t)dns_hdr % __alignof__(struct dns_hdr) != 0) {
+            debug(LOG_WARNING, "Unaligned DNS header pointer");
+            return 0;
+        }
+        
         process_dns_header(dns_hdr);
         
         // 扩展的DNS响应处理
         process_dns_response_extended(dns_data);
+    } else {
+        debug(LOG_WARNING, "DNS packet too small for header: %u bytes", dns_data->pkt_len);
     }
     
-
     return 0;
 }
 
@@ -426,17 +448,22 @@ static int parse_dns_name(const unsigned char *payload, int payload_len, int off
     int max_jumps = 5;
     int jumps = 0;
     
-    if (!payload || offset >= payload_len) {
+    if (!payload || offset < 0 || offset >= payload_len) {
         return -1;
     }
     
     // 如果name为NULL，说明调用者只想跳过域名，不需要解析内容
-    int skip_only = (name == NULL || max_len == 0);
+    int skip_only = (name == NULL || max_len <= 0);
     if (!skip_only) {
         name[0] = '\0';
     }
     
     while (pos < payload_len && jumps < max_jumps) {
+        // 确保pos在有效范围内
+        if (pos < 0 || pos >= payload_len) {
+            return -1;
+        }
+        
         int len = payload[pos];
         
         if (len == 0) {
@@ -454,30 +481,45 @@ static int parse_dns_name(const unsigned char *payload, int payload_len, int off
                 jumped = pos + 2;
             }
             
-            pos = ((len & 0x3F) << 8) | payload[pos + 1];
+            int new_pos = ((len & 0x3F) << 8) | payload[pos + 1];
+            // 验证新位置的有效性，防止无限循环和越界
+            if (new_pos < 0 || new_pos >= payload_len || new_pos >= pos) {
+                return -1;
+            }
+            
+            pos = new_pos;
             jumps++;
             continue;
         }
         
+        // 验证长度字段的合法性
         if (len > 63 || pos + len + 1 > payload_len) {
             return -1;
         }
         
         // 只在需要解析域名时才进行字符串操作
         if (!skip_only) {
+            // 检查缓冲区边界
             if (name_pos > 0 && name_pos < max_len - 1) {
                 name[name_pos++] = '.';
             }
             
+            // 严格检查缓冲区边界，防止溢出
             for (int i = 0; i < len && name_pos < max_len - 1; i++) {
-                name[name_pos++] = payload[pos + 1 + i];
+                unsigned char c = payload[pos + 1 + i];
+                // 只允许可见ASCII字符，过滤控制字符
+                if (c >= 32 && c <= 126) {
+                    name[name_pos++] = c;
+                } else {
+                    name[name_pos++] = '?'; // 替换非法字符
+                }
             }
         }
         
         pos += len + 1;
     }
     
-    if (!skip_only) {
+    if (!skip_only && max_len > 0) {
         name[name_pos] = '\0';
     }
     
@@ -493,11 +535,25 @@ static int parse_dns_question(const unsigned char *payload, int payload_len, str
         return -1;
     }
     
+    // 清零结构体，防止垃圾数据
+    memset(name_info, 0, sizeof(*name_info));
+    
     int offset = sizeof(struct dns_hdr);
     int next_offset = parse_dns_name(payload, payload_len, offset, name_info->query_name, MAX_DNS_NAME);
     
     if (next_offset < 0 || next_offset + 4 > payload_len) {
         return -1;
+    }
+    
+    // 添加额外的边界检查
+    if (next_offset < sizeof(struct dns_hdr) || next_offset >= payload_len - 4) {
+        return -1;
+    }
+    
+    // 安全地读取qtype和qclass，添加对齐检查
+    if ((next_offset % 2) != 0) {
+        // 如果偏移不是2字节对齐，可能导致未对齐访问
+        debug(LOG_WARNING, "DNS question offset not aligned: %d", next_offset);
     }
     
     name_info->qtype = ntohs(*((__u16 *)(payload + next_offset)));
@@ -638,14 +694,17 @@ static int xdpi_add_domain(const char *input_domain)
         return -1;
     }
     
-    // 更新本地缓存
+    // 更新本地缓存 - 添加边界检查防止数组越界
     pthread_mutex_lock(&domain_entries_mutex);
-    if (!domain_entries[local_free_idx].used) {
+    if (local_free_idx >= 0 && local_free_idx < XDPI_DOMAIN_MAX && 
+        !domain_entries[local_free_idx].used) {
         memcpy(domain_entries[local_free_idx].domain, domain_to_process, len_to_copy);
         domain_entries[local_free_idx].domain[len_to_copy] = '\0';
         domain_entries[local_free_idx].domain_len = len_to_copy;
         domain_entries[local_free_idx].sid = entry_for_ioctl.sid;
         domain_entries[local_free_idx].used = true;
+    } else {
+        debug(LOG_WARNING, "Invalid local_free_idx: %d or slot already used", local_free_idx);
     }
     pthread_mutex_unlock(&domain_entries_mutex);
     
@@ -675,7 +734,8 @@ static int is_trusted_domain(const char *query_name, t_domain_trusted **trusted_
                 const char *suffix = domain_pattern + 1; // 跳过 '*', 得到 ".example.com"
                 size_t query_len = strlen(query_name);
                 size_t suffix_len = strlen(suffix);
-                if (query_len >= suffix_len && 
+                // 防止无符号整数下溢
+                if (query_len >= suffix_len && suffix_len > 0 &&
                     strcmp(query_name + query_len - suffix_len, suffix) == 0) {
                     matched = 1;
                 }
@@ -683,7 +743,8 @@ static int is_trusted_domain(const char *query_name, t_domain_trusted **trusted_
                 // 处理 .example.com 格式
                 size_t query_len = strlen(query_name);
                 size_t pattern_len = strlen(domain_pattern);
-                if (query_len >= pattern_len && 
+                // 防止无符号整数下溢和空字符串
+                if (query_len >= pattern_len && pattern_len > 0 &&
                     strcmp(query_name + query_len - pattern_len, domain_pattern) == 0) {
                     matched = 1;
                 }
@@ -815,6 +876,12 @@ static int process_dns_answers(const unsigned char *payload, int payload_len, in
             return -1;
         }
         
+        // 防止整数溢出 - 检查pos + rdlength是否会溢出
+        if (pos > INT_MAX - rdlength) {
+            debug(LOG_WARNING, "Integer overflow prevented in DNS parsing: pos=%d, rdlength=%u", pos, rdlength);
+            return -1;
+        }
+        
         // 只处理A记录和AAAA记录，且长度必须正确
         if (type == DNS_RR_TYPE_A && rdlength == IPV4_ADDR_LEN) {
             if (add_trusted_ip(trusted_domain, type, payload + pos) != 0) {
@@ -876,14 +943,24 @@ static int xdpi_short_domain(const char *full_domain, char *short_domain, int *o
     // 从右到左解析域名段
     while (p >= full_domain && part_count < MAX_PARTS) {
         const char *part_end = p;
+        
+        // 查找点号分隔符，防止指针越界
         while (p >= full_domain && *p != '.') {
             p--;
         }
         
+        // 验证段长度合法性，防止负数或过长
+        int segment_len = part_end - p;
+        if (segment_len <= 0 || segment_len > MAX_DOMAIN_LEN) {
+            debug(LOG_WARNING, "Invalid domain segment length: %d", segment_len);
+            return -1;
+        }
+        
         parts_ptr[part_count] = p + 1;
-        parts_len[part_count] = part_end - p;
+        parts_len[part_count] = segment_len;
         part_count++;
         
+        // 安全地移动指针
         if (p >= full_domain && *p == '.') {
             p--;
         }
