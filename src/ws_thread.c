@@ -99,10 +99,22 @@ generate_sec_websocket_key(char *key, size_t length)
 		return;
 	}
 
-	EVP_EncodeBlock((unsigned char *)key, rand_bytes, sizeof(rand_bytes));
+	// EVP_EncodeBlock always adds padding and null terminator
+	// For 16 bytes input, it produces 24 bytes + null terminator = 25 bytes total
+	int encoded_len = EVP_EncodeBlock((unsigned char *)key, rand_bytes, sizeof(rand_bytes));
 	
-	// Ensure null termination
-	key[24] = '\0';
+	// Verify the encoding was successful and length is as expected
+	if (encoded_len != 24) {
+		debug(LOG_ERR, "Unexpected Base64 encoding length: %d (expected 24)", encoded_len);
+		key[0] = '\0';  // Clear the buffer on error
+		return;
+	}
+	
+	// EVP_EncodeBlock automatically null-terminates, but ensure it's within bounds
+	if (key[24] != '\0') {
+		debug(LOG_WARNING, "Base64 encoding not properly null-terminated");
+		key[24] = '\0';  // Force null termination
+	}
 
 	debug(LOG_DEBUG, "Generated WebSocket key: %s", key);
 }
@@ -150,9 +162,23 @@ static void scheduled_reconnect_cb(evutil_socket_t fd, short events, void *arg)
 static void
 generate_sec_websocket_accept(const char *key, char *accept, size_t length)
 {
+	// Validate input parameters
+	if (!key || !accept || length < 29) {
+		debug(LOG_ERR, "Invalid parameters for WebSocket accept generation");
+		if (accept && length > 0) accept[0] = '\0';
+		return;
+	}
+
 	// Concatenate WebSocket key with WebSocket GUID
 	char key_guid[64];
-	snprintf(key_guid, sizeof(key_guid), "%s%s", key, WS_GUID);
+	int ret = snprintf(key_guid, sizeof(key_guid), "%s%s", key, WS_GUID);
+	
+	// Check for truncation or error
+	if (ret < 0 || ret >= sizeof(key_guid)) {
+		debug(LOG_ERR, "WebSocket key concatenation failed or truncated: ret=%d", ret);
+		accept[0] = '\0';
+		return;
+	}
 
 	// Calculate SHA1 hash of concatenated key
 	unsigned char sha1_hash[SHA_DIGEST_LENGTH];
@@ -165,10 +191,20 @@ generate_sec_websocket_accept(const char *key, char *accept, size_t length)
 		return;
 	}
 
-	EVP_EncodeBlock((unsigned char *)accept, sha1_hash, SHA_DIGEST_LENGTH);
+	int encoded_len = EVP_EncodeBlock((unsigned char *)accept, sha1_hash, SHA_DIGEST_LENGTH);
+	
+	// Verify the encoding was successful and length is as expected
+	if (encoded_len != 28) {
+		debug(LOG_ERR, "Unexpected Base64 encoding length: %d (expected 28)", encoded_len);
+		accept[0] = '\0';  // Clear the buffer on error
+		return;
+	}
 
-	// Ensure null termination
-	accept[28] = '\0';
+	// EVP_EncodeBlock automatically null-terminates, but ensure it's within bounds
+	if (accept[28] != '\0') {
+		debug(LOG_WARNING, "Base64 encoding not properly null-terminated");
+		accept[28] = '\0';  // Force null termination
+	}
 
 	debug(LOG_DEBUG, "Generated WebSocket accept token: %s", accept);
 }
@@ -282,6 +318,13 @@ process_ws_msg(struct bufferevent *bev, const char *msg)
 
 	// Route message to appropriate handler based on type
 	const char *type_str = json_object_get_string(type);
+	if (!type_str) {
+		debug(LOG_ERR, "Invalid message type in JSON (null string)");
+		destroy_transport_context(transport);
+		json_object_put(jobj);
+		return;
+	}
+
 	if (!strcmp(type_str, "heartbeat") || !strcmp(type_str, "connect")) {
 		handle_heartbeat_request(jobj);
 	} else if (!strcmp(type_str, "auth")) {
@@ -371,11 +414,15 @@ ws_send(struct evbuffer *buf, const char *msg, const size_t len, enum WebSocketF
 		evbuffer_add(buf, &len64, sizeof(len64));
 	}
 
-	// Add masking key and masked payload
+	// Add masking key and masked payload - use secure random generator
 	uint8_t mask_key[4];
-    for (int i = 0; i < 4; i++) {
-        mask_key[i] = rand() & 0xFF;
-    }
+	if (!RAND_bytes(mask_key, sizeof(mask_key))) {
+		// Fallback to less secure but still better than rand()
+		debug(LOG_WARNING, "OpenSSL RAND_bytes failed, using fallback");
+		for (int i = 0; i < 4; i++) {
+			mask_key[i] = rand() & 0xFF;
+		}
+	}
 	evbuffer_add(buf, mask_key, 4);
 
 	// Mask and write payload
@@ -444,10 +491,17 @@ ws_receive(struct bufferevent *bev, unsigned char *data, const size_t data_len)
 	switch (opcode) {
 	case TEXT_FRAME: {
 		const char *msg = (const char *)(data + header_len);
+		
+		// Validate payload length to prevent integer overflow and excessive allocation
+		if (payload_len > SIZE_MAX - 1 || payload_len > 1024 * 1024) {  // 1MB limit
+			debug(LOG_ERR, "WebSocket payload too large: %llu bytes", (unsigned long long)payload_len);
+			break;
+		}
+		
 		// Ensure null termination for safety, though payload_len should be accurate
-		char *safe_msg = calloc(1, payload_len + 1);
+		char *safe_msg = calloc(1, (size_t)payload_len + 1);
 		if (safe_msg) {
-			memcpy(safe_msg, msg, payload_len);
+			memcpy(safe_msg, msg, (size_t)payload_len);
 			safe_msg[payload_len] = '\0';
 			process_ws_msg(bev, safe_msg);
 			free(safe_msg);
@@ -467,12 +521,20 @@ ws_receive(struct bufferevent *bev, unsigned char *data, const size_t data_len)
 		// Respond to ping with pong frame containing same payload
 		debug(LOG_DEBUG, "Received ping frame, sending pong response");
 		struct evbuffer *out = bufferevent_get_output(bev);
+		
+		// Validate ping payload length to prevent excessive allocation
+		if (payload_len > 125) {  // RFC 6455: control frames must not exceed 125 bytes
+			debug(LOG_ERR, "Ping frame payload too large: %llu bytes (max 125)", (unsigned long long)payload_len);
+			ws_send(out, "", 0, PONG_FRAME);
+			break;
+		}
+		
 		if (payload_len > 0) {
 			// Echo back the ping payload in pong response
-			char *ping_data = malloc(payload_len);
+			char *ping_data = malloc((size_t)payload_len);
 			if (ping_data) {
-				memcpy(ping_data, data + header_len, payload_len);
-				ws_send(out, ping_data, payload_len, PONG_FRAME);
+				memcpy(ping_data, data + header_len, (size_t)payload_len);
+				ws_send(out, ping_data, (size_t)payload_len, PONG_FRAME);
 				free(ping_data);
 			} else {
 				debug(LOG_ERR, "Failed to allocate memory for ping data");
@@ -747,16 +809,33 @@ ws_read_cb(struct bufferevent *b_ws, void *ctx)
 	unsigned char data[1024] = {0};
 	size_t total_len = 0;
 
-	// Read all available data from input buffer
+	// Read all available data from input buffer with proper bounds checking
 	size_t chunk_len;
 	while ((chunk_len = evbuffer_get_length(input)) > 0) {
-		if (total_len + chunk_len >= sizeof(data)) {
-			debug(LOG_ERR, "Input buffer overflow");
-			return;
+		// Ensure we don't overflow the buffer, leaving space for null terminator
+		size_t available_space = sizeof(data) - total_len - 1;
+		if (chunk_len > available_space) {
+			// Only read what fits, preventing overflow
+			chunk_len = available_space;
+			debug(LOG_WARNING, "Input data truncated to fit buffer");
 		}
+		
+		if (chunk_len == 0) {
+			debug(LOG_ERR, "Input buffer full, cannot read more data");
+			break;
+		}
+		
 		evbuffer_remove(input, data + total_len, chunk_len);
 		total_len += chunk_len;
+		
+		// If buffer is nearly full, break to avoid infinite loop
+		if (total_len >= sizeof(data) - 1) {
+			break;
+		}
 	}
+	
+	// Ensure null termination for string operations
+	data[total_len] = '\0';
 
 	// Handle HTTP upgrade handshake
 	if (!ws_state.upgraded) {
