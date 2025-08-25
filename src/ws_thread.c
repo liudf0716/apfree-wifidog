@@ -809,33 +809,16 @@ ws_read_cb(struct bufferevent *b_ws, void *ctx)
 	unsigned char data[1024] = {0};
 	size_t total_len = 0;
 
-	// Read all available data from input buffer with proper bounds checking
+	// Read all available data from input buffer
 	size_t chunk_len;
 	while ((chunk_len = evbuffer_get_length(input)) > 0) {
-		// Ensure we don't overflow the buffer, leaving space for null terminator
-		size_t available_space = sizeof(data) - total_len - 1;
-		if (chunk_len > available_space) {
-			// Only read what fits, preventing overflow
-			chunk_len = available_space;
-			debug(LOG_WARNING, "Input data truncated to fit buffer");
+		if (total_len + chunk_len >= sizeof(data)) {
+			debug(LOG_ERR, "Input buffer overflow");
+			return;
 		}
-		
-		if (chunk_len == 0) {
-			debug(LOG_ERR, "Input buffer full, cannot read more data");
-			break;
-		}
-		
 		evbuffer_remove(input, data + total_len, chunk_len);
 		total_len += chunk_len;
-		
-		// If buffer is nearly full, break to avoid infinite loop
-		if (total_len >= sizeof(data) - 1) {
-			break;
-		}
 	}
-	
-	// Ensure null termination for string operations
-	data[total_len] = '\0';
 
 	// Handle HTTP upgrade handshake
 	if (!ws_state.upgraded) {
