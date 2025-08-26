@@ -261,28 +261,37 @@ static const struct {
 };
 
 /**
- * @brief This function serves as a declaration of a static helper function.
+ * @brief Safely terminates all service threads
  * 
- * The static keyword indicates this function is only accessible within the same file (gateway.c).
- * The function has a void return type, indicating it doesn't return any value.
- * 
- * @note Further documentation requires the function name and parameters to be specified.
+ * @param self Current thread ID to avoid self-termination
  */
 static void 
 terminate_threads(pthread_t self) {
     for (size_t i = 0; i < sizeof(cleanup_threads)/sizeof(cleanup_threads[0]); i++) {
-        if (*cleanup_threads[i].tid && self != *cleanup_threads[i].tid) {
+        if (*cleanup_threads[i].tid && !pthread_equal(self, *cleanup_threads[i].tid)) {
             debug(LOG_INFO, "Explicitly killing the %s thread", cleanup_threads[i].name);
+            
+            // First try graceful termination
+            int result = pthread_cancel(*cleanup_threads[i].tid);
+            if (result != 0) {
+                debug(LOG_WARNING, "Failed to cancel thread %s: %s", 
+                      cleanup_threads[i].name, strerror(result));
+            }
+            
+            // Give thread time to cleanup
+            struct timespec timeout = {0, 100000000}; // 100ms
+            nanosleep(&timeout, NULL);
+            
+            // Force kill if still running (last resort)
             pthread_kill(*cleanup_threads[i].tid, SIGKILL);
         }
     }
 }
 
 /**
- * @file gateway.c
+ * @brief Handles process termination signals with proper cleanup
  * 
- * The main function declaration for gateway operations.
- * This component handles core gateway functionality in the wifidogx system.
+ * @param s Signal number that triggered termination
  */
 void 
 termination_handler(int s) {
@@ -292,9 +301,10 @@ termination_handler(int s) {
     debug(LOG_INFO, "Handler for termination caught signal %d", s);
 
     /* Ensure cleanup only happens once */
-    if (pthread_mutex_trylock(&sigterm_mutex)) {
+    if (pthread_mutex_trylock(&sigterm_mutex) != 0) {
         debug(LOG_INFO, "Another thread already began global termination handler. I'm exiting");
         pthread_exit(NULL);
+        return; // This won't be reached but good for clarity
     }
 
     /* Cleanup firewall rules */
@@ -308,6 +318,10 @@ termination_handler(int s) {
     terminate_threads(self);
 
     debug(LOG_NOTICE, "Exiting...");
+    
+    // Unlock mutex before exit (good practice even though process is ending)
+    pthread_mutex_unlock(&sigterm_mutex);
+    
     exit(s == 0 ? EXIT_FAILURE : EXIT_SUCCESS);
 }
 
@@ -393,19 +407,29 @@ wd_signal_cb(evutil_socket_t fd, short what, void *arg)
 }
 
 /**
- * @brief A static helper function
- * 
- * To provide more meaningful documentation, please share the function signature
- * and its purpose. Static functions are typically internal helpers with specific
- * roles within the file.
+ * @brief Initializes signal handlers for the event base
+ *
+ * @param evbase Event base for signal handling
  */
 static void
 wd_signals_init(struct event_base *evbase)
 {
+    if (!evbase) {
+        debug(LOG_ERR, "Invalid event base for signal initialization");
+        return;
+    }
+    
 	for (size_t i = 0; i < (sizeof(signals) / sizeof(int)); i++) {
 		sev[i] = evsignal_new(evbase, signals[i], wd_signal_cb, evbase);
-		if (sev[i])
-			evsignal_add(sev[i], NULL);
+		if (sev[i]) {
+		    if (evsignal_add(sev[i], NULL) != 0) {
+		        debug(LOG_WARNING, "Failed to add signal handler for signal %d", signals[i]);
+		        event_free(sev[i]);
+		        sev[i] = NULL;
+		    }
+		} else {
+		    debug(LOG_WARNING, "Failed to create signal event for signal %d", signals[i]);
+		}
 	}
 }
 
@@ -477,7 +501,8 @@ gateway_setting_init(void)
  * @brief Initializes system resource limits for file descriptors
  * 
  * Sets both soft and hard limits for number of open file descriptors
- * to support high concurrent connections. Current limit is set to 1M files.
+ * to support high concurrent connections. Validates current limits
+ * and sets reasonable maximums based on system capabilities.
  * 
  * @note Requires root privileges to increase limits beyond system defaults
  * 
@@ -494,19 +519,34 @@ init_resource_limits(void)
         exit(EXIT_FAILURE);
     }
     
-    // Set new limits - both soft and hard to 1M
-    const rlim_t MAX_FD = 1024 * 1024;  // 1 million file descriptors
-    file_limits.rlim_cur = MAX_FD;
-    file_limits.rlim_max = MAX_FD;
-
-    if (setrlimit(RLIMIT_NOFILE, &file_limits) != 0) {
-        debug(LOG_ERR, "Failed to set file descriptor limits to %ld: %s", 
-              (long)MAX_FD, strerror(errno));
-        debug(LOG_ERR, "Try running as root or requesting lower maxconns value");
-        exit(EXIT_FAILURE);
+    debug(LOG_DEBUG, "Current file descriptor limits: soft=%ld hard=%ld", 
+          (long)file_limits.rlim_cur, (long)file_limits.rlim_max);
+    
+    // Calculate reasonable limit based on system max or a safe default
+    rlim_t target_limit = file_limits.rlim_max;
+    const rlim_t DEFAULT_MAX_FD = 65536;  // 64K file descriptors (reasonable default)
+    const rlim_t ABSOLUTE_MAX_FD = 1024 * 1024;  // 1M absolute maximum
+    
+    // Use system maximum if available, otherwise use default
+    if (target_limit == RLIM_INFINITY || target_limit > ABSOLUTE_MAX_FD) {
+        target_limit = DEFAULT_MAX_FD;
     }
-
-    debug(LOG_DEBUG, "Successfully set file descriptor limits to %ld", (long)MAX_FD);
+    
+    // Only increase limits if current soft limit is lower
+    if (file_limits.rlim_cur < target_limit) {
+        file_limits.rlim_cur = target_limit;
+        
+        if (setrlimit(RLIMIT_NOFILE, &file_limits) != 0) {
+            debug(LOG_WARNING, "Failed to set file descriptor limits to %ld: %s", 
+                  (long)target_limit, strerror(errno));
+            debug(LOG_INFO, "Continuing with current limits: %ld", (long)file_limits.rlim_cur);
+        } else {
+            debug(LOG_DEBUG, "Successfully set file descriptor limits to %ld", (long)target_limit);
+        }
+    } else {
+        debug(LOG_DEBUG, "Current file descriptor limits are sufficient: %ld", 
+              (long)file_limits.rlim_cur);
+    }
 }
 
 /**
@@ -589,41 +629,83 @@ wd_init(s_config *config)
 }
 
 /**
- * @brief Static function (internal use only)
- * @details Implementation details should be specified here when the function is defined
- * @return Returns an integer value
+ * @brief Creates a detached thread with proper error handling
+ * 
+ * @param tid Pointer to thread ID storage
+ * @param routine Thread function to execute
+ * @param arg Argument to pass to thread function
+ * @param name Thread name for debugging
+ * @return 1 on success, 0 on failure
  */
 static int 
 create_detached_thread(pthread_t *tid, void *(*routine)(void*), void *arg, const char *name) 
 {
+    if (!tid || !routine || !name) {
+        debug(LOG_ERR, "Invalid parameters for thread creation");
+        return 0;
+    }
+    
     int result = pthread_create(tid, NULL, routine, arg);
     if (result != 0) {
-        debug(LOG_ERR, "FATAL: Failed to create a new thread (%s) - exiting", name);
+        debug(LOG_ERR, "FATAL: Failed to create thread '%s': %s", name, strerror(result));
         termination_handler(0);
         return 0;
     }
-    pthread_detach(*tid);
+    
+    result = pthread_detach(*tid);
+    if (result != 0) {
+        debug(LOG_WARNING, "Failed to detach thread '%s': %s", name, strerror(result));
+        // Continue anyway as the thread was created successfully
+    }
+    
+    debug(LOG_DEBUG, "Successfully created and detached thread '%s'", name);
     return 1;
 }
 
 /**
- * @brief Static helper function used in gateway operations
+ * @brief Initializes all service threads with proper error handling
  *
- * @details This is a placeholder documentation as the function name and parameters 
- * are not provided in the selection. To provide more specific documentation,
- * please include the complete function signature including parameters and return type.
+ * @param config Pointer to global configuration
  */
 static void
 threads_init(s_config *config)
 {
-    // Core service threads
-    create_detached_thread(&tid_tls_server, (void *)thread_tls_server, NULL, "https_server");
-    create_detached_thread(&tid_wdctl, (void *)thread_wdctl, 
-                          (void *)safe_strdup(config->wdctl_sock), "wdctl");
+    if (!config) {
+        debug(LOG_ERR, "Invalid config parameter for thread initialization");
+        return;
+    }
+    
+    // Core service threads - these are always required
+    if (!create_detached_thread(&tid_tls_server, (void *)thread_tls_server, NULL, "https_server")) {
+        debug(LOG_ERR, "Failed to create HTTPS server thread");
+        return;
+    }
+    
+    char *wdctl_sock_copy = NULL;
+    if (config->wdctl_sock) {
+        wdctl_sock_copy = safe_strdup(config->wdctl_sock);
+        if (!wdctl_sock_copy) {
+            debug(LOG_ERR, "Failed to duplicate wdctl socket path");
+            return;
+        }
+    }
+    
+    if (!create_detached_thread(&tid_wdctl, (void *)thread_wdctl, 
+                               (void *)wdctl_sock_copy, "wdctl")) {
+        debug(LOG_ERR, "Failed to create wdctl thread");
+        if (wdctl_sock_copy) free(wdctl_sock_copy);
+        return;
+    }
 
-    create_detached_thread(&tid_dns_monitor, (void *)thread_dns_monitor, NULL, "dns_monitor");
+    if (!create_detached_thread(&tid_dns_monitor, (void *)thread_dns_monitor, NULL, "dns_monitor")) {
+        debug(LOG_ERR, "Failed to create DNS monitor thread");
+        return;
+    }
 
-    create_detached_thread(&tid_ping, (void *)thread_ping, NULL, "ping");
+    if (!create_detached_thread(&tid_ping, (void *)thread_ping, NULL, "ping")) {
+        debug(LOG_ERR, "Failed to create ping thread");
+        return;
+    }
 
     // Auth server dependent threads
     if (is_local_auth_mode()) {
@@ -632,16 +714,23 @@ threads_init(s_config *config)
     }
 
     // Start auth server dependent threads
-    create_detached_thread(&tid_fw_counter, (void *)thread_client_timeout_check, NULL, "fw_counter");
+    if (!create_detached_thread(&tid_fw_counter, (void *)thread_client_timeout_check, NULL, "fw_counter")) {
+        debug(LOG_ERR, "Failed to create firewall counter thread");
+        return;
+    }
 
     // Optional websocket thread
     if (get_ws_server()) {
-        create_detached_thread(&tid_ws, (void *)thread_websocket, NULL, "websocket");
+        if (!create_detached_thread(&tid_ws, (void *)thread_websocket, NULL, "websocket")) {
+            debug(LOG_WARNING, "Failed to create WebSocket thread (optional)");
+        }
     }
 
     // Optional MQTT thread
     if (get_mqtt_server()) {
-        create_detached_thread(&tid_mqtt_server, (void *)thread_mqtt, config, "mqtt");
+        if (!create_detached_thread(&tid_mqtt_server, (void *)thread_mqtt, config, "mqtt")) {
+            debug(LOG_WARNING, "Failed to create MQTT thread (optional)");
+        }
     }
 }
 
@@ -678,13 +767,28 @@ setup_http_server(struct evhttp *http, struct event_base *base)
 {
     s_config *config = config_get_config();
     int is_ssl = 0;
+    
+    if (!http || !base) {
+        debug(LOG_ERR, "Invalid parameters for HTTP server setup");
+        return 0;
+    }
+    
     if (config->auth_server_mode == AUTH_MODE_CLOUD) {
         t_auth_serv *auth_server = get_auth_server();
+        if (!auth_server || !auth_server->authserv_hostname) {
+            debug(LOG_ERR, "Invalid auth server configuration");
+            return 0;
+        }
+        
         SSL_CTX *ssl_ctx = SSL_CTX_new(SSLv23_method());
-        if (!ssl_ctx) return 0; // Should already be a critical error
+        if (!ssl_ctx) {
+            debug(LOG_ERR, "Failed to create SSL context");
+            return 0;
+        }
 
         SSL *ssl = SSL_new(ssl_ctx);
         if (!ssl) {
+            debug(LOG_ERR, "Failed to create SSL object");
             SSL_CTX_free(ssl_ctx);
             return 0;
         }
@@ -700,6 +804,7 @@ setup_http_server(struct evhttp *http, struct event_base *base)
         s_auth_request_ctx = wd_request_context_new(
             base, ssl, auth_server->authserv_use_ssl);
         if (!s_auth_request_ctx) {
+            debug(LOG_ERR, "Failed to create auth request context");
             SSL_free(ssl);
             SSL_CTX_free(ssl_ctx);
             return 0;
@@ -816,11 +921,25 @@ http_redir_loop(s_config *config)
     event_base_free(base);
 }
 
+/**
+ * @brief Cleanup function called before process exit
+ * 
+ * Properly releases all allocated resources including:
+ * - Global configuration
+ * - Event buffers for offline pages
+ * - Redirect HTML buffers
+ * - Client lists
+ * - Firewall rules
+ */
 static void
 aw_clean_before_exit(void)
 {
-    config_cleanup(); // Clean up global configuration resources
+    debug(LOG_DEBUG, "Starting cleanup before exit");
+    
+    // Clean up global configuration resources
+    config_cleanup(); 
 
+    // Clean up event buffers
     if (evb_internet_offline_page) {
         evbuffer_free(evb_internet_offline_page);
         evb_internet_offline_page = NULL;
@@ -829,6 +948,8 @@ aw_clean_before_exit(void)
         evbuffer_free(evb_authserver_offline_page);
         evb_authserver_offline_page = NULL;
     }
+    
+    // Clean up redirect HTML buffer
     if (wifidog_redir_html) {
         if (wifidog_redir_html->front) {
             free(wifidog_redir_html->front);
@@ -843,10 +964,20 @@ aw_clean_before_exit(void)
     }
 
     // Clean up client lists
-    client_list_destroy(client_get_first_client());
-    offline_client_list_destroy(client_get_first_offline_client());
+    t_client *first_client = client_get_first_client();
+    if (first_client) {
+        client_list_destroy(first_client);
+    }
+    
+    t_offline_client *first_offline_client = client_get_first_offline_client();
+    if (first_offline_client) {
+        offline_client_list_destroy(first_offline_client);
+    }
 
+    // Clean up firewall
     fw_destroy();
+    
+    debug(LOG_DEBUG, "Cleanup before exit completed");
 }
 
 /**
