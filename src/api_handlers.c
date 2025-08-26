@@ -96,9 +96,56 @@ static int send_response(api_transport_context_t *transport, const char *message
     return transport->send_response(transport->transport_ctx, message, strlen(message));
 }
 
+/**
+ * @brief Safe UCI configuration setter with input validation
+ * 
+ * @param config_path UCI configuration path
+ * @param value Value to set
+ * @return 0 on success, -1 on error
+ */
 static int set_uci_config(const char *config_path, const char *value) {
-    char cmd[512];
-    snprintf(cmd, sizeof(cmd), "uci set %s='%s'", config_path, value);
+    if (!config_path || !value) {
+        debug(LOG_ERR, "Invalid parameters for UCI config");
+        return -1;
+    }
+    
+    // Validate config_path format (should contain only alphanumeric, dots, underscores)
+    for (const char *p = config_path; *p; p++) {
+        if (!isalnum(*p) && *p != '.' && *p != '_') {
+            debug(LOG_ERR, "Invalid character in config path: %s", config_path);
+            return -1;
+        }
+    }
+    
+    // Escape single quotes in value to prevent injection
+    size_t escaped_len = strlen(value) * 2 + 1;
+    char *escaped_value = malloc(escaped_len);
+    if (!escaped_value) {
+        debug(LOG_ERR, "Memory allocation failed for escaped value");
+        return -1;
+    }
+    
+    char *dst = escaped_value;
+    for (const char *src = value; *src; src++) {
+        if (*src == '\'') {
+            *dst++ = '\'';
+            *dst++ = '\\';
+            *dst++ = '\'';
+            *dst++ = '\'';
+        } else {
+            *dst++ = *src;
+        }
+    }
+    *dst = '\0';
+    
+    char cmd[1024];
+    int ret = snprintf(cmd, sizeof(cmd), "uci set %s='%s'", config_path, escaped_value);
+    free(escaped_value);
+    
+    if (ret >= sizeof(cmd)) {
+        debug(LOG_ERR, "UCI command too long");
+        return -1;
+    }
     
     FILE *fp = popen(cmd, "r");
     if (!fp) {
@@ -526,7 +573,22 @@ void handle_auth_request(json_object *j_auth) {
 
     // Set optional client name if provided
     if (client_name) {
-        client->name = strdup(json_object_get_string(client_name));
+        const char *name_str = json_object_get_string(client_name);
+        if (name_str && strlen(name_str) > 0) {
+            // Validate client name length and characters
+            if (strlen(name_str) <= 64) {
+                if (client->name) {
+                    free(client->name);
+                }
+                client->name = strdup(name_str);
+            } else {
+                debug(LOG_WARNING, "Client name too long, truncating");
+                if (client->name) {
+                    free(client->name);
+                }
+                client->name = strndup(name_str, 64);
+            }
+        }
     }
 
     client->first_login = time(NULL);
@@ -564,7 +626,7 @@ void handle_get_firmware_info_request(json_object *j_req, api_transport_context_
     debug(LOG_INFO, "Get firmware info request received");
 
     // Execute command to get firmware information
-    fp = popen("cat /etc/openwrt_release", "r");
+    fp = popen("cat /etc/openwrt_release 2>/dev/null", "r");
     if (fp == NULL) {
         debug(LOG_ERR, "Failed to execute firmware info command");
         
@@ -595,7 +657,17 @@ void handle_get_firmware_info_request(json_object *j_req, api_transport_context_
                 value[strlen(value)-1] = 0;
                 value++;
             }
-            json_object_object_add(j_data, key, json_object_new_string(value));
+            // Validate key contains only safe characters
+            bool valid_key = true;
+            for (char *p = key; *p; p++) {
+                if (!isalnum(*p) && *p != '_') {
+                    valid_key = false;
+                    break;
+                }
+            }
+            if (valid_key) {
+                json_object_object_add(j_data, key, json_object_new_string(value));
+            }
         }
     }
 
@@ -624,7 +696,7 @@ void handle_get_firmware_info_request(json_object *j_req, api_transport_context_
  * It executes the sysupgrade command with the provided firmware URL.
  *
  * @param j_req The JSON request object containing the firmware URL
- * @param bev The bufferevent associated with the WebSocket connection
+ * @param transport The transport context for sending responses
  */
 void handle_firmware_upgrade_request(json_object *j_req, api_transport_context_t *transport) {
     json_object *j_response = json_object_new_object();
@@ -662,6 +734,36 @@ void handle_firmware_upgrade_request(json_object *j_req, api_transport_context_t
         return;
     }
     
+    // Validate URL format (basic check for HTTP/HTTPS)
+    if (strncmp(url_str, "http://", 7) != 0 && strncmp(url_str, "https://", 8) != 0) {
+        debug(LOG_ERR, "Invalid URL protocol in firmware upgrade request: %s", url_str);
+        
+        json_object *j_type = json_object_new_string("firmware_upgrade_error");
+        json_object *j_error = json_object_new_string("Invalid URL protocol, only HTTP/HTTPS allowed");
+        json_object_object_add(j_response, "type", j_type);
+        json_object_object_add(j_response, "error", j_error);
+        
+        const char *response_str = json_object_to_json_string(j_response);
+        send_response(transport, response_str);
+        json_object_put(j_response);
+        return;
+    }
+    
+    // Validate URL length
+    if (strlen(url_str) > 256) {
+        debug(LOG_ERR, "URL too long in firmware upgrade request");
+        
+        json_object *j_type = json_object_new_string("firmware_upgrade_error");
+        json_object *j_error = json_object_new_string("URL too long");
+        json_object_object_add(j_response, "type", j_type);
+        json_object_object_add(j_response, "error", j_error);
+        
+        const char *response_str = json_object_to_json_string(j_response);
+        send_response(transport, response_str);
+        json_object_put(j_response);
+        return;
+    }
+    
     // Check for force flag
     bool force_upgrade = false;
     if (json_object_object_get_ex(j_req, "force", &j_force)) {
@@ -683,12 +785,36 @@ void handle_firmware_upgrade_request(json_object *j_req, api_transport_context_t
     send_response(transport, response_str);
     json_object_put(j_response);
     
-    // Execute sysupgrade command
+    // Execute sysupgrade command with proper escaping
+    char *escaped_url = malloc(strlen(url_str) * 2 + 1);
+    if (!escaped_url) {
+        debug(LOG_ERR, "Memory allocation failed for URL escaping");
+        return;
+    }
+    
+    // Escape shell special characters
+    char *dst = escaped_url;
+    for (const char *src = url_str; *src; src++) {
+        if (*src == '\'' || *src == '"' || *src == '\\' || *src == '$' || *src == '`') {
+            *dst++ = '\\';
+        }
+        *dst++ = *src;
+    }
+    *dst = '\0';
+    
     char command[512];
+    int ret;
     if (force_upgrade) {
-        snprintf(command, sizeof(command), "sysupgrade -F %s &", url_str);
+        ret = snprintf(command, sizeof(command), "sysupgrade -F '%s' &", escaped_url);
     } else {
-        snprintf(command, sizeof(command), "sysupgrade %s &", url_str);
+        ret = snprintf(command, sizeof(command), "sysupgrade '%s' &", escaped_url);
+    }
+    
+    free(escaped_url);
+    
+    if (ret >= sizeof(command)) {
+        debug(LOG_ERR, "Sysupgrade command too long");
+        return;
     }
     
     FILE *fp = popen(command, "r");
@@ -778,46 +904,66 @@ void handle_update_device_info_request(json_object *j_req, api_transport_context
     // Update device ID if provided
     if (json_object_object_get_ex(j_device_info, "ap_device_id", &j_ap_device_id)) {
         const char *ap_device_id = json_object_get_string(j_ap_device_id);
-        if (device_info->ap_device_id) free(device_info->ap_device_id);
-        device_info->ap_device_id = safe_strdup(ap_device_id);
-        uci_set_value("wifidogx", "common", "ap_device_id", ap_device_id);
-        debug(LOG_DEBUG, "Updated ap_device_id: %s", ap_device_id);
+        if (ap_device_id && strlen(ap_device_id) > 0 && strlen(ap_device_id) <= 64) {
+            if (device_info->ap_device_id) free(device_info->ap_device_id);
+            device_info->ap_device_id = safe_strdup(ap_device_id);
+            uci_set_value("wifidogx", "common", "ap_device_id", ap_device_id);
+            debug(LOG_DEBUG, "Updated ap_device_id: %s", ap_device_id);
+        } else {
+            debug(LOG_WARNING, "Invalid ap_device_id length");
+        }
     }
 
     // Update MAC address if provided
     if (json_object_object_get_ex(j_device_info, "ap_mac_address", &j_ap_mac_address)) {
         const char *ap_mac_address = json_object_get_string(j_ap_mac_address);
-        if (device_info->ap_mac_address) free(device_info->ap_mac_address);
-        device_info->ap_mac_address = safe_strdup(ap_mac_address);
-        uci_set_value("wifidogx", "common", "ap_mac_address", ap_mac_address);
-        debug(LOG_DEBUG, "Updated ap_mac_address: %s", ap_mac_address);
+        if (ap_mac_address && strlen(ap_mac_address) > 0 && strlen(ap_mac_address) <= 18) {
+            if (device_info->ap_mac_address) free(device_info->ap_mac_address);
+            device_info->ap_mac_address = safe_strdup(ap_mac_address);
+            uci_set_value("wifidogx", "common", "ap_mac_address", ap_mac_address);
+            debug(LOG_DEBUG, "Updated ap_mac_address: %s", ap_mac_address);
+        } else {
+            debug(LOG_WARNING, "Invalid ap_mac_address format");
+        }
     }
 
     // Update longitude if provided
     if (json_object_object_get_ex(j_device_info, "ap_longitude", &j_ap_longitude)) {
         const char *ap_longitude = json_object_get_string(j_ap_longitude);
-        if (device_info->ap_longitude) free(device_info->ap_longitude);
-        device_info->ap_longitude = safe_strdup(ap_longitude);
-        uci_set_value("wifidogx", "common", "ap_longitude", ap_longitude);
-        debug(LOG_DEBUG, "Updated ap_longitude: %s", ap_longitude);
+        if (ap_longitude && strlen(ap_longitude) > 0 && strlen(ap_longitude) <= 32) {
+            if (device_info->ap_longitude) free(device_info->ap_longitude);
+            device_info->ap_longitude = safe_strdup(ap_longitude);
+            uci_set_value("wifidogx", "common", "ap_longitude", ap_longitude);
+            debug(LOG_DEBUG, "Updated ap_longitude: %s", ap_longitude);
+        } else {
+            debug(LOG_WARNING, "Invalid ap_longitude format");
+        }
     }
 
     // Update latitude if provided
     if (json_object_object_get_ex(j_device_info, "ap_latitude", &j_ap_latitude)) {
         const char *ap_latitude = json_object_get_string(j_ap_latitude);
-        if (device_info->ap_latitude) free(device_info->ap_latitude);
-        device_info->ap_latitude = safe_strdup(ap_latitude);
-        uci_set_value("wifidogx", "common", "ap_latitude", ap_latitude);
-        debug(LOG_DEBUG, "Updated ap_latitude: %s", ap_latitude);
+        if (ap_latitude && strlen(ap_latitude) > 0 && strlen(ap_latitude) <= 32) {
+            if (device_info->ap_latitude) free(device_info->ap_latitude);
+            device_info->ap_latitude = safe_strdup(ap_latitude);
+            uci_set_value("wifidogx", "common", "ap_latitude", ap_latitude);
+            debug(LOG_DEBUG, "Updated ap_latitude: %s", ap_latitude);
+        } else {
+            debug(LOG_WARNING, "Invalid ap_latitude format");
+        }
     }
 
     // Update location ID if provided
     if (json_object_object_get_ex(j_device_info, "location_id", &j_location_id)) {
         const char *location_id = json_object_get_string(j_location_id);
-        if (device_info->location_id) free(device_info->location_id);
-        device_info->location_id = safe_strdup(location_id);
-        uci_set_value("wifidogx", "common", "location_id", location_id);
-        debug(LOG_DEBUG, "Updated location_id: %s", location_id);
+        if (location_id && strlen(location_id) > 0 && strlen(location_id) <= 64) {
+            if (device_info->location_id) free(device_info->location_id);
+            device_info->location_id = safe_strdup(location_id);
+            uci_set_value("wifidogx", "common", "location_id", location_id);
+            debug(LOG_DEBUG, "Updated location_id: %s", location_id);
+        } else {
+            debug(LOG_WARNING, "Invalid location_id format");
+        }
     }
 
     // Send success response
@@ -897,6 +1043,8 @@ void handle_get_wifi_info_request(json_object *j_req, api_transport_context_t *t
             // Parse wireless configuration
             if (strstr(key, "wireless.") == key) {
                 char *key_copy = strdup(key);
+                if (!key_copy) continue;
+                
                 char *parts[4];
                 int part_count = 0;
                 
@@ -923,19 +1071,24 @@ void handle_get_wifi_info_request(json_object *j_req, api_transport_context_t *t
                         if (idx == -1 && device_count < 8) {
                             idx = device_count++;
                             strncpy(devices[idx].device_name, section_name, sizeof(devices[idx].device_name) - 1);
+                            devices[idx].device_name[sizeof(devices[idx].device_name) - 1] = '\0';
                         }
 
                         if (idx >= 0) {
                             if (strcmp(option, "type") == 0) {
                                 strncpy(devices[idx].type, value, sizeof(devices[idx].type) - 1);
+                                devices[idx].type[sizeof(devices[idx].type) - 1] = '\0';
                             } else if (strcmp(option, "path") == 0) {
                                 strncpy(devices[idx].path, value, sizeof(devices[idx].path) - 1);
+                                devices[idx].path[sizeof(devices[idx].path) - 1] = '\0';
                             } else if (strcmp(option, "band") == 0) {
                                 strncpy(devices[idx].band, value, sizeof(devices[idx].band) - 1);
+                                devices[idx].band[sizeof(devices[idx].band) - 1] = '\0';
                             } else if (strcmp(option, "channel") == 0) {
                                 devices[idx].channel = atoi(value);
                             } else if (strcmp(option, "htmode") == 0) {
                                 strncpy(devices[idx].htmode, value, sizeof(devices[idx].htmode) - 1);
+                                devices[idx].htmode[sizeof(devices[idx].htmode) - 1] = '\0';
                             } else if (strcmp(option, "cell_density") == 0) {
                                 devices[idx].cell_density = atoi(value);
                             }
@@ -952,23 +1105,31 @@ void handle_get_wifi_info_request(json_object *j_req, api_transport_context_t *t
                         if (idx == -1 && interface_count < 32) {
                             idx = interface_count++;
                             strncpy(interfaces[idx].interface_name, section_name, sizeof(interfaces[idx].interface_name) - 1);
+                            interfaces[idx].interface_name[sizeof(interfaces[idx].interface_name) - 1] = '\0';
                         }
 
                         if (idx >= 0) {
                             if (strcmp(option, "device") == 0) {
                                 strncpy(interfaces[idx].device, value, sizeof(interfaces[idx].device) - 1);
+                                interfaces[idx].device[sizeof(interfaces[idx].device) - 1] = '\0';
                             } else if (strcmp(option, "mode") == 0) {
                                 strncpy(interfaces[idx].mode, value, sizeof(interfaces[idx].mode) - 1);
+                                interfaces[idx].mode[sizeof(interfaces[idx].mode) - 1] = '\0';
                             } else if (strcmp(option, "ssid") == 0) {
                                 strncpy(interfaces[idx].ssid, value, sizeof(interfaces[idx].ssid) - 1);
+                                interfaces[idx].ssid[sizeof(interfaces[idx].ssid) - 1] = '\0';
                             } else if (strcmp(option, "key") == 0) {
                                 strncpy(interfaces[idx].key, value, sizeof(interfaces[idx].key) - 1);
+                                interfaces[idx].key[sizeof(interfaces[idx].key) - 1] = '\0';
                             } else if (strcmp(option, "encryption") == 0) {
                                 strncpy(interfaces[idx].encryption, value, sizeof(interfaces[idx].encryption) - 1);
+                                interfaces[idx].encryption[sizeof(interfaces[idx].encryption) - 1] = '\0';
                             } else if (strcmp(option, "network") == 0) {
                                 strncpy(interfaces[idx].network, value, sizeof(interfaces[idx].network) - 1);
+                                interfaces[idx].network[sizeof(interfaces[idx].network) - 1] = '\0';
                             } else if (strcmp(option, "mesh_id") == 0) {
                                 strncpy(interfaces[idx].mesh_id, value, sizeof(interfaces[idx].mesh_id) - 1);
+                                interfaces[idx].mesh_id[sizeof(interfaces[idx].mesh_id) - 1] = '\0';
                             } else if (strcmp(option, "disabled") == 0) {
                                 interfaces[idx].disabled = atoi(value);
                             }
@@ -1027,7 +1188,7 @@ void handle_get_wifi_info_request(json_object *j_req, api_transport_context_t *t
     json_object *j_networks = json_object_new_array();
     
     // First, get all network interfaces with proto=static
-    fp = popen("uci show network | grep '\\.proto=.static.'", "r");
+    fp = popen("uci show network 2>/dev/null | grep '\\.proto=.static.'", "r");
     if (fp) {
         while (fgets(buffer, sizeof(buffer), fp) != NULL) {
             buffer[strcspn(buffer, "\n")] = 0;
@@ -1035,6 +1196,8 @@ void handle_get_wifi_info_request(json_object *j_req, api_transport_context_t *t
             
             if (key && strstr(key, "network.") == key && strstr(key, ".proto")) {
                 char *key_copy = strdup(key);
+                if (!key_copy) continue;
+                
                 char *parts[4];
                 int part_count = 0;
                 
@@ -1055,10 +1218,12 @@ void handle_get_wifi_info_request(json_object *j_req, api_transport_context_t *t
                         int array_len = json_object_array_length(j_networks);
                         for (int i = 0; i < array_len; i++) {
                             json_object *existing = json_object_array_get_idx(j_networks, i);
-                            const char *existing_name = json_object_get_string(existing);
-                            if (strcmp(existing_name, interface_name) == 0) {
-                                found = 1;
-                                break;
+                            if (existing) {
+                                const char *existing_name = json_object_get_string(existing);
+                                if (existing_name && strcmp(existing_name, interface_name) == 0) {
+                                    found = 1;
+                                    break;
+                                }
                             }
                         }
                         
