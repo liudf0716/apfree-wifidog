@@ -198,10 +198,6 @@ print_stats_sid(uint32_t sid, struct traffic_stats *stats)
     uint32_t incoming_rate = calc_rate_estimator(stats, true);
     uint32_t outgoing_rate = calc_rate_estimator(stats, false);
     
-    // Skip if both rates are 0
-    if (incoming_rate == 0 && outgoing_rate == 0) {
-        return;
-    }
     if (sid < 1000) {
         const char *l7_proto_desc = get_l7_proto_desc_by_sid(sid);
         printf("Key (SID): %u (%s)\n", sid, l7_proto_desc);
@@ -327,11 +323,6 @@ parse_stats_sid_json(uint32_t sid, struct traffic_stats *stats)
     uint32_t incoming_rate = calc_rate_estimator(stats, true);
     uint32_t outgoing_rate = calc_rate_estimator(stats, false);
     
-    // Skip if both rates are 0
-    if (incoming_rate == 0 && outgoing_rate == 0) {
-        return NULL;
-    }
-
     struct json_object *jobj = json_object_new_object();
 
     // Add SID and domain name
@@ -597,22 +588,19 @@ static bool handle_list_command(int map_fd, const char *map_type) {
             return false;
         }
     } else if (strcmp(map_type, "sid") == 0) {
-        uint32_t key = 0;
-        uint32_t next_key;
+        uint32_t cur_key = 0, next_key;
         struct traffic_stats stats = {0};
         
-        while (bpf_map_get_next_key(map_fd, &key, &next_key) == 0) {
+        while ((ret = bpf_map_get_next_key(map_fd, cur_key ? &cur_key : NULL, &next_key)) == 0) {
             if (bpf_map_lookup_elem(map_fd, &next_key, &stats) < 0) {
                 perror("bpf_map_lookup_elem (SID)");
-                break;
+            } else {
+                print_stats_sid(next_key, &stats);
             }
-            
-            print_stats_sid(next_key, &stats);
-            key = next_key;
+            cur_key = next_key;
         }
         
-        // Check if we exited due to error or end of map
-        if (errno != ENOENT) {
+        if (ret != -ENOENT) {
             perror("bpf_map_get_next_key (SID)");
             return false;
         }
@@ -659,18 +647,17 @@ static bool handle_json_command(int map_fd, const char *map_type) {
             cur_key = next_key;
         }
     } else if (strcmp(map_type, "sid") == 0) {
-        __u32 key = 0;
-        __u32 next_key;
+        __u32 cur_key = 0, next_key;
         struct traffic_stats stats = {0};
 
-        while (bpf_map_get_next_key(map_fd, &key, &next_key) == 0) {
+        while (bpf_map_get_next_key(map_fd, cur_key ? &cur_key : NULL, &next_key) == 0) {
             if (bpf_map_lookup_elem(map_fd, &next_key, &stats) == 0) {
                 struct json_object *jentry = parse_stats_sid_json(next_key, &stats);
                 if (jentry) {
                     json_object_array_add(jdata, jentry);
                 }
             }
-            key = next_key;
+            cur_key = next_key;
         }
     } else { // ipv6
         struct in6_addr cur_key = {0}, next_key = {0};
