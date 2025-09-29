@@ -541,14 +541,14 @@ static int parse_dns_question(const unsigned char *payload, int payload_len, str
         return -1;
     }
     
-    // 安全地读取qtype和qclass，添加对齐检查
-    if ((next_offset % 2) != 0) {
-        // 如果偏移不是2字节对齐，可能导致未对齐访问
-        debug(LOG_WARNING, "DNS question offset not aligned: %d", next_offset);
-    }
+    // 安全地读取qtype和qclass，避免未对齐访问
+    // 使用memcpy避免对齐问题，让编译器和CPU处理未对齐访问
+    __u16 qtype_raw, qclass_raw;
+    memcpy(&qtype_raw, payload + next_offset, sizeof(__u16));
+    memcpy(&qclass_raw, payload + next_offset + 2, sizeof(__u16));
     
-    name_info->qtype = ntohs(*((__u16 *)(payload + next_offset)));
-    name_info->qclass = ntohs(*((__u16 *)(payload + next_offset + 2)));
+    name_info->qtype = ntohs(qtype_raw);
+    name_info->qclass = ntohs(qclass_raw);
     
     return next_offset + 4;
 }
@@ -855,10 +855,18 @@ static int process_dns_answers(const unsigned char *payload, int payload_len, in
             return -1;
         }
         
-        __u16 type = ntohs(*((__u16 *)(payload + pos)));
-        __u16 class __attribute__((unused)) = ntohs(*((__u16 *)(payload + pos + 2)));
-        __u32 ttl __attribute__((unused)) = ntohl(*((__u32 *)(payload + pos + 4)));
-        __u16 rdlength = ntohs(*((__u16 *)(payload + pos + 8)));
+        // 安全地读取资源记录头部，避免未对齐访问
+        __u16 type_raw, class_raw, rdlength_raw;
+        __u32 ttl_raw;
+        memcpy(&type_raw, payload + pos, sizeof(__u16));
+        memcpy(&class_raw, payload + pos + 2, sizeof(__u16));
+        memcpy(&ttl_raw, payload + pos + 4, sizeof(__u32));
+        memcpy(&rdlength_raw, payload + pos + 8, sizeof(__u16));
+        
+        __u16 type = ntohs(type_raw);
+        __u16 class __attribute__((unused)) = ntohs(class_raw);
+        __u32 ttl __attribute__((unused)) = ntohl(ttl_raw);
+        __u16 rdlength = ntohs(rdlength_raw);
         
         pos += 10;
         
