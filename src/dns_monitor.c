@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stddef.h>
 #include <unistd.h>
 #include <signal.h>
 #include <errno.h>
@@ -211,40 +212,31 @@ static void process_dns_header(const struct dns_hdr *dns_hdr)
     }
 }
 
-// 处理DNS数据事件
 static int handle_dns_event(void *ctx, void *data, size_t data_sz)
 {
     const struct raw_dns_data *dns_data = data;
-    char src_ip_str[INET6_ADDRSTRLEN] __attribute__((unused));
-    char dst_ip_str[INET6_ADDRSTRLEN] __attribute__((unused));
     
-    // 验证输入参数
     if (!data || data_sz < sizeof(*dns_data)) {
         debug(LOG_ERR, "Invalid DNS data: ptr=%p, size=%zu", data, data_sz);
         return 0;
     }
     
-    // 验证DNS数据包长度
     if (dns_data->pkt_len == 0 || dns_data->pkt_len > MAX_DNS_PAYLOAD_LEN) {
         debug(LOG_WARNING, "Invalid DNS packet length: %u", dns_data->pkt_len);
         return 0;
     }
     
-    // 确保payload指针有效性和大小一致性
-    if (data_sz < sizeof(*dns_data) + dns_data->pkt_len) {
+    size_t expected_size = offsetof(struct raw_dns_data, dns_payload) + dns_data->pkt_len;
+    if (data_sz < expected_size) {
         debug(LOG_WARNING, "DNS data size mismatch: data_sz=%zu, expected=%zu", 
-              data_sz, sizeof(*dns_data) + dns_data->pkt_len);
+              data_sz, expected_size);
         return 0;
     }
     
-    // 简化数据包信息显示 - 移除频繁的数据包日志
-    // debug(LOG_DEBUG, "DNS Packet: %u bytes", dns_data->pkt_len);
     
-    // 解析DNS头 - 添加额外的长度检查
     if (dns_data->pkt_len >= sizeof(struct dns_hdr)) {
         const struct dns_hdr *dns_hdr = (const struct dns_hdr *)dns_data->dns_payload;
         
-        // 验证DNS头部指针对齐
         if ((uintptr_t)dns_hdr % __alignof__(struct dns_hdr) != 0) {
             debug(LOG_WARNING, "Unaligned DNS header pointer");
             return 0;
@@ -252,7 +244,6 @@ static int handle_dns_event(void *ctx, void *data, size_t data_sz)
         
         process_dns_header(dns_hdr);
         
-        // 扩展的DNS响应处理
         process_dns_response_extended(dns_data);
     } else {
         debug(LOG_WARNING, "DNS packet too small for header: %u bytes", dns_data->pkt_len);
@@ -261,7 +252,7 @@ static int handle_dns_event(void *ctx, void *data, size_t data_sz)
     return 0;
 }
 
-// 打印DNS统计信息
+
 static void print_dns_stats(int stats_map_fd)
 {
     __u32 key = 0;
