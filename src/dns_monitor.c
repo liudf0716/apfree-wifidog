@@ -72,6 +72,9 @@ struct domain_entry {
     int domain_len;
     int sid;
     bool used;
+    __u64 access_count;         // 访问计数
+    time_t last_access_time;    // 最后访问时间
+    time_t first_seen_time;     // 首次发现时间
 };
 
 // xDPI域名更新结构
@@ -142,6 +145,12 @@ struct dns_hdr {
 static struct domain_entry domain_entries[XDPI_DOMAIN_MAX];
 static pthread_mutex_t domain_entries_mutex = PTHREAD_MUTEX_INITIALIZER;
 
+// LFU淘汰阈值和统计周期
+#define LFU_MIN_ACCESS_THRESHOLD 5      // 最少访问次数才能保留
+#define TOP_DOMAINS_REPORT_INTERVAL 600 // 10分钟报告一次热门域名
+#define TOP_DOMAINS_COUNT 20            // 报告前20个热门域名
+#define DOMAIN_STATS_FILE "/tmp/wifidog_domain_stats.dat"  // 持久化文件路径
+
 // 有效域名后缀列表
 static const char *valid_domain_suffixes[] = {
     ".com", ".net", ".org", ".gov", ".edu", ".cn", ".com.cn", ".co.uk", 
@@ -167,6 +176,16 @@ static int get_xdpi_domain_count(void);
 static void sync_xdpi_domains_2_kern(void);
 static int is_safe_ip_str(const char *ip_str);
 static int process_dns_response_extended(const struct raw_dns_data *dns_data);
+
+// LFU算法相关函数
+static int find_least_frequently_used_domain(void);
+static int remove_domain_from_kernel(int index);
+static void print_top_domains(int top_n);
+static int compare_domain_by_access_count(const void *a, const void *b);
+
+// 持久化相关函数
+static int save_domain_stats_to_file(void);
+static int load_domain_stats_from_file(void);
 
 // 打印IPv4地址
 static void __attribute__((unused)) print_ipv4_addr(__be32 addr, char *buf, size_t buf_size)
@@ -276,8 +295,13 @@ static void *dns_monitor_thread(void *arg)
     int ringbuf_map_fd = -1, stats_map_fd = -1;
     int err;
     time_t last_stats_time = time(NULL);
+    time_t last_top_domains_report = time(NULL);
+    time_t last_save_time = time(NULL);
     
     debug(LOG_INFO, "DNS Monitor thread started");
+    
+    // 从文件加载之前保存的域名统计
+    load_domain_stats_from_file();
     
     // 打开ring buffer map
     ringbuf_map_fd = bpf_obj_get(DNS_RINGBUF_MAP_PATH);
@@ -314,19 +338,37 @@ static void *dns_monitor_thread(void *arg)
             break;
         }
         
-        // 每30秒打印一次统计信息
+        // 定期任务检查
         time_t current_time = time(NULL);
+        
+        // 每30秒打印一次eBPF统计信息
         if (current_time - last_stats_time >= 30) {
             print_dns_stats(stats_map_fd);
             last_stats_time = current_time;
+        }
+        
+        // 每10分钟报告一次热门域名
+        if (current_time - last_top_domains_report >= TOP_DOMAINS_REPORT_INTERVAL) {
+            print_top_domains(TOP_DOMAINS_COUNT);
+            last_top_domains_report = current_time;
+        }
+        
+        // 每5分钟保存一次域名统计到文件
+        if (current_time - last_save_time >= 300) {
+            save_domain_stats_to_file();
+            last_save_time = current_time;
         }
     }
     
     debug(LOG_DEBUG, "DNS monitor thread shutting down...");
     
+    // 退出前保存域名统计
+    save_domain_stats_to_file();
+    
     // 最后打印一次统计信息
     if (stats_map_fd >= 0) {
         print_dns_stats(stats_map_fd);
+        print_top_domains(TOP_DOMAINS_COUNT);
     }
 
 cleanup:
@@ -613,7 +655,7 @@ static void sync_xdpi_domains_2_kern(void)
 }
 
 /**
- * @brief 添加域名到xDPI
+ * @brief 添加域名到xDPI (增强版 - 支持访问计数和LFU淘汰)
  */
 static int xdpi_add_domain(const char *input_domain)
 {
@@ -622,6 +664,7 @@ static int xdpi_add_domain(const char *input_domain)
     int local_free_idx = -1;
     int local_max_sid = INITIAL_MAX_SID;
     char domain_to_process[MAX_DOMAIN_LEN] = {0};
+    time_t current_time = time(NULL);
     
     if (!input_domain || input_domain[0] == '\0' || strlen(input_domain) >= MAX_DOMAIN_LEN) {
         return -1;
@@ -637,13 +680,16 @@ static int xdpi_add_domain(const char *input_domain)
     }
     domain_to_process[MAX_DOMAIN_LEN-1] = '\0';
     
-    // 查找重复和空闲位置
+    // 查找重复、空闲位置和最大SID
     pthread_mutex_lock(&domain_entries_mutex);
     for (int i = 0; i < XDPI_DOMAIN_MAX; i++) {
         if (domain_entries[i].used) {
             if (strcmp(domain_entries[i].domain, domain_to_process) == 0) {
+                // 域名已存在，增加访问计数
+                domain_entries[i].access_count++;
+                domain_entries[i].last_access_time = current_time;
                 pthread_mutex_unlock(&domain_entries_mutex);
-                return 0; // 域名已存在
+                return 0;
             }
             if (domain_entries[i].sid > local_max_sid) {
                 local_max_sid = domain_entries[i].sid;
@@ -653,10 +699,30 @@ static int xdpi_add_domain(const char *input_domain)
         }
     }
     
+    // 如果没有空闲位置，使用LFU算法淘汰
     if (local_free_idx == -1) {
-        pthread_mutex_unlock(&domain_entries_mutex);
-        debug(LOG_WARNING, "xDPI domain cache is full");
-        return -1;
+        int lfu_idx = find_least_frequently_used_domain();
+        if (lfu_idx >= 0) {
+            // 只有当访问次数低于阈值时才淘汰
+            if (domain_entries[lfu_idx].access_count < LFU_MIN_ACCESS_THRESHOLD) {
+                // 从内核删除旧域名
+                remove_domain_from_kernel(lfu_idx);
+                // 清空该位置，准备添加新域名
+                memset(&domain_entries[lfu_idx], 0, sizeof(struct domain_entry));
+                domain_entries[lfu_idx].used = false;
+                local_free_idx = lfu_idx;
+            } else {
+                // 所有域名访问次数都很高，拒绝添加新域名
+                pthread_mutex_unlock(&domain_entries_mutex);
+                debug(LOG_DEBUG, "All domains have high access count, rejecting new domain: %s", 
+                      domain_to_process);
+                return -1;
+            }
+        } else {
+            pthread_mutex_unlock(&domain_entries_mutex);
+            debug(LOG_WARNING, "xDPI domain cache is full and cannot find LFU candidate");
+            return -1;
+        }
     }
     pthread_mutex_unlock(&domain_entries_mutex);
     
@@ -676,6 +742,9 @@ static int xdpi_add_domain(const char *input_domain)
     entry_for_ioctl.domain_len = len_to_copy;
     entry_for_ioctl.sid = local_max_sid + 1;
     entry_for_ioctl.used = true;
+    entry_for_ioctl.access_count = 1;  // 初始访问计数为1
+    entry_for_ioctl.first_seen_time = current_time;
+    entry_for_ioctl.last_access_time = current_time;
     
     result = ioctl(fd, XDPI_IOC_ADD, &entry_for_ioctl);
     close(fd);
@@ -685,17 +754,19 @@ static int xdpi_add_domain(const char *input_domain)
         return -1;
     }
     
-    // 更新本地缓存 - 添加边界检查防止数组越界
+    // 更新本地缓存
     pthread_mutex_lock(&domain_entries_mutex);
-    if (local_free_idx >= 0 && local_free_idx < XDPI_DOMAIN_MAX && 
-        !domain_entries[local_free_idx].used) {
+    if (local_free_idx >= 0 && local_free_idx < XDPI_DOMAIN_MAX) {
         memcpy(domain_entries[local_free_idx].domain, domain_to_process, len_to_copy);
         domain_entries[local_free_idx].domain[len_to_copy] = '\0';
         domain_entries[local_free_idx].domain_len = len_to_copy;
         domain_entries[local_free_idx].sid = entry_for_ioctl.sid;
         domain_entries[local_free_idx].used = true;
+        domain_entries[local_free_idx].access_count = 1;
+        domain_entries[local_free_idx].first_seen_time = current_time;
+        domain_entries[local_free_idx].last_access_time = current_time;
     } else {
-        debug(LOG_WARNING, "Invalid local_free_idx: %d or slot already used", local_free_idx);
+        debug(LOG_WARNING, "Invalid local_free_idx: %d", local_free_idx);
     }
     pthread_mutex_unlock(&domain_entries_mutex);
     
@@ -1083,3 +1154,244 @@ static int process_dns_response_extended(const struct raw_dns_data *dns_data)
     
     return 0;
 }
+
+// ========== LFU算法实现 ==========
+
+/**
+ * @brief 查找访问频率最低的域名索引
+ */
+static int find_least_frequently_used_domain(void)
+{
+    int min_idx = -1;
+    __u64 min_count = UINT64_MAX;
+    time_t oldest_time = time(NULL);
+    
+    for (int i = 0; i < XDPI_DOMAIN_MAX; i++) {
+        if (domain_entries[i].used) {
+            // 优先淘汰访问次数最少的
+            if (domain_entries[i].access_count < min_count) {
+                min_count = domain_entries[i].access_count;
+                min_idx = i;
+                oldest_time = domain_entries[i].last_access_time;
+            } 
+            // 如果访问次数相同，淘汰最久未访问的
+            else if (domain_entries[i].access_count == min_count && 
+                     domain_entries[i].last_access_time < oldest_time) {
+                min_idx = i;
+                oldest_time = domain_entries[i].last_access_time;
+            }
+        }
+    }
+    
+    return min_idx;
+}
+
+/**
+ * @brief 从内核中删除域名
+ */
+static int remove_domain_from_kernel(int index)
+{
+    if (index < 0 || index >= XDPI_DOMAIN_MAX || !domain_entries[index].used) {
+        return -1;
+    }
+    
+    int fd = open("/proc/xdpi_domains", O_RDWR);
+    if (fd < 0) {
+        debug(LOG_WARNING, "Cannot open /proc/xdpi_domains for deletion: %s", strerror(errno));
+        return -1;
+    }
+    
+    int sid = domain_entries[index].sid;
+    int result = ioctl(fd, XDPI_IOC_DEL, &sid);
+    close(fd);
+    
+    if (result < 0) {
+        debug(LOG_WARNING, "Failed to delete domain %s (SID: %d) from kernel", 
+              domain_entries[index].domain, sid);
+        return -1;
+    }
+    
+    debug(LOG_INFO, "Evicted domain '%s' (access_count: %llu, SID: %d) due to LFU", 
+          domain_entries[index].domain, 
+          (unsigned long long)domain_entries[index].access_count, 
+          sid);
+    
+    return 0;
+}
+
+/**
+ * @brief 比较函数 - 按访问次数降序排序
+ */
+static int compare_domain_by_access_count(const void *a, const void *b)
+{
+    const struct domain_entry *da = (const struct domain_entry *)a;
+    const struct domain_entry *db = (const struct domain_entry *)b;
+    
+    // 未使用的条目排在最后
+    if (!da->used && !db->used) return 0;
+    if (!da->used) return 1;
+    if (!db->used) return -1;
+    
+    // 按访问次数降序
+    if (db->access_count > da->access_count) return 1;
+    if (db->access_count < da->access_count) return -1;
+    
+    return 0;
+}
+
+/**
+ * @brief 打印热门域名统计
+ */
+static void print_top_domains(int top_n)
+{
+    struct domain_entry sorted_entries[XDPI_DOMAIN_MAX];
+    
+    pthread_mutex_lock(&domain_entries_mutex);
+    memcpy(sorted_entries, domain_entries, sizeof(sorted_entries));
+    pthread_mutex_unlock(&domain_entries_mutex);
+    
+    // 排序
+    qsort(sorted_entries, XDPI_DOMAIN_MAX, sizeof(struct domain_entry), 
+          compare_domain_by_access_count);
+    
+    debug(LOG_INFO, "");
+    debug(LOG_INFO, "========================================");
+    debug(LOG_INFO, "  Top %d Most Accessed Domains", top_n);
+    debug(LOG_INFO, "========================================");
+    
+    int count = 0;
+    for (int i = 0; i < XDPI_DOMAIN_MAX && count < top_n; i++) {
+        if (sorted_entries[i].used) {
+            time_t last_access = sorted_entries[i].last_access_time;
+            time_t first_seen = sorted_entries[i].first_seen_time;
+            time_t now = time(NULL);
+            
+            int minutes_ago = (int)difftime(now, last_access) / 60;
+            int hours_alive = (int)difftime(now, first_seen) / 3600;
+            
+            debug(LOG_INFO, "#%-2d %-40s | Count: %-8llu | Last: %dm ago | Age: %dh | SID: %d",
+                  count + 1,
+                  sorted_entries[i].domain,
+                  (unsigned long long)sorted_entries[i].access_count,
+                  minutes_ago,
+                  hours_alive,
+                  sorted_entries[i].sid);
+            count++;
+        }
+    }
+    
+    debug(LOG_INFO, "========================================");
+    debug(LOG_INFO, "");
+}
+
+// ========== 持久化功能实现 ==========
+
+/**
+ * @brief 保存域名统计到文件
+ */
+static int save_domain_stats_to_file(void)
+{
+    FILE *fp = fopen(DOMAIN_STATS_FILE, "wb");
+    if (!fp) {
+        debug(LOG_WARNING, "Failed to open domain stats file for writing: %s", strerror(errno));
+        return -1;
+    }
+    
+    pthread_mutex_lock(&domain_entries_mutex);
+    
+    // 写入魔数和版本号
+    uint32_t magic = 0x44535441;  // "DSTA" = Domain STAts
+    uint32_t version = 1;
+    fwrite(&magic, sizeof(magic), 1, fp);
+    fwrite(&version, sizeof(version), 1, fp);
+    
+    // 写入有效条目数量
+    int valid_count = 0;
+    for (int i = 0; i < XDPI_DOMAIN_MAX; i++) {
+        if (domain_entries[i].used) {
+            valid_count++;
+        }
+    }
+    fwrite(&valid_count, sizeof(valid_count), 1, fp);
+    
+    // 写入每个有效条目
+    for (int i = 0; i < XDPI_DOMAIN_MAX; i++) {
+        if (domain_entries[i].used) {
+            fwrite(&domain_entries[i], sizeof(struct domain_entry), 1, fp);
+        }
+    }
+    
+    pthread_mutex_unlock(&domain_entries_mutex);
+    
+    fclose(fp);
+    debug(LOG_DEBUG, "Saved %d domain entries to %s", valid_count, DOMAIN_STATS_FILE);
+    return 0;
+}
+
+/**
+ * @brief 从文件加载域名统计
+ */
+static int load_domain_stats_from_file(void)
+{
+    FILE *fp = fopen(DOMAIN_STATS_FILE, "rb");
+    if (!fp) {
+        debug(LOG_INFO, "No domain stats file found at %s, starting fresh", DOMAIN_STATS_FILE);
+        return 0;  // 不是错误，可能是首次启动
+    }
+    
+    // 读取并验证魔数
+    uint32_t magic = 0;
+    uint32_t version = 0;
+    if (fread(&magic, sizeof(magic), 1, fp) != 1 || magic != 0x44535441) {
+        debug(LOG_WARNING, "Invalid magic number in domain stats file");
+        fclose(fp);
+        return -1;
+    }
+    
+    if (fread(&version, sizeof(version), 1, fp) != 1 || version != 1) {
+        debug(LOG_WARNING, "Unsupported domain stats file version: %u", version);
+        fclose(fp);
+        return -1;
+    }
+    
+    // 读取条目数量
+    int valid_count = 0;
+    if (fread(&valid_count, sizeof(valid_count), 1, fp) != 1) {
+        debug(LOG_WARNING, "Failed to read domain count from stats file");
+        fclose(fp);
+        return -1;
+    }
+    
+    if (valid_count < 0 || valid_count > XDPI_DOMAIN_MAX) {
+        debug(LOG_WARNING, "Invalid domain count in stats file: %d", valid_count);
+        fclose(fp);
+        return -1;
+    }
+    
+    // 读取域名条目
+    pthread_mutex_lock(&domain_entries_mutex);
+    
+    // 清空现有数据
+    memset(domain_entries, 0, sizeof(domain_entries));
+    
+    int loaded_count = 0;
+    for (int i = 0; i < valid_count && i < XDPI_DOMAIN_MAX; i++) {
+        struct domain_entry temp_entry;
+        if (fread(&temp_entry, sizeof(struct domain_entry), 1, fp) == 1) {
+            memcpy(&domain_entries[i], &temp_entry, sizeof(struct domain_entry));
+            loaded_count++;
+        }
+    }
+    
+    pthread_mutex_unlock(&domain_entries_mutex);
+    
+    fclose(fp);
+    
+    debug(LOG_INFO, "Loaded %d domain entries from %s", loaded_count, DOMAIN_STATS_FILE);
+    
+    // 加载后同步到内核
+    sync_xdpi_domains_2_kern();
+    
+    return loaded_count;
+}
+

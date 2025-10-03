@@ -102,11 +102,11 @@ struct session_data_t {
     __u8  proto;        /* Protocol type (IPPROTO_TCP=6 or IPPROTO_UDP=17) */
     __u8  reserved[2];  /* Reserved for alignment */
     union {
-        struct {
+        struct ipv4_addrs {
             __u32 saddr_v4; /* IPv4 source address */
             __u32 daddr_v4; /* IPv4 destination address */
         } v4;
-        struct {
+        struct ipv6_addrs {
             __u8 saddr_v6[16]; /* IPv6 source address */
             __u8 daddr_v6[16]; /* IPv6 destination address */
         } v6;
