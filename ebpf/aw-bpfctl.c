@@ -22,6 +22,7 @@
 #define XDPI_DOMAINS "/proc/xdpi_domains"
 #define XDPI_L7_PROTO "/proc/xdpi_l7_proto"
 #define DOMAIN_API_URL "http://seo.chawrt.com/open/api/domain/info/batch"  /* 添加API URL定义 */
+#define DNS_STATS_FILE "/tmp/dns_stats.txt"  /* DNS统计文件 */
 
 struct xdpi_l7_proto {
     __u32 id;
@@ -39,9 +40,22 @@ struct domain_entry {
     bool has_details;                          // 是否有详细信息
 };
 
+// DNS统计信息结构体
+struct dns_stat_entry {
+    int rank;
+    char domain[128];
+    unsigned long long access_count;
+    int sid;
+    time_t first_seen;
+    time_t last_access;
+};
+
 // 前向声明函数
 static bool fetch_domain_info(void);
 static void print_stats_l7(void);
+static bool handle_dns_command(const char *cmd);
+static void print_dns_stats(void);
+static void print_dns_stats_json(void);
 
 // 合并后的域名信息列表
 static struct domain_entry domains[XDPI_PROTO_TRAITS_MAX_SIZE];
@@ -401,13 +415,16 @@ aw_bpf_usage()
 {
     fprintf(stderr, "Usage:\n");
     fprintf(stderr, "  aw-bpfctl <ipv4|ipv6|mac> add <IP_ADDRESS|MAC_ADDRESS>\n");
-    fprintf(stderr, "  aw-bpfctl <ipv4|ipv6|mac|sid|l7> list\n");
+    fprintf(stderr, "  aw-bpfctl <ipv4|ipv6|mac|sid|l7|dns> list\n");
     fprintf(stderr, "  aw-bpfctl <ipv4|ipv6|mac> del <IP_ADDRESS|MAC_ADDRESS>\n");
     fprintf(stderr, "  aw-bpfctl <ipv4|ipv6|mac> flush\n");
-    fprintf(stderr, "  aw-bpfctl <ipv4|ipv6|mac|sid|l7> json\n");
+    fprintf(stderr, "  aw-bpfctl <ipv4|ipv6|mac|sid|l7|dns> json\n");
     fprintf(stderr, "  aw-bpfctl <ipv4|ipv6|mac|sid> update <IP_ADDRESS|MAC_ADDRESS|SID> downrate <bps> uprate <bps>\n");
     fprintf(stderr, "  aw-bpfctl <ipv4|ipv6|mac|sid> update_all downrate <bps> uprate <bps>\n");
-    fprintf(stderr, "  aw-bpfctl domain <list|json>\n");  /* 添加domain命令帮助信息 */
+    fprintf(stderr, "  aw-bpfctl domain <list|json>\n");
+    fprintf(stderr, "\nDNS Statistics:\n");
+    fprintf(stderr, "  aw-bpfctl dns list    - Show DNS domain access statistics\n");
+    fprintf(stderr, "  aw-bpfctl dns json    - Show DNS statistics in JSON format\n");
 }
 
 static bool
@@ -1011,6 +1028,186 @@ static bool handle_l7_command(const char *cmd) {
     return false;
 }
 
+// ========== DNS统计查询功能 ==========
+
+/**
+ * @brief 从文件读取DNS统计信息
+ */
+static int load_dns_stats(struct dns_stat_entry *entries, int max_entries)
+{
+    FILE *fp = fopen(DNS_STATS_FILE, "r");
+    if (!fp) {
+        fprintf(stderr, "Failed to open DNS stats file: %s\n", DNS_STATS_FILE);
+        fprintf(stderr, "Make sure wifidog DNS monitor is running.\n");
+        return -1;
+    }
+    
+    char line[512];
+    int count = 0;
+    
+    // 跳过注释行
+    while (fgets(line, sizeof(line), fp)) {
+        if (line[0] != '#') {
+            break;
+        }
+    }
+    
+    // 解析数据行
+    do {
+        if (line[0] == '#' || line[0] == '\n') {
+            continue;
+        }
+        
+        struct dns_stat_entry entry;
+        long long access_count_temp;
+        long first_seen_temp, last_access_temp;
+        
+        if (sscanf(line, "%d|%127[^|]|%lld|%d|%ld|%ld",
+                   &entry.rank,
+                   entry.domain,
+                   &access_count_temp,
+                   &entry.sid,
+                   &first_seen_temp,
+                   &last_access_temp) == 6) {
+            
+            entry.access_count = (unsigned long long)access_count_temp;
+            entry.first_seen = (time_t)first_seen_temp;
+            entry.last_access = (time_t)last_access_temp;
+            
+            entries[count++] = entry;
+            
+            if (count >= max_entries) {
+                break;
+            }
+        }
+    } while (fgets(line, sizeof(line), fp));
+    
+    fclose(fp);
+    return count;
+}
+
+/**
+ * @brief 打印DNS统计信息（表格格式）
+ */
+static void print_dns_stats(void)
+{
+    struct dns_stat_entry entries[256];
+    int count = load_dns_stats(entries, 256);
+    
+    if (count < 0) {
+        return;
+    }
+    
+    if (count == 0) {
+        printf("No DNS statistics available.\n");
+        return;
+    }
+    
+    time_t now = time(NULL);
+    
+    printf("\n");
+    printf("========================================================================================================\n");
+    printf("                              DNS Domain Access Statistics\n");
+    printf("========================================================================================================\n");
+    printf("%-4s %-40s %-12s %-6s %-15s %-15s\n", 
+           "Rank", "Domain", "Access Count", "SID", "Age", "Last Access");
+    printf("--------------------------------------------------------------------------------------------------------\n");
+    
+    for (int i = 0; i < count; i++) {
+        int age_hours = (int)difftime(now, entries[i].first_seen) / 3600;
+        int last_minutes = (int)difftime(now, entries[i].last_access) / 60;
+        
+        char age_str[16], last_str[16];
+        if (age_hours < 24) {
+            snprintf(age_str, sizeof(age_str), "%dh", age_hours);
+        } else {
+            snprintf(age_str, sizeof(age_str), "%dd", age_hours / 24);
+        }
+        
+        if (last_minutes < 60) {
+            snprintf(last_str, sizeof(last_str), "%dm ago", last_minutes);
+        } else if (last_minutes < 1440) {
+            snprintf(last_str, sizeof(last_str), "%dh ago", last_minutes / 60);
+        } else {
+            snprintf(last_str, sizeof(last_str), "%dd ago", last_minutes / 1440);
+        }
+        
+        printf("%-4d %-40s %-12llu %-6d %-15s %-15s\n",
+               entries[i].rank,
+               entries[i].domain,
+               entries[i].access_count,
+               entries[i].sid,
+               age_str,
+               last_str);
+    }
+    
+    printf("--------------------------------------------------------------------------------------------------------\n");
+    printf("Total domains: %d\n", count);
+    printf("========================================================================================================\n");
+    printf("\n");
+}
+
+/**
+ * @brief 打印DNS统计信息（JSON格式）
+ */
+static void print_dns_stats_json(void)
+{
+    struct dns_stat_entry entries[256];
+    int count = load_dns_stats(entries, 256);
+    
+    if (count < 0) {
+        printf("{\"error\": \"Failed to load DNS statistics\"}\n");
+        return;
+    }
+    
+    struct json_object *jroot = json_object_new_object();
+    struct json_object *jarray = json_object_new_array();
+    
+    time_t now = time(NULL);
+    
+    for (int i = 0; i < count; i++) {
+        struct json_object *jentry = json_object_new_object();
+        
+        json_object_object_add(jentry, "rank", json_object_new_int(entries[i].rank));
+        json_object_object_add(jentry, "domain", json_object_new_string(entries[i].domain));
+        json_object_object_add(jentry, "access_count", json_object_new_int64(entries[i].access_count));
+        json_object_object_add(jentry, "sid", json_object_new_int(entries[i].sid));
+        json_object_object_add(jentry, "first_seen", json_object_new_int64(entries[i].first_seen));
+        json_object_object_add(jentry, "last_access", json_object_new_int64(entries[i].last_access));
+        
+        // 添加人类可读的时间字段
+        int age_seconds = (int)difftime(now, entries[i].first_seen);
+        int last_seconds = (int)difftime(now, entries[i].last_access);
+        json_object_object_add(jentry, "age_seconds", json_object_new_int(age_seconds));
+        json_object_object_add(jentry, "last_access_seconds_ago", json_object_new_int(last_seconds));
+        
+        json_object_array_add(jarray, jentry);
+    }
+    
+    json_object_object_add(jroot, "total", json_object_new_int(count));
+    json_object_object_add(jroot, "timestamp", json_object_new_int64(now));
+    json_object_object_add(jroot, "domains", jarray);
+    
+    printf("%s\n", json_object_to_json_string_ext(jroot, JSON_C_TO_STRING_PRETTY));
+    json_object_put(jroot);
+}
+
+/**
+ * @brief 处理DNS命令
+ */
+static bool handle_dns_command(const char *cmd)
+{
+    if (strcmp(cmd, "list") == 0) {
+        print_dns_stats();
+        return true;
+    } else if (strcmp(cmd, "json") == 0) {
+        print_dns_stats_json();
+        return true;
+    }
+    return false;
+}
+
+
 // curl回调函数，用于接收HTTP响应数据
 struct MemoryStruct {
     char *memory;
@@ -1297,8 +1494,9 @@ main(int argc, char **argv)
         strcmp(map_type, "ipv6") != 0 && 
         strcmp(map_type, "mac") != 0 && 
         strcmp(map_type, "sid") != 0 &&
-        strcmp(map_type, "l7") != 0) {
-        fprintf(stderr, "Invalid map type. Must be 'ipv4', 'ipv6', 'mac', 'sid', 'l7', or 'domain'.\n");
+        strcmp(map_type, "l7") != 0 &&
+        strcmp(map_type, "dns") != 0) {
+        fprintf(stderr, "Invalid map type. Must be 'ipv4', 'ipv6', 'mac', 'sid', 'l7', 'dns', or 'domain'.\n");
         aw_bpf_usage();
         return EXIT_FAILURE;
     }
@@ -1311,6 +1509,16 @@ main(int argc, char **argv)
             return EXIT_FAILURE;
         }
         return handle_l7_command(cmd) ? EXIT_SUCCESS : EXIT_FAILURE;
+    }
+
+    // Handle dns commands separately since they read from file
+    if (strcmp(map_type, "dns") == 0) {
+        if (!is_valid_command(cmd)) {
+            fprintf(stderr, "Invalid command for dns. Use 'list' or 'json'.\n");
+            aw_bpf_usage();
+            return EXIT_FAILURE;
+        }
+        return handle_dns_command(cmd) ? EXIT_SUCCESS : EXIT_FAILURE;
     }
 
     // Determine map path based on map type

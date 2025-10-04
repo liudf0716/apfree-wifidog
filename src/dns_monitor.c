@@ -150,6 +150,7 @@ static pthread_mutex_t domain_entries_mutex = PTHREAD_MUTEX_INITIALIZER;
 #define TOP_DOMAINS_REPORT_INTERVAL 600 // 10分钟报告一次热门域名
 #define TOP_DOMAINS_COUNT 20            // 报告前20个热门域名
 #define DOMAIN_STATS_FILE "/tmp/wifidog_domain_stats.dat"  // 持久化文件路径
+#define DNS_STATS_EXPORT_FILE "/tmp/dns_stats.txt"         // 统计导出文件（供aw-bpfctl读取）
 
 // 有效域名后缀列表
 static const char *valid_domain_suffixes[] = {
@@ -182,6 +183,9 @@ static int find_least_frequently_used_domain(void);
 static int remove_domain_from_kernel(int index);
 static void print_top_domains(int top_n);
 static int compare_domain_by_access_count(const void *a, const void *b);
+
+// 统计导出相关函数
+static int export_dns_stats_to_file(void);
 
 // 持久化相关函数
 static int save_domain_stats_to_file(void);
@@ -356,14 +360,20 @@ static void *dns_monitor_thread(void *arg)
         // 每5分钟保存一次域名统计到文件
         if (current_time - last_save_time >= 300) {
             save_domain_stats_to_file();
+            export_dns_stats_to_file();  // 同时导出供aw-bpfctl读取
+            last_save_time = current_time;
+        }
+        if (current_time - last_save_time >= 300) {
+            save_domain_stats_to_file();
             last_save_time = current_time;
         }
     }
     
     debug(LOG_DEBUG, "DNS monitor thread shutting down...");
     
-    // 退出前保存域名统计
+    // 退出前保存域名统计和导出
     save_domain_stats_to_file();
+    export_dns_stats_to_file();
     
     // 最后打印一次统计信息
     if (stats_map_fd >= 0) {
@@ -1393,5 +1403,57 @@ static int load_domain_stats_from_file(void)
     sync_xdpi_domains_2_kern();
     
     return loaded_count;
+}
+
+// ========== 统计数据导出功能 ==========
+
+/**
+ * @brief 导出DNS域名统计到文件供aw-bpfctl读取
+ */
+static int export_dns_stats_to_file(void)
+{
+    FILE *fp = fopen(DNS_STATS_EXPORT_FILE, "w");
+    if (!fp) {
+        debug(LOG_WARNING, "Failed to open DNS stats export file: %s", strerror(errno));
+        return -1;
+    }
+    
+    // 创建排序后的副本
+    struct domain_entry sorted_entries[XDPI_DOMAIN_MAX];
+    
+    pthread_mutex_lock(&domain_entries_mutex);
+    memcpy(sorted_entries, domain_entries, sizeof(sorted_entries));
+    pthread_mutex_unlock(&domain_entries_mutex);
+    
+    // 按访问次数降序排序
+    qsort(sorted_entries, XDPI_DOMAIN_MAX, sizeof(struct domain_entry), 
+          compare_domain_by_access_count);
+    
+    // 写入文件头
+    fprintf(fp, "# DNS Domain Access Statistics\n");
+    fprintf(fp, "# Format: Rank | Domain | Access Count | SID | First Seen | Last Access\n");
+    fprintf(fp, "# Generated at: %ld\n", time(NULL));
+    fprintf(fp, "#\n");
+    
+    // 写入每个有效域名的统计信息
+    int rank = 1;
+    for (int i = 0; i < XDPI_DOMAIN_MAX; i++) {
+        if (sorted_entries[i].used) {
+            fprintf(fp, "%d|%s|%llu|%d|%ld|%ld\n",
+                    rank++,
+                    sorted_entries[i].domain,
+                    (unsigned long long)sorted_entries[i].access_count,
+                    sorted_entries[i].sid,
+                    (long)sorted_entries[i].first_seen_time,
+                    (long)sorted_entries[i].last_access_time);
+        }
+    }
+    
+    fclose(fp);
+    
+    // 设置文件权限，允许其他用户读取
+    chmod(DNS_STATS_EXPORT_FILE, 0644);
+    
+    return 0;
 }
 
