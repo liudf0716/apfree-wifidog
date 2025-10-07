@@ -73,8 +73,8 @@ struct domain_entry {
     int sid;
     bool used;
     __u64 access_count;         // 访问计数
-    time_t last_access_time;    // 最后访问时间
-    time_t first_seen_time;     // 首次发现时间
+    __u64 last_access_time;     // 最后访问时间（使用__u64保证与内核一致）
+    __u64 first_seen_time;      // 首次发现时间（使用__u64保证与内核一致）
 };
 
 // xDPI域名更新结构
@@ -1280,8 +1280,8 @@ static void print_top_domains(int top_n)
     int count = 0;
     for (int i = 0; i < XDPI_DOMAIN_MAX && count < top_n; i++) {
         if (sorted_entries[i].used) {
-            time_t last_access = sorted_entries[i].last_access_time;
-            time_t first_seen = sorted_entries[i].first_seen_time;
+            time_t last_access = (time_t)sorted_entries[i].last_access_time;
+            time_t first_seen = (time_t)sorted_entries[i].first_seen_time;
             time_t now = time(NULL);
             
             int minutes_ago = (int)difftime(now, last_access) / 60;

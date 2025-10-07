@@ -58,6 +58,9 @@ struct domain_entry {
     int domain_len;
     int sid;
     bool used;
+    __u64 access_count;         /* 访问计数 */
+    __u64 last_access_time;     /* 最后访问时间（使用__u64以保证内核/用户空间兼容性） */
+    __u64 first_seen_time;      /* 首次发现时间（使用__u64以保证内核/用户空间兼容性） */
 };
 
 /* Domain update structure for IOCTL operations */

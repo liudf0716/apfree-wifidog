@@ -478,6 +478,9 @@ static int add_domain(struct domain_entry *entry)
             domains[i].domain_len = entry->domain_len;
             domains[i].sid = entry->sid;
             domains[i].used = true;
+            domains[i].access_count = entry->access_count;
+            domains[i].last_access_time = entry->last_access_time;
+            domains[i].first_seen_time = entry->first_seen_time;
             ret = 0;
             break;
         }
@@ -515,6 +518,9 @@ static int update_domain(struct domain_entry *entry, int index)
     domains[index].domain[entry->domain_len] = '\0';
     domains[index].domain_len = entry->domain_len;
     domains[index].sid = entry->sid;
+    domains[index].access_count = entry->access_count;
+    domains[index].last_access_time = entry->last_access_time;
+    domains[index].first_seen_time = entry->first_seen_time;
     spin_unlock_bh(&xdpi_lock);
     
     return 0;
@@ -594,8 +600,22 @@ static const struct proc_ops xdpi_proc_ops = {
     .proc_release = single_release,
 };
 
+// Character device open function
+static int xdpi_dev_open(struct inode *inode, struct file *file)
+{
+    return 0;
+}
+
+// Character device release function
+static int xdpi_dev_release(struct inode *inode, struct file *file)
+{
+    return 0;
+}
+
 static const struct file_operations xdpi_fops = {
     .owner = THIS_MODULE,
+    .open = xdpi_dev_open,
+    .release = xdpi_dev_release,
     .unlocked_ioctl = xdpi_proc_ioctl,
 };
 
