@@ -578,12 +578,13 @@ static long xdpi_proc_ioctl(struct file *file, unsigned int cmd, unsigned long a
     return ret;
 }
 
-static const struct proc_ops xdpi_proc_ops = {
-    .proc_open = xdpi_proc_open,
-    .proc_read = seq_read,
-    .proc_lseek = seq_lseek,
-    .proc_release = single_release,
-    .proc_ioctl = xdpi_proc_ioctl,
+static const struct file_operations xdpi_proc_ops = {
+    .owner = THIS_MODULE,
+    .open = xdpi_proc_open,
+    .read = seq_read,
+    .llseek = seq_lseek,
+    .release = single_release,
+    .unlocked_ioctl = xdpi_proc_ioctl,
 };
 
 // Proc file operations for L7 protocols
@@ -661,8 +662,8 @@ static int __init xdpi_init(void)
         domains[i].used = false;
     }
     
-    // Create proc entries
-    xdpi_proc_file = proc_create("xdpi_domains", 0644, NULL, &xdpi_proc_ops);
+    // Create proc entries (0666 to allow ioctl operations)
+    xdpi_proc_file = proc_create("xdpi_domains", 0666, NULL, &xdpi_proc_ops);
     if (!xdpi_proc_file) {
         pr_err("xdpi: Failed to create proc file\n");
         return -ENOMEM;
