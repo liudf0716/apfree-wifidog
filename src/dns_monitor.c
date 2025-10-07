@@ -640,9 +640,9 @@ static void sync_xdpi_domains_2_kern(void)
     
     pthread_mutex_lock(&domain_entries_mutex);
     
-    fd = open("/proc/xdpi_domains", O_RDWR);
+    fd = open("/dev/xdpi", O_RDWR);
     if (fd < 0) {
-        debug(LOG_ERR, "Cannot open /proc/xdpi_domains: %s", strerror(errno));
+        debug(LOG_ERR, "Cannot open /dev/xdpi: %s", strerror(errno));
         pthread_mutex_unlock(&domain_entries_mutex);
         return;
     }
@@ -744,9 +744,9 @@ static int xdpi_add_domain(const char *input_domain)
     pthread_mutex_unlock(&domain_entries_mutex);
     
     // 添加到内核
-    fd = open("/proc/xdpi_domains", O_RDWR);
+    fd = open("/dev/xdpi", O_RDWR);
     if (fd < 0) {
-        debug(LOG_ERR, "Cannot open /proc/xdpi_domains: %s", strerror(errno));
+        debug(LOG_ERR, "Cannot open /dev/xdpi: %s", strerror(errno));
         return -1;
     }
     
@@ -1213,9 +1213,9 @@ static int remove_domain_from_kernel(int index)
         return -1;
     }
     
-    int fd = open("/proc/xdpi_domains", O_RDWR);
+    int fd = open("/dev/xdpi", O_RDWR);
     if (fd < 0) {
-        debug(LOG_WARNING, "Cannot open /proc/xdpi_domains for deletion: %s", strerror(errno));
+        debug(LOG_WARNING, "Cannot open /dev/xdpi for deletion: %s", strerror(errno));
         return -1;
     }
     

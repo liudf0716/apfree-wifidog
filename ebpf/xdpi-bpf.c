@@ -15,6 +15,9 @@
 #include <linux/tcp.h>
 #include <linux/udp.h>
 #include <linux/uaccess.h>
+#include <linux/fs.h>
+#include <linux/device.h>
+#include <linux/cdev.h>
 
 #include "xdpi-bpf.h"
 
@@ -41,6 +44,12 @@ static DEFINE_SPINLOCK(xdpi_lock);
 static struct proc_dir_entry *xdpi_proc_file;
 static struct proc_dir_entry *xdpi_l7_proto_file;
 static struct proc_dir_entry *xdpi_domain_num_file;
+
+// Character device for ioctl operations
+static int xdpi_major = 0;
+static struct class *xdpi_class = NULL;
+static struct device *xdpi_device = NULL;
+#define XDPI_DEVICE_NAME "xdpi"
 
 static int add_domain(struct domain_entry *entry);
 static int del_domain(int index);
@@ -578,12 +587,15 @@ static long xdpi_proc_ioctl(struct file *file, unsigned int cmd, unsigned long a
     return ret;
 }
 
-static const struct file_operations xdpi_proc_ops = {
+static const struct proc_ops xdpi_proc_ops = {
+    .proc_open = xdpi_proc_open,
+    .proc_read = seq_read,
+    .proc_lseek = seq_lseek,
+    .proc_release = single_release,
+};
+
+static const struct file_operations xdpi_fops = {
     .owner = THIS_MODULE,
-    .open = xdpi_proc_open,
-    .read = seq_read,
-    .llseek = seq_lseek,
-    .release = single_release,
     .unlocked_ioctl = xdpi_proc_ioctl,
 };
 
@@ -662,10 +674,39 @@ static int __init xdpi_init(void)
         domains[i].used = false;
     }
     
-    // Create proc entries (0666 to allow ioctl operations)
-    xdpi_proc_file = proc_create("xdpi_domains", 0666, NULL, &xdpi_proc_ops);
+    // Register character device for ioctl operations
+    xdpi_major = register_chrdev(0, XDPI_DEVICE_NAME, &xdpi_fops);
+    if (xdpi_major < 0) {
+        pr_err("xdpi: Failed to register character device: %d\n", xdpi_major);
+        return xdpi_major;
+    }
+    
+    // Create device class
+    xdpi_class = class_create(THIS_MODULE, XDPI_DEVICE_NAME);
+    if (IS_ERR(xdpi_class)) {
+        ret = PTR_ERR(xdpi_class);
+        pr_err("xdpi: Failed to create device class: %d\n", ret);
+        unregister_chrdev(xdpi_major, XDPI_DEVICE_NAME);
+        return ret;
+    }
+    
+    // Create device node (/dev/xdpi)
+    xdpi_device = device_create(xdpi_class, NULL, MKDEV(xdpi_major, 0), NULL, XDPI_DEVICE_NAME);
+    if (IS_ERR(xdpi_device)) {
+        ret = PTR_ERR(xdpi_device);
+        pr_err("xdpi: Failed to create device: %d\n", ret);
+        class_destroy(xdpi_class);
+        unregister_chrdev(xdpi_major, XDPI_DEVICE_NAME);
+        return ret;
+    }
+    
+    // Create proc entries (for reading domain list)
+    xdpi_proc_file = proc_create("xdpi_domains", 0644, NULL, &xdpi_proc_ops);
     if (!xdpi_proc_file) {
         pr_err("xdpi: Failed to create proc file\n");
+        device_destroy(xdpi_class, MKDEV(xdpi_major, 0));
+        class_destroy(xdpi_class);
+        unregister_chrdev(xdpi_major, XDPI_DEVICE_NAME);
         return -ENOMEM;
     }
 
@@ -673,6 +714,9 @@ static int __init xdpi_init(void)
     if (!xdpi_l7_proto_file) {
         pr_err("xdpi: Failed to create L7 protocol proc file\n");
         proc_remove(xdpi_proc_file);
+        device_destroy(xdpi_class, MKDEV(xdpi_major, 0));
+        class_destroy(xdpi_class);
+        unregister_chrdev(xdpi_major, XDPI_DEVICE_NAME);
         return -ENOMEM;
     }
     
@@ -681,6 +725,9 @@ static int __init xdpi_init(void)
         pr_err("xdpi: Failed to create domain number proc file\n");
         proc_remove(xdpi_proc_file);
         proc_remove(xdpi_l7_proto_file);
+        device_destroy(xdpi_class, MKDEV(xdpi_major, 0));
+        class_destroy(xdpi_class);
+        unregister_chrdev(xdpi_major, XDPI_DEVICE_NAME);
         return -ENOMEM;
     }
     
@@ -690,10 +737,13 @@ static int __init xdpi_init(void)
         proc_remove(xdpi_proc_file);
         proc_remove(xdpi_l7_proto_file);
         proc_remove(xdpi_domain_num_file);
+        device_destroy(xdpi_class, MKDEV(xdpi_major, 0));
+        class_destroy(xdpi_class);
+        unregister_chrdev(xdpi_major, XDPI_DEVICE_NAME);
         return ret;
     }
     
-    printk(KERN_INFO "bpf_kfunc_xdpi: Module loaded successfully\n");
+    printk(KERN_INFO "bpf_kfunc_xdpi: Module loaded successfully (device: /dev/%s)\n", XDPI_DEVICE_NAME);
     return 0; 
 }
 
@@ -705,6 +755,14 @@ static void __exit xdpi_exit(void)
         proc_remove(xdpi_l7_proto_file);
     if (xdpi_domain_num_file)
         proc_remove(xdpi_domain_num_file);
+    
+    // Cleanup character device
+    if (xdpi_device)
+        device_destroy(xdpi_class, MKDEV(xdpi_major, 0));
+    if (xdpi_class)
+        class_destroy(xdpi_class);
+    if (xdpi_major > 0)
+        unregister_chrdev(xdpi_major, XDPI_DEVICE_NAME);
     
     printk(KERN_INFO "Goodbye, xDPI!\n");
 }
