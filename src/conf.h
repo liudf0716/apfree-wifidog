@@ -271,6 +271,7 @@ typedef struct {
 	short enable_anti_nat; /* 1, enable anti nat */
 	short enable_smart_qos; /* 1, enable smart qos */
 	short enable_user_reload; /* 1, enable user reload */
+	short disable_portal_auth; /* 1, disable portal authentication */
 	char *ttl_values; /* ttl values */
 	char *anti_nat_permit_macs; /* anti nat permit mac */
 
@@ -353,6 +354,7 @@ bool is_local_auth_mode(void);
 bool is_cloud_mode(void);
 bool is_custom_auth_offline_page(void);
 bool is_user_reload_enabled(void);
+bool is_portal_auth_disabled(void);
 
 // Global state variables
 extern int g_online_clients;    // Total connected client count

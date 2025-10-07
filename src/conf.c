@@ -106,6 +106,7 @@ typedef enum {
 	oEnableUserReload,
 	oTTLValues,
 	oAntiNatPermitMacs,
+	oDisablePortalAuth,
 	oDeviceInfo,
 	oApDeviceId,
 	oApMacAddress,
@@ -187,6 +188,7 @@ static const struct {
 	"enableuserreload", oEnableUserReload}, {
 	"ttlvalues", oTTLValues}, {
 	"antinatpermitmacs", oAntiNatPermitMacs}, {
+	"disableportalauth", oDisablePortalAuth}, {
 	"deviceinfo", oDeviceInfo}, {
 	"apdeviceid", oApDeviceId}, {
 	"apmacaddress", oApMacAddress}, {
@@ -363,6 +365,7 @@ void config_init(void)
 	config.enable_user_reload 	= 1;
 	config.ttl_values 			= safe_strdup(DEFAULT_TTL_VALUES);
 	config.anti_nat_permit_macs = NULL;
+	config.disable_portal_auth  = 1;
 
 	// Initialize device info
 	config.device_info = NULL;
@@ -1242,6 +1245,9 @@ config_read()
 						config.anti_nat_permit_macs = safe_strdup(p1);
 					else
 						debug(LOG_ERR, "Invalid MAC address %s", p1);
+					break;
+				case oDisablePortalAuth:
+					config.disable_portal_auth = parse_boolean_value(p1);
 					break;
 				case oDeviceID:
 					if(config.device_id) free(config.device_id);
@@ -2423,4 +2429,10 @@ bool
 is_user_reload_enabled(void)
 {
 	return config.enable_user_reload == 1;
+}
+
+bool
+is_portal_auth_disabled(void)
+{
+	return config.disable_portal_auth == 1;
 }

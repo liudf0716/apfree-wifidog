@@ -485,6 +485,12 @@ void
 nft_reload_gw()
 {
     NFT_WIFIDOGX_BYPASS_MODE();
+    
+    // Check if portal auth is disabled
+    if (is_portal_auth_disabled()) {
+        debug(LOG_DEBUG, "Portal authentication is disabled, skip reload_gw operation");
+        return;
+    }
 
     LOCK_CONFIG();
     __nft_del_gw();
@@ -524,6 +530,12 @@ int
 nft_fw_destroy(void)
 {
     NFT_WIFIDOGX_BYPASS_MODE_RETURN(0);
+    
+    // Check if portal auth is disabled
+    if (is_portal_auth_disabled()) {
+        debug(LOG_DEBUG, "Portal authentication is disabled, skip fw_destroy operation");
+        return 0;
+    }
 
 	FILE *fp;
     char buffer[128];
@@ -683,6 +695,13 @@ int
 nft_fw_access(fw_access_t type, const char *ip, const char *mac, int tag)
 {
     char cmd[128] = {0};
+    
+    // Check if portal auth is disabled
+    if (is_portal_auth_disabled()) {
+        debug(LOG_DEBUG, "Portal authentication is disabled, skip fw_access operation");
+        return 0;
+    }
+    
     if (!ip || !mac) {
         debug(LOG_ERR, "Invalid parameters: ip or mac is NULL");
         return 1;
@@ -1740,6 +1759,12 @@ int
 nft_fw_init()
 {
     NFT_WIFIDOGX_BYPASS_MODE_RETURN(1);
+    
+    // Check if portal auth is disabled
+    if (is_portal_auth_disabled()) {
+        debug(LOG_INFO, "Portal authentication is disabled, skip firewall initialization");
+        return 1;
+    }
 
 	generate_nft_wifidogx_init_script();
 	nft_do_init_script_command();

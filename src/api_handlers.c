@@ -240,6 +240,12 @@ void handle_heartbeat_request(json_object *j_heartbeat)
 
 void handle_tmp_pass_request(json_object *j_tmp_pass)
 {
+	// Check if portal auth is disabled
+	if (is_portal_auth_disabled()) {
+		debug(LOG_WARNING, "Portal authentication is disabled, ignoring tmp_pass request from server");
+		return;
+	}
+	
 	// Extract required client MAC
 	json_object *client_mac = json_object_object_get(j_tmp_pass, "client_mac");
 	if (!client_mac) {
@@ -415,6 +421,20 @@ void handle_get_client_info_request(json_object *j_req, api_transport_context_t 
 void handle_kickoff_request(json_object *j_auth, api_transport_context_t *transport) {
     json_object *j_response = json_object_new_object();
     
+    // Check if portal auth is disabled
+    if (is_portal_auth_disabled()) {
+        debug(LOG_WARNING, "Portal authentication is disabled, ignoring kickoff request from server");
+        
+        // Send error response
+        json_object_object_add(j_response, "type", json_object_new_string("kickoff_error"));
+        json_object_object_add(j_response, "error", json_object_new_string("Portal authentication is disabled"));
+        
+        const char *response_str = json_object_to_json_string(j_response);
+        send_response(transport, response_str);
+        json_object_put(j_response);
+        return;
+    }
+    
     // Extract and validate required fields
     json_object *client_ip = json_object_object_get(j_auth, "client_ip");
     json_object *client_mac = json_object_object_get(j_auth, "client_mac");
@@ -523,6 +543,12 @@ void handle_kickoff_request(json_object *j_auth, api_transport_context_t *transp
  * @param j_auth The JSON authentication request object
  */
 void handle_auth_request(json_object *j_auth) {
+    // Check if portal auth is disabled
+    if (is_portal_auth_disabled()) {
+        debug(LOG_WARNING, "Portal authentication is disabled, ignoring auth request from server");
+        return;
+    }
+    
     // Extract required fields
     json_object *token = json_object_object_get(j_auth, "token");
     json_object *client_ip = json_object_object_get(j_auth, "client_ip");
