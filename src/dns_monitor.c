@@ -649,19 +649,26 @@ static void sync_xdpi_domains_2_kern(void)
     
     debug(LOG_DEBUG, "Syncing domain entries to kernel");
     
+    int success_count = 0;
+    int fail_count = 0;
     for (int i = 0; i < XDPI_DOMAIN_MAX; i++) {
         if (domain_entries[i].used) {
             memcpy(&entry, &domain_entries[i], sizeof(entry));
             result = ioctl(fd, XDPI_IOC_ADD, &entry);
             if (result < 0) {
-                debug(LOG_WARNING, "Failed to sync domain %s to kernel", entry.domain);
+                debug(LOG_WARNING, "Failed to sync domain %s to kernel: %s (errno=%d)", 
+                      entry.domain, strerror(errno), errno);
+                fail_count++;
+            } else {
+                success_count++;
             }
         }
     }
     
     close(fd);
     pthread_mutex_unlock(&domain_entries_mutex);
-    debug(LOG_DEBUG, "Domain sync to kernel completed");
+    debug(LOG_DEBUG, "Domain sync to kernel completed: %d succeeded, %d failed", 
+          success_count, fail_count);
 }
 
 /**
@@ -760,7 +767,8 @@ static int xdpi_add_domain(const char *input_domain)
     close(fd);
     
     if (result < 0) {
-        debug(LOG_ERR, "Failed to add domain %s to xDPI kernel module", domain_to_process);
+        debug(LOG_ERR, "Failed to add domain %s to xDPI kernel module: %s (errno=%d)", 
+              domain_to_process, strerror(errno), errno);
         return -1;
     }
     
