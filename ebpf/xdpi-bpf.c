@@ -681,8 +681,8 @@ static int __init xdpi_init(void)
         return xdpi_major;
     }
     
-    // Create device class
-    xdpi_class = class_create(THIS_MODULE, XDPI_DEVICE_NAME);
+    // Create device class (kernel 6.6+ uses single parameter)
+    xdpi_class = class_create(XDPI_DEVICE_NAME);
     if (IS_ERR(xdpi_class)) {
         ret = PTR_ERR(xdpi_class);
         pr_err("xdpi: Failed to create device class: %d\n", ret);
