@@ -1173,6 +1173,11 @@ nft_fw_counters_update()
 {
     NFT_WIFIDOGX_BYPASS_MODE_RETURN(0);
 
+    if (is_portal_auth_disabled()) {
+        debug(LOG_DEBUG, "Portal authentication is disabled, skip counters update");
+        return 0;
+    }
+
     LOCK_CLIENT_LIST();
     reset_client_list();
 

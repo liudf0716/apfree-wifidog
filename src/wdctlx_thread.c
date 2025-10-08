@@ -276,7 +276,12 @@ wdctl_status(struct bufferevent *fd, const char *arg)
 
     if (status) {
         size_t len = strlen(status);
-        bufferevent_write(fd, status, len);
+        int nret = bufferevent_write(fd, status, len);
+        if (nret < 0) {
+            debug(LOG_ERR, "Failed to write status response to client");
+        } else {
+            debug(LOG_DEBUG, "Successfully sent status response (%zu bytes) to client", len);
+        }
         free(status);
     } else {
         bufferevent_write(fd, "{}", 2);
