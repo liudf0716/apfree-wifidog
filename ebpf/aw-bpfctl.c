@@ -11,6 +11,8 @@
 #include <ctype.h>
 #include <unistd.h>
 #include <uci.h>
+#include <sys/ioctl.h>
+#include <fcntl.h>
 
 /* 检查是否安装了 libcurl */
 #if defined(HAVE_LIBCURL) || defined(USE_LIBCURL)
@@ -18,11 +20,11 @@
 #endif
 
 #include "aw-bpf.h"
+#include "xdpi-bpf.h"  // 包含统一的ioctl接口定义
 
-#define XDPI_DOMAINS "/proc/xdpi_domains"
-#define XDPI_L7_PROTO "/proc/xdpi_l7_proto"
 #define DOMAIN_API_URL "http://seo.chawrt.com/open/api/domain/info/batch"  /* 添加API URL定义 */
 #define DNS_STATS_FILE "/tmp/dns_stats.txt"  /* DNS统计文件 */
+#define XDPI_DEVICE "/dev/xdpi"
 
 struct xdpi_l7_proto {
     __u32 id;
@@ -30,8 +32,8 @@ struct xdpi_l7_proto {
     __u32 sid;
 };
 
-// 合并后的域名信息结构体（包含统计信息）
-struct domain_entry {
+// 应用层域名信息结构体（包含扩展信息）
+struct app_domain_entry {
     __u32 id;                                  // 域名ID
     char name[XDPI_PROTO_FEATURE_MAX_SIZE];    // 域名
     __u32 sid;                                 // SID
@@ -48,10 +50,9 @@ struct domain_entry {
 // 前向声明函数
 static bool fetch_domain_info(void);
 static void print_stats_l7(void);
-static void load_dns_stats_into_domains(void);
 
 // 合并后的域名信息列表
-static struct domain_entry domains[XDPI_PROTO_TRAITS_MAX_SIZE];
+static struct app_domain_entry domains[XDPI_PROTO_TRAITS_MAX_SIZE];
 static int domains_count = 0;
 
 static struct xdpi_l7_proto xdpi_l7_protos[XDPI_PROTO_TRAITS_MAX_SIZE];
@@ -59,141 +60,98 @@ static int xdpi_l7_protos_count = 0;
 
 static void load_domains(void)
 {
-    FILE *fp = fopen(XDPI_DOMAINS, "r");
-    if (!fp) {
-        perror("Failed to open XDPI_DOMAINS");
+    int fd;
+    struct domain_list list;
+    int result;
+    
+    // 打开xDPI设备
+    fd = open(XDPI_DEVICE, O_RDWR);
+    if (fd < 0) {
+        perror("Failed to open " XDPI_DEVICE);
+        domains_count = 0;
         return;
     }
-
-    char line[128] = {0};
-    // Skip header lines
-    if (fgets(line, sizeof(line), fp) == NULL) { // Skip "Index | Domain | SID"
-        fclose(fp);
+    
+    // 初始化domain_list结构
+    memset(&list, 0, sizeof(list));
+    list.max_count = XDPI_DOMAIN_MAX;
+    
+    // 通过ioctl获取域名列表
+    result = ioctl(fd, XDPI_IOC_LIST, &list);
+    if (result < 0) {
+        perror("Failed to get domain list via ioctl");
+        close(fd);
+        domains_count = 0;
         return;
     }
-    if (fgets(line, sizeof(line), fp) == NULL) { // Skip "---------------------"
-        fclose(fp);
-        return;
-    }
-
-    domains_count = 0; // Reset counter to ensure clean reload
-    while (fgets(line, sizeof(line), fp)) {
-        struct domain_entry domain;
-        memset(&domain, 0, sizeof(domain));
+    
+    close(fd);
+    
+    // 转换内核域名数据到用户态格式
+    domains_count = 0;
+    printf("Debug: Loading %d domains from kernel via ioctl\n", list.count);
+    
+    for (int i = 0; i < list.count && domains_count < XDPI_PROTO_TRAITS_MAX_SIZE; i++) {
+        struct domain_entry *kernel_entry = &list.domains[i];  // 这是内核的domain_entry结构
+        if (!kernel_entry->used) continue;
         
-        // Use a more robust parsing approach that can handle spaces in domain names
-        char domain_buffer[XDPI_PROTO_FEATURE_MAX_SIZE] = {0};
-        if (sscanf(line, "%u | %[^|] | %u", &domain.id, domain_buffer, &domain.sid) == 3) {
-            // Trim trailing spaces from domain name
-            char *end = domain_buffer + strlen(domain_buffer) - 1;
-            while (end > domain_buffer && isspace(*end)) {
-                *end-- = '\0';
-            }
-            
-            strncpy(domain.name, domain_buffer, sizeof(domain.name) - 1);
-            domain.has_details = false; // 初始化为没有详细信息
-            domain.has_stats = false;   // 初始化为没有统计信息
-            domains[domains_count++] = domain;
-            
-            if (domains_count >= XDPI_PROTO_TRAITS_MAX_SIZE) {
+        // 检查重复（额外的安全检查）
+        bool duplicate = false;
+        for (int j = 0; j < domains_count; j++) {
+            if (strcmp(domains[j].name, kernel_entry->domain) == 0) {
+                printf("Debug: Skipping duplicate domain: %s\n", kernel_entry->domain);
+                duplicate = true;
                 break;
             }
         }
-        memset(line, 0, sizeof(line));
-    }
-
-    fclose(fp);
-    
-    // 加载 DNS 统计信息
-    load_dns_stats_into_domains();
-}
-
-/**
- * @brief 从文件读取DNS统计信息并合并到domains数组
- */
-static void load_dns_stats_into_domains(void)
-{
-    FILE *fp = fopen(DNS_STATS_FILE, "r");
-    if (!fp) {
-        // DNS统计文件不存在是正常的，只是没有统计数据而已
-        return;
-    }
-    
-    char line[512];
-    
-    // 跳过注释行
-    while (fgets(line, sizeof(line), fp)) {
-        if (line[0] != '#') {
-            break;
-        }
-    }
-    
-    // 解析数据行并匹配到对应的domain
-    do {
-        if (line[0] == '#' || line[0] == '\n') {
-            continue;
-        }
         
-        int rank, sid;
-        char domain_name[128];
-        long long access_count_temp;
-        long first_seen_temp, last_access_temp;
-        
-        if (sscanf(line, "%d|%127[^|]|%lld|%d|%ld|%ld",
-                   &rank,
-                   domain_name,
-                   &access_count_temp,
-                   &sid,
-                   &first_seen_temp,
-                   &last_access_temp) == 6) {
+        if (!duplicate) {
+            struct app_domain_entry *entry = &domains[domains_count];
+            memset(entry, 0, sizeof(*entry));
             
-            // 在domains数组中查找匹配的域名
-            for (int i = 0; i < domains_count; i++) {
-                if (strcmp(domains[i].name, domain_name) == 0) {
-                    domains[i].access_count = (unsigned long long)access_count_temp;
-                    domains[i].first_seen = (time_t)first_seen_temp;
-                    domains[i].last_access = (time_t)last_access_temp;
-                    domains[i].has_stats = true;
-                    break;
-                }
+            // 设置基本信息
+            entry->id = domains_count + 1;  // 分配唯一ID
+            strncpy(entry->name, kernel_entry->domain, sizeof(entry->name) - 1);
+            entry->sid = kernel_entry->sid;
+            entry->has_details = false;
+            
+            // 设置统计信息
+            if (kernel_entry->access_count > 0) {
+                entry->access_count = kernel_entry->access_count;
+                entry->first_seen = (time_t)kernel_entry->first_seen_time;
+                entry->last_access = (time_t)kernel_entry->last_access_time;
+                entry->has_stats = true;
+                printf("Debug: Loaded domain[%d]: %s (sid=%u, count=%llu)\n", 
+                       domains_count, entry->name, entry->sid, entry->access_count);
+            } else {
+                entry->access_count = 0;
+                entry->first_seen = 0;
+                entry->last_access = 0;
+                entry->has_stats = false;
+                printf("Debug: Loaded domain[%d]: %s (sid=%u, no stats)\n", 
+                       domains_count, entry->name, entry->sid);
             }
+            
+            domains_count++;
         }
-    } while (fgets(line, sizeof(line), fp));
+    }
     
-    fclose(fp);
+    printf("Debug: Total domains loaded: %d\n", domains_count);
+    
+    // 注意：统计数据现在直接从内核获取，不再需要外部文件
 }
 
+// L7协议加载逻辑现在也使用ioctl接口（如果需要的话）
 static void load_xdpi_l7_protos(void)
 {
-    FILE *fp = fopen(XDPI_L7_PROTO, "r");
-    if (!fp) {
-        perror("Failed to open XDPI_L7_PROTO");
-        return;
-    }
-
-    char line[128] = {0};
-    // Skip header lines
-    if (fgets(line, sizeof(line), fp) == NULL) { // Skip "Index | Protocol | SID"
-        fclose(fp);
-        return;
-    }
-    if (fgets(line, sizeof(line), fp) == NULL) { // Skip "----------------------"
-        fclose(fp);
-        return;
-    }
-
-    while (fgets(line, sizeof(line), fp)) {
-        struct xdpi_l7_proto proto;
-        if (sscanf(line, "%u | %63s | %u", &proto.id, proto.proto_desc, &proto.sid) == 3) {
-            xdpi_l7_protos[xdpi_l7_protos_count++] = proto;
-            if (xdpi_l7_protos_count >= XDPI_PROTO_TRAITS_MAX_SIZE) {
-                break;
-            }
-        }
-        memset(line, 0, sizeof(line));
-    }
-
-    fclose(fp);
+    // TODO: 如果需要L7协议信息，也应该通过ioctl从内核获取
+    // 目前保持简单实现，使用硬编码或从其他来源获取
+    
+    // 清空计数器
+    xdpi_l7_protos_count = 0;
+    
+    // 这里可以添加L7协议的获取逻辑
+    // 暂时保持为空，因为主要focus是域名管理
 }
 
 static const char* get_domain_name_by_sid(__u32 sid) {

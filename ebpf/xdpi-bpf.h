@@ -78,15 +78,23 @@ struct l7_proto_entry {
     l7_proto_match_t match_func; /* Protocol matching function */
 };
 
+/* Other constants */
+#define XDPI_DOMAIN_MAX 256
+#define MIN_TCP_DATA_SIZE 50
+
 /* IOCTL commands */
 #define XDPI_IOC_MAGIC 'X'
 #define XDPI_IOC_ADD    _IOW(XDPI_IOC_MAGIC, 1, struct domain_entry)
 #define XDPI_IOC_DEL    _IOW(XDPI_IOC_MAGIC, 2, int)
 #define XDPI_IOC_UPDATE _IOW(XDPI_IOC_MAGIC, 3, struct domain_entry)
+#define XDPI_IOC_LIST   _IOR(XDPI_IOC_MAGIC, 4, struct domain_list)
 
-/* Other constants */
-#define XDPI_DOMAIN_MAX 256
-#define MIN_TCP_DATA_SIZE 50
+/* Domain list structure for XDPI_IOC_LIST command */
+struct domain_list {
+    int count;                                  // Number of domains returned
+    int max_count;                             // Maximum domains that can be returned
+    struct domain_entry domains[XDPI_DOMAIN_MAX]; // Array of domain entries
+};
 
 /* Kernel function declaration for BTF export */
 #ifdef __KERNEL__

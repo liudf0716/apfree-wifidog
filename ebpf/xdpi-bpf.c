@@ -33,11 +33,6 @@ MODULE_VERSION("1.0");
 static struct domain_entry domains[XDPI_DOMAIN_MAX];
 static DEFINE_SPINLOCK(xdpi_lock);
 
-// IOCTL commands
-#define XDPI_IOC_MAGIC 'X'
-#define XDPI_IOC_ADD    _IOW(XDPI_IOC_MAGIC, 1, struct domain_entry)
-#define XDPI_IOC_DEL    _IOW(XDPI_IOC_MAGIC, 2, int)
-#define XDPI_IOC_UPDATE _IOW(XDPI_IOC_MAGIC, 3, struct domain_entry)
 #define MIN_TCP_DATA_SIZE   50
 
 // Create a proc file for userspace interaction
@@ -466,25 +461,41 @@ static int add_domain(struct domain_entry *entry)
 {
     int i;
     int ret = -ENOSPC;
+    int free_idx = -1;
     
     if (entry->domain_len >= MAX_DOMAIN_LEN || entry->domain_len <= 0)
         return -EINVAL;
 
     spin_lock_bh(&xdpi_lock);
+    
+    // First check if domain already exists
     for (i = 0; i < XDPI_DOMAIN_MAX; i++) {
-        if (!domains[i].used) {
-            memcpy(domains[i].domain, entry->domain, entry->domain_len);
-            domains[i].domain[entry->domain_len] = '\0';
-            domains[i].domain_len = entry->domain_len;
-            domains[i].sid = entry->sid;
-            domains[i].used = true;
-            domains[i].access_count = entry->access_count;
-            domains[i].last_access_time = entry->last_access_time;
-            domains[i].first_seen_time = entry->first_seen_time;
-            ret = 0;
-            break;
+        if (domains[i].used && domains[i].domain_len == entry->domain_len) {
+            if (memcmp(domains[i].domain, entry->domain, entry->domain_len) == 0) {
+                // Domain already exists, update access count and time
+                domains[i].access_count = entry->access_count;
+                domains[i].last_access_time = entry->last_access_time;
+                spin_unlock_bh(&xdpi_lock);
+                return 0; // Success, domain already exists
+            }
+        } else if (!domains[i].used && free_idx == -1) {
+            free_idx = i; // Remember first free slot
         }
     }
+    
+    // Domain doesn't exist, add it if we have space
+    if (free_idx != -1) {
+        memcpy(domains[free_idx].domain, entry->domain, entry->domain_len);
+        domains[free_idx].domain[entry->domain_len] = '\0';
+        domains[free_idx].domain_len = entry->domain_len;
+        domains[free_idx].sid = entry->sid;
+        domains[free_idx].used = true;
+        domains[free_idx].access_count = entry->access_count;
+        domains[free_idx].last_access_time = entry->last_access_time;
+        domains[free_idx].first_seen_time = entry->first_seen_time;
+        ret = 0;
+    }
+    
     spin_unlock_bh(&xdpi_lock);
     
     return ret;
@@ -584,6 +595,30 @@ static long xdpi_proc_ioctl(struct file *file, unsigned int cmd, unsigned long a
         return -EFAULT;
 
         ret = update_domain(&update.entry, update.index);
+        break;
+        
+    case XDPI_IOC_LIST:
+        struct domain_list list;
+        memset(&list, 0, sizeof(list));
+        
+        // Copy the input structure to get max_count
+        if (copy_from_user(&list, (void __user *)arg, sizeof(list)))
+            return -EFAULT;
+            
+        // Fill the domain list
+        spin_lock_bh(&xdpi_lock);
+        list.count = 0;
+        for (int i = 0; i < XDPI_DOMAIN_MAX && list.count < list.max_count; i++) {
+            if (domains[i].used) {
+                memcpy(&list.domains[list.count], &domains[i], sizeof(struct domain_entry));
+                list.count++;
+            }
+        }
+        spin_unlock_bh(&xdpi_lock);
+        
+        // Copy the result back to userspace
+        if (copy_to_user((void __user *)arg, &list, sizeof(list)))
+            return -EFAULT;
         break;
         
     default:
