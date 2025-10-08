@@ -256,6 +256,7 @@ get_status_text()
 
 	evbuffer_add_printf(evb, "apfree wifidog status\n\n");
 
+	// === 基本系统信息 ===
 	evbuffer_add_printf(evb, "Version: " VERSION "\n");
 	evbuffer_add_printf(evb, "Uptime: %s\n", aw_uptime);
 	free(aw_uptime);
@@ -265,8 +266,91 @@ get_status_text()
 		restart_orig_pid,
 		restart_orig_pid ? ")" : "");
 
+	// === 运行模式和配置状态 ===
+	config = config_get_config();
+	LOCK_CONFIG();
+	
+	evbuffer_add_printf(evb, "Auth Server Mode: %s\n", 
+		is_local_auth_mode() ? "Local" : 
+		is_bypass_mode() ? "Bypass" : "Cloud");
+	
+	evbuffer_add_printf(evb, "Portal Auth: %s\n", 
+		is_portal_auth_disabled() ? "Disabled" : "Enabled");
+	
+	evbuffer_add_printf(evb, "Bypass Mode: %s\n", 
+		is_bypass_mode() ? "Yes" : "No");
+	
+	evbuffer_add_printf(evb, "Gateway Port: %d\n", config->gw_port);
+	evbuffer_add_printf(evb, "HTTPS Port: %d\n", config->gw_https_port);
+	evbuffer_add_printf(evb, "Check Interval: %d seconds\n", config->checkinterval);
+	evbuffer_add_printf(evb, "Client Timeout: %d seconds\n", config->clienttimeout);
+	
+	// === 网络和连接状态 ===
 	evbuffer_add_printf(evb, "Internet Connectivity: %s\n", (is_online()? "yes" : "no"));
 	evbuffer_add_printf(evb, "Auth server reachable: %s\n", (is_auth_online()? "yes" : "no"));
+	
+	// === 网关设置信息 ===
+	t_gateway_setting *gw_settings = get_gateway_settings();
+	if (gw_settings) {
+		evbuffer_add_printf(evb, "Gateway Settings:\n");
+		while (gw_settings) {
+			evbuffer_add_printf(evb, "  Interface: %s\n", 
+				gw_settings->gw_interface ? gw_settings->gw_interface : "N/A");
+			evbuffer_add_printf(evb, "  Gateway ID: %s\n", 
+				gw_settings->gw_id ? gw_settings->gw_id : "N/A");
+			evbuffer_add_printf(evb, "  IPv4 Address: %s\n", 
+				gw_settings->gw_address_v4 ? gw_settings->gw_address_v4 : "N/A");
+			evbuffer_add_printf(evb, "  IPv6 Address: %s\n", 
+				gw_settings->gw_address_v6 ? gw_settings->gw_address_v6 : "N/A");
+			evbuffer_add_printf(evb, "  Channel: %s\n", 
+				gw_settings->gw_channel ? gw_settings->gw_channel : "N/A");
+			gw_settings = gw_settings->next;
+			if (gw_settings) evbuffer_add_printf(evb, "  ---\n");
+		}
+	}
+	
+	// === 系统资源信息 ===
+	struct sys_info info;
+	memset(&info, 0, sizeof(info));
+	get_sys_info(&info);
+	
+	evbuffer_add_printf(evb, "System Resources:\n");
+	evbuffer_add_printf(evb, "  System Uptime: %lu seconds\n", info.sys_uptime);
+	evbuffer_add_printf(evb, "  Free Memory: %u KB\n", info.sys_memfree);
+	evbuffer_add_printf(evb, "  Load Average: %.2f\n", info.sys_load);
+	evbuffer_add_printf(evb, "  CPU Usage: %.2f%%\n", info.cpu_usage);
+	if (info.cpu_temp > 0) {
+		evbuffer_add_printf(evb, "  CPU Temperature: %d°C\n", info.cpu_temp);
+	}
+	evbuffer_add_printf(evb, "  Netfilter Conntrack: %lu\n", info.nf_conntrack_count);
+	
+	// === 防火墙和eBPF状态 ===
+	evbuffer_add_printf(evb, "Firewall Status:\n");
+	evbuffer_add_printf(evb, "  FW4 Enabled: %s\n", config->fw4_enable ? "Yes" : "No");
+	evbuffer_add_printf(evb, "  Anti-NAT Enabled: %s\n", config->enable_anti_nat ? "Yes" : "No");
+	evbuffer_add_printf(evb, "  Del Conntrack: %s\n", config->enable_del_conntrack ? "Yes" : "No");
+	
+	// === WebSocket 和 MQTT 状态 ===
+	t_ws_server *ws_server = get_ws_server();
+	if (ws_server) {
+		evbuffer_add_printf(evb, "WebSocket Server:\n");
+		evbuffer_add_printf(evb, "  Host: %s\n", ws_server->hostname ? ws_server->hostname : "N/A");
+		evbuffer_add_printf(evb, "  Port: %d\n", ws_server->port);
+		evbuffer_add_printf(evb, "  Path: %s\n", ws_server->path ? ws_server->path : "N/A");
+		evbuffer_add_printf(evb, "  SSL: %s\n", ws_server->use_ssl ? "Yes" : "No");
+	}
+	
+	t_mqtt_server *mqtt_server = get_mqtt_server();
+	if (mqtt_server) {
+		evbuffer_add_printf(evb, "MQTT Server:\n");
+		evbuffer_add_printf(evb, "  Host: %s\n", mqtt_server->hostname ? mqtt_server->hostname : "N/A");
+		evbuffer_add_printf(evb, "  Port: %d\n", mqtt_server->port);
+		evbuffer_add_printf(evb, "  Username: %s\n", mqtt_server->username ? mqtt_server->username : "N/A");
+	}
+	
+	UNLOCK_CONFIG();
+	
+	// === 客户端统计 ===
 	evbuffer_add_printf(evb, "Clients served this session: %lu\n\n", served_this_session);
 
 	LOCK_CLIENT_LIST();
