@@ -18,7 +18,7 @@
 #include <sys/un.h>
 
 #define DEFAULT_SOCK "/tmp/wdctlx.sock"
-#define WDCTL_TIMEOUT 1
+#define WDCTL_TIMEOUT 5
 
 static struct event_base *base = NULL;
 static char *sk_name = NULL;

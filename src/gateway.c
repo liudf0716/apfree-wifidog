@@ -360,7 +360,7 @@ handle_usr1(struct event_base *evbase)
 static void
 handle_pipe(struct event_base *evbase)
 {
-    debug(LOG_INFO, "Warning: Received SIGPIPE; ignoring.");
+    debug(LOG_WARNING, "Received SIGPIPE: Client disconnected while writing data. This is usually harmless.");
 }
 
 static void

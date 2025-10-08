@@ -194,7 +194,16 @@ wdctl_client_read_cb(struct bufferevent *bev, void *ctx)
 static void
 wdctl_client_event_cb(struct bufferevent *bev, short what, void *ctx)
 {
-    if (what & (BEV_EVENT_EOF|BEV_EVENT_ERROR)) {     
+    if (what & BEV_EVENT_EOF) {
+        debug(LOG_DEBUG, "wdctl client disconnected (EOF)");
+        evutil_closesocket(bufferevent_getfd(bev));
+        bufferevent_free(bev);
+    } else if (what & BEV_EVENT_ERROR) {
+        debug(LOG_WARNING, "wdctl client connection error: %s", evutil_socket_error_to_string(EVUTIL_SOCKET_ERROR()));
+        evutil_closesocket(bufferevent_getfd(bev));
+        bufferevent_free(bev);
+    } else if (what & BEV_EVENT_TIMEOUT) {
+        debug(LOG_DEBUG, "wdctl client connection timeout");
         evutil_closesocket(bufferevent_getfd(bev));
         bufferevent_free(bev);
     }
@@ -259,6 +268,12 @@ wdctl_status(struct bufferevent *fd, const char *arg)
 		debug(LOG_ERR, "Could not get counters from firewall!");
 	}
 
+    // Check if the connection is still valid before processing
+    if (!fd || bufferevent_getfd(fd) < 0) {
+        debug(LOG_WARNING, "Invalid client connection, skipping status response");
+        return;
+    }
+
     // 处理 arg 为 NULL 或空字符串的情况
     if (!type || strlen(type) == 0) {
         // 默认返回完整的文本状态
@@ -278,13 +293,16 @@ wdctl_status(struct bufferevent *fd, const char *arg)
         size_t len = strlen(status);
         int nret = bufferevent_write(fd, status, len);
         if (nret < 0) {
-            debug(LOG_ERR, "Failed to write status response to client");
+            debug(LOG_ERR, "Failed to write status response to client (client may have disconnected)");
         } else {
             debug(LOG_DEBUG, "Successfully sent status response (%zu bytes) to client", len);
         }
         free(status);
     } else {
-        bufferevent_write(fd, "{}", 2);
+        int nret = bufferevent_write(fd, "{}", 2);
+        if (nret < 0) {
+            debug(LOG_ERR, "Failed to write empty response to client (client may have disconnected)");
+        }
     }
 }
 
