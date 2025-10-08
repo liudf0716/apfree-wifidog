@@ -1272,10 +1272,10 @@ static void print_top_domains(int top_n)
     qsort(sorted_entries, XDPI_DOMAIN_MAX, sizeof(struct domain_entry), 
           compare_domain_by_access_count);
     
-    debug(LOG_INFO, "");
-    debug(LOG_INFO, "========================================");
-    debug(LOG_INFO, "  Top %d Most Accessed Domains", top_n);
-    debug(LOG_INFO, "========================================");
+    debug(LOG_DEBUG, "");
+    debug(LOG_DEBUG, "========================================");
+    debug(LOG_DEBUG, "  Top %d Most Accessed Domains", top_n);
+    debug(LOG_DEBUG, "========================================");
     
     int count = 0;
     for (int i = 0; i < XDPI_DOMAIN_MAX && count < top_n; i++) {
@@ -1287,7 +1287,7 @@ static void print_top_domains(int top_n)
             int minutes_ago = (int)difftime(now, last_access) / 60;
             int hours_alive = (int)difftime(now, first_seen) / 3600;
             
-            debug(LOG_INFO, "#%-2d %-40s | Count: %-8llu | Last: %dm ago | Age: %dh | SID: %d",
+            debug(LOG_DEBUG, "#%-2d %-40s | Count: %-8llu | Last: %dm ago | Age: %dh | SID: %d",
                   count + 1,
                   sorted_entries[i].domain,
                   (unsigned long long)sorted_entries[i].access_count,
@@ -1298,8 +1298,8 @@ static void print_top_domains(int top_n)
         }
     }
     
-    debug(LOG_INFO, "========================================");
-    debug(LOG_INFO, "");
+    debug(LOG_DEBUG, "========================================");
+    debug(LOG_DEBUG, "");
 }
 
 // ========== 持久化功能实现 ==========
