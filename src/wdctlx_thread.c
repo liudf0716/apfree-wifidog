@@ -135,7 +135,17 @@ wdctl_cmd_process(struct bufferevent *bev, const char *req)
             if (wdctl_cmd[i].process_cmd) {
                 wdctl_cmd[i].process_cmd(bev);
             } else if (wdctl_cmd[i].process_param_cmd) {
-                wdctl_cmd[i].process_param_cmd(bev, req + strlen(wdctl_cmd[i].command) + 1);
+                // 检查是否有参数
+                const char *param_start = req + strlen(wdctl_cmd[i].command);
+                if (*param_start == ' ') {
+                    param_start++; // 跳过空格
+                }
+                // 如果参数为空或只是空格，传递空字符串
+                if (*param_start == '\0' || *param_start == '\n' || *param_start == '\r') {
+                    wdctl_cmd[i].process_param_cmd(bev, "");
+                } else {
+                    wdctl_cmd[i].process_param_cmd(bev, param_start);
+                }
             }
             return;
         }
@@ -249,13 +259,18 @@ wdctl_status(struct bufferevent *fd, const char *arg)
 		debug(LOG_ERR, "Could not get counters from firewall!");
 	}
 
-    if (!strcmp(type, "client")) {
+    // 处理 arg 为 NULL 或空字符串的情况
+    if (!type || strlen(type) == 0) {
+        // 默认返回完整的文本状态
+        status = get_status_text();
+    } else if (!strcmp(type, "client")) {
         status = get_client_status_json();
     } else if (!strcmp(type, "auth")) {
         status = get_auth_status_json();
     } else if (!strcmp(type, "wifidogx")) {
         status = get_wifidogx_json();
     } else {
+        // 未知参数，返回完整状态
         status = get_status_text();
     }
 
