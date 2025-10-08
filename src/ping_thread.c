@@ -179,6 +179,9 @@ init_captive_domains(void)
 static void
 check_wifidogx_firewall_rules(void)
 {
+	static time_t last_check_time = 0;
+	static int consecutive_failures = 0;
+	
 	if (!is_openwrt_platform()) 
 		return;
 
@@ -187,25 +190,68 @@ check_wifidogx_firewall_rules(void)
 		return;
 	}
 
-	FILE *fp = popen("nft list chain inet fw4 dstnat", "r");
-	if (!fp) {
-		debug(LOG_ERR, "Failed to list chain inet fw4 dstnat");
+	// Check if portal auth is disabled
+	if (is_portal_auth_disabled()) {
+		debug(LOG_DEBUG, "Portal authentication is disabled, no need to check firewall rules");
 		return;
 	}
+
+	FILE *fp = popen("/usr/sbin/nft list chain inet fw4 dstnat 2>/dev/null", "r");
+	if (!fp) {
+		debug(LOG_ERR, "Failed to execute nft command");
+		return;
+	}
+	
 	char line[512] = {0};
 	int has_rule = 0;
+	int command_success = 0;
+	
 	while (fgets(line, sizeof(line), fp)) {
+		command_success = 1;  // Got some output, command executed
 		if (strstr(line, "dstnat_wifidogx_outgoing")) {
 			has_rule = 1;
 			break;
 		}
 	}
-	pclose(fp);
+	
+	int exit_status = pclose(fp);
+	
+	// Check if command failed to execute
+	if (!command_success || exit_status != 0) {
+		debug(LOG_WARNING, "nft command failed or returned no output (exit_status=%d), skipping firewall check", exit_status);
+		return;
+	}
 
 	if (!has_rule) {
-		debug(LOG_ERR, "wifidogx's firewall rule is not completed, reload aw firewall rules");
+		time_t current_time = time(NULL);
+		
+		consecutive_failures++;
+		
+		// 防抖动：至少间隔30秒，且连续失败3次才触发重载
+		if (current_time - last_check_time < 30) {
+			debug(LOG_DEBUG, "Firewall rule check failed, but too soon since last check (%ld seconds ago)", 
+				  current_time - last_check_time);
+			return;
+		}
+		
+		if (consecutive_failures < 3) {
+			debug(LOG_WARNING, "Firewall rule check failed (attempt %d/3), waiting for more confirmations", 
+				  consecutive_failures);
+			return;
+		}
+		
+		debug(LOG_ERR, "wifidogx's firewall rule is not completed after %d consecutive checks, reloading firewall rules", 
+			  consecutive_failures);
+		
+		last_check_time = current_time;
+		consecutive_failures = 0;  // Reset counter after triggering reload
+		
 		pid_t pid = getpid();
     	kill(pid, SIGUSR1);
+	} else {
+		// 规则存在，重置失败计数器
+		consecutive_failures = 0;
+		debug(LOG_DEBUG, "Firewall rules check passed");
 	}
 }
 		
