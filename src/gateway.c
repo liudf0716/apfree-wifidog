@@ -676,9 +676,14 @@ threads_init(s_config *config)
     }
     
     // Core service threads - these are always required
-    if (!create_detached_thread(&tid_tls_server, (void *)thread_tls_server, NULL, "https_server")) {
-        debug(LOG_ERR, "Failed to create HTTPS server thread");
-        return;
+    // Skip HTTPS server thread if portal auth is disabled
+    if (!is_portal_auth_disabled()) {
+        if (!create_detached_thread(&tid_tls_server, (void *)thread_tls_server, NULL, "https_server")) {
+            debug(LOG_ERR, "Failed to create HTTPS server thread");
+            return;
+        }
+    } else {
+        debug(LOG_INFO, "Portal auth is disabled, skipping HTTPS server thread");
     }
     
     char *wdctl_sock_copy = NULL;
@@ -995,7 +1000,30 @@ main_loop(void)
     safe_set_cleanup_func(aw_clean_before_exit);
     wd_init(config);
     threads_init(config);
-    http_redir_loop(config);
+    
+    // Skip HTTP service if portal auth is disabled
+    if (!is_portal_auth_disabled()) {
+        http_redir_loop(config);
+    } else {
+        debug(LOG_INFO, "Portal auth is disabled, skipping HTTP redirect service");
+        
+        // Create event base for signal handling when HTTP service is disabled
+        struct event_base *base = event_base_new();
+        if (!base) {
+            debug(LOG_ERR, "Failed to create event base for signal handling");
+            termination_handler(0);
+        }
+        
+        // Initialize signal handlers
+        wd_signals_init(base);
+        
+        debug(LOG_INFO, "Starting minimal event loop for signal handling");
+        // Run event loop to handle signals gracefully
+        event_base_dispatch(base);
+        
+        // Cleanup
+        event_base_free(base);
+    }
 }
 
 /**
