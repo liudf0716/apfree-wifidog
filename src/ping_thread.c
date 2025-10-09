@@ -15,6 +15,7 @@
 #include "wd_util.h"
 #include "version.h"
 #include "wd_client.h"
+#include "client_list.h"
 
 struct captive_entry {
 	char domain[64];
@@ -246,8 +247,31 @@ check_wifidogx_firewall_rules(void)
 		last_check_time = current_time;
 		consecutive_failures = 0;  // Reset counter after triggering reload
 		
-		pid_t pid = getpid();
-    	kill(pid, SIGUSR1);
+		// 直接重载防火墙，比信号方式更安全
+		debug(LOG_INFO, "Starting direct firewall reload...");
+		
+		// 使用锁保护，避免与其他线程的客户端操作冲突
+		LOCK_CLIENT_LIST();
+		
+		// 销毁现有防火墙规则
+		int destroy_result = fw_destroy();
+		if (destroy_result != 0) {
+			debug(LOG_ERR, "Failed to destroy firewall rules (result: %d)", destroy_result);
+			UNLOCK_CLIENT_LIST();
+			return;
+		}
+		
+		// 重新初始化防火墙规则
+		int init_result = fw_init();
+		if (init_result != 1) {  // fw_init 成功返回1
+			debug(LOG_ERR, "Failed to initialize firewall rules (result: %d)", init_result);
+			UNLOCK_CLIENT_LIST();
+			return;
+		}
+		
+		UNLOCK_CLIENT_LIST();
+		
+		debug(LOG_INFO, "Firewall reload completed successfully");
 	} else {
 		// 规则存在，重置失败计数器
 		consecutive_failures = 0;
