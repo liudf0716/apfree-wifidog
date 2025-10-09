@@ -8,8 +8,6 @@
 #include <linux/filter.h>
 #include <linux/string.h>
 #include <linux/uaccess.h>
-#include <linux/proc_fs.h>
-#include <linux/seq_file.h>
 #include <linux/skbuff.h>
 #include <linux/ip.h>
 #include <linux/tcp.h>
@@ -34,11 +32,6 @@ static struct domain_entry domains[XDPI_DOMAIN_MAX];
 static DEFINE_SPINLOCK(xdpi_lock);
 
 #define MIN_TCP_DATA_SIZE   50
-
-// Create a proc file for userspace interaction
-static struct proc_dir_entry *xdpi_proc_file;
-static struct proc_dir_entry *xdpi_l7_proto_file;
-static struct proc_dir_entry *xdpi_domain_num_file;
 
 // Character device for ioctl operations
 static int xdpi_major = 0;
@@ -537,35 +530,8 @@ static int update_domain(struct domain_entry *entry, int index)
     return 0;
 }
 
-// Proc file operations
-static int xdpi_proc_show(struct seq_file *m, void *v)
-{
-    int i;
-    int l7_count = ARRAY_SIZE(l7_proto_entries);
-    
-    seq_printf(m, "Index | Domain | SID\n");
-    seq_printf(m, "---------------------\n");
-    
-    spin_lock_bh(&xdpi_lock);
-    for (i = 0; i < XDPI_DOMAIN_MAX; i++) {
-        if (domains[i].used) {
-            seq_printf(m, "%5d | %s | %d\n", 
-                      i + l7_count + 1, // Start numbering after L7 protocols
-                      domains[i].domain, 
-                      domains[i].sid);
-        }
-    }
-    spin_unlock_bh(&xdpi_lock);
-    
-    return 0;
-}
-
-static int xdpi_proc_open(struct inode *inode, struct file *file)
-{
-    return single_open(file, xdpi_proc_show, NULL);
-}
-
-static long xdpi_proc_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
+// Character device operations for /dev/xdpi
+static long xdpi_dev_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
     
     int index;
@@ -646,13 +612,6 @@ static long xdpi_proc_ioctl(struct file *file, unsigned int cmd, unsigned long a
     return ret;
 }
 
-static const struct proc_ops xdpi_proc_ops = {
-    .proc_open = xdpi_proc_open,
-    .proc_read = seq_read,
-    .proc_lseek = seq_lseek,
-    .proc_release = single_release,
-};
-
 // Character device open function
 static int xdpi_dev_open(struct inode *inode, struct file *file)
 {
@@ -665,74 +624,72 @@ static int xdpi_dev_release(struct inode *inode, struct file *file)
     return 0;
 }
 
-static const struct file_operations xdpi_fops = {
-    .owner = THIS_MODULE,
-    .open = xdpi_dev_open,
-    .release = xdpi_dev_release,
-    .unlocked_ioctl = xdpi_proc_ioctl,
-};
-
-// Proc file operations for L7 protocols
-static int xdpi_l7_proto_show(struct seq_file *m, void *v)
+// Character device read function - provides domain list
+static ssize_t xdpi_dev_read(struct file *file, char __user *buffer, size_t count, loff_t *ppos)
 {
+    char *tmp_buf;
+    int len = 0;
     int i;
+    int l7_count = ARRAY_SIZE(l7_proto_entries);
+    int total_len;
     
-    seq_printf(m, "Index | L7Proto | SID\n");
-    seq_printf(m, "----------------------\n");
+    // If we've already read, return 0
+    if (*ppos > 0)
+        return 0;
     
-    spin_lock_bh(&xdpi_lock);
-    for (i = 0; i < ARRAY_SIZE(l7_proto_entries); i++) {
-        seq_printf(m, "%5d | %8s | %d\n", 
-                  i + 1,
-                  l7_proto_entries[i].proto_desc,
-                  l7_proto_entries[i].sid);
+    // Allocate temporary buffer for output
+    tmp_buf = kmalloc(PAGE_SIZE, GFP_KERNEL);
+    if (!tmp_buf)
+        return -ENOMEM;
+    
+    // Generate header
+    len += snprintf(tmp_buf + len, PAGE_SIZE - len, "Index | Domain | SID\n");
+    len += snprintf(tmp_buf + len, PAGE_SIZE - len, "---------------------\n");
+    
+    // Add L7 protocols
+    for (i = 0; i < l7_count; i++) {
+        len += snprintf(tmp_buf + len, PAGE_SIZE - len, "%5d | %8s | %d\n", 
+                       i + 1,
+                       l7_proto_entries[i].proto_desc,
+                       l7_proto_entries[i].sid);
+        if (len >= PAGE_SIZE - 100) break; // Prevent overflow
     }
-    spin_unlock_bh(&xdpi_lock);
     
-    return 0;
-}
-
-static int xdpi_l7_proto_open(struct inode *inode, struct file *file)
-{
-    return single_open(file, xdpi_l7_proto_show, NULL);
-}
-
-static const struct proc_ops xdpi_l7_proto_ops = {
-    .proc_open = xdpi_l7_proto_open,
-    .proc_read = seq_read,
-    .proc_lseek = seq_lseek,
-    .proc_release = single_release,
-};
-
-// Proc file operations for domain count
-static int xdpi_domain_num_show(struct seq_file *m, void *v)
-{
-    int i;
-    int count = 0;
-    
+    // Add domains
     spin_lock_bh(&xdpi_lock);
     for (i = 0; i < XDPI_DOMAIN_MAX; i++) {
         if (domains[i].used) {
-            count++;
+            len += snprintf(tmp_buf + len, PAGE_SIZE - len, "%5d | %s | %d\n", 
+                          i + l7_count + 1,
+                          domains[i].domain, 
+                          domains[i].sid);
+            if (len >= PAGE_SIZE - 100) break; // Prevent overflow
         }
     }
     spin_unlock_bh(&xdpi_lock);
     
-    seq_printf(m, "%d\n", count);
+    total_len = len;
     
-    return 0;
+    // Copy to user space
+    if (count < total_len)
+        total_len = count;
+    
+    if (copy_to_user(buffer, tmp_buf, total_len)) {
+        kfree(tmp_buf);
+        return -EFAULT;
+    }
+    
+    kfree(tmp_buf);
+    *ppos += total_len;
+    return total_len;
 }
 
-static int xdpi_domain_num_open(struct inode *inode, struct file *file)
-{
-    return single_open(file, xdpi_domain_num_show, NULL);
-}
-
-static const struct proc_ops xdpi_domain_num_ops = {
-    .proc_open = xdpi_domain_num_open,
-    .proc_read = seq_read,
-    .proc_lseek = seq_lseek,
-    .proc_release = single_release,
+static const struct file_operations xdpi_fops = {
+    .owner = THIS_MODULE,
+    .open = xdpi_dev_open,
+    .release = xdpi_dev_release,
+    .read = xdpi_dev_read,
+    .unlocked_ioctl = xdpi_dev_ioctl,
 };
 
 static int __init xdpi_init(void)
@@ -773,62 +730,21 @@ static int __init xdpi_init(void)
         return ret;
     }
     
-    // Create proc entries (for reading domain list)
-    xdpi_proc_file = proc_create("xdpi_domains", 0644, NULL, &xdpi_proc_ops);
-    if (!xdpi_proc_file) {
-        pr_err("xdpi: Failed to create proc file\n");
-        device_destroy(xdpi_class, MKDEV(xdpi_major, 0));
-        class_destroy(xdpi_class);
-        unregister_chrdev(xdpi_major, XDPI_DEVICE_NAME);
-        return -ENOMEM;
-    }
-
-    xdpi_l7_proto_file = proc_create("xdpi_l7_proto", 0644, NULL, &xdpi_l7_proto_ops);
-    if (!xdpi_l7_proto_file) {
-        pr_err("xdpi: Failed to create L7 protocol proc file\n");
-        proc_remove(xdpi_proc_file);
-        device_destroy(xdpi_class, MKDEV(xdpi_major, 0));
-        class_destroy(xdpi_class);
-        unregister_chrdev(xdpi_major, XDPI_DEVICE_NAME);
-        return -ENOMEM;
-    }
-    
-    xdpi_domain_num_file = proc_create("xdpi_domain_num", 0644, NULL, &xdpi_domain_num_ops);
-    if (!xdpi_domain_num_file) {
-        pr_err("xdpi: Failed to create domain number proc file\n");
-        proc_remove(xdpi_proc_file);
-        proc_remove(xdpi_l7_proto_file);
-        device_destroy(xdpi_class, MKDEV(xdpi_major, 0));
-        class_destroy(xdpi_class);
-        unregister_chrdev(xdpi_major, XDPI_DEVICE_NAME);
-        return -ENOMEM;
-    }
-    
     ret = register_btf_kfunc_id_set(BPF_PROG_TYPE_SCHED_CLS, &bpf_xdpi_kfunc_set);
     if (ret) {
         pr_err("xdpi_bpf: Failed to register BTF kfunc ID set: %d\n", ret);
-        proc_remove(xdpi_proc_file);
-        proc_remove(xdpi_l7_proto_file);
-        proc_remove(xdpi_domain_num_file);
         device_destroy(xdpi_class, MKDEV(xdpi_major, 0));
         class_destroy(xdpi_class);
         unregister_chrdev(xdpi_major, XDPI_DEVICE_NAME);
         return ret;
     }
     
-    printk(KERN_INFO "bpf_kfunc_xdpi: Module loaded successfully (device: /dev/%s)\n", XDPI_DEVICE_NAME);
+    printk(KERN_INFO "xdpi: Module loaded successfully (device: /dev/%s)\n", XDPI_DEVICE_NAME);
     return 0; 
 }
 
 static void __exit xdpi_exit(void)
 {
-    if (xdpi_proc_file)
-        proc_remove(xdpi_proc_file);
-    if (xdpi_l7_proto_file)
-        proc_remove(xdpi_l7_proto_file);
-    if (xdpi_domain_num_file)
-        proc_remove(xdpi_domain_num_file);
-    
     // Cleanup character device
     if (xdpi_device)
         device_destroy(xdpi_class, MKDEV(xdpi_major, 0));
@@ -837,7 +753,7 @@ static void __exit xdpi_exit(void)
     if (xdpi_major > 0)
         unregister_chrdev(xdpi_major, XDPI_DEVICE_NAME);
     
-    printk(KERN_INFO "Goodbye, xDPI!\n");
+    printk(KERN_INFO "xdpi: Module unloaded successfully\n");
 }
 
 module_init(xdpi_init);
