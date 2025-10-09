@@ -573,13 +573,15 @@ static long xdpi_proc_ioctl(struct file *file, unsigned int cmd, unsigned long a
     
     switch (cmd) {
     case XDPI_IOC_ADD:
-        struct domain_entry entry;
-        memset(&entry, 0, sizeof(entry));
-        if (copy_from_user(&entry, (void __user *)arg, sizeof(entry)))
-            return -EFAULT;
-        
-        ret = add_domain(&entry);
-        break;
+        {
+            struct domain_entry entry;
+            memset(&entry, 0, sizeof(entry));
+            if (copy_from_user(&entry, (void __user *)arg, sizeof(entry)))
+                return -EFAULT;
+            
+            ret = add_domain(&entry);
+            break;
+        }
         
     case XDPI_IOC_DEL:
         if (copy_from_user(&index, (void __user *)arg, sizeof(index)))
@@ -589,37 +591,41 @@ static long xdpi_proc_ioctl(struct file *file, unsigned int cmd, unsigned long a
         break;
         
     case XDPI_IOC_UPDATE:
-        struct domain_update update;
-        memset(&update, 0, sizeof(update));
-        if (copy_from_user(&update, (void __user *)arg, sizeof(update)))
-        return -EFAULT;
+        {
+            struct domain_update update;
+            memset(&update, 0, sizeof(update));
+            if (copy_from_user(&update, (void __user *)arg, sizeof(update)))
+                return -EFAULT;
 
-        ret = update_domain(&update.entry, update.index);
-        break;
+            ret = update_domain(&update.entry, update.index);
+            break;
+        }
         
     case XDPI_IOC_LIST:
-        struct domain_list list;
-        memset(&list, 0, sizeof(list));
-        
-        // Copy the input structure to get max_count
-        if (copy_from_user(&list, (void __user *)arg, sizeof(list)))
-            return -EFAULT;
+        {
+            struct domain_list list;
+            memset(&list, 0, sizeof(list));
             
-        // Fill the domain list
-        spin_lock_bh(&xdpi_lock);
-        list.count = 0;
-        for (int i = 0; i < XDPI_DOMAIN_MAX && list.count < list.max_count; i++) {
-            if (domains[i].used) {
-                memcpy(&list.domains[list.count], &domains[i], sizeof(struct domain_entry));
-                list.count++;
+            // Copy the input structure to get max_count
+            if (copy_from_user(&list, (void __user *)arg, sizeof(list)))
+                return -EFAULT;
+                
+            // Fill the domain list
+            spin_lock_bh(&xdpi_lock);
+            list.count = 0;
+            for (int i = 0; i < XDPI_DOMAIN_MAX && list.count < list.max_count; i++) {
+                if (domains[i].used) {
+                    memcpy(&list.domains[list.count], &domains[i], sizeof(struct domain_entry));
+                    list.count++;
+                }
             }
+            spin_unlock_bh(&xdpi_lock);
+            
+            // Copy the result back to userspace
+            if (copy_to_user((void __user *)arg, &list, sizeof(list)))
+                return -EFAULT;
+            break;
         }
-        spin_unlock_bh(&xdpi_lock);
-        
-        // Copy the result back to userspace
-        if (copy_to_user((void __user *)arg, &list, sizeof(list)))
-            return -EFAULT;
-        break;
         
     default:
         ret = -ENOTTY;
