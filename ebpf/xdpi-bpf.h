@@ -85,10 +85,12 @@ struct l7_proto_entry {
 
 /* IOCTL commands */
 #define XDPI_IOC_MAGIC 'X'
-#define XDPI_IOC_ADD    _IOW(XDPI_IOC_MAGIC, 1, struct domain_entry)
-#define XDPI_IOC_DEL    _IOW(XDPI_IOC_MAGIC, 2, int)
-#define XDPI_IOC_UPDATE _IOW(XDPI_IOC_MAGIC, 3, struct domain_entry)
-#define XDPI_IOC_LIST   _IOR(XDPI_IOC_MAGIC, 4, struct domain_list)
+
+/* Use simple integer constants instead of _IOW/_IOR macros for kernel module compatibility */
+#define XDPI_IOC_ADD    0x40584001  /* 'X' << 8 | 1 */
+#define XDPI_IOC_DEL    0x40584002  /* 'X' << 8 | 2 */
+#define XDPI_IOC_UPDATE 0x40584003  /* 'X' << 8 | 3 */
+#define XDPI_IOC_LIST   0x40584004  /* 'X' << 8 | 4 */
 
 /* Domain list structure for XDPI_IOC_LIST command */
 struct domain_list {
