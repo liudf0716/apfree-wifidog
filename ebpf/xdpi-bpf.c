@@ -603,27 +603,39 @@ static long xdpi_proc_ioctl(struct file *file, unsigned int cmd, unsigned long a
         
     case XDPI_IOC_LIST:
         {
-            struct domain_list list;
-            memset(&list, 0, sizeof(list));
+            struct domain_list *list;
+            
+            // Allocate memory for the large structure
+            list = kmalloc(sizeof(*list), GFP_KERNEL);
+            if (!list)
+                return -ENOMEM;
+                
+            memset(list, 0, sizeof(*list));
             
             // Copy the input structure to get max_count
-            if (copy_from_user(&list, (void __user *)arg, sizeof(list)))
+            if (copy_from_user(list, (void __user *)arg, sizeof(*list))) {
+                kfree(list);
                 return -EFAULT;
+            }
                 
             // Fill the domain list
             spin_lock_bh(&xdpi_lock);
-            list.count = 0;
-            for (int i = 0; i < XDPI_DOMAIN_MAX && list.count < list.max_count; i++) {
+            list->count = 0;
+            for (int i = 0; i < XDPI_DOMAIN_MAX && list->count < list->max_count; i++) {
                 if (domains[i].used) {
-                    memcpy(&list.domains[list.count], &domains[i], sizeof(struct domain_entry));
-                    list.count++;
+                    memcpy(&list->domains[list->count], &domains[i], sizeof(struct domain_entry));
+                    list->count++;
                 }
             }
             spin_unlock_bh(&xdpi_lock);
             
             // Copy the result back to userspace
-            if (copy_to_user((void __user *)arg, &list, sizeof(list)))
+            if (copy_to_user((void __user *)arg, list, sizeof(*list))) {
+                kfree(list);
                 return -EFAULT;
+            }
+            
+            kfree(list);
             break;
         }
         
