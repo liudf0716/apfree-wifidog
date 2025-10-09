@@ -37,17 +37,43 @@ static void print_stats_l7(void);
 static struct xdpi_l7_proto xdpi_l7_protos[XDPI_PROTO_TRAITS_MAX_SIZE];
 static int xdpi_l7_protos_count = 0;
 
-// L7协议加载逻辑现在也使用ioctl接口（如果需要的话）
+// L7协议加载逻辑 - 基于头文件中定义的协议
 static void load_xdpi_l7_protos(void)
 {
-    // TODO: 如果需要L7协议信息，也应该通过ioctl从内核获取
-    // 目前保持简单实现，使用硬编码或从其他来源获取
-    
     // 清空计数器
     xdpi_l7_protos_count = 0;
     
-    // 这里可以添加L7协议的获取逻辑
-    // 暂时保持为空，因为主要focus是域名管理
+    // 加载预定义的L7协议列表
+    struct {
+        __u32 id;
+        __u32 sid;
+        const char* desc;
+    } l7_protocols[] = {
+        {1, L7_HTTP, "HTTP"},
+        {2, L7_HTTPS, "HTTPS"}, 
+        {3, L7_SSH, "SSH"},
+        {4, L7_SCP, "SCP"},
+        {5, L7_WECHAT, "WeChat"},
+        {6, L7_DNS, "DNS"},
+        {7, L7_DHCP, "DHCP"},
+        {8, L7_NTP, "NTP"},
+        {9, L7_SNMP, "SNMP"},
+        {10, L7_TFTP, "TFTP"},
+        {11, L7_RTP, "RTP"},
+        {12, L7_RTCP, "RTCP"},
+        {13, L7_UNKNOWN, "Unknown"}
+    };
+    
+    int protocol_count = sizeof(l7_protocols) / sizeof(l7_protocols[0]);
+    
+    for (int i = 0; i < protocol_count && i < XDPI_PROTO_TRAITS_MAX_SIZE; i++) {
+        xdpi_l7_protos[i].id = l7_protocols[i].id;
+        xdpi_l7_protos[i].sid = l7_protocols[i].sid;
+        strncpy(xdpi_l7_protos[i].proto_desc, l7_protocols[i].desc, 
+                sizeof(xdpi_l7_protos[i].proto_desc) - 1);
+        xdpi_l7_protos[i].proto_desc[sizeof(xdpi_l7_protos[i].proto_desc) - 1] = '\0';
+        xdpi_l7_protos_count++;
+    }
 }
 
 static const char *get_l7_proto_desc_by_sid(__u32 sid) {
