@@ -25,6 +25,7 @@
 #include "dns_monitor.h"
 #include "wd_util.h"
 #include "firewall.h"
+#include "../ebpf/xdpi-bpf.h"
 
 // DNS监控状态
 static volatile int dns_monitor_running = 0;
@@ -39,23 +40,13 @@ static pthread_t dns_monitor_tid = 0;
 #define INET6_ADDRSTRLEN 46
 #define MAX_DNS_NAME 256
 
-// xDPI相关常量
-#define XDPI_DOMAIN_MAX 256
-#define MAX_DOMAIN_LEN 64
-#define INITIAL_MAX_SID 0
-#define XDPI_IOC_MAGIC 'X'
-
 // DNS协议相关常量
 #define DNS_RR_TYPE_A 1
 #define DNS_RR_TYPE_AAAA 28
 #define IPV4_ADDR_LEN 4
 #define IPV6_ADDR_LEN 16
 #define MAX_PARTS 5
-
-// xDPI IOCTL定义
-#define XDPI_IOC_ADD    _IOW(XDPI_IOC_MAGIC, 1, struct domain_entry)
-#define XDPI_IOC_DEL    _IOW(XDPI_IOC_MAGIC, 2, int)
-#define XDPI_IOC_UPDATE _IOW(XDPI_IOC_MAGIC, 3, struct domain_update)
+#define INITIAL_MAX_SID 0
 
 // DNS统计信息结构
 struct dns_stats {
@@ -64,23 +55,6 @@ struct dns_stats {
     __u64 dns_errors;
     __u64 ipv4_packets;
     __u64 ipv6_packets;
-};
-
-// xDPI域名条目结构
-struct domain_entry {
-    char domain[MAX_DOMAIN_LEN];
-    int domain_len;
-    int sid;
-    bool used;
-    __u64 access_count;         // 访问计数
-    __u64 last_access_time;     // 最后访问时间（使用__u64保证与内核一致）
-    __u64 first_seen_time;      // 首次发现时间（使用__u64保证与内核一致）
-};
-
-// xDPI域名更新结构
-struct domain_update {
-    struct domain_entry entry;
-    int index;
 };
 
 // DNS名称解析结构
