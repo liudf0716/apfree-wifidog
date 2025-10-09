@@ -9,6 +9,7 @@
  */
 
 #include <linux/types.h>
+#include <linux/ioctl.h>
 
 #define INGRESS 0
 #define EGRESS 1
