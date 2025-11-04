@@ -87,6 +87,11 @@ update_captive_domains_with_real_ips(void)
 		return;
 	}
 
+	if (is_portal_auth_disabled()) {
+		debug(LOG_DEBUG, "Portal authentication is disabled, no need to check firewall rules");
+		return;
+	}
+
 	// First, delete existing addnhosts entries and restart dnsmasq to clear cache
 	if (execute("uci -q delete dhcp.@dnsmasq[0].addnhosts && uci commit dhcp && /etc/init.d/dnsmasq restart >/dev/null 2>&1", 0) != 0) {
 		debug(LOG_ERR, "Failed to remove existing addnhosts configuration");
@@ -135,6 +140,12 @@ init_captive_domains(void)
 {
 	if (!is_openwrt_platform()) {
 		debug(LOG_INFO, "Not openwrt platform, skipping init captive domains setup");
+		return;
+	}
+
+	// if no auth portal; skip it
+	if (is_portal_auth_disabled()) {
+		debug(LOG_DEBUG, "Portal authentication is disabled, no need to check firewall rules");
 		return;
 	}
 
@@ -286,12 +297,14 @@ ping_work_cb(evutil_socket_t fd, short event, void *arg) {
 	int now_online = is_online();
 
 	// When internet becomes available for the first time, update captive domains with real IPs
-	if (now_online && first_online) {
+	// Only if portal auth is enabled
+	if (now_online && first_online && !is_portal_auth_disabled()) {
 		update_captive_domains_with_real_ips();
 		first_online = 0;
 	}
 
 	// Check firewall rules in both local and cloud modes
+	// (check_wifidogx_firewall_rules already has internal portal auth check)
 	check_wifidogx_firewall_rules();
 
 	struct wd_request_context *request_ctx = (struct wd_request_context *)arg;
@@ -328,11 +341,16 @@ ping_work_cb(evutil_socket_t fd, short event, void *arg) {
 void
 thread_ping(void *arg)
 {
-	parse_user_trusted_domain_list();
-	parse_inner_trusted_domain_list();
-	
-	// Initialize captive domains with default IPs at startup
-	init_captive_domains();
+	// Only parse trusted domains and initialize captive domains when portal auth is enabled
+	if (!is_portal_auth_disabled()) {
+		parse_user_trusted_domain_list();
+		parse_inner_trusted_domain_list();
+		
+		// Initialize captive domains with default IPs at startup
+		init_captive_domains();
+	} else {
+		debug(LOG_INFO, "Portal authentication is disabled, skipping domain parsing and captive domains initialization");
+	}
 
 	if (is_local_auth_mode()) {
 		debug(LOG_DEBUG, "auth mode is local, no need to ping auth server");
@@ -342,7 +360,8 @@ thread_ping(void *arg)
 			check_wifidogx_firewall_rules();
 			
 			// When internet becomes available for the first time in local mode, update captive domains with real IPs
-			if (is_online() && first_online) {
+			// Only if portal auth is enabled
+			if (is_online() && first_online && !is_portal_auth_disabled()) {
 				debug(LOG_INFO, "Internet is available in local mode, updating captive domains with real IPs");
 				update_captive_domains_with_real_ips();
 				first_online = 0;

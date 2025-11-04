@@ -1566,6 +1566,12 @@ thread_evdns_parse_trusted_domain_2_ip(void *arg)
 void 
 evdns_parse_trusted_domain_2_ip(trusted_domain_t which)
 { 
+	// If portal authentication is disabled, no need to parse trusted domains
+	if (is_portal_auth_disabled()) {
+		debug(LOG_DEBUG, "Portal authentication is disabled, skip parsing trusted domains");
+		return;
+	}
+	
 	pthread_t tid_evdns_parse;
 	trusted_domain_t *type = malloc(sizeof(trusted_domain_t));
 	*type = which;
