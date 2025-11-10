@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ApFree WiFiDog - Next-Gen Captive Portal Gateway</title>
+<link rel="icon" href="images/logo.png">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<!-- 动态背景 -->
+<div class="bg-container">
+  <img src="images/network-bg.svg" class="bg-animation" alt="Network Flow Background">
+</div>
+
+<header class="hero">
+  <img src="images/logo.png" alt="ApFree WiFiDog Logo" class="logo">
+  <h1>ApFree WiFiDog</h1>
+  <p class="subtitle">下一代 WiFi Portal 网关 · eBPF 加速与 DPI 流控</p>
+  <div class="hero-buttons">
+    <a href="https://github.com/liudf0716/apfree-wifidog" class="btn primary">GitHub</a>
+    <a href="#features" class="btn">功能亮点</a>
+    <a href="#install" class="btn">快速上手</a>
+  </div>
+</header>
+
+<section id="features" class="features">
+  <h2>核心功能 <span>Features</span></h2>
+  <div class="feature-grid">
+    <div class="card">
+      <img src="images/auth.png" alt="认证系统">
+      <h3>认证系统</h3>
+      <p>支持 HTTP/HTTPS 重定向、多用户认证与外部 Auth Server 通讯。</p>
+    </div>
+    <div class="card">
+      <img src="images/ebpf.png" alt="eBPF 流控与 DPI">
+      <h3>eBPF 流控 & DPI</h3>
+      <p>内置 eBPF 加速通道，支持协议识别与带宽控制。</p>
+    </div>
+  </div>
+</section>
+
+<section id="arch" class="arch">
+  <h2>系统架构 <span>Architecture</span></h2>
+  <img src="images/network-bg.svg" alt="架构示意图" class="arch-img">
+</section>
+
+<section id="install" class="install">
+  <h2>快速上手 <span>Quick Start</span></h2>
+  <pre>
+opkg install apfree-wifidog.ipk
+/etc/init.d/wifidogx start
+  </pre>
+  <p>可通过 UCI 配置参数化部署到 OpenWrt LuCI 界面。</p>
+</section>
+
+<footer>
+  <p>© 2025 ApFree WiFiDog · Maintained by <a href="https://github.com/liudf0716">@liudf0716</a></p>
+  <p>开源协议：GPLv3</p>
+</footer>
+
+<script src="js/main.js"></script>
+</body>
+</html>
