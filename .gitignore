@@ -52,3 +52,6 @@ tags
 ebpf/aw-bpfctl
 ebpf/.xdpi-bpf.o.d
 test/test_short_domain
+
+# Ignore Zone.Identifier files on Windows
+*:Zone.Identifier
