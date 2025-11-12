@@ -132,3 +132,15 @@ footer a {
   color: #4ea3ff;
   text-decoration: none;
 }
+
+.qq-group-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 15px;
+}
+
+.group-tip {
+  font-size: 0.9rem;
+  color: #8b949e;
+}
