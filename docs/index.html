@@ -24,34 +24,83 @@
   </div>
 </header>
 
+<section id="introduction" class="features">
+  <h2>📖 Introduction</h2>
+  <p>ApFree WiFiDog is an open-source, high-performance captive portal for HTTP and HTTPS, tailored for the OpenWrt platform.</p>
+  <p>It provides secure authentication, high concurrency handling, and flexible rule management for Wi-Fi networks.</p>
+</section>
+
 <section id="features" class="features">
-  <h2>核心功能 <span>Features</span></h2>
+  <h2>🚀 Features</h2>
   <div class="feature-grid">
     <div class="card">
-      <img src="images/auth.png" alt="认证系统">
-      <h3>认证系统</h3>
-      <p>支持 HTTP/HTTPS 重定向、多用户认证与外部 Auth Server 通讯。</p>
+      <h3>Stable & Fast</h3>
+      <p>API-based iptables integration, thread-safe. Built with libevent2 + epoll for high performance.</p>
     </div>
     <div class="card">
-      <img src="images/ebpf.png" alt="eBPF 流控与 DPI">
-      <h3>eBPF 流控 & DPI</h3>
-      <p>内置 eBPF 加速通道，支持协议识别与带宽控制。</p>
+      <h3>Secure & Real-time</h3>
+      <p>Full HTTPS redirection support and long connection support (WebSocket, MQTT).</p>
+    </div>
+    <div class="card">
+      <h3>Flexible & Dynamic</h3>
+      <p>Local + Cloud authentication, splash page mode. Manage MAC, IP, domains without restart.</p>
+    </div>
+    <div class="card">
+      <h3>eBPF Support</h3>
+      <p>Traffic control & DPI via eBPF.</p>
     </div>
   </div>
 </section>
 
-<section id="arch" class="arch">
-  <h2>系统架构 <span>Architecture</span></h2>
-  <img src="images/network-bg.svg" alt="架构示意图" class="arch-img">
-</section>
 
 <section id="install" class="install">
-  <h2>快速上手 <span>Quick Start</span></h2>
+  <h2>📦 Installation</h2>
+  <p>On <strong>OpenWrt (latest)</strong>:</p>
   <pre>
-opkg install apfree-wifidog.ipk
-/etc/init.d/wifidogx start
+apk update
+apk add apfree-wifidog
   </pre>
-  <p>可通过 UCI 配置参数化部署到 OpenWrt LuCI 界面。</p>
+  <p>On <strong>older OpenWrt</strong>:</p>
+  <pre>
+opkg update
+opkg install apfree-wifidog
+  </pre>
+</section>
+
+<section id="luci" class="features">
+  <h2>🖥️ LuCI Integration</h2>
+  <p>ApFree WiFiDog provides a LuCI Web UI via <code>luci-app-apfree-wifidog</code>.</p>
+  <p>Recommended: use <a href="https://github.com/liudf0716/chawrt">chawrt</a>, which bundles ApFree WiFiDog + LuCI for a ready-to-use OpenWrt firmware.</p>
+</section>
+
+<section id="usage" class="install">
+  <h2>⚙️ Basic Usage Example</h2>
+  <h3>1. Cloud Authentication Mode</h3>
+  <p>Requires external auth server. Configure via LuCI: <code>Auth Server</code> (Hostname, Port, Path) + <code>Gateway Interface</code>.</p>
+  <h3>2. Local Authentication (Splash Page)</h3>
+  <p>No external auth server needed. Configure LuCI: <code>Gateway Interface</code> + Redirect URL (welcome / terms page).</p>
+</section>
+
+<section id="troubleshooting" class="features">
+  <h2>🛠️ Troubleshooting</h2>
+  <p>Check logs via: <code>logread</code></p>
+  <p>Increase debug level in <code>wifidogx.conf</code> → <code>DaemonLogLevel 7</code>.</p>
+  <p>Useful commands:</p>
+  <pre>
+wdctlx status client       # Show authenticated clients
+wdctlx show domain         # Show trusted domains
+wdctlx apfree user_list    # List online users
+  </pre>
+</section>
+
+<section id="contributing" class="install">
+  <h2>🤝 Contributing</h2>
+  <p>We welcome contributions! Submit issues and pull requests on <a href="https://github.com/liudf0716/apfree-wifidog">GitHub</a>.</p>
+</section>
+
+<section id="contact" class="features">
+  <h2>📬 Contact</h2>
+  <p>QQ Group: 331230369</p>
 </section>
 
 <footer>
