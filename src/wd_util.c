@@ -2267,31 +2267,126 @@ get_gateway_setting_by_addr(const char *addr, int type)
 }
 
 /**
- * @brief generate cert for apfree-wifidog
- * first, generate ca cert
- * second, generate server cert
- * the ca cert will save in filename DEFAULT_CA_CRT_FILE
- * the server cert will save in filename config->svr_crt_file
- * the server key will save in filename config->svr_key_file
-*/
+ * @brief Check if a file needs to be generated (doesn't exist or has zero size)
+ * @param filepath Path to the file to check
+ * @return 1 if file needs to be generated, 0 otherwise
+ */
+static int
+need_generate_cert_file(const char *filepath)
+{
+	struct stat st;
+	
+	if (!filepath)
+		return 1;
+	
+	// stat() returns -1 if file doesn't exist, 0 if successful
+	if (stat(filepath, &st) != 0)
+		return 1; // File doesn't exist
+	
+	// Check if file size is zero
+	return (st.st_size == 0) ? 1 : 0;
+}
+
+/**
+ * @brief Verify that certificate files exist and have valid content
+ * @param ca_crt_file Path to CA certificate file
+ * @param svr_crt_file Path to server certificate file
+ * @return 1 if both files are valid, 0 otherwise
+ */
+static int
+verify_cert_files(const char *ca_crt_file, const char *svr_crt_file)
+{
+	if (need_generate_cert_file(ca_crt_file)) {
+		debug(LOG_ERR, "CA certificate file verification failed: %s", ca_crt_file);
+		return 0;
+	}
+	
+	if (need_generate_cert_file(svr_crt_file)) {
+		debug(LOG_ERR, "Server certificate file verification failed: %s", svr_crt_file);
+		return 0;
+	}
+	
+	return 1;
+}
+
+/**
+ * @brief Generate certificates for apfree-wifidog HTTPS server
+ * 
+ * Certificate dependency logic:
+ * - If CA certificate is missing/empty, ALL certificates must be regenerated
+ *   (because server cert is signed by CA cert and becomes invalid without it)
+ * - If only server certificate is missing/empty, regenerate all certificates
+ * - After generation, verifies both certificate files exist and are valid
+ * - If verification fails after generation, terminates the program with fatal error
+ * 
+ * CA cert: saved to config->https_server->ca_crt_file
+ * Server cert: saved to config->https_server->svr_crt_file
+ * Server key: saved to config->https_server->svr_key_file
+ */
 void
 init_apfree_wifidog_cert()
 {
 	s_config *config = config_get_config();
-	// generate ca cert
-	if (access(config->https_server->ca_crt_file, F_OK) != 0) {
-		// generate ca cert
-		char cmd[256] = {0};
-		snprintf(cmd, sizeof(cmd), "openssl req -new -x509 -days 3650 -nodes -out %s -keyout %s -subj \"/C=CN/ST=Beijing/L=Beijing/O=apfree/CN=apfree.com\"", config->https_server->ca_crt_file, DEFAULT_CA_KEY_FILE);
-		execute(cmd, 0);
+	char cmd[256];
+	int need_regenerate = 0;
+	
+	// Check CA certificate first (it's the root of trust)
+	if (need_generate_cert_file(config->https_server->ca_crt_file)) {
+		debug(LOG_WARNING, "CA certificate file missing or empty: %s", 
+			config->https_server->ca_crt_file);
+		need_regenerate = 1;  // Must regenerate ALL certs if CA is missing
 	}
-	// generate server cert
-	if (access(config->https_server->svr_crt_file, F_OK) != 0) {
-		char cmd[256] = {0};
-		snprintf(cmd, sizeof(cmd), "openssl req -new -nodes -out %s -keyout %s -subj \"/C=CN/ST=Beijing/L=Beijing/O=apfree/CN=apfree.com\"", DEFAULT_SVR_CRT_REQ_FILE, config->https_server->svr_key_file);
+	
+	// Check server certificate (depends on CA certificate)
+	if (need_generate_cert_file(config->https_server->svr_crt_file)) {
+		debug(LOG_WARNING, "Server certificate file missing or empty: %s", 
+			config->https_server->svr_crt_file);
+		need_regenerate = 1;  // Must regenerate ALL certs to maintain consistency
+	}
+	
+	// Regenerate ALL certificates if any are missing or empty
+	// This ensures the server certificate is properly signed by the current CA
+	if (need_regenerate) {
+		debug(LOG_INFO, "Regenerating all certificates (CA cert is required to sign server cert)...");
+		
+		// Step 1: Generate CA certificate (must be done first)
+		debug(LOG_INFO, "Generating CA certificate: %s", config->https_server->ca_crt_file);
+		snprintf(cmd, sizeof(cmd), 
+			"openssl req -new -x509 -days 3650 -nodes -out %s -keyout %s "
+			"-subj \"/C=CN/ST=Beijing/L=Beijing/O=apfree/CN=apfree.com\"", 
+			config->https_server->ca_crt_file, DEFAULT_CA_KEY_FILE);
 		execute(cmd, 0);
-		snprintf(cmd, sizeof(cmd), "openssl x509 -req -days 3650 -in %s -CA %s -CAkey %s -set_serial 01 -out %s", DEFAULT_SVR_CRT_REQ_FILE, DEFAULT_CA_CRT_FILE, DEFAULT_CA_KEY_FILE, config->https_server->svr_crt_file);
+		
+		// Step 2: Generate server certificate signing request
+		debug(LOG_INFO, "Generating server certificate: %s", config->https_server->svr_crt_file);
+		snprintf(cmd, sizeof(cmd), 
+			"openssl req -new -nodes -out %s -keyout %s "
+			"-subj \"/C=CN/ST=Beijing/L=Beijing/O=apfree/CN=apfree.com\"", 
+			DEFAULT_SVR_CRT_REQ_FILE, config->https_server->svr_key_file);
 		execute(cmd, 0);
+		
+		// Step 3: Sign the server certificate with CA (this is why CA must exist first)
+		snprintf(cmd, sizeof(cmd), 
+			"openssl x509 -req -days 3650 -in %s -CA %s -CAkey %s -set_serial 01 -out %s", 
+			DEFAULT_SVR_CRT_REQ_FILE, DEFAULT_CA_CRT_FILE, DEFAULT_CA_KEY_FILE, 
+			config->https_server->svr_crt_file);
+		execute(cmd, 0);
+		
+		// Verify certificate files after generation
+		debug(LOG_INFO, "Verifying generated certificate files...");
+		if (!verify_cert_files(config->https_server->ca_crt_file, 
+								config->https_server->svr_crt_file)) {
+			debug(LOG_CRIT, "FATAL: Certificate generation failed! "
+				"Certificate files are missing or empty after generation. "
+				"CA cert: %s, Server cert: %s. Terminating apfree-wifidog.",
+				config->https_server->ca_crt_file, 
+				config->https_server->svr_crt_file);
+			termination_handler(0);
+		}
+		
+		debug(LOG_INFO, "Certificate generation and verification successful");
+	} else {
+		debug(LOG_INFO, "Certificate files already exist and are valid");
 	}
 }
 
