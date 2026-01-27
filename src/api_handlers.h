@@ -101,4 +101,40 @@ api_transport_context_t* create_websocket_transport_context(struct bufferevent *
 api_transport_context_t* create_mqtt_transport_context(void *mosq, unsigned int req_id);
 void destroy_transport_context(api_transport_context_t *transport);
 
+// Handler function types for message routing
+typedef void (*api_legacy_handler_fn)(json_object *req);
+typedef void (*api_handler_fn)(json_object *req, api_transport_context_t *transport);
+
+/**
+ * @brief API route entry structure
+ * 
+ * Defines a mapping from message type/operation name to handler function.
+ * Supports both legacy handlers (without transport) and standard handlers (with transport).
+ */
+typedef struct {
+	const char *name;                  // Message type or operation name
+	api_handler_fn handler;            // Standard handler (with transport)
+	api_legacy_handler_fn legacy_handler;  // Legacy handler (without transport)
+} api_route_entry_t;
+
+/**
+ * @brief Dispatch API request to appropriate handler
+ * 
+ * Looks up the handler for the given operation name and calls it.
+ * Handles both standard and legacy handler signatures.
+ * 
+ * @param op_name Operation name to lookup (e.g., "heartbeat", "auth", "get_wifi_info")
+ * @param json_req JSON request object
+ * @param transport Transport context for sending responses
+ * @return true if handler was found and called, false otherwise
+ */
+bool api_dispatch_request(const char *op_name, json_object *json_req, api_transport_context_t *transport);
+
+/**
+ * @brief Get the global API routing table
+ * 
+ * @return Pointer to the routing table (NULL-terminated array)
+ */
+const api_route_entry_t* api_get_routes(void);
+
 #endif /* _API_HANDLERS_H_ */

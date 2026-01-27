@@ -28,6 +28,36 @@ send_mqtt_response(struct mosquitto *mosq, const unsigned int req_id, int res_id
 	free(res_data);
 }
 
+// Special handlers that need custom processing (MQTT-specific)
+static bool
+handle_special_operation(const char *op, struct mosquitto *mosq, unsigned int req_id, 
+                         json_object *json_request, api_transport_context_t *transport, 
+                         s_config *config)
+{
+	if (strcmp(op, "save_rule") == 0) {
+		user_cfg_save();
+		send_mqtt_response(mosq, req_id, 200, "Ok", config);
+		return true;
+	}
+	
+	// TODO operations - return 501 Not Implemented
+	const char *todo_ops[] = {
+		"reset", "reset_device", "update_config", "qos", "set_default_qos",
+		"uci", "get_traffic_stats", "wan_change", "alarm", NULL
+	};
+	
+	for (int i = 0; todo_ops[i] != NULL; i++) {
+		if (strcmp(op, todo_ops[i]) == 0) {
+			char msg[128];
+			snprintf(msg, sizeof(msg), "%s not implemented yet", op);
+			send_mqtt_response(mosq, req_id, 501, msg, config);
+			return true;
+		}
+	}
+	
+	return false;
+}
+
 static void
 process_mqtt_request(struct mosquitto *mosq, const char *data, s_config *config)
 {
@@ -72,75 +102,21 @@ process_mqtt_request(struct mosquitto *mosq, const char *data, s_config *config)
 		return;
 	}
 
-	// Route message to appropriate handler based on operation type
-	// Same pattern as WebSocket
-	if (!strcmp(op, "heartbeat") || !strcmp(op, "connect") || !strcmp(op, "bootstrap")) {
-		handle_get_sys_info_request(json_request, transport);
-	} else if (!strcmp(op, "auth")) {
-		handle_auth_request(json_request);
-	} else if (!strcmp(op, "kickoff")) {
-		handle_kickoff_request(json_request, transport);
-	} else if (!strcmp(op, "tmp_pass")) {
-		handle_tmp_pass_request(json_request);
-	} else if (!strcmp(op, "get_firmware_info")) {
-		handle_get_firmware_info_request(json_request, transport);
-	} else if (!strcmp(op, "firmware_upgrade") || !strcmp(op, "ota")) {
-		handle_firmware_upgrade_request(json_request, transport);
-	} else if (!strcmp(op, "update_device_info")) {
-		handle_update_device_info_request(json_request, transport);
-	} else if (!strcmp(op, "set_trusted") || !strcmp(op, "sync_trusted_domain")) {
-		handle_sync_trusted_domain_request(json_request, transport);
-	} else if (!strcmp(op, "get_trusted_domains") || !strcmp(op, "show_trusted")) {
-		handle_get_trusted_domains_request(json_request, transport);
-	} else if (!strcmp(op, "sync_trusted_wildcard_domains")) {
-		handle_sync_trusted_wildcard_domains_request(json_request, transport);
-	} else if (!strcmp(op, "get_trusted_wildcard_domains")) {
-		handle_get_trusted_wildcard_domains_request(json_request, transport);
-	} else if (!strcmp(op, "reboot_device") || !strcmp(op, "reboot")) {
-		handle_reboot_device_request(json_request, transport);
-	} else if (!strcmp(op, "get_wifi_info")) {
-		handle_get_wifi_info_request(json_request, transport);
-	} else if (!strcmp(op, "set_wifi_info")) {
-		handle_set_wifi_info_request(json_request, transport);
-	} else if (!strcmp(op, "get_sys_info") || !strcmp(op, "get_status")) {
-		handle_get_sys_info_request(json_request, transport);
-	} else if (!strcmp(op, "get_client_info") || !strcmp(op, "get_clients")) {
-		handle_get_client_info_request(json_request, transport);
-	} else if (!strcmp(op, "save_rule")) {
-		user_cfg_save();
-		send_mqtt_response(mosq, req_id, 200, "Ok", config);
-	} else if (!strcmp(op, "set_auth_serv")) {
-		handle_set_auth_server_request(json_request, transport);
-	} else if (!strcmp(op, "reset") || !strcmp(op, "reset_device")) {
-		// TODO: Implement reset functionality
-		send_mqtt_response(mosq, req_id, 501, "Reset not implemented", config);
-	} else if (!strcmp(op, "update_config")) {
-		// TODO: Implement update_config functionality
-		send_mqtt_response(mosq, req_id, 501, "Update config not implemented", config);
-	} else if (!strcmp(op, "qos")) {
-		// TODO: Implement QoS functionality
-		send_mqtt_response(mosq, req_id, 501, "QoS not implemented", config);
-	} else if (!strcmp(op, "set_default_qos")) {
-		// TODO: Implement default QoS functionality
-		send_mqtt_response(mosq, req_id, 501, "Default QoS not implemented", config);
-	} else if (!strcmp(op, "uci")) {
-		// TODO: Implement UCI functionality
-		send_mqtt_response(mosq, req_id, 501, "UCI not implemented", config);
-	} else if (!strcmp(op, "get_traffic_stats")) {
-		// TODO: Implement traffic stats functionality
-		send_mqtt_response(mosq, req_id, 501, "Traffic stats not implemented", config);
-	} else if (!strcmp(op, "wan_change")) {
-		// TODO: Implement WAN change notification
-		send_mqtt_response(mosq, req_id, 501, "WAN change not implemented", config);
-	} else if (!strcmp(op, "alarm")) {
-		// TODO: Implement alarm functionality
-		send_mqtt_response(mosq, req_id, 501, "Alarm not implemented", config);
-	} else {
-		debug(LOG_ERR, "Unknown operation type: %s", op);
+	debug(LOG_DEBUG, "Processing MQTT operation: %s (req_id: %u)", op, req_id);
+
+	// Check for special operations first
+	if (handle_special_operation(op, mosq, req_id, json_request, transport, config)) {
+		goto cleanup;
+	}
+
+	// Route to handler using unified API dispatch
+	if (!api_dispatch_request(op, json_request, transport)) {
+		debug(LOG_ERR, "Unknown MQTT operation type: %s", op);
 		send_mqtt_response(mosq, req_id, 400, "Unknown operation", config);
 	}
 
-	// Clean up transport context
+cleanup:
+	// Clean up transport context and JSON
 	destroy_transport_context(transport);
 	json_object_put(json_request);
 }

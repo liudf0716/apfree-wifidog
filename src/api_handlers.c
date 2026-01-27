@@ -31,6 +31,92 @@ typedef struct {
 } mqtt_context_t;
 
 /**
+ * @brief Unified API routing table
+ * 
+ * This table maps operation/message type names to their handler functions.
+ * Used by both MQTT and WebSocket protocols.
+ * 
+ * Note: Some operations have aliases (e.g., "connect" and "heartbeat" both map to the same handler)
+ */
+static const api_route_entry_t api_routes[] = {
+	// System info & status
+	{"heartbeat",                   handle_get_sys_info_request, NULL},
+	{"connect",                     handle_get_sys_info_request, NULL},
+	{"bootstrap",                   handle_get_sys_info_request, NULL},
+	{"get_sys_info",                handle_get_sys_info_request, NULL},
+	{"get_status",                  handle_get_sys_info_request, NULL},
+	
+	// Authentication & client management
+	{"auth",                        NULL, handle_auth_request},
+	{"kickoff",                     handle_kickoff_request, NULL},
+	{"tmp_pass",                    NULL, handle_tmp_pass_request},
+	{"get_client_info",             handle_get_client_info_request, NULL},
+	{"get_clients",                 handle_get_client_info_request, NULL},
+	
+	// Firmware management
+	{"get_firmware_info",           handle_get_firmware_info_request, NULL},
+	{"firmware_upgrade",            handle_firmware_upgrade_request, NULL},
+	{"ota",                         handle_firmware_upgrade_request, NULL},
+	
+	// Device configuration
+	{"update_device_info",          handle_update_device_info_request, NULL},
+	{"set_auth_serv",               handle_set_auth_server_request, NULL},
+	{"reboot_device",               handle_reboot_device_request, NULL},
+	{"reboot",                      handle_reboot_device_request, NULL},
+	
+	// WiFi management
+	{"get_wifi_info",               handle_get_wifi_info_request, NULL},
+	{"set_wifi_info",               handle_set_wifi_info_request, NULL},
+	
+	// Trusted domains
+	{"set_trusted",                 handle_sync_trusted_domain_request, NULL},
+	{"sync_trusted_domain",         handle_sync_trusted_domain_request, NULL},
+	{"get_trusted_domains",         handle_get_trusted_domains_request, NULL},
+	{"show_trusted",                handle_get_trusted_domains_request, NULL},
+	{"sync_trusted_wildcard_domains", handle_sync_trusted_wildcard_domains_request, NULL},
+	{"get_trusted_wildcard_domains",  handle_get_trusted_wildcard_domains_request, NULL},
+	
+	// End marker
+	{NULL, NULL, NULL}
+};
+
+/**
+ * @brief Get the global API routing table
+ */
+const api_route_entry_t* 
+api_get_routes(void) 
+{
+	return api_routes;
+}
+
+/**
+ * @brief Dispatch API request to appropriate handler
+ */
+bool 
+api_dispatch_request(const char *op_name, json_object *json_req, api_transport_context_t *transport)
+{
+	if (!op_name || !json_req) {
+		debug(LOG_ERR, "Invalid parameters for API dispatch");
+		return false;
+	}
+
+	// Route to handler using lookup table
+	for (const api_route_entry_t *route = api_routes; route->name != NULL; route++) {
+		if (strcmp(op_name, route->name) == 0) {
+			// Call appropriate handler based on signature
+			if (route->handler) {
+				route->handler(json_req, transport);
+			} else if (route->legacy_handler) {
+				route->legacy_handler(json_req);
+			}
+			return true;
+		}
+	}
+
+	return false;
+}
+
+/**
  * @brief WebSocket-specific send response implementation
  * 
  * @param ctx Transport context (should be struct bufferevent*)

@@ -247,42 +247,14 @@ start_ws_heartbeat(struct bufferevent *b_ws)
 }
 
 /**
- * @brief Processes incoming WebSocket messages.
+ * @brief Processes incoming WebSocket messages using unified API routing.
  *
- * Parses and handles JSON messages received over WebSocket. This function acts as
- * a dispatcher, routing messages to specific handlers based on their "type" field.
- * Supported message types:
- * - "heartbeat": Handles gateway status updates. (Responds with heartbeat)
- * - "connect": Handles initial connection response. (Responds with heartbeat)
- * - "auth": Handles client authentication requests.
- * - "kickoff": Handles client disconnection requests. Responds with "kickoff_response"
- *              for success or "kickoff_error" for validation failures.
- * - "tmp_pass": Handles requests for temporary client access.
- * - "get_firmware_info": Triggers a request for firmware information. The device
- *                        responds with a "firmware_info_response" message
- *                        containing details from /etc/openwrt_release.
- * - "firmware_upgrade": Handles firmware upgrade requests. Executes sysupgrade
- *                       command with the provided URL and responds with success
- *                       or error status before potential system reboot.
- * - "update_device_info": Handles device information update requests. Updates
- *                         local device configuration and UCI settings.
- * - "sync_trusted_domain": Handles trusted domains synchronization. Completely
- *                          replaces the current trusted domains list with the
- *                          provided list. Responds with "sync_trusted_domain_response".
- * - "get_trusted_domains": Retrieves the current list of trusted domains.
- *                          Responds with "get_trusted_domains_response" containing
- *                          an array of exact-match domain names.
- * - "sync_trusted_wildcard_domains": Handles wildcard domains synchronization.
- *                                    Replaces current wildcard domains list with
- *                                    the provided patterns (e.g., "*.example.com").
- *                                    Responds with "sync_trusted_wildcard_domains_response".
- * - "get_trusted_wildcard_domains": Retrieves the current list of wildcard domains.
- *                                   Responds with "get_trusted_wildcard_domains_response"
- *                                   containing an array of wildcard patterns.
- * - "reboot_device": Handles device reboot requests. Executes system reboot command
- *                    to restart the device immediately. No response is sent on success
- *                    as the device shuts down. Responds with "reboot_device_error" 
- *                    if the reboot command fails to execute.
+ * Parses and handles JSON messages received over WebSocket. Uses the unified
+ * API routing table to dispatch messages to appropriate handlers based on their
+ * "type" field.
+ * 
+ * All message types are handled through api_dispatch_request() which uses the
+ * same routing table as MQTT for consistency.
  *
  * @param bev The bufferevent associated with the WebSocket connection,
  *            passed to message handlers for sending responses.
@@ -316,7 +288,7 @@ process_ws_msg(struct bufferevent *bev, const char *msg)
 		return;
 	}
 
-	// Route message to appropriate handler based on type
+	// Get message type string
 	const char *type_str = json_object_get_string(type);
 	if (!type_str) {
 		debug(LOG_ERR, "Invalid message type in JSON (null string)");
@@ -325,45 +297,15 @@ process_ws_msg(struct bufferevent *bev, const char *msg)
 		return;
 	}
 
-	if (!strcmp(type_str, "heartbeat") || !strcmp(type_str, "connect")) {
-		handle_heartbeat_request(jobj);
-	} else if (!strcmp(type_str, "auth")) {
-		handle_auth_request(jobj);
-	} else if (!strcmp(type_str, "kickoff")) {
-		handle_kickoff_request(jobj, transport);
-	} else if (!strcmp(type_str, "tmp_pass")) {
-		handle_tmp_pass_request(jobj);
-	} else if (!strcmp(type_str, "get_firmware_info")) {
-		handle_get_firmware_info_request(jobj, transport);
-	} else if (!strcmp(type_str, "firmware_upgrade")) {
-		handle_firmware_upgrade_request(jobj, transport);
-	} else if (!strcmp(type_str, "update_device_info")) {
-		handle_update_device_info_request(jobj, transport);
-	} else if (!strcmp(type_str, "sync_trusted_domain")) {
-		handle_sync_trusted_domain_request(jobj, transport);
-	} else if (!strcmp(type_str, "get_trusted_domains")) {
-		handle_get_trusted_domains_request(jobj, transport);
-	} else if (!strcmp(type_str, "sync_trusted_wildcard_domains")) {
-		handle_sync_trusted_wildcard_domains_request(jobj, transport);
-	} else if (!strcmp(type_str, "get_trusted_wildcard_domains")) {
-		handle_get_trusted_wildcard_domains_request(jobj, transport);
-	} else if (!strcmp(type_str, "reboot_device")) {
-		handle_reboot_device_request(jobj, transport);
-	} else if (!strcmp(type_str, "get_wifi_info")) {
-		handle_get_wifi_info_request(jobj, transport);
-	} else if (!strcmp(type_str, "set_wifi_info")) {
-		handle_set_wifi_info_request(jobj, transport);
-	} else if (!strcmp(type_str, "get_sys_info")) {
-		handle_get_sys_info_request(jobj, transport);
-	} else if (!strcmp(type_str, "get_client_info")) {
-		handle_get_client_info_request(jobj, transport);
-	} else {
-		debug(LOG_ERR, "Unknown message type: %s", type_str);
+	debug(LOG_DEBUG, "Processing WebSocket message type: %s", type_str);
+
+	// Route to handler using unified API dispatch
+	if (!api_dispatch_request(type_str, jobj, transport)) {
+		debug(LOG_ERR, "Unknown WebSocket message type: %s", type_str);
 	}
 
-	// Clean up transport context
+	// Clean up transport context and JSON
 	destroy_transport_context(transport);
-
 	json_object_put(jobj);
 }
 
