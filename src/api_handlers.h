@@ -89,12 +89,16 @@ void handle_get_trusted_wildcard_domains_request(json_object *j_req, api_transpo
 // System information handlers
 void handle_get_sys_info_request(json_object *j_req, api_transport_context_t *transport);
 
+// Auth server configuration handler
+void handle_set_auth_server_request(json_object *j_req, api_transport_context_t *transport);
+
 // Connection management handlers (these don't need transport context)
 void handle_heartbeat_request(json_object *j_heartbeat);
 void handle_tmp_pass_request(json_object *j_tmp_pass);
 
 // Utility functions for transport abstraction
 api_transport_context_t* create_websocket_transport_context(struct bufferevent *bev);
+api_transport_context_t* create_mqtt_transport_context(void *mosq, unsigned int req_id);
 void destroy_transport_context(api_transport_context_t *transport);
 
 #endif /* _API_HANDLERS_H_ */

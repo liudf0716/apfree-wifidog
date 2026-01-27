@@ -9,15 +9,30 @@
 
 #include "conf.h"
 
-void set_trusted_op(void *mosq, const char *type, const char *value, const int req_id, const s_config *config);
-void del_trusted_op(void *mosq, const char *type, const char *value, const int req_id, const s_config *config);
-void clear_trusted_op(void *mosq, const char *type, const char *value, const int req_id, const s_config *config);
-void show_trusted_op(void *mosq, const char *type, const char *value, const int req_id, const s_config *config);
-void save_rule_op(void *mosq, const char *type, const char *value, const int req_id, const s_config *config);
-void get_status_op(void *mosq, const char *type, const char *value, const int req_id, const s_config *config);
-void reboot_device_op(void *mosq, const char *type, const char *value, const int req_id, const s_config *config);
-void reset_device_op(void *mosq, const char *type, const char *value, const int req_id, const s_config *config);
-void set_auth_server_op(void *mosq, const char *type, const char *value, const int req_id, const s_config *config);
+// Implemented operation handlers
+void set_trusted_op(void *mosq, const char *value, const int req_id, const s_config *config);
+void del_trusted_op(void *mosq, const char *value, const int req_id, const s_config *config);
+void clear_trusted_op(void *mosq, const char *value, const int req_id, const s_config *config);
+void show_trusted_op(void *mosq, const char *value, const int req_id, const s_config *config);
+void save_rule_op(void *mosq, const char *value, const int req_id, const s_config *config);
+void get_status_op(void *mosq, const char *value, const int req_id, const s_config *config);
+void reboot_device_op(void *mosq, const char *value, const int req_id, const s_config *config);
+void reset_device_op(void *mosq, const char *value, const int req_id, const s_config *config);
+void set_auth_server_op(void *mosq, const char *value, const int req_id, const s_config *config);
+
+// Pending implementation operation handlers
+void bootstrap_op(void *mosq, const char *value, const int req_id, const s_config *config);
+void update_config_op(void *mosq, const char *value, const int req_id, const s_config *config);
+void ota_op(void *mosq, const char *value, const int req_id, const s_config *config);
+void qos_op(void *mosq, const char *value, const int req_id, const s_config *config);
+void uci_op(void *mosq, const char *value, const int req_id, const s_config *config);
+void get_traffic_stats_op(void *mosq, const char *value, const int req_id, const s_config *config);
+void get_clients_op(void *mosq, const char *value, const int req_id, const s_config *config);
+void heartbeat_op(void *mosq, const char *value, const int req_id, const s_config *config);
+void wan_change_op(void *mosq, const char *value, const int req_id, const s_config *config);
+void alarm_op(void *mosq, const char *value, const int req_id, const s_config *config);
+void wan_select_op(void *mosq, const char *value, const int req_id, const s_config *config);
+void wan_priority_op(void *mosq, const char *value, const int req_id, const s_config *config);
 
 void thread_mqtt(void *arg);
 

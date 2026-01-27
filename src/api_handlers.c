@@ -3,6 +3,7 @@
  * Copyright (c) 2023 Dengfeng Liu <liudf0716@gmail.com>
  */
 
+#define _GNU_SOURCE
 #include "common.h"
 #include "api_handlers.h"
 #include "debug.h"
@@ -23,6 +24,12 @@ extern void ws_send(struct evbuffer *buf, const char *msg, const size_t len, int
 // WebSocket frame types
 #define TEXT_FRAME 0x1
 
+// MQTT context structure to hold mosquitto instance and req_id
+typedef struct {
+    void *mosq;              // struct mosquitto *
+    unsigned int req_id;
+} mqtt_context_t;
+
 /**
  * @brief WebSocket-specific send response implementation
  * 
@@ -39,6 +46,80 @@ static int websocket_send_response(void *ctx, const char *message, size_t length
     
     ws_send(bufferevent_get_output(bev), message, length, TEXT_FRAME);
     return 0;
+}
+
+/**
+ * @brief MQTT-specific send response implementation
+ * 
+ * @param ctx Transport context (should be mqtt_context_t*)
+ * @param message Message to send
+ * @param length Length of message
+ * @return 0 on success, -1 on error
+ */
+static int mqtt_send_response(void *ctx, const char *message, size_t length) {
+    mqtt_context_t *mqtt_ctx = (mqtt_context_t *)ctx;
+    if (!mqtt_ctx || !mqtt_ctx->mosq || !message) {
+        return -1;
+    }
+    
+    char *topic = NULL;
+    char *res_data = NULL;
+    
+    // Get device ID (external function)
+    extern const char* get_device_id(void);
+    
+    // Format topic and response
+    if (asprintf(&topic, "wifidogx/v1/%s/response", get_device_id()) < 0) {
+        return -1;
+    }
+    
+    if (asprintf(&res_data, "{\"req_id\":%u,\"response\":\"200\",\"data\":%s}", 
+                 mqtt_ctx->req_id, message) < 0) {
+        free(topic);
+        return -1;
+    }
+    
+    // Publish via mosquitto library
+    int ret = mosquitto_publish(mqtt_ctx->mosq, NULL, topic, 
+                               strlen(res_data), res_data, 0, false);
+    
+    free(topic);
+    free(res_data);
+    
+    return ret == 0 ? 0 : -1;
+}
+
+/**
+ * @brief Create a MQTT transport context
+ * 
+ * @param mosq The mosquitto instance
+ * @param req_id Request ID for correlation
+ * @return Allocated transport context, or NULL on error
+ */
+api_transport_context_t* create_mqtt_transport_context(void *mosq, unsigned int req_id) {
+    if (!mosq) {
+        return NULL;
+    }
+    
+    mqtt_context_t *mqtt_ctx = malloc(sizeof(mqtt_context_t));
+    if (!mqtt_ctx) {
+        return NULL;
+    }
+    
+    mqtt_ctx->mosq = mosq;
+    mqtt_ctx->req_id = req_id;
+    
+    api_transport_context_t *transport = malloc(sizeof(api_transport_context_t));
+    if (!transport) {
+        free(mqtt_ctx);
+        return NULL;
+    }
+    
+    transport->transport_ctx = mqtt_ctx;
+    transport->send_response = mqtt_send_response;
+    transport->protocol_name = "mqtt";
+    
+    return transport;
 }
 
 /**
@@ -71,7 +152,11 @@ api_transport_context_t* create_websocket_transport_context(struct bufferevent *
  */
 void destroy_transport_context(api_transport_context_t *transport) {
     if (transport) {
-        // Note: We don't free transport_ctx as it's managed by the caller
+        // For MQTT, we need to free the mqtt_context_t structure
+        if (transport->protocol_name && strcmp(transport->protocol_name, "mqtt") == 0) {
+            free(transport->transport_ctx);
+        }
+        // Note: For WebSocket, transport_ctx (bufferevent) is managed by the caller
         free(transport);
     }
 }
@@ -532,6 +617,89 @@ void handle_kickoff_request(json_object *j_auth, api_transport_context_t *transp
     const char *response_str = json_object_to_json_string(j_response);
     send_response(transport, response_str);
     json_object_put(j_response);
+}
+
+/**
+ * @brief Handle set auth server configuration request
+ * 
+ * Updates the authentication server configuration (hostname, port, path).
+ * 
+ * @param j_req JSON request object with hostname, port, path fields
+ * @param transport Transport context for sending response
+ */
+void handle_set_auth_server_request(json_object *j_req, api_transport_context_t *transport) {
+    if (!j_req || !transport) {
+        debug(LOG_ERR, "Invalid parameters for set_auth_server");
+        return;
+    }
+
+    s_config *config = config_get_config();
+    if (!config || !config->auth_servers) {
+        debug(LOG_ERR, "Config or auth_servers is NULL");
+        send_response(transport, "{\"error\":\"Internal configuration error\"}");
+        return;
+    }
+
+    char *hostname = config->auth_servers->authserv_hostname;
+    char *path = config->auth_servers->authserv_path;
+    const char *tmp_host_name = NULL;
+    const char *tmp_http_port = NULL;
+    const char *tmp_path = NULL;
+
+    // Parse JSON parameters
+    json_object *jo_host_name = json_object_object_get(j_req, "hostname");
+    if (jo_host_name != NULL) {
+        tmp_host_name = json_object_get_string(jo_host_name);
+    }
+
+    json_object *jo_http_port = json_object_object_get(j_req, "port");
+    if (jo_http_port != NULL) {
+        tmp_http_port = json_object_get_string(jo_http_port);
+    }
+
+    json_object *jo_path = json_object_object_get(j_req, "path");
+    if (jo_path != NULL) {
+        tmp_path = json_object_get_string(jo_path);
+    }
+
+    debug(LOG_DEBUG, "Set auth server - hostname: %s, port: %s, path: %s",
+          tmp_host_name ? tmp_host_name : "(unchanged)",
+          tmp_http_port ? tmp_http_port : "(unchanged)",
+          tmp_path ? tmp_path : "(unchanged)");
+
+    // Update configuration with proper locking
+    LOCK_CONFIG();
+
+    if (tmp_host_name != NULL && hostname && strcmp(hostname, tmp_host_name) != 0) {
+        free(hostname);
+        config->auth_servers->authserv_hostname = safe_strdup(tmp_host_name);
+        uci_set_value("wifidogx", "wifidog", "auth_server_hostname",
+                     config->auth_servers->authserv_hostname);
+    }
+
+    if (tmp_path != NULL && path && strcmp(path, tmp_path) != 0) {
+        free(path);
+        config->auth_servers->authserv_path = safe_strdup(tmp_path);
+        uci_set_value("wifidogx", "wifidog", "auth_server_path",
+                     config->auth_servers->authserv_path);
+    }
+
+    if (tmp_http_port != NULL) {
+        config->auth_servers->authserv_http_port = atoi(tmp_http_port);
+        uci_set_value("wifidogx", "wifidog", "auth_server_port", tmp_http_port);
+    }
+
+    UNLOCK_CONFIG();
+
+    // Send success response
+    json_object *response = json_object_new_object();
+    json_object_object_add(response, "status", json_object_new_string("success"));
+    json_object_object_add(response, "message", json_object_new_string("Auth server configuration updated"));
+
+    const char *response_str = json_object_to_json_string(response);
+    send_response(transport, response_str);
+
+    json_object_put(response);
 }
 
 /**
