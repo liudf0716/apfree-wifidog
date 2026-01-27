@@ -64,7 +64,7 @@ struct wifi_device_info {
 };
 
 // Authentication and client management handlers
-void handle_auth_request(json_object *j_auth);
+void handle_auth_request(json_object *j_auth, api_transport_context_t *transport);
 void handle_kickoff_request(json_object *j_req, api_transport_context_t *transport);
 void handle_get_client_info_request(json_object *j_req, api_transport_context_t *transport);
 
@@ -92,36 +92,32 @@ void handle_get_sys_info_request(json_object *j_req, api_transport_context_t *tr
 // Auth server configuration handler
 void handle_set_auth_server_request(json_object *j_req, api_transport_context_t *transport);
 
-// Connection management handlers (these don't need transport context)
-void handle_heartbeat_request(json_object *j_heartbeat);
-void handle_tmp_pass_request(json_object *j_tmp_pass);
+// Connection management handlers
+void handle_heartbeat_request(json_object *j_heartbeat, api_transport_context_t *transport);
+void handle_tmp_pass_request(json_object *j_tmp_pass, api_transport_context_t *transport);
 
 // Utility functions for transport abstraction
 api_transport_context_t* create_websocket_transport_context(struct bufferevent *bev);
 api_transport_context_t* create_mqtt_transport_context(void *mosq, unsigned int req_id);
 void destroy_transport_context(api_transport_context_t *transport);
 
-// Handler function types for message routing
-typedef void (*api_legacy_handler_fn)(json_object *req);
+// Handler function type for message routing
 typedef void (*api_handler_fn)(json_object *req, api_transport_context_t *transport);
 
 /**
  * @brief API route entry structure
  * 
  * Defines a mapping from message type/operation name to handler function.
- * Supports both legacy handlers (without transport) and standard handlers (with transport).
  */
 typedef struct {
 	const char *name;                  // Message type or operation name
-	api_handler_fn handler;            // Standard handler (with transport)
-	api_legacy_handler_fn legacy_handler;  // Legacy handler (without transport)
+	api_handler_fn handler;            // Handler function (with transport)
 } api_route_entry_t;
 
 /**
  * @brief Dispatch API request to appropriate handler
  * 
  * Looks up the handler for the given operation name and calls it.
- * Handles both standard and legacy handler signatures.
  * 
  * @param op_name Operation name to lookup (e.g., "heartbeat", "auth", "get_wifi_info")
  * @param json_req JSON request object

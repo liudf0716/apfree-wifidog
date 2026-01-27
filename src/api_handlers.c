@@ -40,44 +40,44 @@ typedef struct {
  */
 static const api_route_entry_t api_routes[] = {
 	// System info & status
-	{"heartbeat",                   handle_get_sys_info_request, NULL},
-	{"connect",                     handle_get_sys_info_request, NULL},
-	{"bootstrap",                   handle_get_sys_info_request, NULL},
-	{"get_sys_info",                handle_get_sys_info_request, NULL},
-	{"get_status",                  handle_get_sys_info_request, NULL},
+	{"heartbeat",                   handle_get_sys_info_request},
+	{"connect",                     handle_get_sys_info_request},
+	{"bootstrap",                   handle_get_sys_info_request},
+	{"get_sys_info",                handle_get_sys_info_request},
+	{"get_status",                  handle_get_sys_info_request},
 	
 	// Authentication & client management
-	{"auth",                        NULL, handle_auth_request},
-	{"kickoff",                     handle_kickoff_request, NULL},
-	{"tmp_pass",                    NULL, handle_tmp_pass_request},
-	{"get_client_info",             handle_get_client_info_request, NULL},
-	{"get_clients",                 handle_get_client_info_request, NULL},
+	{"auth",                        handle_auth_request},
+	{"kickoff",                     handle_kickoff_request},
+	{"tmp_pass",                    handle_tmp_pass_request},
+	{"get_client_info",             handle_get_client_info_request},
+	{"get_clients",                 handle_get_client_info_request},
 	
 	// Firmware management
-	{"get_firmware_info",           handle_get_firmware_info_request, NULL},
-	{"firmware_upgrade",            handle_firmware_upgrade_request, NULL},
-	{"ota",                         handle_firmware_upgrade_request, NULL},
+	{"get_firmware_info",           handle_get_firmware_info_request},
+	{"firmware_upgrade",            handle_firmware_upgrade_request},
+	{"ota",                         handle_firmware_upgrade_request},
 	
 	// Device configuration
-	{"update_device_info",          handle_update_device_info_request, NULL},
-	{"set_auth_serv",               handle_set_auth_server_request, NULL},
-	{"reboot_device",               handle_reboot_device_request, NULL},
-	{"reboot",                      handle_reboot_device_request, NULL},
+	{"update_device_info",          handle_update_device_info_request},
+	{"set_auth_serv",               handle_set_auth_server_request},
+	{"reboot_device",               handle_reboot_device_request},
+	{"reboot",                      handle_reboot_device_request},
 	
 	// WiFi management
-	{"get_wifi_info",               handle_get_wifi_info_request, NULL},
-	{"set_wifi_info",               handle_set_wifi_info_request, NULL},
+	{"get_wifi_info",               handle_get_wifi_info_request},
+	{"set_wifi_info",               handle_set_wifi_info_request},
 	
 	// Trusted domains
-	{"set_trusted",                 handle_sync_trusted_domain_request, NULL},
-	{"sync_trusted_domain",         handle_sync_trusted_domain_request, NULL},
-	{"get_trusted_domains",         handle_get_trusted_domains_request, NULL},
-	{"show_trusted",                handle_get_trusted_domains_request, NULL},
-	{"sync_trusted_wildcard_domains", handle_sync_trusted_wildcard_domains_request, NULL},
-	{"get_trusted_wildcard_domains",  handle_get_trusted_wildcard_domains_request, NULL},
+	{"set_trusted",                 handle_sync_trusted_domain_request},
+	{"sync_trusted_domain",         handle_sync_trusted_domain_request},
+	{"get_trusted_domains",         handle_get_trusted_domains_request},
+	{"show_trusted",                handle_get_trusted_domains_request},
+	{"sync_trusted_wildcard_domains", handle_sync_trusted_wildcard_domains_request},
+	{"get_trusted_wildcard_domains",  handle_get_trusted_wildcard_domains_request},
 	
 	// End marker
-	{NULL, NULL, NULL}
+	{NULL, NULL}
 };
 
 /**
@@ -103,11 +103,8 @@ api_dispatch_request(const char *op_name, json_object *json_req, api_transport_c
 	// Route to handler using lookup table
 	for (const api_route_entry_t *route = api_routes; route->name != NULL; route++) {
 		if (strcmp(op_name, route->name) == 0) {
-			// Call appropriate handler based on signature
 			if (route->handler) {
 				route->handler(json_req, transport);
-			} else if (route->legacy_handler) {
-				route->legacy_handler(json_req);
 			}
 			return true;
 		}
@@ -352,7 +349,7 @@ static int commit_uci_changes(void) {
     return 0;
 }
 
-void handle_heartbeat_request(json_object *j_heartbeat)
+void handle_heartbeat_request(json_object *j_heartbeat, api_transport_context_t *transport)
 {
 	// Mark auth server as online when receiving heartbeat response
 	mark_auth_online();
@@ -409,7 +406,7 @@ void handle_heartbeat_request(json_object *j_heartbeat)
 	}
 }
 
-void handle_tmp_pass_request(json_object *j_tmp_pass)
+void handle_tmp_pass_request(json_object *j_tmp_pass, api_transport_context_t *transport)
 {
 	// Check if portal auth is disabled
 	if (is_portal_auth_disabled()) {
@@ -796,7 +793,7 @@ void handle_set_auth_server_request(json_object *j_req, api_transport_context_t 
  *
  * @param j_auth The JSON authentication request object
  */
-void handle_auth_request(json_object *j_auth) {
+void handle_auth_request(json_object *j_auth, api_transport_context_t *transport) {
     // Check if portal auth is disabled
     if (is_portal_auth_disabled()) {
         debug(LOG_WARNING, "Portal authentication is disabled, ignoring auth request from server");
