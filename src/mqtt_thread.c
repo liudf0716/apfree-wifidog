@@ -20,7 +20,7 @@ send_mqtt_response(struct mosquitto *mosq, const unsigned int req_id, int res_id
 {
 	char *topic = NULL;
 	char *res_data = NULL;
-	safe_asprintf(&topic, "wifidogx/v1/%s/response", get_device_id());
+	safe_asprintf(&topic, "wifidogx/v1/%s/s2c/response", get_device_id());
 	safe_asprintf(&res_data, "{\"req_id\":%d,\"response\":\"%d\",\"msg\":\"%s\"}", req_id, res_id, msg==NULL?"null":msg);
 	debug(LOG_DEBUG, "send mqtt response: topic is %s msg is %s", topic, res_data);
 	mosquitto_publish(mosq, NULL, topic, strlen(res_data), res_data, 0, false);
@@ -138,10 +138,19 @@ mqtt_message_callback(struct mosquitto *mosq, void *obj, const struct mosquitto_
 static void
 mqtt_connect_callback(struct mosquitto *mosq, void *obj, int rc)
 {
-	char *default_topic = NULL;
-	safe_asprintf(&default_topic, "wifidogx/v1/%s/request", get_device_id());
-	mosquitto_subscribe(mosq, NULL, default_topic, 0); // qos is 0
-	free(default_topic);
+	char *s2c_request_topic = NULL;
+	char *c2s_response_topic = NULL;
+	
+	// Subscribe to s2c/request (Server to Client requests)
+	safe_asprintf(&s2c_request_topic, "wifidogx/v1/%s/s2c/request", get_device_id());
+	mosquitto_subscribe(mosq, NULL, s2c_request_topic, 0); // qos is 0
+	
+	// Subscribe to c2s/response (Client to Server responses)  
+	safe_asprintf(&c2s_response_topic, "wifidogx/v1/%s/c2s/response", get_device_id());
+	mosquitto_subscribe(mosq, NULL, c2s_response_topic, 0); // qos is 0
+	
+	free(s2c_request_topic);
+	free(c2s_response_topic);
 }
 
 void thread_mqtt(void *arg)

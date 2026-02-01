@@ -142,6 +142,7 @@ static int websocket_send_response(void *ctx, const char *message, size_t length
 static int mqtt_send_response(void *ctx, const char *message, size_t length) {
     mqtt_context_t *mqtt_ctx = (mqtt_context_t *)ctx;
     if (!mqtt_ctx || !mqtt_ctx->mosq || !message) {
+        debug(LOG_ERR, "mqtt_send_response: Invalid context or message");
         return -1;
     }
     
@@ -152,19 +153,25 @@ static int mqtt_send_response(void *ctx, const char *message, size_t length) {
     extern const char* get_device_id(void);
     
     // Format topic and response
-    if (asprintf(&topic, "wifidogx/v1/%s/response", get_device_id()) < 0) {
+    if (asprintf(&topic, "wifidogx/v1/%s/s2c/response", get_device_id()) < 0) {
+        debug(LOG_ERR, "mqtt_send_response: Failed to allocate topic");
         return -1;
     }
     
     if (asprintf(&res_data, "{\"req_id\":%u,\"response\":\"200\",\"data\":%s}", 
                  mqtt_ctx->req_id, message) < 0) {
+        debug(LOG_ERR, "mqtt_send_response: Failed to allocate response data");
         free(topic);
         return -1;
     }
     
+    debug(LOG_INFO, "mqtt_send_response: Publishing to topic: %s, req_id: %u", topic, mqtt_ctx->req_id);
+    
     // Publish via mosquitto library
     int ret = mosquitto_publish(mqtt_ctx->mosq, NULL, topic, 
                                strlen(res_data), res_data, 0, false);
+    
+    debug(LOG_INFO, "mqtt_send_response: mosquitto_publish returned: %d", ret);
     
     free(topic);
     free(res_data);
@@ -358,6 +365,7 @@ void handle_heartbeat_request(json_object *j_heartbeat, api_transport_context_t 
 	json_object *gw_array = json_object_object_get(j_heartbeat, "gateway");
 	if (!gw_array || !json_object_is_type(gw_array, json_type_array)) {
 		debug(LOG_ERR, "Heartbeat: Invalid or missing gateway array");
+		send_response(transport, "{\"error\":\"Invalid or missing gateway array\"}");
 		return;
 	}
 
@@ -404,6 +412,9 @@ void handle_heartbeat_request(json_object *j_heartbeat, api_transport_context_t 
 		nft_reload_gw();
 #endif
 	}
+	
+	// Send success response for heartbeat
+	send_response(transport, "{\"status\":\"heartbeat_received\"}");
 }
 
 void handle_tmp_pass_request(json_object *j_tmp_pass, api_transport_context_t *transport)
@@ -411,6 +422,7 @@ void handle_tmp_pass_request(json_object *j_tmp_pass, api_transport_context_t *t
 	// Check if portal auth is disabled
 	if (is_portal_auth_disabled()) {
 		debug(LOG_WARNING, "Portal authentication is disabled, ignoring tmp_pass request from server");
+		send_response(transport, "{\"error\":\"Portal authentication is disabled\"}");
 		return;
 	}
 	
@@ -797,6 +809,7 @@ void handle_auth_request(json_object *j_auth, api_transport_context_t *transport
     // Check if portal auth is disabled
     if (is_portal_auth_disabled()) {
         debug(LOG_WARNING, "Portal authentication is disabled, ignoring auth request from server");
+        send_response(transport, "{\"error\":\"Portal authentication is disabled\"}");
         return;
     }
     
