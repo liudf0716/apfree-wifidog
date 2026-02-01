@@ -61,6 +61,8 @@ handle_special_operation(const char *op, struct mosquitto *mosq, unsigned int re
 static void
 process_mqtt_request(struct mosquitto *mosq, const char *data, s_config *config)
 {
+	unsigned int req_id = 0;
+	
 	json_object *json_request = json_tokener_parse(data);
 	if (is_error(json_request)) {
 		debug(LOG_INFO, "user request is not valid");
@@ -70,7 +72,6 @@ process_mqtt_request(struct mosquitto *mosq, const char *data, s_config *config)
 
 	// Get req_id from JSON payload (v1 format)
 	json_object *jo_req_id = json_object_object_get(json_request, "req_id");
-	unsigned int req_id = 0;
 	if (jo_req_id) {
 		req_id = json_object_get_int(jo_req_id);
 	} else {
