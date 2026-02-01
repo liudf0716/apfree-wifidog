@@ -64,6 +64,7 @@ process_mqtt_request(struct mosquitto *mosq, const char *data, s_config *config)
 	json_object *json_request = json_tokener_parse(data);
 	if (is_error(json_request)) {
 		debug(LOG_INFO, "user request is not valid");
+		send_mqtt_response(mosq, req_id, 400, "Invalid JSON request", config);
 		return;
 	}
 
@@ -126,6 +127,7 @@ mqtt_message_callback(struct mosquitto *mosq, void *obj, const struct mosquitto_
 {
 	s_config *config = obj;
 
+	debug(LOG_INFO, "MQTT message received on topic: %s", message->topic);
 	if (message->payloadlen) {
 		debug(LOG_DEBUG, "topic is %s, data is %s", message->topic, message->payload);
 		process_mqtt_request(mosq, message->payload, config);
@@ -175,20 +177,25 @@ void thread_mqtt(void *arg)
         return ;
     }
    	
-   	if (mosquitto_tls_set(mosq, cafile, NULL, NULL, NULL, NULL)) {
-   		debug(LOG_INFO, "Error : Problem setting TLS option");
-    	mosquitto_destroy(mosq);
-    	mosquitto_lib_cleanup();
-        return ;
-   	}
+   	// Only set TLS if cafile is configured
+   	if (cafile != NULL) {
+   		if (mosquitto_tls_set(mosq, cafile, NULL, NULL, NULL, NULL)) {
+   			debug(LOG_INFO, "Error : Problem setting TLS option");
+        	mosquitto_destroy(mosq);
+        	mosquitto_lib_cleanup();
+            return ;
+   		}
 
-   	// Attention! this setting is not secure, but can simplify our deploy
-    if (mosquitto_tls_insecure_set(mosq, true)) {
-    	debug(LOG_INFO, "Error : Problem setting TLS insecure option");
-    	mosquitto_destroy(mosq);
-    	mosquitto_lib_cleanup();
-        return ;
-    }
+   		// Attention! this setting is not secure, but can simplify our deploy
+        if (mosquitto_tls_insecure_set(mosq, true)) {
+        	debug(LOG_INFO, "Error : Problem setting TLS insecure option");
+        	mosquitto_destroy(mosq);
+        	mosquitto_lib_cleanup();
+            return ;
+        }
+   	} else {
+   		debug(LOG_DEBUG, "TLS not configured for MQTT connection");
+   	}
 
     mosquitto_connect_callback_set(mosq, mqtt_connect_callback);
     mosquitto_message_callback_set(mosq, mqtt_message_callback);
@@ -204,10 +211,12 @@ void thread_mqtt(void *arg)
         case MOSQ_ERR_ERRNO:
             debug(LOG_INFO, "Error : %s\n", strerror(errno));
             break;
-
-        mosquitto_destroy(mosq);
-     	mosquitto_lib_cleanup();
-        return ;
+        case MOSQ_ERR_SUCCESS:
+            debug(LOG_INFO, "Successfully connected to MQTT broker at %s:%d", host, port);
+            break;
+        default:
+            debug(LOG_INFO, "MQTT connection error: %s", mosquitto_strerror(retval));
+            break;
     }
 
     retval = mosquitto_loop_forever(mosq, -1, 1);
