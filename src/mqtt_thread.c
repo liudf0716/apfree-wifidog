@@ -6,6 +6,7 @@
 
 #include "common.h"
 #include "mqtt_thread.h"
+#include "mqtt_shell_handler.h"
 #include "api_handlers.h"
 #include "wdctlx_thread.h"
 #include "conf.h"
@@ -127,11 +128,25 @@ static void
 mqtt_message_callback(struct mosquitto *mosq, void *obj, const struct mosquitto_message *message)
 {
 	s_config *config = obj;
+	char *shell_cmd_topic = NULL;
 
 	debug(LOG_INFO, "MQTT message received on topic: %s", message->topic);
 	if (message->payloadlen) {
 		debug(LOG_DEBUG, "topic is %s, data is %s", message->topic, message->payload);
-		process_mqtt_request(mosq, message->payload, config);
+		
+		// Check if this is a shell command request
+		safe_asprintf(&shell_cmd_topic, "wifidogx/v1/%s/shell/command", get_device_id());
+		
+		if (strcmp(message->topic, shell_cmd_topic) == 0) {
+			// Handle shell command request
+			debug(LOG_DEBUG, "Processing shell command request");
+			handle_shell_command_request(mosq, message->payload, message->payloadlen, config);
+		} else {
+			// Handle standard MQTT request
+			process_mqtt_request(mosq, message->payload, config);
+		}
+		
+		free(shell_cmd_topic);
 	}
 }
 
@@ -140,6 +155,7 @@ mqtt_connect_callback(struct mosquitto *mosq, void *obj, int rc)
 {
 	char *s2c_request_topic = NULL;
 	char *c2s_response_topic = NULL;
+	char *shell_cmd_topic = NULL;
 	
 	// Subscribe to s2c/request (Server to Client requests)
 	safe_asprintf(&s2c_request_topic, "wifidogx/v1/%s/s2c/request", get_device_id());
@@ -149,8 +165,14 @@ mqtt_connect_callback(struct mosquitto *mosq, void *obj, int rc)
 	safe_asprintf(&c2s_response_topic, "wifidogx/v1/%s/c2s/response", get_device_id());
 	mosquitto_subscribe(mosq, NULL, c2s_response_topic, 0); // qos is 0
 	
+	// Subscribe to shell/command (Shell command requests)
+	safe_asprintf(&shell_cmd_topic, "wifidogx/v1/%s/shell/command", get_device_id());
+	mosquitto_subscribe(mosq, NULL, shell_cmd_topic, 0); // qos is 0
+	debug(LOG_INFO, "Subscribed to shell command topic: %s", shell_cmd_topic);
+	
 	free(s2c_request_topic);
 	free(c2s_response_topic);
+	free(shell_cmd_topic);
 }
 
 void thread_mqtt(void *arg)
