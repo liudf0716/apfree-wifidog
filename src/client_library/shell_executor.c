@@ -8,24 +8,8 @@
 #include <sys/time.h>
 #include <errno.h>
 #include <syslog.h>
+#include "shell_executor.h"
 
-#define MAX_COMMAND_LENGTH 4096
-#define MAX_OUTPUT_LENGTH 65536
-#define SHELL_TIMEOUT 30
-
-/**
- * Shell command execution handler
- * Safely executes shell commands with timeout and output capture
- */
-
-typedef struct {
-    int timeout;
-    int max_output;
-    char output[MAX_OUTPUT_LENGTH];
-    int output_length;
-    int exit_code;
-    int timed_out;
-} shell_exec_result_t;
 
 static pid_t child_pid = -1;
 

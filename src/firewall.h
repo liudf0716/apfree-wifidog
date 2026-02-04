@@ -31,6 +31,15 @@ struct wd_request_context;
 /** @brief Initialize the firewall */
 int fw_init(void);
 
+/** @brief Reconcile the firewall rules */
+int fw_reconcile(void);
+
+/** @brief Check if the firewall is ready */
+int fw_is_ready(void);
+
+/** @brief Resilience thread */
+void thread_resilience(void *arg);
+
 /** @brief Clears the authservers list */
 void fw_clear_authservers(void);
 

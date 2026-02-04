@@ -23,6 +23,7 @@
 #include "safe.h"
 #include "util.h"
 #include "wdctlx_thread.h"
+#include "client_snapshot.h"
 #include "wd_util.h"
 #include "version.h"
 #include "wd_client.h"
@@ -276,7 +277,7 @@ process_wired_device_pass(struct evhttp_request *req, const char *mac)
 	
     if (br_is_device_wired(mac)) {
         if (!is_trusted_mac(mac))
-            add_trusted_maclist(mac);
+            client_snapshot_add_trusted_mac(mac, 0, "wired");
         ev_http_resend(req, 0);
         return 1;
     }
@@ -1069,6 +1070,7 @@ ev_http_callback_local_auth(struct evhttp_request *req, void *arg)
         char rtoken[16] = {0};
         gen_random_token(rtoken, sizeof(rtoken) - 1);
         client = client_list_add(ip, mac, rtoken, gw);
+        client->auth_type = AUTH_TYPE_LOCAL_PASS;
         fw_allow(client, FW_MARK_KNOWN);
         debug(LOG_INFO, "Local pass %s %s ", mac, ip);
     } else if ((addr_type == 1 && client->ip && strcmp(client->ip, ip) != 0) ||
@@ -1076,6 +1078,7 @@ ev_http_callback_local_auth(struct evhttp_request *req, void *arg)
         // Client exists but IP changed - deny old and allow new
         debug(LOG_INFO, "Local pass %s with different IP %s", mac, ip);
         fw_deny(client);
+        client->auth_type = AUTH_TYPE_LOCAL_PASS;
         if (addr_type == 1) {
             if (client->ip) free(client->ip);
             client->ip = safe_strdup(ip);
@@ -1087,6 +1090,7 @@ ev_http_callback_local_auth(struct evhttp_request *req, void *arg)
     } else if ((addr_type == 1 && !client->ip) || (addr_type == 2 && !client->ip6)) {
         // Client exists but missing IP field - deny and allow
         debug(LOG_INFO, "Local pass %s adding missing IP type %d", mac, addr_type);
+        client->auth_type = AUTH_TYPE_LOCAL_PASS;
         if (addr_type == 1) {
             client->ip = safe_strdup(ip);
         } else {
@@ -1096,6 +1100,7 @@ ev_http_callback_local_auth(struct evhttp_request *req, void *arg)
     } else {
         // Existing client with same IP - just allow
         debug(LOG_INFO, "Local pass %s %s already login", mac, ip);
+        client->auth_type = AUTH_TYPE_LOCAL_PASS;
         UNLOCK_CLIENT_LIST();
         ev_http_send_user_redirect_page(req, config->local_portal);
         goto END;
@@ -1215,7 +1220,7 @@ ev_http_callback_device(struct evhttp_request *req, void *arg)
     }
 
     // Query bypass user status
-    json_result = query_bypass_user_status(client_ip, 
+    json_result = client_snapshot_query_status(client_ip, 
                                          gw_setting->gw_id,
                                          gw_setting->gw_address_v4, 
                                          QUERY_BY_IP);

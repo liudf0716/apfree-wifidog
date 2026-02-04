@@ -209,6 +209,8 @@ static void validate_popular_servers(void);
 static void add_popular_server(const char *);
 static void parse_device_info(FILE *, const char *, int *);
 static void parse_domain_string_common(const char *ptr, trusted_domain_t which);
+static void remove_mac_from_list(const char *mac, mac_choice_t which);
+static void add_mac_from_list(const char *mac, uint32_t length, char *serial, mac_choice_t which);
 
 static OpCodes config_parse_token(const char *, const char *, int);
 
@@ -1314,6 +1316,111 @@ parse_boolean_value(char *line)
 	}
 
 	return -1;
+}
+
+
+/**
+ * @brief Removes a MAC address from the specified list.
+ */
+static void
+remove_mac_from_list(const char *mac, mac_choice_t which)
+{
+    t_trusted_mac *t_prev = NULL, *t_curr = NULL;
+    t_untrusted_mac *u_prev = NULL, *u_curr = NULL;
+
+    LOCK_CONFIG();
+
+    if (which == TRUSTED_MAC) {
+        t_curr = config.trustedmaclist;
+        while (t_curr) {
+            if (strcasecmp(t_curr->mac, mac) == 0) {
+                if (t_prev) {
+                    t_prev->next = t_curr->next;
+                } else {
+                    config.trustedmaclist = t_curr->next;
+                }
+                if (t_curr->mac) free(t_curr->mac);
+                if (t_curr->ip) free(t_curr->ip);
+                if (t_curr->serial) free(t_curr->serial);
+                free(t_curr);
+                break;
+            }
+            t_prev = t_curr;
+            t_curr = t_curr->next;
+        }
+    } else if (which == UNTRUSTED_MAC) {
+        u_curr = config.mac_blacklist;
+        while (u_curr) {
+            if (strcasecmp(u_curr->mac, mac) == 0) {
+                if (u_prev) {
+                    u_prev->next = u_curr->next;
+                } else {
+                    config.mac_blacklist = u_curr->next;
+                }
+                free(u_curr->mac);
+                free(u_curr);
+                break;
+            }
+            u_prev = u_curr;
+            u_curr = u_curr->next;
+        }
+    }
+
+    UNLOCK_CONFIG();
+}
+
+/**
+ * @brief Adds a MAC address to the specified list.
+ */
+static void
+add_mac_from_list(const char *mac, uint32_t length, char *serial, mac_choice_t which)
+{
+    LOCK_CONFIG();
+
+    if (which == TRUSTED_MAC) {
+        t_trusted_mac *curr = config.trustedmaclist;
+        // Check if already exists
+        while (curr) {
+            if (strcasecmp(curr->mac, mac) == 0) {
+                 // Update if needed, or just return
+                 curr->remaining_time = length;
+                 if (serial) {
+                     if (curr->serial) free(curr->serial);
+                     curr->serial = safe_strdup(serial);
+                 }
+                 UNLOCK_CONFIG();
+                 return;
+            }
+            curr = curr->next;
+        }
+
+        // Add new
+        t_trusted_mac *new_mac = safe_malloc(sizeof(t_trusted_mac));
+        memset(new_mac, 0, sizeof(t_trusted_mac));
+        new_mac->mac = safe_strdup(mac);
+        new_mac->remaining_time = length;
+        if (serial) new_mac->serial = safe_strdup(serial);
+        new_mac->next = config.trustedmaclist;
+        config.trustedmaclist = new_mac;
+
+    } else if (which == UNTRUSTED_MAC) {
+        t_untrusted_mac *curr = config.mac_blacklist;
+        while (curr) {
+             if (strcasecmp(curr->mac, mac) == 0) {
+                 UNLOCK_CONFIG();
+                 return;
+             }
+             curr = curr->next;
+        }
+
+        t_untrusted_mac *new_mac = safe_malloc(sizeof(t_untrusted_mac));
+        memset(new_mac, 0, sizeof(t_untrusted_mac));
+        new_mac->mac = safe_strdup(mac);
+        new_mac->next = config.mac_blacklist;
+        config.mac_blacklist = new_mac;
+    }
+
+    UNLOCK_CONFIG();
 }
 
 void

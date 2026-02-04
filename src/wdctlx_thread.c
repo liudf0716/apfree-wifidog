@@ -18,6 +18,7 @@
 #include "gateway.h"
 #include "safe.h"
 #include "wd_client.h"
+#include "client_snapshot.h"
 
 static struct sockaddr_un *create_unix_socket(const char *);
 
@@ -868,10 +869,10 @@ OUT:
 static void
 wdctl_user_list(struct bufferevent *fd)
 {
-    char *json_user_list = dump_bypass_user_list_json();
+    char *json_user_list = client_snapshot_dump_json();
     if (json_user_list) {
         size_t len = strlen(json_user_list);
-        bufferevent_write(fd, json_user_list, len);   /* XXX Not handling error because we'd just print the same log line. */
+        bufferevent_write(fd, json_user_list, len);
         free(json_user_list);
     } else
         bufferevent_write(fd, "{}", 2);
@@ -880,14 +881,14 @@ wdctl_user_list(struct bufferevent *fd)
 static void
 wdctl_save_user(struct bufferevent *fd)
 {
-    save_bypass_user_list();
+    client_snapshot_save();
     bufferevent_write(fd, "Yes", 3);
 }
 
 static void
 wdctl_restore_user(struct bufferevent *fd)
 {
-    load_bypass_user_list();
+    client_snapshot_load();
     bufferevent_write(fd, "Yes", 3);
 }
 
@@ -947,18 +948,20 @@ wdctl_user_auth(struct bufferevent *fd, const char *json_value)
         uint32_t remaining_time = atoi(time_str);
         uint16_t anti_nat = atoi(nat);
         if (remaining_time == 0) {
-            remove_bypass_user(mac);
+            client_snapshot_remove_trusted_mac(mac);
         } else {
-            add_bypass_user(mac, remaining_time, serial);
+            client_snapshot_add_trusted_mac(mac, remaining_time, serial);
             if (anti_nat) {
-                fw_add_anti_nat_permit_device(mac);
+            if (anti_nat) {
+                fw_add_anti_nat_permit_device(mac); 
+            }
             }
         }
     }
 
 OUT:
     if (root) json_object_put(root);
-    save_bypass_user_list();
+    client_snapshot_save();
     
     bufferevent_write(fd, "Yes", 3);
 }

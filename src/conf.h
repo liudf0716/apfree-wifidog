@@ -10,7 +10,33 @@
 #include <pthread.h>
 
 #include "common.h"
-#include "bypass_user.h"
+
+typedef enum mac_choice_t_ {
+	TRUSTED_MAC,
+	UNTRUSTED_MAC,
+	TRUSTED_LOCAL_MAC,
+	ROAM_MAC
+} mac_choice_t;
+
+/**
+ * Trusted MAC Addresses
+ */
+typedef struct _trusted_mac_t {
+	struct _trusted_mac_t *next;
+    char 	*mac;
+	char 	*ip;
+	char 	*serial;
+	uint32_t 	is_online;
+	uint32_t 	remaining_time;
+	time_t		first_time;
+} t_trusted_mac;
+
+typedef t_trusted_mac t_untrusted_mac;
+
+typedef enum {
+    QUERY_BY_IP,
+    QUERY_BY_MAC,
+} query_choice_t;
 
 /** Configuration file paths */
 #ifndef SYSCONFDIR

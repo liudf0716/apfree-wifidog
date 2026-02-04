@@ -27,6 +27,13 @@ typedef struct _t_counters {
 
 /** Client node for the connected client linked list.
  */
+typedef enum {
+	AUTH_TYPE_UNKNOWN = 0,
+	AUTH_TYPE_AUTH_SERVER,
+	AUTH_TYPE_LOCAL_PASS,
+	AUTH_TYPE_TRUSTED_MAC
+} client_auth_type_t;
+
 typedef struct _t_client {
     struct _t_client *next;             /**< @brief Pointer to the next client */
     unsigned long long id;           	/**< @brief Unique ID per client */
@@ -35,6 +42,7 @@ typedef struct _t_client {
     char *mac;                          /**< @brief Client Mac address */
     char *token;                        /**< @brief Client token */
     int fw_connection_state;     		/**< @brief Connection state in the firewall */
+	client_auth_type_t auth_type;        /**< @brief Authentication type */
 	int fd;              				/**< @brief Client HTTP socket (valid only
 											during login before one of the
 											_http_* function is called */

@@ -13,6 +13,7 @@
 #include "auth.h"
 #include "centralserver.h"
 #include "client_list.h"
+#include "client_snapshot.h"
 #include "commandline.h"
 #include "wd_util.h"
 #include "wd_client.h"
@@ -254,20 +255,68 @@ fw_init(void)
 	result = iptables_fw_init();
 #elif AW_FW4
 	result = nft_fw_init();
-
-	if (restart_orig_pid) {
-		debug(LOG_INFO, "Restoring firewall rules for clients");
-		LOCK_CLIENT_LIST();
-		nft_fw_reload_client();
-		nft_fw_reload_trusted_maclist();
-		UNLOCK_CLIENT_LIST();
-	} else {
-		debug(LOG_INFO, "Loading bypass user list");
-		load_bypass_user_list();
-	}
 #endif
 
 	return result;
+}
+
+int
+fw_is_ready(void)
+{
+#ifdef AW_FW4
+    return nft_check_core_rules();
+#else
+    return 1;
+#endif
+}
+
+int
+fw_reconcile(void)
+{
+    if (fw_is_ready()) return 1;
+
+    debug(LOG_INFO, "Firewall rules missing, reconciling...");
+
+#ifdef AW_FW4
+    nft_reconcile_rules();
+    
+    // Restore state
+    LOCK_CLIENT_LIST();
+    nft_fw_reload_client();
+    nft_fw_reload_trusted_maclist();
+    /** @todo: restore other sets if needed */
+    UNLOCK_CLIENT_LIST();
+    
+    // Call snapshot load if implemented
+    client_snapshot_load(); 
+#endif
+
+    return 1;
+}
+
+void
+thread_resilience(void *arg)
+{
+    debug(LOG_INFO, "Resilience thread started");
+    
+    int check_interval = 3; // Check firewall every 3 seconds
+    int snapshot_interval = 60; // Save snapshot every 60 seconds
+    int last_snapshot = 0;
+    
+    while (1) {
+        sleep(check_interval);
+        
+        if (!fw_is_ready()) {
+            debug(LOG_WARNING, "Firewall rules out of sync! Reconciling...");
+            fw_reconcile();
+        }
+        
+        last_snapshot += check_interval;
+        if (last_snapshot >= snapshot_interval) {
+            client_snapshot_save();
+            last_snapshot = 0;
+        }
+    }
 }
 
 /** Remove all auth server firewall whitelist rules

@@ -23,6 +23,7 @@
 #include "wd_client.h"
 #include "ws_thread.h"
 #include "dns_monitor.h"
+#include "client_snapshot.h"
 
 /* Global mutexes and buffers */
 pthread_mutex_t g_resource_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -40,6 +41,7 @@ static pthread_t tid_tls_server = 0;   /* TLS redirect thread */
 static pthread_t tid_mqtt_server = 0;    /* MQTT server thread */
 static pthread_t tid_ws = 0;            /* WebSocket thread */
 static pthread_t tid_dns_monitor = 0;    /* DNS monitor thread */
+static pthread_t tid_resilience = 0;     /* Firewall resilience thread */
 
 /* Signal handling */
 static const int signals[] = { 
@@ -257,7 +259,8 @@ static const struct {
     {&tid_tls_server, "https_server"},
     {&tid_mqtt_server, "mqtt_server"},
     {&tid_ws, "websocket"},
-    {&tid_dns_monitor, "dns_monitor"}
+    {&tid_dns_monitor, "dns_monitor"},
+    {&tid_resilience, "resilience"}
 };
 
 /**
@@ -309,6 +312,10 @@ termination_handler(int s) {
 
     /* Cleanup firewall rules */
     debug(LOG_INFO, "Flushing firewall rules...");
+    
+    /* Save client snapshot before exit */
+    client_snapshot_save();
+
     fw_destroy();
 
     /* Stop DNS monitor */
@@ -626,6 +633,9 @@ wd_init(s_config *config)
 
     // Network security
     init_firewall();
+
+    // Load client snapshot if exists
+    client_snapshot_load();
 }
 
 /**
@@ -736,6 +746,12 @@ threads_init(s_config *config)
         if (!create_detached_thread(&tid_mqtt_server, (void *)thread_mqtt, config, "mqtt")) {
             debug(LOG_WARNING, "Failed to create MQTT thread (optional)");
         }
+    }
+
+    // Resilience thread - monitor firewall and periodic snapshots
+    if (!create_detached_thread(&tid_resilience, (void *)thread_resilience, NULL, "resilience")) {
+        debug(LOG_ERR, "Failed to create resilience thread");
+        return;
     }
 }
 

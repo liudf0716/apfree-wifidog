@@ -59,83 +59,73 @@ static void nft_statistical_helper(const char *tab, const char *chain, char **ou
 
 const char *nft_wifidogx_init_script[] = {
     "add table inet wifidogx",
-    "add set inet wifidogx set_wifidogx_local_trust_clients { type ether_addr; counter; }",
-    "add chain inet wifidogx prerouting { type nat hook prerouting priority -100; policy accept; }",
-    "add chain inet wifidogx mangle_prerouting { type filter hook prerouting priority -50; policy accept; }",
-    "add set inet fw4 set_wifidogx_auth_servers { type ipv4_addr; }",
-    "add set inet fw4 set_wifidogx_auth_servers_v6 { type ipv6_addr; }",
-    "add set inet fw4 set_wifidogx_gateway { type ipv4_addr; }",
-    "add set inet fw4 set_wifidogx_gateway_v6 { type ipv6_addr; }",
-    "add set inet fw4 set_wifidogx_trust_domains { type ipv4_addr; }",
-    "add set inet fw4 set_wifidogx_trust_domains_v6 { type ipv6_addr; }",
-    "add set inet fw4 set_wifidogx_wildcard_trust_domains { type ipv4_addr; }",
-    "add set inet fw4 set_wifidogx_wildcard_trust_domains_v6 { type ipv6_addr; }",
-    "add set inet fw4 set_wifidogx_inner_trust_domains { type ipv4_addr; }",
-    "add set inet fw4 set_wifidogx_inner_trust_domains_v6 { type ipv6_addr; }",
-    "add set inet fw4 set_wifidogx_bypass_clients { type ipv4_addr; flags interval; }",
-    "add set inet fw4 set_wifidogx_bypass_clients_v6 { type ipv6_addr; flags interval; }",
-    "add set inet fw4 set_wifidogx_trust_clients_out { type ether_addr; flags timeout; timeout 1d; counter; }",
-    "add set inet fw4 set_wifidogx_tmp_trust_clients { type ether_addr; flags timeout; timeout 1m; counter; }",
-    "add chain inet fw4 dstnat_wifidogx_auth_server",
-    "add chain inet fw4 dstnat_wifidogx_wan",
-    "add chain inet fw4 dstnat_wifidogx_outgoing",
-    "add chain inet fw4 dstnat_wifidogx_trust_domains",
-    "add chain inet fw4 dstnat_wifidogx_wildcard_trust_domains",
-    "add chain inet fw4 dstnat_wifidogx_unknown",
-    "add rule inet fw4 dstnat_wifidogx_outgoing ip daddr @set_wifidogx_gateway accept",
-    "add rule inet fw4 dstnat_wifidogx_outgoing ip6 daddr @set_wifidogx_gateway_v6 accept",
-    "add rule inet fw4 dstnat_wifidogx_outgoing jump dstnat_wifidogx_wan",
-    "add rule inet fw4 dstnat_wifidogx_wan ether saddr @set_wifidogx_tmp_trust_clients accept",
-    "add rule inet fw4 dstnat_wifidogx_wan ether saddr @set_wifidogx_trust_clients_out accept",
-    "add rule inet fw4 dstnat_wifidogx_wan ip saddr @set_wifidogx_bypass_clients accept",
-    "add rule inet fw4 dstnat_wifidogx_wan ip6 saddr @set_wifidogx_bypass_clients_v6 accept",
-    "add rule inet fw4 dstnat_wifidogx_wan meta mark 0x20000 accept",
-    "add rule inet fw4 dstnat_wifidogx_wan meta mark 0x10000 accept",
-    "add rule inet fw4 dstnat_wifidogx_wan jump dstnat_wifidogx_unknown",
-    "add rule inet fw4 dstnat_wifidogx_unknown jump dstnat_wifidogx_auth_server",
-    "add rule inet fw4 dstnat_wifidogx_unknown jump dstnat_wifidogx_trust_domains",
-    "add rule inet fw4 dstnat_wifidogx_unknown jump dstnat_wifidogx_wildcard_trust_domains",
-    "add rule inet fw4 dstnat_wifidogx_unknown tcp dport 443 redirect to $HTTPS_PORT$",
-    "add rule inet fw4 dstnat_wifidogx_unknown udp dport 443 drop",
-    "add rule inet fw4 dstnat_wifidogx_unknown tcp dport 80 redirect to $HTTP_PORT$",
-    "add rule inet fw4 dstnat_wifidogx_unknown udp dport 80 drop",
-    "add rule inet fw4 dstnat_wifidogx_auth_server ip daddr @set_wifidogx_auth_servers accept",
-    "add rule inet fw4 dstnat_wifidogx_auth_server ip6 daddr @set_wifidogx_auth_servers_v6 accept",
-    "add rule inet fw4 dstnat_wifidogx_trust_domains ip daddr @set_wifidogx_trust_domains accept",
-    "add rule inet fw4 dstnat_wifidogx_trust_domains ip6 daddr @set_wifidogx_trust_domains_v6 accept",
-    "add rule inet fw4 dstnat_wifidogx_trust_domains ip daddr @set_wifidogx_inner_trust_domains accept",
-    "add rule inet fw4 dstnat_wifidogx_trust_domains ip6 daddr @set_wifidogx_inner_trust_domains_v6 accept",
-    "add rule inet fw4 dstnat_wifidogx_wildcard_trust_domains ip daddr @set_wifidogx_wildcard_trust_domains accept",
-    "add rule inet fw4 dstnat_wifidogx_wildcard_trust_domains ip6 daddr @set_wifidogx_wildcard_trust_domains_v6 accept",
-    "add chain inet fw4 forward_wifidogx_auth_servers",
-    "add chain inet fw4 forward_wifidogx_wan",
-    "add chain inet fw4 forward_wifidogx_trust_domains",
-    "add chain inet fw4 forward_wifidogx_unknown",
-    "add chain inet fw4 mangle_prerouting_wifidogx_outgoing",
-    "add chain inet fw4 mangle_postrouting_wifidogx_incoming",
-    "add rule inet fw4 forward_wifidogx_wan jump forward_wifidogx_auth_servers",
-    "add rule inet fw4 forward_wifidogx_wan jump forward_wifidogx_trust_domains",
-    "add rule inet fw4 forward_wifidogx_wan ether saddr @set_wifidogx_tmp_trust_clients accept",
-    "add rule inet fw4 forward_wifidogx_wan ether saddr @set_wifidogx_trust_clients_out accept",
-    "add rule inet fw4 forward_wifidogx_wan ip saddr @set_wifidogx_bypass_clients accept",
-    "add rule inet fw4 forward_wifidogx_wan ip6 saddr @set_wifidogx_bypass_clients_v6 accept",
-    "add rule inet fw4 forward_wifidogx_wan meta mark 0x10000 accept",
-    "add rule inet fw4 forward_wifidogx_wan meta mark 0x20000 accept",
-    "add rule inet fw4 forward_wifidogx_wan jump forward_wifidogx_unknown",
-    "add rule inet fw4 forward_wifidogx_unknown reject",
-    "add rule inet fw4 forward_wifidogx_auth_servers ip daddr @set_wifidogx_auth_servers accept",
-    "add rule inet fw4 forward_wifidogx_auth_servers ip6 daddr @set_wifidogx_auth_servers_v6 accept",
-    "add rule inet fw4 forward_wifidogx_trust_domains ip daddr @set_wifidogx_trust_domains accept",
-    "add rule inet fw4 forward_wifidogx_trust_domains ip6 daddr @set_wifidogx_trust_domains_v6 accept",
-    "add rule inet fw4 forward_wifidogx_trust_domains ip daddr @set_wifidogx_inner_trust_domains accept",
-    "add rule inet fw4 forward_wifidogx_trust_domains ip6 daddr @set_wifidogx_inner_trust_domains_v6 accept",
-    "insert rule inet fw4 accept_to_wan jump forward_wifidogx_wan",
+    "add set inet wifidogx set_wifidogx_antinat_local_macs { type ether_addr; counter; }",
+    "add set inet wifidogx set_wifidogx_auth_servers { type ipv4_addr; }",
+    "add set inet wifidogx set_wifidogx_auth_servers_v6 { type ipv6_addr; }",
+    "add set inet wifidogx set_wifidogx_gateway { type ipv4_addr; }",
+    "add set inet wifidogx set_wifidogx_gateway_v6 { type ipv6_addr; }",
+    "add set inet wifidogx set_wifidogx_trust_domains { type ipv4_addr; }",
+    "add set inet wifidogx set_wifidogx_trust_domains_v6 { type ipv6_addr; }",
+    "add set inet wifidogx set_wifidogx_wildcard_trust_domains { type ipv4_addr; }",
+    "add set inet wifidogx set_wifidogx_wildcard_trust_domains_v6 { type ipv6_addr; }",
+    "add set inet wifidogx set_wifidogx_inner_trust_domains { type ipv4_addr; }",
+    "add set inet wifidogx set_wifidogx_inner_trust_domains_v6 { type ipv6_addr; }",
+    "add set inet wifidogx set_wifidogx_bypass_clients { type ipv4_addr; flags interval; }",
+    "add set inet wifidogx set_wifidogx_bypass_clients_v6 { type ipv6_addr; flags interval; }",
+    "add set inet wifidogx set_wifidogx_trust_clients_out { type ether_addr; flags timeout; timeout 1d; counter; }",
+    "add set inet wifidogx set_wifidogx_tmp_trust_clients { type ether_addr; flags timeout; timeout 1m; counter; }",
+    "add chain inet wifidogx prerouting { type nat hook prerouting priority -300; policy accept; }",
+    "add chain inet wifidogx forward { type filter hook forward priority -300; policy accept; }",
+    "add chain inet wifidogx mangle_prerouting { type filter hook prerouting priority -300; policy accept; }",
+    "add chain inet wifidogx wifidogx_antinat",
+    "add chain inet wifidogx wifidogx_redirect",
+    "add chain inet wifidogx dstnat_wifidogx_auth_server",
+    "add chain inet wifidogx dstnat_wifidogx_wan",
+    "add chain inet wifidogx dstnat_wifidogx_outgoing",
+    "add chain inet wifidogx dstnat_wifidogx_trust_domains",
+    "add chain inet wifidogx dstnat_wifidogx_wildcard_trust_domains",
+    "add chain inet wifidogx dstnat_wifidogx_unknown",
+    "add chain inet wifidogx forward_wifidogx_auth_servers",
+    "add chain inet wifidogx forward_wifidogx_wan",
+    "add chain inet wifidogx forward_wifidogx_trust_domains",
+    "add chain inet wifidogx forward_wifidogx_unknown",
+    "add chain inet wifidogx mangle_prerouting_wifidogx_outgoing",
+    "add chain inet wifidogx mangle_postrouting_wifidogx_incoming",
+    "add rule inet wifidogx dstnat_wifidogx_unknown jump wifidogx_redirect",
+    "add rule inet wifidogx wifidogx_redirect tcp dport 443 redirect to $HTTPS_PORT$",
+    "add rule inet wifidogx wifidogx_redirect udp dport 443 drop",
+    "add rule inet wifidogx wifidogx_redirect tcp dport 80 redirect to $HTTP_PORT$",
+    "add rule inet wifidogx wifidogx_redirect udp dport 80 drop",
+    "add rule inet wifidogx dstnat_wifidogx_auth_server ip daddr @set_wifidogx_auth_servers accept",
+    "add rule inet wifidogx dstnat_wifidogx_auth_server ip6 daddr @set_wifidogx_auth_servers_v6 accept",
+    "add rule inet wifidogx dstnat_wifidogx_trust_domains ip daddr @set_wifidogx_trust_domains accept",
+    "add rule inet wifidogx dstnat_wifidogx_trust_domains ip6 daddr @set_wifidogx_trust_domains_v6 accept",
+    "add rule inet wifidogx dstnat_wifidogx_trust_domains ip daddr @set_wifidogx_inner_trust_domains accept",
+    "add rule inet wifidogx dstnat_wifidogx_trust_domains ip6 daddr @set_wifidogx_inner_trust_domains_v6 accept",
+    "add rule inet wifidogx dstnat_wifidogx_wildcard_trust_domains ip daddr @set_wifidogx_wildcard_trust_domains accept",
+    "add rule inet wifidogx dstnat_wifidogx_wildcard_trust_domains ip6 daddr @set_wifidogx_wildcard_trust_domains_v6 accept",
+    "add rule inet wifidogx forward_wifidogx_wan jump forward_wifidogx_auth_servers",
+    "add rule inet wifidogx forward_wifidogx_wan jump forward_wifidogx_trust_domains",
+    "add rule inet wifidogx forward_wifidogx_wan ether saddr @set_wifidogx_tmp_trust_clients accept",
+    "add rule inet wifidogx forward_wifidogx_wan ether saddr @set_wifidogx_trust_clients_out accept",
+    "add rule inet wifidogx forward_wifidogx_wan ip saddr @set_wifidogx_bypass_clients accept",
+    "add rule inet wifidogx forward_wifidogx_wan ip6 saddr @set_wifidogx_bypass_clients_v6 accept",
+    "add rule inet wifidogx forward_wifidogx_wan meta mark 0x10000 accept",
+    "add rule inet wifidogx forward_wifidogx_wan meta mark 0x20000 accept",
+    "add rule inet wifidogx forward_wifidogx_wan jump forward_wifidogx_unknown",
+    "add rule inet wifidogx forward_wifidogx_unknown reject",
+    "add rule inet wifidogx forward_wifidogx_auth_servers ip daddr @set_wifidogx_auth_servers accept",
+    "add rule inet wifidogx forward_wifidogx_auth_servers ip6 daddr @set_wifidogx_auth_servers_v6 accept",
+    "add rule inet wifidogx forward_wifidogx_trust_domains ip daddr @set_wifidogx_trust_domains accept",
+    "add rule inet wifidogx forward_wifidogx_trust_domains ip6 daddr @set_wifidogx_trust_domains_v6 accept",
+    "add rule inet wifidogx forward_wifidogx_trust_domains ip daddr @set_wifidogx_inner_trust_domains accept",
+    "add rule inet wifidogx forward_wifidogx_trust_domains ip6 daddr @set_wifidogx_inner_trust_domains_v6 accept",
 };
 
 const char *nft_wifidogx_anti_nat_script[] = {
-    "add rule inet wifidogx prerouting iifname $interface$ ether saddr @set_wifidogx_local_trust_clients accept",
-    "add rule inet wifidogx prerouting iifname $interface$ ip ttl != { $ttlvalues$ } counter drop",
-    "add rule inet wifidogx prerouting iifname $interface$ ip6 hoplimit != { $ttlvalues$ } counter drop",
+    "add rule inet wifidogx wifidogx_antinat iifname $interface$ ether saddr @set_wifidogx_antinat_local_macs accept",
+    "add rule inet wifidogx wifidogx_antinat iifname $interface$ ip ttl != { $ttlvalues$ } counter drop",
+    "add rule inet wifidogx wifidogx_antinat iifname $interface$ ip6 hoplimit != { $ttlvalues$ } counter drop",
 };
 
 /** Replace occurrences of a substring in a string
@@ -239,21 +229,19 @@ generate_nft_wifidogx_init_script()
     }
     
     if (config->enable_anti_nat) {
-        while(gw_settings) {
+        t_gateway_setting *curr_gw = gw_settings;
+        while(curr_gw) {
             for (size_t i = 0; i < sizeof(nft_wifidogx_anti_nat_script) / sizeof(nft_wifidogx_anti_nat_script[0]); i++) {
                 const char *p = nft_wifidogx_anti_nat_script[i];
                 memset(buf, 0, sizeof(buf));
 
                 if (strstr(p, "$interface$") && strstr(p, "$ttlvalues$")) {
-                    // First replace interface
-                    replace_str(p, "$interface$", gw_settings->gw_interface, buf, sizeof(buf));
-                    // Then replace ttlvalues in the result
+                    replace_str(p, "$interface$", curr_gw->gw_interface, buf, sizeof(buf));
                     char tmp[1024] = {0};
                     replace_str(buf, "$ttlvalues$", config->ttl_values, tmp, sizeof(tmp));
                     fprintf(output_file, "%s\n", tmp);
-                    debug(LOG_DEBUG, "anti nat script: %s", tmp);
                 } else if (strstr(p, "$interface$")) {
-                    replace_str(p, "$interface$", gw_settings->gw_interface, buf, sizeof(buf));
+                    replace_str(p, "$interface$", curr_gw->gw_interface, buf, sizeof(buf));
                     fprintf(output_file, "%s\n", buf);
                 } else if (strstr(p, "$ttlvalues$")) {
                     replace_str(p, "$ttlvalues$", config->ttl_values, buf, sizeof(buf));
@@ -262,8 +250,18 @@ generate_nft_wifidogx_init_script()
                     fprintf(output_file, "%s\n", p);
                 }
             }
-            gw_settings = gw_settings->next;
+            curr_gw = curr_gw->next;
         }
+    }
+
+    // Add per-interface jumps
+    t_gateway_setting *curr_gw = gw_settings;
+    while(curr_gw) {
+        fprintf(output_file, "add rule inet wifidogx prerouting iifname \"%s\" jump wifidogx_antinat\n", curr_gw->gw_interface);
+        fprintf(output_file, "add rule inet wifidogx prerouting iifname \"%s\" jump dstnat_wifidogx_outgoing\n", curr_gw->gw_interface);
+        fprintf(output_file, "add rule inet wifidogx forward iifname \"%s\" jump forward_wifidogx_wan\n", curr_gw->gw_interface);
+        fprintf(output_file, "add rule inet wifidogx mangle_prerouting iifname \"%s\" jump mangle_prerouting_wifidogx_outgoing\n", curr_gw->gw_interface);
+        curr_gw = curr_gw->next;
     }
 
     fclose(output_file);
@@ -402,7 +400,7 @@ nft_statistical_helper(const char *tab, const char *chain, char **output, uint32
 static void 
 nft_statistical_outgoing(char **outgoing, uint32_t *outgoing_len)
 {
-    nft_statistical_helper("fw4", "mangle_prerouting_wifidogx_outgoing", outgoing, outgoing_len);
+    nft_statistical_helper("wifidogx", "mangle_prerouting_wifidogx_outgoing", outgoing, outgoing_len);
 }
 
 /**
@@ -417,7 +415,7 @@ nft_statistical_outgoing(char **outgoing, uint32_t *outgoing_len)
 static void
 nft_statistical_incoming(char **incoming, uint32_t *incoming_len)
 {
-    nft_statistical_helper("fw4", "mangle_postrouting_wifidogx_incoming", incoming, incoming_len);
+    nft_statistical_helper("wifidogx", "mangle_postrouting_wifidogx_incoming", incoming, incoming_len);
 }
 
 static void
@@ -432,53 +430,21 @@ __nft_add_gw()
     while(gw_settings) {
         if (gw_settings->auth_mode) {
             debug(LOG_DEBUG, "add gateway %s to auth", gw_settings->gw_interface);
-            nftables_do_command("add rule inet fw4 dstnat iifname %s jump dstnat_wifidogx_outgoing", gw_settings->gw_interface);
-            nftables_do_command("add rule inet fw4 mangle_prerouting iifname %s jump mangle_prerouting_wifidogx_outgoing", gw_settings->gw_interface);
-            nftables_do_command("add rule inet fw4 mangle_postrouting oifname %s jump mangle_postrouting_wifidogx_incoming", gw_settings->gw_interface);
             if (gw_settings->gw_address_v4)
-                nftables_do_command("add element inet fw4 set_wifidogx_gateway { %s }", gw_settings->gw_address_v4);
+                nftables_do_command("add element inet wifidogx set_wifidogx_gateway { %s }", gw_settings->gw_address_v4);
             if (gw_settings->gw_address_v6)
-                nftables_do_command("add element inet fw4 set_wifidogx_gateway_v6 { %s }", gw_settings->gw_address_v6);
+                nftables_do_command("add element inet wifidogx set_wifidogx_gateway_v6 { %s }", gw_settings->gw_address_v6);
         }
         gw_settings = gw_settings->next;
     }
 }
 
-static void
-delete_wifidogx_rules(const char *chain_name, const char *rule_name)
-{
-    char cmd[256] = {0};
-    snprintf(cmd, sizeof(cmd), "nft -a list chain inet fw4 %s", chain_name);
-
-    FILE *r_fp = popen(cmd, "r");
-    if (r_fp == NULL) {
-        debug(LOG_ERR, "popen failed");
-        return;
-    }
-
-    char buf[4096] = {0};
-    while (fgets(buf, sizeof(buf), r_fp) != NULL) {
-        if (strstr(buf, rule_name)) {
-            char *p = strstr(buf, "handle");
-            if (p) {
-                int handle;
-                sscanf(p, "handle %d", &handle);
-                nftables_do_command("delete rule inet fw4 %s handle %d", chain_name, handle);
-                debug(LOG_DEBUG, "delete chain %s rule hanle %d", chain_name, handle);
-            }
-        }
-    }
-}
 
 static void
 __nft_del_gw()
 {
-    delete_wifidogx_rules("dstnat", "dstnat_wifidogx_outgoing");
-    delete_wifidogx_rules("mangle_prerouting", "mangle_prerouting_wifidogx_outgoing");
-    delete_wifidogx_rules("mangle_postrouting", "mangle_postrouting_wifidogx_incoming");
-
-    nftables_do_command("flush set inet fw4 set_wifidogx_gateway");
-    nftables_do_command("flush set inet fw4 set_wifidogx_gateway_v6");
+    nftables_do_command("flush set inet wifidogx set_wifidogx_gateway");
+    nftables_do_command("flush set inet wifidogx set_wifidogx_gateway_v6");
 }
 
 void
@@ -514,7 +480,7 @@ nft_set_ext_interface()
         debug(LOG_ERR, "get_iface_ip [%s] failed", config->external_interface);
         return;
     }
-    nftables_do_command("add element inet fw4 set_wifidogx_bypass_clients { %s }", ip);
+    nftables_do_command("add element inet wifidogx set_wifidogx_bypass_clients { %s }", ip);
     free(ip);
 
     ip = get_iface_ip6(config->external_interface);
@@ -522,7 +488,7 @@ nft_set_ext_interface()
         debug(LOG_ERR, "get_iface_ip6 [%s] failed", config->external_interface);
         return;
     }
-    nftables_do_command("add element inet fw4 set_wifidogx_bypass_clients_v6 { %s }", ip);
+    nftables_do_command("add element inet wifidogx set_wifidogx_bypass_clients_v6 { %s }", ip);
     free(ip);
 }
 
@@ -562,7 +528,7 @@ nft_fw_destroy(void)
         execute("nft delete table inet wifidogx", 0);
     }
 
-    return execute("fw4 restart", 0);
+    return 0;
 }
 
 static int
@@ -618,7 +584,7 @@ nft_fw_del_rule_by_ip_and_mac(const char *ip, const char *mac, const char *chain
 {
     char *buf = NULL;
     uint32_t buf_len = 0;
-    nft_statistical_helper("fw4", chain, &buf, &buf_len);
+    nft_statistical_helper("wifidogx", chain, &buf, &buf_len);
     if (buf == NULL) {
         debug(LOG_ERR, "nft_statistical_helper failed");
         return;
@@ -668,7 +634,7 @@ nft_fw_del_rule_by_ip_and_mac(const char *ip, const char *mac, const char *chain
             }
 
             const char *handle = json_object_get_string(jobj_rule_handle);
-            snprintf(cmd, sizeof(cmd), "delete rule inet fw4 %s handle %s", chain, handle);
+            snprintf(cmd, sizeof(cmd), "delete rule inet wifidogx %s handle %s", chain, handle);
             nftables_do_command(cmd);
             memset(cmd, 0, sizeof(cmd));
         }
@@ -711,23 +677,23 @@ nft_fw_access(fw_access_t type, const char *ip, const char *mac, int tag)
         case FW_ACCESS_ALLOW:
             // Add outgoing traffic rule with counter and mark
             if (is_valid_ip(ip)) {
-                nftables_do_command("add rule inet fw4 mangle_prerouting_wifidogx_outgoing "
+                nftables_do_command("add rule inet wifidogx mangle_prerouting_wifidogx_outgoing "
                                 "ether saddr %s ip saddr %s counter mark set 0x20000 accept", 
                                 mac, ip);
 
                 // Add incoming traffic rule with counter
-                nftables_do_command("add rule inet fw4 mangle_postrouting_wifidogx_incoming "
+                nftables_do_command("add rule inet wifidogx mangle_postrouting_wifidogx_incoming "
                                 "ip daddr %s counter accept", ip);
 
                 snprintf(cmd, sizeof(cmd), "aw-bpfctl ipv4 add %s", ip);
                 execute(cmd, 0);
             } else if (is_valid_ip6(ip)){
-                nftables_do_command("add rule inet fw4 mangle_prerouting_wifidogx_outgoing "
+                nftables_do_command("add rule inet wifidogx mangle_prerouting_wifidogx_outgoing "
                                 "ether saddr %s ip6 saddr %s counter mark set 0x20000 accept", 
                                 mac, ip);
 
                 // Add incoming traffic rule with counter
-                nftables_do_command("add rule inet fw4 mangle_postrouting_wifidogx_incoming "
+                nftables_do_command("add rule inet wifidogx mangle_postrouting_wifidogx_incoming "
                                 "ip6 daddr %s counter accept", ip);
 
                 snprintf(cmd, sizeof(cmd), "aw-bpfctl ipv6 add %s", ip);
@@ -816,8 +782,8 @@ nft_fw_reload_client()
     }
 
     // Flush existing client chains
-    fprintf(fp, "flush chain inet fw4 mangle_prerouting_wifidogx_outgoing\n");
-    fprintf(fp, "flush chain inet fw4 mangle_postrouting_wifidogx_incoming\n");
+    fprintf(fp, "flush chain inet wifidogx mangle_prerouting_wifidogx_outgoing\n");
+    fprintf(fp, "flush chain inet wifidogx mangle_postrouting_wifidogx_incoming\n");
     
     // Add rules for each client
     t_client *current = first_client;
@@ -825,7 +791,7 @@ nft_fw_reload_client()
     do {
         // Add outgoing rule with counters
         snprintf(rule, sizeof(rule), 
-                "add rule inet fw4 mangle_prerouting_wifidogx_outgoing "
+                "add rule inet wifidogx mangle_prerouting_wifidogx_outgoing "
                 "ether saddr %s ip saddr %s counter packets %llu bytes %llu "
                 "mark set 0x20000 accept\n",
                 current->mac, current->ip,
@@ -835,7 +801,7 @@ nft_fw_reload_client()
 
         // Add incoming rule with counters
         snprintf(rule, sizeof(rule),
-                "add rule inet fw4 mangle_postrouting_wifidogx_incoming "
+                "add rule inet wifidogx mangle_postrouting_wifidogx_incoming "
                 "ip daddr %s counter packets %llu bytes %llu accept\n",
                 current->ip,
                 current->counters.incoming_packets,
@@ -871,15 +837,15 @@ nft_fw_reload_trusted_maclist()
     }
 
     // Flush existing trust client set
-    fprintf(fp, "flush set inet fw4 set_wifidogx_trust_clients_out\n");
+    fprintf(fp, "flush set inet wifidogx set_wifidogx_trust_clients_out\n");
     
     // Add rules for each trusted MAC
     while (mac_list != NULL) {
         if (mac_list->remaining_time == 0) {
-            fprintf(fp, "add element inet fw4 set_wifidogx_trust_clients_out { %s }\n", 
+            fprintf(fp, "add element inet wifidogx set_wifidogx_trust_clients_out { %s }\n", 
                     mac_list->mac);
         } else {
-            fprintf(fp, "add element inet fw4 set_wifidogx_trust_clients_out { %s timeout %ds }\n",
+            fprintf(fp, "add element inet wifidogx set_wifidogx_trust_clients_out { %s timeout %ds }\n",
                     mac_list->mac, mac_list->remaining_time);
         }
         mac_list = mac_list->next;
@@ -1387,8 +1353,8 @@ nft_fw_auth_reachable()
 static void
 __nft_fw_clear_authservers()
 {
-    nftables_do_command("flush set inet fw4 set_wifidogx_auth_servers");
-    nftables_do_command("flush set inet fw4 set_wifidogx_auth_servers_v6");
+    nftables_do_command("flush set inet wifidogx set_wifidogx_auth_servers");
+    nftables_do_command("flush set inet wifidogx set_wifidogx_auth_servers_v6");
 }
 
 void
@@ -1416,9 +1382,9 @@ __nft_fw_set_authservers()
     }
     while(ips) {
         if (ips->ip_type == IP_TYPE_IPV4) {
-            nftables_do_command("add element inet fw4 set_wifidogx_auth_servers { %s }", ips->ip);
+            nftables_do_command("add element inet wifidogx set_wifidogx_auth_servers { %s }", ips->ip);
         } else if (ips->ip_type == IP_TYPE_IPV6) {
-            nftables_do_command("add element inet fw4 set_wifidogx_auth_servers_v6 { %s }", ips->ip);
+            nftables_do_command("add element inet wifidogx set_wifidogx_auth_servers_v6 { %s }", ips->ip);
         }
         ips = ips->next;
     }
@@ -1437,8 +1403,8 @@ nft_fw_set_authservers()
 static void
 __nft_fw_clear_inner_domains_trusted()
 {
-    nftables_do_command("flush set inet fw4 set_wifidogx_inner_trust_domains");
-    nftables_do_command("flush set inet fw4 set_wifidogx_inner_trust_domains_v6");
+    nftables_do_command("flush set inet wifidogx set_wifidogx_inner_trust_domains");
+    nftables_do_command("flush set inet wifidogx set_wifidogx_inner_trust_domains_v6");
 }
 
 void
@@ -1461,9 +1427,9 @@ __nft_fw_set_inner_domains_trusted()
         t_ip_trusted *ip_trusted = NULL;
         for(ip_trusted = domain_trusted->ips_trusted; ip_trusted != NULL; ip_trusted = ip_trusted->next) {
             if (ip_trusted->ip_type == IP_TYPE_IPV4)
-                nftables_do_command("add element inet fw4 set_wifidogx_inner_trust_domains { %s }", ip_trusted->ip);
+                nftables_do_command("add element inet wifidogx set_wifidogx_inner_trust_domains { %s }", ip_trusted->ip);
             else if (ip_trusted->ip_type == IP_TYPE_IPV6)
-                nftables_do_command("add element inet fw4 set_wifidogx_inner_trust_domains_v6 { %s }", ip_trusted->ip);
+                nftables_do_command("add element inet wifidogx set_wifidogx_inner_trust_domains_v6 { %s }", ip_trusted->ip);
         }
     }
 }
@@ -1498,7 +1464,7 @@ __nft_fw_set_user_domains_trusted()
     for (domain_trusted = config->domains_trusted; domain_trusted != NULL; domain_trusted = domain_trusted->next) {
         t_ip_trusted *ip_trusted = NULL;
         for(ip_trusted = domain_trusted->ips_trusted; ip_trusted != NULL; ip_trusted = ip_trusted->next) {
-            nftables_do_command("add element inet fw4 set_wifidogx_trust_domains { %s }", ip_trusted->ip);
+            nftables_do_command("add element inet wifidogx set_wifidogx_trust_domains { %s }", ip_trusted->ip);
         }
     }
 }
@@ -1516,8 +1482,8 @@ nft_fw_set_user_domains_trusted()
 static void
 __nft_fw_clear_user_domains_trusted()
 {
-    nftables_do_command("flush set inet fw4 set_wifidogx_trust_domains");
-    nftables_do_command("flush set inet fw4 set_wifidogx_trust_domains_v6");
+    nftables_do_command("flush set inet wifidogx set_wifidogx_trust_domains");
+    nftables_do_command("flush set inet wifidogx set_wifidogx_trust_domains_v6");
 }
 
 void
@@ -1544,8 +1510,8 @@ nft_fw_refresh_user_domains_trusted()
 static void
 __nft_fw_clear_wildcard_domains_trusted()
 {
-    nftables_do_command("flush set inet fw4 set_wifidogx_wildcard_trust_domains");
-    nftables_do_command("flush set inet fw4 set_wifidogx_wildcard_trust_domains_v6");
+    nftables_do_command("flush set inet wifidogx set_wifidogx_wildcard_trust_domains");
+    nftables_do_command("flush set inet wifidogx set_wifidogx_wildcard_trust_domains_v6");
 }
 
 static void
@@ -1558,9 +1524,9 @@ __nft_fw_set_wildcard_domains_trusted()
         t_ip_trusted *ip_trusted = NULL;
         for(ip_trusted = domain_trusted->ips_trusted; ip_trusted != NULL; ip_trusted = ip_trusted->next) {
             if (ip_trusted->ip_type == IP_TYPE_IPV4) {
-                nftables_do_command("add element inet fw4 set_wifidogx_wildcard_trust_domains { %s }", ip_trusted->ip);
+                nftables_do_command("add element inet wifidogx set_wifidogx_wildcard_trust_domains { %s }", ip_trusted->ip);
             } else if (ip_trusted->ip_type == IP_TYPE_IPV6) {
-                nftables_do_command("add element inet fw4 set_wifidogx_wildcard_trust_domains_v6 { %s }", ip_trusted->ip);
+                nftables_do_command("add element inet wifidogx set_wifidogx_wildcard_trust_domains_v6 { %s }", ip_trusted->ip);
             }
         }
     }
@@ -1591,9 +1557,9 @@ static void
 __nft_fw_add_trusted_mac(const char *mac, int timeout)
 {
     if (timeout == 0)
-        nftables_do_command("add element inet fw4 set_wifidogx_trust_clients_out { %s }", mac);
+        nftables_do_command("add element inet wifidogx set_wifidogx_trust_clients_out { %s }", mac);
     else
-        nftables_do_command("add element inet fw4 set_wifidogx_trust_clients_out { %s timeout %ds}", mac, timeout);
+        nftables_do_command("add element inet wifidogx set_wifidogx_trust_clients_out { %s timeout %ds}", mac, timeout);
     
     char cmd[128] = {0};
     snprintf(cmd, sizeof(cmd), "aw-bpfctl mac add %s", mac);
@@ -1603,7 +1569,7 @@ __nft_fw_add_trusted_mac(const char *mac, int timeout)
 static void
 __nft_fw_del_trusted_mac(const char *mac)
 {
-    nftables_do_command("delete element inet fw4 set_wifidogx_trust_clients_out { %s }", mac);
+    nftables_do_command("delete element inet wifidogx set_wifidogx_trust_clients_out { %s }", mac);
 
     char cmd[128] = {0};
     snprintf(cmd, sizeof(cmd), "aw-bpfctl mac del %s", mac);
@@ -1662,7 +1628,7 @@ nft_fw_set_trusted_maclist()
 static void
 __nft_fw_clear_trusted_maclist()
 {
-    nftables_do_command("flush set inet fw4 set_wifidogx_trust_clients_out");
+    nftables_do_command("flush set inet wifidogx set_wifidogx_trust_clients_out");
 }
 
 void
@@ -1693,11 +1659,11 @@ nft_fw_set_mac_temporary(const char *mac, int which)
 
     LOCK_CONFIG();
     if (which == 0) {
-		nftables_do_command("add element inet fw4 set_wifidogx_tmp_trust_clients { %s }", mac);
+		nftables_do_command("add element inet wifidogx set_wifidogx_tmp_trust_clients { %s }", mac);
 	} else if(which > 0) { // trusted
 		if (which > 60*5)
 			which = 60*5;
-		nftables_do_command("add element inet fw4 set_wifidogx_tmp_trust_clients { %s timeout %ds}", mac, which);
+		nftables_do_command("add element inet wifidogx set_wifidogx_tmp_trust_clients { %s timeout %ds}", mac, which);
 	} else if(which < 0) { // untrusted
 		// TODO
 	}
@@ -1710,7 +1676,7 @@ nft_fw_add_anti_nat_permit(const char *mac)
     NFT_WIFIDOGX_BYPASS_MODE();
 
     LOCK_CONFIG();
-    nftables_do_command("add element inet wifidogx set_wifidogx_local_trust_clients { %s }", mac);
+    nftables_do_command("add element inet wifidogx set_wifidogx_antinat_local_macs { %s }", mac);
     UNLOCK_CONFIG();
 }
 
@@ -1720,7 +1686,7 @@ nft_fw_del_anti_nat_permit(const char *mac)
     NFT_WIFIDOGX_BYPASS_MODE();
 
     LOCK_CONFIG();
-    nftables_do_command("delete element inet wifidogx set_wifidogx_local_trust_clients { %s }", mac);
+    nftables_do_command("delete element inet wifidogx set_wifidogx_antinat_local_macs { %s }", mac);
     UNLOCK_CONFIG();
 }
 
@@ -1733,7 +1699,7 @@ __nft_fw_set_anti_nat_permit()
         return;
     }
 
-    nftables_do_command("add element inet wifidogx set_wifidogx_local_trust_clients { %s }", config->anti_nat_permit_macs);
+    nftables_do_command("add element inet wifidogx set_wifidogx_antinat_local_macs { %s }", config->anti_nat_permit_macs);
 }
 
 void
@@ -1785,4 +1751,38 @@ nft_fw_init()
     __nft_fw_set_inner_domains_trusted();
 
     return 1;
+}
+
+int 
+nft_check_core_rules(void)
+{
+    // Check if wifidogx table and core chains exist
+    int ret = system("nft list table inet wifidogx > /dev/null 2>&1");
+    if (ret != 0) return 0;
+    
+    // Check key chains
+    if (system("nft list chain inet wifidogx prerouting > /dev/null 2>&1") != 0) return 0;
+    if (system("nft list chain inet wifidogx forward > /dev/null 2>&1") != 0) return 0;
+    if (system("nft list chain inet wifidogx wifidogx_redirect > /dev/null 2>&1") != 0) return 0;
+    if (system("nft list chain inet wifidogx dstnat_wifidogx_unknown > /dev/null 2>&1") != 0) return 0;
+    
+    // Check forward sub-chains
+    if (system("nft list chain inet wifidogx forward_wifidogx_auth_servers > /dev/null 2>&1") != 0) return 0;
+    if (system("nft list chain inet wifidogx forward_wifidogx_trust_domains > /dev/null 2>&1") != 0) return 0;
+
+    // Check critical rules in wifidogx_redirect (redirects)
+    if (system("nft list chain inet wifidogx wifidogx_redirect | grep -q 'redirect' > /dev/null 2>&1") != 0) return 0;
+
+    // Check critical jump rules in forward_wifidogx_wan
+    if (system("nft list chain inet wifidogx forward_wifidogx_wan | grep -q 'jump forward_wifidogx_auth_servers' > /dev/null 2>&1") != 0) return 0;
+    if (system("nft list chain inet wifidogx forward_wifidogx_wan | grep -q 'jump forward_wifidogx_trust_domains' > /dev/null 2>&1") != 0) return 0;
+    
+    return 1; // Ready
+}
+
+int 
+nft_reconcile_rules(void)
+{
+    debug(LOG_INFO, "Reconciling firewall rules...");
+    return nft_fw_init();
 }
