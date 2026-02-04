@@ -574,6 +574,7 @@ handle_auth_allowed(t_client *client, struct evhttp_request *req,
           client->token, client->ip, client->mac);
 
     // Update client status
+    client->auth_type = AUTH_TYPE_AUTH_SERVER;
     fw_allow(client, FW_MARK_KNOWN);
     client->first_login = time(NULL);
     client->is_online = 1;
@@ -667,6 +668,7 @@ client_login_request_reply(t_authresponse *authresponse,
     case AUTH_VALIDATION:
         debug(LOG_INFO, "Validation access granted for token %s from %s at %s",
               client->token, client->ip, client->mac);
+        client->auth_type = AUTH_TYPE_AUTH_SERVER;
         fw_allow(client, FW_MARK_PROBATION);
         safe_asprintf(&url_fragment, "%smessage=%s",
                      auth_server->authserv_msg_script_path_fragment,

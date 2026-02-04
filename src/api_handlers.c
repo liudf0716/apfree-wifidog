@@ -859,6 +859,7 @@ void handle_auth_request(json_object *j_auth, api_transport_context_t *transport
     // Add new client with firewall rules
     LOCK_CLIENT_LIST();
     t_client *client = client_list_add(client_ip_str, client_mac_str, token_str, gw_setting);
+    client->auth_type = AUTH_TYPE_AUTH_SERVER;
     fw_allow(client, FW_MARK_KNOWN);
 
     // Set optional client name if provided

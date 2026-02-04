@@ -42,6 +42,7 @@ client_get_new(void)
     t_client *client;
     client = safe_malloc(sizeof(t_client));
     client->wired = -1;                   /* keep existing semantic */
+    client->auth_type = AUTH_TYPE_UNKNOWN;
 
     return client;
 }
@@ -239,6 +240,7 @@ client_dup(const t_client * src)
     new->mac = safe_strdup(src->mac);
     new->token = safe_strdup(src->token);
 	new->fw_connection_state = src->fw_connection_state;
+    new->auth_type = src->auth_type;
     new->counters.incoming_bytes = src->counters.incoming_bytes;
     new->counters.incoming_packets = src->counters.incoming_packets;
     new->counters.incoming_rate = src->counters.incoming_rate;
@@ -679,6 +681,7 @@ add_online_client(const char *ip, const char *mac, json_object *client)
         if(token && gw_setting) {
             t_client *client = client_list_add(ip, mac, token, gw_setting);
             client->wired = 0;
+            client->auth_type = AUTH_TYPE_AUTH_SERVER;
 
             if (first_login) {
                 client->first_login = first_login;
