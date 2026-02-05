@@ -74,7 +74,7 @@ const char *nft_wifidogx_init_script[] = {
     "add set inet wifidogx set_wifidogx_bypass_clients_v6 { type ipv6_addr; flags interval; }",
     "add set inet wifidogx set_wifidogx_trust_clients_out { type ether_addr; flags timeout; timeout 1d; counter; }",
     "add set inet wifidogx set_wifidogx_tmp_trust_clients { type ether_addr; flags timeout; timeout 1m; counter; }",
-    "add chain inet wifidogx prerouting { type nat hook prerouting priority -300; policy accept; }",
+    "add chain inet wifidogx prerouting { type nat hook prerouting priority -100; policy accept; }",
     "add chain inet wifidogx forward { type filter hook forward priority -300; policy accept; }",
     "add chain inet wifidogx mangle_prerouting { type filter hook prerouting priority -300; policy accept; }",
     "add chain inet wifidogx wifidogx_antinat",
