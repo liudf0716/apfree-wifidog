@@ -22,6 +22,12 @@
 
 extern time_t started_time;
 
+static bool
+snapshot_enabled(void)
+{
+    return !is_portal_auth_disabled() && !is_bypass_mode();
+}
+
 static const char *
 auth_type_to_string(client_auth_type_t auth_type)
 {
@@ -83,6 +89,11 @@ get_firmware_version(void)
 
 int client_snapshot_save(void)
 {
+    if (!snapshot_enabled()) {
+        debug(LOG_DEBUG, "Snapshot is disabled, skip save");
+        return 0;
+    }
+
     debug(LOG_INFO, "Saving client snapshot to %s", SNAPSHOT_FILE);
 
     json_object *root = json_object_new_object();
@@ -161,6 +172,11 @@ int client_snapshot_save(void)
 
 int client_snapshot_load(void)
 {
+    if (!snapshot_enabled()) {
+        debug(LOG_DEBUG, "Snapshot is disabled, skip load");
+        return 0;
+    }
+
     debug(LOG_INFO, "Loading client snapshot from %s", SNAPSHOT_FILE);
 
     FILE *fp = fopen(SNAPSHOT_FILE, "r");
@@ -300,6 +316,11 @@ int client_snapshot_load(void)
 
 char *client_snapshot_dump_json(void)
 {
+    if (!snapshot_enabled()) {
+        debug(LOG_DEBUG, "Snapshot is disabled, returning empty json");
+        return safe_strdup("{}");
+    }
+
     s_config *config = config_get_config();
     json_object *j_obj = json_object_new_object();
     json_object *j_array = json_object_new_array();
@@ -339,6 +360,19 @@ char *client_snapshot_dump_json(void)
 char *client_snapshot_query_status(const char *key, const char *gw_mac, const char *gw_address, query_choice_t choice)
 {
     if (!key || !gw_mac || !gw_address) return NULL;
+
+    if (!snapshot_enabled()) {
+        json_object *j_status = json_object_new_object();
+        json_object_object_add(j_status, "gw_mac", json_object_new_string(gw_mac));
+        json_object_object_add(j_status, "gw_ip", json_object_new_string(gw_address));
+        json_object_object_add(j_status, "c_mac", json_object_new_string(choice == QUERY_BY_MAC ? key : "unknown"));
+        json_object_object_add(j_status, "c_ip", json_object_new_string(choice == QUERY_BY_IP ? key : "unknown"));
+        json_object_object_add(j_status, "release", json_object_new_string("0"));
+        const char *json_str = json_object_to_json_string(j_status);
+        char *res = safe_strdup(json_str);
+        json_object_put(j_status);
+        return res;
+    }
 
     s_config *config = config_get_config();
     json_object *j_status = json_object_new_object();
@@ -387,6 +421,11 @@ bool client_snapshot_add_trusted_mac(const char *mac, uint32_t remaining_time, c
 	if (mac == NULL || !is_valid_mac(mac) || serial == NULL) {
 		return false;
 	}
+
+	if (!snapshot_enabled()) {
+		debug(LOG_DEBUG, "Snapshot is disabled, skip add trusted mac");
+		return false;
+	}
 	
     add_mac(mac, TRUSTED_MAC); // Note: add_mac should handle list management
     
@@ -412,6 +451,11 @@ bool client_snapshot_add_trusted_mac(const char *mac, uint32_t remaining_time, c
 bool client_snapshot_remove_trusted_mac(const char *mac)
 {
 	if (mac == NULL || !is_valid_mac(mac)) {
+		return false;
+	}
+
+	if (!snapshot_enabled()) {
+		debug(LOG_DEBUG, "Snapshot is disabled, skip remove trusted mac");
 		return false;
 	}
 	

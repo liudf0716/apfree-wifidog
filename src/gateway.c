@@ -635,7 +635,11 @@ wd_init(s_config *config)
     init_firewall();
 
     // Load client snapshot if exists
-    client_snapshot_load();
+    if (!is_portal_auth_disabled() && !is_bypass_mode()) {
+        client_snapshot_load();
+    } else {
+        debug(LOG_INFO, "Portal auth disabled or bypass mode, skip snapshot load");
+    }
 }
 
 /**
@@ -749,7 +753,9 @@ threads_init(s_config *config)
     }
 
     // Resilience thread - monitor firewall and periodic snapshots
-    if (!create_detached_thread(&tid_resilience, (void *)thread_resilience, NULL, "resilience")) {
+    if (is_portal_auth_disabled() || is_bypass_mode()) {
+        debug(LOG_INFO, "Portal auth disabled or bypass mode, skip resilience thread");
+    } else if (!create_detached_thread(&tid_resilience, (void *)thread_resilience, NULL, "resilience")) {
         debug(LOG_ERR, "Failed to create resilience thread");
         return;
     }

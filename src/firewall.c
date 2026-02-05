@@ -288,7 +288,11 @@ fw_reconcile(void)
     UNLOCK_CLIENT_LIST();
     
     // Call snapshot load if implemented
-    client_snapshot_load(); 
+    if (!is_portal_auth_disabled() && !is_bypass_mode()) {
+        client_snapshot_load();
+    } else {
+        debug(LOG_DEBUG, "Portal auth disabled or bypass mode, skip snapshot load");
+    }
 #endif
 
     return 1;
@@ -297,6 +301,11 @@ fw_reconcile(void)
 void
 thread_resilience(void *arg)
 {
+    if (is_portal_auth_disabled() || is_bypass_mode()) {
+        debug(LOG_INFO, "Portal auth disabled or bypass mode, skip resilience thread");
+        return;
+    }
+
     debug(LOG_INFO, "Resilience thread started");
     
     int check_interval = 3; // Check firewall every 3 seconds
