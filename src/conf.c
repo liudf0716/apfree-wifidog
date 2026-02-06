@@ -1386,6 +1386,10 @@ add_mac_from_list(const char *mac, uint32_t length, char *serial, mac_choice_t w
                      if (curr->serial) free(curr->serial);
                      curr->serial = safe_strdup(serial);
                  }
+                 // Update first_time if it's 0 and we have a valid first_time
+                 if (first_time != 0 && curr->first_time == 0) {
+                     curr->first_time = first_time;
+                 }
                  UNLOCK_CONFIG();
                  return;
             }
