@@ -224,24 +224,7 @@ int client_snapshot_load(void)
             
             // Add to config and firewall
             debug(LOG_INFO, "Restoring trusted MAC: %s", mac);
-            LOCK_CONFIG();
-            // add_mac call might handle list but we need to update extra fields
-            add_mac(mac, TRUSTED_MAC); 
-            
-            // Update fields
-            s_config *config = config_get_config();
-            t_trusted_mac *tmac = config->trustedmaclist;
-            while(tmac) {
-                if (strcasecmp(tmac->mac, mac) == 0) {
-                    tmac->remaining_time = remaining_time;
-                    if (tmac->serial) free(tmac->serial);
-                    tmac->serial = safe_strdup(serial);
-                    tmac->first_time = first_time;
-                    break;
-                }
-                tmac = tmac->next;
-            }
-            UNLOCK_CONFIG();
+            add_mac_from_list(mac, remaining_time, safe_strdup(serial), TRUSTED_MAC, first_time);
             fw_add_trusted_mac(mac, remaining_time);
         }
     }
@@ -427,21 +410,7 @@ bool client_snapshot_add_trusted_mac(const char *mac, uint32_t remaining_time, c
 		return false;
 	}
 	
-    add_mac(mac, TRUSTED_MAC); // Note: add_mac should handle list management
-    
-    LOCK_CONFIG();
-    s_config *config = config_get_config();
-    t_trusted_mac *tmac = config->trustedmaclist;
-    while(tmac) {
-        if(strcmp(tmac->mac, mac) == 0) {
-            tmac->remaining_time = remaining_time;
-            if(tmac->serial) free(tmac->serial);
-            tmac->serial = safe_strdup(serial);
-            break;
-        }
-        tmac = tmac->next;
-    }
-    UNLOCK_CONFIG();
+    add_mac_from_list(mac, remaining_time, safe_strdup(serial), TRUSTED_MAC, 0); // Note: add_mac_from_list handles list management and locking
 
     fw_update_trusted_mac(mac, remaining_time);
     client_snapshot_save();
@@ -459,7 +428,7 @@ bool client_snapshot_remove_trusted_mac(const char *mac)
 		return false;
 	}
 	
-	remove_mac(mac, TRUSTED_MAC);
+	remove_mac_from_list(mac, TRUSTED_MAC);
     fw_del_trusted_mac(mac);
     client_snapshot_save();
 	return true;

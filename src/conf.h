@@ -357,7 +357,9 @@ void parse_trusted_mac_list(const char *);
 void parse_del_trusted_mac_list(const char *);
 void clear_trusted_mac_list(void);
 void add_mac(const char *, mac_choice_t);
+void add_mac_from_list(const char *, uint32_t, char *, mac_choice_t, time_t);
 void remove_mac(const char *, mac_choice_t);
+void remove_mac_from_list(const char *, mac_choice_t);
 
 /** Local MAC List Operations */
 void parse_trusted_local_mac_list(const char *);

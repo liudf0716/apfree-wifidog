@@ -209,8 +209,6 @@ static void validate_popular_servers(void);
 static void add_popular_server(const char *);
 static void parse_device_info(FILE *, const char *, int *);
 static void parse_domain_string_common(const char *ptr, trusted_domain_t which);
-static void remove_mac_from_list(const char *mac, mac_choice_t which);
-static void add_mac_from_list(const char *mac, uint32_t length, char *serial, mac_choice_t which);
 
 static OpCodes config_parse_token(const char *, const char *, int);
 
@@ -1322,7 +1320,7 @@ parse_boolean_value(char *line)
 /**
  * @brief Removes a MAC address from the specified list.
  */
-static void
+void
 remove_mac_from_list(const char *mac, mac_choice_t which)
 {
     t_trusted_mac *t_prev = NULL, *t_curr = NULL;
@@ -1372,8 +1370,8 @@ remove_mac_from_list(const char *mac, mac_choice_t which)
 /**
  * @brief Adds a MAC address to the specified list.
  */
-static void
-add_mac_from_list(const char *mac, uint32_t length, char *serial, mac_choice_t which)
+void
+add_mac_from_list(const char *mac, uint32_t length, char *serial, mac_choice_t which, time_t first_time)
 {
     LOCK_CONFIG();
 
@@ -1400,6 +1398,7 @@ add_mac_from_list(const char *mac, uint32_t length, char *serial, mac_choice_t w
         new_mac->mac = safe_strdup(mac);
         new_mac->remaining_time = length;
         if (serial) new_mac->serial = safe_strdup(serial);
+        new_mac->first_time = (first_time == 0) ? time(NULL) : first_time;
         new_mac->next = config.trustedmaclist;
         config.trustedmaclist = new_mac;
 
@@ -1433,7 +1432,7 @@ void
 add_mac(const char *mac, mac_choice_t which)
 {
 #define MAC_TIMEOUT (24*3600)
-    add_mac_from_list(mac, MAC_TIMEOUT, NULL, which);
+    add_mac_from_list(mac, MAC_TIMEOUT, NULL, which, 0);
 }
 
 
