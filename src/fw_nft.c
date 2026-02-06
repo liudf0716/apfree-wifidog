@@ -77,6 +77,7 @@ const char *nft_wifidogx_init_script[] = {
     "add chain inet wifidogx prerouting { type nat hook prerouting priority -100; policy accept; }",
     "add chain inet wifidogx forward { type filter hook forward priority -100; policy accept; }",
     "add chain inet wifidogx mangle_prerouting { type filter hook prerouting priority -100; policy accept; }",
+    "add chain inet wifidogx mangle_postrouting { type filter hook postrouting priority mangle; policy accept; }",
     "add chain inet wifidogx wifidogx_antinat",
     "add chain inet wifidogx wifidogx_redirect",
     "add chain inet wifidogx dstnat_wifidogx_auth_server",
@@ -267,6 +268,7 @@ generate_nft_wifidogx_init_script()
         fprintf(output_file, "add rule inet wifidogx prerouting iifname \"%s\" jump dstnat_wifidogx_outgoing\n", curr_gw->gw_interface);
         fprintf(output_file, "add rule inet wifidogx forward iifname \"%s\" jump forward_wifidogx_wan\n", curr_gw->gw_interface);
         fprintf(output_file, "add rule inet wifidogx mangle_prerouting iifname \"%s\" jump mangle_prerouting_wifidogx_outgoing\n", curr_gw->gw_interface);
+        fprintf(output_file, "add rule inet wifidogx mangle_postrouting oifname \"%s\" jump mangle_postrouting_wifidogx_incoming\n", curr_gw->gw_interface);
         curr_gw = curr_gw->next;
     }
 

@@ -4,7 +4,7 @@
 commit_count=$(git rev-list --count HEAD)
 
 # Define the base version (major.minor)
-base_version="8.$(date +%m)"
+base_version="9.$(date +%m)"
 
 # Combine base version with commit count
 new_version="${base_version}.${commit_count}"
