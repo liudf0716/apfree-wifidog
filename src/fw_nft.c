@@ -80,14 +80,9 @@ const char *nft_wifidogx_init_script[] = {
     "add chain inet wifidogx wifidogx_antinat",
     "add chain inet wifidogx wifidogx_redirect",
     "add chain inet wifidogx dstnat_wifidogx_auth_server",
-    "add chain inet wifidogx dstnat_wifidogx_wan",
     "add chain inet wifidogx dstnat_wifidogx_outgoing",
-    "add chain inet wifidogx dstnat_wifidogx_trust_domains",
-    "add chain inet wifidogx dstnat_wifidogx_wildcard_trust_domains",
     "add chain inet wifidogx dstnat_wifidogx_unknown",
-    "add chain inet wifidogx forward_wifidogx_auth_servers",
     "add chain inet wifidogx forward_wifidogx_wan",
-    "add chain inet wifidogx forward_wifidogx_trust_domains",
     "add chain inet wifidogx forward_wifidogx_unknown",
     "add chain inet wifidogx mangle_prerouting_wifidogx_outgoing",
     "add chain inet wifidogx mangle_postrouting_wifidogx_incoming",
@@ -98,12 +93,6 @@ const char *nft_wifidogx_init_script[] = {
     "add rule inet wifidogx wifidogx_redirect udp dport 80 drop",
     "add rule inet wifidogx dstnat_wifidogx_auth_server ip daddr @set_wifidogx_auth_servers accept",
     "add rule inet wifidogx dstnat_wifidogx_auth_server ip6 daddr @set_wifidogx_auth_servers_v6 accept",
-    "add rule inet wifidogx dstnat_wifidogx_trust_domains ip daddr @set_wifidogx_trust_domains accept",
-    "add rule inet wifidogx dstnat_wifidogx_trust_domains ip6 daddr @set_wifidogx_trust_domains_v6 accept",
-    "add rule inet wifidogx dstnat_wifidogx_trust_domains ip daddr @set_wifidogx_inner_trust_domains accept",
-    "add rule inet wifidogx dstnat_wifidogx_trust_domains ip6 daddr @set_wifidogx_inner_trust_domains_v6 accept",
-    "add rule inet wifidogx dstnat_wifidogx_wildcard_trust_domains ip daddr @set_wifidogx_wildcard_trust_domains accept",
-    "add rule inet wifidogx dstnat_wifidogx_wildcard_trust_domains ip6 daddr @set_wifidogx_wildcard_trust_domains_v6 accept",
     "add rule inet wifidogx dstnat_wifidogx_outgoing ip daddr @set_wifidogx_gateway accept",
     "add rule inet wifidogx dstnat_wifidogx_outgoing ip6 daddr @set_wifidogx_gateway_v6 accept",
     "add rule inet wifidogx dstnat_wifidogx_outgoing ether saddr @set_wifidogx_tmp_trust_clients accept",
@@ -114,15 +103,21 @@ const char *nft_wifidogx_init_script[] = {
     "add rule inet wifidogx dstnat_wifidogx_outgoing meta mark 0x10000 accept",
     "add rule inet wifidogx dstnat_wifidogx_outgoing ip daddr @set_wifidogx_auth_servers jump dstnat_wifidogx_auth_server",
     "add rule inet wifidogx dstnat_wifidogx_outgoing ip6 daddr @set_wifidogx_auth_servers_v6 jump dstnat_wifidogx_auth_server",
-    "add rule inet wifidogx dstnat_wifidogx_outgoing ip daddr @set_wifidogx_trust_domains jump dstnat_wifidogx_trust_domains",
-    "add rule inet wifidogx dstnat_wifidogx_outgoing ip6 daddr @set_wifidogx_trust_domains_v6 jump dstnat_wifidogx_trust_domains",
-    "add rule inet wifidogx dstnat_wifidogx_outgoing ip daddr @set_wifidogx_inner_trust_domains jump dstnat_wifidogx_trust_domains",
-    "add rule inet wifidogx dstnat_wifidogx_outgoing ip6 daddr @set_wifidogx_inner_trust_domains_v6 jump dstnat_wifidogx_trust_domains",
-    "add rule inet wifidogx dstnat_wifidogx_outgoing ip daddr @set_wifidogx_wildcard_trust_domains jump dstnat_wifidogx_wildcard_trust_domains",
-    "add rule inet wifidogx dstnat_wifidogx_outgoing ip6 daddr @set_wifidogx_wildcard_trust_domains_v6 jump dstnat_wifidogx_wildcard_trust_domains",
+    "add rule inet wifidogx dstnat_wifidogx_outgoing ip daddr @set_wifidogx_trust_domains accept",
+    "add rule inet wifidogx dstnat_wifidogx_outgoing ip6 daddr @set_wifidogx_trust_domains_v6 accept",
+    "add rule inet wifidogx dstnat_wifidogx_outgoing ip daddr @set_wifidogx_inner_trust_domains accept",
+    "add rule inet wifidogx dstnat_wifidogx_outgoing ip6 daddr @set_wifidogx_inner_trust_domains_v6 accept",
+    "add rule inet wifidogx dstnat_wifidogx_outgoing ip daddr @set_wifidogx_wildcard_trust_domains accept",
+    "add rule inet wifidogx dstnat_wifidogx_outgoing ip6 daddr @set_wifidogx_wildcard_trust_domains_v6 accept",
     "add rule inet wifidogx dstnat_wifidogx_outgoing jump dstnat_wifidogx_unknown",
-    "add rule inet wifidogx forward_wifidogx_wan jump forward_wifidogx_auth_servers",
-    "add rule inet wifidogx forward_wifidogx_wan jump forward_wifidogx_trust_domains",
+    "add rule inet wifidogx forward_wifidogx_wan ip daddr @set_wifidogx_auth_servers accept",
+    "add rule inet wifidogx forward_wifidogx_wan ip6 daddr @set_wifidogx_auth_servers_v6 accept",
+    "add rule inet wifidogx forward_wifidogx_wan ip daddr @set_wifidogx_trust_domains accept",
+    "add rule inet wifidogx forward_wifidogx_wan ip6 daddr @set_wifidogx_trust_domains_v6 accept",
+    "add rule inet wifidogx forward_wifidogx_wan ip daddr @set_wifidogx_inner_trust_domains accept",
+    "add rule inet wifidogx forward_wifidogx_wan ip6 daddr @set_wifidogx_inner_trust_domains_v6 accept",
+    "add rule inet wifidogx forward_wifidogx_wan ip daddr @set_wifidogx_wildcard_trust_domains accept",
+    "add rule inet wifidogx forward_wifidogx_wan ip6 daddr @set_wifidogx_wildcard_trust_domains_v6 accept",
     "add rule inet wifidogx forward_wifidogx_wan ether saddr @set_wifidogx_tmp_trust_clients accept",
     "add rule inet wifidogx forward_wifidogx_wan ether saddr @set_wifidogx_trust_clients_out accept",
     "add rule inet wifidogx forward_wifidogx_wan ip saddr @set_wifidogx_bypass_clients accept",
@@ -131,12 +126,6 @@ const char *nft_wifidogx_init_script[] = {
     "add rule inet wifidogx forward_wifidogx_wan meta mark 0x20000 accept",
     "add rule inet wifidogx forward_wifidogx_wan jump forward_wifidogx_unknown",
     "add rule inet wifidogx forward_wifidogx_unknown reject",
-    "add rule inet wifidogx forward_wifidogx_auth_servers ip daddr @set_wifidogx_auth_servers accept",
-    "add rule inet wifidogx forward_wifidogx_auth_servers ip6 daddr @set_wifidogx_auth_servers_v6 accept",
-    "add rule inet wifidogx forward_wifidogx_trust_domains ip daddr @set_wifidogx_trust_domains accept",
-    "add rule inet wifidogx forward_wifidogx_trust_domains ip6 daddr @set_wifidogx_trust_domains_v6 accept",
-    "add rule inet wifidogx forward_wifidogx_trust_domains ip daddr @set_wifidogx_inner_trust_domains accept",
-    "add rule inet wifidogx forward_wifidogx_trust_domains ip6 daddr @set_wifidogx_inner_trust_domains_v6 accept",
 };
 
 const char *nft_wifidogx_anti_nat_script[] = {
@@ -1784,15 +1773,15 @@ nft_check_core_rules(void)
     if (system("nft list chain inet wifidogx dstnat_wifidogx_unknown > /dev/null 2>&1") != 0) return 0;
     
     // Check forward sub-chains
-    if (system("nft list chain inet wifidogx forward_wifidogx_auth_servers > /dev/null 2>&1") != 0) return 0;
-    if (system("nft list chain inet wifidogx forward_wifidogx_trust_domains > /dev/null 2>&1") != 0) return 0;
+    if (system("nft list chain inet wifidogx forward_wifidogx_wan > /dev/null 2>&1") != 0) return 0;
+    if (system("nft list chain inet wifidogx forward_wifidogx_unknown > /dev/null 2>&1") != 0) return 0;
 
     // Check critical rules in wifidogx_redirect (redirects)
     if (system("nft list chain inet wifidogx wifidogx_redirect | grep -q 'redirect' > /dev/null 2>&1") != 0) return 0;
 
-    // Check critical jump rules in forward_wifidogx_wan
-    if (system("nft list chain inet wifidogx forward_wifidogx_wan | grep -q 'jump forward_wifidogx_auth_servers' > /dev/null 2>&1") != 0) return 0;
-    if (system("nft list chain inet wifidogx forward_wifidogx_wan | grep -q 'jump forward_wifidogx_trust_domains' > /dev/null 2>&1") != 0) return 0;
+    // Check critical accept rules in forward_wifidogx_wan
+    if (system("nft list chain inet wifidogx forward_wifidogx_wan | grep -q '@set_wifidogx_auth_servers' > /dev/null 2>&1") != 0) return 0;
+    if (system("nft list chain inet wifidogx forward_wifidogx_wan | grep -q '@set_wifidogx_trust_domains' > /dev/null 2>&1") != 0) return 0;
     
     return 1; // Ready
 }
