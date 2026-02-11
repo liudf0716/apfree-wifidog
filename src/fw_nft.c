@@ -1761,26 +1761,9 @@ nft_fw_init()
 int 
 nft_check_core_rules(void)
 {
-    // Check if wifidogx table and core chains exist
+    // Check if wifidogx table exists
     int ret = system("nft list table inet wifidogx > /dev/null 2>&1");
     if (ret != 0) return 0;
-    
-    // Check key chains
-    if (system("nft list chain inet wifidogx prerouting > /dev/null 2>&1") != 0) return 0;
-    if (system("nft list chain inet wifidogx forward > /dev/null 2>&1") != 0) return 0;
-    if (system("nft list chain inet wifidogx wifidogx_redirect > /dev/null 2>&1") != 0) return 0;
-    if (system("nft list chain inet wifidogx dstnat_wifidogx_unknown > /dev/null 2>&1") != 0) return 0;
-    
-    // Check forward sub-chains
-    if (system("nft list chain inet wifidogx forward_wifidogx_wan > /dev/null 2>&1") != 0) return 0;
-    if (system("nft list chain inet wifidogx forward_wifidogx_unknown > /dev/null 2>&1") != 0) return 0;
-
-    // Check critical rules in wifidogx_redirect (redirects)
-    if (system("nft list chain inet wifidogx wifidogx_redirect | grep -q 'redirect' > /dev/null 2>&1") != 0) return 0;
-
-    // Check critical accept rules in forward_wifidogx_wan
-    if (system("nft list chain inet wifidogx forward_wifidogx_wan | grep -q '@set_wifidogx_auth_servers' > /dev/null 2>&1") != 0) return 0;
-    if (system("nft list chain inet wifidogx forward_wifidogx_wan | grep -q '@set_wifidogx_trust_domains' > /dev/null 2>&1") != 0) return 0;
     
     return 1; // Ready
 }
