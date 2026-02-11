@@ -188,107 +188,6 @@ init_captive_domains(void)
 	debug(LOG_INFO, "Initialized captive domains using custom hosts file");
 }
 
-static void
-check_wifidogx_firewall_rules(void)
-{
-	static time_t last_check_time = 0;
-	static int consecutive_failures = 0;
-	
-	if (!is_openwrt_platform()) 
-		return;
-
-	if (is_bypass_mode()) {
-		debug(LOG_INFO, "Bypass mode, no need to check firewall rules");
-		return;
-	}
-
-	// Check if portal auth is disabled
-	if (is_portal_auth_disabled()) {
-		debug(LOG_DEBUG, "Portal authentication is disabled, no need to check firewall rules");
-		return;
-	}
-
-	FILE *fp = popen("/usr/sbin/nft list chain inet fw4 dstnat 2>/dev/null", "r");
-	if (!fp) {
-		debug(LOG_ERR, "Failed to execute nft command");
-		return;
-	}
-	
-	char line[512] = {0};
-	int has_rule = 0;
-	int command_success = 0;
-	
-	while (fgets(line, sizeof(line), fp)) {
-		command_success = 1;  // Got some output, command executed
-		if (strstr(line, "dstnat_wifidogx_outgoing")) {
-			has_rule = 1;
-			break;
-		}
-	}
-	
-	int exit_status = pclose(fp);
-	
-	// Check if command failed to execute
-	if (!command_success || exit_status != 0) {
-		debug(LOG_WARNING, "nft command failed or returned no output (exit_status=%d), skipping firewall check", exit_status);
-		return;
-	}
-
-	if (!has_rule) {
-		time_t current_time = time(NULL);
-		
-		consecutive_failures++;
-		
-		// 防抖动：至少间隔30秒，且连续失败3次才触发重载
-		if (current_time - last_check_time < 30) {
-			debug(LOG_DEBUG, "Firewall rule check failed, but too soon since last check (%ld seconds ago)", 
-				  current_time - last_check_time);
-			return;
-		}
-		
-		if (consecutive_failures < 3) {
-			debug(LOG_WARNING, "Firewall rule check failed (attempt %d/3), waiting for more confirmations", 
-				  consecutive_failures);
-			return;
-		}
-		
-		debug(LOG_ERR, "wifidogx's firewall rule is not completed after %d consecutive checks, reloading firewall rules", 
-			  consecutive_failures);
-		
-		last_check_time = current_time;
-		consecutive_failures = 0;  // Reset counter after triggering reload
-		
-		// 直接重载防火墙，比信号方式更安全
-		debug(LOG_INFO, "Starting direct firewall reload...");
-		
-		// 使用锁保护，避免与其他线程的客户端操作冲突
-		LOCK_CLIENT_LIST();
-		
-		// 销毁现有防火墙规则
-		int destroy_result = fw_destroy();
-		if (destroy_result != 0) {
-			debug(LOG_ERR, "Failed to destroy firewall rules (result: %d)", destroy_result);
-			UNLOCK_CLIENT_LIST();
-			return;
-		}
-		
-		// 重新初始化防火墙规则
-		int init_result = fw_init();
-		if (init_result != 1) {  // fw_init 成功返回1
-			debug(LOG_ERR, "Failed to initialize firewall rules (result: %d)", init_result);
-			UNLOCK_CLIENT_LIST();
-			return;
-		}
-		
-		UNLOCK_CLIENT_LIST();
-		
-		debug(LOG_INFO, "Firewall reload completed successfully");
-	} else {
-		// 规则存在，重置失败计数器
-		consecutive_failures = 0;
-		debug(LOG_DEBUG, "Firewall rules check passed");
-	}
-}
 		
 
 static void 
@@ -302,10 +201,6 @@ ping_work_cb(evutil_socket_t fd, short event, void *arg) {
 		update_captive_domains_with_real_ips();
 		first_online = 0;
 	}
-
-	// Check firewall rules in both local and cloud modes
-	// (check_wifidogx_firewall_rules already has internal portal auth check)
-	check_wifidogx_firewall_rules();
 
 	struct wd_request_context *request_ctx = (struct wd_request_context *)arg;
 	t_gateway_setting *gw_settings = get_gateway_settings();
@@ -357,7 +252,6 @@ thread_ping(void *arg)
 		int first_online = 1;
 		while(1) {
 			sleep(60);
-			check_wifidogx_firewall_rules();
 			
 			// When internet becomes available for the first time in local mode, update captive domains with real IPs
 			// Only if portal auth is enabled
