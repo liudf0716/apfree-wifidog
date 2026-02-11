@@ -1758,13 +1758,52 @@ nft_fw_init()
     return 1;
 }
 
-int 
+int
 nft_check_core_rules(void)
 {
-    // Check if wifidogx table exists
-    int ret = system("nft list table inet wifidogx > /dev/null 2>&1");
-    if (ret != 0) return 0;
-    
-    return 1; // Ready
+    struct mnl_socket *nl;
+    struct nlmsghdr *nlh;
+    struct nftnl_table *table;
+    char buf[MNL_SOCKET_BUFFER_SIZE];
+    int ret;
+    uint32_t seq;
+
+    nl = mnl_socket_open(NETLINK_NETFILTER);
+    if (nl == NULL) {
+        debug(LOG_ERR, "Cannot open netlink socket");
+        return 0;
+    }
+
+    if (mnl_socket_bind(nl, 0, MNL_SOCKET_AUTOPID) < 0) {
+        debug(LOG_ERR, "Cannot bind netlink socket");
+        mnl_socket_close(nl);
+        return 0;
+    }
+
+    nlh = nftnl_nlmsg_build_hdr(buf, NFT_MSG_GETTABLE, NFPROTO_INET,
+                                NLM_F_DUMP, seq = time(NULL));
+    table = nftnl_table_alloc();
+    if (table == NULL) {
+        debug(LOG_ERR, "Cannot allocate table");
+        mnl_socket_close(nl);
+        return 0;
+    }
+
+    nftnl_table_set_str(table, NFTNL_TABLE_NAME, "wifidogx");
+    nftnl_table_nlmsg_build_payload(nlh, table);
+    nftnl_table_free(table);
+
+    ret = mnl_socket_sendto(nl, nlh, nlh->nlmsg_len);
+    if (ret < 0) {
+        debug(LOG_ERR, "Cannot send netlink message");
+        mnl_socket_close(nl);
+        return 0;
+    }
+
+    ret = mnl_socket_recvfrom(nl, buf, sizeof(buf));
+    mnl_socket_close(nl);
+
+    // If we received a message, the table exists
+    return (ret > 0) ? 1 : 0;
 }
 
