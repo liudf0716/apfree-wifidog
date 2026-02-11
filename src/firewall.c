@@ -277,23 +277,24 @@ fw_reconcile(void)
 
     debug(LOG_INFO, "Firewall rules missing, reconciling...");
 
+	fw_destroy();
+	fw_init();
+
 #ifdef AW_FW4
-    nft_reconcile_rules();
-    
-    // Restore state
+    /* 立即从内存恢复在线用户和信任列表，这是最实时的 */
     LOCK_CLIENT_LIST();
     nft_fw_reload_client();
     nft_fw_reload_trusted_maclist();
-    /** @todo: restore other sets if needed */
     UNLOCK_CLIENT_LIST();
-    
+#endif
+
     // Call snapshot load if implemented
     if (!is_portal_auth_disabled() && !is_bypass_mode()) {
         client_snapshot_load();
     } else {
         debug(LOG_DEBUG, "Portal auth disabled or bypass mode, skip snapshot load");
     }
-#endif
+
 
     return 1;
 }

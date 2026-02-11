@@ -1785,9 +1785,3 @@ nft_check_core_rules(void)
     return 1; // Ready
 }
 
-int 
-nft_reconcile_rules(void)
-{
-    debug(LOG_INFO, "Reconciling firewall rules...");
-    return nft_fw_init();
-}

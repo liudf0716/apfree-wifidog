@@ -15,7 +15,6 @@
 int nft_fw_init(void);
 int nft_fw_destroy(void);
 int nft_check_core_rules(void);
-int nft_reconcile_rules(void);
 
 /**
  * @brief nftables operations
