@@ -310,7 +310,7 @@ thread_resilience(void *arg)
 
     debug(LOG_INFO, "Resilience thread started");
     
-    int check_interval = 3; // Check firewall every 3 seconds
+    int check_interval = 30; // Check firewall every 30 seconds
     int snapshot_interval = 60; // Save snapshot every 60 seconds
     int last_snapshot = 0;
     
