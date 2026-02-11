@@ -1803,7 +1803,20 @@ nft_check_core_rules(void)
     ret = mnl_socket_recvfrom(nl, buf, sizeof(buf));
     mnl_socket_close(nl);
 
-    // If we received a message, the table exists
-    return (ret > 0) ? 1 : 0;
+    if (ret <= 0) return 0;
+
+    // Parse the message header to check for errors
+    struct nlmsghdr *nlh_resp = (struct nlmsghdr *)buf;
+    if (nlh_resp->nlmsg_type == NLMSG_ERROR) {
+        struct nlmsgerr *err = mnl_nlmsg_get_payload(nlh_resp);
+        if (err->error != 0) {
+            // Table doesn't exist or other netlink error
+            debug(LOG_ERR, "Netlink error: %d wifidogx table not exist", err->error);
+            return 0;
+        }
+    }
+
+    // If we received a valid message (not an error), the table exists
+    return 1;
 }
 
