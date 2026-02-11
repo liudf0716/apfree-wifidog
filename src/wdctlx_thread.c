@@ -888,7 +888,9 @@ wdctl_save_user(struct bufferevent *fd)
 static void
 wdctl_restore_user(struct bufferevent *fd)
 {
-    client_snapshot_load();
+    LOCK_CLIENT_LIST();
+    __client_snapshot_load();
+    UNLOCK_CLIENT_LIST();
     bufferevent_write(fd, "Yes", 3);
 }
 

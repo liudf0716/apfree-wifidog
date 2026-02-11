@@ -14,8 +14,16 @@ int client_snapshot_save(void);
 /**
  * @brief Load online clients and trusted MACs from /etc/client_snapshot.json
  * @return 0 on success, -1 on error
+ * @note This function provides internal locking
  */
 int client_snapshot_load(void);
+
+/**
+ * @brief Load online clients and trusted MACs from /etc/client_snapshot.json (without locking)
+ * @return 0 on success, -1 on error
+ * @note This function does not provide internal locking, caller must hold LOCK_CLIENT_LIST()
+ */
+int __client_snapshot_load(void);
 
 /**
  * @brief Dump client snapshot as JSON string

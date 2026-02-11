@@ -636,7 +636,9 @@ wd_init(s_config *config)
 
     // Load client snapshot if exists
     if (!is_portal_auth_disabled() && !is_bypass_mode()) {
-        client_snapshot_load();
+        LOCK_CLIENT_LIST();
+        __client_snapshot_load();
+        UNLOCK_CLIENT_LIST();
     } else {
         debug(LOG_INFO, "Portal auth disabled or bypass mode, skip snapshot load");
     }

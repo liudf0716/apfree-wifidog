@@ -172,6 +172,14 @@ int client_snapshot_save(void)
 
 int client_snapshot_load(void)
 {
+    LOCK_CLIENT_LIST();
+    int ret = __client_snapshot_load();
+    UNLOCK_CLIENT_LIST();
+    return ret;
+}
+
+int __client_snapshot_load(void)
+{
     if (!snapshot_enabled()) {
         debug(LOG_DEBUG, "Snapshot is disabled, skip load");
         return 0;
@@ -248,7 +256,6 @@ int client_snapshot_load(void)
 
             debug(LOG_INFO, "Restoring online client: %s (%s)", mac, ip);
             
-            LOCK_CLIENT_LIST();
             t_client *client = client_list_find_by_mac(mac);
             if (!client) {
                 client = client_get_new();
@@ -284,7 +291,6 @@ int client_snapshot_load(void)
                     client_list_insert_client(client);
                 }
             }
-            UNLOCK_CLIENT_LIST();
 
             // Apply firewall rule
             if (fw_state == FW_MARK_KNOWN) {
