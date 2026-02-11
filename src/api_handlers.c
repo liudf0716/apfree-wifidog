@@ -841,6 +841,12 @@ void handle_auth_request(json_object *j_auth, api_transport_context_t *transport
 #ifdef AW_FW4
         nft_reload_gw();
 #endif
+        // Send success response for once-auth
+        char response_msg[128];
+        snprintf(response_msg, sizeof(response_msg), 
+                 "{\"status\":\"once_auth_enabled\",\"gw_id\":\"%s\"}", 
+                 gw_id_str);
+        send_response(transport, response_msg);
         return;
     }
 
@@ -853,6 +859,12 @@ void handle_auth_request(json_object *j_auth, api_transport_context_t *transport
     if (client_list_find(client_ip_str, client_mac_str)) {
         debug(LOG_DEBUG, "Auth: Client %s (%s) already authenticated", 
               client_mac_str, client_ip_str);
+        // Send response indicating client already authenticated
+        char response_msg[256];
+        snprintf(response_msg, sizeof(response_msg), 
+                 "{\"status\":\"already_authenticated\",\"client_ip\":\"%s\",\"client_mac\":\"%s\"}", 
+                 client_ip_str, client_mac_str);
+        send_response(transport, response_msg);
         return;
     }
 
@@ -896,6 +908,13 @@ void handle_auth_request(json_object *j_auth, api_transport_context_t *transport
 
     debug(LOG_DEBUG, "Auth: Added client %s (%s) with token %s",
           client_mac_str, client_ip_str, token_str);
+
+    // Send success response
+    char response_msg[256];
+    snprintf(response_msg, sizeof(response_msg), 
+             "{\"status\":\"auth_success\",\"client_ip\":\"%s\",\"client_mac\":\"%s\"}", 
+             client_ip_str, client_mac_str);
+    send_response(transport, response_msg);
 }
 
 /**
