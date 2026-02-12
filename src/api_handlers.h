@@ -67,6 +67,7 @@ struct wifi_device_info {
 void handle_auth_request(json_object *j_auth, api_transport_context_t *transport);
 void handle_kickoff_request(json_object *j_req, api_transport_context_t *transport);
 void handle_get_client_info_request(json_object *j_req, api_transport_context_t *transport);
+void handle_get_clients_request(json_object *j_req, api_transport_context_t *transport);
 
 // Device management handlers
 void handle_update_device_info_request(json_object *j_req, api_transport_context_t *transport);

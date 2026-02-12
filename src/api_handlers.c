@@ -51,7 +51,7 @@ static const api_route_entry_t api_routes[] = {
 	{"kickoff",                     handle_kickoff_request},
 	{"tmp_pass",                    handle_tmp_pass_request},
 	{"get_client_info",             handle_get_client_info_request},
-	{"get_clients",                 handle_get_client_info_request},
+	{"get_clients",                 handle_get_clients_request},
 	
 	// Firmware management
 	{"get_firmware_info",           handle_get_firmware_info_request},
@@ -712,6 +712,112 @@ void handle_kickoff_request(json_object *j_auth, api_transport_context_t *transp
     const char *response_str = json_object_to_json_string(j_response);
     send_response(transport, response_str);
     json_object_put(j_response);
+}
+
+/**
+ * @brief Handle get clients list request
+ * 
+ * Returns a list of all connected clients with their information.
+ * 
+ * @param j_req JSON request object (no parameters required)
+ * @param transport Transport context for sending response
+ */
+void handle_get_clients_request(json_object *j_req, api_transport_context_t *transport) {
+    json_object *j_response = json_object_new_object();
+    
+    debug(LOG_INFO, "Get clients list request received");
+    
+    // Update client counters before retrieving information
+    debug(LOG_DEBUG, "Updating client counters before retrieving clients list");
+    if (fw_counters_update() == -1) {
+        debug(LOG_WARNING, "Failed to update client counters, proceeding with cached data");
+    }
+    
+    // Create clients array
+    json_object *j_clients_array = json_object_new_array();
+    
+    // Get all clients
+    LOCK_CLIENT_LIST();
+    t_client *client = client_get_first_client();
+    
+    while (client) {
+        // Create client object
+        json_object *j_client = json_object_new_object();
+        
+        // Add client basic information
+        json_object_object_add(j_client, "id", json_object_new_int64(client->id));
+        
+        if (client->ip) {
+            json_object_object_add(j_client, "ip", json_object_new_string(client->ip));
+        }
+        
+        if (client->ip6) {
+            json_object_object_add(j_client, "ip6", json_object_new_string(client->ip6));
+        }
+        
+        if (client->mac) {
+            json_object_object_add(j_client, "mac", json_object_new_string(client->mac));
+        }
+        
+        if (client->token) {
+            json_object_object_add(j_client, "token", json_object_new_string(client->token));
+        }
+        
+        json_object_object_add(j_client, "fw_connection_state", json_object_new_int(client->fw_connection_state));
+        
+        if (client->name) {
+            json_object_object_add(j_client, "name", json_object_new_string(client->name));
+        }
+        
+        json_object_object_add(j_client, "is_online", json_object_new_int(client->is_online));
+        json_object_object_add(j_client, "wired", json_object_new_int(client->wired));
+        json_object_object_add(j_client, "first_login", json_object_new_int64(client->first_login));
+        
+        // Add IPv4 counters
+        json_object *j_counters = json_object_new_object();
+        json_object_object_add(j_counters, "incoming_bytes", json_object_new_int64(client->counters.incoming_bytes));
+        json_object_object_add(j_counters, "incoming_packets", json_object_new_int64(client->counters.incoming_packets));
+        json_object_object_add(j_counters, "outgoing_bytes", json_object_new_int64(client->counters.outgoing_bytes));
+        json_object_object_add(j_counters, "outgoing_packets", json_object_new_int64(client->counters.outgoing_packets));
+        json_object_object_add(j_counters, "incoming_rate", json_object_new_int(client->counters.incoming_rate));
+        json_object_object_add(j_counters, "outgoing_rate", json_object_new_int(client->counters.outgoing_rate));
+        json_object_object_add(j_counters, "last_updated", json_object_new_int64(client->counters.last_updated));
+        json_object_object_add(j_client, "counters", j_counters);
+        
+        // Add IPv6 counters
+        json_object *j_counters6 = json_object_new_object();
+        json_object_object_add(j_counters6, "incoming_bytes", json_object_new_int64(client->counters6.incoming_bytes));
+        json_object_object_add(j_counters6, "incoming_packets", json_object_new_int64(client->counters6.incoming_packets));
+        json_object_object_add(j_counters6, "outgoing_bytes", json_object_new_int64(client->counters6.outgoing_bytes));
+        json_object_object_add(j_counters6, "outgoing_packets", json_object_new_int64(client->counters6.outgoing_packets));
+        json_object_object_add(j_counters6, "incoming_rate", json_object_new_int(client->counters6.incoming_rate));
+        json_object_object_add(j_counters6, "outgoing_rate", json_object_new_int(client->counters6.outgoing_rate));
+        json_object_object_add(j_counters6, "last_updated", json_object_new_int64(client->counters6.last_updated));
+        json_object_object_add(j_client, "counters6", j_counters6);
+        
+        // Add client to array
+        json_object_array_add(j_clients_array, j_client);
+        
+        // Move to next client
+        client = client->next;
+    }
+    
+    UNLOCK_CLIENT_LIST();
+    
+    // Build success response
+    json_object *j_type = json_object_new_string("get_clients_response");
+    json_object_object_add(j_response, "type", j_type);
+    json_object_object_add(j_response, "clients", j_clients_array);
+    
+    // Send response
+    const char *response_str = json_object_to_json_string(j_response);
+    debug(LOG_DEBUG, "Sending clients list response: %s", response_str);
+    send_response(transport, response_str);
+    
+    // Cleanup
+    json_object_put(j_response);
+    
+    debug(LOG_INFO, "Clients list sent successfully");
 }
 
 /**
