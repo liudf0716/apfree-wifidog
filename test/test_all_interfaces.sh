@@ -27,8 +27,8 @@ test_mqtt_op() {
 }
 
 # Test existing operations
-test_mqtt_op "show_trusted (IP)" "2001" '{"op":"show_trusted","type":"ip"}'
-test_mqtt_op "set_trusted (IP)" "2002" '{"op":"set_trusted","type":"ip","value":"10.0.0.1"}'
+test_mqtt_op "get_trusted_domains (IP)" "2001" '{"op":"get_trusted_domains","type":"ip"}'
+test_mqtt_op "sync_trusted_domain (IP)" "2002" '{"op":"sync_trusted_domain","type":"ip","value":"10.0.0.1"}'
 test_mqtt_op "get_status" "2003" '{"op":"get_status"}'
 
 # Test NEW operations from document

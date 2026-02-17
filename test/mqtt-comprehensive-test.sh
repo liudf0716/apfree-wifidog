@@ -218,19 +218,19 @@ test_s2c_get_trusted_domains() {
 }
 
 test_s2c_set_trusted() {
-    print_test "s2c: set_trusted (domain)"
+    print_test "s2c: sync_trusted_domain (domain)"
     TOTAL_TESTS=$((TOTAL_TESTS + 1))
     
     local req_id=$(next_req_id)
-    local payload="{\"req_id\":$req_id,\"op\":\"set_trusted\",\"type\":\"domain\",\"values\":[\"test.example.com\"]}"
+    local payload="{\"req_id\":$req_id,\"op\":\"sync_trusted_domain\",\"type\":\"domain\",\"values\":[\"test.example.com\"]}"
     local topic="wifidogx/v1/$DEVICE_ID/s2c/request"
     
     local response=$(send_mqtt_request "$topic" "$payload")
     
     if check_response "$response" "$req_id" "200"; then
-        print_pass "set_trusted returned successful response"
+        print_pass "sync_trusted_domain returned successful response"
     else
-        print_fail "set_trusted did not return expected response. Got: $response"
+        print_fail "sync_trusted_domain did not return expected response. Got: $response"
     fi
 }
 

@@ -42,8 +42,8 @@ echo "Starting fresh tests..."
 sleep 1
 
 # Test all 21 operations from documentation
-test_operation "show_trusted"                      "show_trusted"                      2001 '"ip":"192.168.1.100"'
-test_operation "set_trusted"                       "set_trusted"                       2002 '"ip":"192.168.1.101"'
+test_operation "get_trusted_domains"               "get_trusted_domains"               2001 '"ip":"192.168.1.100"'
+test_operation "set_trusted"                       "sync_trusted_domain"              2002 '"ip":"192.168.1.101"'
 test_operation "del_trusted"                       "del_trusted"                       2003 '"type":"ip","ip":"192.168.1.101"'
 test_operation "clear_trusted"                     "clear_trusted"                     2004 '"type":"ip"'
 test_operation "get_status"                        "get_status"                        2005 ''

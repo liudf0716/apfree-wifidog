@@ -12,8 +12,8 @@ echo
 
 # Define all operations from documentation
 operations=(
-    "show_trusted"
-    "set_trusted"
+    "get_trusted_domains"
+    "sync_trusted_domain"
     "del_trusted"
     "clear_trusted"
     "get_status"

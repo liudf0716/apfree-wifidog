@@ -10,8 +10,8 @@ STATUS: ✅ ALL 21 OPERATIONS IMPLEMENTED AND TESTED
 OPERATION LIST (21 Total)
 ================================================================================
 
-1. show_trusted                   - Display trusted IPs/domains ✓
-2. set_trusted                    - Add new trusted IP/domain ✓
+1. get_trusted_domains           - Retrieve trusted domain list ✓
+2. sync_trusted_domain            - Add new trusted IP/domain ✓ (replaced `set_trusted`)
 3. del_trusted                    - Delete trusted IP/domain ✓
 4. clear_trusted                  - Clear all trusted rules ✓
 5. get_status                     - Get device status ✓

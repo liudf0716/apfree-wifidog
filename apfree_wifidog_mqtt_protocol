@@ -1,5 +1,5 @@
 apfree wifidog mqtt protocol is used to remotely control wifidog, including
-1, set trusted domain&pdomain&mac&ip
+1, set trusted domain&pdomain&mac&ip (use op: "sync_trusted_domain")
 2, delete trusted domain&pdomain&mac&ip
 3, clear trusted domain&pdomain&mac&ip
 4, show trusted domain&pdomain&mac&ip
@@ -19,19 +19,19 @@ its publish topic format is : wifidog/61ACC80118B6/response/10
 apfree wifidog mqtt protocol details:
 request:
 1, set trusted domain&pdomain&mac&ip
-{"op":"set_trusted", "type":"domain|pdomain|mac|ip","value":"param_list","time":"yyyymmddhhmmss"}
+{"op":"sync_trusted_domain", "type":"domain|pdomain|mac|ip","value":"param_list","time":"yyyymmddhhmmss"}
 2, delete trusted domain&pdomain&mac&ip
 {"op":"del_trusted","type":"domain|pdomain|mac|ip","value":"param_list","time":"yyyymmddhhmmss"}
 3, clear trusted domain&pdomain&mac&ip
 {"op":"clear_trusted","type":"domain|pdomain|mac|ip","time":"yyyymmddhhmmss"}
 4, show trusted domain&pdomain&mac&ip
-{"op":"show_trusted","type":"domain|pdomain|mac|ip","time":"yyyymmddhhmmss"}
+{"op":"get_trusted_domains","type":"domain|pdomain|mac|ip","time":"yyyymmddhhmmss"}
 5, save all above user defining rules
 {"op":"save_rule","time":"yyyymmddhhmmss"}
 6, get status of router
 {"op":"get_status","time":"yyyymmddhhmmss"}
 7, reboot device
-{"op":"reboot","time":"yyyymmddhhmmss"}
+{"op":"reboot_device","time":"yyyymmddhhmmss"}
 8, reset trusted client
 {"op":"reset","type":"ip|mac","value":"client_ip|client_mac","time":"yyyymmddhhmmss"}
 9, set auth server
@@ -51,10 +51,10 @@ for example, set pdomain baidu.com taobao.com qq.com for device 61ACC80118B6
 topic
 wifidog/61ACC80118B6/request/110
 message
-{"op":"set_trusted","type":"pdomain","value":"baidu.com,taobao.com,qq.com","time":"20170223113520"}
+{"op":"sync_trusted_domain","type":"pdomain","value":"baidu.com,taobao.com,qq.com","time":"20170223113520"}
 
 its ok response should be
 topic
 wifidog/61ACC80118B6/response/110
 message
-{"response":"200","op":"set_trusted","type":"pdomain","msg":"ok"}
+{"response":"200","op":"sync_trusted_domain","type":"pdomain","msg":"ok"}
