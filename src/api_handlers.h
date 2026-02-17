@@ -91,6 +91,9 @@ void handle_get_trusted_wildcard_domains_request(json_object *j_req, api_transpo
 // System information handlers
 void handle_get_sys_info_request(json_object *j_req, api_transport_context_t *transport);
 
+// AW status handler (apfree-wifidog specific)
+void handle_get_aw_status_request(json_object *j_req, api_transport_context_t *transport);
+
 // Auth server configuration handler
 void handle_set_auth_server_request(json_object *j_req, api_transport_context_t *transport);
 void handle_get_auth_server_request(json_object *j_req, api_transport_context_t *transport);

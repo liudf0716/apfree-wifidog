@@ -16,6 +16,9 @@
 #include "centralserver.h"
 #include "client_list.h"
 
+/* Internal flag indicating whether MQTT client is connected. */
+_Atomic int mqtt_connected = 0;
+
 static void
 send_mqtt_response(struct mosquitto *mosq, const unsigned int req_id, int res_id, const char *msg, const s_config *config)
 {
@@ -175,6 +178,17 @@ mqtt_connect_callback(struct mosquitto *mosq, void *obj, int rc)
 	free(shell_cmd_topic);
 }
 
+static void
+mqtt_disconnect_callback(struct mosquitto *mosq, void *obj, int rc)
+{
+	/* Mark MQTT as disconnected */
+	(void)mosq;
+	(void)obj;
+	(void)rc;
+	/* clear connected flag */
+	mqtt_connected = 0;
+}
+
 void thread_mqtt(void *arg)
 {
 	s_config *config = arg;
@@ -229,31 +243,42 @@ void thread_mqtt(void *arg)
    		debug(LOG_DEBUG, "TLS not configured for MQTT connection");
    	}
 
-    mosquitto_connect_callback_set(mosq, mqtt_connect_callback);
-    mosquitto_message_callback_set(mosq, mqtt_message_callback);
+	mosquitto_connect_callback_set(mosq, mqtt_connect_callback);
+	mosquitto_disconnect_callback_set(mosq, mqtt_disconnect_callback);
+	mosquitto_message_callback_set(mosq, mqtt_message_callback);
 
 	if (username != NULL) {
 		mosquitto_username_pw_set(mosq, username, password);
 	}
 
-   	switch( retval = mosquitto_connect(mosq, host, port, keepalive) ) {
+	switch( retval = mosquitto_connect(mosq, host, port, keepalive) ) {
         case MOSQ_ERR_INVAL:
             debug(LOG_INFO, "Error : %s\n", mosquitto_strerror(retval)); 
             break;
         case MOSQ_ERR_ERRNO:
             debug(LOG_INFO, "Error : %s\n", strerror(errno));
             break;
-        case MOSQ_ERR_SUCCESS:
-            debug(LOG_INFO, "Successfully connected to MQTT broker at %s:%d", host, port);
-            break;
+		case MOSQ_ERR_SUCCESS:
+			debug(LOG_INFO, "Successfully connected to MQTT broker at %s:%d", host, port);
+			/* mark connected */
+			mqtt_connected = 1;
+			break;
         default:
             debug(LOG_INFO, "MQTT connection error: %s", mosquitto_strerror(retval));
             break;
     }
 
-    retval = mosquitto_loop_forever(mosq, -1, 1);
+	retval = mosquitto_loop_forever(mosq, -1, 1);
 
-    mosquitto_destroy(mosq);
-    mosquitto_lib_cleanup();
+	/* Ensure connected flag is cleared when loop exits */
+	mqtt_connected = 0;
+
+	mosquitto_destroy(mosq);
+	mosquitto_lib_cleanup();
+}
+
+int mqtt_is_connected(void)
+{
+	return mqtt_connected != 0;
 }
 

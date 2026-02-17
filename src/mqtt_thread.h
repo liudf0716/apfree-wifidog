@@ -36,5 +36,8 @@ void wan_priority_op(void *mosq, const char *value, const int req_id, const s_co
 
 void thread_mqtt(void *arg);
 
+/* Return non-zero if MQTT client is currently connected to broker */
+int mqtt_is_connected(void);
+
 
 #endif

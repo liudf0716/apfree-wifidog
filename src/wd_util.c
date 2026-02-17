@@ -195,8 +195,8 @@ is_auth_online()
     }
 }
 
-static char *
-get_aw_uptime()
+char *
+get_aw_uptime(void)
 {
 	// according to stared_time to calculate uptime of apfree wifidog
 	time_t uptime = time(NULL) - started_time;

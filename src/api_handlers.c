@@ -14,6 +14,9 @@
 #include "fw_iptables.h"
 #include "fw_nft.h"
 #include "wd_util.h"
+#include "version.h"
+#include "commandline.h"
+#include "mqtt_thread.h"
 #include "safe.h"
 #include "wdctlx_thread.h"
 #include "ping_thread.h"
@@ -43,8 +46,8 @@ static const api_route_entry_t api_routes[] = {
 	{"heartbeat",                   handle_get_sys_info_request},
 	{"connect",                     handle_get_sys_info_request},
 	{"bootstrap",                   handle_get_sys_info_request},
-	{"get_sys_info",                handle_get_sys_info_request},
-	{"get_status",                  handle_get_sys_info_request},
+    {"get_sys_info",                handle_get_sys_info_request},
+    {"get_status",                  handle_get_aw_status_request},
 	
 	// Authentication & client management
 	{"auth",                        handle_auth_request},
@@ -269,6 +272,170 @@ static int send_response(api_transport_context_t *transport, const char *message
           message, strlen(message) > 100 ? "..." : "");
     
     return transport->send_response(transport->transport_ctx, message, strlen(message));
+}
+
+/**
+ * @brief Return apfree-wifidog runtime status (distinct from sys info)
+ *
+ * Provides a small status object: service name, uptime (seconds), and
+ * number of known clients. This reads only runtime memory and /proc/uptime.
+ */
+void handle_get_aw_status_request(json_object *j_req, api_transport_context_t *transport) {
+    json_object *j_response = json_object_new_object();
+    json_object *j_data = json_object_new_object();
+
+    /* AW human-readable uptime */
+    char *aw_uptime = get_aw_uptime();
+
+    /* System and wifidog stats */
+    struct sys_info info;
+    memset(&info, 0, sizeof(info));
+    get_sys_info(&info);
+
+    /* selected auth section from UCI (if present) */
+    char selected_section[128] = {0};
+    if (uci_get_value("wifidogx", "wifidog", "selected_auth_server", selected_section, sizeof(selected_section)) != 0) {
+        selected_section[0] = '\0';
+    }
+
+    /* Copy runtime auth-server values and config flags under lock */
+    char *hostname_copy = NULL;
+    char *path_copy = NULL;
+    int port_copy = 0;
+    s_config *config = config_get_config();
+
+    LOCK_CONFIG();
+    if (config && config->auth_servers) {
+        if (config->auth_servers->authserv_hostname) {
+            hostname_copy = safe_strdup(config->auth_servers->authserv_hostname);
+        }
+        port_copy = config->auth_servers->authserv_http_port;
+        if (config->auth_servers->authserv_path) {
+            path_copy = safe_strdup(config->auth_servers->authserv_path);
+        }
+    }
+
+    /* collect gateway settings and mqtt server under same lock */
+    t_gateway_setting *gw_settings = NULL;
+    t_mqtt_server *mqtt_server = NULL;
+    if (config) {
+        gw_settings = config->gateway_settings;
+        mqtt_server = config->mqtt_server;
+    }
+    int gw_port = config ? config->gw_port : DEFAULT_GATEWAYPORT;
+    int gw_https_port = config ? config->gw_https_port : DEFAULT_GATEWAY_HTTPS_PORT;
+    int check_interval = config ? config->checkinterval : DEFAULT_CHECKINTERVAL;
+    int client_timeout = config ? config->clienttimeout : DEFAULT_CLIENTTIMEOUT;
+    int fw4_enabled = config ? config->fw4_enable : 0;
+    int anti_nat = config ? config->enable_anti_nat : 0;
+    int del_conntrack = config ? config->enable_del_conntrack : 0;
+    
+    UNLOCK_CONFIG();
+
+    /* Top-level fields */
+    json_object_object_add(j_data, "service", json_object_new_string("apfree-wifidog"));
+    json_object_object_add(j_data, "version", json_object_new_string(VERSION));
+    if (aw_uptime) {
+        json_object_object_add(j_data, "uptime", json_object_new_string(aw_uptime));
+    }
+    json_object_object_add(j_data, "uptime_seconds", json_object_new_int64(info.wifidog_uptime));
+
+    /* Has been restarted */
+    extern pid_t restart_orig_pid;
+    json_object_object_add(j_data, "has_been_restarted", json_object_new_string(restart_orig_pid ? "yes" : "no"));
+    json_object_object_add(j_data, "restart_orig_pid", json_object_new_int((int)restart_orig_pid));
+
+    /* Auth / portal / mode fields */
+    const char *auth_mode_str = is_local_auth_mode() ? "Local" : (is_bypass_mode() ? "Bypass" : "Cloud");
+    json_object_object_add(j_data, "auth_server_mode", json_object_new_string(auth_mode_str));
+    json_object_object_add(j_data, "portal_auth", json_object_new_string(is_portal_auth_disabled() ? "Disabled" : "Enabled"));
+    json_object_object_add(j_data, "bypass_mode", json_object_new_string(is_bypass_mode() ? "Yes" : "No"));
+
+    /* Ports and intervals */
+    json_object_object_add(j_data, "gateway_port", json_object_new_int(gw_port));
+    json_object_object_add(j_data, "https_port", json_object_new_int(gw_https_port));
+    json_object_object_add(j_data, "check_interval", json_object_new_int(check_interval));
+    json_object_object_add(j_data, "client_timeout", json_object_new_int(client_timeout));
+
+    /* Connectivity */
+    json_object_object_add(j_data, "internet_connectivity", json_object_new_string(is_online() ? "yes" : "no"));
+    json_object_object_add(j_data, "auth_server_reachable", json_object_new_string(is_auth_online() ? "yes" : "no"));
+
+    if (selected_section[0]) {
+        json_object_object_add(j_data, "selected_auth_server", json_object_new_string(selected_section));
+    }
+
+    /* Auth server runtime details */
+    json_object *j_auth = json_object_new_object();
+    if (hostname_copy) {
+        json_object_object_add(j_auth, "hostname", json_object_new_string(hostname_copy));
+    }
+    json_object_object_add(j_auth, "port", json_object_new_int(port_copy));
+    if (path_copy) {
+        json_object_object_add(j_auth, "path", json_object_new_string(path_copy));
+    }
+    json_object_object_add(j_data, "auth_server", j_auth);
+
+    /* Gateway settings array */
+    if (gw_settings) {
+        json_object *j_gws = json_object_new_array();
+        t_gateway_setting *g = gw_settings;
+        while (g) {
+            json_object *j_gw = json_object_new_object();
+            json_object_object_add(j_gw, "interface", json_object_new_string(g->gw_interface ? g->gw_interface : "N/A"));
+            json_object_object_add(j_gw, "gateway_id", json_object_new_string(g->gw_id ? g->gw_id : "N/A"));
+            json_object_object_add(j_gw, "ipv4", json_object_new_string(g->gw_address_v4 ? g->gw_address_v4 : "N/A"));
+            json_object_object_add(j_gw, "ipv6", json_object_new_string(g->gw_address_v6 ? g->gw_address_v6 : "N/A"));
+            json_object_object_add(j_gw, "channel", json_object_new_string(g->gw_channel ? g->gw_channel : "N/A"));
+            json_object_array_add(j_gws, j_gw);
+            g = g->next;
+        }
+        json_object_object_add(j_data, "gateway_settings", j_gws);
+    }
+
+    /* System resources */
+    json_object *j_sys = json_object_new_object();
+    json_object_object_add(j_sys, "system_uptime_seconds", json_object_new_int64(info.sys_uptime));
+    json_object_object_add(j_sys, "free_memory_kb", json_object_new_int(info.sys_memfree));
+    json_object_object_add(j_sys, "load_average", json_object_new_double(info.sys_load));
+    json_object_object_add(j_sys, "cpu_usage_percent", json_object_new_double(info.cpu_usage));
+    if (info.cpu_temp > 0) {
+        json_object_object_add(j_sys, "cpu_temperature_c", json_object_new_int(info.cpu_temp));
+    }
+    json_object_object_add(j_sys, "netfilter_conntrack", json_object_new_int64(info.nf_conntrack_count));
+    json_object_object_add(j_data, "system_resources", j_sys);
+
+    /* Firewall status */
+    json_object *j_fw = json_object_new_object();
+    json_object_object_add(j_fw, "fw4_enabled", json_object_new_boolean(fw4_enabled));
+    json_object_object_add(j_fw, "anti_nat_enabled", json_object_new_boolean(anti_nat));
+    json_object_object_add(j_fw, "del_conntrack", json_object_new_boolean(del_conntrack));
+    json_object_object_add(j_data, "firewall_status", j_fw);
+
+    /* MQTT server info */
+    if (mqtt_server) {
+        json_object *j_mqtt = json_object_new_object();
+        json_object_object_add(j_mqtt, "host", json_object_new_string(mqtt_server->hostname ? mqtt_server->hostname : "N/A"));
+        json_object_object_add(j_mqtt, "port", json_object_new_int(mqtt_server->port));
+        json_object_object_add(j_mqtt, "username", json_object_new_string(mqtt_server->username ? mqtt_server->username : "N/A"));
+        /* MQTT connection status */
+        json_object_object_add(j_mqtt, "connected", json_object_new_boolean(mqtt_is_connected()));
+        json_object_object_add(j_data, "mqtt_server", j_mqtt);
+    }
+
+    /* Portal/authentication runtime status convenience */
+    json_object_object_add(j_data, "portal_auth_enabled", json_object_new_boolean(!is_portal_auth_disabled()));
+
+    json_object_object_add(j_response, "type", json_object_new_string("get_status_response"));
+    json_object_object_add(j_response, "data", j_data);
+
+    const char *response_str = json_object_to_json_string(j_response);
+    send_response(transport, response_str);
+    json_object_put(j_response);
+
+    free(aw_uptime);
+    free(hostname_copy);
+    free(path_copy);
 }
 
 /**
