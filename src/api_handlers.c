@@ -62,18 +62,16 @@ static const api_route_entry_t api_routes[] = {
     {"update_device_info",          handle_update_device_info_request},
     {"get_device_info",             handle_get_device_info_request},
 	{"set_auth_serv",               handle_set_auth_server_request},
-	{"reboot_device",               handle_reboot_device_request},
-	{"reboot",                      handle_reboot_device_request},
+    {"reboot_device",               handle_reboot_device_request},
 	
 	// WiFi management
 	{"get_wifi_info",               handle_get_wifi_info_request},
 	{"set_wifi_info",               handle_set_wifi_info_request},
 	
-	// Trusted domains
-	{"set_trusted",                 handle_sync_trusted_domain_request},
-	{"sync_trusted_domain",         handle_sync_trusted_domain_request},
+    // Trusted domains
+    // Note: Use `sync_trusted_domain` as the canonical operation name.
+    {"sync_trusted_domain",         handle_sync_trusted_domain_request},
 	{"get_trusted_domains",         handle_get_trusted_domains_request},
-	{"show_trusted",                handle_get_trusted_domains_request},
 	{"sync_trusted_wildcard_domains", handle_sync_trusted_wildcard_domains_request},
 	{"get_trusted_wildcard_domains",  handle_get_trusted_wildcard_domains_request},
 	
