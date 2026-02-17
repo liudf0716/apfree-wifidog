@@ -71,6 +71,7 @@ void handle_get_clients_request(json_object *j_req, api_transport_context_t *tra
 
 // Device management handlers
 void handle_update_device_info_request(json_object *j_req, api_transport_context_t *transport);
+void handle_get_device_info_request(json_object *j_req, api_transport_context_t *transport);
 void handle_reboot_device_request(json_object *j_req, api_transport_context_t *transport);
 
 // Firmware management handlers

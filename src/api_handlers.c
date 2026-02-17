@@ -59,7 +59,8 @@ static const api_route_entry_t api_routes[] = {
 	{"ota",                         handle_firmware_upgrade_request},
 	
 	// Device configuration
-	{"update_device_info",          handle_update_device_info_request},
+    {"update_device_info",          handle_update_device_info_request},
+    {"get_device_info",             handle_get_device_info_request},
 	{"set_auth_serv",               handle_set_auth_server_request},
 	{"reboot_device",               handle_reboot_device_request},
 	{"reboot",                      handle_reboot_device_request},
@@ -1395,6 +1396,57 @@ void handle_update_device_info_request(json_object *j_req, api_transport_context
     json_object_put(j_response);
 
     debug(LOG_INFO, "Device info updated successfully");
+}
+
+/**
+ * @brief Handles a request to get stored device information (ap_longitude, ap_latitude, etc.)
+ *
+ * This returns the contents of the device_info structure saved in firmware (if present).
+ */
+void handle_get_device_info_request(json_object *j_req, api_transport_context_t *transport) {
+    json_object *j_response = json_object_new_object();
+
+    debug(LOG_INFO, "Get device info request received");
+
+    t_device_info *device_info = get_device_info();
+    if (!device_info) {
+        json_object *j_type = json_object_new_string("get_device_info_error");
+        json_object *j_error = json_object_new_string("Device info not set");
+        json_object_object_add(j_response, "type", j_type);
+        json_object_object_add(j_response, "error", j_error);
+        const char *response_str = json_object_to_json_string(j_response);
+        send_response(transport, response_str);
+        json_object_put(j_response);
+        return;
+    }
+
+    json_object *j_data = json_object_new_object();
+
+    if (device_info->ap_device_id) {
+        json_object_object_add(j_data, "ap_device_id", json_object_new_string(device_info->ap_device_id));
+    }
+    if (device_info->ap_mac_address) {
+        json_object_object_add(j_data, "ap_mac_address", json_object_new_string(device_info->ap_mac_address));
+    }
+    if (device_info->ap_longitude) {
+        json_object_object_add(j_data, "ap_longitude", json_object_new_string(device_info->ap_longitude));
+    }
+    if (device_info->ap_latitude) {
+        json_object_object_add(j_data, "ap_latitude", json_object_new_string(device_info->ap_latitude));
+    }
+    if (device_info->location_id) {
+        json_object_object_add(j_data, "location_id", json_object_new_string(device_info->location_id));
+    }
+
+    json_object_object_add(j_response, "type", json_object_new_string("get_device_info_response"));
+    json_object_object_add(j_response, "data", j_data);
+
+    const char *response_str = json_object_to_json_string(j_response);
+    debug(LOG_INFO, "Sending device info response: %s", response_str);
+    send_response(transport, response_str);
+    json_object_put(j_response);
+
+    debug(LOG_INFO, "Device info sent successfully");
 }
 
 /**
