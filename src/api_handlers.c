@@ -426,6 +426,64 @@ void handle_get_aw_status_request(json_object *j_req, api_transport_context_t *t
     /* Portal/authentication runtime status convenience */
     json_object_object_add(j_data, "portal_auth_enabled", json_object_new_boolean(!is_portal_auth_disabled()));
 
+    /* Descriptions for AI/clients: explain each field returned in the JSON */
+    json_object *j_field_desc = json_object_new_object();
+    json_object_object_add(j_field_desc, "service", json_object_new_string("Service name (string) - identifies this software component"));
+    json_object_object_add(j_field_desc, "version", json_object_new_string("Version (string) - software version string"));
+    json_object_object_add(j_field_desc, "uptime", json_object_new_string("Human-readable uptime (string), e.g. '1D 2H 3M 4S'"));
+    json_object_object_add(j_field_desc, "uptime_seconds", json_object_new_string("Uptime in seconds (int64) since service start"));
+    json_object_object_add(j_field_desc, "has_been_restarted", json_object_new_string("Indicates whether process was restarted during this run ('yes'/'no')"));
+    json_object_object_add(j_field_desc, "restart_orig_pid", json_object_new_string("Original parent PID if restarted (int)"));
+    json_object_object_add(j_field_desc, "auth_server_mode", json_object_new_string("Auth mode (string) - 'Local', 'Cloud' or 'Bypass'"));
+    json_object_object_add(j_field_desc, "portal_auth", json_object_new_string("Portal authentication status (string) - 'Enabled' or 'Disabled'"));
+    json_object_object_add(j_field_desc, "bypass_mode", json_object_new_string("Bypass mode flag (string) - 'Yes' or 'No'"));
+    json_object_object_add(j_field_desc, "gateway_port", json_object_new_string("Gateway HTTP port (int) used by captive portal"));
+    json_object_object_add(j_field_desc, "https_port", json_object_new_string("Gateway HTTPS port (int) used by captive portal"));
+    json_object_object_add(j_field_desc, "check_interval", json_object_new_string("Connectivity check interval (int, seconds)"));
+    json_object_object_add(j_field_desc, "client_timeout", json_object_new_string("Client session timeout (int, seconds)") );
+    json_object_object_add(j_field_desc, "internet_connectivity", json_object_new_string("Hint whether Internet connectivity appears available ('yes'/'no')"));
+    json_object_object_add(j_field_desc, "auth_server_reachable", json_object_new_string("Hint whether the configured auth server is reachable ('yes'/'no')"));
+    json_object_object_add(j_field_desc, "selected_auth_server", json_object_new_string("UCI section name of the selected auth server (string), if configured"));
+
+    /* auth_server subfields */
+    json_object *j_auth_desc = json_object_new_object();
+    json_object_object_add(j_auth_desc, "hostname", json_object_new_string("Auth server hostname (string) from runtime config"));
+    json_object_object_add(j_auth_desc, "port", json_object_new_string("Auth server HTTP port (int) from runtime config"));
+    json_object_object_add(j_auth_desc, "path", json_object_new_string("Auth server path (string) used for authentication requests"));
+    json_object_object_add(j_field_desc, "auth_server", j_auth_desc);
+
+    /* gateway_settings description */
+    json_object_object_add(j_field_desc, "gateway_settings", json_object_new_string("Array of gateway objects. Each object: interface (string), gateway_id (string), ipv4 (string), ipv6 (string), channel (string)"));
+
+    /* system_resources subfields */
+    json_object *j_sys_desc = json_object_new_object();
+    json_object_object_add(j_sys_desc, "system_uptime_seconds", json_object_new_string("System uptime in seconds (int64)"));
+    json_object_object_add(j_sys_desc, "free_memory_kb", json_object_new_string("Free memory in KB (int)"));
+    json_object_object_add(j_sys_desc, "load_average", json_object_new_string("System load average (double)"));
+    json_object_object_add(j_sys_desc, "cpu_usage_percent", json_object_new_string("Estimated CPU usage percent (double)"));
+    json_object_object_add(j_sys_desc, "cpu_temperature_c", json_object_new_string("CPU temperature in Celsius (int) if available"));
+    json_object_object_add(j_sys_desc, "netfilter_conntrack", json_object_new_string("Number of conntrack entries (int64)"));
+    json_object_object_add(j_field_desc, "system_resources", j_sys_desc);
+
+    /* firewall_status subfields */
+    json_object *j_fw_desc = json_object_new_object();
+    json_object_object_add(j_fw_desc, "fw4_enabled", json_object_new_string("IPv4 firewall enabled boolean"));
+    json_object_object_add(j_fw_desc, "anti_nat_enabled", json_object_new_string("Anti-NAT rules enabled boolean"));
+    json_object_object_add(j_fw_desc, "del_conntrack", json_object_new_string("Whether conntrack entries are removed on client disconnect (boolean)"));
+    json_object_object_add(j_field_desc, "firewall_status", j_fw_desc);
+
+    /* mqtt_server subfields */
+    json_object *j_mqtt_desc = json_object_new_object();
+    json_object_object_add(j_mqtt_desc, "host", json_object_new_string("MQTT broker hostname (string) from runtime config"));
+    json_object_object_add(j_mqtt_desc, "port", json_object_new_string("MQTT broker port (int)"));
+    json_object_object_add(j_mqtt_desc, "username", json_object_new_string("MQTT username (string) if configured"));
+    json_object_object_add(j_mqtt_desc, "connected", json_object_new_string("Current MQTT connection state (boolean) - true if client connected to broker"));
+    json_object_object_add(j_field_desc, "mqtt_server", j_mqtt_desc);
+
+    json_object_object_add(j_field_desc, "portal_auth_enabled", json_object_new_string("Boolean (true/false) duplicate convenience indicating portal auth is enabled"));
+
+    json_object_object_add(j_data, "field_descriptions", j_field_desc);
+
     json_object_object_add(j_response, "type", json_object_new_string("get_status_response"));
     json_object_object_add(j_response, "data", j_data);
 
