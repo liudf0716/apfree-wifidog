@@ -62,6 +62,7 @@ static const api_route_entry_t api_routes[] = {
     {"update_device_info",          handle_update_device_info_request},
     {"get_device_info",             handle_get_device_info_request},
 	{"set_auth_serv",               handle_set_auth_server_request},
+    {"get_auth_serv",               handle_get_auth_server_request},
     {"reboot_device",               handle_reboot_device_request},
 	
 	// WiFi management
@@ -848,48 +849,71 @@ void handle_set_auth_server_request(json_object *j_req, api_transport_context_t 
 
     // Parse JSON parameters
     json_object *jo_host_name = json_object_object_get(j_req, "hostname");
-    if (jo_host_name != NULL) {
-        tmp_host_name = json_object_get_string(jo_host_name);
-    }
-
     json_object *jo_http_port = json_object_object_get(j_req, "port");
+    json_object *jo_path = json_object_object_get(j_req, "path");
+
+    const char *json_host = NULL;
+    const char *json_port = NULL;
+    const char *json_path = NULL;
+
+    if (jo_host_name != NULL) {
+        json_host = json_object_get_string(jo_host_name);
+    }
     if (jo_http_port != NULL) {
-        tmp_http_port = json_object_get_string(jo_http_port);
+        json_port = json_object_get_string(jo_http_port);
+    }
+    if (jo_path != NULL) {
+        json_path = json_object_get_string(jo_path);
     }
 
-    json_object *jo_path = json_object_object_get(j_req, "path");
-    if (jo_path != NULL) {
-        tmp_path = json_object_get_string(jo_path);
+    /* Update runtime config first (memory is authoritative) */
+    LOCK_CONFIG();
+    if (json_host != NULL && hostname && strcmp(hostname, json_host) != 0) {
+        free(hostname);
+        config->auth_servers->authserv_hostname = safe_strdup(json_host);
+        tmp_host_name = config->auth_servers->authserv_hostname;
     }
+
+    if (json_path != NULL && path && strcmp(path, json_path) != 0) {
+        free(path);
+        config->auth_servers->authserv_path = safe_strdup(json_path);
+        tmp_path = config->auth_servers->authserv_path;
+    }
+
+    if (json_port != NULL) {
+        config->auth_servers->authserv_http_port = atoi(json_port);
+        /* store string form for persisting */
+        tmp_http_port = json_port;
+    }
+    UNLOCK_CONFIG();
 
     debug(LOG_DEBUG, "Set auth server - hostname: %s, port: %s, path: %s",
           tmp_host_name ? tmp_host_name : "(unchanged)",
           tmp_http_port ? tmp_http_port : "(unchanged)",
           tmp_path ? tmp_path : "(unchanged)");
 
-    // Update configuration with proper locking
-    LOCK_CONFIG();
+    /* runtime already updated above; persistence handled against the
+     * selected auth 'config auth' section further below. Removed duplicate
+     * writes to the 'wifidog' section to avoid overwriting unrelated state.
+     */
 
-    if (tmp_host_name != NULL && hostname && strcmp(hostname, tmp_host_name) != 0) {
-        free(hostname);
-        config->auth_servers->authserv_hostname = safe_strdup(tmp_host_name);
-        uci_set_value("wifidogx", "wifidog", "auth_server_hostname",
-                     config->auth_servers->authserv_hostname);
+    /* Persist changes to the config file: write into the selected auth 'config auth' section */
+    char selected_section[128] = {0};
+    if (uci_get_value("wifidogx", "wifidog", "selected_auth_server", selected_section, sizeof(selected_section)) == 0 && selected_section[0] != '\0') {
+        if (tmp_host_name != NULL) {
+            uci_set_value("wifidogx", selected_section, "auth_server_hostname", tmp_host_name);
+        }
+        if (tmp_path != NULL) {
+            uci_set_value("wifidogx", selected_section, "auth_server_path", tmp_path);
+        }
+        if (tmp_http_port != NULL) {
+            char portbuf[16];
+            snprintf(portbuf, sizeof(portbuf), "%d", config->auth_servers->authserv_http_port);
+            uci_set_value("wifidogx", selected_section, "auth_server_port", portbuf);
+        }
+    } else {
+        debug(LOG_WARNING, "No selected_auth_server found in UCI; skipping persistence to auth section");
     }
-
-    if (tmp_path != NULL && path && strcmp(path, tmp_path) != 0) {
-        free(path);
-        config->auth_servers->authserv_path = safe_strdup(tmp_path);
-        uci_set_value("wifidogx", "wifidog", "auth_server_path",
-                     config->auth_servers->authserv_path);
-    }
-
-    if (tmp_http_port != NULL) {
-        config->auth_servers->authserv_http_port = atoi(tmp_http_port);
-        uci_set_value("wifidogx", "wifidog", "auth_server_port", tmp_http_port);
-    }
-
-    UNLOCK_CONFIG();
 
     // Send success response
     json_object *response = json_object_new_object();
@@ -900,6 +924,66 @@ void handle_set_auth_server_request(json_object *j_req, api_transport_context_t 
     send_response(transport, response_str);
 
     json_object_put(response);
+}
+
+/**
+ * @brief Handles a request to get the configured authentication server.
+ *
+ * Returns the current auth server hostname, port and path from runtime config.
+ */
+void handle_get_auth_server_request(json_object *j_req, api_transport_context_t *transport) {
+    /* Return auth server configuration from runtime memory only.
+     * Do not read from UCI or config files here. Protect access with
+     * LOCK_CONFIG()/UNLOCK_CONFIG() to avoid races when other threads
+     * may be updating the runtime config.
+     */
+    json_object *j_response = json_object_new_object();
+
+    s_config *config = config_get_config();
+    if (!config || !config->auth_servers) {
+        debug(LOG_ERR, "Get auth server: Config or auth_servers is NULL");
+        json_object_object_add(j_response, "type", json_object_new_string("get_auth_serv_error"));
+        json_object_object_add(j_response, "error", json_object_new_string("Internal configuration error"));
+        const char *response_str = json_object_to_json_string(j_response);
+        send_response(transport, response_str);
+        json_object_put(j_response);
+        return;
+    }
+
+    /* Copy runtime values under lock into local buffers/vars so we only
+     * read memory and then build the response from those copies. */
+    char *hostname_copy = NULL;
+    char *path_copy = NULL;
+    int port_copy = 0;
+
+    LOCK_CONFIG();
+    if (config->auth_servers->authserv_hostname) {
+        hostname_copy = safe_strdup(config->auth_servers->authserv_hostname);
+    }
+    port_copy = config->auth_servers->authserv_http_port;
+    if (config->auth_servers->authserv_path) {
+        path_copy = safe_strdup(config->auth_servers->authserv_path);
+    }
+    UNLOCK_CONFIG();
+
+    json_object *j_data = json_object_new_object();
+    if (hostname_copy) {
+        json_object_object_add(j_data, "hostname", json_object_new_string(hostname_copy));
+    }
+    json_object_object_add(j_data, "port", json_object_new_int(port_copy));
+    if (path_copy) {
+        json_object_object_add(j_data, "path", json_object_new_string(path_copy));
+    }
+
+    json_object_object_add(j_response, "type", json_object_new_string("get_auth_serv_response"));
+    json_object_object_add(j_response, "data", j_data);
+
+    const char *response_str = json_object_to_json_string(j_response);
+    send_response(transport, response_str);
+    json_object_put(j_response);
+
+    free(hostname_copy);
+    free(path_copy);
 }
 
 /**

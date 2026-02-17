@@ -93,6 +93,7 @@ void handle_get_sys_info_request(json_object *j_req, api_transport_context_t *tr
 
 // Auth server configuration handler
 void handle_set_auth_server_request(json_object *j_req, api_transport_context_t *transport);
+void handle_get_auth_server_request(json_object *j_req, api_transport_context_t *transport);
 
 // Connection management handlers
 void handle_heartbeat_request(json_object *j_heartbeat, api_transport_context_t *transport);
