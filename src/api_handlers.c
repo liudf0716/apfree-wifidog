@@ -107,7 +107,8 @@ api_dispatch_request(const char *op_name, json_object *json_req, api_transport_c
 	for (const api_route_entry_t *route = api_routes; route->name != NULL; route++) {
 		if (strcmp(op_name, route->name) == 0) {
 			if (route->handler) {
-				route->handler(json_req, transport);
+                route->handler(json_req, transport);
+                return true;
 			}
 			return true;
 		}
@@ -272,6 +273,62 @@ static int send_response(api_transport_context_t *transport, const char *message
           message, strlen(message) > 100 ? "..." : "");
     
     return transport->send_response(transport->transport_ctx, message, strlen(message));
+}
+
+/*
+ * Auto-generate simple field descriptions for responses.
+ * If a handler has already provided a dedicated `field_descriptions`
+ * entry, this function will do nothing. Otherwise it will add a
+ * top-level `field_descriptions` object describing keys under `data`.
+ */
+static void add_auto_field_descriptions(json_object *j_response)
+{
+    if (!j_response) return;
+
+    json_object *existing = NULL;
+    if (json_object_object_get_ex(j_response, "field_descriptions", &existing)) {
+        return; /* already provided */
+    }
+
+    json_object *j_data = NULL;
+    if (!json_object_object_get_ex(j_response, "data", &j_data) || !json_object_is_type(j_data, json_type_object)) {
+        /* nothing to describe */
+        return;
+    }
+
+    json_object *j_fd = json_object_new_object();
+    json_object_object_foreach(j_data, key, val) {
+        const char *type_name = "unknown";
+        switch(json_object_get_type(val)) {
+            case json_type_boolean: type_name = "boolean"; break;
+            case json_type_double:  type_name = "double";  break;
+            case json_type_int:     type_name = "integer"; break;
+            case json_type_string:  type_name = "string";  break;
+            case json_type_array:   type_name = "array";   break;
+            case json_type_object:  type_name = "object";  break;
+            default: type_name = "unknown"; break;
+        }
+
+        char buf[128];
+        snprintf(buf, sizeof(buf), "Auto-generated: key '%s' of type %s", key, type_name);
+        json_object_object_add(j_fd, key, json_object_new_string(buf));
+    }
+
+    json_object_object_add(j_response, "field_descriptions", j_fd);
+}
+
+/* Send a json_object response after adding field descriptions (if missing). */
+static void send_json_response(api_transport_context_t *transport, json_object *j_response)
+{
+    if (!j_response) return;
+    add_auto_field_descriptions(j_response);
+
+    const char *response_str = json_object_to_json_string(j_response);
+    if (response_str) {
+        send_response(transport, response_str);
+    }
+
+    json_object_put(j_response);
 }
 
 /**
@@ -487,9 +544,7 @@ void handle_get_aw_status_request(json_object *j_req, api_transport_context_t *t
     json_object_object_add(j_response, "type", json_object_new_string("get_status_response"));
     json_object_object_add(j_response, "data", j_data);
 
-    const char *response_str = json_object_to_json_string(j_response);
-    send_response(transport, response_str);
-    json_object_put(j_response);
+    send_json_response(transport, j_response);
 
     free(aw_uptime);
     free(hostname_copy);
@@ -696,9 +751,7 @@ void handle_get_client_info_request(json_object *j_req, api_transport_context_t 
         json_object_object_add(j_response, "type", j_type);
         json_object_object_add(j_response, "error", j_error);
         
-        const char *response_str = json_object_to_json_string(j_response);
-        send_response(transport, response_str);
-        json_object_put(j_response);
+        send_json_response(transport, j_response);
         return;
     }
     
@@ -711,9 +764,7 @@ void handle_get_client_info_request(json_object *j_req, api_transport_context_t 
         json_object_object_add(j_response, "type", j_type);
         json_object_object_add(j_response, "error", j_error);
         
-        const char *response_str = json_object_to_json_string(j_response);
-        send_response(transport, response_str);
-        json_object_put(j_response);
+        send_json_response(transport, j_response);
         return;
     }
     
@@ -736,9 +787,7 @@ void handle_get_client_info_request(json_object *j_req, api_transport_context_t 
         json_object_object_add(j_response, "type", j_type);
         json_object_object_add(j_response, "error", j_error);
         
-        const char *response_str = json_object_to_json_string(j_response);
-        send_response(transport, response_str);
-        json_object_put(j_response);
+        send_json_response(transport, j_response);
         return;
     }
     
@@ -802,14 +851,44 @@ void handle_get_client_info_request(json_object *j_req, api_transport_context_t 
     json_object *j_type = json_object_new_string("get_client_info_response");
     json_object_object_add(j_response, "type", j_type);
     json_object_object_add(j_response, "data", j_data);
-    
+    /* Detailed field descriptions for clients (hand-written for AI/clients) */
+    json_object *j_fd = json_object_new_object();
+    json_object_object_add(j_fd, "id", json_object_new_string("Client internal id (int64)"));
+    json_object_object_add(j_fd, "ip", json_object_new_string("IPv4 address of client (string)"));
+    json_object_object_add(j_fd, "ip6", json_object_new_string("IPv6 address of client (string) if present"));
+    json_object_object_add(j_fd, "mac", json_object_new_string("Client MAC address (string)"));
+    json_object_object_add(j_fd, "token", json_object_new_string("Authentication token assigned to client (string)"));
+    json_object_object_add(j_fd, "fw_connection_state", json_object_new_string("Firewall/connection state (int) - internal enum"));
+    json_object_object_add(j_fd, "name", json_object_new_string("Optional client name (string)"));
+    json_object_object_add(j_fd, "is_online", json_object_new_string("Is client currently online (boolean as int: 0/1)"));
+    json_object_object_add(j_fd, "wired", json_object_new_string("Is client wired (boolean as int: 0/1)"));
+    json_object_object_add(j_fd, "first_login", json_object_new_string("Epoch timestamp of first login (int64)"));
+    /* counters subobject */
+    json_object *j_cnt_desc = json_object_new_object();
+    json_object_object_add(j_cnt_desc, "incoming_bytes", json_object_new_string("IPv4 incoming bytes (int64)"));
+    json_object_object_add(j_cnt_desc, "incoming_packets", json_object_new_string("IPv4 incoming packets (int64)"));
+    json_object_object_add(j_cnt_desc, "outgoing_bytes", json_object_new_string("IPv4 outgoing bytes (int64)"));
+    json_object_object_add(j_cnt_desc, "outgoing_packets", json_object_new_string("IPv4 outgoing packets (int64)"));
+    json_object_object_add(j_cnt_desc, "incoming_rate", json_object_new_string("IPv4 incoming rate (int, bytes/sec)"));
+    json_object_object_add(j_cnt_desc, "outgoing_rate", json_object_new_string("IPv4 outgoing rate (int, bytes/sec)"));
+    json_object_object_add(j_cnt_desc, "last_updated", json_object_new_string("Epoch timestamp when counters were last updated (int64)"));
+    json_object_object_add(j_fd, "counters", j_cnt_desc);
+    /* counters6 subobject */
+    json_object *j_cnt6_desc = json_object_new_object();
+    json_object_object_add(j_cnt6_desc, "incoming_bytes", json_object_new_string("IPv6 incoming bytes (int64)"));
+    json_object_object_add(j_cnt6_desc, "incoming_packets", json_object_new_string("IPv6 incoming packets (int64)"));
+    json_object_object_add(j_cnt6_desc, "outgoing_bytes", json_object_new_string("IPv6 outgoing bytes (int64)"));
+    json_object_object_add(j_cnt6_desc, "outgoing_packets", json_object_new_string("IPv6 outgoing packets (int64)"));
+    json_object_object_add(j_cnt6_desc, "incoming_rate", json_object_new_string("IPv6 incoming rate (int, bytes/sec)"));
+    json_object_object_add(j_cnt6_desc, "outgoing_rate", json_object_new_string("IPv6 outgoing rate (int, bytes/sec)"));
+    json_object_object_add(j_cnt6_desc, "last_updated", json_object_new_string("Epoch timestamp when counters6 were last updated (int64)"));
+    json_object_object_add(j_fd, "counters6", j_cnt6_desc);
+    json_object_object_add(j_data, "field_descriptions", j_fd);
+
     // Send response
     const char *response_str = json_object_to_json_string(j_response);
     debug(LOG_DEBUG, "Sending client info response: %s", response_str);
-    send_response(transport, response_str);
-    
-    // Cleanup
-    json_object_put(j_response);
+    send_json_response(transport, j_response);
     
     debug(LOG_INFO, "Client info for MAC %s sent successfully", mac_str);
 }
@@ -834,9 +913,7 @@ void handle_kickoff_request(json_object *j_auth, api_transport_context_t *transp
         json_object_object_add(j_response, "type", json_object_new_string("kickoff_error"));
         json_object_object_add(j_response, "error", json_object_new_string("Portal authentication is disabled"));
         
-        const char *response_str = json_object_to_json_string(j_response);
-        send_response(transport, response_str);
-        json_object_put(j_response);
+        send_json_response(transport, j_response);
         return;
     }
     
@@ -853,9 +930,7 @@ void handle_kickoff_request(json_object *j_auth, api_transport_context_t *transp
         json_object_object_add(j_response, "type", json_object_new_string("kickoff_error"));
         json_object_object_add(j_response, "error", json_object_new_string("Missing required fields in request"));
         
-        const char *response_str = json_object_to_json_string(j_response);
-        send_response(transport, response_str);
-        json_object_put(j_response);
+        send_json_response(transport, j_response);
         return;
     }
 
@@ -877,9 +952,7 @@ void handle_kickoff_request(json_object *j_auth, api_transport_context_t *transp
         json_object_object_add(j_response, "client_ip", json_object_new_string(client_ip_str));
         json_object_object_add(j_response, "client_mac", json_object_new_string(client_mac_str));
         
-        const char *response_str = json_object_to_json_string(j_response);
-        send_response(transport, response_str);
-        json_object_put(j_response);
+        send_json_response(transport, j_response);
         return;
     }
 
@@ -894,9 +967,7 @@ void handle_kickoff_request(json_object *j_auth, api_transport_context_t *transp
         json_object_object_add(j_response, "expected_device_id", json_object_new_string(device_id_str));
         json_object_object_add(j_response, "actual_device_id", json_object_new_string(local_device_id ? local_device_id : "null"));
         
-        const char *response_str = json_object_to_json_string(j_response);
-        send_response(transport, response_str);
-        json_object_put(j_response);
+        send_json_response(transport, j_response);
         return;
     }
 
@@ -912,9 +983,7 @@ void handle_kickoff_request(json_object *j_auth, api_transport_context_t *transp
         json_object_object_add(j_response, "expected_gw_id", json_object_new_string(gw_id_str));
         json_object_object_add(j_response, "actual_gw_id", json_object_new_string(client->gw_setting ? client->gw_setting->gw_id : "null"));
         
-        const char *response_str = json_object_to_json_string(j_response);
-        send_response(transport, response_str);
-        json_object_put(j_response);
+        send_json_response(transport, j_response);
         return;
     }
 
@@ -934,9 +1003,7 @@ void handle_kickoff_request(json_object *j_auth, api_transport_context_t *transp
     json_object_object_add(j_response, "client_mac", json_object_new_string(client_mac_str));
     json_object_object_add(j_response, "message", json_object_new_string("Client kicked off successfully"));
     
-    const char *response_str = json_object_to_json_string(j_response);
-    send_response(transport, response_str);
-    json_object_put(j_response);
+    send_json_response(transport, j_response);
 }
 
 /**
@@ -1033,14 +1100,28 @@ void handle_get_clients_request(json_object *j_req, api_transport_context_t *tra
     json_object *j_type = json_object_new_string("get_clients_response");
     json_object_object_add(j_response, "type", j_type);
     json_object_object_add(j_response, "clients", j_clients_array);
-    
+    /* Describe the clients array and client object fields for AI/clients */
+    json_object *j_fd = json_object_new_object();
+    json_object_object_add(j_fd, "clients", json_object_new_string("Array of client objects. Each object contains id, ip, ip6, mac, token, counters, counters6, etc."));
+    json_object *j_client_desc = json_object_new_object();
+    json_object_object_add(j_client_desc, "id", json_object_new_string("Client internal id (int64)"));
+    json_object_object_add(j_client_desc, "ip", json_object_new_string("IPv4 address (string)"));
+    json_object_object_add(j_client_desc, "ip6", json_object_new_string("IPv6 address (string) if present"));
+    json_object_object_add(j_client_desc, "mac", json_object_new_string("MAC address (string)"));
+    json_object_object_add(j_client_desc, "token", json_object_new_string("Auth token (string)"));
+    json_object_object_add(j_client_desc, "fw_connection_state", json_object_new_string("Firewall/connection state (int)"));
+    json_object_object_add(j_client_desc, "name", json_object_new_string("Optional human name for client (string)"));
+    json_object_object_add(j_client_desc, "is_online", json_object_new_string("Online flag (0/1)"));
+    json_object_object_add(j_client_desc, "wired", json_object_new_string("Wired flag (0/1)"));
+    json_object_object_add(j_client_desc, "first_login", json_object_new_string("Epoch timestamp of first login (int64)"));
+    json_object_object_add(j_fd, "client_object", j_client_desc);
+    json_object_object_add(j_response, "field_descriptions", j_fd);
+
     // Send response
     const char *response_str = json_object_to_json_string(j_response);
     debug(LOG_DEBUG, "Sending clients list response: %s", response_str);
-    send_response(transport, response_str);
+    send_json_response(transport, j_response);
     
-    // Cleanup
-    json_object_put(j_response);
     
     debug(LOG_INFO, "Clients list sent successfully");
 }
@@ -1145,10 +1226,7 @@ void handle_set_auth_server_request(json_object *j_req, api_transport_context_t 
     json_object_object_add(response, "status", json_object_new_string("success"));
     json_object_object_add(response, "message", json_object_new_string("Auth server configuration updated"));
 
-    const char *response_str = json_object_to_json_string(response);
-    send_response(transport, response_str);
-
-    json_object_put(response);
+    send_json_response(transport, response);
 }
 
 /**
@@ -1169,9 +1247,7 @@ void handle_get_auth_server_request(json_object *j_req, api_transport_context_t 
         debug(LOG_ERR, "Get auth server: Config or auth_servers is NULL");
         json_object_object_add(j_response, "type", json_object_new_string("get_auth_serv_error"));
         json_object_object_add(j_response, "error", json_object_new_string("Internal configuration error"));
-        const char *response_str = json_object_to_json_string(j_response);
-        send_response(transport, response_str);
-        json_object_put(j_response);
+        send_json_response(transport, j_response);
         return;
     }
 
@@ -1202,10 +1278,14 @@ void handle_get_auth_server_request(json_object *j_req, api_transport_context_t 
 
     json_object_object_add(j_response, "type", json_object_new_string("get_auth_serv_response"));
     json_object_object_add(j_response, "data", j_data);
+    /* Describe fields for AI/clients */
+    json_object *j_fd = json_object_new_object();
+    json_object_object_add(j_fd, "hostname", json_object_new_string("Auth server hostname (string) from runtime config"));
+    json_object_object_add(j_fd, "port", json_object_new_string("Auth server HTTP port (int) from runtime config"));
+    json_object_object_add(j_fd, "path", json_object_new_string("Auth server path (string) from runtime config"));
+    json_object_object_add(j_response, "field_descriptions", j_fd);
 
-    const char *response_str = json_object_to_json_string(j_response);
-    send_response(transport, response_str);
-    json_object_put(j_response);
+    send_json_response(transport, j_response);
 
     free(hostname_copy);
     free(path_copy);
@@ -1360,9 +1440,7 @@ void handle_get_firmware_info_request(json_object *j_req, api_transport_context_
         json_object_object_add(j_response, "type", j_type);
         json_object_object_add(j_response, "error", j_error);
         
-        const char *response_str = json_object_to_json_string(j_response);
-        send_response(transport, response_str);
-        json_object_put(j_response);
+        send_json_response(transport, j_response);
         return;
     }
 
@@ -1401,14 +1479,15 @@ void handle_get_firmware_info_request(json_object *j_req, api_transport_context_
     json_object *j_type = json_object_new_string("firmware_info_response");
     json_object_object_add(j_response, "type", j_type);
     json_object_object_add(j_response, "data", j_data);
+    /* Describe firmware info: keys are release variables (strings) */
+    json_object *j_fd = json_object_new_object();
+    json_object_object_add(j_fd, "data", json_object_new_string("Map of firmware/release keys to string values (e.g. DISTRIB_RELEASE, DISTRIB_ID). Keys vary by device image."));
+    json_object_object_add(j_data, "field_descriptions", j_fd);
 
     // Send response
     const char *response_str = json_object_to_json_string(j_response);
     debug(LOG_DEBUG, "Sending firmware info response: %s", response_str);
-    send_response(transport, response_str);
-
-    // Cleanup
-    json_object_put(j_response);
+    send_json_response(transport, j_response);
 
     debug(LOG_INFO, "Firmware info sent successfully");
 }
@@ -1437,9 +1516,7 @@ void handle_firmware_upgrade_request(json_object *j_req, api_transport_context_t
         json_object_object_add(j_response, "type", j_type);
         json_object_object_add(j_response, "error", j_error);
         
-        const char *response_str = json_object_to_json_string(j_response);
-        send_response(transport, response_str);
-        json_object_put(j_response);
+        send_json_response(transport, j_response);
         return;
     }
     
@@ -1452,9 +1529,7 @@ void handle_firmware_upgrade_request(json_object *j_req, api_transport_context_t
         json_object_object_add(j_response, "type", j_type);
         json_object_object_add(j_response, "error", j_error);
         
-        const char *response_str = json_object_to_json_string(j_response);
-        send_response(transport, response_str);
-        json_object_put(j_response);
+        send_json_response(transport, j_response);
         return;
     }
     
@@ -1467,14 +1542,12 @@ void handle_firmware_upgrade_request(json_object *j_req, api_transport_context_t
         json_object_object_add(j_response, "type", j_type);
         json_object_object_add(j_response, "error", j_error);
         
-        const char *response_str = json_object_to_json_string(j_response);
-        send_response(transport, response_str);
-        json_object_put(j_response);
+        send_json_response(transport, j_response);
         return;
     }
     
     // Validate URL length
-    if (strlen(url_str) > 256) {
+    if (strlen(url_str) > 1024) {
         debug(LOG_ERR, "URL too long in firmware upgrade request");
         
         json_object *j_type = json_object_new_string("firmware_upgrade_error");
@@ -1482,9 +1555,7 @@ void handle_firmware_upgrade_request(json_object *j_req, api_transport_context_t
         json_object_object_add(j_response, "type", j_type);
         json_object_object_add(j_response, "error", j_error);
         
-        const char *response_str = json_object_to_json_string(j_response);
-        send_response(transport, response_str);
-        json_object_put(j_response);
+        send_json_response(transport, j_response);
         return;
     }
     
@@ -1505,9 +1576,7 @@ void handle_firmware_upgrade_request(json_object *j_req, api_transport_context_t
     json_object_object_add(j_response, "status", j_status);
     json_object_object_add(j_response, "message", j_message);
     
-    const char *response_str = json_object_to_json_string(j_response);
-    send_response(transport, response_str);
-    json_object_put(j_response);
+    send_json_response(transport, j_response);
     
     // Execute sysupgrade command with proper escaping
     char *escaped_url = malloc(strlen(url_str) * 2 + 1);
@@ -1575,9 +1644,7 @@ void handle_reboot_device_request(json_object *j_req, api_transport_context_t *t
         json_object_object_add(j_response, "type", j_type);
         json_object_object_add(j_response, "error", j_error);
         
-        const char *response_str = json_object_to_json_string(j_response);
-        send_response(transport, response_str);
-        json_object_put(j_response);
+        send_json_response(transport, j_response);
         return;
     }
     
@@ -1610,9 +1677,7 @@ void handle_update_device_info_request(json_object *j_req, api_transport_context
         json_object_object_add(j_response, "type", j_type);
         json_object_object_add(j_response, "error", j_error);
         
-        const char *response_str = json_object_to_json_string(j_response);
-        send_response(transport, response_str);
-        json_object_put(j_response);
+        send_json_response(transport, j_response);
         return;
     }
 
@@ -1698,9 +1763,7 @@ void handle_update_device_info_request(json_object *j_req, api_transport_context
     json_object_object_add(j_response, "status", j_status);
     json_object_object_add(j_response, "message", j_message);
 
-    const char *response_str = json_object_to_json_string(j_response);
-    send_response(transport, response_str);
-    json_object_put(j_response);
+    send_json_response(transport, j_response);
 
     debug(LOG_INFO, "Device info updated successfully");
 }
@@ -1721,9 +1784,7 @@ void handle_get_device_info_request(json_object *j_req, api_transport_context_t 
         json_object *j_error = json_object_new_string("Device info not set");
         json_object_object_add(j_response, "type", j_type);
         json_object_object_add(j_response, "error", j_error);
-        const char *response_str = json_object_to_json_string(j_response);
-        send_response(transport, response_str);
-        json_object_put(j_response);
+        send_json_response(transport, j_response);
         return;
     }
 
@@ -1750,8 +1811,7 @@ void handle_get_device_info_request(json_object *j_req, api_transport_context_t 
 
     const char *response_str = json_object_to_json_string(j_response);
     debug(LOG_INFO, "Sending device info response: %s", response_str);
-    send_response(transport, response_str);
-    json_object_put(j_response);
+    send_json_response(transport, j_response);
 
     debug(LOG_INFO, "Device info sent successfully");
 }
@@ -1794,9 +1854,7 @@ void handle_get_wifi_info_request(json_object *j_req, api_transport_context_t *t
         json_object_object_add(j_response, "type", j_type);
         json_object_object_add(j_response, "error", j_error);
         
-        const char *response_str = json_object_to_json_string(j_response);
-        send_response(transport, response_str);
-        json_object_put(j_response);
+        send_json_response(transport, j_response);
         return;
     }
 
@@ -2018,13 +2076,39 @@ void handle_get_wifi_info_request(json_object *j_req, api_transport_context_t *t
     json_object *j_type = json_object_new_string("get_wifi_info_response");
     json_object_object_add(j_response, "type", j_type);
     json_object_object_add(j_response, "data", j_data);
+    /* Describe fields for AI/clients */
+    json_object *j_fd = json_object_new_object();
+
+    /* radio_device describes the structure for each radio key (e.g., radio0, radio1) */
+    json_object *j_radio_desc = json_object_new_object();
+    json_object_object_add(j_radio_desc, "type", json_object_new_string("Radio device driver/type string (e.g., mac80211)"));
+    json_object_object_add(j_radio_desc, "path", json_object_new_string("Kernel/platform path for the radio device (string)"));
+    json_object_object_add(j_radio_desc, "band", json_object_new_string("Radio band (string) e.g., 2g, 5g"));
+    json_object_object_add(j_radio_desc, "channel", json_object_new_string("Operating channel (int)"));
+    json_object_object_add(j_radio_desc, "htmode", json_object_new_string("HT mode (string), e.g., HT20, HE80"));
+    json_object_object_add(j_radio_desc, "cell_density", json_object_new_string("Cell density (int)"));
+
+    /* Interface object description */
+    json_object *j_iface_desc = json_object_new_object();
+    json_object_object_add(j_iface_desc, "interface_name", json_object_new_string("Logical interface name (string)"));
+    json_object_object_add(j_iface_desc, "mode", json_object_new_string("Interface mode (string) e.g., ap, sta"));
+    json_object_object_add(j_iface_desc, "network", json_object_new_string("Associated network name (string)"));
+    json_object_object_add(j_iface_desc, "encryption", json_object_new_string("Encryption type (string) e.g., psk2"));
+    json_object_object_add(j_iface_desc, "disabled", json_object_new_string("Disabled flag (boolean)"));
+    json_object_object_add(j_iface_desc, "ssid", json_object_new_string("SSID string (if configured)"));
+    json_object_object_add(j_iface_desc, "key", json_object_new_string("Pre-shared key/passphrase (if present)"));
+    json_object_object_add(j_iface_desc, "mesh_id", json_object_new_string("Mesh identifier string (if present)"));
+
+    json_object_object_add(j_radio_desc, "interfaces", j_iface_desc);
+
+    json_object_object_add(j_fd, "radio_device", j_radio_desc);
+    json_object_object_add(j_fd, "available_networks", json_object_new_string("Array of available static network interface names (array of strings)"));
+
+    json_object_object_add(j_response, "field_descriptions", j_fd);
 
     const char *response_str = json_object_to_json_string(j_response);
-    debug(LOG_DEBUG, "Sending complete Wi-Fi info response");
-    send_response(transport, response_str);
-
-    // Cleanup
-    json_object_put(j_response);
+    debug(LOG_DEBUG, "Sending complete Wi-Fi info response: %s", response_str);
+    send_json_response(transport, j_response);
     
     debug(LOG_INFO, "WiFi info sent successfully");
 }
@@ -2041,9 +2125,12 @@ void handle_get_trusted_domains_request(json_object *j_req, api_transport_contex
     json_object_object_add(j_response, "type", json_object_new_string("get_trusted_domains_response"));
     json_object_object_add(j_response, "domains", j_domains);
 
-    const char *response_str = json_object_to_json_string(j_response);
-    send_response(transport, response_str);
-    json_object_put(j_response);
+    /* Describe fields for AI/clients */
+    json_object *j_fd = json_object_new_object();
+    json_object_object_add(j_fd, "domains", json_object_new_string("Array of trusted domain strings (exact hostnames)"));
+    json_object_object_add(j_response, "field_descriptions", j_fd);
+
+    send_json_response(transport, j_response);
 }
 
 void handle_sync_trusted_domain_request(json_object *j_req, api_transport_context_t *transport) {
@@ -2071,9 +2158,7 @@ void handle_sync_trusted_domain_request(json_object *j_req, api_transport_contex
     json_object_object_add(j_response, "type", json_object_new_string("sync_trusted_domain_response"));
     json_object_object_add(j_response, "status", json_object_new_string("success"));
     json_object_object_add(j_response, "message", json_object_new_string("Trusted domains synchronized successfully"));
-    const char *response_str = json_object_to_json_string(j_response);
-    send_response(transport, response_str);
-    json_object_put(j_response);
+    send_json_response(transport, j_response);
 }
 
 void handle_get_trusted_wildcard_domains_request(json_object *j_req, api_transport_context_t *transport) {
@@ -2088,9 +2173,12 @@ void handle_get_trusted_wildcard_domains_request(json_object *j_req, api_transpo
     json_object_object_add(j_response, "type", json_object_new_string("get_trusted_wildcard_domains_response"));
     json_object_object_add(j_response, "domains", j_domains);
 
-    const char *response_str = json_object_to_json_string(j_response);
-    send_response(transport, response_str);
-    json_object_put(j_response);
+    /* Describe fields for AI/clients */
+    json_object *j_fd = json_object_new_object();
+    json_object_object_add(j_fd, "domains", json_object_new_string("Array of trusted wildcard domain strings (may include leading '*.' patterns)"));
+    json_object_object_add(j_response, "field_descriptions", j_fd);
+
+    send_json_response(transport, j_response);
 }
 
 void handle_sync_trusted_wildcard_domains_request(json_object *j_req, api_transport_context_t *transport) {
@@ -2118,9 +2206,7 @@ void handle_sync_trusted_wildcard_domains_request(json_object *j_req, api_transp
     json_object_object_add(j_response, "type", json_object_new_string("sync_trusted_wildcard_domains_response"));
     json_object_object_add(j_response, "status", json_object_new_string("success"));
     json_object_object_add(j_response, "message", json_object_new_string("Trusted wildcard domains synchronized successfully"));
-    const char *response_str = json_object_to_json_string(j_response);
-    send_response(transport, response_str);
-    json_object_put(j_response);
+    send_json_response(transport, j_response);
 }
 
 void handle_set_wifi_info_request(json_object *j_req, api_transport_context_t *transport) {
@@ -2131,9 +2217,7 @@ void handle_set_wifi_info_request(json_object *j_req, api_transport_context_t *t
         debug(LOG_ERR, "Set wifi info request missing 'data' field");
         json_object_object_add(j_response, "type", json_object_new_string("set_wifi_info_error"));
         json_object_object_add(j_response, "error", json_object_new_string("Missing 'data' field"));
-        const char *response_str = json_object_to_json_string(j_response);
-        send_response(transport, response_str);
-        json_object_put(j_response);
+        send_json_response(transport, j_response);
         return;
     }
 
@@ -2304,11 +2388,8 @@ void handle_set_wifi_info_request(json_object *j_req, api_transport_context_t *t
     }
 
     const char *response_str = json_object_to_json_string(j_response);
-    debug(LOG_INFO, "Sending Wi-Fi configuration response");
-    send_response(transport, response_str);
-
-    // Cleanup
-    json_object_put(j_response);
+    debug(LOG_INFO, "Sending Wi-Fi configuration response: %s", response_str);
+    send_json_response(transport, j_response);
 }
 
 void handle_get_sys_info_request(json_object *j_req, api_transport_context_t *transport) {
@@ -2336,8 +2417,5 @@ void handle_get_sys_info_request(json_object *j_req, api_transport_context_t *tr
     
     const char *response_str = json_object_to_json_string(j_response);
     debug(LOG_INFO, "Sending system info response: %s", response_str);
-    send_response(transport, response_str);
-    
-    // Cleanup
-    json_object_put(j_response);
+    send_json_response(transport, j_response);
 }
