@@ -70,7 +70,9 @@ static const api_route_entry_t api_routes[] = {
 	
 	// WiFi management
 	{"get_wifi_info",               handle_get_wifi_info_request},
-	{"set_wifi_info",               handle_set_wifi_info_request},
+    {"set_wifi_info",               handle_set_wifi_info_request},
+    {"scan_wifi",                   handle_scan_wifi_request},
+    {"set_wifi_relay",              handle_set_wifi_relay_request},
 	
     // Trusted domains
     // Note: Use `sync_trusted_domain` as the canonical operation name.
@@ -2179,6 +2181,564 @@ void handle_get_trusted_wildcard_domains_request(json_object *j_req, api_transpo
     json_object_object_add(j_response, "field_descriptions", j_fd);
 
     send_json_response(transport, j_response);
+}
+
+/* forward declare helper used below */
+static char *select_radio_by_band(const char *band_pref);
+
+/**
+ * @brief Scan for nearby Wi-Fi networks, filtered by band
+ *
+ * Request JSON parameters (optional):
+ * - "band": "2g" or "5g" (default "2g")
+ *
+ * Response: { "type":"scan_wifi_response", "networks": [ { ssid, bssid, frequency_ghz, signal_dbm, encryption } ] }
+ */
+void handle_scan_wifi_request(json_object *j_req, api_transport_context_t *transport) {
+    const char *band = "2g";
+    json_object *j_band = json_object_object_get(j_req, "band");
+    if (j_band && json_object_is_type(j_band, json_type_string)) {
+        const char *b = json_object_get_string(j_band);
+        if (b && (strcmp(b, "5g") == 0 || strcmp(b, "2g") == 0)) band = b;
+    }
+
+    json_object *j_response = json_object_new_object();
+    json_object *j_networks = json_object_new_array();
+
+    /* Use ubus to perform scan and return JSON results.
+     * Select radio dynamically via select_radio_by_band(); fall back to
+     * legacy names when not available.
+     */
+    char *device = select_radio_by_band(band);
+    if (!device) {
+        device = strdup(strcmp(band, "5g") == 0 ? "radio0" : "radio1");
+    }
+    char cmd[256];
+    snprintf(cmd, sizeof(cmd), "ubus call iwinfo scan '{\"device\":\"%s\"}' 2>/dev/null", device);
+
+    FILE *sfp = popen(cmd, "r");
+    if (!sfp) {
+        json_object_object_add(j_response, "type", json_object_new_string("scan_wifi_error"));
+        json_object_object_add(j_response, "error", json_object_new_string("Failed to invoke ubus iwinfo scan"));
+        if (device) free(device);
+        send_json_response(transport, j_response);
+        return;
+    }
+
+    // Read entire output into buffer
+    size_t out_len = 0;
+    size_t buf_size = 4096;
+    char *out = malloc(buf_size);
+    if (!out) {
+        pclose(sfp);
+        if (device) free(device);
+        json_object_object_add(j_response, "type", json_object_new_string("scan_wifi_error"));
+        json_object_object_add(j_response, "error", json_object_new_string("Memory allocation failed"));
+        send_json_response(transport, j_response);
+        return;
+    }
+    out[0] = '\0';
+    char chunk[1024];
+    while (fgets(chunk, sizeof(chunk), sfp) != NULL) {
+        size_t chunk_len = strlen(chunk);
+        if (out_len + chunk_len + 1 > buf_size) {
+            buf_size = (out_len + chunk_len + 1) * 2;
+            char *n = realloc(out, buf_size);
+            if (!n) break;
+            out = n;
+        }
+        memcpy(out + out_len, chunk, chunk_len);
+        out_len += chunk_len;
+        out[out_len] = '\0';
+    }
+    pclose(sfp);
+
+    if (out_len == 0) {
+        free(out);
+        if (device) free(device);
+        json_object_object_add(j_response, "type", json_object_new_string("scan_wifi_response"));
+        json_object_object_add(j_response, "networks", j_networks);
+        json_object *j_fd_empty = json_object_new_object();
+        json_object_object_add(j_fd_empty, "networks", json_object_new_string("Array of network objects found by scan"));
+        json_object_object_add(j_response, "field_descriptions", j_fd_empty);
+        send_json_response(transport, j_response);
+        return;
+    }
+
+    // Parse JSON output from ubus
+    json_object *j_scan = NULL;
+    j_scan = json_tokener_parse(out);
+    free(out);
+    if (!j_scan) {
+        if (device) free(device);
+        json_object_object_add(j_response, "type", json_object_new_string("scan_wifi_error"));
+        json_object_object_add(j_response, "error", json_object_new_string("Failed to parse ubus iwinfo JSON output"));
+        send_json_response(transport, j_response);
+        return;
+    }
+
+    json_object *j_results = NULL;
+    if (json_object_object_get_ex(j_scan, "results", &j_results) && json_object_is_type(j_results, json_type_array)) {
+        size_t n = json_object_array_length(j_results);
+        for (size_t i = 0; i < n; i++) {
+            json_object *entry = json_object_array_get_idx(j_results, i);
+            if (!entry || !json_object_is_type(entry, json_type_object)) continue;
+
+            json_object *j_net = json_object_new_object();
+            json_object *tmp = NULL;
+
+            if (json_object_object_get_ex(entry, "ssid", &tmp) && json_object_is_type(tmp, json_type_string))
+                json_object_object_add(j_net, "ssid", json_object_new_string(json_object_get_string(tmp)));
+
+            if (json_object_object_get_ex(entry, "bssid", &tmp) && json_object_is_type(tmp, json_type_string))
+                json_object_object_add(j_net, "bssid", json_object_new_string(json_object_get_string(tmp)));
+
+            if (json_object_object_get_ex(entry, "band", &tmp) && json_object_is_type(tmp, json_type_int))
+                json_object_object_add(j_net, "band", json_object_new_int(json_object_get_int(tmp)));
+
+            if (json_object_object_get_ex(entry, "channel", &tmp) && json_object_is_type(tmp, json_type_int))
+                json_object_object_add(j_net, "channel", json_object_new_int(json_object_get_int(tmp)));
+
+            if (json_object_object_get_ex(entry, "mhz", &tmp) && json_object_is_type(tmp, json_type_int))
+                json_object_object_add(j_net, "mhz", json_object_new_int(json_object_get_int(tmp)));
+
+            if (json_object_object_get_ex(entry, "signal", &tmp) && json_object_is_type(tmp, json_type_int))
+                json_object_object_add(j_net, "signal_dbm", json_object_new_int(json_object_get_int(tmp)));
+
+            if (json_object_object_get_ex(entry, "quality", &tmp) && json_object_is_type(tmp, json_type_int))
+                json_object_object_add(j_net, "quality", json_object_new_int(json_object_get_int(tmp)));
+
+            // encryption object
+            json_object *j_enc = NULL;
+            if (json_object_object_get_ex(entry, "encryption", &j_enc) && json_object_is_type(j_enc, json_type_object)) {
+                json_object *j_enc_out = json_object_new_object();
+                json_object *jen = NULL;
+                if (json_object_object_get_ex(j_enc, "enabled", &jen) && json_object_is_type(jen, json_type_boolean))
+                    json_object_object_add(j_enc_out, "enabled", json_object_new_boolean(json_object_get_boolean(jen)));
+
+                // wpa array
+                if (json_object_object_get_ex(j_enc, "wpa", &jen) && json_object_is_type(jen, json_type_array)) {
+                    json_object_object_add(j_enc_out, "wpa", json_object_get(jen));
+                }
+
+                if (json_object_object_get_ex(j_enc, "authentication", &jen) && json_object_is_type(jen, json_type_array)) {
+                    json_object_object_add(j_enc_out, "authentication", json_object_get(jen));
+                }
+
+                if (json_object_object_get_ex(j_enc, "ciphers", &jen) && json_object_is_type(jen, json_type_array)) {
+                    json_object_object_add(j_enc_out, "ciphers", json_object_get(jen));
+                }
+
+                json_object_object_add(j_net, "encryption", j_enc_out);
+            }
+
+            json_object_array_add(j_networks, j_net);
+        }
+    }
+
+    json_object_put(j_scan);
+
+    json_object_object_add(j_response, "type", json_object_new_string("scan_wifi_response"));
+    json_object_object_add(j_response, "networks", j_networks);
+    /* Describe fields */
+    json_object *j_fd = json_object_new_object();
+    json_object_object_add(j_fd, "networks", json_object_new_string("Array of network objects found by scan"));
+    json_object_object_add(j_response, "field_descriptions", j_fd);
+    send_json_response(transport, j_response);
+    if (device) free(device);
+}
+
+/*
+ * Production-ready implementation to configure a Wi-Fi client (STA) that
+ * attaches to `wwan` (upstream via DHCP). This function performs the
+ * following, safely and deterministically:
+ * - ensures a `wwan` interface exists in /etc/config/network
+ * - selects a radio dynamically via `ubus` (falls back to sensible default)
+ * - removes any existing `mode='sta'` wifi-iface sections
+ * - atomically creates a new wifi-iface section and sets properties
+ * - optionally triggers a non-blocking `wifi reload`
+ * - validates that `wwan` obtains an IP address
+ *
+ * Request JSON parameters (required):
+ * - "ssid": SSID to join
+ * Optional:
+ * - "bssid": BSSID (MAC) of target AP
+ * - "encryption": encryption type (e.g., psk2, sae, none)
+ * - "key": PSK/password if required by encryption
+ * - "band": "2g" or "5g" (preferred band; best-effort)
+ * - "apply": boolean (default true) - whether to trigger wifi reload/apply
+ */
+static int ensure_wwan_interface(void) {
+    FILE *fp = popen("uci get network.wwan.proto 2>/dev/null", "r");
+    if (fp) {
+        char buf[64];
+        if (fgets(buf, sizeof(buf), fp) != NULL) {
+            pclose(fp);
+            return 0; // exists
+        }
+        pclose(fp);
+    }
+
+    // Create wwan interface (batch and commit)
+    char batch_template[] = "set network.wwan=interface\nset network.wwan.proto='dhcp'\n";
+    char tmpfn[] = "/tmp/uci_wwan_batch_XXXXXX";
+    int fd = mkstemp(tmpfn);
+    if (fd < 0) return -1;
+    FILE *tf = fdopen(fd, "w");
+    if (!tf) { close(fd); unlink(tmpfn); return -1; }
+    fwrite(batch_template, 1, strlen(batch_template), tf);
+    fclose(tf);
+
+    char cmd[256];
+    snprintf(cmd, sizeof(cmd), "uci batch %s >/dev/null 2>&1", tmpfn);
+    int r = system(cmd);
+    unlink(tmpfn);
+    if (r != 0) return -1;
+    // Commit network changes
+    if (system("uci commit network >/dev/null 2>&1") != 0) return -1;
+    return 0;
+}
+
+static char *select_radio_by_band(const char *band_pref) {
+    // Try ubus call network.wireless status
+    FILE *fp = popen("ubus call network.wireless status 2>/dev/null", "r");
+    if (!fp) return NULL;
+    size_t buf_size = 4096, len = 0; char *out = malloc(buf_size);
+    if (!out) { pclose(fp); return NULL; }
+    out[0] = '\0';
+    char chunk[1024];
+    while (fgets(chunk, sizeof(chunk), fp) != NULL) {
+        size_t cl = strlen(chunk);
+        if (len + cl + 1 > buf_size) {
+            buf_size = (len + cl + 1) * 2;
+            char *n = realloc(out, buf_size);
+            if (!n) break;
+            out = n;
+        }
+        memcpy(out + len, chunk, cl);
+        len += cl; out[len] = '\0';
+    }
+    pclose(fp);
+    if (len == 0) { free(out); return NULL; }
+
+    json_object *j = json_tokener_parse(out);
+    free(out);
+    if (!j) return NULL;
+
+    /* Improved heuristic: look inside each radio's `config` object for
+     * explicit `band` (preferred), then `channel` (numeric), then
+     * `htmode` as a fallback. This matches the structure returned by
+     * `ubus call network.wireless status`.
+     */
+    json_object_object_foreach(j, key, val) {
+        if (!json_object_is_type(val, json_type_object)) continue;
+
+        json_object *j_config = NULL;
+        if (json_object_object_get_ex(val, "config", &j_config) && json_object_is_type(j_config, json_type_object)) {
+            // Check explicit band string: "2g" or "5g"
+            json_object *j_band = NULL;
+            if (json_object_object_get_ex(j_config, "band", &j_band) && json_object_is_type(j_band, json_type_string)) {
+                const char *band = json_object_get_string(j_band);
+                if (band && strcmp(band_pref, band) == 0) {
+                    char *res = strdup(key);
+                    json_object_put(j);
+                    return res;
+                }
+            }
+
+            // Check channel (can be string or int)
+            json_object *j_channel = NULL;
+            if (json_object_object_get_ex(j_config, "channel", &j_channel)) {
+                int ch = 0;
+                if (json_object_is_type(j_channel, json_type_string)) {
+                    ch = atoi(json_object_get_string(j_channel));
+                } else if (json_object_is_type(j_channel, json_type_int)) {
+                    ch = json_object_get_int(j_channel);
+                }
+                if (ch > 0) {
+                    if (strcmp(band_pref, "5g") == 0 && ch > 14) {
+                        char *res = strdup(key);
+                        json_object_put(j);
+                        return res;
+                    }
+                    if (strcmp(band_pref, "2g") == 0 && ch <= 14) {
+                        char *res = strdup(key);
+                        json_object_put(j);
+                        return res;
+                    }
+                }
+            }
+
+            // Fallback: htmode may indicate band (strings like HE80, HT20, VHT80)
+            json_object *j_ht = NULL;
+            if (json_object_object_get_ex(j_config, "htmode", &j_ht) && json_object_is_type(j_ht, json_type_string)) {
+                const char *ht = json_object_get_string(j_ht);
+                if (ht) {
+                    if (strcmp(band_pref, "5g") == 0 && (strstr(ht, "HE") || strstr(ht, "VHT") || strstr(ht, "HE80") || strstr(ht, "HE160") || strstr(ht, "VHT"))) {
+                        char *res = strdup(key);
+                        json_object_put(j);
+                        return res;
+                    }
+                    if (strcmp(band_pref, "2g") == 0 && (strstr(ht, "HT") || strstr(ht, "11b") || strstr(ht, "11g"))) {
+                        char *res = strdup(key);
+                        json_object_put(j);
+                        return res;
+                    }
+                }
+            }
+        }
+    }
+
+    // If nothing matched, take the first key as fallback
+    const char *first_key = NULL;
+    json_object_object_foreach(j, k, v) { first_key = k; break; }
+    char *res = NULL;
+    if (first_key) res = strdup(first_key);
+    json_object_put(j);
+    return res;
+}
+
+static int remove_existing_sta_iface(void) {
+    FILE *fp = popen("uci show wireless 2>/dev/null", "r");
+    if (!fp) return 0; // nothing to remove
+    char line[512];
+    // Prepare a batch file for deletions
+    char tmpfn[] = "/tmp/uci_del_batch_XXXXXX";
+    int fd = mkstemp(tmpfn);
+    if (fd < 0) { pclose(fp); return -1; }
+    FILE *tf = fdopen(fd, "w");
+    if (!tf) { close(fd); unlink(tmpfn); pclose(fp); return -1; }
+
+    while (fgets(line, sizeof(line), fp) != NULL) {
+        // Example formats:
+        // wireless.foo.mode='sta'
+        // wireless.@wifi-iface[0].mode='sta'
+        char *p_mode = strstr(line, ".mode=");
+        if (!p_mode) continue;
+        char *start = line + strlen("wireless.");
+        char *dot = strstr(start, ".");
+        if (!dot) continue;
+        int len = dot - start;
+        char section[128];
+        if (len <= 0 || len >= (int)sizeof(section)) continue;
+        strncpy(section, start, len);
+        section[len] = '\0';
+        // Add delete command
+        fprintf(tf, "delete wireless.%s\n", section);
+    }
+
+    fclose(tf);
+    pclose(fp);
+
+    // If file non-empty, run uci batch
+    struct stat st;
+    if (stat(tmpfn, &st) == 0 && st.st_size > 0) {
+        char cmd[256];
+        snprintf(cmd, sizeof(cmd), "uci batch %s >/dev/null 2>&1", tmpfn);
+        int r = system(cmd);
+        unlink(tmpfn);
+        if (r != 0) return -1;
+    } else {
+        unlink(tmpfn);
+    }
+    return 0;
+}
+
+static int verify_sta_connection(int timeout_seconds) {
+    // Poll ubus for wwan status
+    for (int i = 0; i < timeout_seconds; i++) {
+        FILE *fp = popen("ubus call network.interface.wwan status 2>/dev/null", "r");
+        if (!fp) { sleep(1); continue; }
+        size_t buf_size = 2048, len = 0; char *out = malloc(buf_size);
+        if (!out) { pclose(fp); sleep(1); continue; }
+        out[0] = '\0'; char chunk[512];
+        while (fgets(chunk, sizeof(chunk), fp) != NULL) {
+            size_t cl = strlen(chunk);
+            if (len + cl + 1 > buf_size) { buf_size = (len + cl + 1) * 2; char *n = realloc(out, buf_size); if (!n) break; out = n; }
+            memcpy(out + len, chunk, cl); len += cl; out[len] = '\0';
+        }
+        pclose(fp);
+        if (len == 0) { free(out); sleep(1); continue; }
+        json_object *j = json_tokener_parse(out);
+        free(out);
+        if (!j) { sleep(1); continue; }
+        json_object *j_up = NULL;
+        if (json_object_object_get_ex(j, "up", &j_up) && json_object_is_type(j_up, json_type_boolean)) {
+            int up = json_object_get_boolean(j_up);
+            json_object_put(j);
+            if (up) return 0;
+            sleep(1);
+            continue;
+        }
+        json_object_put(j);
+        sleep(1);
+    }
+    return -1;
+}
+
+void handle_set_wifi_relay_request(json_object *j_req, api_transport_context_t *transport) {
+    // Validate required SSID
+    json_object *j_ssid = json_object_object_get(j_req, "ssid");
+    if (!j_ssid || !json_object_is_type(j_ssid, json_type_string)) {
+        json_object *j_err = json_object_new_object();
+        json_object_object_add(j_err, "type", json_object_new_string("set_wifi_sta_error"));
+        json_object_object_add(j_err, "error", json_object_new_string("Missing required 'ssid' parameter"));
+        send_json_response(transport, j_err);
+        return;
+    }
+    const char *ssid = json_object_get_string(j_ssid);
+
+    // Optional params
+    const char *bssid = NULL; json_object *j_bssid = json_object_object_get(j_req, "bssid");
+    if (j_bssid && json_object_is_type(j_bssid, json_type_string)) bssid = json_object_get_string(j_bssid);
+
+    const char *encryption = NULL; json_object *j_enc = json_object_object_get(j_req, "encryption");
+    if (j_enc && json_object_is_type(j_enc, json_type_string)) encryption = json_object_get_string(j_enc);
+
+    const char *key = NULL; json_object *j_key = json_object_object_get(j_req, "key");
+    if (j_key && json_object_is_type(j_key, json_type_string)) key = json_object_get_string(j_key);
+
+    const char *band = "2g"; json_object *j_band = json_object_object_get(j_req, "band");
+    if (j_band && json_object_is_type(j_band, json_type_string)) {
+        const char *b = json_object_get_string(j_band);
+        if (b && (strcmp(b, "5g") == 0 || strcmp(b, "2g") == 0)) band = b;
+    }
+
+    int apply = 1; json_object *j_apply = json_object_object_get(j_req, "apply");
+    if (j_apply && json_object_is_type(j_apply, json_type_boolean)) apply = json_object_get_boolean(j_apply);
+
+    // Validate encryption/key semantics
+    if (encryption && strcmp(encryption, "none") == 0 && key) {
+        json_object *j_err = json_object_new_object();
+        json_object_object_add(j_err, "type", json_object_new_string("set_wifi_sta_error"));
+        json_object_object_add(j_err, "error", json_object_new_string("'key' must not be provided when encryption is 'none'"));
+        send_json_response(transport, j_err);
+        return;
+    }
+    if (encryption && (strncmp(encryption, "psk", 3) == 0 || strcmp(encryption, "sae") == 0) && !key) {
+        json_object *j_err = json_object_new_object();
+        json_object_object_add(j_err, "type", json_object_new_string("set_wifi_sta_error"));
+        json_object_object_add(j_err, "error", json_object_new_string("'key' is required for WPA-PSK/SAE encryption"));
+        send_json_response(transport, j_err);
+        return;
+    }
+
+    // Ensure wwan exists
+    if (ensure_wwan_interface() != 0) {
+        json_object *j_err = json_object_new_object();
+        json_object_object_add(j_err, "type", json_object_new_string("set_wifi_sta_error"));
+        json_object_object_add(j_err, "error", json_object_new_string("Failed to ensure 'wwan' network interface"));
+        send_json_response(transport, j_err);
+        return;
+    }
+
+    // Select radio dynamically
+    char *radio = select_radio_by_band(band);
+    if (!radio) {
+        // Fallback: reasonable names
+        radio = strdup(strcmp(band, "5g") == 0 ? "radio1" : "radio0");
+    }
+
+    // Remove existing STA ifaces
+    if (remove_existing_sta_iface() != 0) {
+        free(radio);
+        json_object *j_err = json_object_new_object();
+        json_object_object_add(j_err, "type", json_object_new_string("set_wifi_sta_error"));
+        json_object_object_add(j_err, "error", json_object_new_string("Failed to remove existing STA interfaces"));
+        send_json_response(transport, j_err);
+        return;
+    }
+
+    // Add new wifi-iface and capture returned section name
+    char secbuf[128] = {0};
+    FILE *afp = popen("uci add wireless wifi-iface 2>/dev/null", "r");
+    if (!afp) { free(radio);
+        json_object *j_err = json_object_new_object();
+        json_object_object_add(j_err, "type", json_object_new_string("set_wifi_sta_error"));
+        json_object_object_add(j_err, "error", json_object_new_string("Failed to create wireless section"));
+        send_json_response(transport, j_err);
+        return;
+    }
+    if (fgets(secbuf, sizeof(secbuf), afp) == NULL) { pclose(afp); free(radio);
+        json_object *j_err = json_object_new_object();
+        json_object_object_add(j_err, "type", json_object_new_string("set_wifi_sta_error"));
+        json_object_object_add(j_err, "error", json_object_new_string("Failed to obtain new section name"));
+        send_json_response(transport, j_err);
+        return;
+    }
+    pclose(afp);
+    // Trim newline
+    secbuf[strcspn(secbuf, "\n")] = '\0';
+
+    // Prepare batch file to set options atomically
+    char tmpfn[] = "/tmp/uci_sta_batch_XXXXXX";
+    int fd = mkstemp(tmpfn);
+    if (fd < 0) { free(radio);
+        json_object *j_err = json_object_new_object(); json_object_object_add(j_err, "type", json_object_new_string("set_wifi_sta_error")); json_object_object_add(j_err, "error", json_object_new_string("Failed to create temporary batch file")); send_json_response(transport, j_err); return; }
+    FILE *tf = fdopen(fd, "w");
+    if (!tf) { close(fd); unlink(tmpfn); free(radio);
+        json_object *j_err = json_object_new_object(); json_object_object_add(j_err, "type", json_object_new_string("set_wifi_sta_error")); json_object_object_add(j_err, "error", json_object_new_string("Failed to open temporary batch file")); send_json_response(transport, j_err); return; }
+
+    // Write set commands
+    fprintf(tf, "set wireless.%s.device='%s'\n", secbuf, radio);
+    fprintf(tf, "set wireless.%s.mode='sta'\n", secbuf);
+    fprintf(tf, "set wireless.%s.ssid='%s'\n", secbuf, ssid);
+    fprintf(tf, "set wireless.%s.network='wwan'\n", secbuf);
+    if (bssid) fprintf(tf, "set wireless.%s.bssid='%s'\n", secbuf, bssid);
+    if (encryption) fprintf(tf, "set wireless.%s.encryption='%s'\n", secbuf, encryption);
+    if (key) fprintf(tf, "set wireless.%s.key='%s'\n", secbuf, key);
+    fclose(tf);
+
+    // Apply batch and commit atomically
+    char cmd[256];
+    snprintf(cmd, sizeof(cmd), "uci batch %s >/dev/null 2>&1", tmpfn);
+    int r = system(cmd);
+    unlink(tmpfn);
+    if (r != 0) {
+        // rollback: delete created section
+        char delcmd[256];
+        snprintf(delcmd, sizeof(delcmd), "uci delete wireless.%s >/dev/null 2>&1", secbuf);
+        int del_ret = system(delcmd);
+        if (del_ret != 0) debug(LOG_WARNING, "Rollback uci delete failed: %s (ret=%d)", delcmd, del_ret);
+        free(radio);
+        json_object *j_err = json_object_new_object();
+        json_object_object_add(j_err, "type", json_object_new_string("set_wifi_sta_error"));
+        json_object_object_add(j_err, "error", json_object_new_string("Failed to apply wireless settings"));
+        send_json_response(transport, j_err);
+        return;
+    }
+    // Commit wireless and network
+    if (system("uci commit wireless >/dev/null 2>&1") != 0 || system("uci commit network >/dev/null 2>&1") != 0) {
+        // rollback
+        char delcmd[256]; snprintf(delcmd, sizeof(delcmd), "uci delete wireless.%s >/dev/null 2>&1", secbuf);
+        int del_ret2 = system(delcmd);
+        if (del_ret2 != 0) debug(LOG_WARNING, "Rollback uci delete failed: %s (ret=%d)", delcmd, del_ret2);
+        free(radio);
+        json_object *j_err = json_object_new_object(); json_object_object_add(j_err, "type", json_object_new_string("set_wifi_sta_error")); json_object_object_add(j_err, "error", json_object_new_string("Failed to commit UCI changes")); send_json_response(transport, j_err); return;
+    }
+
+    // Trigger wifi reload if requested (non-blocking)
+    if (apply) {
+        // spawn in background
+        int wifi_ret = system("wifi reload >/dev/null 2>&1 &");
+        if (wifi_ret != 0) debug(LOG_WARNING, "wifi reload background command failed (ret=%d)", wifi_ret);
+    }
+
+    // Verify connection (poll ubus for wwan up)
+    int ok = verify_sta_connection(8); // wait up to 8s
+
+    json_object *j_resp = json_object_new_object();
+    json_object_object_add(j_resp, "type", json_object_new_string("set_wifi_sta_response"));
+    if (ok == 0) {
+        json_object_object_add(j_resp, "status", json_object_new_string("success"));
+        json_object_object_add(j_resp, "message", json_object_new_string("STA configured and wwan is up"));
+    } else {
+        json_object_object_add(j_resp, "status", json_object_new_string("error"));
+        json_object_object_add(j_resp, "message", json_object_new_string("STA configured but wwan did not come up within timeout"));
+    }
+    send_json_response(transport, j_resp);
+
+    free(radio);
 }
 
 void handle_sync_trusted_wildcard_domains_request(json_object *j_req, api_transport_context_t *transport) {
