@@ -104,6 +104,14 @@ void handle_get_auth_server_request(json_object *j_req, api_transport_context_t 
 void handle_heartbeat_request(json_object *j_heartbeat, api_transport_context_t *transport);
 void handle_tmp_pass_request(json_object *j_tmp_pass, api_transport_context_t *transport);
 
+// Flow-control (aw-bpfctl) API handlers - forward declarations
+void handle_bpf_add_request(json_object *j_req, api_transport_context_t *transport);
+void handle_bpf_del_request(json_object *j_req, api_transport_context_t *transport);
+void handle_bpf_flush_request(json_object *j_req, api_transport_context_t *transport);
+void handle_bpf_json_request(json_object *j_req, api_transport_context_t *transport);
+void handle_bpf_update_request(json_object *j_req, api_transport_context_t *transport);
+void handle_bpf_update_all_request(json_object *j_req, api_transport_context_t *transport);
+
 // Utility functions for transport abstraction
 api_transport_context_t* create_websocket_transport_context(struct bufferevent *bev);
 api_transport_context_t* create_mqtt_transport_context(void *mosq, unsigned int req_id);
