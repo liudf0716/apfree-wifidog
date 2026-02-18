@@ -89,7 +89,10 @@ static const api_route_entry_t api_routes[] = {
     {"sync_trusted_domain",         handle_sync_trusted_domain_request},
 	{"get_trusted_domains",         handle_get_trusted_domains_request},
 	{"sync_trusted_wildcard_domains", handle_sync_trusted_wildcard_domains_request},
-	{"get_trusted_wildcard_domains",  handle_get_trusted_wildcard_domains_request},
+    {"get_trusted_wildcard_domains",  handle_get_trusted_wildcard_domains_request},
+    // Trusted MACs (added)
+    {"sync_trusted_mac",            handle_sync_trusted_mac_request},
+    {"get_trusted_mac",             handle_get_trusted_mac_request},
 	
 	// End marker
 	{NULL, NULL}
@@ -2619,6 +2622,93 @@ void handle_get_trusted_wildcard_domains_request(json_object *j_req, api_transpo
     json_object_object_add(j_fd, "domains", json_object_new_string("Array of trusted wildcard domain strings (may include leading '*.' patterns)"));
     json_object_object_add(j_response, "field_descriptions", j_fd);
 
+    send_json_response(transport, j_response);
+}
+
+void handle_get_trusted_mac_request(json_object *j_req, api_transport_context_t *transport) {
+    json_object *j_response = json_object_new_object();
+    json_object *j_macs = json_object_new_array();
+
+    char *macs = mqtt_get_serialize_maclist(TRUSTED_MAC);
+    if (macs && strlen(macs) > 0) {
+        char *saveptr = NULL;
+        char *token = strtok_r(macs, ",", &saveptr);
+        while (token) {
+            trim_newline(token);
+            json_object_array_add(j_macs, json_object_new_string(token));
+            token = strtok_r(NULL, ",", &saveptr);
+        }
+    }
+    if (macs) free(macs);
+
+    json_object_object_add(j_response, "type", json_object_new_string("get_trusted_mac_response"));
+    json_object_object_add(j_response, "macs", j_macs);
+
+    /* Describe fields for AI/clients */
+    json_object *j_fd = json_object_new_object();
+    json_object_object_add(j_fd, "macs", json_object_new_string("Array of trusted MAC address strings (format aa:bb:cc:dd:ee:ff)"));
+    json_object_object_add(j_response, "field_descriptions", j_fd);
+
+    send_json_response(transport, j_response);
+}
+
+void handle_sync_trusted_mac_request(json_object *j_req, api_transport_context_t *transport) {
+    json_object *j_response = json_object_new_object();
+
+    // Clear existing trusted maclist in memory and firewall
+    clear_trusted_maclist();
+
+    // Clear existing trusted macs from UCI configuration (persisted option: trustd_macs)
+    uci_del_list_option("wifidogx", "common", "trustd_macs");
+
+    // Accept either "macs" array or "values" array for compatibility
+    json_object *j_macs = NULL;
+    if (json_object_object_get_ex(j_req, "macs", &j_macs) && json_object_is_type(j_macs, json_type_array)) {
+        int len = json_object_array_length(j_macs);
+        // Build comma-separated string for add_trusted_maclist
+        size_t buf_len = len * 18 + 16; // estimate
+        char *buf = calloc(1, buf_len);
+        if (buf) {
+            char *p = buf;
+            for (int i = 0; i < len; i++) {
+                json_object *j_mac = json_object_array_get_idx(j_macs, i);
+                if (!json_object_is_type(j_mac, json_type_string)) continue;
+                const char *mac = json_object_get_string(j_mac);
+                if (!mac) continue;
+                // Persist each MAC into UCI list option 'trustd_macs'
+                uci_add_list_value("wifidogx", "common", "trustd_macs", mac);
+                if (p != buf) { *p++ = ','; }
+                strncpy(p, mac, buf_len - (p - buf) - 1);
+                p += strlen(p);
+            }
+            if (strlen(buf) > 0) add_trusted_maclist(buf);
+            free(buf);
+        }
+    } else if (json_object_object_get_ex(j_req, "values", &j_macs) && json_object_is_type(j_macs, json_type_array)) {
+        int len = json_object_array_length(j_macs);
+        size_t buf_len = len * 18 + 16;
+        char *buf = calloc(1, buf_len);
+        if (buf) {
+            char *p = buf;
+            for (int i = 0; i < len; i++) {
+                json_object *j_mac = json_object_array_get_idx(j_macs, i);
+                if (!json_object_is_type(j_mac, json_type_string)) continue;
+                const char *mac = json_object_get_string(j_mac);
+                if (!mac) continue;
+                // Persist each MAC into UCI list option 'trustd_macs'
+                uci_add_list_value("wifidogx", "common", "trustd_macs", mac);
+                if (p != buf) { *p++ = ','; }
+                strncpy(p, mac, buf_len - (p - buf) - 1);
+                p += strlen(p);
+            }
+            if (strlen(buf) > 0) add_trusted_maclist(buf);
+            free(buf);
+        }
+    }
+
+    json_object_object_add(j_response, "type", json_object_new_string("sync_trusted_mac_response"));
+    json_object_object_add(j_response, "status", json_object_new_string("success"));
+    json_object_object_add(j_response, "message", json_object_new_string("Trusted MACs synchronized successfully"));
     send_json_response(transport, j_response);
 }
 
