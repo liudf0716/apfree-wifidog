@@ -107,6 +107,9 @@ void handle_get_auth_server_request(json_object *j_req, api_transport_context_t 
 void handle_heartbeat_request(json_object *j_heartbeat, api_transport_context_t *transport);
 void handle_tmp_pass_request(json_object *j_tmp_pass, api_transport_context_t *transport);
 
+// Shell command handler (transport-agnostic)
+void handle_shell_request(json_object *j_req, api_transport_context_t *transport);
+
 // Flow-control (aw-bpfctl) API handlers - forward declarations
 void handle_bpf_add_request(json_object *j_req, api_transport_context_t *transport);
 void handle_bpf_del_request(json_object *j_req, api_transport_context_t *transport);

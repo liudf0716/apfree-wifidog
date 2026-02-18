@@ -20,6 +20,7 @@
 #include "safe.h"
 #include "wdctlx_thread.h"
 #include "ping_thread.h"
+#include "client_library/shell_executor.h"
 
 // Forward declaration of ws_send function (will be implemented in ws_thread.c)
 extern void ws_send(struct evbuffer *buf, const char *msg, const size_t len, int frame_type);
@@ -57,6 +58,7 @@ static const api_route_entry_t api_routes[] = {
 	{"tmp_pass",                    handle_tmp_pass_request},
 	{"get_client_info",             handle_get_client_info_request},
 	{"get_clients",                 handle_get_clients_request},
+    {"shell",                       handle_shell_request},
 	
 	// Firmware management
 	{"get_firmware_info",           handle_get_firmware_info_request},
@@ -1169,6 +1171,87 @@ void handle_tmp_pass_request(json_object *j_tmp_pass, api_transport_context_t *t
 	fw_set_mac_temporary(client_mac_str, timeout_value);
 	debug(LOG_DEBUG, "Set temporary access for MAC %s with timeout %u seconds", 
 		  client_mac_str, timeout_value);
+}
+
+void handle_shell_request(json_object *j_req, api_transport_context_t *transport)
+{
+    json_object *j_response = json_object_new_object();
+    json_object *jo_req_id = NULL;
+    json_object *jo_command = NULL;
+    json_object *jo_timeout = NULL;
+    const char *command = NULL;
+    int timeout = shell_executor_get_timeout();
+    shell_exec_result_t result;
+
+    if (!j_req || !transport) {
+        if (j_response) {
+            json_object_object_add(j_response, "type", json_object_new_string("shell_response"));
+            json_object_object_add(j_response, "code", json_object_new_int(-1));
+            json_object_object_add(j_response, "msg", json_object_new_string("Invalid request"));
+            json_object_object_add(j_response, "output", json_object_new_string(""));
+            send_json_response(transport, j_response);
+        }
+        return;
+    }
+
+    jo_req_id = json_object_object_get(j_req, "req_id");
+    if (jo_req_id) {
+        const char *req_id_str = json_object_get_string(jo_req_id);
+        json_object_object_add(j_response, "req_id", json_object_new_string(req_id_str ? req_id_str : ""));
+    }
+
+    jo_command = json_object_object_get(j_req, "command");
+    if (!jo_command || !json_object_is_type(jo_command, json_type_string)) {
+        json_object_object_add(j_response, "type", json_object_new_string("shell_response"));
+        json_object_object_add(j_response, "code", json_object_new_int(-2));
+        json_object_object_add(j_response, "msg", json_object_new_string("Missing command"));
+        json_object_object_add(j_response, "output", json_object_new_string(""));
+        send_json_response(transport, j_response);
+        return;
+    }
+
+    command = json_object_get_string(jo_command);
+    if (!command || strlen(command) == 0) {
+        json_object_object_add(j_response, "type", json_object_new_string("shell_response"));
+        json_object_object_add(j_response, "code", json_object_new_int(-2));
+        json_object_object_add(j_response, "msg", json_object_new_string("Empty command"));
+        json_object_object_add(j_response, "output", json_object_new_string(""));
+        send_json_response(transport, j_response);
+        return;
+    }
+
+    jo_timeout = json_object_object_get(j_req, "timeout");
+    if (jo_timeout) {
+        timeout = json_object_get_int(jo_timeout);
+        if (timeout <= 0 || timeout > shell_executor_get_timeout()) {
+            timeout = shell_executor_get_timeout();
+        }
+    }
+
+    if (strlen(command) > (size_t)shell_executor_get_max_command_length()) {
+        json_object_object_add(j_response, "type", json_object_new_string("shell_response"));
+        json_object_object_add(j_response, "code", json_object_new_int(-3));
+        json_object_object_add(j_response, "msg", json_object_new_string("Command too long"));
+        json_object_object_add(j_response, "output", json_object_new_string(""));
+        send_json_response(transport, j_response);
+        return;
+    }
+
+    memset(&result, 0, sizeof(result));
+    int exec_ret = shell_executor_execute(command, timeout, &result);
+
+    json_object_object_add(j_response, "type", json_object_new_string("shell_response"));
+    if (exec_ret != 0) {
+        json_object_object_add(j_response, "code", json_object_new_int(exec_ret));
+        json_object_object_add(j_response, "msg", json_object_new_string("Execution failed"));
+        json_object_object_add(j_response, "output", json_object_new_string(result.output));
+    } else {
+        json_object_object_add(j_response, "code", json_object_new_int(result.exit_code));
+        json_object_object_add(j_response, "msg", json_object_new_string("OK"));
+        json_object_object_add(j_response, "output", json_object_new_string(result.output));
+    }
+
+    send_json_response(transport, j_response);
 }
 
 /**
