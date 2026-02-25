@@ -19,6 +19,7 @@
 #endif
 
 #include "aw-bpf.h"
+#include "dns-bpf.h"
 
 #define DEBUG 0  // Set to 1 to enable debug prints
 
@@ -103,14 +104,20 @@ struct {
     __uint(max_entries, 1 << 24);
 } session_events_map SEC(".maps");
 
-// Program array map for tail calls to dns-bpf
+// --- DNS Maps ---
 struct {
-    __uint(type, BPF_MAP_TYPE_PROG_ARRAY);
+    __uint(type, BPF_MAP_TYPE_RINGBUF);
     __uint(pinning, 1);
-    __uint(max_entries, 8);
+    __uint(max_entries, 256 * 1024); // 256KB ring buffer
+} dns_ringbuf SEC(".maps");
+
+struct {
+    __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
+    __uint(pinning, 1);
     __type(key, __u32);
-    __type(value, __u32);
-} prog_array_map SEC(".maps");
+    __type(value, struct dns_stats);
+    __uint(max_entries, 1);
+} dns_stats_map SEC(".maps");
 
 static __always_inline __u32 get_current_time(void)
 {
@@ -482,12 +489,131 @@ static __always_inline int handle_udp_packet(struct __sk_buff *skb, direction_t 
 }
 #endif // ENABLE_XDPI_FEATURE
 
+// --- DNS Monitoring Helpers (Merged from dns-bpf.c) ---
+static __always_inline void update_dns_stats(__u8 is_response, __u8 ip_version, __u8 is_error)
+{
+    __u32 key = 0;
+    struct dns_stats *stats = bpf_map_lookup_elem(&dns_stats_map, &key);
+    if (!stats)
+        return;
+    
+    if (is_response) {
+        stats->dns_responses++;
+    } else {
+        stats->dns_queries++;
+    }
+    
+    if (is_error) {
+        stats->dns_errors++;
+    }
+    
+    if (ip_version == 4) {
+        stats->ipv4_packets++;
+    } else if (ip_version == 6) {
+        stats->ipv6_packets++;
+    }
+}
+
+static __always_inline __u8 is_dns_error(__be16 flags)
+{
+    __u16 rcode = bpf_ntohs(flags) & 0x000F;
+    return (rcode != 0);
+}
+
+static __always_inline int dns_monitor_main(struct __sk_buff *skb)
+{
+    void *data_end = (void *)(long)skb->data_end;
+    void *data = (void *)(long)skb->data;
+
+    struct ethhdr *eth = data;
+    if ((void *)(eth + 1) > data_end) return TC_ACT_OK;
+
+    __u16 h_proto = bpf_ntohs(eth->h_proto);
+    __u8 ip_proto;
+    __u16 ip_hdr_len;
+    __u8 ip_version;
+    __be32 src_ip_v4 = 0, dst_ip_v4 = 0;
+    struct in6_addr src_ip_v6 = {}, dst_ip_v6 = {};
+
+    if (h_proto == ETH_P_IP) {
+        struct iphdr *ip = data + sizeof(*eth);
+        if ((void *)(ip + 1) > data_end) return TC_ACT_OK;
+        ip_proto = ip->protocol;
+        ip_hdr_len = ip->ihl * 4;
+        ip_version = 4;
+        src_ip_v4 = ip->saddr; dst_ip_v4 = ip->daddr;
+    } else if (h_proto == ETH_P_IPV6) {
+        struct ipv6hdr *ipv6 = data + sizeof(*eth);
+        if ((void *)(ipv6 + 1) > data_end) return TC_ACT_OK;
+        ip_proto = ipv6->nexthdr;
+        ip_hdr_len = sizeof(struct ipv6hdr);
+        ip_version = 6;
+        __builtin_memcpy(&src_ip_v6, &ipv6->saddr, sizeof(struct in6_addr));
+        __builtin_memcpy(&dst_ip_v6, &ipv6->daddr, sizeof(struct in6_addr));
+    } else {
+        return TC_ACT_OK;
+    }
+
+    if (ip_proto != IPPROTO_UDP) return TC_ACT_OK;
+
+    struct udphdr *udp = data + sizeof(*eth) + ip_hdr_len;
+    if ((void *)(udp + 1) > data_end) return TC_ACT_OK;
+
+    __u16 src_port = bpf_ntohs(udp->source);
+    __u16 dst_port = bpf_ntohs(udp->dest);
+
+    if (src_port != 53) return TC_ACT_OK;
+
+    void *dns_payload_start = (void *)udp + sizeof(*udp);
+    if ((void *)(dns_payload_start + sizeof(struct dns_hdr)) > data_end) return TC_ACT_OK;
+    struct dns_hdr *dns_h = (struct dns_hdr *)dns_payload_start;
+
+    __u16 flags = bpf_ntohs(dns_h->flags);
+    __u8 is_response = (flags >> 15) & 0x1;
+    __u8 is_error = is_dns_error(dns_h->flags);
+
+    update_dns_stats(is_response, ip_version, is_error);
+
+    if (!is_response) return TC_ACT_OK;
+
+    __u32 dns_payload_len = data_end - dns_payload_start;
+    if (dns_payload_len > MAX_DNS_PAYLOAD_LEN) dns_payload_len = MAX_DNS_PAYLOAD_LEN;
+
+    struct raw_dns_data *output_data = bpf_ringbuf_reserve(&dns_ringbuf, sizeof(*output_data), 0);
+    if (!output_data) return TC_ACT_OK;
+
+    output_data->pkt_len = dns_payload_len;
+    output_data->ip_version = ip_version;
+    output_data->src_port = src_port;
+    output_data->dst_port = dst_port;
+    output_data->timestamp = get_current_time();
+
+    if (ip_version == 4) {
+        output_data->src_ip.saddr_v4 = src_ip_v4;
+        output_data->dst_ip.daddr_v4 = dst_ip_v4;
+    } else {
+        __builtin_memcpy(&output_data->src_ip.saddr_v6, &src_ip_v6, sizeof(struct in6_addr));
+        __builtin_memcpy(&output_data->dst_ip.daddr_v6, &dst_ip_v6, sizeof(struct in6_addr));
+    }
+    
+    if (dns_payload_len > 0) {
+        #pragma unroll
+        for (int i = 0; i < MAX_DNS_PAYLOAD_LEN; i++) {
+            if (i >= dns_payload_len) break;
+            if ((void *)(dns_payload_start + i + 1) > data_end) break;
+            output_data->dns_payload[i] = ((char *)dns_payload_start)[i];
+        }
+    }
+
+    bpf_ringbuf_submit(output_data, 0);
+    return TC_ACT_OK;
+}
+
 static inline int process_packet(struct __sk_buff *skb, direction_t dir) {
     __u32 current_time = get_current_time();
     __u32 est_slot = current_time / RATE_ESTIMATOR;
     void *data = (void *)(long)skb->data;
     void *data_end = (void *)(long)skb->data_end;
-    long err = 0;
 
     struct ethhdr *eth = data;
     if (data + sizeof(*eth) > data_end)
@@ -705,7 +831,6 @@ int tc_ingress(struct __sk_buff *skb) {
         return TC_ACT_SHOT;
     }
     
-    // No DNS processing needed for ingress (DNS responses come from egress)
     return TC_ACT_OK;
 }
 
@@ -716,11 +841,9 @@ int tc_egress(struct __sk_buff *skb) {
         return TC_ACT_SHOT;
     }
     
-    // Tail call to dns-bpf program for DNS response processing
-    // Index 0 is reserved for DNS egress handler (DNS responses)
-    bpf_tail_call(skb, &prog_array_map, 0);
+    // Direct call to DNS monitor instead of tail call
+    dns_monitor_main(skb);
     
-    // If tail call fails, continue with normal processing
     return TC_ACT_OK;
 }
 
