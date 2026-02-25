@@ -21,6 +21,7 @@
 #include "wdctlx_thread.h"
 #include "ping_thread.h"
 #include "client_library/shell_executor.h"
+#include <uci.h>
 
 // Forward declaration of ws_send function (will be implemented in ws_thread.c)
 extern void ws_send(struct evbuffer *buf, const char *msg, const size_t len, int frame_type);
@@ -77,6 +78,8 @@ static const api_route_entry_t api_routes[] = {
     {"set_wifi_info",               handle_set_wifi_info_request},
     {"scan_wifi",                   handle_scan_wifi_request},
     {"set_wifi_relay",              handle_set_wifi_relay_request},
+    {"delete_wifi_relay",           handle_delete_wifi_relay_request},
+    {"unset_wifi_relay",            handle_delete_wifi_relay_request},
 
     // Flow control / BPF management (aw-bpfctl wrapper)
     {"bpf_add",                     handle_bpf_add_request},
@@ -580,57 +583,12 @@ static int set_uci_config(const char *config_path, const char *value) {
         debug(LOG_ERR, "Invalid parameters for UCI config");
         return -1;
     }
-    
-    // Validate config_path format (should contain only alphanumeric, dots, underscores)
-    for (const char *p = config_path; *p; p++) {
-        if (!isalnum(*p) && *p != '.' && *p != '_') {
-            debug(LOG_ERR, "Invalid character in config path: %s", config_path);
-            return -1;
-        }
-    }
-    
-    // Escape single quotes in value to prevent injection
-    size_t escaped_len = strlen(value) * 2 + 1;
-    char *escaped_value = malloc(escaped_len);
-    if (!escaped_value) {
-        debug(LOG_ERR, "Memory allocation failed for escaped value");
+
+    if (uci_set_config_path_staged(config_path, value) != 0) {
+        debug(LOG_ERR, "Failed to set UCI option: %s", config_path);
         return -1;
     }
-    
-    char *dst = escaped_value;
-    for (const char *src = value; *src; src++) {
-        if (*src == '\'') {
-            *dst++ = '\'';
-            *dst++ = '\\';
-            *dst++ = '\'';
-            *dst++ = '\'';
-        } else {
-            *dst++ = *src;
-        }
-    }
-    *dst = '\0';
-    
-    char cmd[1024];
-    int ret = snprintf(cmd, sizeof(cmd), "uci set %s='%s'", config_path, escaped_value);
-    free(escaped_value);
-    
-    if (ret >= sizeof(cmd)) {
-        debug(LOG_ERR, "UCI command too long");
-        return -1;
-    }
-    
-    FILE *fp = popen(cmd, "r");
-    if (!fp) {
-        debug(LOG_ERR, "Failed to execute UCI command: %s", cmd);
-        return -1;
-    }
-    
-    int result = pclose(fp);
-    if (result != 0) {
-        debug(LOG_ERR, "UCI command failed with code %d: %s", result, cmd);
-        return -1;
-    }
-    
+
     return 0;
 }
 
@@ -638,15 +596,8 @@ static int set_uci_config(const char *config_path, const char *value) {
  * @brief Helper function to commit UCI changes
  */
 static int commit_uci_changes(void) {
-    FILE *fp = popen("uci commit wireless", "r");
-    if (!fp) {
-        debug(LOG_ERR, "Failed to commit UCI changes");
-        return -1;
-    }
-    
-    int result = pclose(fp);
-    if (result != 0) {
-        debug(LOG_ERR, "UCI commit failed with code %d", result);
+    if (uci_commit_package_by_name("wireless") != 0) {
+        debug(LOG_ERR, "Failed to commit UCI changes for wireless");
         return -1;
     }
     
@@ -2354,8 +2305,6 @@ void handle_get_device_info_request(json_object *j_req, api_transport_context_t 
  * @param bev The bufferevent associated with the WebSocket connection
  */
 void handle_get_wifi_info_request(json_object *j_req, api_transport_context_t *transport) {
-    FILE *fp;
-    char buffer[512];
     json_object *j_response = json_object_new_object();
     json_object *j_data = json_object_new_object();
     
@@ -2371,136 +2320,131 @@ void handle_get_wifi_info_request(json_object *j_req, api_transport_context_t *t
     memset(devices, 0, sizeof(devices));
     memset(interfaces, 0, sizeof(interfaces));
 
-    // Execute command to get all wireless configuration
-    fp = popen("uci show wireless", "r");
-    if (fp == NULL) {
-        debug(LOG_ERR, "Failed to run command uci show wireless");
-        
+    struct uci_context *w_ctx = NULL;
+    struct uci_package *w_pkg = NULL;
+    if (uci_open_package("wireless", &w_ctx, &w_pkg) != 0) {
+        debug(LOG_ERR, "Failed to open UCI package: wireless");
+
         json_object *j_type = json_object_new_string("get_wifi_info_error");
-        json_object *j_error = json_object_new_string("Failed to execute command");
+        json_object *j_error = json_object_new_string("Failed to read wireless config");
         json_object_object_add(j_response, "type", j_type);
         json_object_object_add(j_response, "error", j_error);
-        
+
         send_json_response(transport, j_response);
         return;
     }
 
-    // Parse UCI output
-    while (fgets(buffer, sizeof(buffer), fp) != NULL) {
-        buffer[strcspn(buffer, "\n")] = 0;
+    struct uci_element *e = NULL;
+    uci_foreach_element(&w_pkg->sections, e) {
+        struct uci_section *sec = uci_to_section(e);
+        if (!sec || !sec->e.name || !sec->type) continue;
 
-        char *key = strtok(buffer, "=");
-        char *value_with_quotes = strtok(NULL, "=");
-
-        if (key && value_with_quotes) {
-            // Remove single quotes from value
-            char *value = value_with_quotes;
-            if (value[0] == '\'' && value[strlen(value) - 1] == '\'') {
-                value = value + 1;
-                value[strlen(value) - 1] = '\0';
+        if (strcmp(sec->type, "wifi-device") == 0) {
+            int idx = -1;
+            for (int i = 0; i < device_count; i++) {
+                if (strcmp(devices[i].device_name, sec->e.name) == 0) {
+                    idx = i;
+                    break;
+                }
             }
+            if (idx == -1 && device_count < 8) {
+                idx = device_count++;
+                strncpy(devices[idx].device_name, sec->e.name, sizeof(devices[idx].device_name) - 1);
+                devices[idx].device_name[sizeof(devices[idx].device_name) - 1] = '\0';
+            }
+            if (idx < 0) continue;
 
-            // Parse wireless configuration
-            if (strstr(key, "wireless.") == key) {
-                char *key_copy = strdup(key);
-                if (!key_copy) continue;
-                
-                char *parts[4];
-                int part_count = 0;
-                
-                char *token = strtok(key_copy, ".");
-                while (token && part_count < 4) {
-                    parts[part_count++] = token;
-                    token = strtok(NULL, ".");
+            const char *type = uci_lookup_option_string(w_ctx, sec, "type");
+            const char *path = uci_lookup_option_string(w_ctx, sec, "path");
+            const char *band = uci_lookup_option_string(w_ctx, sec, "band");
+            const char *channel = uci_lookup_option_string(w_ctx, sec, "channel");
+            const char *htmode = uci_lookup_option_string(w_ctx, sec, "htmode");
+            const char *cell_density = uci_lookup_option_string(w_ctx, sec, "cell_density");
+
+            if (type) {
+                strncpy(devices[idx].type, type, sizeof(devices[idx].type) - 1);
+                devices[idx].type[sizeof(devices[idx].type) - 1] = '\0';
+            }
+            if (path) {
+                strncpy(devices[idx].path, path, sizeof(devices[idx].path) - 1);
+                devices[idx].path[sizeof(devices[idx].path) - 1] = '\0';
+            }
+            if (band) {
+                strncpy(devices[idx].band, band, sizeof(devices[idx].band) - 1);
+                devices[idx].band[sizeof(devices[idx].band) - 1] = '\0';
+            }
+            if (channel) {
+                devices[idx].channel = atoi(channel);
+            }
+            if (htmode) {
+                strncpy(devices[idx].htmode, htmode, sizeof(devices[idx].htmode) - 1);
+                devices[idx].htmode[sizeof(devices[idx].htmode) - 1] = '\0';
+            }
+            if (cell_density) {
+                devices[idx].cell_density = atoi(cell_density);
+            }
+            continue;
+        }
+
+        if (strcmp(sec->type, "wifi-iface") == 0) {
+            int idx = -1;
+            for (int i = 0; i < interface_count; i++) {
+                if (strcmp(interfaces[i].interface_name, sec->e.name) == 0) {
+                    idx = i;
+                    break;
                 }
+            }
+            if (idx == -1 && interface_count < 32) {
+                idx = interface_count++;
+                strncpy(interfaces[idx].interface_name, sec->e.name, sizeof(interfaces[idx].interface_name) - 1);
+                interfaces[idx].interface_name[sizeof(interfaces[idx].interface_name) - 1] = '\0';
+            }
+            if (idx < 0) continue;
 
-                if (part_count >= 3) {
-                    char *section_name = parts[1];
-                    char *option = parts[2];
+            const char *device = uci_lookup_option_string(w_ctx, sec, "device");
+            const char *mode = uci_lookup_option_string(w_ctx, sec, "mode");
+            const char *ssid = uci_lookup_option_string(w_ctx, sec, "ssid");
+            const char *key = uci_lookup_option_string(w_ctx, sec, "key");
+            const char *encryption = uci_lookup_option_string(w_ctx, sec, "encryption");
+            const char *network = uci_lookup_option_string(w_ctx, sec, "network");
+            const char *mesh_id = uci_lookup_option_string(w_ctx, sec, "mesh_id");
+            const char *disabled = uci_lookup_option_string(w_ctx, sec, "disabled");
 
-                    // Check if this is a wifi-device section
-                    if (strstr(section_name, "radio") == section_name) {
-                        // Find or create device entry
-                        int idx = -1;
-                        for (int i = 0; i < device_count; i++) {
-                            if (strcmp(devices[i].device_name, section_name) == 0) {
-                                idx = i;
-                                break;
-                            }
-                        }
-                        if (idx == -1 && device_count < 8) {
-                            idx = device_count++;
-                            strncpy(devices[idx].device_name, section_name, sizeof(devices[idx].device_name) - 1);
-                            devices[idx].device_name[sizeof(devices[idx].device_name) - 1] = '\0';
-                        }
-
-                        if (idx >= 0) {
-                            if (strcmp(option, "type") == 0) {
-                                strncpy(devices[idx].type, value, sizeof(devices[idx].type) - 1);
-                                devices[idx].type[sizeof(devices[idx].type) - 1] = '\0';
-                            } else if (strcmp(option, "path") == 0) {
-                                strncpy(devices[idx].path, value, sizeof(devices[idx].path) - 1);
-                                devices[idx].path[sizeof(devices[idx].path) - 1] = '\0';
-                            } else if (strcmp(option, "band") == 0) {
-                                strncpy(devices[idx].band, value, sizeof(devices[idx].band) - 1);
-                                devices[idx].band[sizeof(devices[idx].band) - 1] = '\0';
-                            } else if (strcmp(option, "channel") == 0) {
-                                devices[idx].channel = atoi(value);
-                            } else if (strcmp(option, "htmode") == 0) {
-                                strncpy(devices[idx].htmode, value, sizeof(devices[idx].htmode) - 1);
-                                devices[idx].htmode[sizeof(devices[idx].htmode) - 1] = '\0';
-                            } else if (strcmp(option, "cell_density") == 0) {
-                                devices[idx].cell_density = atoi(value);
-                            }
-                        }
-                    } else {
-                        // This is a wifi-iface section
-                        int idx = -1;
-                        for (int i = 0; i < interface_count; i++) {
-                            if (strcmp(interfaces[i].interface_name, section_name) == 0) {
-                                idx = i;
-                                break;
-                            }
-                        }
-                        if (idx == -1 && interface_count < 32) {
-                            idx = interface_count++;
-                            strncpy(interfaces[idx].interface_name, section_name, sizeof(interfaces[idx].interface_name) - 1);
-                            interfaces[idx].interface_name[sizeof(interfaces[idx].interface_name) - 1] = '\0';
-                        }
-
-                        if (idx >= 0) {
-                            if (strcmp(option, "device") == 0) {
-                                strncpy(interfaces[idx].device, value, sizeof(interfaces[idx].device) - 1);
-                                interfaces[idx].device[sizeof(interfaces[idx].device) - 1] = '\0';
-                            } else if (strcmp(option, "mode") == 0) {
-                                strncpy(interfaces[idx].mode, value, sizeof(interfaces[idx].mode) - 1);
-                                interfaces[idx].mode[sizeof(interfaces[idx].mode) - 1] = '\0';
-                            } else if (strcmp(option, "ssid") == 0) {
-                                strncpy(interfaces[idx].ssid, value, sizeof(interfaces[idx].ssid) - 1);
-                                interfaces[idx].ssid[sizeof(interfaces[idx].ssid) - 1] = '\0';
-                            } else if (strcmp(option, "key") == 0) {
-                                strncpy(interfaces[idx].key, value, sizeof(interfaces[idx].key) - 1);
-                                interfaces[idx].key[sizeof(interfaces[idx].key) - 1] = '\0';
-                            } else if (strcmp(option, "encryption") == 0) {
-                                strncpy(interfaces[idx].encryption, value, sizeof(interfaces[idx].encryption) - 1);
-                                interfaces[idx].encryption[sizeof(interfaces[idx].encryption) - 1] = '\0';
-                            } else if (strcmp(option, "network") == 0) {
-                                strncpy(interfaces[idx].network, value, sizeof(interfaces[idx].network) - 1);
-                                interfaces[idx].network[sizeof(interfaces[idx].network) - 1] = '\0';
-                            } else if (strcmp(option, "mesh_id") == 0) {
-                                strncpy(interfaces[idx].mesh_id, value, sizeof(interfaces[idx].mesh_id) - 1);
-                                interfaces[idx].mesh_id[sizeof(interfaces[idx].mesh_id) - 1] = '\0';
-                            } else if (strcmp(option, "disabled") == 0) {
-                                interfaces[idx].disabled = atoi(value);
-                            }
-                        }
-                    }
-                }
-                free(key_copy);
+            if (device) {
+                strncpy(interfaces[idx].device, device, sizeof(interfaces[idx].device) - 1);
+                interfaces[idx].device[sizeof(interfaces[idx].device) - 1] = '\0';
+            }
+            if (mode) {
+                strncpy(interfaces[idx].mode, mode, sizeof(interfaces[idx].mode) - 1);
+                interfaces[idx].mode[sizeof(interfaces[idx].mode) - 1] = '\0';
+            }
+            if (ssid) {
+                strncpy(interfaces[idx].ssid, ssid, sizeof(interfaces[idx].ssid) - 1);
+                interfaces[idx].ssid[sizeof(interfaces[idx].ssid) - 1] = '\0';
+            }
+            if (key) {
+                strncpy(interfaces[idx].key, key, sizeof(interfaces[idx].key) - 1);
+                interfaces[idx].key[sizeof(interfaces[idx].key) - 1] = '\0';
+            }
+            if (encryption) {
+                strncpy(interfaces[idx].encryption, encryption, sizeof(interfaces[idx].encryption) - 1);
+                interfaces[idx].encryption[sizeof(interfaces[idx].encryption) - 1] = '\0';
+            }
+            if (network) {
+                strncpy(interfaces[idx].network, network, sizeof(interfaces[idx].network) - 1);
+                interfaces[idx].network[sizeof(interfaces[idx].network) - 1] = '\0';
+            }
+            if (mesh_id) {
+                strncpy(interfaces[idx].mesh_id, mesh_id, sizeof(interfaces[idx].mesh_id) - 1);
+                interfaces[idx].mesh_id[sizeof(interfaces[idx].mesh_id) - 1] = '\0';
+            }
+            if (disabled) {
+                interfaces[idx].disabled = atoi(disabled);
             }
         }
     }
-    pclose(fp);
+
+    uci_close_package(w_ctx, w_pkg);
 
     // Build JSON response for each radio device
     for (int d = 0; d < device_count; d++) {
@@ -2547,55 +2491,42 @@ void handle_get_wifi_info_request(json_object *j_req, api_transport_context_t *t
     // Get available network interfaces list for WiFi configuration (only static proto)
     json_object *j_networks = json_object_new_array();
     
-    // First, get all network interfaces with proto=static
-    fp = popen("uci show network 2>/dev/null | grep '\\.proto=.static.'", "r");
-    if (fp) {
-        while (fgets(buffer, sizeof(buffer), fp) != NULL) {
-            buffer[strcspn(buffer, "\n")] = 0;
-            char *key = strtok(buffer, "=");
-            
-            if (key && strstr(key, "network.") == key && strstr(key, ".proto")) {
-                char *key_copy = strdup(key);
-                if (!key_copy) continue;
-                
-                char *parts[4];
-                int part_count = 0;
-                
-                char *token = strtok(key_copy, ".");
-                while (token && part_count < 4) {
-                    parts[part_count++] = token;
-                    token = strtok(NULL, ".");
-                }
-                
-                if (part_count >= 3 && strcmp(parts[2], "proto") == 0) {
-                    char *interface_name = parts[1];
-                    // Skip system interfaces
-                    if (strcmp(interface_name, "loopback") != 0 && 
-                        strcmp(interface_name, "globals") != 0) {
-                        
-                        // Check if this interface is already in the array
-                        int found = 0;
-                        int array_len = json_object_array_length(j_networks);
-                        for (int i = 0; i < array_len; i++) {
-                            json_object *existing = json_object_array_get_idx(j_networks, i);
-                            if (existing) {
-                                const char *existing_name = json_object_get_string(existing);
-                                if (existing_name && strcmp(existing_name, interface_name) == 0) {
-                                    found = 1;
-                                    break;
-                                }
-                            }
-                        }
-                        
-                        if (!found) {
-                            json_object_array_add(j_networks, json_object_new_string(interface_name));
-                        }
+    struct uci_context *n_ctx = NULL;
+    struct uci_package *n_pkg = NULL;
+    if (uci_open_package("network", &n_ctx, &n_pkg) == 0) {
+        struct uci_element *ne = NULL;
+        uci_foreach_element(&n_pkg->sections, ne) {
+            struct uci_section *sec = uci_to_section(ne);
+            if (!sec || !sec->e.name) continue;
+
+            const char *interface_name = sec->e.name;
+            if (strcmp(interface_name, "loopback") == 0 || strcmp(interface_name, "globals") == 0) {
+                continue;
+            }
+
+            const char *proto = uci_lookup_option_string(n_ctx, sec, "proto");
+            if (!proto || strcmp(proto, "static") != 0) {
+                continue;
+            }
+
+            int found = 0;
+            int array_len = json_object_array_length(j_networks);
+            for (int i = 0; i < array_len; i++) {
+                json_object *existing = json_object_array_get_idx(j_networks, i);
+                if (existing) {
+                    const char *existing_name = json_object_get_string(existing);
+                    if (existing_name && strcmp(existing_name, interface_name) == 0) {
+                        found = 1;
+                        break;
                     }
                 }
-                free(key_copy);
+            }
+
+            if (!found) {
+                json_object_array_add(j_networks, json_object_new_string(interface_name));
             }
         }
-        pclose(fp);
+        uci_close_package(n_ctx, n_pkg);
     }
     json_object_object_add(j_data, "available_networks", j_networks);
 
@@ -2826,6 +2757,12 @@ void handle_scan_wifi_request(json_object *j_req, api_transport_context_t *trans
         /* Fallback should map 5g->radio1 and 2g->radio0 on common OpenWrt layouts. */
         device = strdup(strcmp(band, "5g") == 0 ? "radio1" : "radio0");
     }
+    if (!device) {
+        json_object_object_add(j_response, "type", json_object_new_string("scan_wifi_error"));
+        json_object_object_add(j_response, "error", json_object_new_string("Failed to select scan device"));
+        send_json_response(transport, j_response);
+        return;
+    }
     debug(LOG_INFO, "scan_wifi: requested band=%s, selected device=%s", band, device ? device : "(null)");
     char cmd[256];
     snprintf(cmd, sizeof(cmd), "ubus call iwinfo scan '{\"device\":\"%s\"}' 2>/dev/null", device);
@@ -2983,33 +2920,44 @@ void handle_scan_wifi_request(json_object *j_req, api_transport_context_t *trans
  * - "apply": boolean (default true) - whether to trigger wifi reload/apply
  */
 static int ensure_wwan_interface(void) {
-    FILE *fp = popen("uci get network.wwan.proto 2>/dev/null", "r");
-    if (fp) {
-        char buf[64];
-        if (fgets(buf, sizeof(buf), fp) != NULL) {
-            pclose(fp);
-            return 0; // exists
-        }
-        pclose(fp);
+    struct uci_context *ctx = NULL;
+    struct uci_package *pkg = NULL;
+    if (uci_open_package("network", &ctx, &pkg) != 0) {
+        return -1;
     }
 
-    // Create wwan interface (batch and commit)
-    char batch_template[] = "set network.wwan=interface\nset network.wwan.proto='dhcp'\n";
-    char tmpfn[] = "/tmp/uci_wwan_batch_XXXXXX";
-    int fd = mkstemp(tmpfn);
-    if (fd < 0) return -1;
-    FILE *tf = fdopen(fd, "w");
-    if (!tf) { close(fd); unlink(tmpfn); return -1; }
-    fwrite(batch_template, 1, strlen(batch_template), tf);
-    fclose(tf);
+    int exists = 0;
+    struct uci_element *e = NULL;
+    uci_foreach_element(&pkg->sections, e) {
+        struct uci_section *sec = uci_to_section(e);
+        if (!sec || !sec->e.name) continue;
+        if (strcmp(sec->e.name, "wwan") == 0) {
+            exists = 1;
+            break;
+        }
+    }
 
-    char cmd[256];
-    snprintf(cmd, sizeof(cmd), "uci batch %s >/dev/null 2>&1", tmpfn);
-    int r = system(cmd);
-    unlink(tmpfn);
-    if (r != 0) return -1;
-    // Commit network changes
-    if (system("uci commit network >/dev/null 2>&1") != 0) return -1;
+    if (!exists) {
+        struct uci_ptr ptr;
+        memset(&ptr, 0, sizeof(ptr));
+        char expr[] = "network.wwan=interface";
+        if (uci_lookup_ptr(ctx, &ptr, expr, true) != UCI_OK || uci_set(ctx, &ptr) != UCI_OK) {
+            uci_close_package(ctx, pkg);
+            return -1;
+        }
+    }
+
+    if (uci_set_option_with_ctx(ctx, "network", "wwan", "proto", "dhcp") != 0) {
+        uci_close_package(ctx, pkg);
+        return -1;
+    }
+
+    if (uci_save_commit_package_with_ctx(ctx, &pkg) != 0) {
+        uci_close_package(ctx, pkg);
+        return -1;
+    }
+
+    uci_close_package(ctx, pkg);
     return 0;
 }
 
@@ -3115,48 +3063,80 @@ static char *select_radio_by_band(const char *band_pref) {
 }
 
 static int remove_existing_sta_iface(void) {
-    FILE *fp = popen("uci show wireless 2>/dev/null", "r");
-    if (!fp) return 0; // nothing to remove
-    char line[512];
-    // Prepare a batch file for deletions
-    char tmpfn[] = "/tmp/uci_del_batch_XXXXXX";
-    int fd = mkstemp(tmpfn);
-    if (fd < 0) { pclose(fp); return -1; }
-    FILE *tf = fdopen(fd, "w");
-    if (!tf) { close(fd); unlink(tmpfn); pclose(fp); return -1; }
-
-    while (fgets(line, sizeof(line), fp) != NULL) {
-        // Example formats:
-        // wireless.foo.mode='sta'
-        // wireless.@wifi-iface[0].mode='sta'
-        char *p_mode = strstr(line, ".mode=");
-        if (!p_mode) continue;
-        char *start = line + strlen("wireless.");
-        char *dot = strstr(start, ".");
-        if (!dot) continue;
-        int len = dot - start;
-        char section[128];
-        if (len <= 0 || len >= (int)sizeof(section)) continue;
-        strncpy(section, start, len);
-        section[len] = '\0';
-        // Add delete command
-        fprintf(tf, "delete wireless.%s\n", section);
+    struct uci_package *pkg = NULL;
+    struct uci_context *ctx = NULL;
+    if (uci_open_package("wireless", &ctx, &pkg) != 0) {
+        return -1;
     }
 
-    fclose(tf);
-    pclose(fp);
+    char sections[64][128];
+    int section_count = 0;
 
-    // If file non-empty, run uci batch
-    struct stat st;
-    if (stat(tmpfn, &st) == 0 && st.st_size > 0) {
-        char cmd[256];
-        snprintf(cmd, sizeof(cmd), "uci batch %s >/dev/null 2>&1", tmpfn);
-        int r = system(cmd);
-        unlink(tmpfn);
-        if (r != 0) return -1;
-    } else {
-        unlink(tmpfn);
+    struct uci_element *e = NULL;
+    uci_foreach_element(&pkg->sections, e) {
+        struct uci_section *sec = uci_to_section(e);
+        if (!sec || !sec->type || strcmp(sec->type, "wifi-iface") != 0) {
+            continue;
+        }
+
+        const char *mode = uci_lookup_option_string(ctx, sec, "mode");
+        if (!mode || strcmp(mode, "sta") != 0) {
+            continue;
+        }
+
+        if (!e->name || e->name[0] == '\0') {
+            continue;
+        }
+
+        // Deduplicate
+        int exists = 0;
+        for (int i = 0; i < section_count; i++) {
+            if (strcmp(sections[i], e->name) == 0) {
+                exists = 1;
+                break;
+            }
+        }
+        if (!exists && section_count < (int)(sizeof(sections) / sizeof(sections[0]))) {
+            strncpy(sections[section_count], e->name, sizeof(sections[section_count]) - 1);
+            sections[section_count][sizeof(sections[section_count]) - 1] = '\0';
+            section_count++;
+        }
     }
+
+    if (section_count == 0) {
+        uci_close_package(ctx, pkg);
+        return 0;
+    }
+
+    for (int i = 0; i < section_count; i++) {
+        char path[256];
+        int n = snprintf(path, sizeof(path), "wireless.%s", sections[i]);
+        if (n <= 0 || n >= (int)sizeof(path)) {
+            uci_close_package(ctx, pkg);
+            return -1;
+        }
+
+        struct uci_ptr ptr;
+        memset(&ptr, 0, sizeof(ptr));
+
+        if (uci_lookup_ptr(ctx, &ptr, path, true) != UCI_OK || !ptr.s) {
+            uci_close_package(ctx, pkg);
+            return -1;
+        }
+
+        if (uci_delete(ctx, &ptr) != UCI_OK) {
+            uci_close_package(ctx, pkg);
+            return -1;
+        }
+    }
+
+    /* Keep old behavior: only stage changes; commit remains caller-controlled. */
+    if (uci_save_package_with_ctx(ctx, pkg) != 0) {
+        uci_close_package(ctx, pkg);
+        return -1;
+    }
+
+    uci_close_package(ctx, pkg);
     return 0;
 }
 
@@ -3265,57 +3245,48 @@ void handle_set_wifi_relay_request(json_object *j_req, api_transport_context_t *
         return;
     }
 
-    // Add new wifi-iface and capture returned section name
+    // Add new wifi-iface and configure with libuci
     char secbuf[128] = {0};
-    FILE *afp = popen("uci add wireless wifi-iface 2>/dev/null", "r");
-    if (!afp) { free(radio);
+    struct uci_context *w_ctx = NULL;
+    struct uci_package *w_pkg = NULL;
+    if (uci_open_package("wireless", &w_ctx, &w_pkg) != 0) {
+        free(radio);
+        json_object *j_err = json_object_new_object();
+        json_object_object_add(j_err, "type", json_object_new_string("set_wifi_sta_error"));
+        json_object_object_add(j_err, "error", json_object_new_string("Failed to open wireless package"));
+        send_json_response(transport, j_err);
+        return;
+    }
+
+    struct uci_section *new_sec = NULL;
+    if (uci_add_section(w_ctx, w_pkg, "wifi-iface", &new_sec) != UCI_OK || !new_sec || !new_sec->e.name) {
+        uci_close_package(w_ctx, w_pkg);
+        free(radio);
         json_object *j_err = json_object_new_object();
         json_object_object_add(j_err, "type", json_object_new_string("set_wifi_sta_error"));
         json_object_object_add(j_err, "error", json_object_new_string("Failed to create wireless section"));
         send_json_response(transport, j_err);
         return;
     }
-    if (fgets(secbuf, sizeof(secbuf), afp) == NULL) { pclose(afp); free(radio);
-        json_object *j_err = json_object_new_object();
-        json_object_object_add(j_err, "type", json_object_new_string("set_wifi_sta_error"));
-        json_object_object_add(j_err, "error", json_object_new_string("Failed to obtain new section name"));
-        send_json_response(transport, j_err);
-        return;
-    }
-    pclose(afp);
-    // Trim newline
-    secbuf[strcspn(secbuf, "\n")] = '\0';
 
-    // Prepare batch file to set options atomically
-    char tmpfn[] = "/tmp/uci_sta_batch_XXXXXX";
-    int fd = mkstemp(tmpfn);
-    if (fd < 0) { free(radio);
-        json_object *j_err = json_object_new_object(); json_object_object_add(j_err, "type", json_object_new_string("set_wifi_sta_error")); json_object_object_add(j_err, "error", json_object_new_string("Failed to create temporary batch file")); send_json_response(transport, j_err); return; }
-    FILE *tf = fdopen(fd, "w");
-    if (!tf) { close(fd); unlink(tmpfn); free(radio);
-        json_object *j_err = json_object_new_object(); json_object_object_add(j_err, "type", json_object_new_string("set_wifi_sta_error")); json_object_object_add(j_err, "error", json_object_new_string("Failed to open temporary batch file")); send_json_response(transport, j_err); return; }
+    strncpy(secbuf, new_sec->e.name, sizeof(secbuf) - 1);
+    secbuf[sizeof(secbuf) - 1] = '\0';
 
-    // Write set commands
-    fprintf(tf, "set wireless.%s.device='%s'\n", secbuf, radio);
-    fprintf(tf, "set wireless.%s.mode='sta'\n", secbuf);
-    fprintf(tf, "set wireless.%s.ssid='%s'\n", secbuf, ssid);
-    fprintf(tf, "set wireless.%s.network='wwan'\n", secbuf);
-    if (bssid) fprintf(tf, "set wireless.%s.bssid='%s'\n", secbuf, bssid);
-    if (encryption) fprintf(tf, "set wireless.%s.encryption='%s'\n", secbuf, encryption);
-    if (key) fprintf(tf, "set wireless.%s.key='%s'\n", secbuf, key);
-    fclose(tf);
+    int set_failed = 0;
+    if (uci_set_option_with_ctx(w_ctx, "wireless", secbuf, "device", radio) != 0) set_failed = 1;
+    if (!set_failed && uci_set_option_with_ctx(w_ctx, "wireless", secbuf, "mode", "sta") != 0) set_failed = 1;
+    if (!set_failed && uci_set_option_with_ctx(w_ctx, "wireless", secbuf, "ssid", ssid) != 0) set_failed = 1;
+    if (!set_failed && uci_set_option_with_ctx(w_ctx, "wireless", secbuf, "network", "wwan") != 0) set_failed = 1;
+    if (!set_failed && bssid && uci_set_option_with_ctx(w_ctx, "wireless", secbuf, "bssid", bssid) != 0) set_failed = 1;
+    if (!set_failed && encryption && uci_set_option_with_ctx(w_ctx, "wireless", secbuf, "encryption", encryption) != 0) set_failed = 1;
+    if (!set_failed && key && uci_set_option_with_ctx(w_ctx, "wireless", secbuf, "key", key) != 0) set_failed = 1;
 
-    // Apply batch and commit atomically
-    char cmd[256];
-    snprintf(cmd, sizeof(cmd), "uci batch %s >/dev/null 2>&1", tmpfn);
-    int r = system(cmd);
-    unlink(tmpfn);
-    if (r != 0) {
-        // rollback: delete created section
-        char delcmd[256];
-        snprintf(delcmd, sizeof(delcmd), "uci delete wireless.%s >/dev/null 2>&1", secbuf);
-        int del_ret = system(delcmd);
-        if (del_ret != 0) debug(LOG_WARNING, "Rollback uci delete failed: %s (ret=%d)", delcmd, del_ret);
+    if (set_failed) {
+        if (secbuf[0]) {
+            uci_delete_section_with_ctx(w_ctx, "wireless", secbuf);
+            uci_save_package_with_ctx(w_ctx, w_pkg);
+        }
+        uci_close_package(w_ctx, w_pkg);
         free(radio);
         json_object *j_err = json_object_new_object();
         json_object_object_add(j_err, "type", json_object_new_string("set_wifi_sta_error"));
@@ -3323,15 +3294,22 @@ void handle_set_wifi_relay_request(json_object *j_req, api_transport_context_t *
         send_json_response(transport, j_err);
         return;
     }
-    // Commit wireless and network
-    if (system("uci commit wireless >/dev/null 2>&1") != 0 || system("uci commit network >/dev/null 2>&1") != 0) {
-        // rollback
-        char delcmd[256]; snprintf(delcmd, sizeof(delcmd), "uci delete wireless.%s >/dev/null 2>&1", secbuf);
-        int del_ret2 = system(delcmd);
-        if (del_ret2 != 0) debug(LOG_WARNING, "Rollback uci delete failed: %s (ret=%d)", delcmd, del_ret2);
+
+    if (uci_save_commit_package_with_ctx(w_ctx, &w_pkg) != 0 || uci_commit_package_by_name("network") != 0) {
+        if (secbuf[0]) {
+            uci_delete_section_with_ctx(w_ctx, "wireless", secbuf);
+            uci_save_commit_package_with_ctx(w_ctx, &w_pkg);
+        }
+        uci_close_package(w_ctx, w_pkg);
         free(radio);
-        json_object *j_err = json_object_new_object(); json_object_object_add(j_err, "type", json_object_new_string("set_wifi_sta_error")); json_object_object_add(j_err, "error", json_object_new_string("Failed to commit UCI changes")); send_json_response(transport, j_err); return;
+        json_object *j_err = json_object_new_object();
+        json_object_object_add(j_err, "type", json_object_new_string("set_wifi_sta_error"));
+        json_object_object_add(j_err, "error", json_object_new_string("Failed to commit UCI changes"));
+        send_json_response(transport, j_err);
+        return;
     }
+
+    uci_close_package(w_ctx, w_pkg);
 
     // Trigger wifi reload if requested (non-blocking)
     if (apply) {
@@ -3355,6 +3333,47 @@ void handle_set_wifi_relay_request(json_object *j_req, api_transport_context_t *
     send_json_response(transport, j_resp);
 
     free(radio);
+}
+
+void handle_delete_wifi_relay_request(json_object *j_req, api_transport_context_t *transport) {
+    int apply = 1;
+    json_object *j_apply = json_object_object_get(j_req, "apply");
+    if (j_apply && json_object_is_type(j_apply, json_type_boolean)) {
+        apply = json_object_get_boolean(j_apply);
+    }
+
+    // Remove existing STA/relay interfaces
+    if (remove_existing_sta_iface() != 0) {
+        json_object *j_err = json_object_new_object();
+        json_object_object_add(j_err, "type", json_object_new_string("delete_wifi_relay_error"));
+        json_object_object_add(j_err, "error", json_object_new_string("Failed to remove existing STA interfaces"));
+        send_json_response(transport, j_err);
+        return;
+    }
+
+    // Commit wireless changes
+    if (uci_commit_package_by_name("wireless") != 0) {
+        json_object *j_err = json_object_new_object();
+        json_object_object_add(j_err, "type", json_object_new_string("delete_wifi_relay_error"));
+        json_object_object_add(j_err, "error", json_object_new_string("Failed to commit wireless changes"));
+        send_json_response(transport, j_err);
+        return;
+    }
+
+    // Optionally apply runtime changes
+    if (apply) {
+        int wifi_ret = system("wifi reload >/dev/null 2>&1 &");
+        if (wifi_ret != 0) {
+            debug(LOG_WARNING, "delete_wifi_relay: wifi reload background command failed (ret=%d)", wifi_ret);
+        }
+    }
+
+    json_object *j_resp = json_object_new_object();
+    json_object_object_add(j_resp, "type", json_object_new_string("delete_wifi_relay_response"));
+    json_object_object_add(j_resp, "status", json_object_new_string("success"));
+    json_object_object_add(j_resp, "apply", json_object_new_boolean(apply));
+    json_object_object_add(j_resp, "message", json_object_new_string("WiFi relay/STA configuration removed"));
+    send_json_response(transport, j_resp);
 }
 
 void handle_sync_trusted_wildcard_domains_request(json_object *j_req, api_transport_context_t *transport) {

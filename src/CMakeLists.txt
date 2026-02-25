@@ -5,6 +5,7 @@ set(src_apfreewifidog
 	util.c wdctlx_thread.c ping_thread.c safe.c
 	tls_thread.c wd_client.c wd_util.c mqtt_thread.c mqtt_shell_handler.c
 	ws_thread.c api_handlers.c
+	uci_helper.c
 	client_snapshot.c dns_monitor.c
 	client_library/shell_executor.c
 )

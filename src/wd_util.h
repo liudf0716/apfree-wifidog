@@ -9,6 +9,7 @@
 
 #include "conf.h"
 #include "client_list.h"
+#include "uci_helper.h"
 
 /*  arp_flags and at_flags field values */
 #define ATF_INUSE   0x01    /* entry in use */
@@ -112,18 +113,6 @@ void evdns_parse_trusted_domain_2_ip(trusted_domain_t);
 void evdns_add_trusted_domain_ip_cb(int, struct evutil_addrinfo *, void *);
 
 char *evb_2_string(struct evbuffer *, int *);
-
-int uci_get_value(const char *, const char *, const char *, char *, int);
-
-int uci_set_value(const char *, const char *, const char *, const char *);
-
-int uci_del_value(const char *, const char *, const char *);
-
-int uci_add_list_value(const char *, const char *, const char *, const char *);
-
-int uci_del_list_option(const char *, const char *, const char *);
-
-int uci_add_list_value(const char *, const char *, const char *, const char *);
 
 /** @brief Execute a shell command */
 int execute(const char *, int);
