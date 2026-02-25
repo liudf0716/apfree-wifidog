@@ -26,7 +26,7 @@ endif
 
 obj-m := xdpi-bpf.o  
 
-all: aw-bpf.o dns-bpf.o aw-bpfctl event_daemon dns-monitor
+all: aw-bpf.o aw-bpfctl event_daemon dns-monitor
 	@if [ -d /lib/modules/$(shell uname -r)/build ]; then \
 		make -C /lib/modules/$(shell uname -r)/build M=$(PWD) modules; \
 	else \
@@ -35,10 +35,6 @@ all: aw-bpf.o dns-bpf.o aw-bpfctl event_daemon dns-monitor
 
 # eBPF program compilation
 aw-bpf.o: aw-bpf.c
-	$(CLANG) -g -O2 -target bpf -c $< $(BPF_CFLAGS) -o $@
-
-# DNS eBPF program compilation
-dns-bpf.o: dns-bpf.c
 	$(CLANG) -g -O2 -target bpf -c $< $(BPF_CFLAGS) -o $@
 
 # User space program compilation
@@ -60,7 +56,7 @@ test_xdpi: test_xdpi-bpf.c
 	@./test_xdpi
 
 clean:
-	rm -f aw-bpf.o dns-bpf.o aw-bpfctl event_daemon dns-monitor test_xdpi
+	rm -f aw-bpf.o aw-bpfctl event_daemon dns-monitor test_xdpi
 	@if [ -d /lib/modules/$(shell uname -r)/build ]; then \
 		make -C /lib/modules/$(shell uname -r)/build M=$(PWD) clean; \
 	else \
@@ -72,12 +68,6 @@ load: aw-bpf.o
 	sudo tc qdisc add dev eth0 clsact
 	sudo tc filter add dev eth0 egress bpf da obj aw-bpf.o sec tc/egress
 	sudo tc filter add dev eth0 ingress bpf da obj aw-bpf.o sec tc/ingress
-
-# load DNS monitor eBPF program (only ingress for DNS responses)
-load-dns: dns-bpf.o
-	sudo tc qdisc add dev eth0 clsact 2>/dev/null || true
-	sudo tc filter add dev eth0 ingress bpf da obj dns-bpf.o sec tc/dns/ingress
-	@echo "DNS response monitor loaded on ingress. Check ring buffer events in user space program."
 
 # load xdpi classifier using tc
 load-xdpi: aw-bpf.o xdpi-bpf.ko
