@@ -84,6 +84,8 @@ void handle_set_wifi_info_request(json_object *j_req, api_transport_context_t *t
 void handle_scan_wifi_request(json_object *j_req, api_transport_context_t *transport);
 void handle_set_wifi_relay_request(json_object *j_req, api_transport_context_t *transport);
 void handle_delete_wifi_relay_request(json_object *j_req, api_transport_context_t *transport);
+void handle_get_ipsec_vpn_request(json_object *j_req, api_transport_context_t *transport);
+void handle_set_ipsec_vpn_request(json_object *j_req, api_transport_context_t *transport);
 
 // Domain management handlers
 void handle_sync_trusted_domain_request(json_object *j_req, api_transport_context_t *transport);
