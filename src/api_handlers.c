@@ -2823,8 +2823,10 @@ void handle_scan_wifi_request(json_object *j_req, api_transport_context_t *trans
      */
     char *device = select_radio_by_band(band);
     if (!device) {
-        device = strdup(strcmp(band, "5g") == 0 ? "radio0" : "radio1");
+        /* Fallback should map 5g->radio1 and 2g->radio0 on common OpenWrt layouts. */
+        device = strdup(strcmp(band, "5g") == 0 ? "radio1" : "radio0");
     }
+    debug(LOG_INFO, "scan_wifi: requested band=%s, selected device=%s", band, device ? device : "(null)");
     char cmd[256];
     snprintf(cmd, sizeof(cmd), "ubus call iwinfo scan '{\"device\":\"%s\"}' 2>/dev/null", device);
 
@@ -3012,6 +3014,7 @@ static int ensure_wwan_interface(void) {
 }
 
 static char *select_radio_by_band(const char *band_pref) {
+    debug(LOG_DEBUG, "select_radio_by_band: start, band_pref=%s", band_pref ? band_pref : "(null)");
     // Try ubus call network.wireless status
     FILE *fp = popen("ubus call network.wireless status 2>/dev/null", "r");
     if (!fp) return NULL;
@@ -3037,21 +3040,22 @@ static char *select_radio_by_band(const char *band_pref) {
     free(out);
     if (!j) return NULL;
 
-    /* Improved heuristic: look inside each radio's `config` object for
-     * explicit `band` (preferred), then `channel` (numeric), then
-     * `htmode` as a fallback. This matches the structure returned by
-     * `ubus call network.wireless status`.
+    /* Only use strong signals to infer band:
+     * 1) explicit `band`, 2) numeric `channel`, 3) `hwmode`.
+     * Do NOT use broad htmode substring matching (e.g. VHT80 contains "HT"),
+     * which can misclassify 5g radios as 2g.
      */
     json_object_object_foreach(j, key, val) {
         if (!json_object_is_type(val, json_type_object)) continue;
 
         json_object *j_config = NULL;
         if (json_object_object_get_ex(val, "config", &j_config) && json_object_is_type(j_config, json_type_object)) {
-            // Check explicit band string: "2g" or "5g"
+            // Check explicit band string first
             json_object *j_band = NULL;
             if (json_object_object_get_ex(j_config, "band", &j_band) && json_object_is_type(j_band, json_type_string)) {
                 const char *band = json_object_get_string(j_band);
                 if (band && strcmp(band_pref, band) == 0) {
+                    debug(LOG_INFO, "select_radio_by_band: matched by config.band, band_pref=%s, radio=%s", band_pref, key);
                     char *res = strdup(key);
                     json_object_put(j);
                     return res;
@@ -3069,11 +3073,13 @@ static char *select_radio_by_band(const char *band_pref) {
                 }
                 if (ch > 0) {
                     if (strcmp(band_pref, "5g") == 0 && ch > 14) {
+                        debug(LOG_INFO, "select_radio_by_band: matched by channel, band_pref=%s, channel=%d, radio=%s", band_pref, ch, key);
                         char *res = strdup(key);
                         json_object_put(j);
                         return res;
                     }
                     if (strcmp(band_pref, "2g") == 0 && ch <= 14) {
+                        debug(LOG_INFO, "select_radio_by_band: matched by channel, band_pref=%s, channel=%d, radio=%s", band_pref, ch, key);
                         char *res = strdup(key);
                         json_object_put(j);
                         return res;
@@ -3081,17 +3087,19 @@ static char *select_radio_by_band(const char *band_pref) {
                 }
             }
 
-            // Fallback: htmode may indicate band (strings like HE80, HT20, VHT80)
-            json_object *j_ht = NULL;
-            if (json_object_object_get_ex(j_config, "htmode", &j_ht) && json_object_is_type(j_ht, json_type_string)) {
-                const char *ht = json_object_get_string(j_ht);
-                if (ht) {
-                    if (strcmp(band_pref, "5g") == 0 && (strstr(ht, "HE") || strstr(ht, "VHT") || strstr(ht, "HE80") || strstr(ht, "HE160") || strstr(ht, "VHT"))) {
+            // hwmode fallback: 11a -> 5g, 11b/11g -> 2g
+            json_object *j_hwmode = NULL;
+            if (json_object_object_get_ex(j_config, "hwmode", &j_hwmode) && json_object_is_type(j_hwmode, json_type_string)) {
+                const char *hw = json_object_get_string(j_hwmode);
+                if (hw) {
+                    if (strcmp(band_pref, "5g") == 0 && strstr(hw, "11a")) {
+                        debug(LOG_INFO, "select_radio_by_band: matched by hwmode, band_pref=%s, hwmode=%s, radio=%s", band_pref, hw, key);
                         char *res = strdup(key);
                         json_object_put(j);
                         return res;
                     }
-                    if (strcmp(band_pref, "2g") == 0 && (strstr(ht, "HT") || strstr(ht, "11b") || strstr(ht, "11g"))) {
+                    if (strcmp(band_pref, "2g") == 0 && (strstr(hw, "11b") || strstr(hw, "11g"))) {
+                        debug(LOG_INFO, "select_radio_by_band: matched by hwmode, band_pref=%s, hwmode=%s, radio=%s", band_pref, hw, key);
                         char *res = strdup(key);
                         json_object_put(j);
                         return res;
@@ -3101,13 +3109,9 @@ static char *select_radio_by_band(const char *band_pref) {
         }
     }
 
-    // If nothing matched, take the first key as fallback
-    const char *first_key = NULL;
-    json_object_object_foreach(j, k, v) { first_key = k; break; }
-    char *res = NULL;
-    if (first_key) res = strdup(first_key);
     json_object_put(j);
-    return res;
+    debug(LOG_WARNING, "select_radio_by_band: no matched radio for band_pref=%s", band_pref ? band_pref : "(null)");
+    return NULL;
 }
 
 static int remove_existing_sta_iface(void) {
