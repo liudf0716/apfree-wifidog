@@ -4,7 +4,10 @@ set(src_apfreewifidog
 	firewall.c centralserver.c http.c auth.c client_list.c
 	util.c wdctlx_thread.c ping_thread.c safe.c
 	tls_thread.c wd_client.c wd_util.c mqtt_thread.c mqtt_shell_handler.c
-	ws_thread.c api_handlers.c
+	api_handlers_auth.c
+	api_handlers_wifi.c
+	api_handlers_sys.c
+	ws_thread.c api_handlers.c api_routes.c api_handlers_bpf.c api_handlers_vpn.c
 	uci_helper.c
 	client_snapshot.c dns_monitor.c
 	client_library/shell_executor.c
