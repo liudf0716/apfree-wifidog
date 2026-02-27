@@ -987,7 +987,8 @@ void handle_set_wifi_relay_request(json_object *j_req, api_transport_context_t *
     struct uci_ptr sec_ptr;
     memset(&sec_ptr, 0, sizeof(sec_ptr));
     /* Expression creates (or ensures) a named section: wireless.wifinet4=wifi-iface */
-    if (uci_lookup_ptr(w_ctx, &sec_ptr, "wireless.wifinet4=wifi-iface", true) != UCI_OK || uci_set(w_ctx, &sec_ptr) != UCI_OK || !sec_ptr.s) {
+    char sec_expr[] = "wireless.wifinet4=wifi-iface";
+    if (uci_lookup_ptr(w_ctx, &sec_ptr, sec_expr, true) != UCI_OK || uci_set(w_ctx, &sec_ptr) != UCI_OK || !sec_ptr.s) {
         uci_close_package(w_ctx, w_pkg);
         free(radio);
         json_object *j_err = json_object_new_object();
