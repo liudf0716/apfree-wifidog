@@ -912,18 +912,21 @@ void handle_set_wifi_relay_request(json_object *j_req, api_transport_context_t *
         return;
     }
 
-    struct uci_section *new_sec = NULL;
-    if (uci_add_section(w_ctx, w_pkg, "wifi-iface", &new_sec) != UCI_OK || !new_sec || !new_sec->e.name) {
+    /* Create a named section 'wifinet4' so the config file shows the expected name */
+    struct uci_ptr sec_ptr;
+    memset(&sec_ptr, 0, sizeof(sec_ptr));
+    /* Expression creates (or ensures) a named section: wireless.wifinet4=wifi-iface */
+    if (uci_lookup_ptr(w_ctx, &sec_ptr, "wireless.wifinet4=wifi-iface", true) != UCI_OK || uci_set(w_ctx, &sec_ptr) != UCI_OK || !sec_ptr.s) {
         uci_close_package(w_ctx, w_pkg);
         free(radio);
         json_object *j_err = json_object_new_object();
         json_object_object_add(j_err, "type", json_object_new_string("set_wifi_sta_error"));
-        json_object_object_add(j_err, "error", json_object_new_string("Failed to create wireless section"));
+        json_object_object_add(j_err, "error", json_object_new_string("Failed to create named wireless section wifinet4"));
         send_json_response(transport, j_err);
         return;
     }
 
-    strncpy(secbuf, new_sec->e.name, sizeof(secbuf) - 1);
+    strncpy(secbuf, sec_ptr.s, sizeof(secbuf) - 1);
     secbuf[sizeof(secbuf) - 1] = '\0';
 
     int set_failed = 0;
@@ -986,18 +989,11 @@ void handle_set_wifi_relay_request(json_object *j_req, api_transport_context_t *
         if (wifi_ret != 0) debug(LOG_WARNING, "wifi reload command failed (ret=%d)", wifi_ret);
     }
 
-    // Verify connection (poll ubus for wwan up)
-    int ok = verify_sta_connection(8); // wait up to 8s
-
+    /* Delegate verification to AWAS platform — do not block here. */
     json_object *j_resp = json_object_new_object();
     json_object_object_add(j_resp, "type", json_object_new_string("set_wifi_sta_response"));
-    if (ok == 0) {
-        json_object_object_add(j_resp, "status", json_object_new_string("success"));
-        json_object_object_add(j_resp, "message", json_object_new_string("STA configured and wwan is up"));
-    } else {
-        json_object_object_add(j_resp, "status", json_object_new_string("error"));
-        json_object_object_add(j_resp, "message", json_object_new_string("STA configured but wwan did not come up within timeout"));
-    }
+    json_object_object_add(j_resp, "status", json_object_new_string("success"));
+    json_object_object_add(j_resp, "message", json_object_new_string("STA configured; verification delegated to AWAS"));
     send_json_response(transport, j_resp);
 
     free(radio);
