@@ -533,6 +533,53 @@ static int ensure_wwan_interface(void) {
     return 0;
 }
 
+static int remove_wwan_interface(void) {
+    struct uci_context *ctx = NULL;
+    struct uci_package *pkg = NULL;
+    if (uci_open_package("network", &ctx, &pkg) != 0) {
+        return -1;
+    }
+
+    int exists = 0;
+    struct uci_element *e = NULL;
+    uci_foreach_element(&pkg->sections, e) {
+        struct uci_section *sec = uci_to_section(e);
+        if (!sec || !sec->e.name) {
+            continue;
+        }
+        if (strcmp(sec->e.name, "wwan") == 0) {
+            exists = 1;
+            break;
+        }
+    }
+
+    if (!exists) {
+        uci_close_package(ctx, pkg);
+        return 0;
+    }
+
+    struct uci_ptr ptr;
+    memset(&ptr, 0, sizeof(ptr));
+    char expr[] = "network.wwan";
+    if (uci_lookup_ptr(ctx, &ptr, expr, true) != UCI_OK || !ptr.s) {
+        uci_close_package(ctx, pkg);
+        return -1;
+    }
+
+    if (uci_delete(ctx, &ptr) != UCI_OK) {
+        uci_close_package(ctx, pkg);
+        return -1;
+    }
+
+    if (uci_save_commit_package_with_ctx(ctx, &pkg) != 0) {
+        uci_close_package(ctx, pkg);
+        return -1;
+    }
+
+    uci_close_package(ctx, pkg);
+    return 0;
+}
+
 static char *select_radio_by_band(const char *band_pref) {
     debug(LOG_DEBUG, "select_radio_by_band: start, band_pref=%s", band_pref ? band_pref : "(null)");
     // Try ubus call network.wireless status
@@ -712,6 +759,40 @@ static int remove_existing_sta_iface(void) {
     return 0;
 }
 
+static int enforce_mesh_iface_disabled(void) {
+    struct uci_package *pkg = NULL;
+    struct uci_context *ctx = NULL;
+    if (uci_open_package("wireless", &ctx, &pkg) != 0) {
+        return -1;
+    }
+
+    struct uci_element *e = NULL;
+    uci_foreach_element(&pkg->sections, e) {
+        struct uci_section *sec = uci_to_section(e);
+        if (!sec || !sec->type || strcmp(sec->type, "wifi-iface") != 0 || !sec->e.name) {
+            continue;
+        }
+
+        const char *mode = uci_lookup_option_string(ctx, sec, "mode");
+        if (!mode || strcmp(mode, "mesh") != 0) {
+            continue;
+        }
+
+        if (uci_set_option_with_ctx(ctx, "wireless", sec->e.name, "disabled", "1") != 0) {
+            uci_close_package(ctx, pkg);
+            return -1;
+        }
+    }
+
+    if (uci_save_package_with_ctx(ctx, pkg) != 0) {
+        uci_close_package(ctx, pkg);
+        return -1;
+    }
+
+    uci_close_package(ctx, pkg);
+    return 0;
+}
+
 static int verify_sta_connection(int timeout_seconds) {
     // Poll ubus for wwan status
     for (int i = 0; i < timeout_seconds; i++) {
@@ -741,6 +822,78 @@ static int verify_sta_connection(int timeout_seconds) {
         json_object_put(j);
         sleep(1);
     }
+    return -1;
+}
+
+static int has_default_route(void) {
+    FILE *fp = popen("ip route show default 2>/dev/null", "r");
+    if (!fp) {
+        return 0;
+    }
+
+    char line[256];
+    int found = 0;
+    while (fgets(line, sizeof(line), fp) != NULL) {
+        if (strstr(line, "default") == line) {
+            found = 1;
+            break;
+        }
+    }
+    pclose(fp);
+    return found;
+}
+
+static int wait_for_default_route(int timeout_seconds) {
+    for (int i = 0; i < timeout_seconds; i++) {
+        if (has_default_route()) {
+            return 0;
+        }
+        sleep(1);
+    }
+    return -1;
+}
+
+static int recover_default_route_after_set_relay(void) {
+    if (has_default_route()) {
+        return 0;
+    }
+
+    debug(LOG_WARNING, "Default route missing after relay change, try ifdown/ifup wwan");
+    system("ifdown wwan >/dev/null 2>&1");
+    sleep(1);
+    system("ifup wwan >/dev/null 2>&1");
+    if (wait_for_default_route(8) == 0) {
+        return 0;
+    }
+
+    debug(LOG_WARNING, "Default route still missing, fallback to /etc/init.d/network restart");
+    system("/etc/init.d/network restart >/dev/null 2>&1");
+    if (wait_for_default_route(12) == 0) {
+        return 0;
+    }
+
+    return -1;
+}
+
+static int recover_default_route_after_delete_relay(void) {
+    if (has_default_route()) {
+        return 0;
+    }
+
+    /* Relay removed: do not bring wwan up again. Only ensure it is down. */
+    debug(LOG_INFO, "Relay removed, ensure wwan is down");
+    system("ifdown wwan >/dev/null 2>&1");
+
+    if (wait_for_default_route(3) == 0) {
+        return 0;
+    }
+
+    debug(LOG_WARNING, "Default route still missing after relay delete, fallback to /etc/init.d/network restart");
+    system("/etc/init.d/network restart >/dev/null 2>&1");
+    if (wait_for_default_route(12) == 0) {
+        return 0;
+    }
+
     return -1;
 }
 
@@ -849,6 +1002,7 @@ void handle_set_wifi_relay_request(json_object *j_req, api_transport_context_t *
     if (!set_failed && uci_set_option_with_ctx(w_ctx, "wireless", secbuf, "mode", "sta") != 0) set_failed = 1;
     if (!set_failed && uci_set_option_with_ctx(w_ctx, "wireless", secbuf, "ssid", ssid) != 0) set_failed = 1;
     if (!set_failed && uci_set_option_with_ctx(w_ctx, "wireless", secbuf, "network", "wwan") != 0) set_failed = 1;
+    if (!set_failed && uci_set_option_with_ctx(w_ctx, "wireless", secbuf, "disabled", "0") != 0) set_failed = 1;
     if (!set_failed && bssid && uci_set_option_with_ctx(w_ctx, "wireless", secbuf, "bssid", bssid) != 0) set_failed = 1;
     if (!set_failed && encryption && uci_set_option_with_ctx(w_ctx, "wireless", secbuf, "encryption", encryption) != 0) set_failed = 1;
     if (!set_failed && key && uci_set_option_with_ctx(w_ctx, "wireless", secbuf, "key", key) != 0) set_failed = 1;
@@ -863,6 +1017,20 @@ void handle_set_wifi_relay_request(json_object *j_req, api_transport_context_t *
         json_object *j_err = json_object_new_object();
         json_object_object_add(j_err, "type", json_object_new_string("set_wifi_sta_error"));
         json_object_object_add(j_err, "error", json_object_new_string("Failed to apply wireless settings"));
+        send_json_response(transport, j_err);
+        return;
+    }
+
+    if (enforce_mesh_iface_disabled() != 0) {
+        if (secbuf[0]) {
+            uci_delete_section_with_ctx(w_ctx, "wireless", secbuf);
+            uci_save_commit_package_with_ctx(w_ctx, &w_pkg);
+        }
+        uci_close_package(w_ctx, w_pkg);
+        free(radio);
+        json_object *j_err = json_object_new_object();
+        json_object_object_add(j_err, "type", json_object_new_string("set_wifi_sta_error"));
+        json_object_object_add(j_err, "error", json_object_new_string("Failed to enforce mesh disabled state"));
         send_json_response(transport, j_err);
         return;
     }
@@ -883,11 +1051,13 @@ void handle_set_wifi_relay_request(json_object *j_req, api_transport_context_t *
 
     uci_close_package(w_ctx, w_pkg);
 
-    // Trigger wifi reload if requested (non-blocking)
+    // Trigger wifi reload if requested
     if (apply) {
-        // spawn in background
-        int wifi_ret = system("wifi reload >/dev/null 2>&1 &");
-        if (wifi_ret != 0) debug(LOG_WARNING, "wifi reload background command failed (ret=%d)", wifi_ret);
+        int wifi_ret = system("wifi reload >/dev/null 2>&1");
+        if (wifi_ret != 0) debug(LOG_WARNING, "wifi reload command failed (ret=%d)", wifi_ret);
+        if (recover_default_route_after_set_relay() != 0) {
+            debug(LOG_WARNING, "set_wifi_relay: default route not recovered after staged recover actions");
+        }
     }
 
     // Verify connection (poll ubus for wwan up)
@@ -923,6 +1093,22 @@ void handle_delete_wifi_relay_request(json_object *j_req, api_transport_context_
         return;
     }
 
+    if (enforce_mesh_iface_disabled() != 0) {
+        json_object *j_err = json_object_new_object();
+        json_object_object_add(j_err, "type", json_object_new_string("delete_wifi_relay_error"));
+        json_object_object_add(j_err, "error", json_object_new_string("Failed to enforce mesh disabled state"));
+        send_json_response(transport, j_err);
+        return;
+    }
+
+    if (remove_wwan_interface() != 0) {
+        json_object *j_err = json_object_new_object();
+        json_object_object_add(j_err, "type", json_object_new_string("delete_wifi_relay_error"));
+        json_object_object_add(j_err, "error", json_object_new_string("Failed to remove network.wwan interface"));
+        send_json_response(transport, j_err);
+        return;
+    }
+
     // Commit wireless changes
     if (uci_commit_package_by_name("wireless") != 0) {
         json_object *j_err = json_object_new_object();
@@ -934,9 +1120,12 @@ void handle_delete_wifi_relay_request(json_object *j_req, api_transport_context_
 
     // Optionally apply runtime changes
     if (apply) {
-        int wifi_ret = system("wifi reload >/dev/null 2>&1 &");
+        int wifi_ret = system("wifi reload >/dev/null 2>&1");
         if (wifi_ret != 0) {
-            debug(LOG_WARNING, "delete_wifi_relay: wifi reload background command failed (ret=%d)", wifi_ret);
+            debug(LOG_WARNING, "delete_wifi_relay: wifi reload command failed (ret=%d)", wifi_ret);
+        }
+        if (recover_default_route_after_delete_relay() != 0) {
+            debug(LOG_WARNING, "delete_wifi_relay: default route not recovered after staged recover actions");
         }
     }
 
