@@ -7,6 +7,7 @@
 #include "conf.h"
 #include "safe.h"
 #include "uci_helper.h"
+#include "wd_util.h"
 #include <uci.h>
 
 static int set_uci_config(const char *config_path, const char *value) {
@@ -859,15 +860,21 @@ static int recover_default_route_after_set_relay(void) {
     }
 
     debug(LOG_WARNING, "Default route missing after relay change, try ifdown/ifup wwan");
-    system("ifdown wwan >/dev/null 2>&1");
+    if (execute("ifdown wwan >/dev/null 2>&1", 0) != 0) {
+        debug(LOG_WARNING, "ifdown wwan command failed during route recovery");
+    }
     sleep(1);
-    system("ifup wwan >/dev/null 2>&1");
+    if (execute("ifup wwan >/dev/null 2>&1", 0) != 0) {
+        debug(LOG_WARNING, "ifup wwan command failed during route recovery");
+    }
     if (wait_for_default_route(8) == 0) {
         return 0;
     }
 
     debug(LOG_WARNING, "Default route still missing, fallback to /etc/init.d/network restart");
-    system("/etc/init.d/network restart >/dev/null 2>&1");
+    if (execute("/etc/init.d/network restart >/dev/null 2>&1", 0) != 0) {
+        debug(LOG_WARNING, "network restart command failed during route recovery");
+    }
     if (wait_for_default_route(12) == 0) {
         return 0;
     }
@@ -882,14 +889,18 @@ static int recover_default_route_after_delete_relay(void) {
 
     /* Relay removed: do not bring wwan up again. Only ensure it is down. */
     debug(LOG_INFO, "Relay removed, ensure wwan is down");
-    system("ifdown wwan >/dev/null 2>&1");
+    if (execute("ifdown wwan >/dev/null 2>&1", 0) != 0) {
+        debug(LOG_WARNING, "ifdown wwan command failed after relay delete");
+    }
 
     if (wait_for_default_route(3) == 0) {
         return 0;
     }
 
     debug(LOG_WARNING, "Default route still missing after relay delete, fallback to /etc/init.d/network restart");
-    system("/etc/init.d/network restart >/dev/null 2>&1");
+    if (execute("/etc/init.d/network restart >/dev/null 2>&1", 0) != 0) {
+        debug(LOG_WARNING, "network restart command failed after relay delete");
+    }
     if (wait_for_default_route(12) == 0) {
         return 0;
     }
@@ -1053,7 +1064,7 @@ void handle_set_wifi_relay_request(json_object *j_req, api_transport_context_t *
 
     // Trigger wifi reload if requested
     if (apply) {
-        int wifi_ret = system("wifi reload >/dev/null 2>&1");
+        int wifi_ret = execute("wifi reload >/dev/null 2>&1", 0);
         if (wifi_ret != 0) debug(LOG_WARNING, "wifi reload command failed (ret=%d)", wifi_ret);
         if (recover_default_route_after_set_relay() != 0) {
             debug(LOG_WARNING, "set_wifi_relay: default route not recovered after staged recover actions");
@@ -1120,7 +1131,7 @@ void handle_delete_wifi_relay_request(json_object *j_req, api_transport_context_
 
     // Optionally apply runtime changes
     if (apply) {
-        int wifi_ret = system("wifi reload >/dev/null 2>&1");
+        int wifi_ret = execute("wifi reload >/dev/null 2>&1", 0);
         if (wifi_ret != 0) {
             debug(LOG_WARNING, "delete_wifi_relay: wifi reload command failed (ret=%d)", wifi_ret);
         }

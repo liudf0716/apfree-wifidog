@@ -754,10 +754,8 @@ threads_init(s_config *config)
         }
     }
 
-    // Resilience thread - monitor firewall and periodic snapshots
-    if (is_portal_auth_disabled() || is_bypass_mode()) {
-        debug(LOG_INFO, "Portal auth disabled or bypass mode, skip resilience thread");
-    } else if (!create_detached_thread(&tid_resilience, (void *)thread_resilience, NULL, "resilience")) {
+    // Resilience thread - always run as system watchdog
+    if (!create_detached_thread(&tid_resilience, (void *)thread_resilience, NULL, "resilience")) {
         debug(LOG_ERR, "Failed to create resilience thread");
         return;
     }

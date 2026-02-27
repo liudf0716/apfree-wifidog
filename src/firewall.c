@@ -300,27 +300,120 @@ fw_reconcile(void)
     return 1;
 }
 
+static int
+has_default_route_v4(void)
+{
+	FILE *input = fopen("/proc/net/route", "r");
+	if (!input) {
+		debug(LOG_WARNING, "Failed to open /proc/net/route: %s", strerror(errno));
+		return 0;
+	}
+
+	char ifname[32] = {0};
+	char destination[32] = {0};
+	int found = 0;
+
+	while (!feof(input)) {
+		if (fscanf(input, "%31s %31s %*s %*s %*s %*s %*s %*s %*s %*s %*s\n", ifname, destination) == 2) {
+			if (strcmp(destination, "00000000") == 0) {
+				found = 1;
+				break;
+			}
+		}
+	}
+
+	fclose(input);
+	return found;
+}
+
+static int
+wait_default_route_v4(int timeout_seconds)
+{
+	for (int i = 0; i < timeout_seconds; i++) {
+		if (has_default_route_v4()) {
+			return 1;
+		}
+		sleep(1);
+	}
+	return 0;
+}
+
+static int
+recover_default_route(void)
+{
+	if (has_default_route_v4()) {
+		return 1;
+	}
+
+	debug(LOG_WARNING, "Default route missing, trying ifup wan/wwan");
+	execute("ifup wan >/dev/null 2>&1", 0);
+	execute("ifup wwan >/dev/null 2>&1", 0);
+	if (wait_default_route_v4(6)) {
+		debug(LOG_INFO, "Default route restored by ifup");
+		return 1;
+	}
+
+	debug(LOG_WARNING, "Default route still missing, trying /etc/init.d/network reload");
+	execute("/etc/init.d/network reload >/dev/null 2>&1", 0);
+	if (wait_default_route_v4(8)) {
+		debug(LOG_INFO, "Default route restored by network reload");
+		return 1;
+	}
+
+	debug(LOG_WARNING, "Default route still missing, trying /etc/init.d/network restart");
+	execute("/etc/init.d/network restart >/dev/null 2>&1", 0);
+	if (wait_default_route_v4(12)) {
+		debug(LOG_INFO, "Default route restored by network restart");
+		return 1;
+	}
+
+	debug(LOG_ERR, "Failed to recover default route after staged recovery");
+	return 0;
+}
+
 void
 thread_resilience(void *arg)
 {
-    if (is_portal_auth_disabled() || is_bypass_mode()) {
-        debug(LOG_INFO, "Portal auth disabled or bypass mode, skip resilience thread");
-        return;
-    }
-
     debug(LOG_INFO, "Resilience thread started");
     
     int check_interval = 30; // Check firewall every 30 seconds
     int snapshot_interval = 60; // Save snapshot every 60 seconds
+	int route_recover_cooldown = 120; // Avoid frequent network restarts
     int last_snapshot = 0;
+	time_t last_route_recover = 0;
+	int last_fw_check_skipped = -1;
     
     while (1) {
         sleep(check_interval);
-        
-        if (!fw_is_ready()) {
-            debug(LOG_WARNING, "Firewall rules out of sync! Reconciling...");
-            fw_reconcile();
+
+		int fw_check_skipped = (is_portal_auth_disabled() || is_bypass_mode()) ? 1 : 0;
+		if (fw_check_skipped) {
+			if (last_fw_check_skipped != 1) {
+				debug(LOG_INFO, "Portal auth disabled or bypass mode, pause firewall integrity check");
+			}
+		} else {
+			if (last_fw_check_skipped == 1) {
+				debug(LOG_INFO, "Portal auth enabled and not bypass, resume firewall integrity check");
+			}
+			if (!fw_is_ready()) {
+				debug(LOG_WARNING, "Firewall rules out of sync! Reconciling...");
+				fw_reconcile();
+			}
         }
+		last_fw_check_skipped = fw_check_skipped;
+
+		if (!has_default_route_v4()) {
+			time_t now = time(NULL);
+			if (last_route_recover == 0 || (now - last_route_recover) >= route_recover_cooldown) {
+				debug(LOG_WARNING, "Default route is missing, start recovery workflow");
+				recover_default_route();
+				last_route_recover = now;
+			} else {
+				debug(LOG_WARNING,
+					  "Default route missing, skip recovery due cooldown (%d sec left)",
+					  route_recover_cooldown - (int)(now - last_route_recover));
+			}
+		}
         
         last_snapshot += check_interval;
         if (last_snapshot >= snapshot_interval) {
