@@ -677,7 +677,13 @@ static char *select_radio_by_band(const char *band_pref) {
      * 1) explicit `band`, 2) numeric `channel`, 3) `hwmode`.
      * Do NOT use broad htmode substring matching (e.g. VHT80 contains "HT"),
      * which can misclassify 5g radios as 2g.
+     * 
+     * IMPORTANT: Do NOT call json_object_put(j) inside json_object_object_foreach,
+     * as this will destroy the iterator and cause segmentation fault.
+     * Instead, save the match and break, then release j after the loop.
      */
+    char *matched_radio = NULL;
+
     json_object_object_foreach(j, key, val) {
         if (!json_object_is_type(val, json_type_object)) continue;
 
@@ -689,9 +695,8 @@ static char *select_radio_by_band(const char *band_pref) {
                 const char *band = json_object_get_string(j_band);
                 if (band && strcmp(band_pref, band) == 0) {
                     debug(LOG_INFO, "select_radio_by_band: matched by config.band, band_pref=%s, radio=%s", band_pref, key);
-                    char *res = strdup(key);
-                    json_object_put(j);
-                    return res;
+                    matched_radio = strdup(key);
+                    break;
                 }
             }
 
@@ -707,15 +712,13 @@ static char *select_radio_by_band(const char *band_pref) {
                 if (ch > 0) {
                     if (strcmp(band_pref, "5g") == 0 && ch > 14) {
                         debug(LOG_INFO, "select_radio_by_band: matched by channel, band_pref=%s, channel=%d, radio=%s", band_pref, ch, key);
-                        char *res = strdup(key);
-                        json_object_put(j);
-                        return res;
+                        matched_radio = strdup(key);
+                        break;
                     }
                     if (strcmp(band_pref, "2g") == 0 && ch <= 14) {
                         debug(LOG_INFO, "select_radio_by_band: matched by channel, band_pref=%s, channel=%d, radio=%s", band_pref, ch, key);
-                        char *res = strdup(key);
-                        json_object_put(j);
-                        return res;
+                        matched_radio = strdup(key);
+                        break;
                     }
                 }
             }
@@ -727,15 +730,13 @@ static char *select_radio_by_band(const char *band_pref) {
                 if (hw) {
                     if (strcmp(band_pref, "5g") == 0 && strstr(hw, "11a")) {
                         debug(LOG_INFO, "select_radio_by_band: matched by hwmode, band_pref=%s, hwmode=%s, radio=%s", band_pref, hw, key);
-                        char *res = strdup(key);
-                        json_object_put(j);
-                        return res;
+                        matched_radio = strdup(key);
+                        break;
                     }
                     if (strcmp(band_pref, "2g") == 0 && (strstr(hw, "11b") || strstr(hw, "11g"))) {
                         debug(LOG_INFO, "select_radio_by_band: matched by hwmode, band_pref=%s, hwmode=%s, radio=%s", band_pref, hw, key);
-                        char *res = strdup(key);
-                        json_object_put(j);
-                        return res;
+                        matched_radio = strdup(key);
+                        break;
                     }
                 }
             }
@@ -743,6 +744,11 @@ static char *select_radio_by_band(const char *band_pref) {
     }
 
     json_object_put(j);
+    
+    if (matched_radio) {
+        return matched_radio;
+    }
+
     debug(LOG_WARNING, "select_radio_by_band: no matched radio for band_pref=%s", band_pref ? band_pref : "(null)");
     return NULL;
 }
