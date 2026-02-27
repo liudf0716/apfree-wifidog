@@ -36,6 +36,71 @@ static int commit_uci_changes(void) {
     return 0;
 }
 
+/* Local helpers to detect and recover default IPv4 route (inspired by firewall.c) */
+static int has_default_route_v4_local(void)
+{
+    FILE *input = fopen("/proc/net/route", "r");
+    if (!input) {
+        debug(LOG_WARNING, "has_default_route_v4_local: failed to open /proc/net/route: %s", strerror(errno));
+        return 0;
+    }
+
+    char ifname[32] = {0};
+    char destination[32] = {0};
+    int found = 0;
+
+    while (!feof(input)) {
+        if (fscanf(input, "%31s %31s %*s %*s %*s %*s %*s %*s %*s %*s %*s\n", ifname, destination) == 2) {
+            if (strcmp(destination, "00000000") == 0) {
+                found = 1;
+                break;
+            }
+        }
+    }
+
+    fclose(input);
+    return found;
+}
+
+static int wait_default_route_v4_local(int timeout_seconds)
+{
+    for (int i = 0; i < timeout_seconds; i++) {
+        if (has_default_route_v4_local()) return 1;
+        sleep(1);
+    }
+    return 0;
+}
+
+static int recover_default_route_local(void)
+{
+    if (has_default_route_v4_local()) return 1;
+
+    debug(LOG_WARNING, "recover_default_route_local: default route missing, trying ifup wan/wwan");
+    execute("ifup wan >/dev/null 2>&1", 0);
+    execute("ifup wwan >/dev/null 2>&1", 0);
+    if (wait_default_route_v4_local(6)) {
+        debug(LOG_INFO, "recover_default_route_local: default route restored by ifup");
+        return 1;
+    }
+
+    debug(LOG_WARNING, "recover_default_route_local: trying /etc/init.d/network reload");
+    execute("/etc/init.d/network reload >/dev/null 2>&1", 0);
+    if (wait_default_route_v4_local(8)) {
+        debug(LOG_INFO, "recover_default_route_local: default route restored by network reload");
+        return 1;
+    }
+
+    debug(LOG_WARNING, "recover_default_route_local: trying /etc/init.d/network restart");
+    execute("/etc/init.d/network restart >/dev/null 2>&1", 0);
+    if (wait_default_route_v4_local(12)) {
+        debug(LOG_INFO, "recover_default_route_local: default route restored by network restart");
+        return 1;
+    }
+
+    debug(LOG_ERR, "recover_default_route_local: failed to recover default route");
+    return 0;
+}
+
 /* Helper: run shell command and capture stdout into allocated string. */
 
 void handle_get_wifi_info_request(json_object *j_req, api_transport_context_t *transport) {
@@ -926,8 +991,12 @@ void handle_set_wifi_relay_request(json_object *j_req, api_transport_context_t *
         return;
     }
 
-    strncpy(secbuf, sec_ptr.s, sizeof(secbuf) - 1);
-    secbuf[sizeof(secbuf) - 1] = '\0';
+    if (sec_ptr.s && sec_ptr.s->e.name) {
+        strncpy(secbuf, sec_ptr.s->e.name, sizeof(secbuf) - 1);
+        secbuf[sizeof(secbuf) - 1] = '\0';
+    } else {
+        secbuf[0] = '\0';
+    }
 
     int set_failed = 0;
     if (uci_set_option_with_ctx(w_ctx, "wireless", secbuf, "device", radio) != 0) set_failed = 1;
@@ -1041,10 +1110,23 @@ void handle_delete_wifi_relay_request(json_object *j_req, api_transport_context_
     }
 
     // Optionally apply runtime changes
+    int default_route_restored = 1;
     if (apply) {
         int wifi_ret = execute("wifi reload >/dev/null 2>&1", 0);
         if (wifi_ret != 0) {
             debug(LOG_WARNING, "delete_wifi_relay: wifi reload command failed (ret=%d)", wifi_ret);
+        }
+
+        // If default route disappeared after reload, attempt staged recovery
+        if (!has_default_route_v4_local()) {
+            debug(LOG_WARNING, "delete_wifi_relay: default route missing after reload, attempting recovery");
+            if (!recover_default_route_local()) {
+                debug(LOG_ERR, "delete_wifi_relay: failed to recover default route");
+                default_route_restored = 0;
+            } else {
+                debug(LOG_INFO, "delete_wifi_relay: default route recovered by recovery routine");
+                default_route_restored = 1;
+            }
         }
     }
 
@@ -1052,6 +1134,7 @@ void handle_delete_wifi_relay_request(json_object *j_req, api_transport_context_
     json_object_object_add(j_resp, "type", json_object_new_string("delete_wifi_relay_response"));
     json_object_object_add(j_resp, "status", json_object_new_string("success"));
     json_object_object_add(j_resp, "apply", json_object_new_boolean(apply));
+    json_object_object_add(j_resp, "default_route_restored", json_object_new_boolean(default_route_restored));
     json_object_object_add(j_resp, "message", json_object_new_string("WiFi relay/STA configuration removed"));
     send_json_response(transport, j_resp);
 }
