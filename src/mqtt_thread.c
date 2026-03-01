@@ -258,34 +258,30 @@ void thread_mqtt(void *arg)
 		mosquitto_username_pw_set(mosq, username, password);
 	}
 
-	/* Attempt to connect and retry until successful. Use exponential backoff with cap. */
-	int retry_delay = 5; /* seconds */
-	const int max_delay = 60; /* cap delay to 60s */
-	while (1) {
-		retval = mosquitto_connect(mosq, host, port, keepalive);
-		if (retval == MOSQ_ERR_SUCCESS) {
-			debug(LOG_INFO, "Successfully connected to MQTT broker at %s:%d", host, port);
-			mqtt_connected = 1;
-			break;
-		}
+	/* Use libmosquitto automatic reconnect handling instead of app-level retry loop.
+	 * Configure reconnect delay (initial 5s, max 60s) with exponential backoff. */
+	mosquitto_reconnect_delay_set(mosq, 5, 60, true);
 
-		/* Log error detail */
-		if (retval == MOSQ_ERR_ERRNO) {
-			debug(LOG_INFO, "MQTT connect failed: %s", strerror(errno));
-		} else {
-			debug(LOG_INFO, "MQTT connect failed: %s", mosquitto_strerror(retval));
-		}
-
-		debug(LOG_INFO, "Retrying MQTT connect in %d seconds...", retry_delay);
-		sleep(retry_delay);
-		if (retry_delay < max_delay) {
-			retry_delay *= 2;
-			if (retry_delay > max_delay) retry_delay = max_delay;
-		}
+	/* Try to start a non-blocking connect; the loop thread will manage retries after disconnects. */
+	retval = mosquitto_connect_async(mosq, host, port, keepalive);
+	if (retval == MOSQ_ERR_SUCCESS) {
+		debug(LOG_INFO, "mosquitto_connect_async initiated to %s:%d", host, port);
+	} else if (retval == MOSQ_ERR_ERRNO) {
+		debug(LOG_INFO, "mosquitto_connect_async error: %s", strerror(errno));
+	} else {
+		debug(LOG_INFO, "mosquitto_connect_async error: %s", mosquitto_strerror(retval));
 	}
 
-	/* Enter the mosquitto network loop (this call blocks until loop exits) */
-	retval = mosquitto_loop_forever(mosq, -1, 1);
+	/* Start background network handling thread provided by libmosquitto. */
+	if (mosquitto_loop_start(mosq) != MOSQ_ERR_SUCCESS) {
+		debug(LOG_WARNING, "mosquitto_loop_start failed, falling back to loop_forever");
+		retval = mosquitto_loop_forever(mosq, -1, 1);
+	} else {
+		/* Keep this thread alive while the background loop runs. */
+		while (1) {
+			sleep(60);
+		}
+	}
 
 	/* Ensure connected flag is cleared when loop exits */
 	mqtt_connected = 0;
