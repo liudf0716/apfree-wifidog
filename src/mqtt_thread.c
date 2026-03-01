@@ -258,23 +258,33 @@ void thread_mqtt(void *arg)
 		mosquitto_username_pw_set(mosq, username, password);
 	}
 
-	switch( retval = mosquitto_connect(mosq, host, port, keepalive) ) {
-        case MOSQ_ERR_INVAL:
-            debug(LOG_INFO, "Error : %s\n", mosquitto_strerror(retval)); 
-            break;
-        case MOSQ_ERR_ERRNO:
-            debug(LOG_INFO, "Error : %s\n", strerror(errno));
-            break;
-		case MOSQ_ERR_SUCCESS:
+	/* Attempt to connect and retry until successful. Use exponential backoff with cap. */
+	int retry_delay = 5; /* seconds */
+	const int max_delay = 60; /* cap delay to 60s */
+	while (1) {
+		retval = mosquitto_connect(mosq, host, port, keepalive);
+		if (retval == MOSQ_ERR_SUCCESS) {
 			debug(LOG_INFO, "Successfully connected to MQTT broker at %s:%d", host, port);
-			/* mark connected */
 			mqtt_connected = 1;
 			break;
-        default:
-            debug(LOG_INFO, "MQTT connection error: %s", mosquitto_strerror(retval));
-            break;
-    }
+		}
 
+		/* Log error detail */
+		if (retval == MOSQ_ERR_ERRNO) {
+			debug(LOG_INFO, "MQTT connect failed: %s", strerror(errno));
+		} else {
+			debug(LOG_INFO, "MQTT connect failed: %s", mosquitto_strerror(retval));
+		}
+
+		debug(LOG_INFO, "Retrying MQTT connect in %d seconds...", retry_delay);
+		sleep(retry_delay);
+		if (retry_delay < max_delay) {
+			retry_delay *= 2;
+			if (retry_delay > max_delay) retry_delay = max_delay;
+		}
+	}
+
+	/* Enter the mosquitto network loop (this call blocks until loop exits) */
 	retval = mosquitto_loop_forever(mosq, -1, 1);
 
 	/* Ensure connected flag is cleared when loop exits */
