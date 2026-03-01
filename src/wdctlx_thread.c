@@ -19,6 +19,7 @@
 #include "safe.h"
 #include "wd_client.h"
 #include "client_snapshot.h"
+#include "hotplug_listener.h"
 
 static struct sockaddr_un *create_unix_socket(const char *);
 
@@ -992,149 +993,7 @@ wdctl_del_anti_nat_permit_device(struct bufferevent *fd, const char *mac)
     bufferevent_write(fd, "Yes", 3);
 }
 
-// Helper function to parse IP address string into components
-static bool 
-parse_ip_address(const char *ip_str, unsigned int *parts) {
-    if (!ip_str || !parts) return false;
-    return sscanf(ip_str, "%u.%u.%u.%u", &parts[0], &parts[1], &parts[2], &parts[3]) == 4;
-}
-
-// Helper function to check network conflict
-static bool 
-check_network_conflict(const unsigned int *net1, const unsigned int *net2) {
-    if (!net1 || !net2) return false;
-    for (int i = 0; i < 4; i++) {
-        if (net1[i] != net2[i]) return false;
-    }
-    return true;
-}
-
-// Helper function to get network configuration using UCI
-static bool 
-get_network_config(char *ip, size_t ip_size, char *mask, size_t mask_size) {
-    char cmd[256];
-    FILE *fp;
-    bool success = true;
-
-    // Get LAN IP
-    snprintf(cmd, sizeof(cmd), "uci -q get network.lan.ipaddr");
-    if (!(fp = popen(cmd, "r")) || !fgets(ip, ip_size, fp)) {
-        debug(LOG_ERR, "Failed to get LAN IP address");
-        success = false;
-    }
-    if (fp) pclose(fp);
-    if (success) ip[strcspn(ip, "\n")] = 0;
-
-    // Get netmask
-    if (success) {
-        snprintf(cmd, sizeof(cmd), "uci -q get network.lan.netmask");
-        if (!(fp = popen(cmd, "r")) || !fgets(mask, mask_size, fp)) {
-            debug(LOG_ERR, "Failed to get LAN netmask");
-            success = false;
-        }
-        if (fp) pclose(fp);
-        if (success) mask[strcspn(mask, "\n")] = 0;
-    }
-
-    return success;
-}
-
 static void 
 wdctl_hotplugin_event(struct bufferevent *fd, const char *event_json_data) {
-    json_object *root = NULL;
-    bool success = true;
-    char *wan_ip = NULL;
-
-    if (!is_openwrt_platform()) {
-        debug(LOG_INFO, "Hotplugin events are only supported on OpenWrt platform");
-        bufferevent_write(fd, "Not Support", strlen("Not Support"));
-        return;
-    }
-
-    // Parse JSON
-    root = json_tokener_parse(event_json_data);
-    if (!root || json_object_get_type(root) != json_type_object) {
-        debug(LOG_ERR, "Failed to parse event json data: %s", event_json_data);
-        success = false;
-        goto cleanup;
-    }
-
-    // Extract JSON fields
-    json_object *interface_jo = NULL, *action_jo = NULL, *device_jo = NULL;
-    if (!json_object_object_get_ex(root, "interface", &interface_jo) ||
-        !json_object_object_get_ex(root, "action", &action_jo) ||
-        !json_object_object_get_ex(root, "device", &device_jo)) {
-        debug(LOG_ERR, "Missing required fields in event json");
-        success = false;
-        goto cleanup;
-    }
-
-    const char *interface = json_object_get_string(interface_jo);
-    const char *action = json_object_get_string(action_jo);
-    const char *device = json_object_get_string(device_jo);
-
-    // Only process WWAN or WAN interface up events
-    if ((strcmp(interface, "wwan") != 0 && strcmp(interface, "wan") != 0) || strcmp(action, "ifup") != 0) {
-        debug(LOG_DEBUG, "Ignoring event for interface %s action %s", interface, action);
-        goto cleanup;
-    }
-
-    // Get IP configurations
-    wan_ip = get_iface_ip(device);
-    char lan_ip[16] = {0}, lan_mask[16] = {0};
-    if (!wan_ip || !get_network_config(lan_ip, sizeof(lan_ip), lan_mask, sizeof(lan_mask))) {
-        debug(LOG_ERR, "Failed to get network configuration");
-        success = false;
-        goto cleanup;
-    }
-
-    // Parse IP addresses
-    unsigned int wwan_ip_parts[4], lan_ip_parts[4], mask_parts[4];
-    unsigned int wwan_network[4], lan_network[4];
-    
-    if (!parse_ip_address(wan_ip, wwan_ip_parts) ||
-        !parse_ip_address(lan_ip, lan_ip_parts) ||
-        !parse_ip_address(lan_mask, mask_parts)) {
-        debug(LOG_ERR, "Failed to parse IP addresses");
-        success = false;
-        goto cleanup;
-    }
-
-    // Calculate network addresses
-    for (int i = 0; i < 4; i++) {
-        wwan_network[i] = wwan_ip_parts[i] & mask_parts[i];
-        lan_network[i] = lan_ip_parts[i] & mask_parts[i];
-    }
-
-    // Handle network conflict
-    if (check_network_conflict(wwan_network, lan_network)) {
-        debug(LOG_NOTICE, "Network conflict detected, adjusting LAN IP");
-        
-        // Increment third octet with overflow handling
-        lan_ip_parts[2] = (lan_ip_parts[2] + 1) % 256;
-        if (lan_ip_parts[2] == 0) {
-            lan_ip_parts[1] = (lan_ip_parts[1] + 1) % 256;
-        }
-
-        char cmd[256], new_ip[16];
-        snprintf(new_ip, sizeof(new_ip), "%u.%u.%u.%u", 
-                lan_ip_parts[0], lan_ip_parts[1], 
-                lan_ip_parts[2], lan_ip_parts[3]);
-
-        snprintf(cmd, sizeof(cmd), "uci set network.lan.ipaddr='%s' && uci commit network && reboot",
-                new_ip);
-        
-        if (system(cmd) != 0) {
-            debug(LOG_ERR, "Failed to update network configuration");
-            success = false;
-            goto cleanup;
-        }
-
-        debug(LOG_NOTICE, "Changed LAN IP to %s", new_ip);
-    }
-
-cleanup:
-    if (root) json_object_put(root);
-    if (wan_ip) free(wan_ip);
-    bufferevent_write(fd, success ? "Yes" : "No", success ? 3 : 2);
+    hotplug_handle_event(fd, event_json_data);
 }

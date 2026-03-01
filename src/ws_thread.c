@@ -32,15 +32,19 @@ static struct {
 	struct event_base *base;      /* Main event loop base */
 	struct evdns_base *dnsbase;   /* DNS resolver base */
 	struct event *heartbeat_ev;   /* Heartbeat timer event */
+	struct event *control_ev;     /* Internal control timer event */
 	bool upgraded;                /* WebSocket upgrade completed flag */
 	struct bufferevent *current_bev; /* Current active bufferevent */
 } ws_state = {
 	.base = NULL,
 	.dnsbase = NULL, 
 	.heartbeat_ev = NULL,
+	.control_ev = NULL,
 	.upgraded = false,
 	.current_bev = NULL
 };
+
+static _Atomic int ws_reconnect_requested = 0;
 
 /**
  * SSL/TLS connection state
@@ -59,10 +63,34 @@ static char WS_ACCEPT[WS_ACCEPT_LEN+1];
 /* Forward declarations for callback functions */
 static void ws_heartbeat_cb(evutil_socket_t fd, short events, void *arg);
 static void wsevent_connection_cb(struct bufferevent *bev, short events, void *ctx);
+static void ws_control_cb(evutil_socket_t fd, short events, void *arg);
 
 static void cleanup_ws_connection(void);
 static void reconnect_websocket(void);
 static void scheduled_reconnect_cb(evutil_socket_t fd, short events, void *arg);
+
+static void
+start_ws_control_timer(void)
+{
+	if (!ws_state.base) {
+		return;
+	}
+
+	if (ws_state.control_ev) {
+		event_free(ws_state.control_ev);
+		ws_state.control_ev = NULL;
+	}
+
+	struct timeval tv = {
+		.tv_sec = 1,
+		.tv_usec = 0
+	};
+
+	ws_state.control_ev = event_new(ws_state.base, -1, EV_PERSIST, ws_control_cb, NULL);
+	if (ws_state.control_ev) {
+		event_add(ws_state.control_ev, &tv);
+	}
+}
 
 
 /**
@@ -733,6 +761,23 @@ ws_heartbeat_cb(evutil_socket_t fd, short event, void *arg)
 	send_msg(out, "heartbeat");	
 }
 
+static void
+ws_control_cb(evutil_socket_t fd, short events, void *arg)
+{
+	(void)fd;
+	(void)events;
+	(void)arg;
+
+	if (!ws_reconnect_requested) {
+		return;
+	}
+
+	ws_reconnect_requested = 0;
+	debug(LOG_INFO, "WebSocket reconnect requested by hotplugin event");
+	cleanup_ws_connection();
+	reconnect_websocket();
+}
+
 /**
  * WebSocket read callback handler
  *
@@ -992,6 +1037,12 @@ cleanup_ws_connection(void)
 		ws_state.heartbeat_ev = NULL;
 	}
 
+	if (ws_state.control_ev) {
+		event_del(ws_state.control_ev);
+		event_free(ws_state.control_ev);
+		ws_state.control_ev = NULL;
+	}
+
 	// Reset connection state
 	ws_state.upgraded = false;
 
@@ -1203,6 +1254,8 @@ thread_websocket(void *arg)
 		goto cleanup;
 	}
 
+	start_ws_control_timer();
+
 	// Connect to WebSocket server
 	if (connect_ws_server(ws_server) < 0) {
 		debug(LOG_ERR, "Failed to connect to WebSocket server");
@@ -1231,5 +1284,11 @@ cleanup:
 		SSL_CTX_free(ssl_state.ctx);
 		ssl_state.ctx = NULL;
 	}
+}
+
+void
+ws_request_reconnect(void)
+{
+	ws_reconnect_requested = 1;
 }
 

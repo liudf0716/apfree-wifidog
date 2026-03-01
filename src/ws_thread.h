@@ -50,6 +50,7 @@ enum WebSocketFrameType {
 };
 
 void thread_websocket(void *arg);
+void ws_request_reconnect(void);
 
 // WebSocket utility functions for handlers
 void ws_send(struct evbuffer *buf, const char *msg, const size_t len, enum WebSocketFrameType frame_type);

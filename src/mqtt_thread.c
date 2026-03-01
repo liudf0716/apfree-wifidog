@@ -18,6 +18,8 @@
 
 /* Internal flag indicating whether MQTT client is connected. */
 _Atomic int mqtt_connected = 0;
+static pthread_mutex_t mqtt_client_lock = PTHREAD_MUTEX_INITIALIZER;
+static struct mosquitto *mqtt_client_instance = NULL;
 
 static void
 send_mqtt_response(struct mosquitto *mosq, const unsigned int req_id, int res_id, const char *msg, const s_config *config)
@@ -222,6 +224,11 @@ void thread_mqtt(void *arg)
         mosquitto_lib_cleanup();
         return ;
     }
+
+	/* expose client instance for out-of-thread reconnect trigger */
+	pthread_mutex_lock(&mqtt_client_lock);
+	mqtt_client_instance = mosq;
+	pthread_mutex_unlock(&mqtt_client_lock);
    	
    	// Only set TLS if cafile is configured
    	if (cafile != NULL) {
@@ -273,6 +280,10 @@ void thread_mqtt(void *arg)
 	/* Ensure connected flag is cleared when loop exits */
 	mqtt_connected = 0;
 
+	pthread_mutex_lock(&mqtt_client_lock);
+	mqtt_client_instance = NULL;
+	pthread_mutex_unlock(&mqtt_client_lock);
+
 	mosquitto_destroy(mosq);
 	mosquitto_lib_cleanup();
 }
@@ -280,5 +291,26 @@ void thread_mqtt(void *arg)
 int mqtt_is_connected(void)
 {
 	return mqtt_connected != 0;
+}
+
+void mqtt_request_reconnect(void)
+{
+	struct mosquitto *mosq = NULL;
+
+	pthread_mutex_lock(&mqtt_client_lock);
+	mosq = mqtt_client_instance;
+	pthread_mutex_unlock(&mqtt_client_lock);
+
+	if (!mosq) {
+		debug(LOG_DEBUG, "MQTT reconnect requested but client is not initialized");
+		return;
+	}
+
+	debug(LOG_INFO, "MQTT reconnect requested by hotplugin event");
+	mosquitto_disconnect(mosq);
+	int rc = mosquitto_reconnect_async(mosq);
+	if (rc != MOSQ_ERR_SUCCESS && rc != MOSQ_ERR_NO_CONN) {
+		debug(LOG_WARNING, "mosquitto_reconnect_async failed: %s", mosquitto_strerror(rc));
+	}
 }
 

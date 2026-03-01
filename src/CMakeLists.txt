@@ -7,6 +7,7 @@ set(src_apfreewifidog
 	api_handlers_auth.c
 	api_handlers_wifi.c
 	api_handlers_sys.c
+	hotplug_listener.c
 	ws_thread.c api_handlers.c api_routes.c api_handlers_bpf.c api_handlers_vpn.c
 	uci_helper.c
 	client_snapshot.c dns_monitor.c

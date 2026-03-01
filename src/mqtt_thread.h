@@ -39,5 +39,8 @@ void thread_mqtt(void *arg);
 /* Return non-zero if MQTT client is currently connected to broker */
 int mqtt_is_connected(void);
 
+/* Request MQTT client to disconnect and reconnect immediately */
+void mqtt_request_reconnect(void);
+
 
 #endif

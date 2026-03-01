@@ -24,6 +24,7 @@
 #include "ws_thread.h"
 #include "dns_monitor.h"
 #include "client_snapshot.h"
+#include "hotplug_listener.h"
 
 /* Global mutexes and buffers */
 pthread_mutex_t g_resource_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -40,6 +41,7 @@ static pthread_t tid_wdctl = 0;         /* Control interface thread */
 static pthread_t tid_tls_server = 0;   /* TLS redirect thread */
 static pthread_t tid_mqtt_server = 0;    /* MQTT server thread */
 static pthread_t tid_ws = 0;            /* WebSocket thread */
+static pthread_t tid_hotplug = 0;       /* OpenWrt hotplug listener thread */
 static pthread_t tid_dns_monitor = 0;    /* DNS monitor thread */
 static pthread_t tid_resilience = 0;     /* Firewall resilience thread */
 
@@ -259,6 +261,7 @@ static const struct {
     {&tid_tls_server, "https_server"},
     {&tid_mqtt_server, "mqtt_server"},
     {&tid_ws, "websocket"},
+    {&tid_hotplug, "hotplug_listener"},
     {&tid_dns_monitor, "dns_monitor"},
     {&tid_resilience, "resilience"}
 };
@@ -716,6 +719,12 @@ threads_init(s_config *config)
         debug(LOG_ERR, "Failed to create wdctl thread");
         if (wdctl_sock_copy) free(wdctl_sock_copy);
         return;
+    }
+
+    if (is_openwrt_platform()) {
+        if (!create_detached_thread(&tid_hotplug, (void *)thread_hotplug_listener, NULL, "hotplug_listener")) {
+            debug(LOG_WARNING, "Failed to create hotplug listener thread (optional)");
+        }
     }
 
     if (!create_detached_thread(&tid_dns_monitor, (void *)thread_dns_monitor, NULL, "dns_monitor")) {
