@@ -15,11 +15,26 @@
 #include "wd_util.h"
 #include "centralserver.h"
 #include "client_list.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdbool.h>
+#include <time.h>
+#include <errno.h>
 
 /* Internal flag indicating whether MQTT client is connected. */
 _Atomic int mqtt_connected = 0;
 static pthread_mutex_t mqtt_client_lock = PTHREAD_MUTEX_INITIALIZER;
 static struct mosquitto *mqtt_client_instance = NULL;
+/* control for graceful shutdown */
+static _Atomic int mqtt_thread_should_stop = 0;
+static pthread_mutex_t mqtt_thread_ctrl_lock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t mqtt_thread_ctrl_cond = PTHREAD_COND_INITIALIZER;
+
+/* cached connection parameters (copied from config) to allow reconnect from other threads) */
+static char *mqtt_host_cached = NULL;
+static int mqtt_port_cached = 0;
+static int mqtt_keepalive_cached = 60;
 
 static void
 send_mqtt_response(struct mosquitto *mosq, const unsigned int req_id, int res_id, const char *msg, const s_config *config)
@@ -161,23 +176,31 @@ mqtt_connect_callback(struct mosquitto *mosq, void *obj, int rc)
 	char *s2c_request_topic = NULL;
 	char *c2s_response_topic = NULL;
 	char *shell_cmd_topic = NULL;
-	
-	// Subscribe to s2c/request (Server to Client requests)
-	safe_asprintf(&s2c_request_topic, "wifidogx/v1/%s/s2c/request", get_device_id());
-	mosquitto_subscribe(mosq, NULL, s2c_request_topic, 0); // qos is 0
-	
-	// Subscribe to c2s/response (Client to Server responses)  
-	safe_asprintf(&c2s_response_topic, "wifidogx/v1/%s/c2s/response", get_device_id());
-	mosquitto_subscribe(mosq, NULL, c2s_response_topic, 0); // qos is 0
-	
-	// Subscribe to shell/command (Shell command requests)
-	safe_asprintf(&shell_cmd_topic, "wifidogx/v1/%s/shell/command", get_device_id());
-	mosquitto_subscribe(mosq, NULL, shell_cmd_topic, 0); // qos is 0
-	debug(LOG_INFO, "Subscribed to shell command topic: %s", shell_cmd_topic);
-	
-	free(s2c_request_topic);
-	free(c2s_response_topic);
-	free(shell_cmd_topic);
+
+	if (rc == 0) {
+		/* connected successfully */
+		mqtt_connected = 1;
+
+		/* Subscribe to s2c/request (Server to Client requests)") */
+		safe_asprintf(&s2c_request_topic, "wifidogx/v1/%s/s2c/request", get_device_id());
+		mosquitto_subscribe(mosq, NULL, s2c_request_topic, 0); // qos is 0
+
+		/* Subscribe to c2s/response (Client to Server responses)  */
+		safe_asprintf(&c2s_response_topic, "wifidogx/v1/%s/c2s/response", get_device_id());
+		mosquitto_subscribe(mosq, NULL, c2s_response_topic, 0); // qos is 0
+
+		/* Subscribe to shell/command (Shell command requests) */
+		safe_asprintf(&shell_cmd_topic, "wifidogx/v1/%s/shell/command", get_device_id());
+		mosquitto_subscribe(mosq, NULL, shell_cmd_topic, 0); // qos is 0
+		debug(LOG_INFO, "Subscribed to shell command topic: %s", shell_cmd_topic);
+
+		free(s2c_request_topic);
+		free(c2s_response_topic);
+		free(shell_cmd_topic);
+	} else {
+		mqtt_connected = 0;
+		debug(LOG_WARNING, "MQTT connect callback: failed with rc=%d (%s)", rc, mosquitto_strerror(rc));
+	}
 }
 
 static void
@@ -186,9 +209,9 @@ mqtt_disconnect_callback(struct mosquitto *mosq, void *obj, int rc)
 	/* Mark MQTT as disconnected */
 	(void)mosq;
 	(void)obj;
-	(void)rc;
 	/* clear connected flag */
 	mqtt_connected = 0;
+	debug(LOG_INFO, "MQTT disconnected (rc=%d)", rc);
 }
 
 void thread_mqtt(void *arg)
@@ -228,6 +251,16 @@ void thread_mqtt(void *arg)
 	/* expose client instance for out-of-thread reconnect trigger */
 	pthread_mutex_lock(&mqtt_client_lock);
 	mqtt_client_instance = mosq;
+	/* cache host/port/keepalive for use by mqtt_request_reconnect() */
+	if (mqtt_host_cached) {
+		free(mqtt_host_cached);
+		mqtt_host_cached = NULL;
+	}
+	if (host) {
+		mqtt_host_cached = strdup(host);
+	}
+	mqtt_port_cached = port;
+	mqtt_keepalive_cached = keepalive;
 	pthread_mutex_unlock(&mqtt_client_lock);
    	
    	// Only set TLS if cafile is configured
@@ -276,11 +309,17 @@ void thread_mqtt(void *arg)
 	if (mosquitto_loop_start(mosq) != MOSQ_ERR_SUCCESS) {
 		debug(LOG_WARNING, "mosquitto_loop_start failed, falling back to loop_forever");
 		retval = mosquitto_loop_forever(mosq, -1, 1);
+		/* mosquitto_loop_forever only returns on error or finish */
 	} else {
-		/* Keep this thread alive while the background loop runs. */
-		while (1) {
-			sleep(60);
+		/* Wait for stop signal (graceful exit) */
+		pthread_mutex_lock(&mqtt_thread_ctrl_lock);
+		while (!mqtt_thread_should_stop) {
+			pthread_cond_wait(&mqtt_thread_ctrl_cond, &mqtt_thread_ctrl_lock);
 		}
+		pthread_mutex_unlock(&mqtt_thread_ctrl_lock);
+
+		/* Stop the libmosquitto loop; finish work and return */
+		mosquitto_loop_stop(mosq, true);
 	}
 
 	/* Ensure connected flag is cleared when loop exits */
@@ -288,6 +327,10 @@ void thread_mqtt(void *arg)
 
 	pthread_mutex_lock(&mqtt_client_lock);
 	mqtt_client_instance = NULL;
+	if (mqtt_host_cached) {
+		free(mqtt_host_cached);
+		mqtt_host_cached = NULL;
+	}
 	pthread_mutex_unlock(&mqtt_client_lock);
 
 	mosquitto_destroy(mosq);
@@ -299,24 +342,80 @@ int mqtt_is_connected(void)
 	return mqtt_connected != 0;
 }
 
+static bool has_default_route(void)
+{
+	FILE *f = fopen("/proc/net/route", "r");
+	if (!f)
+		return false;
+	char line[256];
+	/* skip header */
+	if (!fgets(line, sizeof(line), f)) {
+		fclose(f);
+		return false;
+	}
+	while (fgets(line, sizeof(line), f)) {
+		char iface[64];
+		char dest_s[32];
+		if (sscanf(line, "%63s %31s", iface, dest_s) >= 2) {
+			unsigned long dest = strtoul(dest_s, NULL, 16);
+			if (dest == 0) {
+				fclose(f);
+				return true;
+			}
+		}
+	}
+	fclose(f);
+	return false;
+}
+
 void mqtt_request_reconnect(void)
 {
 	struct mosquitto *mosq = NULL;
 
 	pthread_mutex_lock(&mqtt_client_lock);
 	mosq = mqtt_client_instance;
-	pthread_mutex_unlock(&mqtt_client_lock);
-
+	/* if no client or thread not running, nothing to do */
 	if (!mosq) {
+		pthread_mutex_unlock(&mqtt_client_lock);
 		debug(LOG_DEBUG, "MQTT reconnect requested but client is not initialized");
 		return;
 	}
 
-	debug(LOG_INFO, "MQTT reconnect requested by hotplugin event");
-	mosquitto_disconnect(mosq);
-	int rc = mosquitto_reconnect_async(mosq);
-	if (rc != MOSQ_ERR_SUCCESS && rc != MOSQ_ERR_NO_CONN) {
-		debug(LOG_WARNING, "mosquitto_reconnect_async failed: %s", mosquitto_strerror(rc));
+	/* If already connected, let library keep the connection; nothing to do. */
+	if (mqtt_connected) {
+		pthread_mutex_unlock(&mqtt_client_lock);
+		debug(LOG_DEBUG, "MQTT reconnect requested but already connected");
+		return;
+	}
+
+	/* Keep default route check as requested */
+	if (!has_default_route()) {
+		pthread_mutex_unlock(&mqtt_client_lock);
+		debug(LOG_INFO, "MQTT reconnect requested but no default route; skipping immediate reconnect");
+		return;
+	}
+
+	/* Request a connect from the library in a thread-safe way.
+	 * We avoid calling mosquitto_reconnect_async to prevent mixing reconnect strategies.
+	 * Instead, call mosquitto_connect_async when disconnected — lib will manage retries
+	 * according to reconnect_delay_set. */
+	if (!mqtt_host_cached) {
+		pthread_mutex_unlock(&mqtt_client_lock);
+		debug(LOG_WARNING, "MQTT reconnect requested but connection parameters unavailable");
+		return;
+	}
+
+	debug(LOG_INFO, "MQTT reconnect requested: attempting connect to %s:%d", mqtt_host_cached, mqtt_port_cached);
+	int rc = mosquitto_connect_async(mosq, mqtt_host_cached, mqtt_port_cached, mqtt_keepalive_cached);
+	pthread_mutex_unlock(&mqtt_client_lock);
+	if (rc == MOSQ_ERR_SUCCESS) {
+		debug(LOG_INFO, "mosquitto_connect_async initiated from reconnect request");
+	} else if (rc == MOSQ_ERR_ERRNO) {
+		debug(LOG_WARNING, "mosquitto_connect_async errno: %s", strerror(errno));
+	} else {
+		debug(LOG_WARNING, "mosquitto_connect_async failed: %s", mosquitto_strerror(rc));
 	}
 }
+
+
 
