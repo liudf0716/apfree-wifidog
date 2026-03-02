@@ -49,6 +49,8 @@
 #include "debug.h"
 #include "firewall.h"
 #include "version.h"
+#include "mqtt_thread.h"
+#include "ws_thread.h"
 
 #define LOCK_GHBN() do { \
 	debug(LOG_DEBUG, "Locking wd_gethostbyname()"); \
@@ -336,6 +338,7 @@ get_status_text()
 		evbuffer_add_printf(evb, "  Port: %d\n", ws_server->port);
 		evbuffer_add_printf(evb, "  Path: %s\n", ws_server->path ? ws_server->path : "N/A");
 		evbuffer_add_printf(evb, "  SSL: %s\n", ws_server->use_ssl ? "Yes" : "No");
+		evbuffer_add_printf(evb, "  Connected: %s\n", ws_is_connected() ? "yes" : "no");
 	}
 	
 	t_mqtt_server *mqtt_server = get_mqtt_server();
@@ -344,6 +347,7 @@ get_status_text()
 		evbuffer_add_printf(evb, "  Host: %s\n", mqtt_server->hostname ? mqtt_server->hostname : "N/A");
 		evbuffer_add_printf(evb, "  Port: %d\n", mqtt_server->port);
 		evbuffer_add_printf(evb, "  Username: %s\n", mqtt_server->username ? mqtt_server->username : "N/A");
+		evbuffer_add_printf(evb, "  Connected: %s\n", mqtt_is_connected() ? "yes" : "no");
 	}
 	
 	UNLOCK_CONFIG();
@@ -543,6 +547,8 @@ get_wifidogx_json()
 	json_object_object_add(jstatus, "uptime", json_object_new_int64(uptime));
 	json_object_object_add(jstatus, "is_internet_connected", json_object_new_int(is_online()));
 	json_object_object_add(jstatus, "is_auth_server_connected", json_object_new_int(is_auth_online()));
+	json_object_object_add(jstatus, "is_mqtt_connected", json_object_new_int(mqtt_is_connected()));
+	json_object_object_add(jstatus, "is_websocket_connected", json_object_new_int(ws_is_connected()));
 	json_object_object_add(jstatus, "wifidogx_version", json_object_new_string(VERSION));
 	json_object_object_add(jstatus, "auth_server_mode", json_object_new_int(config_get_config()->auth_server_mode));
 

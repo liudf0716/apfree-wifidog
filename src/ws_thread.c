@@ -237,6 +237,14 @@ generate_sec_websocket_accept(const char *key, char *accept, size_t length)
 	debug(LOG_DEBUG, "Generated WebSocket accept token: %s", accept);
 }
 
+/*
+ * Exposed accessor for other modules to check if websocket is upgraded/connected
+ */
+int ws_is_connected(void)
+{
+	return ws_state.upgraded ? 1 : 0;
+}
+
 /**
  * Start or restart the WebSocket heartbeat timer
  *
