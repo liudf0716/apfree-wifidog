@@ -22,6 +22,7 @@
 #include <libnftnl/expr.h>
 #include <libnftnl/object.h>
 #include <bpf/bpf.h>
+#include <bpf/libbpf.h>
 
 #include "debug.h"
 #include "util.h"
@@ -56,6 +57,65 @@ static int fw_quiet = 0;
 static int nft_fw_counters_update_ebpf(void);
 static int nft_fw_counters_update_nftables(void);
 static void nft_statistical_helper(const char *tab, const char *chain, char **output, uint32_t *output_len);
+
+static int get_possible_cpus_cached(void)
+{
+    static int cached = -1;
+    if (cached > 0)
+        return cached;
+
+    cached = libbpf_num_possible_cpus();
+    if (cached <= 0)
+        cached = 0;
+    return cached;
+}
+
+static __u32 sum_u32_sat(__u32 a, __u32 b)
+{
+    __u64 sum = (__u64)a + (__u64)b;
+    return sum > UINT32_MAX ? UINT32_MAX : (__u32)sum;
+}
+
+static int lookup_agg_stats_percpu(int map_fd, const void *key, struct traffic_stats *agg)
+{
+    int ncpus = get_possible_cpus_cached();
+    if (ncpus <= 0 || !agg)
+        return -1;
+
+    struct traffic_stats *percpu_vals = calloc(ncpus, sizeof(*percpu_vals));
+    if (!percpu_vals)
+        return -1;
+
+    if (bpf_map_lookup_elem(map_fd, key, percpu_vals) < 0) {
+        free(percpu_vals);
+        return -1;
+    }
+
+    memset(agg, 0, sizeof(*agg));
+    for (int i = 0; i < ncpus; i++) {
+        agg->incoming.cur_s_bytes = sum_u32_sat(agg->incoming.cur_s_bytes, percpu_vals[i].incoming.cur_s_bytes);
+        agg->incoming.prev_s_bytes = sum_u32_sat(agg->incoming.prev_s_bytes, percpu_vals[i].incoming.prev_s_bytes);
+        agg->incoming.total_bytes += percpu_vals[i].incoming.total_bytes;
+        agg->incoming.total_packets += percpu_vals[i].incoming.total_packets;
+        if (percpu_vals[i].incoming.est_slot > agg->incoming.est_slot)
+            agg->incoming.est_slot = percpu_vals[i].incoming.est_slot;
+
+        agg->outgoing.cur_s_bytes = sum_u32_sat(agg->outgoing.cur_s_bytes, percpu_vals[i].outgoing.cur_s_bytes);
+        agg->outgoing.prev_s_bytes = sum_u32_sat(agg->outgoing.prev_s_bytes, percpu_vals[i].outgoing.prev_s_bytes);
+        agg->outgoing.total_bytes += percpu_vals[i].outgoing.total_bytes;
+        agg->outgoing.total_packets += percpu_vals[i].outgoing.total_packets;
+        if (percpu_vals[i].outgoing.est_slot > agg->outgoing.est_slot)
+            agg->outgoing.est_slot = percpu_vals[i].outgoing.est_slot;
+
+        if (percpu_vals[i].incoming_rate_limit.bps > agg->incoming_rate_limit.bps)
+            agg->incoming_rate_limit.bps = percpu_vals[i].incoming_rate_limit.bps;
+        if (percpu_vals[i].outgoing_rate_limit.bps > agg->outgoing_rate_limit.bps)
+            agg->outgoing_rate_limit.bps = percpu_vals[i].outgoing_rate_limit.bps;
+    }
+
+    free(percpu_vals);
+    return 0;
+}
 
 const char *nft_wifidogx_init_script[] = {
     "add table inet wifidogx",
@@ -1186,7 +1246,7 @@ nft_fw_counters_update_ebpf()
     struct traffic_stats ipv4_stats;
     
     while (bpf_map_get_next_key(ipv4_map_fd, ipv4_key ? &ipv4_key : NULL, &next_ipv4_key) == 0) {
-        if (bpf_map_lookup_elem(ipv4_map_fd, &next_ipv4_key, &ipv4_stats) == 0) {
+        if (lookup_agg_stats_percpu(ipv4_map_fd, &next_ipv4_key, &ipv4_stats) == 0) {
             // Convert IPv4 address to string
             char ip_str[INET_ADDRSTRLEN];
             if (inet_ntop(AF_INET, &next_ipv4_key, ip_str, sizeof(ip_str))) {
@@ -1237,7 +1297,7 @@ nft_fw_counters_update_ebpf()
         while (bpf_map_get_next_key(ipv6_map_fd, first_key ? NULL : &ipv6_key, &next_ipv6_key) == 0) {
             first_key = 0;
             
-            if (bpf_map_lookup_elem(ipv6_map_fd, &next_ipv6_key, &ipv6_stats) == 0) {
+            if (lookup_agg_stats_percpu(ipv6_map_fd, &next_ipv6_key, &ipv6_stats) == 0) {
                 // Convert IPv6 address to string
                 char ip_str[INET6_ADDRSTRLEN];
                 if (inet_ntop(AF_INET6, &next_ipv6_key, ip_str, sizeof(ip_str))) {

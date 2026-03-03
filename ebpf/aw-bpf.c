@@ -44,7 +44,7 @@ extern int bpf_xdpi_skb_match(struct __sk_buff *skb, int dir) __ksym;
 
 // Map for IPv4 addresses
 struct {
-    __uint(type, BPF_MAP_TYPE_HASH);
+    __uint(type, BPF_MAP_TYPE_PERCPU_HASH);
     __uint(pinning, 1);
     __type(key, __be32);
     __type(value, struct traffic_stats);
@@ -53,7 +53,7 @@ struct {
 
 // Map for IPv6 addresses
 struct {
-    __uint(type, BPF_MAP_TYPE_HASH);
+    __uint(type, BPF_MAP_TYPE_PERCPU_HASH);
     __uint(pinning, 1);
     __type(key, struct in6_addr);
     __type(value, struct traffic_stats);
@@ -62,7 +62,7 @@ struct {
 
 // Map for mac addresses
 struct {
-    __uint(type, BPF_MAP_TYPE_HASH);
+    __uint(type, BPF_MAP_TYPE_PERCPU_HASH);
     __uint(pinning, 1);
     __type(key, struct mac_addr);
     __type(value, struct traffic_stats);
@@ -91,7 +91,7 @@ struct {
 
 // Map for xdpi protocol stats
 struct {
-    __uint(type, BPF_MAP_TYPE_HASH);
+    __uint(type, BPF_MAP_TYPE_PERCPU_HASH);
     __uint(pinning, 1);
     __type(key, __u32);
     __type(value, struct traffic_stats);
@@ -143,24 +143,27 @@ static __always_inline void update_stats(struct counters *cnt, __u32 len, __u32 
 
 #ifdef __KERNEL__
 static __always_inline __u32 calc_rate_estimator(struct counters *cnt, __u32 now, __u32 est_slot) {
-	__u32 rate = 0;
-	__u32 cur_bytes = 0;
-	__u32 delta = RATE_ESTIMATOR - (now % RATE_ESTIMATOR);
-	__u32 ratio = RATE_ESTIMATOR * SMOOTH_VALUE / delta;
+	__u64 prev_bytes = 0;
+	__u64 cur_bytes = 0;
+	__u32 elapsed = now % RATE_ESTIMATOR;
+	__u32 remain = RATE_ESTIMATOR - elapsed;
+	__u64 weighted_bytes;
 
     if (cnt->est_slot == est_slot) {
-        rate = cnt->prev_s_bytes;
+        prev_bytes = cnt->prev_s_bytes;
         cur_bytes = cnt->cur_s_bytes;
     } else if (cnt->est_slot == est_slot - 1) {
-        rate = cnt->cur_s_bytes;
+        prev_bytes = cnt->cur_s_bytes;
+        cur_bytes = 0;
+        elapsed = 0;
+        remain = RATE_ESTIMATOR;
     } else {
         return 0;
     }
 
-    rate = (rate * SMOOTH_VALUE) / ratio;
-    rate += cur_bytes;
+    weighted_bytes = prev_bytes * remain + cur_bytes * elapsed;
 
-	return rate * 8 / RATE_ESTIMATOR;
+	return (__u32)((weighted_bytes * 8) / (RATE_ESTIMATOR * RATE_ESTIMATOR));
 }
 #endif
 

@@ -36,6 +36,104 @@ static void print_stats_l7(void);
 
 static struct xdpi_l7_proto xdpi_l7_protos[XDPI_PROTO_TRAITS_MAX_SIZE];
 static int xdpi_l7_protos_count = 0;
+static int possible_cpus = -1;
+
+static int get_possible_cpus_cached(void)
+{
+    if (possible_cpus > 0)
+        return possible_cpus;
+
+    possible_cpus = libbpf_num_possible_cpus();
+    if (possible_cpus <= 0)
+        possible_cpus = 0;
+    return possible_cpus;
+}
+
+static __u32 sum_u32_sat(__u32 a, __u32 b)
+{
+    __u64 sum = (__u64)a + (__u64)b;
+    return sum > UINT32_MAX ? UINT32_MAX : (__u32)sum;
+}
+
+static bool lookup_stats_agg_percpu(int map_fd, const void *key, struct traffic_stats *agg)
+{
+    int ncpus = get_possible_cpus_cached();
+    if (ncpus <= 0 || !agg)
+        return false;
+
+    struct traffic_stats *percpu_vals = calloc(ncpus, sizeof(*percpu_vals));
+    if (!percpu_vals)
+        return false;
+
+    if (bpf_map_lookup_elem(map_fd, key, percpu_vals) < 0) {
+        free(percpu_vals);
+        return false;
+    }
+
+    memset(agg, 0, sizeof(*agg));
+    for (int i = 0; i < ncpus; i++) {
+        agg->incoming.cur_s_bytes = sum_u32_sat(agg->incoming.cur_s_bytes, percpu_vals[i].incoming.cur_s_bytes);
+        agg->incoming.prev_s_bytes = sum_u32_sat(agg->incoming.prev_s_bytes, percpu_vals[i].incoming.prev_s_bytes);
+        agg->incoming.total_bytes += percpu_vals[i].incoming.total_bytes;
+        agg->incoming.total_packets += percpu_vals[i].incoming.total_packets;
+        if (percpu_vals[i].incoming.est_slot > agg->incoming.est_slot)
+            agg->incoming.est_slot = percpu_vals[i].incoming.est_slot;
+
+        agg->outgoing.cur_s_bytes = sum_u32_sat(agg->outgoing.cur_s_bytes, percpu_vals[i].outgoing.cur_s_bytes);
+        agg->outgoing.prev_s_bytes = sum_u32_sat(agg->outgoing.prev_s_bytes, percpu_vals[i].outgoing.prev_s_bytes);
+        agg->outgoing.total_bytes += percpu_vals[i].outgoing.total_bytes;
+        agg->outgoing.total_packets += percpu_vals[i].outgoing.total_packets;
+        if (percpu_vals[i].outgoing.est_slot > agg->outgoing.est_slot)
+            agg->outgoing.est_slot = percpu_vals[i].outgoing.est_slot;
+
+        if (percpu_vals[i].incoming_rate_limit.bps > agg->incoming_rate_limit.bps)
+            agg->incoming_rate_limit.bps = percpu_vals[i].incoming_rate_limit.bps;
+        if (percpu_vals[i].outgoing_rate_limit.bps > agg->outgoing_rate_limit.bps)
+            agg->outgoing_rate_limit.bps = percpu_vals[i].outgoing_rate_limit.bps;
+        if (percpu_vals[i].incoming_rate_limit.t_last > agg->incoming_rate_limit.t_last)
+            agg->incoming_rate_limit.t_last = percpu_vals[i].incoming_rate_limit.t_last;
+        if (percpu_vals[i].outgoing_rate_limit.t_last > agg->outgoing_rate_limit.t_last)
+            agg->outgoing_rate_limit.t_last = percpu_vals[i].outgoing_rate_limit.t_last;
+        if (percpu_vals[i].incoming_rate_limit.tokens > agg->incoming_rate_limit.tokens)
+            agg->incoming_rate_limit.tokens = percpu_vals[i].incoming_rate_limit.tokens;
+        if (percpu_vals[i].outgoing_rate_limit.tokens > agg->outgoing_rate_limit.tokens)
+            agg->outgoing_rate_limit.tokens = percpu_vals[i].outgoing_rate_limit.tokens;
+    }
+
+    free(percpu_vals);
+    return true;
+}
+
+static bool update_rate_limits_percpu(int map_fd, const void *key, uint32_t downrate, uint32_t uprate, bool create_if_missing)
+{
+    int ncpus = get_possible_cpus_cached();
+    if (ncpus <= 0)
+        return false;
+
+    struct traffic_stats *percpu_vals = calloc(ncpus, sizeof(*percpu_vals));
+    if (!percpu_vals)
+        return false;
+
+    bool exists = (bpf_map_lookup_elem(map_fd, key, percpu_vals) == 0);
+    if (!exists && !create_if_missing) {
+        free(percpu_vals);
+        return false;
+    }
+
+    if (!exists)
+        memset(percpu_vals, 0, ncpus * sizeof(*percpu_vals));
+
+    for (int i = 0; i < ncpus; i++) {
+        percpu_vals[i].incoming_rate_limit.bps = downrate;
+        percpu_vals[i].outgoing_rate_limit.bps = uprate;
+    }
+
+    int update_flag = exists ? BPF_EXIST : BPF_NOEXIST;
+    int rc = bpf_map_update_elem(map_fd, key, percpu_vals, update_flag);
+
+    free(percpu_vals);
+    return rc == 0;
+}
 
 // L7协议加载逻辑 - 基于头文件中定义的协议
 static void load_xdpi_l7_protos(void)
@@ -438,9 +536,7 @@ static void get_aw_global_qos_config(uint32_t *downrate, uint32_t *uprate)
 }
 
 static bool handle_add_command(int map_fd, const char *map_type, const char *addr_str) {
-    struct traffic_stats stats = {0};
     void *key = NULL;
-    int key_size = 0;
     
     if (strcmp(map_type, "ipv4") == 0) {
         __be32 ipv4_key = 0;
@@ -449,7 +545,6 @@ static bool handle_add_command(int map_fd, const char *map_type, const char *add
             return false;
         }
         key = &ipv4_key;
-        key_size = sizeof(ipv4_key);
     } else if (strcmp(map_type, "mac") == 0) {
         if (!is_valid_mac_addr(addr_str)) {
             fprintf(stderr, "Invalid MAC address format\n");
@@ -458,7 +553,6 @@ static bool handle_add_command(int map_fd, const char *map_type, const char *add
         struct mac_addr mac_key = {0};
         parse_mac_address(&mac_key, addr_str);
         key = &mac_key;
-        key_size = sizeof(mac_key);
     } else if (strcmp(map_type, "ipv6") == 0) {
         struct in6_addr ipv6_key = {0};
         if (inet_pton(AF_INET6, addr_str, &ipv6_key) != 1) {
@@ -466,14 +560,13 @@ static bool handle_add_command(int map_fd, const char *map_type, const char *add
             return false;
         }
         key = &ipv6_key;
-        key_size = sizeof(ipv6_key);
     } else {
         fprintf(stderr, "Invalid address type\n");
         return false;
     }
 
     struct traffic_stats tmp;
-    if (bpf_map_lookup_elem(map_fd, key, &tmp) == 0) {
+    if (lookup_stats_agg_percpu(map_fd, key, &tmp)) {
         printf("%s key %s already exists in map.\n", map_type, addr_str);
         return true;
     }
@@ -481,10 +574,7 @@ static bool handle_add_command(int map_fd, const char *map_type, const char *add
     // Get global QoS configuration
     uint32_t downrate, uprate;
     get_aw_global_qos_config(&downrate, &uprate);
-    stats.incoming_rate_limit.bps = downrate;
-    stats.outgoing_rate_limit.bps = uprate;
-
-    if (bpf_map_update_elem(map_fd, key, &stats, BPF_NOEXIST) < 0) {
+    if (!update_rate_limits_percpu(map_fd, key, downrate, uprate, true)) {
         perror("bpf_map_update_elem");
         return false;
     }
@@ -501,7 +591,7 @@ static bool handle_list_command(int map_fd, const char *map_type) {
         struct traffic_stats stats = {0};
         
         while ((ret = bpf_map_get_next_key(map_fd, cur_key ? &cur_key : NULL, &next_key)) == 0) {
-            if (bpf_map_lookup_elem(map_fd, &next_key, &stats) < 0) {
+            if (!lookup_stats_agg_percpu(map_fd, &next_key, &stats)) {
                 perror("bpf_map_lookup_elem (IPv4)");
             } else {
                 print_stats_ipv4(next_key, &stats);
@@ -520,7 +610,7 @@ static bool handle_list_command(int map_fd, const char *map_type) {
         while ((ret = bpf_map_get_next_key(map_fd, 
                (memcmp(&cur_key, &(struct mac_addr){0}, sizeof(cur_key)) ? &cur_key : NULL),
                &next_key)) == 0) {
-            if (bpf_map_lookup_elem(map_fd, &next_key, &stats) < 0) {
+            if (!lookup_stats_agg_percpu(map_fd, &next_key, &stats)) {
                 perror("bpf_map_lookup_elem (MAC)");
             } else {
                 print_stats_mac(next_key, &stats);
@@ -539,7 +629,7 @@ static bool handle_list_command(int map_fd, const char *map_type) {
         while ((ret = bpf_map_get_next_key(map_fd, 
                (memcmp(&cur_key, &(struct in6_addr){0}, sizeof(cur_key)) ? &cur_key : NULL),
                &next_key)) == 0) {
-            if (bpf_map_lookup_elem(map_fd, &next_key, &stats) < 0) {
+            if (!lookup_stats_agg_percpu(map_fd, &next_key, &stats)) {
                 perror("bpf_map_lookup_elem (IPv6)");
             } else {
                 print_stats_ipv6(next_key, &stats);
@@ -556,7 +646,7 @@ static bool handle_list_command(int map_fd, const char *map_type) {
         struct traffic_stats stats = {0};
         
         while ((ret = bpf_map_get_next_key(map_fd, cur_key ? &cur_key : NULL, &next_key)) == 0) {
-            if (bpf_map_lookup_elem(map_fd, &next_key, &stats) < 0) {
+            if (!lookup_stats_agg_percpu(map_fd, &next_key, &stats)) {
                 perror("bpf_map_lookup_elem (SID)");
             } else {
                 print_stats_sid(next_key, &stats);
@@ -585,7 +675,7 @@ static bool handle_json_command(int map_fd, const char *map_type) {
         struct traffic_stats stats = {0};
         
         while (bpf_map_get_next_key(map_fd, cur_key ? &cur_key : NULL, &next_key) == 0) {
-            if (bpf_map_lookup_elem(map_fd, &next_key, &stats) == 0) {
+            if (lookup_stats_agg_percpu(map_fd, &next_key, &stats)) {
                 struct json_object *jentry = parse_stats_ipv4_json(next_key, &stats);
                 if (jentry) {
                     json_object_array_add(jdata, jentry);
@@ -600,7 +690,7 @@ static bool handle_json_command(int map_fd, const char *map_type) {
         while (bpf_map_get_next_key(map_fd, 
                (memcmp(&cur_key, &(struct mac_addr){0}, sizeof(cur_key)) ? &cur_key : NULL),
                &next_key) == 0) {
-            if (bpf_map_lookup_elem(map_fd, &next_key, &stats) == 0) {
+            if (lookup_stats_agg_percpu(map_fd, &next_key, &stats)) {
                 struct json_object *jentry = parse_stats_mac_json(next_key, &stats);
                 if (jentry) {
                     json_object_array_add(jdata, jentry);
@@ -615,7 +705,7 @@ static bool handle_json_command(int map_fd, const char *map_type) {
         struct traffic_stats stats = {0};
 
         while (bpf_map_get_next_key(map_fd, cur_key ? &cur_key : NULL, &next_key) == 0) {
-            if (bpf_map_lookup_elem(map_fd, &next_key, &stats) == 0) {
+            if (lookup_stats_agg_percpu(map_fd, &next_key, &stats)) {
                 struct json_object *jentry = parse_stats_sid_json(next_key, &stats);
                 if (jentry) {
                     json_object_array_add(jdata, jentry);
@@ -630,7 +720,7 @@ static bool handle_json_command(int map_fd, const char *map_type) {
         while (bpf_map_get_next_key(map_fd, 
                (memcmp(&cur_key, &(struct in6_addr){0}, sizeof(cur_key)) ? &cur_key : NULL),
                &next_key) == 0) {
-            if (bpf_map_lookup_elem(map_fd, &next_key, &stats) == 0) {
+            if (lookup_stats_agg_percpu(map_fd, &next_key, &stats)) {
                 struct json_object *jentry = parse_stats_ipv6_json(next_key, &stats);
                 if (jentry) {
                     json_object_array_add(jdata, jentry);
@@ -730,15 +820,9 @@ static bool handle_update_command(int map_fd, const char *map_type, const char *
 
     // Look up existing stats
     struct traffic_stats stats = {0};
-    bool exists = (bpf_map_lookup_elem(map_fd, key, &stats) == 0);
-    
-    // Update rate limits
-    stats.incoming_rate_limit.bps = downrate;
-    stats.outgoing_rate_limit.bps = uprate;
-    
-    // Update or add the entry
-    int update_flag = exists ? BPF_EXIST : BPF_NOEXIST;
-    if (bpf_map_update_elem(map_fd, key, &stats, update_flag) < 0) {
+    bool exists = lookup_stats_agg_percpu(map_fd, key, &stats);
+
+    if (!update_rate_limits_percpu(map_fd, key, downrate, uprate, true)) {
         perror("bpf_map_update_elem");
         return false;
     }
@@ -749,58 +833,37 @@ static bool handle_update_command(int map_fd, const char *map_type, const char *
 
 static bool handle_update_all_command(int map_fd, const char *map_type, 
                                     uint32_t downrate, uint32_t uprate) {
-    // Prepare stats structure with updated rate limits
-    struct traffic_stats stats = {0};
-    stats.incoming_rate_limit.bps = downrate;
-    stats.outgoing_rate_limit.bps = uprate;
-    
     if (strcmp(map_type, "ipv4") == 0) {
         __be32 cur_key = 0, next_key = 0;
-        struct traffic_stats existing;
         
         while (bpf_map_get_next_key(map_fd, cur_key ? &cur_key : NULL, &next_key) == 0) {
-            // Keep existing traffic stats, just update rate limits
-            if (bpf_map_lookup_elem(map_fd, &next_key, &existing) == 0) {
-                existing.incoming_rate_limit.bps = downrate;
-                existing.outgoing_rate_limit.bps = uprate;
-                if (bpf_map_update_elem(map_fd, &next_key, &existing, BPF_EXIST) < 0) {
-                    perror("bpf_map_update_elem (IPv4)");
-                    return false;
-                }
+            if (!update_rate_limits_percpu(map_fd, &next_key, downrate, uprate, false)) {
+                perror("bpf_map_update_elem (IPv4)");
+                return false;
             }
             cur_key = next_key;
         }
     } else if (strcmp(map_type, "mac") == 0) {
         struct mac_addr cur_key = {0}, next_key = {0};
-        struct traffic_stats existing;
         
         while (bpf_map_get_next_key(map_fd, 
                (memcmp(&cur_key, &(struct mac_addr){0}, sizeof(cur_key)) ? &cur_key : NULL),
                &next_key) == 0) {
-            if (bpf_map_lookup_elem(map_fd, &next_key, &existing) == 0) {
-                existing.incoming_rate_limit.bps = downrate;
-                existing.outgoing_rate_limit.bps = uprate;
-                if (bpf_map_update_elem(map_fd, &next_key, &existing, BPF_EXIST) < 0) {
-                    perror("bpf_map_update_elem (MAC)");
-                    return false;
-                }
+            if (!update_rate_limits_percpu(map_fd, &next_key, downrate, uprate, false)) {
+                perror("bpf_map_update_elem (MAC)");
+                return false;
             }
             cur_key = next_key;
         }
     } else { // ipv6
         struct in6_addr cur_key = {0}, next_key = {0};
-        struct traffic_stats existing;
         
         while (bpf_map_get_next_key(map_fd, 
                (memcmp(&cur_key, &(struct in6_addr){0}, sizeof(cur_key)) ? &cur_key : NULL),
                &next_key) == 0) {
-            if (bpf_map_lookup_elem(map_fd, &next_key, &existing) == 0) {
-                existing.incoming_rate_limit.bps = downrate;
-                existing.outgoing_rate_limit.bps = uprate;
-                if (bpf_map_update_elem(map_fd, &next_key, &existing, BPF_EXIST) < 0) {
-                    perror("bpf_map_update_elem (IPv6)");
-                    return false;
-                }
+            if (!update_rate_limits_percpu(map_fd, &next_key, downrate, uprate, false)) {
+                perror("bpf_map_update_elem (IPv6)");
+                return false;
             }
             cur_key = next_key;
         }
