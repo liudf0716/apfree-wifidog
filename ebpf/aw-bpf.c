@@ -133,7 +133,7 @@ static __always_inline void update_stats(struct counters *cnt, __u32 len, __u32 
     } else {
         __u32 new_prev = (old_slot == est_slot - 1) ? cnt->cur_s_bytes : 0;
         cnt->prev_s_bytes = new_prev;
-        cnt->cur_s_bytes = 0;
+        cnt->cur_s_bytes = len;
         cnt->est_slot = est_slot;
     }
 
@@ -341,14 +341,14 @@ static __always_inline int handle_tcp_packet(struct __sk_buff *skb, direction_t 
                 return 1;
             }
         }
-        if (proto_stats) update_stats(&proto_stats->outgoing, skb->len, est_slot);
+        if (proto_stats) update_stats(&proto_stats->outgoing, skb->wire_len, est_slot);
     } else {
         if (proto_stats && proto_stats->incoming_rate_limit.bps) {
             if (edt_sched_departure(skb, &proto_stats->incoming_rate_limit)) {
                 return 1;
             }
         }
-        if (proto_stats) update_stats(&proto_stats->incoming, skb->len, est_slot);
+        if (proto_stats) update_stats(&proto_stats->incoming, skb->wire_len, est_slot);
     }
     
     return 0;
@@ -479,9 +479,9 @@ static __always_inline int handle_udp_packet(struct __sk_buff *skb, direction_t 
     struct traffic_stats *proto_stats = bpf_map_lookup_elem(&xdpi_l7_map, &sid);
     if (proto_stats) {
         if (dir == INGRESS) {
-            update_stats(&proto_stats->incoming, skb->len, est_slot);
+            update_stats(&proto_stats->incoming, skb->wire_len, est_slot);
         } else {
-            update_stats(&proto_stats->outgoing, skb->len, est_slot);
+            update_stats(&proto_stats->outgoing, skb->wire_len, est_slot);
         }
     }
 
@@ -714,7 +714,7 @@ static inline int process_packet(struct __sk_buff *skb, direction_t dir) {
                     return 1;
                 }
             } 
-            update_stats(&s_stats->outgoing, skb->len, est_slot);    
+            update_stats(&s_stats->outgoing, skb->wire_len, est_slot);    
         }
 
         // Process destination IP (incoming traffic)
@@ -725,7 +725,7 @@ static inline int process_packet(struct __sk_buff *skb, direction_t dir) {
                     return 1;
                 }
             } 
-            update_stats(&d_stats->incoming, skb->len, est_slot);
+            update_stats(&d_stats->incoming, skb->wire_len, est_slot);
         }
     }
     // Handle IPv6
@@ -807,7 +807,7 @@ static inline int process_packet(struct __sk_buff *skb, direction_t dir) {
                     return 1;
                 }
             }
-            update_stats(&s_stats6->outgoing, skb->len, est_slot);
+            update_stats(&s_stats6->outgoing, skb->wire_len, est_slot);
         }
 
         // Process destination IPv6 (incoming traffic)
@@ -818,7 +818,7 @@ static inline int process_packet(struct __sk_buff *skb, direction_t dir) {
                     return 1;
                 }
             } 
-            update_stats(&d_stats6->incoming, skb->len, est_slot);
+            update_stats(&d_stats6->incoming, skb->wire_len, est_slot);
         }
     }
     return 0;
