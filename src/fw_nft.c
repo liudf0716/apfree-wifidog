@@ -1726,8 +1726,8 @@ nft_fw_set_mac_temporary(const char *mac, int which)
     if (which == 0) {
 		nftables_do_command("add element inet wifidogx set_wifidogx_tmp_trust_clients { %s }", mac);
 	} else if(which > 0) { // trusted
-		if (which > 60*5)
-			which = 60*5;
+		if (which > 60*10)
+			which = 60*10;
 		nftables_do_command("add element inet wifidogx set_wifidogx_tmp_trust_clients { %s timeout %ds}", mac, which);
 	} else if(which < 0) { // untrusted
 		// TODO
