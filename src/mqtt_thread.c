@@ -263,7 +263,7 @@ void thread_mqtt(void *arg)
 	pthread_mutex_unlock(&mqtt_client_lock);
    	
 	
-	int tls_rc = mosquitto_tls_set(mosq, NULL, NULL, NULL, NULL, NULL);
+	int tls_rc = mosquitto_tls_set(mosq, NULL, "/etc/ssl/certs", NULL, NULL, NULL);
 	if (tls_rc != MOSQ_ERR_SUCCESS) {
 		debug(LOG_WARNING, "mosquitto_tls_set failed: rc=%d (%s); continuing without TLS", tls_rc, mosquitto_strerror(tls_rc));
 		goto END;
