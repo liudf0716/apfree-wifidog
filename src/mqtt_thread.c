@@ -223,7 +223,6 @@ void thread_mqtt(void *arg)
 	int  port 	= config->mqtt_server->port;
 	char *username 	= config->mqtt_server->username;
 	char *password 	= config->mqtt_server->password;
-	char *cafile = config->mqtt_server->cafile;
 	int  keepalive = 60;
 	int  retval = 0;
 
@@ -263,23 +262,17 @@ void thread_mqtt(void *arg)
 	mqtt_keepalive_cached = keepalive;
 	pthread_mutex_unlock(&mqtt_client_lock);
    	
-	/* Configure TLS. Allow NULL cafile to reduce configuration burden —
-	 * mosquitto_tls_set accepts a NULL cafile (uses system defaults).
-	 * For convenience and to simplify deployments, default to insecure
-	 * mode (skip server cert verification). This makes mqtts usable
-	 * without supplying a CA file. Note: insecure mode is not
-	 * recommended for production. */
-	/* Try to configure TLS. If it fails, log details and continue without TLS.
-	 * This avoids hard-failing at startup in environments where libmosquitto
-	 * lacks TLS support or runtime TLS configuration is missing. */
-	int tls_rc = mosquitto_tls_set(mosq, cafile, NULL, NULL, NULL, NULL);
+	
+	int tls_rc = mosquitto_tls_set(mosq, NULL, NULL, NULL, NULL, NULL);
 	if (tls_rc != MOSQ_ERR_SUCCESS) {
 		debug(LOG_WARNING, "mosquitto_tls_set failed: rc=%d (%s); continuing without TLS", tls_rc, mosquitto_strerror(tls_rc));
+		goto END;
 	} else {
 		/* Default to skipping server cert verification to lower config burden. */
 		int insecure_rc = mosquitto_tls_insecure_set(mosq, true);
 		if (insecure_rc != MOSQ_ERR_SUCCESS) {
 			debug(LOG_WARNING, "mosquitto_tls_insecure_set failed: rc=%d (%s)", insecure_rc, mosquitto_strerror(insecure_rc));
+			goto END;
 		}
 	}
 
@@ -322,6 +315,7 @@ void thread_mqtt(void *arg)
 		mosquitto_loop_stop(mosq, true);
 	}
 
+END:
 	/* Ensure connected flag is cleared when loop exits */
 	mqtt_connected = 0;
 
