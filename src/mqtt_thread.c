@@ -263,25 +263,26 @@ void thread_mqtt(void *arg)
 	mqtt_keepalive_cached = keepalive;
 	pthread_mutex_unlock(&mqtt_client_lock);
    	
-   	// Only set TLS if cafile is configured
-   	if (cafile != NULL) {
-   		if (mosquitto_tls_set(mosq, cafile, NULL, NULL, NULL, NULL)) {
-   			debug(LOG_INFO, "Error : Problem setting TLS option");
-        	mosquitto_destroy(mosq);
-        	mosquitto_lib_cleanup();
-            return ;
-   		}
+	/* Configure TLS. Allow NULL cafile to reduce configuration burden —
+	 * mosquitto_tls_set accepts a NULL cafile (uses system defaults).
+	 * For convenience and to simplify deployments, default to insecure
+	 * mode (skip server cert verification). This makes mqtts usable
+	 * without supplying a CA file. Note: insecure mode is not
+	 * recommended for production. */
+	if (mosquitto_tls_set(mosq, cafile, NULL, NULL, NULL, NULL)) {
+		debug(LOG_INFO, "Error : Problem setting TLS option");
+		mosquitto_destroy(mosq);
+		mosquitto_lib_cleanup();
+		return ;
+	}
 
-   		// Attention! this setting is not secure, but can simplify our deploy
-        if (mosquitto_tls_insecure_set(mosq, true)) {
-        	debug(LOG_INFO, "Error : Problem setting TLS insecure option");
-        	mosquitto_destroy(mosq);
-        	mosquitto_lib_cleanup();
-            return ;
-        }
-   	} else {
-   		debug(LOG_DEBUG, "TLS not configured for MQTT connection");
-   	}
+	/* Default to skipping server cert verification to lower config burden. */
+	if (mosquitto_tls_insecure_set(mosq, true)) {
+		debug(LOG_INFO, "Error : Problem setting TLS insecure option");
+		mosquitto_destroy(mosq);
+		mosquitto_lib_cleanup();
+		return ;
+	}
 
 	mosquitto_connect_callback_set(mosq, mqtt_connect_callback);
 	mosquitto_disconnect_callback_set(mosq, mqtt_disconnect_callback);
