@@ -80,6 +80,12 @@ void handle_tmp_pass_request(json_object *j_tmp_pass, api_transport_context_t *t
     json_object *client_mac = json_object_object_get(j_tmp_pass, "client_mac");
     if (!client_mac) {
         debug(LOG_ERR, "Temporary pass: Missing client MAC address");
+        /* respond with error to caller */
+        json_object *j_err = json_object_new_object();
+        json_object_object_add(j_err, "type", json_object_new_string("tmp_pass_response"));
+        json_object_object_add(j_err, "status", json_object_new_string("error"));
+        json_object_object_add(j_err, "msg", json_object_new_string("Missing client_mac"));
+        send_json_response(transport, j_err);
         return;
     }
     const char *client_mac_str = json_object_get_string(client_mac);
@@ -92,6 +98,13 @@ void handle_tmp_pass_request(json_object *j_tmp_pass, api_transport_context_t *t
 
     fw_set_mac_temporary(client_mac_str, timeout_value);
     debug(LOG_DEBUG, "Set temporary access for MAC %s with timeout %u seconds", client_mac_str, timeout_value);
+    /* send success response back to caller */
+    json_object *j_resp = json_object_new_object();
+    json_object_object_add(j_resp, "type", json_object_new_string("tmp_pass_response"));
+    json_object_object_add(j_resp, "status", json_object_new_string("ok"));
+    json_object_object_add(j_resp, "mac", json_object_new_string(client_mac_str));
+    json_object_object_add(j_resp, "timeout", json_object_new_int((int)timeout_value));
+    send_json_response(transport, j_resp);
 }
 
 void handle_shell_request(json_object *j_req, api_transport_context_t *transport)
