@@ -215,6 +215,15 @@ mqtt_disconnect_callback(struct mosquitto *mosq, void *obj, int rc)
 	debug(LOG_INFO, "MQTT disconnected (rc=%d, %s)", rc, mosquitto_strerror(rc));
 }
 
+static void
+mosq_log_callback(struct mosquitto *mosq, void *obj, int level, const char *str)
+{
+	(void)mosq;
+	(void)obj;
+	(void)level;
+	debug(LOG_INFO, "mosquitto: %s", str);
+}
+
 void thread_mqtt(void *arg)
 {
 	s_config *config = arg;
@@ -262,6 +271,10 @@ void thread_mqtt(void *arg)
 	mqtt_port_cached = port;
 	mqtt_keepalive_cached = keepalive;
 	pthread_mutex_unlock(&mqtt_client_lock);
+	/* Set mosquitto library log callback for more detailed runtime diagnostics */
+	mosquitto_log_callback_set(mosq, mosq_log_callback);
+	debug(LOG_INFO, "MQTT client init: client_id=%s username=%s host=%s port=%d",
+		get_device_id(), username?username:"<null>", host?host:"<null>", port);
    	
 	
 	int tls_rc = mosquitto_tls_set(mosq, NULL, "/etc/ssl/certs", NULL, NULL, NULL);
