@@ -277,7 +277,7 @@ void thread_mqtt(void *arg)
 		get_device_id(), username?username:"<null>", host?host:"<null>", port);
    	
 	
-	int tls_rc = mosquitto_tls_set(mosq, NULL, "/etc/ssl/certs", NULL, NULL, NULL);
+	int tls_rc = mosquitto_tls_set(mosq, "/etc/ssl/certs/ca-certificates.crt", NULL, NULL, NULL, NULL);
 	if (tls_rc != MOSQ_ERR_SUCCESS) {
 		debug(LOG_WARNING, "mosquitto_tls_set failed: rc=%d (%s); continuing without TLS", tls_rc, mosquitto_strerror(tls_rc));
 		goto END;
