@@ -21,6 +21,7 @@
 #include <stdbool.h>
 #include <time.h>
 #include <errno.h>
+#include <mosquitto.h>
 
 /* Internal flag indicating whether MQTT client is connected. */
 _Atomic int mqtt_connected = 0;
@@ -211,7 +212,7 @@ mqtt_disconnect_callback(struct mosquitto *mosq, void *obj, int rc)
 	(void)obj;
 	/* clear connected flag */
 	mqtt_connected = 0;
-	debug(LOG_INFO, "MQTT disconnected (rc=%d)", rc);
+	debug(LOG_INFO, "MQTT disconnected (rc=%d, %s)", rc, mosquitto_strerror(rc));
 }
 
 void thread_mqtt(void *arg)
@@ -371,7 +372,7 @@ void mqtt_request_reconnect(void)
 	/* if no client or thread not running, nothing to do */
 	if (!mosq) {
 		pthread_mutex_unlock(&mqtt_client_lock);
-		debug(LOG_DEBUG, "MQTT reconnect requested but client is not initialized");
+		debug(LOG_DEBUG, "disreconnect requested but client is not initialized");
 		return;
 	}
 
