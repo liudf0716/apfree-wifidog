@@ -953,10 +953,13 @@ update_client_counters(t_client *client, uint64_t packets, uint64_t bytes, int i
         client->wired = br_is_device_wired(client->mac);
     }
 
+    int has_activity = 0;
+
     // Update traffic counters
     if (is_outgoing) {            // Update with new values
             if (is_ip6) {
-                uint64_t delta_bytes = bytes - client->counters6.outgoing_bytes;
+                uint64_t old_bytes = client->counters6.outgoing_bytes;
+                uint64_t delta_bytes = (bytes >= old_bytes) ? (bytes - old_bytes) : bytes;
                 client->counters6.outgoing_bytes = bytes;
                 client->counters6.outgoing_packets = packets;
                 
@@ -970,8 +973,11 @@ update_client_counters(t_client *client, uint64_t packets, uint64_t bytes, int i
                     // Calculate bytes per second
                     client->counters6.outgoing_rate = delta_bytes / time_diff;
                 }
+
+                has_activity = (delta_bytes > 0);
             } else {
-                uint64_t delta_bytes = bytes - client->counters.outgoing_bytes;
+                uint64_t old_bytes = client->counters.outgoing_bytes;
+                uint64_t delta_bytes = (bytes >= old_bytes) ? (bytes - old_bytes) : bytes;
                 client->counters.outgoing_bytes = bytes;
                 client->counters.outgoing_packets = packets;
                 
@@ -982,11 +988,14 @@ update_client_counters(t_client *client, uint64_t packets, uint64_t bytes, int i
                     // Calculate bytes per second
                     client->counters.outgoing_rate = delta_bytes / time_diff;
                 }
+
+                has_activity = (delta_bytes > 0);
             }
     } else {            // Update with new values
             if (is_ip6) {
 
-                uint64_t delta_bytes = bytes - client->counters6.incoming_bytes;
+                uint64_t old_bytes = client->counters6.incoming_bytes;
+                uint64_t delta_bytes = (bytes >= old_bytes) ? (bytes - old_bytes) : bytes;
                 client->counters6.incoming_bytes = bytes;
                 client->counters6.incoming_packets = packets;
                 
@@ -997,8 +1006,11 @@ update_client_counters(t_client *client, uint64_t packets, uint64_t bytes, int i
                     // Calculate bytes per second
                     client->counters6.incoming_rate = delta_bytes / time_diff;
                 }
+
+                has_activity = (delta_bytes > 0);
             } else {
-                uint64_t delta_bytes = bytes - client->counters.incoming_bytes;
+                uint64_t old_bytes = client->counters.incoming_bytes;
+                uint64_t delta_bytes = (bytes >= old_bytes) ? (bytes - old_bytes) : bytes;
                 client->counters.incoming_bytes = bytes;
                 client->counters.incoming_packets = packets;
                 
@@ -1009,16 +1021,21 @@ update_client_counters(t_client *client, uint64_t packets, uint64_t bytes, int i
                     // Calculate bytes per second
                     client->counters.incoming_rate = delta_bytes / time_diff;
                 }
+
+                has_activity = (delta_bytes > 0);
             }
     }
 
-    // Update timestamp and online status
-    if (is_ip6) {
-        client->counters6.last_updated = time(NULL);
-    } else {
-        client->counters.last_updated = time(NULL);
+    // Only refresh activity timestamp when byte counters truly increase.
+    // This prevents idle clients from being kept alive by periodic polling.
+    if (has_activity) {
+        if (is_ip6) {
+            client->counters6.last_updated = time(NULL);
+        } else {
+            client->counters.last_updated = time(NULL);
+        }
+        client->is_online = 1;
     }
-    client->is_online = 1;
 
     debug(LOG_INFO, "Updated counters for client: %s, IP: %s, MAC: %s, "
             "Packets: %llu, Bytes: %llu, Outgoing: %d, IP6: %d",

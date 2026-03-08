@@ -744,6 +744,17 @@ process_auth_server_login(struct evhttp_request *req, void *ctx)
     }
 }
 
+static time_t
+client_last_activity(const t_client *client)
+{
+    if (!client)
+        return 0;
+
+    return (client->counters6.last_updated > client->counters.last_updated)
+               ? client->counters6.last_updated
+               : client->counters.last_updated;
+}
+
 /**
  * @brief Process auth server's counter response for a client and manage client timeout
  * 
@@ -769,12 +780,13 @@ client_counter_request_reply(t_authresponse *authresponse,
 
     // Calculate timeout values
     time_t current_time = time(NULL);
-    time_t idle_time = current_time - client->counters.last_updated;
+    time_t last_activity = client_last_activity(client);
+    time_t idle_time = current_time - last_activity;
     time_t timeout = config->checkinterval * config->clienttimeout;
 
     debug(LOG_DEBUG,
           "Client %s timeout check: Last updated=%ld, Idle time=%ld, Timeout=%ld, Current time=%ld",
-          client->ip, client->counters.last_updated, idle_time, timeout, current_time);
+            client->ip, last_activity, idle_time, timeout, current_time);
 
     if (idle_time >= timeout) {
         // Client has timed out - remove them
@@ -913,12 +925,13 @@ client_counter_request_reply_v2(t_authresponse *authresponse,
 
     // Check client timeout
     time_t current_time = time(NULL);
-    time_t idle_time = current_time - client->counters.last_updated;
+        time_t last_activity = client_last_activity(client);
+        time_t idle_time = current_time - last_activity;
     time_t timeout = config->checkinterval * config->clienttimeout;
 
     debug(LOG_DEBUG,
       "Client %s timeout check: Last updated=%ld, Idle time=%ld, Timeout=%ld, Current time=%ld",
-      client->ip, client->counters.last_updated, idle_time, timeout, current_time);
+            client->ip, last_activity, idle_time, timeout, current_time);
 
     if (idle_time >= timeout) {
         UNLOCK_CLIENT_LIST(); 
