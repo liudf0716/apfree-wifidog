@@ -197,15 +197,19 @@ static void process_dns_header(const struct dns_hdr *dns_hdr)
     // 只在有错误时记录日志
     if (rcode != DNS_RCODE_NOERROR) {
         const char *error_msg;
+        int log_level = LOG_INFO;
         switch (rcode) {
             case DNS_RCODE_FORMERR:  error_msg = "Format Error"; break;
             case DNS_RCODE_SERVFAIL: error_msg = "Server Failure"; break;
-            case DNS_RCODE_NXDOMAIN: error_msg = "Name Error"; break;
+            case DNS_RCODE_NXDOMAIN:
+                error_msg = "Name Error";
+                log_level = LOG_DEBUG;
+                break;
             case DNS_RCODE_NOTIMP:   error_msg = "Not Implemented"; break;
             case DNS_RCODE_REFUSED:  error_msg = "Refused"; break;
             default: error_msg = "Unknown Error"; break;
         }
-        debug(LOG_INFO, "DNS Error: %s (code: %d)", error_msg, rcode);
+        debug(log_level, "DNS Error: %s (code: %d)", error_msg, rcode);
     }
 }
 
@@ -1438,4 +1442,3 @@ static int export_dns_stats_to_file(void)
     
     return 0;
 }
-
