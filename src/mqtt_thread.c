@@ -36,6 +36,8 @@ static pthread_cond_t mqtt_thread_ctrl_cond = PTHREAD_COND_INITIALIZER;
 static char *mqtt_host_cached = NULL;
 static int mqtt_port_cached = 0;
 static int mqtt_keepalive_cached = 60;
+static const int mqtt_reconnect_backstop_sec = 10;
+static bool has_default_route(void);
 
 static void
 send_mqtt_response(struct mosquitto *mosq, const unsigned int req_id, int res_id, const char *msg, const s_config *config)
@@ -269,13 +271,11 @@ void thread_mqtt(void *arg)
 	int tls_rc = mosquitto_tls_set(mosq, "/etc/ssl/certs/ca-certificates.crt", NULL, NULL, NULL, NULL);
 	if (tls_rc != MOSQ_ERR_SUCCESS) {
 		debug(LOG_WARNING, "mosquitto_tls_set failed: rc=%d (%s); continuing without TLS", tls_rc, mosquitto_strerror(tls_rc));
-		goto END;
 	} else {
 		/* Default to skipping server cert verification to lower config burden. */
 		int insecure_rc = mosquitto_tls_insecure_set(mosq, true);
 		if (insecure_rc != MOSQ_ERR_SUCCESS) {
 			debug(LOG_WARNING, "mosquitto_tls_insecure_set failed: rc=%d (%s)", insecure_rc, mosquitto_strerror(insecure_rc));
-			goto END;
 		}
 	}
 
@@ -307,10 +307,22 @@ void thread_mqtt(void *arg)
 		retval = mosquitto_loop_forever(mosq, -1, 1);
 		/* mosquitto_loop_forever only returns on error or finish */
 	} else {
-		/* Wait for stop signal (graceful exit) */
+		/* Wait for stop signal and provide a periodic reconnect backstop. */
 		pthread_mutex_lock(&mqtt_thread_ctrl_lock);
 		while (!mqtt_thread_should_stop) {
-			pthread_cond_wait(&mqtt_thread_ctrl_cond, &mqtt_thread_ctrl_lock);
+			struct timespec ts;
+			clock_gettime(CLOCK_REALTIME, &ts);
+			ts.tv_sec += mqtt_reconnect_backstop_sec;
+
+			int wait_rc = pthread_cond_timedwait(&mqtt_thread_ctrl_cond, &mqtt_thread_ctrl_lock, &ts);
+			if (mqtt_thread_should_stop) {
+				break;
+			}
+			if (wait_rc == ETIMEDOUT && !mqtt_connected && has_default_route()) {
+				pthread_mutex_unlock(&mqtt_thread_ctrl_lock);
+				mqtt_request_reconnect();
+				pthread_mutex_lock(&mqtt_thread_ctrl_lock);
+			}
 		}
 		pthread_mutex_unlock(&mqtt_thread_ctrl_lock);
 
@@ -318,7 +330,6 @@ void thread_mqtt(void *arg)
 		mosquitto_loop_stop(mosq, true);
 	}
 
-END:
 	/* Ensure connected flag is cleared when loop exits */
 	mqtt_connected = 0;
 
@@ -413,6 +424,4 @@ void mqtt_request_reconnect(void)
 		debug(LOG_WARNING, "mosquitto_connect_async failed: %s", mosquitto_strerror(rc));
 	}
 }
-
-
 
