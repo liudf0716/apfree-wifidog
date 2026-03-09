@@ -371,7 +371,10 @@ get_status_text()
 		evbuffer_add_printf(evb, "  MAC: %s\n", current->mac?current->mac:"N/A");
 		evbuffer_add_printf(evb, "  Token: %s\n", current->token?current->token:"N/A");
 		evbuffer_add_printf(evb, "  First Login: %lld\n", (long long)current->first_login);
+		long long last_activity = (long long)((current->counters6.last_updated > current->counters.last_updated)
+			? current->counters6.last_updated : current->counters.last_updated);
 		evbuffer_add_printf(evb, "  Online Time: %lld\n", (long long)(time(NULL) - current->first_login));
+		evbuffer_add_printf(evb, "  Last Activity: %lld\n", last_activity);
 		evbuffer_add_printf(evb, "  Name: %s\n", current->name?current->name:"N/A");
 		evbuffer_add_printf(evb, "  Wired: %d\n", current->wired);
 		evbuffer_add_printf(evb, "  Download Bytes: %lld\n", (long long)current->counters.incoming_bytes);
@@ -460,6 +463,9 @@ get_client_status_json()
 		json_object_object_add(jclient, "first_login", json_object_new_int64(current->first_login));
 		json_object_object_add(jclient, "online_time", 
 			json_object_new_int64(time(NULL) - current->first_login));
+		long long jlast_activity = (long long)((current->counters6.last_updated > current->counters.last_updated)
+			? current->counters6.last_updated : current->counters.last_updated);
+		json_object_object_add(jclient, "last_activity", json_object_new_int64(jlast_activity));
 		struct json_object *jtraffic = json_object_new_object();
 		json_object_object_add(jtraffic, "download_bytes", 
 			json_object_new_int64(current->counters.incoming_bytes));
