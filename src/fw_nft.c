@@ -1270,17 +1270,26 @@ nft_fw_counters_update_ebpf()
                 // Find client by IP
                 t_client *client = client_list_find_by_ip(ip_str);
                 if (client) {
-                    // Update client counters
+                    // Update client counters. Only refresh last_updated when actual
+                    // byte counters increase to avoid keeping idle clients alive
+                    // due to periodic polling.
+                    uint64_t old_in_bytes = client->counters.incoming_bytes;
+                    uint64_t old_out_bytes = client->counters.outgoing_bytes;
+
                     client->counters.incoming_bytes = ipv4_stats.incoming.total_bytes;
                     client->counters.incoming_packets = ipv4_stats.incoming.total_packets;
                     client->counters.incoming_rate = calc_rate_estimator(&ipv4_stats, true);
-                    
+
                     client->counters.outgoing_bytes = ipv4_stats.outgoing.total_bytes;
                     client->counters.outgoing_packets = ipv4_stats.outgoing.total_packets;
                     client->counters.outgoing_rate = calc_rate_estimator(&ipv4_stats, false);
-                    
-                    client->counters.last_updated = time(NULL);
-                    client->is_online = 1;
+
+                    int has_activity = (ipv4_stats.incoming.total_bytes > old_in_bytes) ||
+                                       (ipv4_stats.outgoing.total_bytes > old_out_bytes);
+                    if (has_activity) {
+                        client->counters.last_updated = time(NULL);
+                        client->is_online = 1;
+                    }
                     
                     // Initialize name if not set
                     if (!client->name) {
@@ -1321,17 +1330,25 @@ nft_fw_counters_update_ebpf()
                     // Find client by IPv6
                     t_client *client = client_list_find_by_ip(ip_str);
                     if (client) {
-                        // Update client counters for IPv6
+                        // Update client counters for IPv6. Only refresh last_updated when
+                        // byte counters increase to match nftables semantics.
+                        uint64_t old_in6_bytes = client->counters6.incoming_bytes;
+                        uint64_t old_out6_bytes = client->counters6.outgoing_bytes;
+
                         client->counters6.incoming_bytes = ipv6_stats.incoming.total_bytes;
                         client->counters6.incoming_packets = ipv6_stats.incoming.total_packets;
                         client->counters6.incoming_rate = calc_rate_estimator(&ipv6_stats, true);
-                        
+
                         client->counters6.outgoing_bytes = ipv6_stats.outgoing.total_bytes;
                         client->counters6.outgoing_packets = ipv6_stats.outgoing.total_packets;
                         client->counters6.outgoing_rate = calc_rate_estimator(&ipv6_stats, false);
-                        
-                        client->counters6.last_updated = time(NULL);
-                        client->is_online = 1;
+
+                        int has_activity6 = (ipv6_stats.incoming.total_bytes > old_in6_bytes) ||
+                                           (ipv6_stats.outgoing.total_bytes > old_out6_bytes);
+                        if (has_activity6) {
+                            client->counters6.last_updated = time(NULL);
+                            client->is_online = 1;
+                        }
                         
                         // Initialize name if not set
                         if (!client->name) {
