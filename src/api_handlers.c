@@ -23,6 +23,44 @@ typedef struct {
     unsigned int req_id;
 } mqtt_context_t;
 
+static bool transport_should_echo_req_id(const api_transport_context_t *transport)
+{
+    return transport && transport->req_id &&
+           transport->protocol_name &&
+           strcmp(transport->protocol_name, "websocket") == 0;
+}
+
+static void maybe_attach_req_id(api_transport_context_t *transport, json_object *j_response)
+{
+    if (!transport_should_echo_req_id(transport) || !j_response ||
+        !json_object_is_type(j_response, json_type_object)) {
+        return;
+    }
+
+    json_object *existing = NULL;
+    if (json_object_object_get_ex(j_response, "req_id", &existing)) {
+        return;
+    }
+
+    json_object_object_add(j_response, "req_id", json_object_get(transport->req_id));
+}
+
+void api_transport_set_req_id(api_transport_context_t *transport, json_object *req_id)
+{
+    if (!transport) {
+        return;
+    }
+
+    if (transport->req_id) {
+        json_object_put(transport->req_id);
+        transport->req_id = NULL;
+    }
+
+    if (req_id) {
+        transport->req_id = json_object_get(req_id);
+    }
+}
+
 /**
  * @brief Dispatch API request to appropriate handler
  */
@@ -144,6 +182,7 @@ api_transport_context_t* create_mqtt_transport_context(void *mosq, unsigned int 
     transport->transport_ctx = mqtt_ctx;
     transport->send_response = mqtt_send_response;
     transport->protocol_name = "mqtt";
+    transport->req_id = NULL;
     
     return transport;
 }
@@ -154,7 +193,7 @@ api_transport_context_t* create_mqtt_transport_context(void *mosq, unsigned int 
  * @param bev The bufferevent for WebSocket connection
  * @return Allocated transport context, or NULL on error
  */
-api_transport_context_t* create_websocket_transport_context(struct bufferevent *bev) {
+api_transport_context_t* create_websocket_transport_context(struct bufferevent *bev, json_object *req_id) {
     if (!bev) {
         return NULL;
     }
@@ -167,6 +206,8 @@ api_transport_context_t* create_websocket_transport_context(struct bufferevent *
     transport->transport_ctx = bev;
     transport->send_response = websocket_send_response;
     transport->protocol_name = "websocket";
+    transport->req_id = NULL;
+    api_transport_set_req_id(transport, req_id);
     
     return transport;
 }
@@ -178,6 +219,10 @@ api_transport_context_t* create_websocket_transport_context(struct bufferevent *
  */
 void destroy_transport_context(api_transport_context_t *transport) {
     if (transport) {
+        if (transport->req_id) {
+            json_object_put(transport->req_id);
+            transport->req_id = NULL;
+        }
         // For MQTT, we need to free the mqtt_context_t structure
         if (transport->protocol_name && strcmp(transport->protocol_name, "mqtt") == 0) {
             free(transport->transport_ctx);
@@ -203,7 +248,21 @@ int send_response(api_transport_context_t *transport, const char *message) {
     debug(LOG_DEBUG, "Sending response via %s: %.100s%s", 
           transport->protocol_name ? transport->protocol_name : "unknown",
           message, strlen(message) > 100 ? "..." : "");
-    
+
+    if (transport_should_echo_req_id(transport)) {
+        json_object *j_response = json_tokener_parse(message);
+        if (j_response && json_object_is_type(j_response, json_type_object)) {
+            maybe_attach_req_id(transport, j_response);
+            const char *annotated = json_object_to_json_string(j_response);
+            int rc = transport->send_response(transport->transport_ctx, annotated, strlen(annotated));
+            json_object_put(j_response);
+            return rc;
+        }
+        if (j_response) {
+            json_object_put(j_response);
+        }
+    }
+
     return transport->send_response(transport->transport_ctx, message, strlen(message));
 }
 
@@ -253,6 +312,7 @@ static void add_auto_field_descriptions(json_object *j_response)
 void send_json_response(api_transport_context_t *transport, json_object *j_response)
 {
     if (!j_response) return;
+    maybe_attach_req_id(transport, j_response);
     add_auto_field_descriptions(j_response);
 
     const char *response_str = json_object_to_json_string(j_response);

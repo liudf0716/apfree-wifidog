@@ -36,6 +36,7 @@ struct api_transport_context {
     void *transport_ctx;                    // Transport-specific context (e.g., bufferevent*)
     api_send_response_func_t send_response; // Function to send responses
     char *protocol_name;                    // Protocol name for debugging ("websocket", "mqtt", etc.)
+    json_object *req_id;                    // Optional request identifier for request/response correlation
 };
 
 struct wifi_interface_info {
@@ -126,7 +127,7 @@ void handle_bpf_update_request(json_object *j_req, api_transport_context_t *tran
 void handle_bpf_update_all_request(json_object *j_req, api_transport_context_t *transport);
 
 // Utility functions for transport abstraction
-api_transport_context_t* create_websocket_transport_context(struct bufferevent *bev);
+api_transport_context_t* create_websocket_transport_context(struct bufferevent *bev, json_object *req_id);
 api_transport_context_t* create_mqtt_transport_context(void *mosq, unsigned int req_id);
 void destroy_transport_context(api_transport_context_t *transport);
 

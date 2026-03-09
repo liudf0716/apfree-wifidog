@@ -23,6 +23,7 @@
 #include "wdctlx_thread.h"
 #include "ping_thread.h"
 #include "api_handlers.h"
+#include "api_handlers_internal.h"
 #include "wd_util.h"
 
 /**
@@ -308,18 +309,25 @@ process_ws_msg(struct bufferevent *bev, const char *msg)
 		return;
 	}
 
+	json_object *req_id = NULL;
+	json_object_object_get_ex(jobj, "req_id", &req_id);
+
 	// Extract message type
 	json_object *type = json_object_object_get(jobj, "type");
-	if (!type) {
-		debug(LOG_ERR, "Missing message type in JSON");
+	api_transport_context_t *transport = create_websocket_transport_context(bev, req_id);
+	if (!transport) {
+		debug(LOG_ERR, "Failed to create WebSocket transport context");
 		json_object_put(jobj);
 		return;
 	}
 
-	// Create transport context for WebSocket
-	api_transport_context_t *transport = create_websocket_transport_context(bev);
-	if (!transport) {
-		debug(LOG_ERR, "Failed to create WebSocket transport context");
+	if (!type) {
+		debug(LOG_ERR, "Missing message type in JSON");
+		json_object *j_response = json_object_new_object();
+		json_object_object_add(j_response, "type", json_object_new_string("request_error"));
+		json_object_object_add(j_response, "error", json_object_new_string("Missing message type in JSON"));
+		send_json_response(transport, j_response);
+		destroy_transport_context(transport);
 		json_object_put(jobj);
 		return;
 	}
@@ -328,6 +336,10 @@ process_ws_msg(struct bufferevent *bev, const char *msg)
 	const char *type_str = json_object_get_string(type);
 	if (!type_str) {
 		debug(LOG_ERR, "Invalid message type in JSON (null string)");
+		json_object *j_response = json_object_new_object();
+		json_object_object_add(j_response, "type", json_object_new_string("request_error"));
+		json_object_object_add(j_response, "error", json_object_new_string("Invalid message type in JSON"));
+		send_json_response(transport, j_response);
 		destroy_transport_context(transport);
 		json_object_put(jobj);
 		return;
@@ -338,6 +350,11 @@ process_ws_msg(struct bufferevent *bev, const char *msg)
 	// Route to handler using unified API dispatch
 	if (!api_dispatch_request(type_str, jobj, transport)) {
 		debug(LOG_ERR, "Unknown WebSocket message type: %s", type_str);
+		json_object *j_response = json_object_new_object();
+		json_object_object_add(j_response, "type", json_object_new_string("request_error"));
+		json_object_object_add(j_response, "error", json_object_new_string("Unknown WebSocket message type"));
+		json_object_object_add(j_response, "requested_type", json_object_new_string(type_str));
+		send_json_response(transport, j_response);
 	}
 
 	// Clean up transport context and JSON
@@ -1299,4 +1316,3 @@ ws_request_reconnect(void)
 {
 	ws_reconnect_requested = 1;
 }
-

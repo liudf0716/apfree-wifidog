@@ -11,6 +11,33 @@ WiFiDogX implements a WebSocket client that connects to a central management ser
 - **Frame Type**: Text frames
 - **Authentication**: Device-based identification via `device_id`
 
+## `req_id` Request Correlation
+
+- Server-to-device requests now support an optional `req_id` field
+- For requests that generate a response, the device echoes the same `req_id` at the top level of the JSON response
+- `req_id` may be either a JSON number or string
+- One-way messages that do not generate responses, such as `auth`, do not echo `req_id`
+- If a request is missing `type` or uses an unsupported `type`, the device returns `type: "request_error"` and includes `req_id` when present
+
+**Example request:**
+```json
+{
+  "req_id": 1001,
+  "type": "get_status"
+}
+```
+
+**Example response:**
+```json
+{
+  "type": "get_status_response",
+  "req_id": 1001,
+  "data": {
+    "service": "apfree-wifidog"
+  }
+}
+```
+
 ## Message Types
 
 ### 1. Connection & Heartbeat

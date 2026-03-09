@@ -6,6 +6,7 @@
 
 void send_json_response(api_transport_context_t *transport, json_object *j_response);
 int send_response(api_transport_context_t *transport, const char *message);
+void api_transport_set_req_id(api_transport_context_t *transport, json_object *req_id);
 int run_command_capture(const char *cmd, char **out_str, int *exit_status);
 
 #endif /* _API_HANDLERS_INTERNAL_H_ */

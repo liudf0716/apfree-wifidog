@@ -11,6 +11,33 @@ WiFiDogX 实现了一个 WebSocket 客户端，用于连接到中央管理服务
 - **帧类型**: 文本帧
 - **认证**: 通过 `device_id` 进行基于设备的身份识别
 
+## `req_id` 请求关联
+
+- 服务器发往设备的请求现在支持可选字段 `req_id`
+- 对于会返回响应的请求，设备会在响应 JSON 顶层原样回显 `req_id`
+- `req_id` 可以是 JSON number 或 string
+- 不产生响应的单向消息，如 `auth`，不会回传 `req_id`
+- 如果请求缺少 `type` 或 `type` 不支持，设备会返回 `type: "request_error"`，并在有 `req_id` 时一并带回
+
+**示例请求:**
+```json
+{
+  "req_id": 1001,
+  "type": "get_status"
+}
+```
+
+**示例响应:**
+```json
+{
+  "type": "get_status_response",
+  "req_id": 1001,
+  "data": {
+    "service": "apfree-wifidog"
+  }
+}
+```
+
 ## 消息类型
 
 ### 1. 连接与心跳
