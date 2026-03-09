@@ -27,6 +27,8 @@ struct wd_request_context {
     void *data; /**< Additional user data. Its lifecycle is managed by the user of this context,
                      *   not by wd_request_context_destroy(). The callback or the setup code
                      *   is responsible for allocating and freeing this data if necessary. */
+    int per_request; /**< If set, context was created for a single request and should be
+                        * destroyed by the response callback after handling. */
 };
 
 /**

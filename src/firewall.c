@@ -964,18 +964,27 @@ ev_fw_sync_with_authserver(struct wd_request_context *context)
 				free(uri); // Free the allocated URI before continuing
 				continue;  // Skip to the next client
 			}
-			context->data = client_for_context; // Assign the new duplicate to context->data
 
-			// Pass the original context (which now contains client_for_context)
-			if (!wd_make_request(context, &evcon, &req, process_auth_server_counter)) {
+			// Create a per-request context so we don't overwrite the shared context->data
+			struct wd_request_context *req_ctx = wd_request_context_new(context->base, context->ssl,
+																		get_auth_server()->authserv_use_ssl);
+			if (!req_ctx) {
+				debug(LOG_ERR, "Failed to create per-request context for client %s", p1->mac);
+				client_free_node(client_for_context);
+				free(uri);
+				continue;
+			}
+			req_ctx->data = client_for_context;
+			req_ctx->per_request = 1;
+
+			if (!wd_make_request(req_ctx, &evcon, &req, process_auth_server_counter)) {
 				evhttp_make_request(evcon, req, EVHTTP_REQ_GET, uri);
 			} else {
-				// If wd_make_request fails, the context->data (client_for_context) was set
-				// but the request wasn't made. It needs to be freed here to prevent a leak,
-				// as process_auth_server_counter won't be called.
-				debug(LOG_ERR, "wd_make_request failed for client %s. Freeing duplicated client for context.", client_for_context->mac);
+				// wd_make_request failed: free client and destroy per-request context
+				debug(LOG_ERR, "wd_make_request failed for client %s. Cleaning up per-request context.", client_for_context->mac);
 				client_free_node(client_for_context);
-				context->data = NULL; // Defensive nulling
+				req_ctx->data = NULL;
+				wd_request_context_destroy(req_ctx);
 			}
 			free(uri);
 		}

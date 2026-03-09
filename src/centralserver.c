@@ -838,6 +838,11 @@ process_auth_server_counter(struct evhttp_request *req, void *ctx)
     if (parse_auth_server_response(&authresponse, req)) {
         // Successfully parsed - process the counter response
         client_counter_request_reply(&authresponse, req, ctx);
+        /* If this context was created per-request, destroy it now. */
+        struct wd_request_context *rctx = (struct wd_request_context *)ctx;
+        if (rctx && rctx->per_request) {
+            wd_request_context_destroy(rctx);
+        }
     } else {
         // Failed to parse - clean up client data
         t_client *client = (t_client *)((struct wd_request_context *)ctx)->data;
@@ -849,6 +854,10 @@ process_auth_server_counter(struct evhttp_request *req, void *ctx)
             client_free_node(client_to_free);
         }
         ((struct wd_request_context *)ctx)->data = NULL;
+        struct wd_request_context *rctx = (struct wd_request_context *)ctx;
+        if (rctx && rctx->per_request) {
+            wd_request_context_destroy(rctx);
+        }
     }
 }
 
