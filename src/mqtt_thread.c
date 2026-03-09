@@ -224,12 +224,19 @@ void thread_mqtt(void *arg)
 	s_config *config = arg;
 	int major = 0, minor = 0, revision = 0;
 	struct mosquitto *mosq = NULL;
-	char *host 	= config->mqtt_server->hostname;
+	const char *host = config->mqtt_server->hostname;
 	int  port 	= config->mqtt_server->port;
 	char *username 	= config->mqtt_server->username;
 	char *password 	= config->mqtt_server->password;
+	char *cafile = config->mqtt_server->cafile;
+	int use_tls = config->mqtt_server->use_ssl ? 1 : 0;
 	int  keepalive = 60;
 	int  retval = 0;
+
+	if (!host || !*host) {
+		debug(LOG_ERR, "MQTT server hostname is empty");
+		return;
+	}
 
  	mosquitto_lib_version(&major, &minor, &revision);
     debug(LOG_DEBUG, "Mosquitto library version : %d.%d.%d\n", major, minor, revision); 
@@ -268,15 +275,31 @@ void thread_mqtt(void *arg)
 	pthread_mutex_unlock(&mqtt_client_lock);
    	
 	
-	int tls_rc = mosquitto_tls_set(mosq, "/etc/ssl/certs/ca-certificates.crt", NULL, NULL, NULL, NULL);
-	if (tls_rc != MOSQ_ERR_SUCCESS) {
-		debug(LOG_WARNING, "mosquitto_tls_set failed: rc=%d (%s); continuing without TLS", tls_rc, mosquitto_strerror(tls_rc));
-	} else {
-		/* Default to skipping server cert verification to lower config burden. */
+	if (use_tls) {
+		const char *ca_path = (cafile && *cafile) ? cafile : "/etc/ssl/certs/ca-certificates.crt";
+		int tls_rc = mosquitto_tls_set(mosq, ca_path, NULL, NULL, NULL, NULL);
+		if (tls_rc != MOSQ_ERR_SUCCESS) {
+			debug(LOG_ERR, "mosquitto_tls_set failed for MQTTS: rc=%d (%s)", tls_rc, mosquitto_strerror(tls_rc));
+			pthread_mutex_lock(&mqtt_client_lock);
+			mqtt_client_instance = NULL;
+			if (mqtt_host_cached) {
+				free(mqtt_host_cached);
+				mqtt_host_cached = NULL;
+			}
+			pthread_mutex_unlock(&mqtt_client_lock);
+			mosquitto_destroy(mosq);
+			mosquitto_lib_cleanup();
+			return;
+		}
+
+		/* Keep existing behavior: skip cert verification by default. */
 		int insecure_rc = mosquitto_tls_insecure_set(mosq, true);
 		if (insecure_rc != MOSQ_ERR_SUCCESS) {
 			debug(LOG_WARNING, "mosquitto_tls_insecure_set failed: rc=%d (%s)", insecure_rc, mosquitto_strerror(insecure_rc));
 		}
+		debug(LOG_INFO, "MQTT transport: MQTTS (TLS enabled), broker=%s:%d", host, port);
+	} else {
+		debug(LOG_INFO, "MQTT transport: MQTT (plain TCP), broker=%s:%d", host, port);
 	}
 
 	mosquitto_connect_callback_set(mosq, mqtt_connect_callback);

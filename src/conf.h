@@ -201,6 +201,7 @@ typedef struct _mqtt_server_t {
 	char *crtfile;
 	char *keyfile;
 	short port;
+	short use_ssl;
 } t_mqtt_server;
 
 typedef struct _ws_server_t {

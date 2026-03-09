@@ -90,6 +90,7 @@ typedef enum {
 	oMQTT,
 	oMQTTServer,
 	oMQTTServerPort,
+	oMQTTUseSSL,
 	oMQTTUsername,
 	oMQTTPassword,
 	oMQTTCAFile,
@@ -173,6 +174,7 @@ static const struct {
 	"mqtt", oMQTT}, {
 	"serveraddr", oMQTTServer}, {
 	"serverport", oMQTTServerPort}, {
+	"mqttUseSSL", oMQTTUseSSL}, {
 	"mqttUsername", oMQTTUsername}, {
 	"mqttPassword", oMQTTPassword}, {
 	"cafile", oMQTTCAFile}, {
@@ -881,6 +883,7 @@ parse_mqtt_server(FILE * file, const char *filename, int *linenum)
 {
 	char *host = NULL, *username = NULL, *password = NULL, *cafile = NULL, line[MAX_BUF], *p1, *p2;
 	int port = 0, opcode;
+	int use_ssl = -1;
 
 	/* Parsing loop */
 	while (memset(line, 0, MAX_BUF) && fgets(line, MAX_BUF - 1, file) && (strchr(line, '}') == NULL)) {
@@ -931,6 +934,9 @@ parse_mqtt_server(FILE * file, const char *filename, int *linenum)
 			case oMQTTPassword:
 				password = safe_strdup(p2);
 				break;
+			case oMQTTUseSSL:
+				use_ssl = parse_boolean_value(p2);
+				break;
 			case oMQTTCAFile:
 				cafile = safe_strdup(p2);
 				break;
@@ -953,6 +959,10 @@ parse_mqtt_server(FILE * file, const char *filename, int *linenum)
 		exit(-1);
 	}
 	debug(LOG_DEBUG, "Adding %s:%d to the mqtt server", host, port);
+	if (use_ssl == -1) {
+		/* Backward compatibility: infer TLS if not explicitly configured. */
+		use_ssl = ((cafile && *cafile) || port == 8883) ? 1 : 0;
+	}
 
 	t_mqtt_server *mqtt_server = (t_mqtt_server *)malloc(sizeof(t_mqtt_server));
 	mqtt_server->hostname = host;
@@ -960,6 +970,7 @@ parse_mqtt_server(FILE * file, const char *filename, int *linenum)
 	mqtt_server->username = username;
 	mqtt_server->password = password;
 	mqtt_server->cafile = cafile;
+	mqtt_server->use_ssl = use_ssl;
 	config.mqtt_server = mqtt_server;
 
 	debug(LOG_DEBUG, "MQTT server added");
