@@ -604,8 +604,11 @@ ws_receive(struct bufferevent *bev, unsigned char *data, const size_t data_len)
 		uint16_t close_response = htons(1000); // Normal closure
 		ws_send(out, (const char*)&close_response, 2, CLOSING_FRAME);
 		
-		// Clean up connection
+		// Clean up connection and schedule reconnect
+		// This handles the case where the server restarts and sends a close frame
 		cleanup_ws_connection();
+		debug(LOG_INFO, "Server closed WebSocket connection (code: %u), scheduling reconnect", close_code);
+		schedule_reconnect(3);
 		break;
 	}
 	case 0x0:
@@ -1079,11 +1082,10 @@ cleanup_ws_connection(void)
 		ws_state.heartbeat_ev = NULL;
 	}
 
-	if (ws_state.control_ev) {
-		event_del(ws_state.control_ev);
-		event_free(ws_state.control_ev);
-		ws_state.control_ev = NULL;
-	}
+	// NOTE: Do NOT free control_ev here.
+	// control_ev is an infrastructure timer that keeps the event loop alive
+	// and processes reconnect requests. It must persist across connection
+	// lifecycles. It is only freed during final thread shutdown.
 
 	// Reset connection state
 	ws_state.upgraded = false;
@@ -1116,9 +1118,18 @@ reconnect_websocket(void)
 		ws_state.current_bev = NULL;
 	}
 
+	// Reset upgrade state for the new connection
+	ws_state.upgraded = false;
+
+	// Regenerate WebSocket handshake keys for the new connection
+	// Each new WebSocket connection requires a fresh Sec-WebSocket-Key
+	generate_sec_websocket_key(WS_KEY, sizeof(WS_KEY));
+	generate_sec_websocket_accept(WS_KEY, WS_ACCEPT, sizeof(WS_ACCEPT));
+
 	struct bufferevent *bev = create_ws_bufferevent();
 	if (!bev) {
 		debug(LOG_ERR, "Failed to create new bufferevent for reconnection");
+		schedule_reconnect(5);
 		return;
 	}
 
@@ -1155,9 +1166,10 @@ reconnect_websocket(void)
 		debug(LOG_ERR, "Reconnection failed: %s", evutil_socket_error_to_string(errno));
 		bufferevent_free(bev);
 		ws_state.current_bev = NULL;
-		schedule_reconnect(2);
+		schedule_reconnect(5);
 	} else {
-		debug(LOG_DEBUG, "Reconnection attempt initiated");
+		debug(LOG_INFO, "WebSocket reconnection attempt initiated to %s:%d", 
+			  server->hostname, server->port);
 	}
 }
 
@@ -1313,6 +1325,12 @@ thread_websocket(void *arg)
 
 cleanup:
 	cleanup_ws_connection(); /* Frees current_bev, its SSL, and heartbeat */
+	// Free control_ev during final thread shutdown (not freed by cleanup_ws_connection)
+	if (ws_state.control_ev) {
+		event_del(ws_state.control_ev);
+		event_free(ws_state.control_ev);
+		ws_state.control_ev = NULL;
+	}
 	if (ws_state.base) {
 		event_base_free(ws_state.base);
 		ws_state.base = NULL;
