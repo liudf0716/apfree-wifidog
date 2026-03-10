@@ -1,6 +1,21 @@
 #include <linux/init.h>
 #include <linux/module.h>
 #include <linux/kernel.h>
+#include <linux/version.h>
+
+/* Module metadata */
+MODULE_LICENSE("GPL");                 
+MODULE_AUTHOR("Dengfeng Liu <liudf0716@gmail.com>");            
+MODULE_DESCRIPTION("xDPI kernel module for apfree-wifidog"); 
+MODULE_VERSION("1.0");
+
+/*
+ * xDPI requires kernel >= 5.10 for BTF kfunc support (BTF_SET8_START,
+ * BTF_ID_FLAGS, register_btf_kfunc_id_set, __diag_push/__diag_pop, etc).
+ * On older kernels we compile a no-op stub so the module still builds.
+ */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
+
 #include <linux/bpf.h>
 #include <linux/btf.h>
 #include <linux/btf_ids.h>
@@ -18,14 +33,6 @@
 #include <linux/cdev.h>
 
 #include "xdpi-bpf.h"
-
-/* Module metadata */
-MODULE_LICENSE("GPL");                 
-MODULE_AUTHOR("Dengfeng Liu <liudf0716@gmail.com>");            
-MODULE_DESCRIPTION("xDPI kernel module for apfree-wifidog"); 
-MODULE_VERSION("1.0");
-
-
 
 // Fixed size array of domain entries
 static struct domain_entry domains[XDPI_DOMAIN_MAX];
@@ -48,95 +55,58 @@ static char *xdpi_strstr(const char *haystack, int haystack_sz,
 // Protocol identification functions
 static __always_inline int is_dns(const char *data, int data_sz, __u16 dport)
 {
-    // First check if this is a DNS port
     if (dport != DNS_PORT)
         return 0;
-
     if (data_sz < 12) return 0;
-    
-    // Check DNS header format
-    // ID (2 bytes) + Flags (2 bytes) + Questions (2 bytes) + Answer RRs (2 bytes)
-    // + Authority RRs (2 bytes) + Additional RRs (2 bytes)
     return 1;
 }
 
 static __always_inline int is_dhcp(const char *data, int data_sz, __u16 dport)
 {
-    // First check if this is a DHCP port
     if (dport != DHCP_SERVER_PORT && dport != DHCP_CLIENT_PORT)
         return 0;
-
-    if (data_sz < 240) return 0;  // Minimum DHCP message size
-    
-    // Check DHCP message type
-    // First byte after UDP header should be message type
-    // 1=DISCOVER, 2=OFFER, 3=REQUEST, 4=DECLINE, 5=ACK, 6=NAK, 7=RELEASE, 8=INFORM
+    if (data_sz < 240) return 0;
     __u8 msg_type = data[0];
     return (msg_type >= 1 && msg_type <= 8);
 }
 
 static __always_inline int is_ntp(const char *data, int data_sz, __u16 dport)
 {
-    // First check if this is an NTP port
     if (dport != NTP_PORT)
         return 0;
-
-    if (data_sz < 48) return 0;  // Minimum NTP message size
-    
-    // Check NTP version and mode
-    // First byte: LI (2 bits) + Version (3 bits) + Mode (3 bits)
+    if (data_sz < 48) return 0;
     __u8 first_byte = data[0];
     __u8 version = (first_byte >> 3) & 0x07;
     __u8 mode = first_byte & 0x07;
-    
     return (version >= 1 && version <= 4) && (mode >= 1 && mode <= 7);
 }
 
 static __always_inline int is_snmp(const char *data, int data_sz, __u16 dport)
 {
-    // First check if this is an SNMP port
     if (dport != SNMP_PORT && dport != SNMP_TRAP_PORT)
         return 0;
-
     if (data_sz < 8) return 0;
-    
-    // Check SNMP version and PDU type
-    // First byte should be 0x30 (SEQUENCE)
-    // Second byte should be length
-    // Third byte should be version (0=SNMPv1, 1=SNMPv2c, 3=SNMPv3)
     return (data[0] == 0x30);
 }
 
 static __always_inline int is_tftp(const char *data, int data_sz, __u16 dport)
 {
-    // First check if this is a TFTP port
     if (dport != TFTP_PORT)
         return 0;
-
     if (data_sz < 4) return 0;
-    
-    // Check TFTP opcode
-    // First two bytes should be opcode
-    // 1=RRQ, 2=WRQ, 3=DATA, 4=ACK, 5=ERROR
     __u16 opcode = (data[0] << 8) | data[1];
     return (opcode >= 1 && opcode <= 5);
 }
 
 static __always_inline int is_rtp(const char *data, int data_sz, __u16 dport)
 {
-    // First check if this is an RTP port
     if (dport != RTP_PORT)
         return 0;
-
-    if (data_sz < 12) return 0;  // Minimum RTP header size
-    
-    // Check RTP version (should be 2)
-    // First byte: V=2, P, X, CC
+    if (data_sz < 12) return 0;
     __u8 version = (data[0] >> 6) & 0x03;
     return (version == 2);
 }
 
-// Existing protocol identification functions
 static __always_inline int is_mstsc(const char *data, int data_sz, __u16 dport)
 {
     return data_sz > 3 && data[0] == 0x03 && data[1] == 0x00 && data[2] == 0x00;
@@ -151,10 +121,8 @@ static __always_inline int is_http(const char *data, int data_sz, __u16 dport)
 {
     if (data_sz < 50)
         return 0;
-
     if (data[0] == 'G' && data[1] == 'E' && data[2] == 'T' && data[3] == ' ') return 1;
     if (data[0] == 'P' && data[1] == 'O' && data[2] == 'S' && data[3] == 'T') return 1;
-
     return 0;
 }
 
@@ -162,13 +130,11 @@ static __always_inline int is_https(const char *data, int data_sz, __u16 dport)
 {
     if (data_sz < 50)
         return 0;
-
     if (data[0] == 0x16 && data[1] == 0x03 && data[5] == 0x01) {
         if (data[2] >= 0x00 && data[2] <= 0x04) {
             return 1;
         }
     }
-
     return 0;
 }
 
@@ -176,7 +142,6 @@ static __always_inline int is_scp(const char *data, int data_sz, __u16 dport)
 {
     if (data_sz < 50)
         return 0;
-
     if (data[0] == 'C' || data[0] == 'D') {
         if (data[1] >= '0' && data[1] <= '7' &&
             data[2] >= '0' && data[2] <= '7' &&
@@ -184,7 +149,6 @@ static __always_inline int is_scp(const char *data, int data_sz, __u16 dport)
             return 1;
         }
     }
-
     return 0;
 }
 
@@ -196,7 +160,6 @@ static __always_inline int is_wechat(const char *data, int data_sz, __u16 dport)
         }
         return 1;
     }
-
     return 0;
 }
 
@@ -307,23 +270,19 @@ __bpf_kfunc int bpf_xdpi_skb_match(struct __sk_buff *skb_ctx, int dir)
     void *udp_buf = NULL;
     int ret = -EINVAL;
     
-    // For ingress traffic, check if destination port is 80 or 443
     if (dir != INGRESS) {
         return -EACCES;
     }
 
-    // Check if skb is null
     if (!skb)
         return -EINVAL;
 
     if (unlikely(skb_linearize(skb) != 0))
         return -EFAULT;
 
-    // Check if this is an IP packet
     if (skb->protocol != htons(ETH_P_IP))
         return -EPROTONOSUPPORT;
 
-    // Allocate buffers for headers
     ip_buf = kmalloc(sizeof(struct iphdr), GFP_ATOMIC);
     if (!ip_buf) {
         ret = -ENOMEM;
@@ -353,7 +312,6 @@ __bpf_kfunc int bpf_xdpi_skb_match(struct __sk_buff *skb_ctx, int dir)
         u8 *data = skb->data + skb_network_offset(skb) + ip->ihl * 4 + tcp->doff * 4;
         int data_len = skb->len - (data - skb->data);
 
-        // Match L7 protocol
         struct l7_proto_entry *proto_entry = NULL;
         for (int i = 0; i < ARRAY_SIZE(l7_proto_entries); i++) {
             if (l7_proto_entries[i].proto_type == PROTO_TCP &&
@@ -368,13 +326,11 @@ __bpf_kfunc int bpf_xdpi_skb_match(struct __sk_buff *skb_ctx, int dir)
             goto out;
         }
 
-        // Return if protocol is not HTTP or HTTPS
         if (proto_entry->sid != L7_HTTP && proto_entry->sid != L7_HTTPS) {
             ret = proto_entry->sid;
             goto out;
         }
 
-        // Match domain for HTTP/HTTPS
         struct domain_entry *domain_entry = NULL;
         spin_lock_bh(&xdpi_lock);
         for (int i = 0; i < XDPI_DOMAIN_MAX; i++) {
@@ -410,7 +366,6 @@ __bpf_kfunc int bpf_xdpi_skb_match(struct __sk_buff *skb_ctx, int dir)
         u8 *data = skb->data + skb_network_offset(skb) + ip->ihl * 4 + sizeof(*udp);
         int data_len = skb->len - (data - skb->data);
 
-        // Match L7 protocol
         struct l7_proto_entry *proto_entry = NULL;
         for (int i = 0; i < ARRAY_SIZE(l7_proto_entries); i++) {
             if (l7_proto_entries[i].proto_type == PROTO_UDP &&
@@ -461,22 +416,19 @@ static int add_domain(struct domain_entry *entry)
 
     spin_lock_bh(&xdpi_lock);
     
-    // First check if domain already exists
     for (i = 0; i < XDPI_DOMAIN_MAX; i++) {
         if (domains[i].used && domains[i].domain_len == entry->domain_len) {
             if (memcmp(domains[i].domain, entry->domain, entry->domain_len) == 0) {
-                // Domain already exists, update access count and time
                 domains[i].access_count = entry->access_count;
                 domains[i].last_access_time = entry->last_access_time;
                 spin_unlock_bh(&xdpi_lock);
-                return 0; // Success, domain already exists
+                return 0;
             }
         } else if (!domains[i].used && free_idx == -1) {
-            free_idx = i; // Remember first free slot
+            free_idx = i;
         }
     }
     
-    // Domain doesn't exist, add it if we have space
     if (free_idx != -1) {
         memcpy(domains[free_idx].domain, entry->domain, entry->domain_len);
         domains[free_idx].domain[entry->domain_len] = '\0';
@@ -571,20 +523,17 @@ static long xdpi_dev_ioctl(struct file *file, unsigned int cmd, unsigned long ar
         {
             struct domain_list *list;
             
-            // Allocate memory for the large structure
             list = kmalloc(sizeof(*list), GFP_KERNEL);
             if (!list)
                 return -ENOMEM;
                 
             memset(list, 0, sizeof(*list));
             
-            // Copy the input structure to get max_count
             if (copy_from_user(list, (void __user *)arg, sizeof(*list))) {
                 kfree(list);
                 return -EFAULT;
             }
                 
-            // Fill the domain list
             spin_lock_bh(&xdpi_lock);
             list->count = 0;
             for (int i = 0; i < XDPI_DOMAIN_MAX && list->count < list->max_count; i++) {
@@ -595,7 +544,6 @@ static long xdpi_dev_ioctl(struct file *file, unsigned int cmd, unsigned long ar
             }
             spin_unlock_bh(&xdpi_lock);
             
-            // Copy the result back to userspace
             if (copy_to_user((void __user *)arg, list, sizeof(*list))) {
                 kfree(list);
                 return -EFAULT;
@@ -612,19 +560,16 @@ static long xdpi_dev_ioctl(struct file *file, unsigned int cmd, unsigned long ar
     return ret;
 }
 
-// Character device open function
 static int xdpi_dev_open(struct inode *inode, struct file *file)
 {
     return 0;
 }
 
-// Character device release function
 static int xdpi_dev_release(struct inode *inode, struct file *file)
 {
     return 0;
 }
 
-// Character device read function - provides domain list
 static ssize_t xdpi_dev_read(struct file *file, char __user *buffer, size_t count, loff_t *ppos)
 {
     char *tmp_buf;
@@ -633,29 +578,24 @@ static ssize_t xdpi_dev_read(struct file *file, char __user *buffer, size_t coun
     int l7_count = ARRAY_SIZE(l7_proto_entries);
     int total_len;
     
-    // If we've already read, return 0
     if (*ppos > 0)
         return 0;
     
-    // Allocate temporary buffer for output
     tmp_buf = kmalloc(PAGE_SIZE, GFP_KERNEL);
     if (!tmp_buf)
         return -ENOMEM;
     
-    // Generate header
     len += snprintf(tmp_buf + len, PAGE_SIZE - len, "Index | Domain | SID\n");
     len += snprintf(tmp_buf + len, PAGE_SIZE - len, "---------------------\n");
     
-    // Add L7 protocols
     for (i = 0; i < l7_count; i++) {
         len += snprintf(tmp_buf + len, PAGE_SIZE - len, "%5d | %8s | %d\n", 
                        i + 1,
                        l7_proto_entries[i].proto_desc,
                        l7_proto_entries[i].sid);
-        if (len >= PAGE_SIZE - 100) break; // Prevent overflow
+        if (len >= PAGE_SIZE - 100) break;
     }
     
-    // Add domains
     spin_lock_bh(&xdpi_lock);
     for (i = 0; i < XDPI_DOMAIN_MAX; i++) {
         if (domains[i].used) {
@@ -663,14 +603,13 @@ static ssize_t xdpi_dev_read(struct file *file, char __user *buffer, size_t coun
                           i + l7_count + 1,
                           domains[i].domain, 
                           domains[i].sid);
-            if (len >= PAGE_SIZE - 100) break; // Prevent overflow
+            if (len >= PAGE_SIZE - 100) break;
         }
     }
     spin_unlock_bh(&xdpi_lock);
     
     total_len = len;
     
-    // Copy to user space
     if (count < total_len)
         total_len = count;
     
@@ -699,20 +638,22 @@ static int __init xdpi_init(void)
 
     printk(KERN_INFO "Hello, xDPI!\n");
     
-    // Initialize domain array
     for (i = 0; i < XDPI_DOMAIN_MAX; i++) {
         domains[i].used = false;
     }
     
-    // Register character device for ioctl operations
     xdpi_major = register_chrdev(0, XDPI_DEVICE_NAME, &xdpi_fops);
     if (xdpi_major < 0) {
         pr_err("xdpi: Failed to register character device: %d\n", xdpi_major);
         return xdpi_major;
     }
     
-    // Create device class (kernel 6.6+ uses single parameter)
+    // Create device class - handle API difference between kernel versions
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 4, 0)
     xdpi_class = class_create(XDPI_DEVICE_NAME);
+#else
+    xdpi_class = class_create(THIS_MODULE, XDPI_DEVICE_NAME);
+#endif
     if (IS_ERR(xdpi_class)) {
         ret = PTR_ERR(xdpi_class);
         pr_err("xdpi: Failed to create device class: %d\n", ret);
@@ -720,7 +661,6 @@ static int __init xdpi_init(void)
         return ret;
     }
     
-    // Create device node (/dev/xdpi)
     xdpi_device = device_create(xdpi_class, NULL, MKDEV(xdpi_major, 0), NULL, XDPI_DEVICE_NAME);
     if (IS_ERR(xdpi_device)) {
         ret = PTR_ERR(xdpi_device);
@@ -745,7 +685,6 @@ static int __init xdpi_init(void)
 
 static void __exit xdpi_exit(void)
 {
-    // Cleanup character device
     if (xdpi_device)
         device_destroy(xdpi_class, MKDEV(xdpi_major, 0));
     if (xdpi_class)
@@ -755,6 +694,30 @@ static void __exit xdpi_exit(void)
     
     printk(KERN_INFO "xdpi: Module unloaded successfully\n");
 }
+
+#else /* LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0) */
+
+/*
+ * Stub implementation for kernels < 5.10.
+ * The module compiles and can be loaded, but provides no xDPI functionality.
+ * All BTF kfunc, BPF verifier integration, and character device features
+ * are disabled on these older kernels.
+ */
+
+static int __init xdpi_init(void)
+{
+    printk(KERN_WARNING "xdpi: Module loaded in STUB mode. "
+           "xDPI functionality requires kernel >= 5.10. "
+           "Current kernel does not support required BTF kfunc APIs.\n");
+    return 0;
+}
+
+static void __exit xdpi_exit(void)
+{
+    printk(KERN_INFO "xdpi: Stub module unloaded.\n");
+}
+
+#endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0) */
 
 module_init(xdpi_init);
 module_exit(xdpi_exit);

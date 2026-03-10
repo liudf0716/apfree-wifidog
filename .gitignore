@@ -57,3 +57,4 @@ test/test_short_domain
 *:Zone.Identifier
 build/
 build_shell/
+.github/copilot-instructions.md
