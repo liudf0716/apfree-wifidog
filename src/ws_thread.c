@@ -69,6 +69,7 @@ static void ws_control_cb(evutil_socket_t fd, short events, void *arg);
 static void cleanup_ws_connection(void);
 static void reconnect_websocket(void);
 static void scheduled_reconnect_cb(evutil_socket_t fd, short events, void *arg);
+static void schedule_reconnect(int delay_sec);
 
 static void
 start_ws_control_timer(void)
@@ -169,6 +170,41 @@ static void scheduled_reconnect_cb(evutil_socket_t fd, short events, void *arg)
 	// Use event_free() instead of free() for events created with event_new()
 	if (timer_event_ptr) {
 		event_free(timer_event_ptr);
+	}
+}
+
+/* Schedule a one-shot reconnect attempt after delay_sec seconds. */
+static void
+schedule_reconnect(int delay_sec)
+{
+	if (!ws_state.base) {
+		debug(LOG_ERR, "ws_state.base is NULL. Cannot schedule reconnection.");
+		return;
+	}
+
+	if (delay_sec < 1) {
+		delay_sec = 1;
+	}
+
+	struct timeval delay_tv;
+	delay_tv.tv_sec = delay_sec;
+	delay_tv.tv_usec = 0;
+
+	struct event *reconnect_timer_ev_heap = event_new(ws_state.base, -1, 0, scheduled_reconnect_cb, NULL);
+	if (!reconnect_timer_ev_heap) {
+		debug(LOG_ERR, "Failed to allocate memory for reconnect timer event.");
+		return;
+	}
+
+	/* Pass the event itself as callback arg so callback can free it safely. */
+	event_assign(reconnect_timer_ev_heap, ws_state.base, -1, 0,
+			scheduled_reconnect_cb, (void *)reconnect_timer_ev_heap);
+
+	if (event_add(reconnect_timer_ev_heap, &delay_tv) == 0) {
+		debug(LOG_DEBUG, "Successfully scheduled reconnection in %d seconds.", delay_sec);
+	} else {
+		debug(LOG_ERR, "Failed to add reconnect timer event to pending list.");
+		event_free(reconnect_timer_ev_heap);
 	}
 }
 
@@ -844,6 +880,9 @@ ws_read_cb(struct bufferevent *b_ws, void *ctx)
 		if (strncmp((const char*)data, "HTTP/1.1 101", strlen("HTTP/1.1 101")) != 0 
 			|| !strstr((const char*)data, WS_ACCEPT)) {
 			debug(LOG_ERR, "Invalid WebSocket upgrade response");
+			/* Handshake failed: close current connection and retry later. */
+			cleanup_ws_connection();
+			schedule_reconnect(2);
 			return;
 		}
 
@@ -1009,29 +1048,7 @@ wsevent_connection_cb(struct bufferevent* b_ws, short events, void *ctx)
 		int delay = (events & BEV_EVENT_EOF) ? 5 : 2;
 		debug(LOG_DEBUG, "Attempting to schedule reconnection in %d seconds.", delay);
 
-		if (ws_state.base) {
-			struct timeval delay_tv;
-			delay_tv.tv_sec = delay;
-			delay_tv.tv_usec = 0;
-
-			// Create timer event with callback that will handle its own cleanup
-			struct event *reconnect_timer_ev_heap = event_new(ws_state.base, -1, 0, scheduled_reconnect_cb, NULL);
-			if (reconnect_timer_ev_heap) {
-				// Update the callback argument to point to the event itself so it can free itself
-				event_assign(reconnect_timer_ev_heap, ws_state.base, -1, 0, scheduled_reconnect_cb, (void *)reconnect_timer_ev_heap);
-				if (event_add(reconnect_timer_ev_heap, &delay_tv) == 0) {
-					debug(LOG_DEBUG, "Successfully scheduled reconnection in %d seconds.", delay);
-				} else {
-					debug(LOG_ERR, "Failed to add reconnect timer event to pending list.");
-					event_free(reconnect_timer_ev_heap);
-				}
-			} else {
-				debug(LOG_ERR, "Failed to allocate memory for reconnect timer event.");
-			}
-		} else {
-			debug(LOG_ERR, "ws_state.base is NULL. Cannot schedule reconnection.");
-			// If ws_state.base is NULL, the thread is likely shutting down, so no reschedule.
-		}
+		schedule_reconnect(delay);
 		return;
 	}
 
@@ -1138,6 +1155,7 @@ reconnect_websocket(void)
 		debug(LOG_ERR, "Reconnection failed: %s", evutil_socket_error_to_string(errno));
 		bufferevent_free(bev);
 		ws_state.current_bev = NULL;
+		schedule_reconnect(2);
 	} else {
 		debug(LOG_DEBUG, "Reconnection attempt initiated");
 	}
