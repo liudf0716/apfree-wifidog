@@ -84,13 +84,22 @@ struct traffic_stats {
     struct rate_limit outgoing_rate_limit;    /* Outgoing rate limit */
 };
 
+/*
+ * xdpi_nf_conn is only used by the eBPF program (aw-bpf.c) and kernel module.
+ * It contains struct bpf_timer which requires kernel >= 5.15 headers.
+ * User-space code (fw_nft.c, aw-bpfctl.c, etc.) does not need this struct.
+ * - eBPF programs define KBUILD_MODNAME before including headers
+ * - Kernel modules define __KERNEL__
+ */
+#if defined(__KERNEL__) || defined(KBUILD_MODNAME)
 struct xdpi_nf_conn {
     __u32  sid;
     __u32  pkt_seen;
     __u32  last_time;
     struct bpf_timer timer;
-    __u8   event_sent; // New field
+    __u8   event_sent;
 };
+#endif
 
 /**
  * @struct session_data_t
