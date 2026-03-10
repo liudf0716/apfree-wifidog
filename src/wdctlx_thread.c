@@ -197,7 +197,6 @@ static void
 wdctl_client_event_cb(struct bufferevent *bev, short what, void *ctx)
 {
     if (what & BEV_EVENT_EOF) {
-        debug(LOG_DEBUG, "wdctl client disconnected (EOF)");
         evutil_closesocket(bufferevent_getfd(bev));
         bufferevent_free(bev);
     } else if (what & BEV_EVENT_ERROR) {
