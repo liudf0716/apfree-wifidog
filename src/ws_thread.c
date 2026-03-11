@@ -348,8 +348,8 @@ process_ws_msg(struct bufferevent *bev, const char *msg)
 	json_object *req_id = NULL;
 	json_object_object_get_ex(jobj, "req_id", &req_id);
 
-	// Extract message type
-	json_object *type = json_object_object_get(jobj, "type");
+	// Extract operation name (unified field `op` used by MQTT and API routing)
+	json_object *op = json_object_object_get(jobj, "op");
 	api_transport_context_t *transport = create_websocket_transport_context(bev, req_id);
 	if (!transport) {
 		debug(LOG_ERR, "Failed to create WebSocket transport context");
@@ -357,39 +357,39 @@ process_ws_msg(struct bufferevent *bev, const char *msg)
 		return;
 	}
 
-	if (!type) {
-		debug(LOG_ERR, "Missing message type in JSON");
+	if (!op) {
+		debug(LOG_ERR, "Missing op field in JSON");
 		json_object *j_response = json_object_new_object();
 		json_object_object_add(j_response, "type", json_object_new_string("request_error"));
-		json_object_object_add(j_response, "error", json_object_new_string("Missing message type in JSON"));
+		json_object_object_add(j_response, "error", json_object_new_string("Missing op field in JSON"));
 		send_json_response(transport, j_response);
 		destroy_transport_context(transport);
 		json_object_put(jobj);
 		return;
 	}
 
-	// Get message type string
-	const char *type_str = json_object_get_string(type);
-	if (!type_str) {
-		debug(LOG_ERR, "Invalid message type in JSON (null string)");
+	// Get operation string
+	const char *op_str = json_object_get_string(op);
+	if (!op_str) {
+		debug(LOG_ERR, "Invalid op in JSON (null string)");
 		json_object *j_response = json_object_new_object();
 		json_object_object_add(j_response, "type", json_object_new_string("request_error"));
-		json_object_object_add(j_response, "error", json_object_new_string("Invalid message type in JSON"));
+		json_object_object_add(j_response, "error", json_object_new_string("Invalid op in JSON"));
 		send_json_response(transport, j_response);
 		destroy_transport_context(transport);
 		json_object_put(jobj);
 		return;
 	}
 
-	debug(LOG_DEBUG, "Processing WebSocket message type: %s", type_str);
+	debug(LOG_DEBUG, "Processing WebSocket message op: %s", op_str);
 
 	// Route to handler using unified API dispatch
-	if (!api_dispatch_request(type_str, jobj, transport)) {
-		debug(LOG_ERR, "Unknown WebSocket message type: %s", type_str);
+	if (!api_dispatch_request(op_str, jobj, transport)) {
+		debug(LOG_ERR, "Unknown WebSocket operation: %s", op_str);
 		json_object *j_response = json_object_new_object();
 		json_object_object_add(j_response, "type", json_object_new_string("request_error"));
-		json_object_object_add(j_response, "error", json_object_new_string("Unknown WebSocket message type"));
-		json_object_object_add(j_response, "requested_type", json_object_new_string(type_str));
+		json_object_object_add(j_response, "error", json_object_new_string("Unknown WebSocket operation"));
+		json_object_object_add(j_response, "requested_op", json_object_new_string(op_str));
 		send_json_response(transport, j_response);
 	}
 
@@ -699,7 +699,7 @@ send_msg(struct evbuffer *out, const char *type)
 {
 	// Create root JSON object with type and device ID
 	json_object *root = json_object_new_object();
-	json_object_object_add(root, "type", json_object_new_string(type));
+	json_object_object_add(root, "op", json_object_new_string(type));
 	json_object_object_add(root, "device_id", json_object_new_string(get_device_id()));
 
 	// Add device info as an object if available
