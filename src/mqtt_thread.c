@@ -99,7 +99,18 @@ process_mqtt_request(struct mosquitto *mosq, const char *data, s_config *config)
 
 	debug(LOG_DEBUG, "Processing MQTT operation: %s (req_id: %u)", op, req_id);
 
-	// Route to handler using unified API dispatch
+	// Handle upward reports directly (not routed through downlink command handlers)
+	if (strcmp(op, "heartbeat") == 0 || strcmp(op, "connect") == 0 || strcmp(op, "bootstrap") == 0) {
+		debug(LOG_INFO, "Received upward report via MQTT: %s (req_id: %u)", op, req_id);
+		// For MQTT upward reports: acknowledge receipt if needed
+		// Currently upward reports don't require a response back to device
+		// This is different from WebSocket where device sends proactively
+		destroy_transport_context(transport);
+		json_object_put(json_request);
+		return;
+	}
+
+	// Route downlink commands through API dispatch
 	if (!api_dispatch_request(op, json_request, transport)) {
 		debug(LOG_ERR, "Unknown MQTT operation type: %s", op);
 		send_mqtt_response(mosq, req_id, 400, "Unknown operation", config);

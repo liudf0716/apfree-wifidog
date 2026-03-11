@@ -19,7 +19,7 @@
 #include "uci_helper.h"
 #include "client_library/shell_executor.h"
 
-void handle_heartbeat_request(json_object *j_heartbeat, api_transport_context_t *transport)
+void handle_gateway_state_heartbeat_request(json_object *j_heartbeat, api_transport_context_t *transport)
 {
     mark_auth_online();
 

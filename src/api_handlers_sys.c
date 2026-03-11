@@ -6,6 +6,92 @@
 #include "debug.h"
 #include "conf.h"
 #include "ping_thread.h"
+#include "client_list.h"
+
+json_object *build_gateway_report_message(const char *op)
+{
+    if (!op || *op == '\0') {
+        return NULL;
+    }
+
+    json_object *root = json_object_new_object();
+    json_object_object_add(root, "op", json_object_new_string(op));
+    json_object_object_add(root, "device_id", json_object_new_string(get_device_id()));
+
+    t_device_info *device_info = get_device_info();
+    if (device_info) {
+        json_object *device_info_obj = json_object_new_object();
+
+        if (device_info->ap_device_id) {
+            json_object_object_add(device_info_obj, "ap_device_id", json_object_new_string(device_info->ap_device_id));
+        }
+        if (device_info->ap_mac_address) {
+            json_object_object_add(device_info_obj, "ap_mac_address", json_object_new_string(device_info->ap_mac_address));
+        }
+        if (device_info->ap_longitude) {
+            json_object_object_add(device_info_obj, "ap_longitude", json_object_new_string(device_info->ap_longitude));
+        }
+        if (device_info->ap_latitude) {
+            json_object_object_add(device_info_obj, "ap_latitude", json_object_new_string(device_info->ap_latitude));
+        }
+        if (device_info->location_id) {
+            json_object_object_add(device_info_obj, "location_id", json_object_new_string(device_info->location_id));
+        }
+
+        json_object_object_add(root, "device_info", device_info_obj);
+    }
+
+    json_object *gw_array = json_object_new_array();
+    t_gateway_setting *gw_settings = get_gateway_settings();
+    while (gw_settings) {
+        json_object *gw = json_object_new_object();
+
+        json_object_object_add(gw, "gw_id", json_object_new_string(gw_settings->gw_id));
+        json_object_object_add(gw, "gw_channel", json_object_new_string(gw_settings->gw_channel));
+        json_object_object_add(gw, "gw_address_v4", json_object_new_string(gw_settings->gw_address_v4));
+        json_object_object_add(gw, "auth_mode", json_object_new_int(gw_settings->auth_mode));
+        json_object_object_add(gw, "gw_interface", json_object_new_string(gw_settings->gw_interface));
+
+        if (gw_settings->gw_address_v6) {
+            json_object_object_add(gw, "gw_address_v6", json_object_new_string(gw_settings->gw_address_v6));
+        }
+
+        json_object_array_add(gw_array, gw);
+        gw_settings = gw_settings->next;
+    }
+    json_object_object_add(root, "gateway", gw_array);
+
+    if (strcmp(op, "heartbeat") == 0) {
+        struct sys_info info;
+        memset(&info, 0, sizeof(info));
+        get_sys_info(&info);
+
+        json_object *sys_info_obj = json_object_new_object();
+        json_object_object_add(sys_info_obj, "sys_uptime", json_object_new_int64(info.sys_uptime));
+        json_object_object_add(sys_info_obj, "sys_memfree", json_object_new_int64(info.sys_memfree));
+        json_object_object_add(sys_info_obj, "sys_load", json_object_new_double(info.sys_load));
+        json_object_object_add(sys_info_obj, "nf_conntrack_count", json_object_new_int64(info.nf_conntrack_count));
+        json_object_object_add(sys_info_obj, "cpu_usage", json_object_new_double(info.cpu_usage));
+        json_object_object_add(sys_info_obj, "cpu_temp", json_object_new_int(info.cpu_temp));
+
+        extern time_t started_time;
+        long wifidog_uptime = time(NULL) - started_time;
+        if (wifidog_uptime > (long)info.sys_uptime) {
+            wifidog_uptime = 0;
+        }
+        json_object_object_add(sys_info_obj, "wifidog_uptime", json_object_new_int64(wifidog_uptime));
+
+        extern int g_online_clients;
+        json_object_object_add(sys_info_obj, "online_clients", json_object_new_int(g_online_clients));
+        json_object_object_add(sys_info_obj, "offline_clients", json_object_new_int(offline_client_ageout()));
+
+        json_object_object_add(root, "sys_info", sys_info_obj);
+    }
+
+    return root;
+}
+
+// Handlers for upward reports removed—handled directly in ws_thread and mqtt_thread
 
 /**
  * @brief Handles a request for firmware information.

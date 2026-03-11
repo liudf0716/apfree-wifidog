@@ -104,6 +104,9 @@ void handle_get_trusted_mac_request(json_object *j_req, api_transport_context_t 
 // System information handlers
 void handle_get_sys_info_request(json_object *j_req, api_transport_context_t *transport);
 
+// Shared report builder for heartbeat/connect/bootstrap payloads (used by ws_thread and mqtt_thread)
+json_object *build_gateway_report_message(const char *op);
+
 // AW status handler (apfree-wifidog specific)
 void handle_get_aw_status_request(json_object *j_req, api_transport_context_t *transport);
 
@@ -112,7 +115,7 @@ void handle_set_auth_server_request(json_object *j_req, api_transport_context_t 
 void handle_get_auth_server_request(json_object *j_req, api_transport_context_t *transport);
 
 // Connection management handlers
-void handle_heartbeat_request(json_object *j_heartbeat, api_transport_context_t *transport);
+void handle_gateway_state_heartbeat_request(json_object *j_heartbeat, api_transport_context_t *transport);
 void handle_tmp_pass_request(json_object *j_tmp_pass, api_transport_context_t *transport);
 
 // Shell command handler (transport-agnostic)

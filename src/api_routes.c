@@ -4,22 +4,21 @@
 #include "api_handlers.h"
 
 /**
- * @brief Unified API routing table
+ * @brief Unified API routing table for downlink commands
  *
  * This table maps operation/message type names to their handler functions.
- * Used by both MQTT and WebSocket protocols.
+ * Used for server-to-client command routing via MQTT and WebSocket.
  *
- * Note: Some operations have aliases (e.g., "connect" and "heartbeat" both map to the same handler)
+ * Note: Upward reports (heartbeat/connect/bootstrap) are NOT in this table—
+ * they are handled directly in mqtt_thread and ws_thread.
  */
 static const api_route_entry_t api_routes[] = {
-	// System info & status
-	{"heartbeat",                   handle_get_sys_info_request},
-	{"connect",                     handle_get_sys_info_request},
-	{"bootstrap",                   handle_get_sys_info_request},
+	// System info & status (downlink queries)
     {"get_sys_info",                handle_get_sys_info_request},
     {"get_status",                  handle_get_aw_status_request},
 
 	// Authentication & client management
+    {"gateway_heartbeat",           handle_gateway_state_heartbeat_request},
 	{"auth",                        handle_auth_request},
 	{"kickoff",                     handle_kickoff_request},
 	{"tmp_pass",                    handle_tmp_pass_request},
