@@ -19,9 +19,7 @@ extern void ws_send(struct evbuffer *buf, const char *msg, const size_t len, int
 
 static bool transport_should_echo_req_id(const api_transport_context_t *transport)
 {
-    return transport && transport->req_id &&
-           transport->protocol_name &&
-           strcmp(transport->protocol_name, "websocket") == 0;
+    return transport && transport->req_id;
 }
 
 static void maybe_attach_req_id(api_transport_context_t *transport, json_object *j_response)
@@ -115,9 +113,6 @@ static int mqtt_send_response(api_transport_context_t *transport, const char *me
     }
 
     char *topic = NULL;
-    json_object *j_response = NULL;
-    json_object *j_data = NULL;
-    
     // Get device ID (external function)
     extern const char* get_device_id(void);
     
@@ -127,38 +122,15 @@ static int mqtt_send_response(api_transport_context_t *transport, const char *me
         return -1;
     }
 
-    j_response = json_object_new_object();
-    if (!j_response) {
-        debug(LOG_ERR, "mqtt_send_response: Failed to allocate response object");
-        free(topic);
-        return -1;
-    }
-
-    if (transport->req_id) {
-        json_object_object_add(j_response, "req_id", json_object_get(transport->req_id));
-    }
-    json_object_object_add(j_response, "response", json_object_new_string("200"));
-
-    j_data = json_tokener_parse(message);
-    if (!j_data || is_error(j_data)) {
-        if (j_data && is_error(j_data)) {
-            j_data = NULL;
-        }
-        j_data = json_object_new_string(message);
-    }
-    json_object_object_add(j_response, "data", j_data);
-
-    const char *res_data = json_object_to_json_string(j_response);
     debug(LOG_INFO, "mqtt_send_response: Publishing to topic: %s", topic);
     
     // Publish via mosquitto library
     int ret = mosquitto_publish(mosq, NULL, topic, 
-                               strlen(res_data), res_data, 0, false);
+                               length, message, 0, false);
     
     debug(LOG_INFO, "mqtt_send_response: mosquitto_publish returned: %d", ret);
     
     free(topic);
-    json_object_put(j_response);
     
     return ret == 0 ? 0 : -1;
 }
@@ -247,21 +219,56 @@ int send_response(api_transport_context_t *transport, const char *message) {
           transport->protocol_name ? transport->protocol_name : "unknown",
           message, strlen(message) > 100 ? "..." : "");
 
-    if (transport_should_echo_req_id(transport)) {
-        json_object *j_response = json_tokener_parse(message);
-        if (j_response && json_object_is_type(j_response, json_type_object)) {
-            maybe_attach_req_id(transport, j_response);
-            const char *annotated = json_object_to_json_string(j_response);
+    json_object *j_message = json_tokener_parse(message);
+    if (j_message && json_object_is_type(j_message, json_type_object)) {
+        json_object *existing_response = NULL;
+        if (json_object_object_get_ex(j_message, "response", &existing_response)) {
+            /* Already in MQTT envelope format (e.g. error response), only ensure req_id exists. */
+            maybe_attach_req_id(transport, j_message);
+            const char *annotated = json_object_to_json_string(j_message);
             int rc = transport->send_response(transport, annotated, strlen(annotated));
-            json_object_put(j_response);
+            json_object_put(j_message);
             return rc;
         }
-        if (j_response) {
-            json_object_put(j_response);
+
+        /* Wrap handler output into unified MQTT-style success envelope. */
+        json_object *j_envelope = json_object_new_object();
+        if (!j_envelope) {
+            json_object_put(j_message);
+            return transport->send_response(transport, message, strlen(message));
         }
+
+        if (transport->req_id) {
+            json_object_object_add(j_envelope, "req_id", json_object_get(transport->req_id));
+        }
+        json_object_object_add(j_envelope, "response", json_object_new_string("200"));
+        json_object_object_add(j_envelope, "data", j_message);
+
+        const char *wrapped = json_object_to_json_string(j_envelope);
+        int rc = transport->send_response(transport, wrapped, strlen(wrapped));
+        json_object_put(j_envelope);
+        return rc;
     }
 
-    return transport->send_response(transport, message, strlen(message));
+    if (j_message) {
+        json_object_put(j_message);
+    }
+
+    /* Non-JSON payload fallback: still use MQTT success envelope with string data. */
+    json_object *j_envelope = json_object_new_object();
+    if (!j_envelope) {
+        return transport->send_response(transport, message, strlen(message));
+    }
+    if (transport->req_id) {
+        json_object_object_add(j_envelope, "req_id", json_object_get(transport->req_id));
+    }
+    json_object_object_add(j_envelope, "response", json_object_new_string("200"));
+    json_object_object_add(j_envelope, "data", json_object_new_string(message));
+
+    const char *wrapped = json_object_to_json_string(j_envelope);
+    int rc = transport->send_response(transport, wrapped, strlen(wrapped));
+    json_object_put(j_envelope);
+    return rc;
 }
 
 /*

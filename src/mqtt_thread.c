@@ -7,6 +7,7 @@
 #include "common.h"
 #include "mqtt_thread.h"
 #include "api_handlers.h"
+#include "api_handlers_internal.h"
 #include "wdctlx_thread.h"
 #include "conf.h"
 #include "debug.h"
@@ -59,16 +60,29 @@ static void publish_gateway_report(struct mosquitto *mosq, const char *op)
 }
 
 static void
-send_mqtt_response(struct mosquitto *mosq, const unsigned int req_id, int res_id, const char *msg, const s_config *config)
+send_mqtt_error_response(struct mosquitto *mosq, json_object *req_id, int res_id, const char *msg, const char *requested_op)
 {
-	char *topic = NULL;
-	char *res_data = NULL;
-	safe_asprintf(&topic, "wifidogx/v1/%s/s2c/response", get_device_id());
-	safe_asprintf(&res_data, "{\"req_id\":%d,\"response\":\"%d\",\"msg\":\"%s\"}", req_id, res_id, msg==NULL?"null":msg);
-	debug(LOG_DEBUG, "send mqtt response: topic is %s msg is %s", topic, res_data);
-	mosquitto_publish(mosq, NULL, topic, strlen(res_data), res_data, 0, false);
-	free(topic);
-	free(res_data);
+	api_transport_context_t *transport = create_mqtt_transport_context(mosq, req_id);
+	if (!transport) {
+		return;
+	}
+
+	json_object *j_response = json_object_new_object();
+	if (!j_response) {
+		destroy_transport_context(transport);
+		return;
+	}
+
+	char code_buf[16];
+	snprintf(code_buf, sizeof(code_buf), "%d", res_id);
+	json_object_object_add(j_response, "response", json_object_new_string(code_buf));
+	json_object_object_add(j_response, "msg", json_object_new_string(msg ? msg : "error"));
+	if (requested_op) {
+		json_object_object_add(j_response, "requested_op", json_object_new_string(requested_op));
+	}
+
+	send_json_response(transport, j_response);
+	destroy_transport_context(transport);
 }
 
 static void
@@ -76,11 +90,14 @@ process_mqtt_request(struct mosquitto *mosq, const char *data, s_config *config)
 {
 	unsigned int req_id = 0;
 	json_object *jo_req_id = NULL;
+	api_transport_context_t *transport = NULL;
 	
+	(void)config;
+
 	json_object *json_request = json_tokener_parse(data);
 	if (is_error(json_request)) {
 		debug(LOG_INFO, "user request is not valid");
-		send_mqtt_response(mosq, req_id, 400, "Invalid JSON request", config);
+		send_mqtt_error_response(mosq, NULL, 400, "Invalid JSON request", NULL);
 		return;
 	}
 
@@ -88,8 +105,21 @@ process_mqtt_request(struct mosquitto *mosq, const char *data, s_config *config)
 	jo_req_id = json_object_object_get(json_request, "req_id");
 	if (jo_req_id) {
 		req_id = json_object_get_int(jo_req_id);
-	} else {
+	}
+
+	// Create MQTT transport context
+	transport = create_mqtt_transport_context(mosq, jo_req_id);
+	if (!transport) {
+		debug(LOG_ERR, "Failed to create MQTT transport context");
+		json_object_put(json_request);
+		send_mqtt_error_response(mosq, jo_req_id, 500, "Internal error", NULL);
+		return;
+	}
+
+	if (!jo_req_id) {
 		debug(LOG_INFO, "No req_id in request");
+		send_mqtt_error_response(mosq, NULL, 400, "Missing req_id", NULL);
+		destroy_transport_context(transport);
 		json_object_put(json_request);
 		return;
 	}
@@ -98,6 +128,8 @@ process_mqtt_request(struct mosquitto *mosq, const char *data, s_config *config)
 	json_object *jo_op = json_object_object_get(json_request, "op");
 	if (!jo_op) {
 		debug(LOG_INFO, "No op item in request");
+		send_mqtt_error_response(mosq, jo_req_id, 400, "Missing op field in JSON", NULL);
+		destroy_transport_context(transport);
 		json_object_put(json_request);
 		return;
 	}
@@ -105,16 +137,9 @@ process_mqtt_request(struct mosquitto *mosq, const char *data, s_config *config)
 	const char *op = json_object_get_string(jo_op);
 	if (!op) {
 		debug(LOG_ERR, "Invalid operation type in JSON (null string)");
+		send_mqtt_error_response(mosq, jo_req_id, 400, "Invalid op in JSON", NULL);
+		destroy_transport_context(transport);
 		json_object_put(json_request);
-		return;
-	}
-
-	// Create MQTT transport context
-	api_transport_context_t *transport = create_mqtt_transport_context(mosq, jo_req_id);
-	if (!transport) {
-		debug(LOG_ERR, "Failed to create MQTT transport context");
-		json_object_put(json_request);
-		send_mqtt_response(mosq, req_id, 500, "Internal error", config);
 		return;
 	}
 
@@ -137,7 +162,7 @@ process_mqtt_request(struct mosquitto *mosq, const char *data, s_config *config)
 	// Route downlink commands through API dispatch
 	if (!api_dispatch_request(op, json_request, transport)) {
 		debug(LOG_ERR, "Unknown MQTT operation type: %s", op);
-		send_mqtt_response(mosq, req_id, 400, "Unknown operation", config);
+		send_mqtt_error_response(mosq, jo_req_id, 400, "Unknown operation", op);
 	}
 
 	// Clean up transport context and JSON

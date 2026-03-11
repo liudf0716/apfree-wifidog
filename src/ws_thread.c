@@ -334,6 +334,25 @@ start_ws_heartbeat(struct bufferevent *b_ws)
  * @param msg The raw JSON message string to process.
  */
 static void
+send_ws_error_response(api_transport_context_t *transport, int res_code, const char *msg, const char *requested_op)
+{
+	json_object *j_response = json_object_new_object();
+	if (!j_response) {
+		return;
+	}
+
+	char code_buf[16];
+	snprintf(code_buf, sizeof(code_buf), "%d", res_code);
+	json_object_object_add(j_response, "response", json_object_new_string(code_buf));
+	json_object_object_add(j_response, "msg", json_object_new_string(msg ? msg : "error"));
+	if (requested_op) {
+		json_object_object_add(j_response, "requested_op", json_object_new_string(requested_op));
+	}
+
+	send_json_response(transport, j_response);
+}
+
+static void
 process_ws_msg(struct bufferevent *bev, const char *msg)
 {
 	debug(LOG_DEBUG, "Processing WebSocket message: %s", msg);
@@ -342,6 +361,11 @@ process_ws_msg(struct bufferevent *bev, const char *msg)
 	json_object *jobj = json_tokener_parse(msg);
 	if (!jobj) {
 		debug(LOG_ERR, "Failed to parse JSON message");
+		api_transport_context_t *transport = create_websocket_transport_context(bev, NULL);
+		if (transport) {
+			send_ws_error_response(transport, 400, "Invalid JSON request", NULL);
+			destroy_transport_context(transport);
+		}
 		return;
 	}
 
@@ -359,10 +383,7 @@ process_ws_msg(struct bufferevent *bev, const char *msg)
 
 	if (!op) {
 		debug(LOG_ERR, "Missing op field in JSON");
-		json_object *j_response = json_object_new_object();
-		json_object_object_add(j_response, "type", json_object_new_string("request_error"));
-		json_object_object_add(j_response, "error", json_object_new_string("Missing op field in JSON"));
-		send_json_response(transport, j_response);
+		send_ws_error_response(transport, 400, "Missing op field in JSON", NULL);
 		destroy_transport_context(transport);
 		json_object_put(jobj);
 		return;
@@ -372,10 +393,7 @@ process_ws_msg(struct bufferevent *bev, const char *msg)
 	const char *op_str = json_object_get_string(op);
 	if (!op_str) {
 		debug(LOG_ERR, "Invalid op in JSON (null string)");
-		json_object *j_response = json_object_new_object();
-		json_object_object_add(j_response, "type", json_object_new_string("request_error"));
-		json_object_object_add(j_response, "error", json_object_new_string("Invalid op in JSON"));
-		send_json_response(transport, j_response);
+		send_ws_error_response(transport, 400, "Invalid op in JSON", NULL);
 		destroy_transport_context(transport);
 		json_object_put(jobj);
 		return;
@@ -404,11 +422,7 @@ process_ws_msg(struct bufferevent *bev, const char *msg)
 	// Route downlink commands using unified API dispatch
 	if (!api_dispatch_request(op_str, jobj, transport)) {
 		debug(LOG_ERR, "Unknown WebSocket operation: %s", op_str);
-		json_object *j_response = json_object_new_object();
-		json_object_object_add(j_response, "type", json_object_new_string("request_error"));
-		json_object_object_add(j_response, "error", json_object_new_string("Unknown WebSocket operation"));
-		json_object_object_add(j_response, "requested_op", json_object_new_string(op_str));
-		send_json_response(transport, j_response);
+		send_ws_error_response(transport, 400, "Unknown operation", op_str);
 	}
 
 	// Clean up transport context and JSON
