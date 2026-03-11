@@ -19,12 +19,12 @@ typedef struct api_transport_context api_transport_context_t;
  * Different transport protocols (WebSocket, MQTT, HTTP) can provide
  * their own implementation of this function.
  * 
- * @param ctx Transport-specific context (e.g., bufferevent for WebSocket)
+ * @param transport Full transport context
  * @param message The message string to send
  * @param length Length of the message
  * @return 0 on success, -1 on error
  */
-typedef int (*api_send_response_func_t)(void *ctx, const char *message, size_t length);
+typedef int (*api_send_response_func_t)(api_transport_context_t *transport, const char *message, size_t length);
 
 /**
  * @brief Transport context structure for API handlers
@@ -131,7 +131,7 @@ void handle_bpf_update_all_request(json_object *j_req, api_transport_context_t *
 
 // Utility functions for transport abstraction
 api_transport_context_t* create_websocket_transport_context(struct bufferevent *bev, json_object *req_id);
-api_transport_context_t* create_mqtt_transport_context(void *mosq, unsigned int req_id);
+api_transport_context_t* create_mqtt_transport_context(void *mosq, json_object *req_id);
 void destroy_transport_context(api_transport_context_t *transport);
 
 // Handler function type for message routing

@@ -17,12 +17,6 @@ extern void ws_send(struct evbuffer *buf, const char *msg, const size_t len, int
 
 
 
-// MQTT context structure to hold mosquitto instance and req_id
-typedef struct {
-    void *mosq;              // struct mosquitto *
-    unsigned int req_id;
-} mqtt_context_t;
-
 static bool transport_should_echo_req_id(const api_transport_context_t *transport)
 {
     return transport && transport->req_id &&
@@ -90,13 +84,13 @@ api_dispatch_request(const char *op_name, json_object *json_req, api_transport_c
 /**
  * @brief WebSocket-specific send response implementation
  * 
- * @param ctx Transport context (should be struct bufferevent*)
+ * @param transport Transport context
  * @param message Message to send
  * @param length Length of message
  * @return 0 on success, -1 on error
  */
-static int websocket_send_response(void *ctx, const char *message, size_t length) {
-    struct bufferevent *bev = (struct bufferevent *)ctx;
+static int websocket_send_response(api_transport_context_t *transport, const char *message, size_t length) {
+    struct bufferevent *bev = transport ? (struct bufferevent *)transport->transport_ctx : NULL;
     if (!bev || !message) {
         return -1;
     }
@@ -108,20 +102,21 @@ static int websocket_send_response(void *ctx, const char *message, size_t length
 /**
  * @brief MQTT-specific send response implementation
  * 
- * @param ctx Transport context (should be mqtt_context_t*)
+ * @param transport Transport context
  * @param message Message to send
  * @param length Length of message
  * @return 0 on success, -1 on error
  */
-static int mqtt_send_response(void *ctx, const char *message, size_t length) {
-    mqtt_context_t *mqtt_ctx = (mqtt_context_t *)ctx;
-    if (!mqtt_ctx || !mqtt_ctx->mosq || !message) {
+static int mqtt_send_response(api_transport_context_t *transport, const char *message, size_t length) {
+    void *mosq = transport ? transport->transport_ctx : NULL;
+    if (!mosq || !message) {
         debug(LOG_ERR, "mqtt_send_response: Invalid context or message");
         return -1;
     }
-    
+
     char *topic = NULL;
-    char *res_data = NULL;
+    json_object *j_response = NULL;
+    json_object *j_data = NULL;
     
     // Get device ID (external function)
     extern const char* get_device_id(void);
@@ -131,24 +126,39 @@ static int mqtt_send_response(void *ctx, const char *message, size_t length) {
         debug(LOG_ERR, "mqtt_send_response: Failed to allocate topic");
         return -1;
     }
-    
-    if (asprintf(&res_data, "{\"req_id\":%u,\"response\":\"200\",\"data\":%s}", 
-                 mqtt_ctx->req_id, message) < 0) {
-        debug(LOG_ERR, "mqtt_send_response: Failed to allocate response data");
+
+    j_response = json_object_new_object();
+    if (!j_response) {
+        debug(LOG_ERR, "mqtt_send_response: Failed to allocate response object");
         free(topic);
         return -1;
     }
-    
-    debug(LOG_INFO, "mqtt_send_response: Publishing to topic: %s, req_id: %u", topic, mqtt_ctx->req_id);
+
+    if (transport->req_id) {
+        json_object_object_add(j_response, "req_id", json_object_get(transport->req_id));
+    }
+    json_object_object_add(j_response, "response", json_object_new_string("200"));
+
+    j_data = json_tokener_parse(message);
+    if (!j_data || is_error(j_data)) {
+        if (j_data && is_error(j_data)) {
+            j_data = NULL;
+        }
+        j_data = json_object_new_string(message);
+    }
+    json_object_object_add(j_response, "data", j_data);
+
+    const char *res_data = json_object_to_json_string(j_response);
+    debug(LOG_INFO, "mqtt_send_response: Publishing to topic: %s", topic);
     
     // Publish via mosquitto library
-    int ret = mosquitto_publish(mqtt_ctx->mosq, NULL, topic, 
+    int ret = mosquitto_publish(mosq, NULL, topic, 
                                strlen(res_data), res_data, 0, false);
     
     debug(LOG_INFO, "mqtt_send_response: mosquitto_publish returned: %d", ret);
     
     free(topic);
-    free(res_data);
+    json_object_put(j_response);
     
     return ret == 0 ? 0 : -1;
 }
@@ -160,29 +170,21 @@ static int mqtt_send_response(void *ctx, const char *message, size_t length) {
  * @param req_id Request ID for correlation
  * @return Allocated transport context, or NULL on error
  */
-api_transport_context_t* create_mqtt_transport_context(void *mosq, unsigned int req_id) {
+api_transport_context_t* create_mqtt_transport_context(void *mosq, json_object *req_id) {
     if (!mosq) {
         return NULL;
     }
-    
-    mqtt_context_t *mqtt_ctx = malloc(sizeof(mqtt_context_t));
-    if (!mqtt_ctx) {
-        return NULL;
-    }
-    
-    mqtt_ctx->mosq = mosq;
-    mqtt_ctx->req_id = req_id;
-    
+
     api_transport_context_t *transport = malloc(sizeof(api_transport_context_t));
     if (!transport) {
-        free(mqtt_ctx);
         return NULL;
     }
     
-    transport->transport_ctx = mqtt_ctx;
+    transport->transport_ctx = mosq;
     transport->send_response = mqtt_send_response;
     transport->protocol_name = "mqtt";
     transport->req_id = NULL;
+    api_transport_set_req_id(transport, req_id);
     
     return transport;
 }
@@ -223,11 +225,7 @@ void destroy_transport_context(api_transport_context_t *transport) {
             json_object_put(transport->req_id);
             transport->req_id = NULL;
         }
-        // For MQTT, we need to free the mqtt_context_t structure
-        if (transport->protocol_name && strcmp(transport->protocol_name, "mqtt") == 0) {
-            free(transport->transport_ctx);
-        }
-        // Note: For WebSocket, transport_ctx (bufferevent) is managed by the caller
+        // transport_ctx is owned by the caller for both MQTT and WebSocket.
         free(transport);
     }
 }
@@ -254,7 +252,7 @@ int send_response(api_transport_context_t *transport, const char *message) {
         if (j_response && json_object_is_type(j_response, json_type_object)) {
             maybe_attach_req_id(transport, j_response);
             const char *annotated = json_object_to_json_string(j_response);
-            int rc = transport->send_response(transport->transport_ctx, annotated, strlen(annotated));
+            int rc = transport->send_response(transport, annotated, strlen(annotated));
             json_object_put(j_response);
             return rc;
         }
@@ -263,7 +261,7 @@ int send_response(api_transport_context_t *transport, const char *message) {
         }
     }
 
-    return transport->send_response(transport->transport_ctx, message, strlen(message));
+    return transport->send_response(transport, message, strlen(message));
 }
 
 /*

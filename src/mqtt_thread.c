@@ -75,6 +75,7 @@ static void
 process_mqtt_request(struct mosquitto *mosq, const char *data, s_config *config)
 {
 	unsigned int req_id = 0;
+	json_object *jo_req_id = NULL;
 	
 	json_object *json_request = json_tokener_parse(data);
 	if (is_error(json_request)) {
@@ -84,7 +85,7 @@ process_mqtt_request(struct mosquitto *mosq, const char *data, s_config *config)
 	}
 
 	// Get req_id from JSON payload (v1 format)
-	json_object *jo_req_id = json_object_object_get(json_request, "req_id");
+	jo_req_id = json_object_object_get(json_request, "req_id");
 	if (jo_req_id) {
 		req_id = json_object_get_int(jo_req_id);
 	} else {
@@ -109,7 +110,7 @@ process_mqtt_request(struct mosquitto *mosq, const char *data, s_config *config)
 	}
 
 	// Create MQTT transport context
-	api_transport_context_t *transport = create_mqtt_transport_context(mosq, req_id);
+	api_transport_context_t *transport = create_mqtt_transport_context(mosq, jo_req_id);
 	if (!transport) {
 		debug(LOG_ERR, "Failed to create MQTT transport context");
 		json_object_put(json_request);
