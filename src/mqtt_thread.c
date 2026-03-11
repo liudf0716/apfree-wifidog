@@ -52,36 +52,6 @@ send_mqtt_response(struct mosquitto *mosq, const unsigned int req_id, int res_id
 	free(res_data);
 }
 
-// Special handlers that need custom processing (MQTT-specific)
-static bool
-handle_special_operation(const char *op, struct mosquitto *mosq, unsigned int req_id, 
-                         json_object *json_request, api_transport_context_t *transport, 
-                         s_config *config)
-{
-	if (strcmp(op, "save_rule") == 0) {
-		user_cfg_save();
-		send_mqtt_response(mosq, req_id, 200, "Ok", config);
-		return true;
-	}
-	
-	// TODO operations - return 501 Not Implemented
-	const char *todo_ops[] = {
-		"reset", "reset_device", "update_config", "qos", "set_default_qos",
-		"uci", "get_traffic_stats", "wan_change", "alarm", NULL
-	};
-	
-	for (int i = 0; todo_ops[i] != NULL; i++) {
-		if (strcmp(op, todo_ops[i]) == 0) {
-			char msg[128];
-			snprintf(msg, sizeof(msg), "%s not implemented yet", op);
-			send_mqtt_response(mosq, req_id, 501, msg, config);
-			return true;
-		}
-	}
-	
-	return false;
-}
-
 static void
 process_mqtt_request(struct mosquitto *mosq, const char *data, s_config *config)
 {
@@ -130,18 +100,12 @@ process_mqtt_request(struct mosquitto *mosq, const char *data, s_config *config)
 
 	debug(LOG_DEBUG, "Processing MQTT operation: %s (req_id: %u)", op, req_id);
 
-	// Check for special operations first
-	if (handle_special_operation(op, mosq, req_id, json_request, transport, config)) {
-		goto cleanup;
-	}
-
 	// Route to handler using unified API dispatch
 	if (!api_dispatch_request(op, json_request, transport)) {
 		debug(LOG_ERR, "Unknown MQTT operation type: %s", op);
 		send_mqtt_response(mosq, req_id, 400, "Unknown operation", config);
 	}
 
-cleanup:
 	// Clean up transport context and JSON
 	destroy_transport_context(transport);
 	json_object_put(json_request);
