@@ -102,9 +102,12 @@ process_mqtt_request(struct mosquitto *mosq, const char *data, s_config *config)
 	// Handle upward reports directly (not routed through downlink command handlers)
 	if (strcmp(op, "heartbeat") == 0 || strcmp(op, "connect") == 0 || strcmp(op, "bootstrap") == 0) {
 		debug(LOG_INFO, "Received upward report via MQTT: %s (req_id: %u)", op, req_id);
-		// For MQTT upward reports: acknowledge receipt if needed
-		// Currently upward reports don't require a response back to device
-		// This is different from WebSocket where device sends proactively
+		// For connect/bootstrap, run gateway-state sync logic (preserve legacy behavior)
+		if (strcmp(op, "connect") == 0 || strcmp(op, "bootstrap") == 0) {
+			debug(LOG_INFO, "Invoking gateway state handler for %s", op);
+			handle_gateway_state_heartbeat_request(json_request, transport);
+		}
+		// For heartbeat we currently do not need to run gateway-state handler here
 		destroy_transport_context(transport);
 		json_object_put(json_request);
 		return;
