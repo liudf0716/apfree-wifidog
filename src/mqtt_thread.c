@@ -21,6 +21,7 @@
 #include <time.h>
 #include <errno.h>
 #include <mosquitto.h>
+#include <pthread.h>
 
 /* Internal flag indicating whether MQTT client is connected. */
 _Atomic int mqtt_connected = 0;
@@ -36,7 +37,26 @@ static char *mqtt_host_cached = NULL;
 static int mqtt_port_cached = 0;
 static int mqtt_keepalive_cached = 60;
 static const int mqtt_reconnect_backstop_sec = 10;
+static const int mqtt_heartbeat_interval_sec = 60;
 static bool has_default_route(void);
+
+static void publish_gateway_report(struct mosquitto *mosq, const char *op)
+{
+	json_object *j_report = build_gateway_report_message(op);
+	if (!j_report) {
+		return;
+	}
+
+	const char *payload = json_object_to_json_string(j_report);
+	char *topic = NULL;
+	safe_asprintf(&topic, "wifidogx/v1/%s/c2s/request", get_device_id());
+	if (topic && payload) {
+		mosquitto_publish(mosq, NULL, topic, strlen(payload), payload, 0, false);
+	}
+
+	free(topic);
+	json_object_put(j_report);
+}
 
 static void
 send_mqtt_response(struct mosquitto *mosq, const unsigned int req_id, int res_id, const char *msg, const s_config *config)
@@ -161,6 +181,9 @@ mqtt_connect_callback(struct mosquitto *mosq, void *obj, int rc)
 
 		free(s2c_request_topic);
 		free(c2s_response_topic);
+
+		/* Publish a one-time connect report on MQTT (device -> server) */
+		publish_gateway_report(mosq, "connect");
 	} else {
 		mqtt_connected = 0;
 		debug(LOG_WARNING, "MQTT connect callback: failed with rc=%d (%s)", rc, mosquitto_strerror(rc));
@@ -291,6 +314,8 @@ void thread_mqtt(void *arg)
 		retval = mosquitto_loop_forever(mosq, -1, 1);
 		/* mosquitto_loop_forever only returns on error or finish */
 	} else {
+		time_t next_heartbeat_at = time(NULL) + mqtt_heartbeat_interval_sec;
+
 		/* Wait for stop signal and provide a periodic reconnect backstop. */
 		pthread_mutex_lock(&mqtt_thread_ctrl_lock);
 		while (!mqtt_thread_should_stop) {
@@ -305,6 +330,14 @@ void thread_mqtt(void *arg)
 			if (wait_rc == ETIMEDOUT && !mqtt_connected && has_default_route()) {
 				pthread_mutex_unlock(&mqtt_thread_ctrl_lock);
 				mqtt_request_reconnect();
+				pthread_mutex_lock(&mqtt_thread_ctrl_lock);
+			}
+
+			time_t now = time(NULL);
+			if (mqtt_connected && now >= next_heartbeat_at) {
+				pthread_mutex_unlock(&mqtt_thread_ctrl_lock);
+				publish_gateway_report(mosq, "heartbeat");
+				next_heartbeat_at = now + mqtt_heartbeat_interval_sec;
 				pthread_mutex_lock(&mqtt_thread_ctrl_lock);
 			}
 		}
