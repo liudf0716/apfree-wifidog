@@ -81,10 +81,19 @@ ev_logout_client(struct wd_request_context *context, t_client *client)
         return;
     }
 
+    // Keep a stable snapshot across async request/response lifecycle.
+    // The original client may be removed by other threads before callback.
+    t_client *client_snapshot = client_dup(client);
+    if (!client_snapshot) {
+        debug(LOG_ERR, "Failed to duplicate client for logout request");
+        return;
+    }
+
     // Generate logout URI for this client
-    char *uri = get_auth_uri(REQUEST_TYPE_LOGOUT, ONLINE_CLIENT, client);
+    char *uri = get_auth_uri(REQUEST_TYPE_LOGOUT, ONLINE_CLIENT, client_snapshot);
     if (!uri) {
         debug(LOG_ERR, "Failed to generate logout URI");
+        client_free_node(client_snapshot);
         return;
     }
 
@@ -95,12 +104,13 @@ ev_logout_client(struct wd_request_context *context, t_client *client)
     struct evhttp_request *req = NULL;
     
     assert(context->data == NULL);
-    context->data = client;
+    context->data = client_snapshot;
 
     if (!wd_make_request(context, &evcon, &req, process_auth_server_logout)) {
         evhttp_make_request(evcon, req, EVHTTP_REQ_GET, uri);
     } else {
         debug(LOG_ERR, "Failed to create auth server request");
+        client_free_node(client_snapshot);
         context->data = NULL;
     }
 

@@ -538,9 +538,18 @@ process_auth_server_logout(struct evhttp_request *req, void *ctx)
     if (authresponse.authcode == 0) {
         // Successful logout
         if (client) {
-            fw_deny(client);
-            debug(LOG_INFO, "Client %s logged out successfully", client->ip);
-            safe_client_list_delete(client);
+            LOCK_CLIENT_LIST();
+            t_client *active_client = client_list_find_by_client_id(client->id);
+            if (active_client) {
+                fw_deny(active_client);
+                debug(LOG_INFO, "Client %s logged out successfully", active_client->ip);
+                client_list_delete(active_client);
+            } else {
+                debug(LOG_NOTICE,
+                    "Client id=%llu already removed before logout callback",
+                    client->id);
+            }
+            UNLOCK_CLIENT_LIST();
         }
     } else {
         debug(LOG_WARNING, "Auth server returned non-zero code %d for logout",
@@ -548,6 +557,10 @@ process_auth_server_logout(struct evhttp_request *req, void *ctx)
     }
 
 cleanup:
+    if (client) {
+        // context->data stores a client snapshot owned by this callback.
+        client_free_node(client);
+    }
     context->data = NULL; // Clear client pointer from context
 }
 
@@ -942,15 +955,25 @@ client_counter_request_reply_v2(t_authresponse *authresponse,
       "Client %s timeout check: Last updated=%ld, Idle time=%ld, Timeout=%ld, Current time=%ld",
             client->ip, last_activity, idle_time, timeout, current_time);
 
+    // Duplicate under lock so caller side never dereferences a shared pointer
+    // after releasing client list lock.
+    t_client *client_snapshot = client_dup(client);
+    UNLOCK_CLIENT_LIST();
+
+    if (!client_snapshot) {
+        debug(LOG_ERR, "Failed to duplicate client snapshot");
+        return;
+    }
+
     if (idle_time >= timeout) {
-        UNLOCK_CLIENT_LIST(); 
         debug(LOG_DEBUG, "Client %s timed out after %ld seconds of inactivity",
-            client->ip, idle_time);
-        ev_logout_client(context, client);
+            client_snapshot->ip, idle_time);
+        ev_logout_client(context, client_snapshot);
+        client_free_node(client_snapshot);
     } else {
-        UNLOCK_CLIENT_LIST();
         // Process any status changes from auth server
-        fw_client_process_from_authserver_response(authresponse, client);
+        fw_client_process_from_authserver_response(authresponse, client_snapshot);
+        client_free_node(client_snapshot);
     }
 }
 
