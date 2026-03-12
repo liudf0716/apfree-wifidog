@@ -491,6 +491,8 @@ get_client_status_json()
 			json_object_new_int64(current->counters6.incoming_packets));	
 		json_object_object_add(jtraffic, "outgoing_packets_v6",
 			json_object_new_int64(current->counters6.outgoing_packets));
+		/* Attach traffic object to client JSON */
+		json_object_object_add(jclient, "traffic", jtraffic);
 		json_object_object_add(jclient, "wired", json_object_new_int(current->wired));
 		json_object_object_add(jclient, "gw_id",
 			json_object_new_string(
