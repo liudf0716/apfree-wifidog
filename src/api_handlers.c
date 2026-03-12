@@ -329,6 +329,27 @@ void send_json_response(api_transport_context_t *transport, json_object *j_respo
 }
 
 /**
+ * @brief Generate a request identifier for tracing.
+ *
+ * The identifier is an unsigned integer composed from the current
+ * UNIX millisecond timestamp and a small random suffix to reduce
+ * collision probability across devices. The returned json_object is
+ * a JSON integer and the caller must free it with json_object_put().
+ */
+json_object *api_generate_req_id(void)
+{
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    unsigned long long ms = (unsigned long long)tv.tv_sec * 1000ULL + (tv.tv_usec / 1000ULL);
+    unsigned int suffix = (unsigned int)(random() % 1000);
+    /* Compose a numeric id: ms * 1000 + suffix. Cast to 32-bit int
+     * using json_object_new_int() as requested. Note: this truncates
+     * higher bits if the value exceeds 32-bit range. */
+    unsigned long long id = ms * 1000ULL + (unsigned long long)suffix;
+    return json_object_new_int((int)id);
+}
+
+/**
  * @brief Safe UCI configuration setter with input validation
  * 
  * @param config_path UCI configuration path

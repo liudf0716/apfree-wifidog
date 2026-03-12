@@ -107,6 +107,14 @@ void handle_get_sys_info_request(json_object *j_req, api_transport_context_t *tr
 // Shared report builder for heartbeat/connect/bootstrap payloads (used by ws_thread and mqtt_thread)
 json_object *build_gateway_report_message(const char *op);
 
+/* Generate a request identifier for tracing/log correlation.
+ * Returns a newly allocated json_object (32-bit integer) which the caller
+ * should free with json_object_put() when no longer needed.
+ * Note: the value is created with json_object_new_int() and may be
+ * truncated if it exceeds 32-bit range.
+ */
+json_object *api_generate_req_id(void);
+
 // AW status handler (apfree-wifidog specific)
 void handle_get_aw_status_request(json_object *j_req, api_transport_context_t *transport);
 

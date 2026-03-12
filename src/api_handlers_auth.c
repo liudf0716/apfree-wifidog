@@ -130,8 +130,18 @@ void handle_shell_request(json_object *j_req, api_transport_context_t *transport
 
     jo_req_id = json_object_object_get(j_req, "req_id");
     if (jo_req_id) {
-        const char *req_id_str = json_object_get_string(jo_req_id);
-        json_object_object_add(j_response, "req_id", json_object_new_string(req_id_str ? req_id_str : ""));
+        enum json_type t = json_object_get_type(jo_req_id);
+        if (t == json_type_int) {
+            json_object_object_add(j_response, "req_id",
+                                   json_object_new_int64(json_object_get_int64(jo_req_id)));
+        } else if (t == json_type_double) {
+            /* Treat double as integer by truncation */
+            json_object_object_add(j_response, "req_id",
+                                   json_object_new_int64((long long)json_object_get_double(jo_req_id)));
+        } else {
+            const char *req_id_str = json_object_get_string(jo_req_id);
+            json_object_object_add(j_response, "req_id", json_object_new_string(req_id_str ? req_id_str : ""));
+        }
     }
 
     jo_command = json_object_object_get(j_req, "command");

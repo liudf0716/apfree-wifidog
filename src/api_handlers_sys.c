@@ -88,6 +88,14 @@ json_object *build_gateway_report_message(const char *op)
         json_object_object_add(root, "sys_info", sys_info_obj);
     }
 
+    /* Attach a generated req_id using the common helper for consistency. */
+    {
+        json_object *rid = api_generate_req_id();
+        if (rid) {
+            json_object_object_add(root, "req_id", rid);
+        }
+    }
+
     return root;
 }
 
