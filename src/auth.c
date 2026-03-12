@@ -102,16 +102,30 @@ ev_logout_client(struct wd_request_context *context, t_client *client)
     // Setup auth server request
     struct evhttp_connection *evcon = NULL;
     struct evhttp_request *req = NULL;
-    
-    assert(context->data == NULL);
-    context->data = client_snapshot;
 
-    if (!wd_make_request(context, &evcon, &req, process_auth_server_logout)) {
+    // Create a dedicated request context so logout does not race on
+    // shared context->data when multiple async requests are in-flight.
+    struct wd_request_context *req_ctx = wd_request_context_new(
+        context->base,
+        context->ssl,
+        get_auth_server()->authserv_use_ssl);
+    if (!req_ctx) {
+        debug(LOG_ERR, "Failed to create per-request context for logout");
+        client_free_node(client_snapshot);
+        free(uri);
+        return;
+    }
+
+    req_ctx->data = client_snapshot;
+    req_ctx->per_request = 1;
+
+    if (!wd_make_request(req_ctx, &evcon, &req, process_auth_server_logout)) {
         evhttp_make_request(evcon, req, EVHTTP_REQ_GET, uri);
     } else {
         debug(LOG_ERR, "Failed to create auth server request");
         client_free_node(client_snapshot);
-        context->data = NULL;
+        req_ctx->data = NULL;
+        wd_request_context_destroy(req_ctx);
     }
 
     free(uri);

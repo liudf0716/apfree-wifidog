@@ -12,6 +12,7 @@
 #include "firewall.h"
 #include "safe.h"
 #include "util.h"
+#include "wd_util.h"
 #include <errno.h>
 
 #ifndef VERSION
@@ -104,6 +105,17 @@ int client_snapshot_save(void)
     LOCK_CLIENT_LIST();
     t_client *client = client_get_first_client();
     while (client) {
+        if (!client->gw_setting || !client->gw_setting->gw_id || !client->gw_setting->gw_channel
+            || client->gw_setting->gw_id[0] == '\0' || client->gw_setting->gw_channel[0] == '\0') {
+            UNLOCK_CLIENT_LIST();
+            json_object_put(root);
+            debug(LOG_ERR,
+                "Fatal: online client %s (%s) missing required gw_id/gw_channel; aborting",
+                client->mac ? client->mac : "N/A",
+                client->ip ? client->ip : "N/A");
+            exit(EXIT_FAILURE);
+        }
+
         json_object *c_obj = json_object_new_object();
         json_object_object_add(c_obj, "mac", json_object_new_string(client->mac));
         json_object_object_add(c_obj, "ip", json_object_new_string(client->ip ? client->ip : ""));
@@ -130,6 +142,8 @@ int client_snapshot_save(void)
         json_object_object_add(c_obj, "counters6", c6_obj);
 
         json_object_object_add(c_obj, "fw_connection_state", json_object_new_int(client->fw_connection_state));
+        json_object_object_add(c_obj, "gw_id", json_object_new_string(client->gw_setting->gw_id));
+        json_object_object_add(c_obj, "gw_channel", json_object_new_string(client->gw_setting->gw_channel));
         
         json_object_array_add(clients_array, c_obj);
         client = client->next;
@@ -247,11 +261,49 @@ int __client_snapshot_load(void)
             const char *ip = json_object_get_string(json_object_object_get(c_obj, "ip"));
             const char *ip6 = json_object_get_string(json_object_object_get(c_obj, "ip6"));
             const char *token = json_object_get_string(json_object_object_get(c_obj, "token"));
+            const char *gw_id = NULL;
+            const char *gw_channel = NULL;
             int fw_state = json_object_get_int(json_object_object_get(c_obj, "fw_connection_state"));
             const char *auth_type_str = NULL;
             json_object *auth_type_obj = NULL;
+            json_object *gw_id_obj = NULL;
+            json_object *gw_channel_obj = NULL;
             if (json_object_object_get_ex(c_obj, "auth_type", &auth_type_obj)) {
                 auth_type_str = json_object_get_string(auth_type_obj);
+            }
+            if (json_object_object_get_ex(c_obj, "gw_id", &gw_id_obj)) {
+                gw_id = json_object_get_string(gw_id_obj);
+            }
+            if (json_object_object_get_ex(c_obj, "gw_channel", &gw_channel_obj)) {
+                gw_channel = json_object_get_string(gw_channel_obj);
+            }
+
+            if (!gw_id || gw_id[0] == '\0' || !gw_channel || gw_channel[0] == '\0') {
+                json_object_put(root);
+                debug(LOG_ERR,
+                    "Fatal: snapshot client %s (%s) missing required gw_id/gw_channel",
+                    mac ? mac : "N/A", ip ? ip : "N/A");
+                exit(EXIT_FAILURE);
+            }
+
+            t_gateway_setting *gw_setting = get_gateway_setting_by_id(gw_id);
+
+            if (!gw_setting) {
+                json_object_put(root);
+                debug(LOG_ERR,
+                    "Fatal: snapshot gw_id '%s' for client %s (%s) not found in gateway settings",
+                    gw_id, mac ? mac : "N/A", ip ? ip : "N/A");
+                exit(EXIT_FAILURE);
+            }
+
+            if (!gw_setting->gw_channel || strcmp(gw_setting->gw_channel, gw_channel) != 0) {
+                json_object_put(root);
+                debug(LOG_ERR,
+                    "Fatal: snapshot gw_channel '%s' mismatch for gw_id '%s' (expected '%s')",
+                    gw_channel,
+                    gw_id,
+                    gw_setting->gw_channel ? gw_setting->gw_channel : "N/A");
+                exit(EXIT_FAILURE);
             }
 
             debug(LOG_INFO, "Restoring online client: %s (%s)", mac, ip);
@@ -264,6 +316,7 @@ int __client_snapshot_load(void)
                     client->ip = safe_strdup(ip);
                     client->ip6 = safe_strdup(ip6);
                     client->token = safe_strdup(token);
+                    client->gw_setting = gw_setting;
                     client->first_login = json_object_get_int64(json_object_object_get(c_obj, "first_login"));
                     client->auth_type = auth_type_from_string(auth_type_str);
                     
@@ -290,6 +343,8 @@ int __client_snapshot_load(void)
                     
                     client_list_insert_client(client);
                 }
+            } else {
+                client->gw_setting = gw_setting;
             }
 
             // Apply firewall rule

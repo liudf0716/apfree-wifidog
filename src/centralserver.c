@@ -385,6 +385,10 @@ get_auth_uri(const char *request_type, client_type_t type, void *data)
     switch(type) {
     case ONLINE_CLIENT: {
         t_client *client = (t_client *)data;
+        if (!client) {
+            debug(LOG_ERR, "get_auth_uri: NULL client for ONLINE_CLIENT");
+            return NULL;
+        }
         
         // Basic identifiers
         ip = client->ip;
@@ -412,8 +416,17 @@ get_auth_uri(const char *request_type, client_type_t type, void *data)
         wired = client->wired;
         
         // Gateway info
-        gw_id = client->gw_setting->gw_id;
-        gw_channel = client->gw_setting->gw_channel;
+        t_gateway_setting *gw_setting = client->gw_setting;
+        if (!gw_setting || !gw_setting->gw_id || !gw_setting->gw_channel
+            || gw_setting->gw_id[0] == '\0' || gw_setting->gw_channel[0] == '\0') {
+            debug(LOG_ERR,
+                "Fatal: get_auth_uri requires valid gw_id/gw_channel for client %s (%s)",
+                client->mac ? client->mac : "N/A",
+                client->ip ? client->ip : "N/A");
+            exit(EXIT_FAILURE);
+        }
+        gw_id = gw_setting->gw_id;
+        gw_channel = gw_setting->gw_channel;
         break;
     }    
     
@@ -562,6 +575,9 @@ cleanup:
         client_free_node(client);
     }
     context->data = NULL; // Clear client pointer from context
+    if (context->per_request) {
+        wd_request_context_destroy(context);
+    }
 }
 
 /**
