@@ -65,8 +65,6 @@ void handle_gateway_state_heartbeat_request(json_object *j_heartbeat, api_transp
         nft_reload_gw();
 #endif
     }
-
-    send_response(transport, "{\"status\":\"heartbeat_received\"}");
 }
 
 void handle_tmp_pass_request(json_object *j_tmp_pass, api_transport_context_t *transport)
