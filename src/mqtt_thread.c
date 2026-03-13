@@ -124,6 +124,30 @@ process_mqtt_request(struct mosquitto *mosq, const char *data, s_config *config)
 		return;
 	}
 
+	// if message is response from server
+	json_object *j_response = NULL;
+	if (json_object_object_get_ex(json_request, "response", &j_response)) {
+		// get data field and get type field in data
+		json_object *j_data = NULL;
+		if (json_object_object_get_ex(json_request, "data", &j_data)) {
+			json_object *j_type = NULL;
+			if (json_object_object_get_ex(j_data, "type", &j_type)) {
+				if (strcmp(json_object_get_string(j_type), "connect") == 0 || strcmp(json_object_get_string(j_type), "bootstrap") == 0) {
+					debug(LOG_INFO, "Received connect/bootstrap response, invoking gateway state sync");
+					handle_gateway_state_heartbeat_request(j_data, transport);
+				} else if (strcmp(json_object_get_string(j_type), "heartbeat") == 0) {
+					debug(LOG_DEBUG, "Received heartbeat response, no additional handling needed");
+					// 
+				}
+				// For other response types, we currently do not have specific handling logic here
+				// but we could add it in the future if needed.
+			}
+		}
+		destroy_transport_context(transport);
+		json_object_put(json_request);
+		return;
+	}
+
 	// Get operation type
 	json_object *jo_op = json_object_object_get(json_request, "op");
 	if (!jo_op) {
@@ -145,21 +169,9 @@ process_mqtt_request(struct mosquitto *mosq, const char *data, s_config *config)
 
 	debug(LOG_DEBUG, "Processing MQTT operation: %s (req_id: %u)", op, req_id);
 
-	// Handle upward reports directly (not routed through downlink command handlers)
-	if (strcmp(op, "heartbeat") == 0 || strcmp(op, "connect") == 0 || strcmp(op, "bootstrap") == 0) {
-		debug(LOG_INFO, "Received upward report via MQTT: %s (req_id: %u)", op, req_id);
-		// For connect/bootstrap, run gateway-state sync logic (preserve legacy behavior)
-		if (strcmp(op, "connect") == 0 || strcmp(op, "bootstrap") == 0) {
-			debug(LOG_INFO, "Invoking gateway state handler for %s", op);
-			handle_gateway_state_heartbeat_request(json_request, transport);
-		}
-		// For heartbeat we currently do not need to run gateway-state handler here
-		destroy_transport_context(transport);
-		json_object_put(json_request);
-		return;
-	}
-
-	// Route downlink commands through API dispatch
+	/* Route all MQTT operations through the unified API dispatcher so behavior
+	 * matches WebSocket processing (process_ws_msg). This keeps handler logic
+	 * centralized and avoids transport-specific special-casing here. */
 	if (!api_dispatch_request(op, json_request, transport)) {
 		debug(LOG_ERR, "Unknown MQTT operation type: %s", op);
 		send_mqtt_error_response(mosq, jo_req_id, 400, "Unknown operation", op);
