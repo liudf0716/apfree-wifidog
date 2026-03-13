@@ -8,6 +8,7 @@
 #include "api_handlers.h"
 #include "debug.h"
 #include "api_handlers_internal.h"
+#include <limits.h>
 
 // Forward declaration of ws_send function (will be implemented in ws_thread.c)
 extern void ws_send(struct evbuffer *buf, const char *msg, const size_t len, int frame_type);
@@ -343,10 +344,17 @@ json_object *api_generate_req_id(void)
     unsigned long long ms = (unsigned long long)tv.tv_sec * 1000ULL + (tv.tv_usec / 1000ULL);
     unsigned int suffix = (unsigned int)(random() % 1000);
     /* Compose a numeric id: ms * 1000 + suffix. Cast to 32-bit int
-     * using json_object_new_int() as requested. Note: this truncates
-     * higher bits if the value exceeds 32-bit range. */
+     * using json_object_new_int() as requested. To avoid negative
+     * values from 32-bit overflow, clamp the generated value into
+     * the positive 32-bit signed range. */
     unsigned long long id = ms * 1000ULL + (unsigned long long)suffix;
-    return json_object_new_int((int)id);
+    /* INT_MAX from <limits.h> is used as the clamp upper bound. */
+    int clamped = (int)(id % (unsigned long long)INT_MAX);
+    if (clamped <= 0) {
+        /* Ensure strictly positive */
+        clamped = 1;
+    }
+    return json_object_new_int(clamped);
 }
 
 /**
