@@ -26,7 +26,6 @@ void handle_gateway_state_heartbeat_request(json_object *j_heartbeat, api_transp
     json_object *gw_array = json_object_object_get(j_heartbeat, "gateway");
     if (!gw_array || !json_object_is_type(gw_array, json_type_array)) {
         debug(LOG_ERR, "Heartbeat: Invalid or missing gateway array");
-        send_response(transport, "{\"error\":\"Invalid or missing gateway array\"}");
         return;
     }
 
