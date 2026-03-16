@@ -17,6 +17,15 @@ static int is_valid_bpf_table(const char *table)
     return 0;
 }
 
+/* Validate bpf_json table names. Query view additionally supports sid and l7. */
+static int is_valid_bpf_json_table(const char *table)
+{
+    if (is_valid_bpf_table(table)) return 1;
+    if (strcmp(table, "sid") == 0) return 1;
+    if (strcmp(table, "l7") == 0) return 1;
+    return 0;
+}
+
 /* Validate IPv4 address using inet_pton */
 static int is_valid_ipv4_address(const char *addr)
 {
@@ -236,7 +245,7 @@ void handle_bpf_json_request(json_object *j_req, api_transport_context_t *transp
     }
 
     const char *table = json_object_get_string(j_table);
-    if (!is_valid_bpf_table(table)) {
+    if (!is_valid_bpf_json_table(table)) {
         json_object_object_add(j_response, "type", json_object_new_string("bpf_json_error"));
         json_object_object_add(j_response, "error", json_object_new_string("Invalid 'table' parameter"));
         send_json_response(transport, j_response);
