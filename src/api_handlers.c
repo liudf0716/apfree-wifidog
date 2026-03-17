@@ -23,6 +23,61 @@ static bool transport_should_echo_req_id(const api_transport_context_t *transpor
     return transport && transport->req_id;
 }
 
+json_object *api_response_new(const char *type)
+{
+    json_object *j_response = json_object_new_object();
+    if (!j_response) {
+        return NULL;
+    }
+
+    json_object_object_add(j_response, "type",
+                           json_object_new_string(type && type[0] ? type : "generic_response"));
+    json_object_object_add(j_response, "data", json_object_new_object());
+
+    return j_response;
+}
+
+json_object *api_response_get_data(json_object *j_response)
+{
+    if (!j_response) {
+        return NULL;
+    }
+
+    json_object *j_data = NULL;
+    if (!json_object_object_get_ex(j_response, "data", &j_data) ||
+        !json_object_is_type(j_data, json_type_object)) {
+        j_data = json_object_new_object();
+        json_object_object_add(j_response, "data", j_data);
+    }
+
+    return j_data;
+}
+
+void api_response_set_success(json_object *j_response, const char *message)
+{
+    if (!j_response) {
+        return;
+    }
+
+    json_object_object_add(j_response, "status", json_object_new_string("success"));
+    json_object_object_add(j_response, "code", json_object_new_int(0));
+    json_object_object_add(j_response, "message",
+                           json_object_new_string(message && message[0] ? message : "OK"));
+}
+
+void api_response_set_error(json_object *j_response, int code, const char *message)
+{
+    if (!j_response) {
+        return;
+    }
+
+    json_object_object_add(j_response, "status", json_object_new_string("error"));
+    json_object_object_add(j_response, "code",
+                           json_object_new_int(code ? code : 1000));
+    json_object_object_add(j_response, "message",
+                           json_object_new_string(message && message[0] ? message : "Error"));
+}
+
 static void maybe_attach_req_id(api_transport_context_t *transport, json_object *j_response)
 {
     if (!transport_should_echo_req_id(transport) || !j_response ||
@@ -325,8 +380,6 @@ void send_json_response(api_transport_context_t *transport, json_object *j_respo
     if (response_str) {
         send_response(transport, response_str);
     }
-
-    json_object_put(j_response);
 }
 
 /**

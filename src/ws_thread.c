@@ -350,6 +350,7 @@ send_ws_error_response(api_transport_context_t *transport, int res_code, const c
 	}
 
 	send_json_response(transport, j_response);
+	json_object_put(j_response);
 }
 
 static void

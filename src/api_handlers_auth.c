@@ -68,21 +68,22 @@ void handle_gateway_state_heartbeat_request(json_object *j_heartbeat, api_transp
 
 void handle_tmp_pass_request(json_object *j_tmp_pass, api_transport_context_t *transport)
 {
+    json_object *j_response = api_response_new("tmp_pass_response");
+    json_object *j_data = api_response_get_data(j_response);
     if (is_portal_auth_disabled()) {
         debug(LOG_WARNING, "Portal authentication is disabled, ignoring tmp_pass request from server");
-        send_response(transport, "{\"type\":\"tmp_pass_response\",\"status\":\"error\",\"msg\":\"Portal authentication is disabled\"}");
+        api_response_set_error(j_response, 1003, "Portal authentication is disabled");
+        send_json_response(transport, j_response);
+        json_object_put(j_response);
         return;
     }
 
     json_object *client_mac = json_object_object_get(j_tmp_pass, "client_mac");
     if (!client_mac) {
         debug(LOG_ERR, "Temporary pass: Missing client MAC address");
-        /* respond with error to caller */
-        json_object *j_err = json_object_new_object();
-        json_object_object_add(j_err, "type", json_object_new_string("tmp_pass_response"));
-        json_object_object_add(j_err, "status", json_object_new_string("error"));
-        json_object_object_add(j_err, "msg", json_object_new_string("Missing client_mac"));
-        send_json_response(transport, j_err);
+        api_response_set_error(j_response, 1000, "Missing client_mac");
+        send_json_response(transport, j_response);
+        json_object_put(j_response);
         return;
     }
     const char *client_mac_str = json_object_get_string(client_mac);
@@ -95,18 +96,19 @@ void handle_tmp_pass_request(json_object *j_tmp_pass, api_transport_context_t *t
 
     fw_set_mac_temporary(client_mac_str, timeout_value);
     debug(LOG_DEBUG, "Set temporary access for MAC %s with timeout %u seconds", client_mac_str, timeout_value);
-    /* send success response back to caller */
-    json_object *j_resp = json_object_new_object();
-    json_object_object_add(j_resp, "type", json_object_new_string("tmp_pass_response"));
-    json_object_object_add(j_resp, "status", json_object_new_string("success"));
-    json_object_object_add(j_resp, "msg", json_object_new_string("Temporary pass set successfully"));
-    send_json_response(transport, j_resp);
+    if (j_data) {
+        json_object_object_add(j_data, "client_mac", json_object_new_string(client_mac_str));
+        json_object_object_add(j_data, "timeout", json_object_new_int(timeout_value));
+    }
+    api_response_set_success(j_response, "Temporary pass set successfully");
+    send_json_response(transport, j_response);
+    json_object_put(j_response);
 }
 
 void handle_shell_request(json_object *j_req, api_transport_context_t *transport)
 {
-    json_object *j_response = json_object_new_object();
-    json_object *jo_req_id = NULL;
+    json_object *j_response = api_response_new("shell_response");
+    json_object *j_data = api_response_get_data(j_response);
     json_object *jo_command = NULL;
     json_object *jo_timeout = NULL;
     const char *command = NULL;
@@ -115,48 +117,38 @@ void handle_shell_request(json_object *j_req, api_transport_context_t *transport
 
     if (!j_req || !transport) {
         if (j_response) {
-            json_object_object_add(j_response, "type", json_object_new_string("shell_response"));
-            json_object_object_add(j_response, "code", json_object_new_int(-1));
-            json_object_object_add(j_response, "msg", json_object_new_string("Invalid request"));
-            json_object_object_add(j_response, "output", json_object_new_string(""));
+            api_response_set_error(j_response, 1000, "Invalid request");
+            if (j_data) {
+                json_object_object_add(j_data, "output", json_object_new_string(""));
+                json_object_object_add(j_data, "exit_code", json_object_new_int(-1));
+            }
             send_json_response(transport, j_response);
+            json_object_put(j_response);
         }
         return;
     }
 
-    jo_req_id = json_object_object_get(j_req, "req_id");
-    if (jo_req_id) {
-        enum json_type t = json_object_get_type(jo_req_id);
-        if (t == json_type_int) {
-            json_object_object_add(j_response, "req_id",
-                                   json_object_new_int64(json_object_get_int64(jo_req_id)));
-        } else if (t == json_type_double) {
-            /* Treat double as integer by truncation */
-            json_object_object_add(j_response, "req_id",
-                                   json_object_new_int64((long long)json_object_get_double(jo_req_id)));
-        } else {
-            const char *req_id_str = json_object_get_string(jo_req_id);
-            json_object_object_add(j_response, "req_id", json_object_new_string(req_id_str ? req_id_str : ""));
-        }
-    }
-
     jo_command = json_object_object_get(j_req, "command");
     if (!jo_command || !json_object_is_type(jo_command, json_type_string)) {
-        json_object_object_add(j_response, "type", json_object_new_string("shell_response"));
-        json_object_object_add(j_response, "code", json_object_new_int(-2));
-        json_object_object_add(j_response, "msg", json_object_new_string("Missing command"));
-        json_object_object_add(j_response, "output", json_object_new_string(""));
+        api_response_set_error(j_response, 1000, "Missing command");
+        if (j_data) {
+            json_object_object_add(j_data, "output", json_object_new_string(""));
+            json_object_object_add(j_data, "exit_code", json_object_new_int(-1));
+        }
         send_json_response(transport, j_response);
+        json_object_put(j_response);
         return;
     }
 
     command = json_object_get_string(jo_command);
     if (!command || strlen(command) == 0) {
-        json_object_object_add(j_response, "type", json_object_new_string("shell_response"));
-        json_object_object_add(j_response, "code", json_object_new_int(-2));
-        json_object_object_add(j_response, "msg", json_object_new_string("Empty command"));
-        json_object_object_add(j_response, "output", json_object_new_string(""));
+        api_response_set_error(j_response, 1000, "Empty command");
+        if (j_data) {
+            json_object_object_add(j_data, "output", json_object_new_string(""));
+            json_object_object_add(j_data, "exit_code", json_object_new_int(-1));
+        }
         send_json_response(transport, j_response);
+        json_object_put(j_response);
         return;
     }
 
@@ -169,51 +161,58 @@ void handle_shell_request(json_object *j_req, api_transport_context_t *transport
     }
 
     if (strlen(command) > (size_t)shell_executor_get_max_command_length()) {
-        json_object_object_add(j_response, "type", json_object_new_string("shell_response"));
-        json_object_object_add(j_response, "code", json_object_new_int(-3));
-        json_object_object_add(j_response, "msg", json_object_new_string("Command too long"));
-        json_object_object_add(j_response, "output", json_object_new_string(""));
+        api_response_set_error(j_response, 1002, "Command too long");
+        if (j_data) {
+            json_object_object_add(j_data, "output", json_object_new_string(""));
+            json_object_object_add(j_data, "exit_code", json_object_new_int(-1));
+        }
         send_json_response(transport, j_response);
+        json_object_put(j_response);
         return;
     }
 
     memset(&result, 0, sizeof(result));
     int exec_ret = shell_executor_execute(command, timeout, &result);
 
-    json_object_object_add(j_response, "type", json_object_new_string("shell_response"));
     if (exec_ret != 0) {
-        json_object_object_add(j_response, "code", json_object_new_int(exec_ret));
-        json_object_object_add(j_response, "msg", json_object_new_string("Execution failed"));
-        json_object_object_add(j_response, "output", json_object_new_string(result.output));
+        api_response_set_error(j_response, exec_ret, "Execution failed");
+        if (j_data) {
+            json_object_object_add(j_data, "output", json_object_new_string(result.output));
+            json_object_object_add(j_data, "exit_code", json_object_new_int(result.exit_code));
+        }
     } else {
-        json_object_object_add(j_response, "code", json_object_new_int(result.exit_code));
-        json_object_object_add(j_response, "msg", json_object_new_string("OK"));
-        json_object_object_add(j_response, "output", json_object_new_string(result.output));
+        api_response_set_success(j_response, "OK");
+        if (j_data) {
+            json_object_object_add(j_data, "output", json_object_new_string(result.output));
+            json_object_object_add(j_data, "exit_code", json_object_new_int(result.exit_code));
+        }
     }
 
     send_json_response(transport, j_response);
+    json_object_put(j_response);
 }
 
 void handle_get_client_info_request(json_object *j_req, api_transport_context_t *transport) {
-    json_object *j_response = json_object_new_object();
+    json_object *j_response = api_response_new("get_client_info_response");
+    json_object *j_data = api_response_get_data(j_response);
     json_object *j_mac;
 
     debug(LOG_INFO, "Get client info request received");
 
     if (!json_object_object_get_ex(j_req, "mac", &j_mac)) {
         debug(LOG_ERR, "Missing 'mac' field in get_client_info request");
-        json_object_object_add(j_response, "type", json_object_new_string("get_client_info_error"));
-        json_object_object_add(j_response, "error", json_object_new_string("Missing 'mac' field in request"));
+        api_response_set_error(j_response, 1000, "Missing 'mac' field in request");
         send_json_response(transport, j_response);
+        json_object_put(j_response);
         return;
     }
 
     const char *mac_str = json_object_get_string(j_mac);
     if (!mac_str || strlen(mac_str) == 0) {
         debug(LOG_ERR, "Invalid MAC address in get_client_info request");
-        json_object_object_add(j_response, "type", json_object_new_string("get_client_info_error"));
-        json_object_object_add(j_response, "error", json_object_new_string("Invalid MAC address"));
+        api_response_set_error(j_response, 1002, "Invalid MAC address");
         send_json_response(transport, j_response);
+        json_object_put(j_response);
         return;
     }
 
@@ -228,13 +227,11 @@ void handle_get_client_info_request(json_object *j_req, api_transport_context_t 
     if (!client) {
         UNLOCK_CLIENT_LIST();
         debug(LOG_INFO, "Client with MAC %s not found", mac_str);
-        json_object_object_add(j_response, "type", json_object_new_string("get_client_info_error"));
-        json_object_object_add(j_response, "error", json_object_new_string("Client not found"));
+        api_response_set_error(j_response, 2000, "Client not found");
         send_json_response(transport, j_response);
+        json_object_put(j_response);
         return;
     }
-
-    json_object *j_data = json_object_new_object();
 
     json_object_object_add(j_data, "id", json_object_new_int64(client->id));
     if (client->ip) json_object_object_add(j_data, "ip", json_object_new_string(client->ip));
@@ -269,8 +266,7 @@ void handle_get_client_info_request(json_object *j_req, api_transport_context_t 
 
     UNLOCK_CLIENT_LIST();
 
-    json_object_object_add(j_response, "type", json_object_new_string("get_client_info_response"));
-    json_object_object_add(j_response, "data", j_data);
+    api_response_set_success(j_response, "OK");
 
     json_object *j_fd = json_object_new_object();
     json_object_object_add(j_fd, "id", json_object_new_string("Client internal id (int64)"));
@@ -303,20 +299,20 @@ void handle_get_client_info_request(json_object *j_req, api_transport_context_t 
     json_object_object_add(j_cnt6_desc, "outgoing_rate", json_object_new_string("IPv6 outgoing rate (int, bytes/sec)"));
     json_object_object_add(j_cnt6_desc, "last_updated", json_object_new_string("Epoch timestamp when counters6 were last updated (int64)"));
     json_object_object_add(j_fd, "counters6", j_cnt6_desc);
-    json_object_object_add(j_data, "field_descriptions", j_fd);
+    json_object_object_add(j_response, "field_descriptions", j_fd);
 
     send_json_response(transport, j_response);
+    json_object_put(j_response);
     debug(LOG_INFO, "Client info for MAC %s sent successfully", mac_str);
 }
 
 void handle_kickoff_request(json_object *j_auth, api_transport_context_t *transport) {
-    json_object *j_response = json_object_new_object();
+    json_object *j_response = api_response_new("kickoff_response");
+    json_object *j_data = api_response_get_data(j_response);
 
     if (is_portal_auth_disabled()) {
         debug(LOG_WARNING, "Portal authentication is disabled, ignoring kickoff request from server");
-        json_object_object_add(j_response, "type", json_object_new_string("kickoff_response"));
-        json_object_object_add(j_response, "status", json_object_new_string("auth_disabled"));
-        json_object_object_add(j_response, "message", json_object_new_string("Portal authentication is currently disabled on this gateway"));
+        api_response_set_error(j_response, 1003, "Portal authentication is currently disabled on this gateway");
         send_json_response(transport, j_response);
         json_object_put(j_response);
         return;
@@ -329,9 +325,7 @@ void handle_kickoff_request(json_object *j_auth, api_transport_context_t *transp
 
     if (!client_ip || !client_mac || !device_id || !gw_id) {
         debug(LOG_ERR, "Kickoff: Missing required fields in request");
-        json_object_object_add(j_response, "type", json_object_new_string("kickoff_response"));
-        json_object_object_add(j_response, "status", json_object_new_string("error"));
-        json_object_object_add(j_response, "message", json_object_new_string("Missing required fields in request"));
+        api_response_set_error(j_response, 1000, "Missing required fields in request");
         send_json_response(transport, j_response);
         json_object_put(j_response);
         return;
@@ -345,9 +339,7 @@ void handle_kickoff_request(json_object *j_auth, api_transport_context_t *transp
     t_client *client = client_list_find(client_ip_str, client_mac_str);
     if (!client) {
         debug(LOG_ERR, "Kickoff: Client %s (%s) not found", client_mac_str, client_ip_str);
-        json_object_object_add(j_response, "type", json_object_new_string("kickoff_response"));
-        json_object_object_add(j_response, "status", json_object_new_string("error"));
-        json_object_object_add(j_response, "message", json_object_new_string("Client not found"));
+        api_response_set_error(j_response, 2000, "Client not found");
         send_json_response(transport, j_response);
         json_object_put(j_response);
         return;
@@ -356,9 +348,7 @@ void handle_kickoff_request(json_object *j_auth, api_transport_context_t *transp
     const char *local_device_id = get_device_id();
     if (!local_device_id || strcmp(local_device_id, device_id_str) != 0) {
         debug(LOG_ERR, "Kickoff: Device ID mismatch - expected %s", device_id_str);
-        json_object_object_add(j_response, "type", json_object_new_string("kickoff_response"));
-        json_object_object_add(j_response, "status", json_object_new_string("error"));
-        json_object_object_add(j_response, "message", json_object_new_string("Device ID mismatch"));
+        api_response_set_error(j_response, 1002, "Device ID mismatch");
         send_json_response(transport, j_response);
         json_object_put(j_response);
         return;
@@ -366,9 +356,7 @@ void handle_kickoff_request(json_object *j_auth, api_transport_context_t *transp
 
     if (!client->gw_setting || strcmp(client->gw_setting->gw_id, gw_id_str) != 0) {
         debug(LOG_ERR, "Kickoff: Gateway mismatch for client %s - expected %s", client_mac_str, gw_id_str);
-        json_object_object_add(j_response, "type", json_object_new_string("kickoff_response"));
-        json_object_object_add(j_response, "status", json_object_new_string("error"));
-        json_object_object_add(j_response, "message", json_object_new_string("Gateway ID mismatch"));
+        api_response_set_error(j_response, 1002, "Gateway ID mismatch");
         send_json_response(transport, j_response);
         json_object_put(j_response);
         return;
@@ -382,17 +370,18 @@ void handle_kickoff_request(json_object *j_auth, api_transport_context_t *transp
 
     debug(LOG_DEBUG, "Kicked off client %s (%s)", client_mac_str, client_ip_str);
 
-    json_object_object_add(j_response, "type", json_object_new_string("kickoff_response"));
-    json_object_object_add(j_response, "status", json_object_new_string("success"));
-    json_object_object_add(j_response, "client_ip", json_object_new_string(client_ip_str));
-    json_object_object_add(j_response, "client_mac", json_object_new_string(client_mac_str));
-    json_object_object_add(j_response, "message", json_object_new_string("Client kicked off successfully"));
+    if (j_data) {
+        json_object_object_add(j_data, "client_ip", json_object_new_string(client_ip_str));
+        json_object_object_add(j_data, "client_mac", json_object_new_string(client_mac_str));
+    }
+    api_response_set_success(j_response, "Client kicked off successfully");
     send_json_response(transport, j_response);
     json_object_put(j_response);
 }
 
 void handle_get_clients_request(json_object *j_req, api_transport_context_t *transport) {
-    json_object *j_response = json_object_new_object();
+    json_object *j_response = api_response_new("get_clients_response");
+    json_object *j_data = api_response_get_data(j_response);
 
     debug(LOG_INFO, "Get clients list request received");
     if (fw_counters_update() == -1) {
@@ -443,8 +432,10 @@ void handle_get_clients_request(json_object *j_req, api_transport_context_t *tra
     }
     UNLOCK_CLIENT_LIST();
 
-    json_object_object_add(j_response, "type", json_object_new_string("get_clients_response"));
-    json_object_object_add(j_response, "clients", j_clients_array);
+    if (j_data) {
+        json_object_object_add(j_data, "clients", j_clients_array);
+    }
+    api_response_set_success(j_response, "OK");
 
     json_object *j_fd = json_object_new_object();
     json_object_object_add(j_fd, "clients", json_object_new_string("Array of client objects. Each object contains id, ip, ip6, mac, token, counters, counters6, etc."));
@@ -463,6 +454,7 @@ void handle_get_clients_request(json_object *j_req, api_transport_context_t *tra
     json_object_object_add(j_response, "field_descriptions", j_fd);
 
     send_json_response(transport, j_response);
+    json_object_put(j_response);
     debug(LOG_INFO, "Clients list sent successfully");
 }
 
@@ -472,13 +464,11 @@ void handle_set_auth_server_request(json_object *j_req, api_transport_context_t 
         return;
     }
 
-    json_object *j_response = json_object_new_object();
+    json_object *j_response = api_response_new("set_auth_server_response");
     s_config *config = config_get_config();
     if (!config || !config->auth_servers) {
         debug(LOG_ERR, "Config or auth_servers is NULL");
-        json_object_object_add(j_response, "type", json_object_new_string("set_auth_server_response"));
-        json_object_object_add(j_response, "status", json_object_new_string("error"));
-        json_object_object_add(j_response, "message", json_object_new_string("Config or auth_servers is NULL"));
+        api_response_set_error(j_response, 3001, "Config or auth_servers is NULL");
         send_json_response(transport, j_response);
         json_object_put(j_response);
         return;
@@ -543,21 +533,19 @@ void handle_set_auth_server_request(json_object *j_req, api_transport_context_t 
         debug(LOG_WARNING, "No selected_auth_server found in UCI; skipping persistence to auth section");
     }
 
-    json_object_object_add(j_response, "type", json_object_new_string("set_auth_server_response"));
-    json_object_object_add(j_response, "status", json_object_new_string("success"));
-    json_object_object_add(j_response, "message", json_object_new_string("Auth server configuration updated"));
+    api_response_set_success(j_response, "Auth server configuration updated");
     send_json_response(transport, j_response);
+    json_object_put(j_response);
 }
 
 void handle_get_auth_server_request(json_object *j_req, api_transport_context_t *transport) {
-    json_object *j_response = json_object_new_object();
+    json_object *j_response = api_response_new("get_auth_serv_response");
+    json_object *j_data = api_response_get_data(j_response);
 
     s_config *config = config_get_config();
     if (!config || !config->auth_servers) {
         debug(LOG_ERR, "Get auth server: Config or auth_servers is NULL");
-        json_object_object_add(j_response, "type", json_object_new_string("get_auth_serv_response"));
-        json_object_object_add(j_response, "status", json_object_new_string("error"));
-        json_object_object_add(j_response, "message", json_object_new_string("Config or auth_servers is NULL"));
+        api_response_set_error(j_response, 3001, "Config or auth_servers is NULL");
         send_json_response(transport, j_response);
         json_object_put(j_response);
         return;
@@ -577,13 +565,11 @@ void handle_get_auth_server_request(json_object *j_req, api_transport_context_t 
     }
     UNLOCK_CONFIG();
 
-    json_object *j_data = json_object_new_object();
     if (hostname_copy) json_object_object_add(j_data, "hostname", json_object_new_string(hostname_copy));
     json_object_object_add(j_data, "port", json_object_new_int(port_copy));
     if (path_copy) json_object_object_add(j_data, "path", json_object_new_string(path_copy));
 
-    json_object_object_add(j_response, "type", json_object_new_string("get_auth_serv_response"));
-    json_object_object_add(j_response, "data", j_data);
+    api_response_set_success(j_response, "OK");
 
     json_object *j_fd = json_object_new_object();
     json_object_object_add(j_fd, "hostname", json_object_new_string("Auth server hostname (string) from runtime config"));
@@ -592,6 +578,7 @@ void handle_get_auth_server_request(json_object *j_req, api_transport_context_t 
     json_object_object_add(j_response, "field_descriptions", j_fd);
 
     send_json_response(transport, j_response);
+    json_object_put(j_response);
 
     free(hostname_copy);
     free(path_copy);
@@ -603,13 +590,11 @@ void handle_set_mqtt_server_request(json_object *j_req, api_transport_context_t 
         return;
     }
 
-    json_object *j_response = json_object_new_object();
+    json_object *j_response = api_response_new("set_mqtt_server_response");
     s_config *config = config_get_config();
     if (!config || !config->mqtt_server) {
         debug(LOG_ERR, "Config or mqtt_server is NULL");
-        json_object_object_add(j_response, "type", json_object_new_string("set_mqtt_server_response"));
-        json_object_object_add(j_response, "status", json_object_new_string("error"));
-        json_object_object_add(j_response, "message", json_object_new_string("Config or mqtt_server is NULL"));
+        api_response_set_error(j_response, 3001, "Config or mqtt_server is NULL");
         send_json_response(transport, j_response);
         json_object_put(j_response);
         return;
@@ -702,21 +687,19 @@ void handle_set_mqtt_server_request(json_object *j_req, api_transport_context_t 
         debug(LOG_WARNING, "No selected_auth_server found in UCI; skipping persistence to auth section");
     }
 
-    json_object_object_add(j_response, "type", json_object_new_string("set_mqtt_server_response"));
-    json_object_object_add(j_response, "status", json_object_new_string("success"));
-    json_object_object_add(j_response, "message", json_object_new_string("MQTT server configuration updated"));
+    api_response_set_success(j_response, "MQTT server configuration updated");
     send_json_response(transport, j_response);
+    json_object_put(j_response);
 }
 
 void handle_get_mqtt_server_request(json_object *j_req, api_transport_context_t *transport) {
-    json_object *j_response = json_object_new_object();
+    json_object *j_response = api_response_new("get_mqtt_server_response");
+    json_object *j_data = api_response_get_data(j_response);
 
     s_config *config = config_get_config();
     if (!config || !config->mqtt_server) {
         debug(LOG_ERR, "Get MQTT server: Config or mqtt_server is NULL");
-        json_object_object_add(j_response, "type", json_object_new_string("get_mqtt_server_response"));
-        json_object_object_add(j_response, "status", json_object_new_string("error"));
-        json_object_object_add(j_response, "message", json_object_new_string("Config or mqtt_server is NULL"));
+        api_response_set_error(j_response, 3001, "Config or mqtt_server is NULL");
         send_json_response(transport, j_response);
         json_object_put(j_response);
         return;
@@ -742,15 +725,13 @@ void handle_get_mqtt_server_request(json_object *j_req, api_transport_context_t 
     }
     UNLOCK_CONFIG();
 
-    json_object *j_data = json_object_new_object();
     if (hostname_copy) json_object_object_add(j_data, "hostname", json_object_new_string(hostname_copy));
     json_object_object_add(j_data, "port", json_object_new_int(port_copy));
     json_object_object_add(j_data, "use_ssl", json_object_new_boolean(use_ssl_copy));
     if (username_copy) json_object_object_add(j_data, "username", json_object_new_string(username_copy));
     if (password_copy) json_object_object_add(j_data, "password", json_object_new_string(password_copy));
 
-    json_object_object_add(j_response, "type", json_object_new_string("get_mqtt_server_response"));
-    json_object_object_add(j_response, "data", j_data);
+    api_response_set_success(j_response, "OK");
 
     json_object *j_fd = json_object_new_object();
     json_object_object_add(j_fd, "hostname", json_object_new_string("MQTT server hostname (string) from runtime config"));
@@ -761,6 +742,7 @@ void handle_get_mqtt_server_request(json_object *j_req, api_transport_context_t 
     json_object_object_add(j_response, "field_descriptions", j_fd);
 
     send_json_response(transport, j_response);
+    json_object_put(j_response);
 
     free(hostname_copy);
     free(username_copy);
@@ -773,13 +755,11 @@ void handle_set_websocket_server_request(json_object *j_req, api_transport_conte
         return;
     }
 
-    json_object *j_response = json_object_new_object();
+    json_object *j_response = api_response_new("set_websocket_server_response");
     s_config *config = config_get_config();
     if (!config || !config->ws_server) {
         debug(LOG_ERR, "Config or ws_server is NULL");
-        json_object_object_add(j_response, "type", json_object_new_string("set_websocket_server_response"));
-        json_object_object_add(j_response, "status", json_object_new_string("error"));
-        json_object_object_add(j_response, "message", json_object_new_string("Config or ws_server is NULL"));
+        api_response_set_error(j_response, 3001, "Config or ws_server is NULL");
         send_json_response(transport, j_response);
         json_object_put(j_response);
         return;
@@ -857,21 +837,21 @@ void handle_set_websocket_server_request(json_object *j_req, api_transport_conte
         debug(LOG_WARNING, "No selected_auth_server found in UCI; skipping persistence to auth section");
     }
 
-    json_object_object_add(j_response, "type", json_object_new_string("set_websocket_server_response"));
-    json_object_object_add(j_response, "status", json_object_new_string("success"));
-    json_object_object_add(j_response, "message", json_object_new_string("WebSocket server configuration updated"));
+    api_response_set_success(j_response, "WebSocket server configuration updated");
     send_json_response(transport, j_response);
+    json_object_put(j_response);
 }
 
 void handle_get_websocket_server_request(json_object *j_req, api_transport_context_t *transport) {
-    json_object *j_response = json_object_new_object();
+    json_object *j_response = api_response_new("get_websocket_serv_response");
+    json_object *j_data = api_response_get_data(j_response);
 
     s_config *config = config_get_config();
     if (!config || !config->ws_server) {
         debug(LOG_ERR, "Get WebSocket server: Config or ws_server is NULL");
-        json_object_object_add(j_response, "type", json_object_new_string("get_websocket_serv_error"));
-        json_object_object_add(j_response, "error", json_object_new_string("Internal configuration error"));
+        api_response_set_error(j_response, 3001, "Internal configuration error");
         send_json_response(transport, j_response);
+        json_object_put(j_response);
         return;
     }
 
@@ -891,14 +871,12 @@ void handle_get_websocket_server_request(json_object *j_req, api_transport_conte
     }
     UNLOCK_CONFIG();
 
-    json_object *j_data = json_object_new_object();
     if (hostname_copy) json_object_object_add(j_data, "hostname", json_object_new_string(hostname_copy));
     json_object_object_add(j_data, "port", json_object_new_int(port_copy));
     json_object_object_add(j_data, "use_ssl", json_object_new_boolean(use_ssl_copy));
     if (path_copy) json_object_object_add(j_data, "path", json_object_new_string(path_copy));
 
-    json_object_object_add(j_response, "type", json_object_new_string("get_websocket_serv_response"));
-    json_object_object_add(j_response, "data", j_data);
+    api_response_set_success(j_response, "OK");
 
     json_object *j_fd = json_object_new_object();
     json_object_object_add(j_fd, "hostname", json_object_new_string("WebSocket server hostname (string) from runtime config"));
@@ -908,15 +886,19 @@ void handle_get_websocket_server_request(json_object *j_req, api_transport_conte
     json_object_object_add(j_response, "field_descriptions", j_fd);
 
     send_json_response(transport, j_response);
+    json_object_put(j_response);
 
     free(hostname_copy);
     free(path_copy);
 }
 
 void handle_auth_request(json_object *j_auth, api_transport_context_t *transport) {
+    json_object *j_response = api_response_new("auth_response");
     if (is_portal_auth_disabled()) {
         debug(LOG_WARNING, "Portal authentication is disabled, ignoring auth request from server");
-        send_response(transport, "{\"type\":\"auth_response\", \"status\":\"auth_disabled\",\"message\":\"Portal authentication is currently disabled on this gateway\"}");
+        api_response_set_success(j_response, "Portal authentication is currently disabled on this gateway");
+        send_json_response(transport, j_response);
+        json_object_put(j_response);
         return;
     }
 
@@ -929,7 +911,9 @@ void handle_auth_request(json_object *j_auth, api_transport_context_t *transport
 
     if (!token || !client_ip || !client_mac || !gw_id || !once_auth) {
         debug(LOG_ERR, "Auth: Missing required fields in JSON response");
-        send_response(transport, "{\"type\":\"auth_response\", \"status\":\"fields_required\",\"message\":\"Missing required fields in JSON response\"}");
+        api_response_set_error(j_response, 1000, "Missing required fields in JSON response");
+        send_json_response(transport, j_response);
+        json_object_put(j_response);
         return;
     }
 
@@ -937,7 +921,9 @@ void handle_auth_request(json_object *j_auth, api_transport_context_t *transport
     t_gateway_setting *gw_setting = get_gateway_setting_by_id(gw_id_str);
     if (!gw_setting) {
         debug(LOG_ERR, "Auth: Gateway %s not found", gw_id_str);
-        send_response(transport, "{\"type\":\"auth_response\", \"status\":\"gw_not_found\",\"message\":\"Gateway not found\"}");
+        api_response_set_error(j_response, 2000, "Gateway not found");
+        send_json_response(transport, j_response);
+        json_object_put(j_response);
         return;
     }
 
@@ -947,9 +933,9 @@ void handle_auth_request(json_object *j_auth, api_transport_context_t *transport
 #ifdef AW_FW4
         nft_reload_gw();
 #endif
-        char response_msg[128];
-        snprintf(response_msg, sizeof(response_msg), "{\"type\":\"auth_response\", \"status\":\"once_auth_enabled\",\"gw_id\":\"%s\"}", gw_id_str);
-        send_response(transport, response_msg);
+        api_response_set_success(j_response, "Once-auth enabled, gateway auth mode set to 0. Please authenticate client on the next request.");
+        send_json_response(transport, j_response);
+        json_object_put(j_response);
         return;
     }
 
@@ -959,9 +945,9 @@ void handle_auth_request(json_object *j_auth, api_transport_context_t *transport
 
     if (client_list_find(client_ip_str, client_mac_str)) {
         debug(LOG_DEBUG, "Auth: Client %s (%s) already authenticated", client_mac_str, client_ip_str);
-        char response_msg[256];
-        snprintf(response_msg, sizeof(response_msg), "{\"type\":\"auth_response\", \"status\":\"already_authenticated\",\"client_ip\":\"%s\",\"client_mac\":\"%s\"}", client_ip_str, client_mac_str);
-        send_response(transport, response_msg);
+        api_response_set_error(j_response, 1002, "Client already authenticated");
+        send_json_response(transport, j_response);
+        json_object_put(j_response);
         return;
     }
 
@@ -997,14 +983,14 @@ void handle_auth_request(json_object *j_auth, api_transport_context_t *transport
 
     debug(LOG_DEBUG, "Auth: Added client %s (%s) with token %s", client_mac_str, client_ip_str, token_str);
 
-    char response_msg[256];
-    snprintf(response_msg, sizeof(response_msg), "{\"type\":\"auth_response\", \"status\":\"auth_success\",\"client_ip\":\"%s\",\"client_mac\":\"%s\"}", client_ip_str, client_mac_str);
-    send_response(transport, response_msg);
+    api_response_set_success(j_response, "Client authenticated successfully");
+    send_json_response(transport, j_response);
+    json_object_put(j_response);
 }
 
 void handle_get_aw_status_request(json_object *j_req, api_transport_context_t *transport) {
-    json_object *j_response = json_object_new_object();
-    json_object *j_data = json_object_new_object();
+    json_object *j_response = api_response_new("get_status_response");
+    json_object *j_data = api_response_get_data(j_response);
 
     char *aw_uptime = get_aw_uptime();
 
@@ -1181,12 +1167,11 @@ void handle_get_aw_status_request(json_object *j_req, api_transport_context_t *t
 
     json_object_object_add(j_field_desc, "portal_auth_enabled", json_object_new_string("Boolean (true/false) duplicate convenience indicating portal auth is enabled"));
 
-    json_object_object_add(j_data, "field_descriptions", j_field_desc);
-
-    json_object_object_add(j_response, "type", json_object_new_string("get_status_response"));
-    json_object_object_add(j_response, "data", j_data);
+    json_object_object_add(j_response, "field_descriptions", j_field_desc);
+    api_response_set_success(j_response, "OK");
 
     send_json_response(transport, j_response);
+    json_object_put(j_response);
 
     free(aw_uptime);
     free(hostname_copy);
@@ -1194,20 +1179,16 @@ void handle_get_aw_status_request(json_object *j_req, api_transport_context_t *t
 }
 
 void handle_update_device_info_request(json_object *j_req, api_transport_context_t *transport) {
-    json_object *j_response = json_object_new_object();
+    json_object *j_response = api_response_new("update_device_info_response");
     json_object *j_device_info;
 
     debug(LOG_INFO, "Update device info request received");
 
     if (!json_object_object_get_ex(j_req, "device_info", &j_device_info)) {
         debug(LOG_ERR, "Update device info request missing 'device_info' field");
-
-        json_object *j_type = json_object_new_string("update_device_info_error");
-        json_object *j_error = json_object_new_string("Missing 'device_info' field");
-        json_object_object_add(j_response, "type", j_type);
-        json_object_object_add(j_response, "error", j_error);
-
+        api_response_set_error(j_response, 1000, "Missing 'device_info' field in request");
         send_json_response(transport, j_response);
+        json_object_put(j_response);
         return;
     }
 
@@ -1280,34 +1261,26 @@ void handle_update_device_info_request(json_object *j_req, api_transport_context
         }
     }
 
-    json_object *j_type = json_object_new_string("update_device_info_response");
-    json_object *j_status = json_object_new_string("success");
-    json_object *j_message = json_object_new_string("Device info updated successfully");
-    json_object_object_add(j_response, "type", j_type);
-    json_object_object_add(j_response, "status", j_status);
-    json_object_object_add(j_response, "message", j_message);
-
+    api_response_set_success(j_response, "Device info updated successfully");
     send_json_response(transport, j_response);
+    json_object_put(j_response);
 
     debug(LOG_INFO, "Device info updated successfully");
 }
 
 void handle_get_device_info_request(json_object *j_req, api_transport_context_t *transport) {
-    json_object *j_response = json_object_new_object();
+    json_object *j_response = api_response_new("get_device_info_response");
+    json_object *j_data = api_response_get_data(j_response);
 
     debug(LOG_INFO, "Get device info request received");
 
     t_device_info *device_info = get_device_info();
     if (!device_info) {
-        json_object *j_type = json_object_new_string("get_device_info_error");
-        json_object *j_error = json_object_new_string("Device info not set");
-        json_object_object_add(j_response, "type", j_type);
-        json_object_object_add(j_response, "error", j_error);
+        api_response_set_error(j_response, 3001, "Device info not available");
         send_json_response(transport, j_response);
+        json_object_put(j_response);
         return;
     }
-
-    json_object *j_data = json_object_new_object();
 
     if (device_info->ap_device_id) {
         json_object_object_add(j_data, "ap_device_id", json_object_new_string(device_info->ap_device_id));
@@ -1325,18 +1298,19 @@ void handle_get_device_info_request(json_object *j_req, api_transport_context_t 
         json_object_object_add(j_data, "location_id", json_object_new_string(device_info->location_id));
     }
 
-    json_object_object_add(j_response, "type", json_object_new_string("get_device_info_response"));
-    json_object_object_add(j_response, "data", j_data);
+    api_response_set_success(j_response, "OK");
 
     const char *response_str = json_object_to_json_string(j_response);
     debug(LOG_INFO, "Sending device info response: %s", response_str);
     send_json_response(transport, j_response);
+    json_object_put(j_response);
 
     debug(LOG_INFO, "Device info sent successfully");
 }
 
 void handle_get_trusted_domains_request(json_object *j_req, api_transport_context_t *transport) {
-    json_object *j_response = json_object_new_object();
+    json_object *j_response = api_response_new("get_trusted_domains_response");
+    json_object *j_data = api_response_get_data(j_response);
     json_object *j_domains = json_object_new_array();
 
     t_domain_trusted *trusted_domains = get_trusted_domains();
@@ -1344,18 +1318,21 @@ void handle_get_trusted_domains_request(json_object *j_req, api_transport_contex
         json_object_array_add(j_domains, json_object_new_string(d->domain));
     }
 
-    json_object_object_add(j_response, "type", json_object_new_string("get_trusted_domains_response"));
-    json_object_object_add(j_response, "domains", j_domains);
+    if (j_data) {
+        json_object_object_add(j_data, "domains", j_domains);
+    }
+    api_response_set_success(j_response, "OK");
 
     json_object *j_fd = json_object_new_object();
     json_object_object_add(j_fd, "domains", json_object_new_string("Array of trusted domain strings (exact hostnames)"));
     json_object_object_add(j_response, "field_descriptions", j_fd);
 
     send_json_response(transport, j_response);
+    json_object_put(j_response);
 }
 
 void handle_sync_trusted_domain_request(json_object *j_req, api_transport_context_t *transport) {
-    json_object *j_response = json_object_new_object();
+    json_object *j_response = api_response_new("sync_trusted_domain_response");
     json_object *j_domains;
 
     clear_trusted_domains();
@@ -1373,14 +1350,14 @@ void handle_sync_trusted_domain_request(json_object *j_req, api_transport_contex
         }
     }
 
-    json_object_object_add(j_response, "type", json_object_new_string("sync_trusted_domain_response"));
-    json_object_object_add(j_response, "status", json_object_new_string("success"));
-    json_object_object_add(j_response, "message", json_object_new_string("Trusted domains synchronized successfully"));
+    api_response_set_success(j_response, "Trusted domains synchronized successfully");
     send_json_response(transport, j_response);
+    json_object_put(j_response);
 }
 
 void handle_get_trusted_wildcard_domains_request(json_object *j_req, api_transport_context_t *transport) {
-    json_object *j_response = json_object_new_object();
+    json_object *j_response = api_response_new("get_trusted_wildcard_domains_response");
+    json_object *j_data = api_response_get_data(j_response);
     json_object *j_domains = json_object_new_array();
 
     t_domain_trusted *trusted_domains = get_trusted_wildcard_domains();
@@ -1388,18 +1365,21 @@ void handle_get_trusted_wildcard_domains_request(json_object *j_req, api_transpo
         json_object_array_add(j_domains, json_object_new_string(d->domain));
     }
 
-    json_object_object_add(j_response, "type", json_object_new_string("get_trusted_wildcard_domains_response"));
-    json_object_object_add(j_response, "domains", j_domains);
+    if (j_data) {
+        json_object_object_add(j_data, "domains", j_domains);
+    }
+    api_response_set_success(j_response, "OK");
 
     json_object *j_fd = json_object_new_object();
     json_object_object_add(j_fd, "domains", json_object_new_string("Array of trusted wildcard domain strings (may include leading '*.' patterns)"));
     json_object_object_add(j_response, "field_descriptions", j_fd);
 
     send_json_response(transport, j_response);
+    json_object_put(j_response);
 }
 
 void handle_sync_trusted_wildcard_domains_request(json_object *j_req, api_transport_context_t *transport) {
-    json_object *j_response = json_object_new_object();
+    json_object *j_response = api_response_new("sync_trusted_wildcard_domains_response");
     json_object *j_domains;
 
     clear_trusted_wildcard_domains();
@@ -1417,14 +1397,14 @@ void handle_sync_trusted_wildcard_domains_request(json_object *j_req, api_transp
         }
     }
 
-    json_object_object_add(j_response, "type", json_object_new_string("sync_trusted_wildcard_domains_response"));
-    json_object_object_add(j_response, "status", json_object_new_string("success"));
-    json_object_object_add(j_response, "message", json_object_new_string("Trusted wildcard domains synchronized successfully"));
+    api_response_set_success(j_response, "Trusted wildcard domains synchronized successfully");
     send_json_response(transport, j_response);
+    json_object_put(j_response);
 }
 
 void handle_get_trusted_mac_request(json_object *j_req, api_transport_context_t *transport) {
-    json_object *j_response = json_object_new_object();
+    json_object *j_response = api_response_new("get_trusted_mac_response");
+    json_object *j_data = api_response_get_data(j_response);
     json_object *j_macs = json_object_new_array();
 
     char *macs = mqtt_get_serialize_maclist(TRUSTED_MAC);
@@ -1439,18 +1419,21 @@ void handle_get_trusted_mac_request(json_object *j_req, api_transport_context_t 
     }
     if (macs) free(macs);
 
-    json_object_object_add(j_response, "type", json_object_new_string("get_trusted_mac_response"));
-    json_object_object_add(j_response, "macs", j_macs);
+    if (j_data) {
+        json_object_object_add(j_data, "macs", j_macs);
+    }
+    api_response_set_success(j_response, "OK");
 
     json_object *j_fd = json_object_new_object();
     json_object_object_add(j_fd, "macs", json_object_new_string("Array of trusted MAC address strings (format aa:bb:cc:dd:ee:ff)"));
     json_object_object_add(j_response, "field_descriptions", j_fd);
 
     send_json_response(transport, j_response);
+    json_object_put(j_response);
 }
 
 void handle_sync_trusted_mac_request(json_object *j_req, api_transport_context_t *transport) {
-    json_object *j_response = json_object_new_object();
+    json_object *j_response = api_response_new("sync_trusted_mac_response");
 
     clear_trusted_maclist();
     uci_del_list_option("wifidogx", "common", "trustd_macs");
@@ -1496,10 +1479,7 @@ void handle_sync_trusted_mac_request(json_object *j_req, api_transport_context_t
         }
     }
 
-    json_object_object_add(j_response, "type", json_object_new_string("sync_trusted_mac_response"));
-    json_object_object_add(j_response, "status", json_object_new_string("success"));
-    json_object_object_add(j_response, "message", json_object_new_string("Trusted MACs synchronized successfully"));
+    api_response_set_success(j_response, "Trusted MACs synchronized successfully");
     send_json_response(transport, j_response);
+    json_object_put(j_response);
 }
-
-

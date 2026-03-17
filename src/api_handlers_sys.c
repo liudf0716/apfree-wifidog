@@ -114,21 +114,17 @@ json_object *build_gateway_report_message(const char *op)
 void handle_get_firmware_info_request(json_object *j_req, api_transport_context_t *transport) {
     FILE *fp;
     char buffer[256];
-    json_object *j_response = json_object_new_object();
-    json_object *j_data = json_object_new_object();
+    json_object *j_response = api_response_new("firmware_info_response");
+    json_object *j_data = api_response_get_data(j_response);
 
     debug(LOG_INFO, "Get firmware info request received");
 
     fp = popen("cat /etc/openwrt_release 2>/dev/null", "r");
     if (fp == NULL) {
         debug(LOG_ERR, "Failed to execute firmware info command");
-
-        json_object *j_type = json_object_new_string("firmware_info_error");
-        json_object *j_error = json_object_new_string("Failed to execute command");
-        json_object_object_add(j_response, "type", j_type);
-        json_object_object_add(j_response, "error", j_error);
-
+        api_response_set_error(j_response, 3000, "Failed to execute command");
         send_json_response(transport, j_response);
+        json_object_put(j_response);
         return;
     }
 
@@ -159,16 +155,15 @@ void handle_get_firmware_info_request(json_object *j_req, api_transport_context_
 
     pclose(fp);
 
-    json_object *j_type = json_object_new_string("firmware_info_response");
-    json_object_object_add(j_response, "type", j_type);
-    json_object_object_add(j_response, "data", j_data);
+    api_response_set_success(j_response, "OK");
     json_object *j_fd = json_object_new_object();
     json_object_object_add(j_fd, "data", json_object_new_string("Map of firmware/release keys to string values (e.g. DISTRIB_RELEASE, DISTRIB_ID). Keys vary by device image."));
-    json_object_object_add(j_data, "field_descriptions", j_fd);
+    json_object_object_add(j_response, "field_descriptions", j_fd);
 
     const char *response_str = json_object_to_json_string(j_response);
     debug(LOG_DEBUG, "Sending firmware info response: %s", response_str);
     send_json_response(transport, j_response);
+    json_object_put(j_response);
 
     debug(LOG_INFO, "Firmware info sent successfully");
 }
@@ -177,57 +172,41 @@ void handle_get_firmware_info_request(json_object *j_req, api_transport_context_
  * @brief Handles a request for firmware upgrade.
  */
 void handle_firmware_upgrade_request(json_object *j_req, api_transport_context_t *transport) {
-    json_object *j_response = json_object_new_object();
+    json_object *j_response = api_response_new("firmware_upgrade_response");
     json_object *j_url, *j_force;
 
     debug(LOG_INFO, "Firmware upgrade request received");
 
     if (!json_object_object_get_ex(j_req, "url", &j_url)) {
         debug(LOG_ERR, "Missing 'url' field in firmware upgrade request");
-
-        json_object *j_type = json_object_new_string("firmware_upgrade_error");
-        json_object *j_error = json_object_new_string("Missing or invalid 'url' field");
-        json_object_object_add(j_response, "type", j_type);
-        json_object_object_add(j_response, "error", j_error);
-
+        api_response_set_error(j_response, 1000, "Missing or invalid 'url' field");
         send_json_response(transport, j_response);
+        json_object_put(j_response);
         return;
     }
 
     const char *url_str = json_object_get_string(j_url);
     if (!url_str || strlen(url_str) == 0) {
         debug(LOG_ERR, "Invalid URL in firmware upgrade request");
-
-        json_object *j_type = json_object_new_string("firmware_upgrade_error");
-        json_object *j_error = json_object_new_string("Missing or invalid 'url' field");
-        json_object_object_add(j_response, "type", j_type);
-        json_object_object_add(j_response, "error", j_error);
-
+        api_response_set_error(j_response, 1002, "Missing or invalid 'url' field");
         send_json_response(transport, j_response);
+        json_object_put(j_response);
         return;
     }
 
     if (strncmp(url_str, "http://", 7) != 0 && strncmp(url_str, "https://", 8) != 0) {
         debug(LOG_ERR, "Invalid URL protocol in firmware upgrade request: %s", url_str);
-
-        json_object *j_type = json_object_new_string("firmware_upgrade_error");
-        json_object *j_error = json_object_new_string("Invalid URL protocol, only HTTP/HTTPS allowed");
-        json_object_object_add(j_response, "type", j_type);
-        json_object_object_add(j_response, "error", j_error);
-
+        api_response_set_error(j_response, 1002, "Invalid URL protocol, only HTTP/HTTPS allowed");
         send_json_response(transport, j_response);
+        json_object_put(j_response);
         return;
     }
 
     if (strlen(url_str) > 1024) {
         debug(LOG_ERR, "URL too long in firmware upgrade request");
-
-        json_object *j_type = json_object_new_string("firmware_upgrade_error");
-        json_object *j_error = json_object_new_string("URL too long");
-        json_object_object_add(j_response, "type", j_type);
-        json_object_object_add(j_response, "error", j_error);
-
+        api_response_set_error(j_response, 1002, "URL too long");
         send_json_response(transport, j_response);
+        json_object_put(j_response);
         return;
     }
 
@@ -239,14 +218,10 @@ void handle_firmware_upgrade_request(json_object *j_req, api_transport_context_t
     debug(LOG_INFO, "Starting firmware upgrade from URL: %s (force: %s)",
           url_str, force_upgrade ? "true" : "false");
 
-    json_object *j_type = json_object_new_string("firmware_upgrade_response");
-    json_object *j_status = json_object_new_string("success");
-    json_object *j_message = json_object_new_string("Firmware upgrade initiated successfully");
-    json_object_object_add(j_response, "type", j_type);
-    json_object_object_add(j_response, "status", j_status);
-    json_object_object_add(j_response, "message", j_message);
+    api_response_set_success(j_response, "Firmware upgrade initiated successfully");
 
     send_json_response(transport, j_response);
+    json_object_put(j_response);
 
     char *escaped_url = malloc(strlen(url_str) * 2 + 1);
     if (!escaped_url) {
@@ -298,23 +273,25 @@ void handle_reboot_device_request(json_object *j_req, api_transport_context_t *t
     if (fp == NULL) {
         debug(LOG_ERR, "Failed to execute reboot command");
 
-        json_object *j_response = json_object_new_object();
-        json_object *j_type = json_object_new_string("reboot_device_error");
-        json_object *j_error = json_object_new_string("Failed to execute reboot command");
-        json_object_object_add(j_response, "type", j_type);
-        json_object_object_add(j_response, "error", j_error);
-
+        json_object *j_response = api_response_new("reboot_device_response");
+        api_response_set_error(j_response, 3000, "Failed to execute reboot command");
         send_json_response(transport, j_response);
+        json_object_put(j_response);
         return;
     }
 
     pclose(fp);
     debug(LOG_INFO, "Device is rebooting now");
+
+    json_object *j_response = api_response_new("reboot_device_response");
+    api_response_set_success(j_response, "Device reboot initiated");
+    send_json_response(transport, j_response);
+    json_object_put(j_response);
 }
 
 void handle_get_sys_info_request(json_object *j_req, api_transport_context_t *transport) {
-    json_object *j_response = json_object_new_object();
-    json_object *j_data = json_object_new_object();
+    json_object *j_response = api_response_new("get_sys_info_response");
+    json_object *j_data = api_response_get_data(j_response);
 
     debug(LOG_INFO, "System info request received");
 
@@ -329,10 +306,10 @@ void handle_get_sys_info_request(json_object *j_req, api_transport_context_t *tr
     json_object_object_add(j_data, "wifidog_uptime", json_object_new_int64(sysinfo.wifidog_uptime));
     json_object_object_add(j_data, "cpu_temp", json_object_new_int(sysinfo.cpu_temp));
 
-    json_object_object_add(j_response, "type", json_object_new_string("get_sys_info_response"));
-    json_object_object_add(j_response, "data", j_data);
+    api_response_set_success(j_response, "OK");
 
     const char *response_str = json_object_to_json_string(j_response);
     debug(LOG_INFO, "Sending system info response: %s", response_str);
     send_json_response(transport, j_response);
+    json_object_put(j_response);
 }
