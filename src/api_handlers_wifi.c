@@ -104,8 +104,8 @@ static int recover_default_route_local(void)
 /* Helper: run shell command and capture stdout into allocated string. */
 
 void handle_get_wifi_info_request(json_object *j_req, api_transport_context_t *transport) {
-    json_object *j_response = json_object_new_object();
-    json_object *j_data = json_object_new_object();
+    json_object *j_response = api_response_new("get_wifi_info_response");
+    json_object *j_data = api_response_get_data(j_response);
     
     debug(LOG_INFO, "Get WiFi info request received");
     
@@ -124,11 +124,7 @@ void handle_get_wifi_info_request(json_object *j_req, api_transport_context_t *t
     if (uci_open_package("wireless", &w_ctx, &w_pkg) != 0) {
         debug(LOG_ERR, "Failed to open UCI package: wireless");
 
-        json_object *j_type = json_object_new_string("get_wifi_info_error");
-        json_object *j_error = json_object_new_string("Failed to read wireless config");
-        json_object_object_add(j_response, "type", j_type);
-        json_object_object_add(j_response, "error", j_error);
-
+        api_response_set_error(j_response, 3001, "Failed to read wireless config");
         send_json_response(transport, j_response);
         json_object_put(j_response);
         return;
@@ -331,9 +327,7 @@ void handle_get_wifi_info_request(json_object *j_req, api_transport_context_t *t
     json_object_object_add(j_data, "available_networks", j_networks);
 
     // Build success response
-    json_object *j_type = json_object_new_string("get_wifi_info_response");
-    json_object_object_add(j_response, "type", j_type);
-    json_object_object_add(j_response, "data", j_data);
+    api_response_set_success(j_response, "OK");
     /* Describe fields for AI/clients */
     json_object *j_fd = json_object_new_object();
 
@@ -384,7 +378,8 @@ void handle_scan_wifi_request(json_object *j_req, api_transport_context_t *trans
         if (b && (strcmp(b, "5g") == 0 || strcmp(b, "2g") == 0)) band = b;
     }
 
-    json_object *j_response = json_object_new_object();
+    json_object *j_response = api_response_new("scan_wifi_response");
+    json_object *j_data = api_response_get_data(j_response);
     json_object *j_networks = json_object_new_array();
 
     /* Use ubus to perform scan and return JSON results.
@@ -397,8 +392,7 @@ void handle_scan_wifi_request(json_object *j_req, api_transport_context_t *trans
         device = strdup(strcmp(band, "5g") == 0 ? "radio1" : "radio0");
     }
     if (!device) {
-        json_object_object_add(j_response, "type", json_object_new_string("scan_wifi_error"));
-        json_object_object_add(j_response, "error", json_object_new_string("Failed to select scan device"));
+        api_response_set_error(j_response, 3001, "Failed to select scan device");
         send_json_response(transport, j_response);
         json_object_put(j_response);
         return;
@@ -409,8 +403,7 @@ void handle_scan_wifi_request(json_object *j_req, api_transport_context_t *trans
 
     FILE *sfp = popen(cmd, "r");
     if (!sfp) {
-        json_object_object_add(j_response, "type", json_object_new_string("scan_wifi_error"));
-        json_object_object_add(j_response, "error", json_object_new_string("Failed to invoke ubus iwinfo scan"));
+        api_response_set_error(j_response, 3000, "Failed to invoke ubus iwinfo scan");
         if (device) free(device);
         send_json_response(transport, j_response);
         json_object_put(j_response);
@@ -424,8 +417,7 @@ void handle_scan_wifi_request(json_object *j_req, api_transport_context_t *trans
     if (!out) {
         pclose(sfp);
         if (device) free(device);
-        json_object_object_add(j_response, "type", json_object_new_string("scan_wifi_error"));
-        json_object_object_add(j_response, "error", json_object_new_string("Memory allocation failed"));
+        api_response_set_error(j_response, 3000, "Memory allocation failed");
         send_json_response(transport, j_response);
         json_object_put(j_response);
         return;
@@ -449,8 +441,10 @@ void handle_scan_wifi_request(json_object *j_req, api_transport_context_t *trans
     if (out_len == 0) {
         free(out);
         if (device) free(device);
-        json_object_object_add(j_response, "type", json_object_new_string("scan_wifi_response"));
-        json_object_object_add(j_response, "networks", j_networks);
+        if (j_data) {
+            json_object_object_add(j_data, "networks", j_networks);
+        }
+        api_response_set_success(j_response, "OK");
         json_object *j_fd_empty = json_object_new_object();
         json_object_object_add(j_fd_empty, "networks", json_object_new_string("Array of network objects found by scan"));
         json_object_object_add(j_response, "field_descriptions", j_fd_empty);
@@ -465,8 +459,7 @@ void handle_scan_wifi_request(json_object *j_req, api_transport_context_t *trans
     free(out);
     if (!j_scan) {
         if (device) free(device);
-        json_object_object_add(j_response, "type", json_object_new_string("scan_wifi_error"));
-        json_object_object_add(j_response, "error", json_object_new_string("Failed to parse ubus iwinfo JSON output"));
+        api_response_set_error(j_response, 3000, "Failed to parse ubus iwinfo JSON output");
         send_json_response(transport, j_response);
         json_object_put(j_response);
         return;
@@ -533,8 +526,10 @@ void handle_scan_wifi_request(json_object *j_req, api_transport_context_t *trans
 
     json_object_put(j_scan);
 
-    json_object_object_add(j_response, "type", json_object_new_string("scan_wifi_response"));
-    json_object_object_add(j_response, "networks", j_networks);
+    if (j_data) {
+        json_object_object_add(j_data, "networks", j_networks);
+    }
+    api_response_set_success(j_response, "OK");
     /* Describe fields */
     json_object *j_fd = json_object_new_object();
     json_object_object_add(j_fd, "networks", json_object_new_string("Array of network objects found by scan"));
@@ -909,9 +904,8 @@ void handle_set_wifi_relay_request(json_object *j_req, api_transport_context_t *
     // Validate required SSID
     json_object *j_ssid = json_object_object_get(j_req, "ssid");
     if (!j_ssid || !json_object_is_type(j_ssid, json_type_string)) {
-        json_object *j_err = json_object_new_object();
-        json_object_object_add(j_err, "type", json_object_new_string("set_wifi_sta_error"));
-        json_object_object_add(j_err, "error", json_object_new_string("Missing required 'ssid' parameter"));
+        json_object *j_err = api_response_new("set_wifi_sta_response");
+        api_response_set_error(j_err, 1000, "Missing required 'ssid' parameter");
         send_json_response(transport, j_err);
         json_object_put(j_err);
         return;
@@ -939,17 +933,15 @@ void handle_set_wifi_relay_request(json_object *j_req, api_transport_context_t *
 
     // Validate encryption/key semantics
     if (encryption && strcmp(encryption, "none") == 0 && key) {
-        json_object *j_err = json_object_new_object();
-        json_object_object_add(j_err, "type", json_object_new_string("set_wifi_sta_error"));
-        json_object_object_add(j_err, "error", json_object_new_string("'key' must not be provided when encryption is 'none'"));
+        json_object *j_err = api_response_new("set_wifi_sta_response");
+        api_response_set_error(j_err, 1002, "'key' must not be provided when encryption is 'none'");
         send_json_response(transport, j_err);
         json_object_put(j_err);
         return;
     }
     if (encryption && (strncmp(encryption, "psk", 3) == 0 || strcmp(encryption, "sae") == 0) && !key) {
-        json_object *j_err = json_object_new_object();
-        json_object_object_add(j_err, "type", json_object_new_string("set_wifi_sta_error"));
-        json_object_object_add(j_err, "error", json_object_new_string("'key' is required for WPA-PSK/SAE encryption"));
+        json_object *j_err = api_response_new("set_wifi_sta_response");
+        api_response_set_error(j_err, 1002, "'key' is required for WPA-PSK/SAE encryption");
         send_json_response(transport, j_err);
         json_object_put(j_err);
         return;
@@ -957,9 +949,8 @@ void handle_set_wifi_relay_request(json_object *j_req, api_transport_context_t *
 
     // Ensure wwan exists
     if (ensure_wwan_interface() != 0) {
-        json_object *j_err = json_object_new_object();
-        json_object_object_add(j_err, "type", json_object_new_string("set_wifi_sta_error"));
-        json_object_object_add(j_err, "error", json_object_new_string("Failed to ensure 'wwan' network interface"));
+        json_object *j_err = api_response_new("set_wifi_sta_response");
+        api_response_set_error(j_err, 3001, "Failed to ensure 'wwan' network interface");
         send_json_response(transport, j_err);
         json_object_put(j_err);
         return;
@@ -975,9 +966,8 @@ void handle_set_wifi_relay_request(json_object *j_req, api_transport_context_t *
     // Remove existing STA ifaces
     if (remove_existing_sta_iface() != 0) {
         free(radio);
-        json_object *j_err = json_object_new_object();
-        json_object_object_add(j_err, "type", json_object_new_string("set_wifi_sta_error"));
-        json_object_object_add(j_err, "error", json_object_new_string("Failed to remove existing STA interfaces"));
+        json_object *j_err = api_response_new("set_wifi_sta_response");
+        api_response_set_error(j_err, 3000, "Failed to remove existing STA interfaces");
         send_json_response(transport, j_err);
         json_object_put(j_err);
         return;
@@ -989,9 +979,8 @@ void handle_set_wifi_relay_request(json_object *j_req, api_transport_context_t *
     struct uci_package *w_pkg = NULL;
     if (uci_open_package("wireless", &w_ctx, &w_pkg) != 0) {
         free(radio);
-        json_object *j_err = json_object_new_object();
-        json_object_object_add(j_err, "type", json_object_new_string("set_wifi_sta_error"));
-        json_object_object_add(j_err, "error", json_object_new_string("Failed to open wireless package"));
+        json_object *j_err = api_response_new("set_wifi_sta_response");
+        api_response_set_error(j_err, 3001, "Failed to open wireless package");
         send_json_response(transport, j_err);
         json_object_put(j_err);
         return;
@@ -1005,9 +994,8 @@ void handle_set_wifi_relay_request(json_object *j_req, api_transport_context_t *
     if (uci_lookup_ptr(w_ctx, &sec_ptr, sec_expr, true) != UCI_OK || uci_set(w_ctx, &sec_ptr) != UCI_OK || !sec_ptr.s) {
         uci_close_package(w_ctx, w_pkg);
         free(radio);
-        json_object *j_err = json_object_new_object();
-        json_object_object_add(j_err, "type", json_object_new_string("set_wifi_sta_error"));
-        json_object_object_add(j_err, "error", json_object_new_string("Failed to create named wireless section wifinet4"));
+        json_object *j_err = api_response_new("set_wifi_sta_response");
+        api_response_set_error(j_err, 3000, "Failed to create named wireless section wifinet4");
         send_json_response(transport, j_err);
         json_object_put(j_err);
         return;
@@ -1037,9 +1025,8 @@ void handle_set_wifi_relay_request(json_object *j_req, api_transport_context_t *
         }
         uci_close_package(w_ctx, w_pkg);
         free(radio);
-        json_object *j_err = json_object_new_object();
-        json_object_object_add(j_err, "type", json_object_new_string("set_wifi_sta_error"));
-        json_object_object_add(j_err, "error", json_object_new_string("Failed to apply wireless settings"));
+        json_object *j_err = api_response_new("set_wifi_sta_response");
+        api_response_set_error(j_err, 3000, "Failed to apply wireless settings");
         send_json_response(transport, j_err);
         json_object_put(j_err);
         return;
@@ -1052,9 +1039,8 @@ void handle_set_wifi_relay_request(json_object *j_req, api_transport_context_t *
         }
         uci_close_package(w_ctx, w_pkg);
         free(radio);
-        json_object *j_err = json_object_new_object();
-        json_object_object_add(j_err, "type", json_object_new_string("set_wifi_sta_error"));
-        json_object_object_add(j_err, "error", json_object_new_string("Failed to enforce mesh disabled state"));
+        json_object *j_err = api_response_new("set_wifi_sta_response");
+        api_response_set_error(j_err, 3000, "Failed to enforce mesh disabled state");
         send_json_response(transport, j_err);
         json_object_put(j_err);
         return;
@@ -1067,9 +1053,8 @@ void handle_set_wifi_relay_request(json_object *j_req, api_transport_context_t *
         }
         uci_close_package(w_ctx, w_pkg);
         free(radio);
-        json_object *j_err = json_object_new_object();
-        json_object_object_add(j_err, "type", json_object_new_string("set_wifi_sta_error"));
-        json_object_object_add(j_err, "error", json_object_new_string("Failed to commit UCI changes"));
+        json_object *j_err = api_response_new("set_wifi_sta_response");
+        api_response_set_error(j_err, 3000, "Failed to commit UCI changes");
         send_json_response(transport, j_err);
         json_object_put(j_err);
         return;
@@ -1084,10 +1069,14 @@ void handle_set_wifi_relay_request(json_object *j_req, api_transport_context_t *
     }
 
     /* Delegate verification to AWAS platform — do not block here. */
-    json_object *j_resp = json_object_new_object();
-    json_object_object_add(j_resp, "type", json_object_new_string("set_wifi_sta_response"));
-    json_object_object_add(j_resp, "status", json_object_new_string("success"));
-    json_object_object_add(j_resp, "message", json_object_new_string("STA configured; verification delegated to AWAS"));
+    json_object *j_resp = api_response_new("set_wifi_sta_response");
+    json_object *j_resp_data = api_response_get_data(j_resp);
+    if (j_resp_data) {
+        json_object_object_add(j_resp_data, "ssid", json_object_new_string(ssid));
+        json_object_object_add(j_resp_data, "band", json_object_new_string(band));
+        json_object_object_add(j_resp_data, "apply", json_object_new_boolean(apply));
+    }
+    api_response_set_success(j_resp, "STA configured; verification delegated to AWAS");
     send_json_response(transport, j_resp);
     json_object_put(j_resp);
 
@@ -1103,27 +1092,24 @@ void handle_delete_wifi_relay_request(json_object *j_req, api_transport_context_
 
     // Remove existing STA/relay interfaces
     if (remove_existing_sta_iface() != 0) {
-        json_object *j_err = json_object_new_object();
-        json_object_object_add(j_err, "type", json_object_new_string("delete_wifi_relay_error"));
-        json_object_object_add(j_err, "error", json_object_new_string("Failed to remove existing STA interfaces"));
+        json_object *j_err = api_response_new("delete_wifi_relay_response");
+        api_response_set_error(j_err, 3000, "Failed to remove existing STA interfaces");
         send_json_response(transport, j_err);
         json_object_put(j_err);
         return;
     }
 
     if (enforce_mesh_iface_disabled() != 0) {
-        json_object *j_err = json_object_new_object();
-        json_object_object_add(j_err, "type", json_object_new_string("delete_wifi_relay_error"));
-        json_object_object_add(j_err, "error", json_object_new_string("Failed to enforce mesh disabled state"));
+        json_object *j_err = api_response_new("delete_wifi_relay_response");
+        api_response_set_error(j_err, 3000, "Failed to enforce mesh disabled state");
         send_json_response(transport, j_err);
         json_object_put(j_err);
         return;
     }
 
     if (remove_wwan_interface() != 0) {
-        json_object *j_err = json_object_new_object();
-        json_object_object_add(j_err, "type", json_object_new_string("delete_wifi_relay_error"));
-        json_object_object_add(j_err, "error", json_object_new_string("Failed to remove network.wwan interface"));
+        json_object *j_err = api_response_new("delete_wifi_relay_response");
+        api_response_set_error(j_err, 3000, "Failed to remove network.wwan interface");
         send_json_response(transport, j_err);
         json_object_put(j_err);
         return;
@@ -1131,9 +1117,8 @@ void handle_delete_wifi_relay_request(json_object *j_req, api_transport_context_
 
     // Commit wireless changes
     if (uci_commit_package_by_name("wireless") != 0) {
-        json_object *j_err = json_object_new_object();
-        json_object_object_add(j_err, "type", json_object_new_string("delete_wifi_relay_error"));
-        json_object_object_add(j_err, "error", json_object_new_string("Failed to commit wireless changes"));
+        json_object *j_err = api_response_new("delete_wifi_relay_response");
+        api_response_set_error(j_err, 3000, "Failed to commit wireless changes");
         send_json_response(transport, j_err);
         json_object_put(j_err);
         return;
@@ -1160,24 +1145,25 @@ void handle_delete_wifi_relay_request(json_object *j_req, api_transport_context_
         }
     }
 
-    json_object *j_resp = json_object_new_object();
-    json_object_object_add(j_resp, "type", json_object_new_string("delete_wifi_relay_response"));
-    json_object_object_add(j_resp, "status", json_object_new_string("success"));
-    json_object_object_add(j_resp, "apply", json_object_new_boolean(apply));
-    json_object_object_add(j_resp, "default_route_restored", json_object_new_boolean(default_route_restored));
-    json_object_object_add(j_resp, "message", json_object_new_string("WiFi relay/STA configuration removed"));
+    json_object *j_resp = api_response_new("delete_wifi_relay_response");
+    json_object *j_resp_data = api_response_get_data(j_resp);
+    if (j_resp_data) {
+        json_object_object_add(j_resp_data, "apply", json_object_new_boolean(apply));
+        json_object_object_add(j_resp_data, "default_route_restored", json_object_new_boolean(default_route_restored));
+    }
+    api_response_set_success(j_resp, "WiFi relay/STA configuration removed");
     send_json_response(transport, j_resp);
     json_object_put(j_resp);
 }
 
 void handle_set_wifi_info_request(json_object *j_req, api_transport_context_t *transport) {
-    json_object *j_response = json_object_new_object();
+    json_object *j_response = api_response_new("set_wifi_info_response");
+    json_object *j_resp_data = api_response_get_data(j_response);
     json_object *j_data;
 
     if (!json_object_object_get_ex(j_req, "data", &j_data)) {
         debug(LOG_ERR, "Set wifi info request missing 'data' field");
-        json_object_object_add(j_response, "type", json_object_new_string("set_wifi_info_error"));
-        json_object_object_add(j_response, "error", json_object_new_string("Missing 'data' field"));
+        api_response_set_error(j_response, 1000, "Missing 'data' field");
         send_json_response(transport, j_response);
         json_object_put(j_response);
         return;
@@ -1331,22 +1317,18 @@ void handle_set_wifi_info_request(json_object *j_req, api_transport_context_t *t
         FILE *reload_fp = popen("wifi reload", "r");
         if (reload_fp == NULL) {
             debug(LOG_ERR, "Failed to run reload commands");
-            json_object_object_add(j_response, "type", json_object_new_string("set_wifi_info_error"));
-            json_object_object_add(j_response, "error", json_object_new_string("Failed to reload services"));
+            api_response_set_error(j_response, 3000, "Failed to reload services");
         } else {
             pclose(reload_fp);
-            
-            // Construct success response
-            json_object *j_resp_data = json_object_new_object();
-            json_object_object_add(j_resp_data, "status", json_object_new_string("success"));
-            json_object_object_add(j_resp_data, "message", json_object_new_string("Wi-Fi configuration updated successfully"));
-            json_object_object_add(j_response, "type", json_object_new_string("set_wifi_info_response"));
-            json_object_object_add(j_response, "data", j_resp_data);
+
+            if (j_resp_data) {
+                json_object_object_add(j_resp_data, "reloaded", json_object_new_boolean(true));
+            }
+            api_response_set_success(j_response, "Wi-Fi configuration updated successfully");
         }
     } else {
         // Construct error response
-        json_object_object_add(j_response, "type", json_object_new_string("set_wifi_info_error"));
-        json_object_object_add(j_response, "error", json_object_new_string(strlen(error_msg) > 0 ? error_msg : "Failed to update Wi-Fi configuration"));
+        api_response_set_error(j_response, 3000, strlen(error_msg) > 0 ? error_msg : "Failed to update Wi-Fi configuration");
     }
 
     const char *response_str = json_object_to_json_string(j_response);
