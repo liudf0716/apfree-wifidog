@@ -70,7 +70,7 @@ void handle_tmp_pass_request(json_object *j_tmp_pass, api_transport_context_t *t
 {
     if (is_portal_auth_disabled()) {
         debug(LOG_WARNING, "Portal authentication is disabled, ignoring tmp_pass request from server");
-        send_response(transport, "{\"error\":\"Portal authentication is disabled\"}");
+        send_response(transport, "{\"type\":\"tmp_pass_response\",\"status\":\"error\",\"msg\":\"Portal authentication is disabled\"}");
         return;
     }
 
@@ -98,9 +98,8 @@ void handle_tmp_pass_request(json_object *j_tmp_pass, api_transport_context_t *t
     /* send success response back to caller */
     json_object *j_resp = json_object_new_object();
     json_object_object_add(j_resp, "type", json_object_new_string("tmp_pass_response"));
-    json_object_object_add(j_resp, "status", json_object_new_string("ok"));
-    json_object_object_add(j_resp, "mac", json_object_new_string(client_mac_str));
-    json_object_object_add(j_resp, "timeout", json_object_new_int((int)timeout_value));
+    json_object_object_add(j_resp, "status", json_object_new_string("success"));
+    json_object_object_add(j_resp, "msg", json_object_new_string("Temporary pass set successfully"));
     send_json_response(transport, j_resp);
 }
 
@@ -315,9 +314,11 @@ void handle_kickoff_request(json_object *j_auth, api_transport_context_t *transp
 
     if (is_portal_auth_disabled()) {
         debug(LOG_WARNING, "Portal authentication is disabled, ignoring kickoff request from server");
-        json_object_object_add(j_response, "type", json_object_new_string("kickoff_error"));
-        json_object_object_add(j_response, "error", json_object_new_string("Portal authentication is disabled"));
+        json_object_object_add(j_response, "type", json_object_new_string("kickoff_response"));
+        json_object_object_add(j_response, "status", json_object_new_string("auth_disabled"));
+        json_object_object_add(j_response, "message", json_object_new_string("Portal authentication is currently disabled on this gateway"));
         send_json_response(transport, j_response);
+        json_object_put(j_response);
         return;
     }
 
@@ -328,9 +329,11 @@ void handle_kickoff_request(json_object *j_auth, api_transport_context_t *transp
 
     if (!client_ip || !client_mac || !device_id || !gw_id) {
         debug(LOG_ERR, "Kickoff: Missing required fields in request");
-        json_object_object_add(j_response, "type", json_object_new_string("kickoff_error"));
-        json_object_object_add(j_response, "error", json_object_new_string("Missing required fields in request"));
+        json_object_object_add(j_response, "type", json_object_new_string("kickoff_response"));
+        json_object_object_add(j_response, "status", json_object_new_string("error"));
+        json_object_object_add(j_response, "message", json_object_new_string("Missing required fields in request"));
         send_json_response(transport, j_response);
+        json_object_put(j_response);
         return;
     }
 
@@ -342,33 +345,32 @@ void handle_kickoff_request(json_object *j_auth, api_transport_context_t *transp
     t_client *client = client_list_find(client_ip_str, client_mac_str);
     if (!client) {
         debug(LOG_ERR, "Kickoff: Client %s (%s) not found", client_mac_str, client_ip_str);
-        json_object_object_add(j_response, "type", json_object_new_string("kickoff_error"));
-        json_object_object_add(j_response, "error", json_object_new_string("Client not found"));
-        json_object_object_add(j_response, "client_ip", json_object_new_string(client_ip_str));
-        json_object_object_add(j_response, "client_mac", json_object_new_string(client_mac_str));
+        json_object_object_add(j_response, "type", json_object_new_string("kickoff_response"));
+        json_object_object_add(j_response, "status", json_object_new_string("error"));
+        json_object_object_add(j_response, "message", json_object_new_string("Client not found"));
         send_json_response(transport, j_response);
+        json_object_put(j_response);
         return;
     }
 
     const char *local_device_id = get_device_id();
     if (!local_device_id || strcmp(local_device_id, device_id_str) != 0) {
         debug(LOG_ERR, "Kickoff: Device ID mismatch - expected %s", device_id_str);
-        json_object_object_add(j_response, "type", json_object_new_string("kickoff_error"));
-        json_object_object_add(j_response, "error", json_object_new_string("Device ID mismatch"));
-        json_object_object_add(j_response, "expected_device_id", json_object_new_string(device_id_str));
-        json_object_object_add(j_response, "actual_device_id", json_object_new_string(local_device_id ? local_device_id : "null"));
+        json_object_object_add(j_response, "type", json_object_new_string("kickoff_response"));
+        json_object_object_add(j_response, "status", json_object_new_string("error"));
+        json_object_object_add(j_response, "message", json_object_new_string("Device ID mismatch"));
         send_json_response(transport, j_response);
+        json_object_put(j_response);
         return;
     }
 
     if (!client->gw_setting || strcmp(client->gw_setting->gw_id, gw_id_str) != 0) {
         debug(LOG_ERR, "Kickoff: Gateway mismatch for client %s - expected %s", client_mac_str, gw_id_str);
-        json_object_object_add(j_response, "type", json_object_new_string("kickoff_error"));
-        json_object_object_add(j_response, "error", json_object_new_string("Gateway ID mismatch"));
-        json_object_object_add(j_response, "client_mac", json_object_new_string(client_mac_str));
-        json_object_object_add(j_response, "expected_gw_id", json_object_new_string(gw_id_str));
-        json_object_object_add(j_response, "actual_gw_id", json_object_new_string(client->gw_setting ? client->gw_setting->gw_id : "null"));
+        json_object_object_add(j_response, "type", json_object_new_string("kickoff_response"));
+        json_object_object_add(j_response, "status", json_object_new_string("error"));
+        json_object_object_add(j_response, "message", json_object_new_string("Gateway ID mismatch"));
         send_json_response(transport, j_response);
+        json_object_put(j_response);
         return;
     }
 
@@ -386,6 +388,7 @@ void handle_kickoff_request(json_object *j_auth, api_transport_context_t *transp
     json_object_object_add(j_response, "client_mac", json_object_new_string(client_mac_str));
     json_object_object_add(j_response, "message", json_object_new_string("Client kicked off successfully"));
     send_json_response(transport, j_response);
+    json_object_put(j_response);
 }
 
 void handle_get_clients_request(json_object *j_req, api_transport_context_t *transport) {
