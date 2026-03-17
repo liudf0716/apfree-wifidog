@@ -469,10 +469,15 @@ void handle_set_auth_server_request(json_object *j_req, api_transport_context_t 
         return;
     }
 
+    json_object *j_response = json_object_new_object();
     s_config *config = config_get_config();
     if (!config || !config->auth_servers) {
         debug(LOG_ERR, "Config or auth_servers is NULL");
-        send_response(transport, "{\"error\":\"Internal configuration error\"}");
+        json_object_object_add(j_response, "type", json_object_new_string("set_auth_server_response"));
+        json_object_object_add(j_response, "status", json_object_new_string("error"));
+        json_object_object_add(j_response, "message", json_object_new_string("Config or auth_servers is NULL"));
+        send_json_response(transport, j_response);
+        json_object_put(j_response);
         return;
     }
 
@@ -519,7 +524,7 @@ void handle_set_auth_server_request(json_object *j_req, api_transport_context_t 
           tmp_path ? tmp_path : "(unchanged)");
 
     char selected_section[128] = {0};
-    if (uci_get_value("wifidogx", "wifidog", "selected_auth_server", selected_section, sizeof(selected_section)) == 0 && selected_section[0] != '\0') {
+    if (uci_get_value("wifidogx", "common", "selected_auth_server", selected_section, sizeof(selected_section)) == 0 && selected_section[0] != '\0') {
         if (tmp_host_name != NULL) {
             uci_set_value("wifidogx", selected_section, "auth_server_hostname", tmp_host_name);
         }
@@ -535,10 +540,10 @@ void handle_set_auth_server_request(json_object *j_req, api_transport_context_t 
         debug(LOG_WARNING, "No selected_auth_server found in UCI; skipping persistence to auth section");
     }
 
-    json_object *response = json_object_new_object();
-    json_object_object_add(response, "status", json_object_new_string("success"));
-    json_object_object_add(response, "message", json_object_new_string("Auth server configuration updated"));
-    send_json_response(transport, response);
+    json_object_object_add(j_response, "type", json_object_new_string("set_auth_server_response"));
+    json_object_object_add(j_response, "status", json_object_new_string("success"));
+    json_object_object_add(j_response, "message", json_object_new_string("Auth server configuration updated"));
+    send_json_response(transport, j_response);
 }
 
 void handle_get_auth_server_request(json_object *j_req, api_transport_context_t *transport) {
@@ -547,9 +552,11 @@ void handle_get_auth_server_request(json_object *j_req, api_transport_context_t 
     s_config *config = config_get_config();
     if (!config || !config->auth_servers) {
         debug(LOG_ERR, "Get auth server: Config or auth_servers is NULL");
-        json_object_object_add(j_response, "type", json_object_new_string("get_auth_serv_error"));
-        json_object_object_add(j_response, "error", json_object_new_string("Internal configuration error"));
+        json_object_object_add(j_response, "type", json_object_new_string("get_auth_serv_response"));
+        json_object_object_add(j_response, "status", json_object_new_string("error"));
+        json_object_object_add(j_response, "message", json_object_new_string("Config or auth_servers is NULL"));
         send_json_response(transport, j_response);
+        json_object_put(j_response);
         return;
     }
 
@@ -587,10 +594,326 @@ void handle_get_auth_server_request(json_object *j_req, api_transport_context_t 
     free(path_copy);
 }
 
+void handle_set_mqtt_server_request(json_object *j_req, api_transport_context_t *transport) {
+    if (!j_req || !transport) {
+        debug(LOG_ERR, "Invalid parameters for set_mqtt_server");
+        return;
+    }
+
+    json_object *j_response = json_object_new_object();
+    s_config *config = config_get_config();
+    if (!config || !config->mqtt_server) {
+        debug(LOG_ERR, "Config or mqtt_server is NULL");
+        json_object_object_add(j_response, "type", json_object_new_string("set_mqtt_server_response"));
+        json_object_object_add(j_response, "status", json_object_new_string("error"));
+        json_object_object_add(j_response, "message", json_object_new_string("Config or mqtt_server is NULL"));
+        send_json_response(transport, j_response);
+        json_object_put(j_response);
+        return;
+    }
+
+    char *hostname = config->mqtt_server->hostname;
+    char *username = config->mqtt_server->username;
+    char *password = config->mqtt_server->password;
+    const char *tmp_host_name = NULL;
+    const char *tmp_port_str = NULL;
+    const char *tmp_username = NULL;
+    const char *tmp_password = NULL;
+    int tmp_use_ssl_set = 0;
+    int tmp_use_ssl = 0;
+
+    json_object *jo_host_name = json_object_object_get(j_req, "hostname");
+    json_object *jo_port = json_object_object_get(j_req, "port");
+    json_object *jo_username = json_object_object_get(j_req, "username");
+    json_object *jo_password = json_object_object_get(j_req, "password");
+    json_object *jo_use_ssl = json_object_object_get(j_req, "use_ssl");
+
+    const char *json_host = NULL;
+    const char *json_port = NULL;
+    const char *json_username = NULL;
+    const char *json_password = NULL;
+
+    if (jo_host_name != NULL) json_host = json_object_get_string(jo_host_name);
+    if (jo_port != NULL) json_port = json_object_get_string(jo_port);
+    if (jo_username != NULL) json_username = json_object_get_string(jo_username);
+    if (jo_password != NULL) json_password = json_object_get_string(jo_password);
+
+    LOCK_CONFIG();
+    if (json_host != NULL && (!hostname || strcmp(hostname, json_host) != 0)) {
+        free(hostname);
+        config->mqtt_server->hostname = safe_strdup(json_host);
+        tmp_host_name = config->mqtt_server->hostname;
+    }
+
+    if (json_port != NULL) {
+        config->mqtt_server->port = (short)atoi(json_port);
+        tmp_port_str = json_port;
+    }
+
+    if (json_username != NULL && (!username || strcmp(username, json_username) != 0)) {
+        free(username);
+        config->mqtt_server->username = safe_strdup(json_username);
+        tmp_username = config->mqtt_server->username;
+    }
+
+    if (json_password != NULL && (!password || strcmp(password, json_password) != 0)) {
+        free(password);
+        config->mqtt_server->password = safe_strdup(json_password);
+        tmp_password = config->mqtt_server->password;
+    }
+
+    if (jo_use_ssl != NULL) {
+        tmp_use_ssl_set = 1;
+        tmp_use_ssl = json_object_get_boolean(jo_use_ssl) ? 1 : 0;
+        config->mqtt_server->use_ssl = (short)tmp_use_ssl;
+    }
+    UNLOCK_CONFIG();
+
+        debug(LOG_DEBUG, "Set MQTT server - hostname: %s, port: %s, username: %s, password: %s, use_ssl: %s",
+          tmp_host_name ? tmp_host_name : "(unchanged)",
+          tmp_port_str ? tmp_port_str : "(unchanged)",
+          tmp_username ? tmp_username : "(unchanged)",
+            tmp_password ? "(updated)" : "(unchanged)",
+            tmp_use_ssl_set ? (tmp_use_ssl ? "1" : "0") : "(unchanged)");
+
+    char selected_section[128] = {0};
+    if (uci_get_value("wifidogx", "common", "selected_auth_server", selected_section, sizeof(selected_section)) == 0 && selected_section[0] != '\0') {
+        if (tmp_host_name != NULL) {
+            uci_set_value("wifidogx", selected_section, "mqtt_server_hostname", tmp_host_name);
+        }
+        if (tmp_port_str != NULL) {
+            char portbuf[16];
+            snprintf(portbuf, sizeof(portbuf), "%d", config->mqtt_server->port);
+            uci_set_value("wifidogx", selected_section, "mqtt_server_port", portbuf);
+        }
+        if (tmp_username != NULL) {
+            uci_set_value("wifidogx", selected_section, "mqtt_username", tmp_username);
+        }
+        if (tmp_password != NULL) {
+            uci_set_value("wifidogx", selected_section, "mqtt_password", tmp_password);
+        }
+        if (tmp_use_ssl_set) {
+            uci_set_value("wifidogx", selected_section, "long_conn_mode", tmp_use_ssl ? "mqtts" : "mqtt");
+        }
+    } else {
+        debug(LOG_WARNING, "No selected_auth_server found in UCI; skipping persistence to auth section");
+    }
+
+    json_object_object_add(j_response, "type", json_object_new_string("set_mqtt_server_response"));
+    json_object_object_add(j_response, "status", json_object_new_string("success"));
+    json_object_object_add(j_response, "message", json_object_new_string("MQTT server configuration updated"));
+    send_json_response(transport, j_response);
+}
+
+void handle_get_mqtt_server_request(json_object *j_req, api_transport_context_t *transport) {
+    json_object *j_response = json_object_new_object();
+
+    s_config *config = config_get_config();
+    if (!config || !config->mqtt_server) {
+        debug(LOG_ERR, "Get MQTT server: Config or mqtt_server is NULL");
+        json_object_object_add(j_response, "type", json_object_new_string("get_mqtt_server_response"));
+        json_object_object_add(j_response, "status", json_object_new_string("error"));
+        json_object_object_add(j_response, "message", json_object_new_string("Config or mqtt_server is NULL"));
+        send_json_response(transport, j_response);
+        json_object_put(j_response);
+        return;
+    }
+
+    char *hostname_copy = NULL;
+    char *username_copy = NULL;
+    char *password_copy = NULL;
+    int port_copy = 0;
+    int use_ssl_copy = 0;
+
+    LOCK_CONFIG();
+    if (config->mqtt_server->hostname) {
+        hostname_copy = safe_strdup(config->mqtt_server->hostname);
+    }
+    port_copy = config->mqtt_server->port;
+    use_ssl_copy = config->mqtt_server->use_ssl;
+    if (config->mqtt_server->username) {
+        username_copy = safe_strdup(config->mqtt_server->username);
+    }
+    if (config->mqtt_server->password) {
+        password_copy = safe_strdup(config->mqtt_server->password);
+    }
+    UNLOCK_CONFIG();
+
+    json_object *j_data = json_object_new_object();
+    if (hostname_copy) json_object_object_add(j_data, "hostname", json_object_new_string(hostname_copy));
+    json_object_object_add(j_data, "port", json_object_new_int(port_copy));
+    json_object_object_add(j_data, "use_ssl", json_object_new_boolean(use_ssl_copy));
+    if (username_copy) json_object_object_add(j_data, "username", json_object_new_string(username_copy));
+    if (password_copy) json_object_object_add(j_data, "password", json_object_new_string(password_copy));
+
+    json_object_object_add(j_response, "type", json_object_new_string("get_mqtt_server_response"));
+    json_object_object_add(j_response, "data", j_data);
+
+    json_object *j_fd = json_object_new_object();
+    json_object_object_add(j_fd, "hostname", json_object_new_string("MQTT server hostname (string) from runtime config"));
+    json_object_object_add(j_fd, "port", json_object_new_string("MQTT server port (int) from runtime config"));
+    json_object_object_add(j_fd, "use_ssl", json_object_new_string("Whether MQTT uses TLS/SSL (boolean)"));
+    json_object_object_add(j_fd, "username", json_object_new_string("MQTT username (string) from runtime config"));
+    json_object_object_add(j_fd, "password", json_object_new_string("MQTT password (string) from runtime config"));
+    json_object_object_add(j_response, "field_descriptions", j_fd);
+
+    send_json_response(transport, j_response);
+
+    free(hostname_copy);
+    free(username_copy);
+    free(password_copy);
+}
+
+void handle_set_websocket_server_request(json_object *j_req, api_transport_context_t *transport) {
+    if (!j_req || !transport) {
+        debug(LOG_ERR, "Invalid parameters for set_websocket_server");
+        return;
+    }
+
+    json_object *j_response = json_object_new_object();
+    s_config *config = config_get_config();
+    if (!config || !config->ws_server) {
+        debug(LOG_ERR, "Config or ws_server is NULL");
+        json_object_object_add(j_response, "type", json_object_new_string("set_websocket_server_response"));
+        json_object_object_add(j_response, "status", json_object_new_string("error"));
+        json_object_object_add(j_response, "message", json_object_new_string("Config or ws_server is NULL"));
+        send_json_response(transport, j_response);
+        json_object_put(j_response);
+        return;
+    }
+
+    char *hostname = config->ws_server->hostname;
+    char *path = config->ws_server->path;
+    const char *tmp_host_name = NULL;
+    const char *tmp_port_str = NULL;
+    const char *tmp_path = NULL;
+    int tmp_use_ssl_set = 0;
+    int tmp_use_ssl = 0;
+
+    json_object *jo_host_name = json_object_object_get(j_req, "hostname");
+    json_object *jo_port = json_object_object_get(j_req, "port");
+    json_object *jo_path = json_object_object_get(j_req, "path");
+    json_object *jo_use_ssl = json_object_object_get(j_req, "use_ssl");
+
+    const char *json_host = NULL;
+    const char *json_port = NULL;
+    const char *json_path = NULL;
+
+    if (jo_host_name != NULL) json_host = json_object_get_string(jo_host_name);
+    if (jo_port != NULL) json_port = json_object_get_string(jo_port);
+    if (jo_path != NULL) json_path = json_object_get_string(jo_path);
+
+    LOCK_CONFIG();
+    if (json_host != NULL && (!hostname || strcmp(hostname, json_host) != 0)) {
+        free(hostname);
+        config->ws_server->hostname = safe_strdup(json_host);
+        tmp_host_name = config->ws_server->hostname;
+    }
+
+    if (json_port != NULL) {
+        config->ws_server->port = (uint16_t)atoi(json_port);
+        tmp_port_str = json_port;
+    }
+
+    if (json_path != NULL && (!path || strcmp(path, json_path) != 0)) {
+        free(path);
+        config->ws_server->path = safe_strdup(json_path);
+        tmp_path = config->ws_server->path;
+    }
+
+    if (jo_use_ssl != NULL) {
+        tmp_use_ssl_set = 1;
+        tmp_use_ssl = json_object_get_boolean(jo_use_ssl) ? 1 : 0;
+        config->ws_server->use_ssl = (uint16_t)tmp_use_ssl;
+    }
+    UNLOCK_CONFIG();
+
+        debug(LOG_DEBUG, "Set WebSocket server - hostname: %s, port: %s, path: %s, use_ssl: %s",
+          tmp_host_name ? tmp_host_name : "(unchanged)",
+          tmp_port_str ? tmp_port_str : "(unchanged)",
+            tmp_path ? tmp_path : "(unchanged)",
+            tmp_use_ssl_set ? (tmp_use_ssl ? "1" : "0") : "(unchanged)");
+
+    char selected_section[128] = {0};
+    if (uci_get_value("wifidogx", "common", "selected_auth_server", selected_section, sizeof(selected_section)) == 0 && selected_section[0] != '\0') {
+        if (tmp_host_name != NULL) {
+            uci_set_value("wifidogx", selected_section, "ws_server_hostname", tmp_host_name);
+        }
+        if (tmp_port_str != NULL) {
+            char portbuf[16];
+            snprintf(portbuf, sizeof(portbuf), "%d", config->ws_server->port);
+            uci_set_value("wifidogx", selected_section, "ws_server_port", portbuf);
+        }
+        if (tmp_path != NULL) {
+            uci_set_value("wifidogx", selected_section, "ws_server_path", tmp_path);
+        }
+        if (tmp_use_ssl_set) {
+            uci_set_value("wifidogx", selected_section, "long_conn_mode", tmp_use_ssl ? "wss" : "ws");
+        }
+    } else {
+        debug(LOG_WARNING, "No selected_auth_server found in UCI; skipping persistence to auth section");
+    }
+
+    json_object_object_add(j_response, "type", json_object_new_string("set_websocket_server_response"));
+    json_object_object_add(j_response, "status", json_object_new_string("success"));
+    json_object_object_add(j_response, "message", json_object_new_string("WebSocket server configuration updated"));
+    send_json_response(transport, j_response);
+}
+
+void handle_get_websocket_server_request(json_object *j_req, api_transport_context_t *transport) {
+    json_object *j_response = json_object_new_object();
+
+    s_config *config = config_get_config();
+    if (!config || !config->ws_server) {
+        debug(LOG_ERR, "Get WebSocket server: Config or ws_server is NULL");
+        json_object_object_add(j_response, "type", json_object_new_string("get_websocket_serv_error"));
+        json_object_object_add(j_response, "error", json_object_new_string("Internal configuration error"));
+        send_json_response(transport, j_response);
+        return;
+    }
+
+    char *hostname_copy = NULL;
+    char *path_copy = NULL;
+    int port_copy = 0;
+    int use_ssl_copy = 0;
+
+    LOCK_CONFIG();
+    if (config->ws_server->hostname) {
+        hostname_copy = safe_strdup(config->ws_server->hostname);
+    }
+    port_copy = config->ws_server->port;
+    use_ssl_copy = config->ws_server->use_ssl;
+    if (config->ws_server->path) {
+        path_copy = safe_strdup(config->ws_server->path);
+    }
+    UNLOCK_CONFIG();
+
+    json_object *j_data = json_object_new_object();
+    if (hostname_copy) json_object_object_add(j_data, "hostname", json_object_new_string(hostname_copy));
+    json_object_object_add(j_data, "port", json_object_new_int(port_copy));
+    json_object_object_add(j_data, "use_ssl", json_object_new_boolean(use_ssl_copy));
+    if (path_copy) json_object_object_add(j_data, "path", json_object_new_string(path_copy));
+
+    json_object_object_add(j_response, "type", json_object_new_string("get_websocket_serv_response"));
+    json_object_object_add(j_response, "data", j_data);
+
+    json_object *j_fd = json_object_new_object();
+    json_object_object_add(j_fd, "hostname", json_object_new_string("WebSocket server hostname (string) from runtime config"));
+    json_object_object_add(j_fd, "port", json_object_new_string("WebSocket server port (int) from runtime config"));
+    json_object_object_add(j_fd, "use_ssl", json_object_new_string("Whether WebSocket uses TLS/SSL (boolean)"));
+    json_object_object_add(j_fd, "path", json_object_new_string("WebSocket server path (string) from runtime config"));
+    json_object_object_add(j_response, "field_descriptions", j_fd);
+
+    send_json_response(transport, j_response);
+
+    free(hostname_copy);
+    free(path_copy);
+}
+
 void handle_auth_request(json_object *j_auth, api_transport_context_t *transport) {
     if (is_portal_auth_disabled()) {
         debug(LOG_WARNING, "Portal authentication is disabled, ignoring auth request from server");
-        send_response(transport, "{\"error\":\"Portal authentication is disabled\"}");
+        send_response(transport, "{\"status\":\"auth_disabled\",\"message\":\"Portal authentication is currently disabled on this gateway\"}");
         return;
     }
 
@@ -603,6 +926,7 @@ void handle_auth_request(json_object *j_auth, api_transport_context_t *transport
 
     if (!token || !client_ip || !client_mac || !gw_id || !once_auth) {
         debug(LOG_ERR, "Auth: Missing required fields in JSON response");
+        send_response(transport, "{\"status\":\"fields_required\",\"message\":\"Missing required fields in JSON response\"}");
         return;
     }
 
@@ -610,6 +934,7 @@ void handle_auth_request(json_object *j_auth, api_transport_context_t *transport
     t_gateway_setting *gw_setting = get_gateway_setting_by_id(gw_id_str);
     if (!gw_setting) {
         debug(LOG_ERR, "Auth: Gateway %s not found", gw_id_str);
+        send_response(transport, "{\"status\":\"gw_not_found\",\"message\":\"Gateway not found\"}");
         return;
     }
 
@@ -685,7 +1010,7 @@ void handle_get_aw_status_request(json_object *j_req, api_transport_context_t *t
     get_sys_info(&info);
 
     char selected_section[128] = {0};
-    if (uci_get_value("wifidogx", "wifidog", "selected_auth_server", selected_section, sizeof(selected_section)) != 0) {
+    if (uci_get_value("wifidogx", "common", "selected_auth_server", selected_section, sizeof(selected_section)) != 0) {
         selected_section[0] = '\0';
     }
 
