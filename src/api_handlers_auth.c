@@ -913,7 +913,7 @@ void handle_get_websocket_server_request(json_object *j_req, api_transport_conte
 void handle_auth_request(json_object *j_auth, api_transport_context_t *transport) {
     if (is_portal_auth_disabled()) {
         debug(LOG_WARNING, "Portal authentication is disabled, ignoring auth request from server");
-        send_response(transport, "{\"status\":\"auth_disabled\",\"message\":\"Portal authentication is currently disabled on this gateway\"}");
+        send_response(transport, "{\"type\":\"auth_response\", \"status\":\"auth_disabled\",\"message\":\"Portal authentication is currently disabled on this gateway\"}");
         return;
     }
 
@@ -926,7 +926,7 @@ void handle_auth_request(json_object *j_auth, api_transport_context_t *transport
 
     if (!token || !client_ip || !client_mac || !gw_id || !once_auth) {
         debug(LOG_ERR, "Auth: Missing required fields in JSON response");
-        send_response(transport, "{\"status\":\"fields_required\",\"message\":\"Missing required fields in JSON response\"}");
+        send_response(transport, "{\"type\":\"auth_response\", \"status\":\"fields_required\",\"message\":\"Missing required fields in JSON response\"}");
         return;
     }
 
@@ -934,7 +934,7 @@ void handle_auth_request(json_object *j_auth, api_transport_context_t *transport
     t_gateway_setting *gw_setting = get_gateway_setting_by_id(gw_id_str);
     if (!gw_setting) {
         debug(LOG_ERR, "Auth: Gateway %s not found", gw_id_str);
-        send_response(transport, "{\"status\":\"gw_not_found\",\"message\":\"Gateway not found\"}");
+        send_response(transport, "{\"type\":\"auth_response\", \"status\":\"gw_not_found\",\"message\":\"Gateway not found\"}");
         return;
     }
 
@@ -945,7 +945,7 @@ void handle_auth_request(json_object *j_auth, api_transport_context_t *transport
         nft_reload_gw();
 #endif
         char response_msg[128];
-        snprintf(response_msg, sizeof(response_msg), "{\"status\":\"once_auth_enabled\",\"gw_id\":\"%s\"}", gw_id_str);
+        snprintf(response_msg, sizeof(response_msg), "{\"type\":\"auth_response\", \"status\":\"once_auth_enabled\",\"gw_id\":\"%s\"}", gw_id_str);
         send_response(transport, response_msg);
         return;
     }
@@ -957,7 +957,7 @@ void handle_auth_request(json_object *j_auth, api_transport_context_t *transport
     if (client_list_find(client_ip_str, client_mac_str)) {
         debug(LOG_DEBUG, "Auth: Client %s (%s) already authenticated", client_mac_str, client_ip_str);
         char response_msg[256];
-        snprintf(response_msg, sizeof(response_msg), "{\"status\":\"already_authenticated\",\"client_ip\":\"%s\",\"client_mac\":\"%s\"}", client_ip_str, client_mac_str);
+        snprintf(response_msg, sizeof(response_msg), "{\"type\":\"auth_response\", \"status\":\"already_authenticated\",\"client_ip\":\"%s\",\"client_mac\":\"%s\"}", client_ip_str, client_mac_str);
         send_response(transport, response_msg);
         return;
     }
@@ -995,7 +995,7 @@ void handle_auth_request(json_object *j_auth, api_transport_context_t *transport
     debug(LOG_DEBUG, "Auth: Added client %s (%s) with token %s", client_mac_str, client_ip_str, token_str);
 
     char response_msg[256];
-    snprintf(response_msg, sizeof(response_msg), "{\"status\":\"auth_success\",\"client_ip\":\"%s\",\"client_mac\":\"%s\"}", client_ip_str, client_mac_str);
+    snprintf(response_msg, sizeof(response_msg), "{\"type\":\"auth_response\", \"status\":\"auth_success\",\"client_ip\":\"%s\",\"client_mac\":\"%s\"}", client_ip_str, client_mac_str);
     send_response(transport, response_msg);
 }
 
