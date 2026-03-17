@@ -138,8 +138,8 @@ static int ipsec_add_section_from_json(struct uci_context *ctx, struct uci_packa
 void handle_get_ipsec_vpn_request(json_object *j_req, api_transport_context_t *transport) {
     (void)j_req;
 
-    json_object *j_response = json_object_new_object();
-    json_object *j_data = json_object_new_object();
+    json_object *j_response = api_response_new("get_ipsec_vpn_response");
+    json_object *j_data = api_response_get_data(j_response);
     json_object *j_proposals = json_object_new_array();
     json_object *j_tunnels = json_object_new_array();
     json_object *j_remotes = json_object_new_array();
@@ -147,8 +147,7 @@ void handle_get_ipsec_vpn_request(json_object *j_req, api_transport_context_t *t
     struct uci_context *ctx = NULL;
     struct uci_package *pkg = NULL;
     if (uci_open_package("ipsec", &ctx, &pkg) != 0) {
-        json_object_object_add(j_response, "type", json_object_new_string("get_ipsec_vpn_error"));
-        json_object_object_add(j_response, "error", json_object_new_string("Failed to open ipsec config"));
+        api_response_set_error(j_response, 3001, "Failed to open ipsec config");
         send_json_response(transport, j_response);
         return;
     }
@@ -190,17 +189,15 @@ void handle_get_ipsec_vpn_request(json_object *j_req, api_transport_context_t *t
     json_object_object_add(j_data, "tunnels", j_tunnels);
     json_object_object_add(j_data, "remotes", j_remotes);
 
-    json_object_object_add(j_response, "type", json_object_new_string("get_ipsec_vpn_response"));
-    json_object_object_add(j_response, "data", j_data);
+    api_response_set_success(j_response, "OK");
     send_json_response(transport, j_response);
 }
 
 void handle_set_ipsec_vpn_request(json_object *j_req, api_transport_context_t *transport) {
     json_object *j_data = json_object_object_get(j_req, "data");
     if (!j_data || !json_object_is_type(j_data, json_type_object)) {
-        json_object *j_err = json_object_new_object();
-        json_object_object_add(j_err, "type", json_object_new_string("set_ipsec_vpn_error"));
-        json_object_object_add(j_err, "error", json_object_new_string("Missing or invalid 'data' object"));
+        json_object *j_err = api_response_new("set_ipsec_vpn_response");
+        api_response_set_error(j_err, 1000, "Missing or invalid 'data' object");
         send_json_response(transport, j_err);
         return;
     }
@@ -208,9 +205,8 @@ void handle_set_ipsec_vpn_request(json_object *j_req, api_transport_context_t *t
     struct uci_context *ctx = NULL;
     struct uci_package *pkg = NULL;
     if (uci_open_package("ipsec", &ctx, &pkg) != 0) {
-        json_object *j_err = json_object_new_object();
-        json_object_object_add(j_err, "type", json_object_new_string("set_ipsec_vpn_error"));
-        json_object_object_add(j_err, "error", json_object_new_string("Failed to open ipsec config"));
+        json_object *j_err = api_response_new("set_ipsec_vpn_response");
+        api_response_set_error(j_err, 3001, "Failed to open ipsec config");
         send_json_response(transport, j_err);
         return;
     }
@@ -299,52 +295,53 @@ void handle_set_ipsec_vpn_request(json_object *j_req, api_transport_context_t *t
     uci_close_package(ctx, pkg);
 
     if (rc != 0) {
-        json_object *j_err = json_object_new_object();
-        json_object_object_add(j_err, "type", json_object_new_string("set_ipsec_vpn_error"));
-        json_object_object_add(j_err, "error", json_object_new_string("Failed to update ipsec config"));
+        json_object *j_err = api_response_new("set_ipsec_vpn_response");
+        api_response_set_error(j_err, 3000, "Failed to update ipsec config");
         send_json_response(transport, j_err);
         return;
     }
 
-    json_object *j_resp = json_object_new_object();
-    json_object_object_add(j_resp, "type", json_object_new_string("set_ipsec_vpn_response"));
-    json_object_object_add(j_resp, "status", json_object_new_string("success"));
-    json_object_object_add(j_resp, "message", json_object_new_string("IPsec VPN configuration updated"));
+    json_object *j_resp = api_response_new("set_ipsec_vpn_response");
+    api_response_set_success(j_resp, "IPsec VPN configuration updated");
     send_json_response(transport, j_resp);
 }
 
 void handle_get_ipsec_vpn_status_request(json_object *j_req, api_transport_context_t *transport) {
     (void)j_req;
 
-    json_object *j_resp = json_object_new_object();
+    json_object *j_resp = api_response_new("get_ipsec_vpn_status_response");
+    json_object *j_data = api_response_get_data(j_resp);
     char *out = NULL;
     int exit_code = 0;
 
     int rc = run_command_capture("swanctl -l 2>&1", &out, &exit_code);
     if (rc != 0) {
-        json_object_object_add(j_resp, "type", json_object_new_string("get_ipsec_vpn_status_error"));
-        json_object_object_add(j_resp, "error", json_object_new_string("Failed to execute swanctl -l"));
-        json_object_object_add(j_resp, "exit_code", json_object_new_int(exit_code));
-        json_object_object_add(j_resp, "output", json_object_new_string(out ? out : ""));
+        api_response_set_error(j_resp, 3000, "Failed to execute swanctl -l");
+        if (j_data) {
+            json_object_object_add(j_data, "exit_code", json_object_new_int(exit_code));
+            json_object_object_add(j_data, "output", json_object_new_string(out ? out : ""));
+        }
         send_json_response(transport, j_resp);
         free(out);
         return;
     }
 
     if (exit_code != 0) {
-        json_object_object_add(j_resp, "type", json_object_new_string("get_ipsec_vpn_status_error"));
-        json_object_object_add(j_resp, "error", json_object_new_string("swanctl -l returned non-zero exit code"));
-        json_object_object_add(j_resp, "exit_code", json_object_new_int(exit_code));
-        json_object_object_add(j_resp, "output", json_object_new_string(out ? out : ""));
+        api_response_set_error(j_resp, 3000, "swanctl -l returned non-zero exit code");
+        if (j_data) {
+            json_object_object_add(j_data, "exit_code", json_object_new_int(exit_code));
+            json_object_object_add(j_data, "output", json_object_new_string(out ? out : ""));
+        }
         send_json_response(transport, j_resp);
         free(out);
         return;
     }
 
-    json_object_object_add(j_resp, "type", json_object_new_string("get_ipsec_vpn_status_response"));
-    json_object_object_add(j_resp, "status", json_object_new_string("success"));
-    json_object_object_add(j_resp, "exit_code", json_object_new_int(exit_code));
-    json_object_object_add(j_resp, "output", json_object_new_string(out ? out : ""));
+    api_response_set_success(j_resp, "OK");
+    if (j_data) {
+        json_object_object_add(j_data, "exit_code", json_object_new_int(exit_code));
+        json_object_object_add(j_data, "output", json_object_new_string(out ? out : ""));
+    }
     send_json_response(transport, j_resp);
 
     free(out);
@@ -443,16 +440,15 @@ static int add_network_section_from_json(struct uci_context *ctx, struct uci_pac
 void handle_get_wireguard_vpn_request(json_object *j_req, api_transport_context_t *transport) {
     (void)j_req;
 
-    json_object *j_response = json_object_new_object();
-    json_object *j_data = json_object_new_object();
+    json_object *j_response = api_response_new("get_wireguard_vpn_response");
+    json_object *j_data = api_response_get_data(j_response);
     json_object *j_interfaces = json_object_new_array();
     json_object *j_peers = json_object_new_array();
 
     struct uci_context *ctx = NULL;
     struct uci_package *pkg = NULL;
     if (uci_open_package("network", &ctx, &pkg) != 0) {
-        json_object_object_add(j_response, "type", json_object_new_string("get_wireguard_vpn_error"));
-        json_object_object_add(j_response, "error", json_object_new_string("Failed to open network config"));
+        api_response_set_error(j_response, 3001, "Failed to open network config");
         send_json_response(transport, j_response);
         return;
     }
@@ -503,17 +499,15 @@ void handle_get_wireguard_vpn_request(json_object *j_req, api_transport_context_
     json_object_object_add(j_data, "interfaces", j_interfaces);
     json_object_object_add(j_data, "peers", j_peers);
 
-    json_object_object_add(j_response, "type", json_object_new_string("get_wireguard_vpn_response"));
-    json_object_object_add(j_response, "data", j_data);
+    api_response_set_success(j_response, "OK");
     send_json_response(transport, j_response);
 }
 
 void handle_set_wireguard_vpn_request(json_object *j_req, api_transport_context_t *transport) {
     json_object *j_data = json_object_object_get(j_req, "data");
     if (!j_data || !json_object_is_type(j_data, json_type_object)) {
-        json_object *j_err = json_object_new_object();
-        json_object_object_add(j_err, "type", json_object_new_string("set_wireguard_vpn_error"));
-        json_object_object_add(j_err, "error", json_object_new_string("Missing or invalid 'data' object"));
+        json_object *j_err = api_response_new("set_wireguard_vpn_response");
+        api_response_set_error(j_err, 1000, "Missing or invalid 'data' object");
         send_json_response(transport, j_err);
         return;
     }
@@ -521,9 +515,8 @@ void handle_set_wireguard_vpn_request(json_object *j_req, api_transport_context_
     struct uci_context *ctx = NULL;
     struct uci_package *pkg = NULL;
     if (uci_open_package("network", &ctx, &pkg) != 0) {
-        json_object *j_err = json_object_new_object();
-        json_object_object_add(j_err, "type", json_object_new_string("set_wireguard_vpn_error"));
-        json_object_object_add(j_err, "error", json_object_new_string("Failed to open network config"));
+        json_object *j_err = api_response_new("set_wireguard_vpn_response");
+        api_response_set_error(j_err, 3001, "Failed to open network config");
         send_json_response(transport, j_err);
         return;
     }
@@ -635,52 +628,53 @@ void handle_set_wireguard_vpn_request(json_object *j_req, api_transport_context_
     uci_close_package(ctx, pkg);
 
     if (rc != 0) {
-        json_object *j_err = json_object_new_object();
-        json_object_object_add(j_err, "type", json_object_new_string("set_wireguard_vpn_error"));
-        json_object_object_add(j_err, "error", json_object_new_string("Failed to update wireguard config"));
+        json_object *j_err = api_response_new("set_wireguard_vpn_response");
+        api_response_set_error(j_err, 3000, "Failed to update wireguard config");
         send_json_response(transport, j_err);
         return;
     }
 
-    json_object *j_resp = json_object_new_object();
-    json_object_object_add(j_resp, "type", json_object_new_string("set_wireguard_vpn_response"));
-    json_object_object_add(j_resp, "status", json_object_new_string("success"));
-    json_object_object_add(j_resp, "message", json_object_new_string("WireGuard VPN configuration updated"));
+    json_object *j_resp = api_response_new("set_wireguard_vpn_response");
+    api_response_set_success(j_resp, "WireGuard VPN configuration updated");
     send_json_response(transport, j_resp);
 }
 
 void handle_get_wireguard_vpn_status_request(json_object *j_req, api_transport_context_t *transport) {
     (void)j_req;
 
-    json_object *j_resp = json_object_new_object();
+    json_object *j_resp = api_response_new("get_wireguard_vpn_status_response");
+    json_object *j_data = api_response_get_data(j_resp);
     char *out = NULL;
     int exit_code = 0;
 
     int rc = run_command_capture("wg show 2>&1", &out, &exit_code);
     if (rc != 0) {
-        json_object_object_add(j_resp, "type", json_object_new_string("get_wireguard_vpn_status_error"));
-        json_object_object_add(j_resp, "error", json_object_new_string("Failed to execute wg show"));
-        json_object_object_add(j_resp, "exit_code", json_object_new_int(exit_code));
-        json_object_object_add(j_resp, "output", json_object_new_string(out ? out : ""));
+        api_response_set_error(j_resp, 3000, "Failed to execute wg show");
+        if (j_data) {
+            json_object_object_add(j_data, "exit_code", json_object_new_int(exit_code));
+            json_object_object_add(j_data, "output", json_object_new_string(out ? out : ""));
+        }
         send_json_response(transport, j_resp);
         free(out);
         return;
     }
 
     if (exit_code != 0) {
-        json_object_object_add(j_resp, "type", json_object_new_string("get_wireguard_vpn_status_error"));
-        json_object_object_add(j_resp, "error", json_object_new_string("wg show returned non-zero exit code"));
-        json_object_object_add(j_resp, "exit_code", json_object_new_int(exit_code));
-        json_object_object_add(j_resp, "output", json_object_new_string(out ? out : ""));
+        api_response_set_error(j_resp, 3000, "wg show returned non-zero exit code");
+        if (j_data) {
+            json_object_object_add(j_data, "exit_code", json_object_new_int(exit_code));
+            json_object_object_add(j_data, "output", json_object_new_string(out ? out : ""));
+        }
         send_json_response(transport, j_resp);
         free(out);
         return;
     }
 
-    json_object_object_add(j_resp, "type", json_object_new_string("get_wireguard_vpn_status_response"));
-    json_object_object_add(j_resp, "status", json_object_new_string("success"));
-    json_object_object_add(j_resp, "exit_code", json_object_new_int(exit_code));
-    json_object_object_add(j_resp, "output", json_object_new_string(out ? out : ""));
+    api_response_set_success(j_resp, "OK");
+    if (j_data) {
+        json_object_object_add(j_data, "exit_code", json_object_new_int(exit_code));
+        json_object_object_add(j_data, "output", json_object_new_string(out ? out : ""));
+    }
     send_json_response(transport, j_resp);
 
     free(out);
