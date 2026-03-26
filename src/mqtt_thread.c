@@ -88,7 +88,6 @@ send_mqtt_error_response(struct mosquitto *mosq, json_object *req_id, int res_id
 static void
 process_mqtt_request(struct mosquitto *mosq, const char *data, s_config *config)
 {
-	unsigned int req_id = 0;
 	json_object *jo_req_id = NULL;
 	api_transport_context_t *transport = NULL;
 	
@@ -103,9 +102,6 @@ process_mqtt_request(struct mosquitto *mosq, const char *data, s_config *config)
 
 	// Get req_id from JSON payload (v1 format)
 	jo_req_id = json_object_object_get(json_request, "req_id");
-	if (jo_req_id) {
-		req_id = json_object_get_int(jo_req_id);
-	}
 
 	// Create MQTT transport context
 	transport = create_mqtt_transport_context(mosq, jo_req_id);
@@ -167,7 +163,8 @@ process_mqtt_request(struct mosquitto *mosq, const char *data, s_config *config)
 		return;
 	}
 
-	debug(LOG_DEBUG, "Processing MQTT operation: %s (req_id: %u)", op, req_id);
+	debug(LOG_DEBUG, "Processing MQTT operation: %s (req_id: %s)", op,
+	      jo_req_id ? json_object_to_json_string(jo_req_id) : "null");
 
 	/* Route all MQTT operations through the unified API dispatcher so behavior
 	 * matches WebSocket processing (process_ws_msg). This keeps handler logic

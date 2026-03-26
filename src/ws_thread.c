@@ -372,8 +372,9 @@ process_ws_msg(struct bufferevent *bev, const char *msg)
 
 	json_object *req_id = NULL;
 	json_object_object_get_ex(jobj, "req_id", &req_id);
-	if (req_id && json_object_is_type(req_id, json_type_int)) {
-		debug(LOG_DEBUG, "Message has req_id: %d", json_object_get_int(req_id));
+	if (req_id && (json_object_is_type(req_id, json_type_string) ||
+	               json_object_is_type(req_id, json_type_int))) {
+		debug(LOG_DEBUG, "Message has req_id: %s", json_object_to_json_string(req_id));
 	} else {
 		debug(LOG_INFO, "Message has no valid req_id");
 		api_transport_context_t *transport = create_websocket_transport_context(bev, NULL);

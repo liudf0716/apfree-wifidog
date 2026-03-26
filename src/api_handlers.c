@@ -388,26 +388,16 @@ void send_json_response(api_transport_context_t *transport, json_object *j_respo
  * The identifier is an unsigned integer composed from the current
  * UNIX millisecond timestamp and a small random suffix to reduce
  * collision probability across devices. The returned json_object is
- * a JSON integer and the caller must free it with json_object_put().
+ * a JSON string (16 hex characters) and the caller must free it with
+ * json_object_put().
  */
 json_object *api_generate_req_id(void)
 {
-    struct timeval tv;
-    gettimeofday(&tv, NULL);
-    unsigned long long ms = (unsigned long long)tv.tv_sec * 1000ULL + (tv.tv_usec / 1000ULL);
-    unsigned int suffix = (unsigned int)(random() % 1000);
-    /* Compose a numeric id: ms * 1000 + suffix. Cast to 32-bit int
-     * using json_object_new_int() as requested. To avoid negative
-     * values from 32-bit overflow, clamp the generated value into
-     * the positive 32-bit signed range. */
-    unsigned long long id = ms * 1000ULL + (unsigned long long)suffix;
-    /* INT_MAX from <limits.h> is used as the clamp upper bound. */
-    int clamped = (int)(id % (unsigned long long)INT_MAX);
-    if (clamped <= 0) {
-        /* Ensure strictly positive */
-        clamped = 1;
-    }
-    return json_object_new_int(clamped);
+    unsigned int r1 = (unsigned int)random();
+    unsigned int r2 = (unsigned int)random();
+    char hex[17]; /* 16 hex chars + NUL */
+    snprintf(hex, sizeof(hex), "%08x%08x", r1, r2);
+    return json_object_new_string(hex);
 }
 
 /**
