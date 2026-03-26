@@ -1092,19 +1092,22 @@ reconnect_websocket(void)
 
 	t_ws_server *server = get_ws_server();
 	if (!server) {
-		debug(LOG_ERR, "reconnect_websocket: WebSocket server configuration (server) is NULL. Aborting.");
+		debug(LOG_ERR, "reconnect_websocket: WebSocket server configuration (server) is NULL. Retrying later.");
 		bufferevent_free(bev);
+		schedule_reconnect(5);
 		return;
 	}
 
 	if (!ws_state.dnsbase) {
-		debug(LOG_ERR, "reconnect_websocket: ws_state.dnsbase is NULL. Aborting reconnection attempt.");
+		debug(LOG_ERR, "reconnect_websocket: ws_state.dnsbase is NULL. Retrying later.");
 		bufferevent_free(bev);
+		schedule_reconnect(5);
 		return;
 	}
 	if (!server->hostname) {
-		debug(LOG_ERR, "reconnect_websocket: WebSocket server hostname is NULL. Aborting.");
+		debug(LOG_ERR, "reconnect_websocket: WebSocket server hostname is NULL. Retrying later.");
 		bufferevent_free(bev);
+		schedule_reconnect(5);
 		return;
 	}
 
@@ -1191,18 +1194,18 @@ static int
 connect_ws_server(t_ws_server *ws_server)
 {
 	struct bufferevent *ws_bev = NULL;
-	int max_retries = 5;
 	int retry_count = 0;
 
 	generate_sec_websocket_key(WS_KEY, sizeof(WS_KEY));
 	generate_sec_websocket_accept(WS_KEY, WS_ACCEPT, sizeof(WS_ACCEPT));
 
-	while (retry_count < max_retries) {
+	/* Keep retrying forever until initial connection attempt is successfully started. */
+	while (1) {
 		ws_bev = create_ws_bufferevent();
 		if (!ws_bev) {
-			debug(LOG_ERR, "Failed to create bufferevent");
-			sleep(1);
 			retry_count++;
+			debug(LOG_ERR, "Failed to create bufferevent (attempt %d), retrying", retry_count);
+			sleep(1);
 			continue;
 		}
 
@@ -1217,16 +1220,18 @@ connect_ws_server(t_ws_server *ws_server)
 		if (ret >= 0) {
 			ws_state.current_bev = ws_bev;
 			ws_state.upgraded = false;
+			debug(LOG_INFO, "Initial WebSocket connection attempt started successfully after %d attempt(s)", retry_count + 1);
 			return 0;
 		}
 
+		retry_count++;
 		debug(LOG_ERR, "Connection attempt %d failed: %s", 
-			  retry_count + 1, strerror(errno));
+			  retry_count, strerror(errno));
 		bufferevent_free(ws_bev);
 		sleep(1);
-		retry_count++;
 	}
 
+	/* Unreachable: loop retries forever until returning success. */
 	return -1;
 }
 
@@ -1268,7 +1273,8 @@ thread_websocket(void *arg)
 
 	start_ws_control_timer();
 
-	// Connect to WebSocket server
+	// Connect to WebSocket server. This call retries indefinitely until
+	// the first connection attempt is successfully initiated.
 	if (connect_ws_server(ws_server) < 0) {
 		debug(LOG_ERR, "Failed to connect to WebSocket server");
 		if (ws_state.base) {
