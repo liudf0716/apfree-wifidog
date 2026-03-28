@@ -737,26 +737,24 @@ threads_init(s_config *config)
         return;
     }
 
-    // Auth server dependent threads
-    if (is_local_auth_mode()) {
-        debug(LOG_INFO, "Auth mode is local, no need to start auth server related threads");
-        return;
+    // Auth server dependent threads - only needed in cloud/bypass mode
+    if (!is_local_auth_mode()) {
+        if (!create_detached_thread(&tid_fw_counter, (void *)thread_client_timeout_check, NULL, "fw_counter")) {
+            debug(LOG_ERR, "Failed to create firewall counter thread");
+            return;
+        }
+    } else {
+        debug(LOG_INFO, "Auth mode is local, skipping auth server dependent threads");
     }
 
-    // Start auth server dependent threads
-    if (!create_detached_thread(&tid_fw_counter, (void *)thread_client_timeout_check, NULL, "fw_counter")) {
-        debug(LOG_ERR, "Failed to create firewall counter thread");
-        return;
-    }
-
-    // Optional websocket thread
+    // Optional websocket thread - runs in any auth mode for remote management (e.g. OpenClaw)
     if (get_ws_server()) {
         if (!create_detached_thread(&tid_ws, (void *)thread_websocket, NULL, "websocket")) {
             debug(LOG_WARNING, "Failed to create WebSocket thread (optional)");
         }
     }
 
-    // Optional MQTT thread
+    // Optional MQTT thread - runs in any auth mode for remote management (e.g. OpenClaw)
     if (get_mqtt_server()) {
         if (!create_detached_thread(&tid_mqtt_server, (void *)thread_mqtt, config, "mqtt")) {
             debug(LOG_WARNING, "Failed to create MQTT thread (optional)");
