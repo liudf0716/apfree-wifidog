@@ -336,17 +336,15 @@ start_ws_heartbeat(struct bufferevent *b_ws)
 static void
 send_ws_error_response(api_transport_context_t *transport, int res_code, const char *msg, const char *requested_op)
 {
-	json_object *j_response = json_object_new_object();
+	json_object *j_response = api_response_new("generic_response");
 	if (!j_response) {
 		return;
 	}
+	api_response_set_error(j_response, res_code, msg ? msg : "error");
 
-	char code_buf[16];
-	snprintf(code_buf, sizeof(code_buf), "%d", res_code);
-	json_object_object_add(j_response, "response", json_object_new_string(code_buf));
-	json_object_object_add(j_response, "msg", json_object_new_string(msg ? msg : "error"));
-	if (requested_op) {
-		json_object_object_add(j_response, "requested_op", json_object_new_string(requested_op));
+	json_object *j_data = api_response_get_data(j_response);
+	if (requested_op && j_data) {
+		json_object_object_add(j_data, "requested_op", json_object_new_string(requested_op));
 	}
 
 	send_json_response(transport, j_response);
