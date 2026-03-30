@@ -50,6 +50,7 @@ Sent automatically when WebSocket connection is established.
 {
   "type": "connect",
   "device_id": "<device_identifier>",
+  "mode": 0,
   "device_info": {
     "ap_device_id": "<ap_device_id>",
     "ap_mac_address": "<ap_mac_address>", 
@@ -70,6 +71,11 @@ Sent automatically when WebSocket connection is established.
 }
 ```
 
+`mode` is an integer auth-server mode enum:
+- `0`: cloud
+- `1`: bypass
+- `2`: local
+
 #### 1.2 Heartbeat Message (Device → Server)
 Sent every 60 seconds to maintain connection and sync gateway states.
 
@@ -78,6 +84,7 @@ Sent every 60 seconds to maintain connection and sync gateway states.
 {
   "type": "heartbeat",
   "device_id": "<device_identifier>",
+  "mode": 0,
   "device_info": {
     "ap_device_id": "<ap_device_id>",
     "ap_mac_address": "<ap_mac_address>", 

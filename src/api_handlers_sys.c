@@ -16,7 +16,18 @@ json_object *build_gateway_report_message(const char *op)
 
     json_object *root = json_object_new_object();
     json_object_object_add(root, "op", json_object_new_string(op));
-    json_object_object_add(root, "device_id", json_object_new_string(get_device_id()));
+
+    const char *device_id = get_device_id();
+    if (!device_id || *device_id == '\0') {
+        debug(LOG_WARNING, "device_id is empty, using placeholder for gateway report message");
+        device_id = "UNKNOWN";
+    }
+    json_object_object_add(root, "device_id", json_object_new_string(device_id));
+
+    // Report current authentication mode for connect/heartbeat consumers.
+    // Enum values: cloud=0, bypass=1, local=2.
+    int mode = is_local_auth_mode() ? AUTH_MODE_LOCAL : (is_bypass_mode() ? AUTH_MODE_BYPASS : AUTH_MODE_CLOUD);
+    json_object_object_add(root, "mode", json_object_new_int(mode));
 
     t_device_info *device_info = get_device_info();
     if (device_info) {

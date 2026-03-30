@@ -50,6 +50,7 @@ WebSocket 连接建立时自动发送。
 {
   "type": "connect",
   "device_id": "<device_identifier>",
+  "mode": 0,
   "device_info": {
     "ap_device_id": "<ap_device_id>",
     "ap_mac_address": "<ap_mac_address>", 
@@ -70,6 +71,11 @@ WebSocket 连接建立时自动发送。
 }
 ```
 
+`mode` 为认证服务器模式整数枚举：
+- `0`: cloud
+- `1`: bypass
+- `2`: local
+
 #### 1.2 心跳消息 (设备 → 服务器)
 每60秒发送一次以维持连接并同步网关状态。
 
@@ -78,6 +84,7 @@ WebSocket 连接建立时自动发送。
 {
   "type": "heartbeat",
   "device_id": "<device_identifier>",
+  "mode": 0,
   "device_info": {
     "ap_device_id": "<ap_device_id>",
     "ap_mac_address": "<ap_mac_address>", 
