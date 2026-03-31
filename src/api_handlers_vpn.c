@@ -103,12 +103,28 @@ static int ipsec_add_section_from_json(struct uci_context *ctx, struct uci_packa
         return -1;
     }
 
-    struct uci_section *new_sec = NULL;
-    if (uci_add_section(ctx, pkg, section_type, &new_sec) != UCI_OK || !new_sec || !new_sec->e.name) {
-        return -1;
+    const char *sec_name = NULL;
+
+    // Check if a named section is requested via "_name" field
+    json_object *j_name = json_object_object_get(j_section, "_name");
+    if (j_name && json_object_is_type(j_name, json_type_string)) {
+        sec_name = json_object_get_string(j_name);
     }
 
-    const char *sec_name = new_sec->e.name;
+    if (sec_name && sec_name[0] != '\0') {
+        // Create a named section (e.g. config crypto_proposal 'p1')
+        if (uci_add_named_section_with_ctx(ctx, "ipsec", sec_name, section_type) != 0) {
+            return -1;
+        }
+    } else {
+        // Create an anonymous section (e.g. config ipsec)
+        struct uci_section *new_sec = NULL;
+        if (uci_add_section(ctx, pkg, section_type, &new_sec) != UCI_OK || !new_sec || !new_sec->e.name) {
+            return -1;
+        }
+        sec_name = new_sec->e.name;
+    }
+
     json_object_object_foreach(j_section, key, val) {
         if (!key || strcmp(key, "_name") == 0 || !val) {
             continue;
@@ -147,8 +163,12 @@ void handle_get_ipsec_vpn_request(json_object *j_req, api_transport_context_t *t
     struct uci_context *ctx = NULL;
     struct uci_package *pkg = NULL;
     if (uci_open_package("ipsec", &ctx, &pkg) != 0) {
+        json_object_put(j_proposals);
+        json_object_put(j_tunnels);
+        json_object_put(j_remotes);
         api_response_set_error(j_response, 3001, "Failed to open ipsec config");
         send_json_response(transport, j_response);
+        json_object_put(j_response);
         return;
     }
 
@@ -191,6 +211,7 @@ void handle_get_ipsec_vpn_request(json_object *j_req, api_transport_context_t *t
 
     api_response_set_success(j_response, "OK");
     send_json_response(transport, j_response);
+    json_object_put(j_response);
 }
 
 void handle_set_ipsec_vpn_request(json_object *j_req, api_transport_context_t *transport) {
@@ -199,6 +220,7 @@ void handle_set_ipsec_vpn_request(json_object *j_req, api_transport_context_t *t
         json_object *j_err = api_response_new("set_ipsec_vpn_response");
         api_response_set_error(j_err, 1000, "Missing or invalid 'data' object");
         send_json_response(transport, j_err);
+        json_object_put(j_err);
         return;
     }
 
@@ -208,6 +230,7 @@ void handle_set_ipsec_vpn_request(json_object *j_req, api_transport_context_t *t
         json_object *j_err = api_response_new("set_ipsec_vpn_response");
         api_response_set_error(j_err, 3001, "Failed to open ipsec config");
         send_json_response(transport, j_err);
+        json_object_put(j_err);
         return;
     }
 
@@ -298,12 +321,14 @@ void handle_set_ipsec_vpn_request(json_object *j_req, api_transport_context_t *t
         json_object *j_err = api_response_new("set_ipsec_vpn_response");
         api_response_set_error(j_err, 3000, "Failed to update ipsec config");
         send_json_response(transport, j_err);
+        json_object_put(j_err);
         return;
     }
 
     json_object *j_resp = api_response_new("set_ipsec_vpn_response");
     api_response_set_success(j_resp, "IPsec VPN configuration updated");
     send_json_response(transport, j_resp);
+    json_object_put(j_resp);
 }
 
 void handle_get_ipsec_vpn_status_request(json_object *j_req, api_transport_context_t *transport) {
@@ -322,6 +347,7 @@ void handle_get_ipsec_vpn_status_request(json_object *j_req, api_transport_conte
             json_object_object_add(j_data, "output", json_object_new_string(out ? out : ""));
         }
         send_json_response(transport, j_resp);
+        json_object_put(j_resp);
         free(out);
         return;
     }
@@ -333,6 +359,7 @@ void handle_get_ipsec_vpn_status_request(json_object *j_req, api_transport_conte
             json_object_object_add(j_data, "output", json_object_new_string(out ? out : ""));
         }
         send_json_response(transport, j_resp);
+        json_object_put(j_resp);
         free(out);
         return;
     }
@@ -343,6 +370,7 @@ void handle_get_ipsec_vpn_status_request(json_object *j_req, api_transport_conte
         json_object_object_add(j_data, "output", json_object_new_string(out ? out : ""));
     }
     send_json_response(transport, j_resp);
+    json_object_put(j_resp);
 
     free(out);
 }
@@ -711,6 +739,7 @@ void handle_generate_wireguard_keys_request(json_object *j_req, api_transport_co
     if (rc != 0 || privkey_exit != 0 || !privkey_out || privkey_out[0] == '\0') {
         api_response_set_error(j_resp, 3000, "Failed to generate WireGuard private key (is wireguard-tools installed?)");
         send_json_response(transport, j_resp);
+        json_object_put(j_resp);
         free(privkey_out);
         return;
     }
@@ -728,6 +757,7 @@ void handle_generate_wireguard_keys_request(json_object *j_req, api_transport_co
     if (rc != 0 || pubkey_exit != 0 || !pubkey_out || pubkey_out[0] == '\0') {
         api_response_set_error(j_resp, 3000, "Failed to derive WireGuard public key");
         send_json_response(transport, j_resp);
+        json_object_put(j_resp);
         free(privkey_out);
         free(pubkey_out);
         return;
@@ -741,6 +771,7 @@ void handle_generate_wireguard_keys_request(json_object *j_req, api_transport_co
     if (!ctx) {
         api_response_set_error(j_resp, 3000, "Failed to allocate UCI context");
         send_json_response(transport, j_resp);
+        json_object_put(j_resp);
         free(privkey_out);
         free(pubkey_out);
         return;
@@ -780,7 +811,6 @@ void handle_generate_wireguard_keys_request(json_object *j_req, api_transport_co
     }
 
     uci_close_package(ctx, pkg);
-    uci_free_context(ctx);
 
     /* Wipe private key from memory immediately after UCI write */
     memset(privkey_out, 0, strlen(privkey_out));
@@ -788,8 +818,9 @@ void handle_generate_wireguard_keys_request(json_object *j_req, api_transport_co
 
     if (uci_rc != 0) {
         api_response_set_error(j_resp, 3000, "Failed to write private key to UCI config");
-        free(pubkey_out);
         send_json_response(transport, j_resp);
+        json_object_put(j_resp);
+        free(pubkey_out);
         return;
     }
 
@@ -800,6 +831,7 @@ void handle_generate_wireguard_keys_request(json_object *j_req, api_transport_co
         json_object_object_add(j_data, "interface", json_object_new_string(WG_IFACE_NAME));
     }
     send_json_response(transport, j_resp);
+    json_object_put(j_resp);
 
     free(pubkey_out);
 }
