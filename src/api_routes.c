@@ -57,6 +57,12 @@ static const api_route_entry_t api_routes[] = {
     {"get_wireguard_vpn",               handle_get_wireguard_vpn_request},
     {"set_wireguard_vpn",               handle_set_wireguard_vpn_request},
     {"get_wireguard_vpn_status",        handle_get_wireguard_vpn_status_request},
+    {"generate_wireguard_keys",         handle_generate_wireguard_keys_request},
+
+    // VPN route management
+    {"get_vpn_routes",                  handle_get_vpn_routes_request},
+    {"set_vpn_routes",                  handle_set_vpn_routes_request},
+    {"delete_vpn_routes",               handle_delete_vpn_routes_request},
 
     // Flow control / BPF management (aw-bpfctl wrapper)
     {"bpf_add",                         handle_bpf_add_request},

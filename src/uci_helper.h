@@ -12,6 +12,7 @@ int uci_save_package_with_ctx(struct uci_context *ctx, struct uci_package *pkg);
 int uci_save_commit_package_with_ctx(struct uci_context *ctx, struct uci_package **pkg_io);
 int uci_set_config_path_staged(const char *config_path, const char *value);
 int uci_set_option_with_ctx(struct uci_context *ctx, const char *package_name, const char *section_name, const char *option_name, const char *value);
+int uci_add_named_section_with_ctx(struct uci_context *ctx, const char *package_name, const char *section_name, const char *section_type);
 int uci_delete_section_with_ctx(struct uci_context *ctx, const char *package_name, const char *section_name);
 int uci_commit_package_by_name(const char *package_name);
 

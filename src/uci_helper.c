@@ -201,6 +201,28 @@ int uci_set_option_with_ctx(struct uci_context *ctx, const char *package_name, c
     return 0;
 }
 
+int uci_add_named_section_with_ctx(struct uci_context *ctx, const char *package_name, const char *section_name, const char *section_type)
+{
+    if (!ctx || !package_name || !section_name || !section_type) return -1;
+
+    char path[UCI_PATH_MAX];
+    if (build_uci_path2(path, sizeof(path), package_name, section_name) != 0) {
+        return -1;
+    }
+
+    struct uci_ptr ptr;
+    if (lookup_uci_ptr(ctx, &ptr, path) != 0) {
+        return -1;
+    }
+
+    ptr.value = (char *)section_type;
+    if (uci_set(ctx, &ptr) != UCI_OK) {
+        return -1;
+    }
+
+    return 0;
+}
+
 int uci_delete_section_with_ctx(struct uci_context *ctx, const char *package_name, const char *section_name)
 {
     if (!ctx || !package_name || !section_name) return -1;
