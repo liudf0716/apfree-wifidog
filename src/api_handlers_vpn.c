@@ -1030,19 +1030,33 @@ void handle_set_vpn_routes_request(json_object *j_req, api_transport_context_t *
             json_object *route_obj = json_object_array_get_idx(j_routes, i);
             if (!route_obj) continue;
 
-            const char *dest = NULL;
+            const char *raw_dest = NULL;
 
             /* Accept both plain strings ["1.2.3.0/24"] and objects [{"destination":"1.2.3.0/24"}] */
             if (json_object_is_type(route_obj, json_type_string)) {
-                dest = json_object_get_string(route_obj);
+                raw_dest = json_object_get_string(route_obj);
             } else if (json_object_is_type(route_obj, json_type_object)) {
                 json_object *j_dest = json_object_object_get(route_obj, "destination");
                 if (j_dest && json_object_is_type(j_dest, json_type_string)) {
-                    dest = json_object_get_string(j_dest);
+                    raw_dest = json_object_get_string(j_dest);
                 }
             }
 
-            if (!dest || !is_valid_route_destination(dest)) {
+            if (!raw_dest || raw_dest[0] == '\0') {
+                failed++;
+                continue;
+            }
+
+            char dest[128];
+            /* If no CIDR suffix, append /32 */
+            if (!strchr(raw_dest, '/')) {
+                snprintf(dest, sizeof(dest), "%s/32", raw_dest);
+            } else {
+                strncpy(dest, raw_dest, sizeof(dest) - 1);
+                dest[sizeof(dest) - 1] = '\0';
+            }
+
+            if (!is_valid_route_destination(dest)) {
                 failed++;
                 continue;
             }
