@@ -25,7 +25,7 @@
 #include "dns_monitor.h"
 #include "wd_util.h"
 #include "firewall.h"
-#include "../ebpf/xdpi-bpf.h"
+#include "aw_bpf_compat.h"
 
 // DNS监控状态
 static volatile int dns_monitor_running = 0;

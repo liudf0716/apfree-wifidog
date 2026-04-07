@@ -34,8 +34,8 @@
 #include "gateway.h"
 #include "safe.h"
 
-// Include the eBPF header for required structures
-#include "../ebpf/aw-bpf.h"
+// Include the eBPF compatibility header for required structures
+#include "aw_bpf_compat.h"
 
 #define NFT_FILENAME_OUT "/tmp/fw4_apfree-wifiodg_init.conf.out"
 #define NFT_WIFIDOGX_CLIENT_LIST "/tmp/nftables_wifidogx_client_list"
