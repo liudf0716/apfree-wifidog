@@ -6,6 +6,77 @@
 
 #include <arpa/inet.h>
 #include <ctype.h>
+#include <unistd.h>
+#include <limits.h>
+
+/* Check for aw-bpfctl availability in PATH or common locations */
+static int aw_bpfctl_available(void)
+{
+    const char *name = "aw-bpfctl";
+    const char *cands[] = {"/usr/bin/aw-bpfctl", "/usr/local/bin/aw-bpfctl", NULL};
+    for (int i = 0; cands[i]; i++) {
+        if (access(cands[i], X_OK) == 0) return 1;
+    }
+    const char *path = getenv("PATH");
+    if (!path) return 0;
+    char *p = strdup(path);
+    if (!p) return 0;
+    char *tok = strtok(p, ":");
+    while (tok) {
+        char buf[PATH_MAX];
+        snprintf(buf, sizeof(buf), "%s/%s", tok, name);
+        if (access(buf, X_OK) == 0) {
+            free(p);
+            return 1;
+        }
+        tok = strtok(NULL, ":");
+    }
+    free(p);
+    return 0;
+}
+
+static int run_aw_bpfctl_command(json_object *j_response, json_object *j_data,
+                                 api_transport_context_t *transport,
+                                 const char *cmd, const char *ok_message)
+{
+    char *out = NULL;
+    int status = 0;
+
+    if (!aw_bpfctl_available()) {
+        api_response_set_error(j_response, 2001, "aw-bpfctl not available on system");
+        if (j_data) {
+            json_object_object_add(j_data, "exit_code", json_object_new_int(-1));
+            json_object_object_add(j_data, "output", json_object_new_string(""));
+        }
+        send_json_response(transport, j_response);
+        json_object_put(j_response);
+        return -1;
+    }
+
+    run_command_capture(cmd, &out, &status);
+
+    if (status != 0) {
+        api_response_set_error(j_response, 3001, "aw-bpfctl command failed");
+        if (j_data) {
+            json_object_object_add(j_data, "exit_code", json_object_new_int(status));
+            json_object_object_add(j_data, "output", json_object_new_string(out ? out : ""));
+        }
+        send_json_response(transport, j_response);
+        json_object_put(j_response);
+        free(out);
+        return -1;
+    }
+
+    api_response_set_success(j_response, ok_message ? ok_message : "OK");
+    if (j_data) {
+        json_object_object_add(j_data, "exit_code", json_object_new_int(status));
+        json_object_object_add(j_data, "output", json_object_new_string(out ? out : ""));
+    }
+    send_json_response(transport, j_response);
+    json_object_put(j_response);
+    free(out);
+    return 0;
+}
 
 /* Validate requested aw-bpfctl table name */
 static int is_valid_bpf_table(const char *table)
@@ -128,14 +199,7 @@ void handle_bpf_add_request(json_object *j_req, api_transport_context_t *transpo
         return;
     }
 
-    char *out = NULL;
-    int status = 0;
-    run_command_capture(cmd, &out, &status);
-
-    api_response_set_success(j_response, "Entry added successfully");
-    send_json_response(transport, j_response);
-    json_object_put(j_response);
-    free(out);
+    run_aw_bpfctl_command(j_response, NULL, transport, cmd, "Entry added successfully");
 }
 
 void handle_bpf_del_request(json_object *j_req, api_transport_context_t *transport)
@@ -186,18 +250,7 @@ void handle_bpf_del_request(json_object *j_req, api_transport_context_t *transpo
     char cmd[512];
     snprintf(cmd, sizeof(cmd), "aw-bpfctl %s del %s", table, addr);
 
-    char *out = NULL;
-    int status = 0;
-    run_command_capture(cmd, &out, &status);
-
-    api_response_set_success(j_response, "OK");
-    if (j_data) {
-        json_object_object_add(j_data, "exit_code", json_object_new_int(status));
-        json_object_object_add(j_data, "output", json_object_new_string(out ? out : ""));
-    }
-    send_json_response(transport, j_response);
-    json_object_put(j_response);
-    free(out);
+    run_aw_bpfctl_command(j_response, j_data, transport, cmd, "OK");
 }
 
 void handle_bpf_flush_request(json_object *j_req, api_transport_context_t *transport)
@@ -224,18 +277,7 @@ void handle_bpf_flush_request(json_object *j_req, api_transport_context_t *trans
     char cmd[256];
     snprintf(cmd, sizeof(cmd), "aw-bpfctl %s flush", table);
 
-    char *out = NULL;
-    int status = 0;
-    run_command_capture(cmd, &out, &status);
-
-    api_response_set_success(j_response, "OK");
-    if (j_data) {
-        json_object_object_add(j_data, "exit_code", json_object_new_int(status));
-        json_object_object_add(j_data, "output", json_object_new_string(out ? out : ""));
-    }
-    send_json_response(transport, j_response);
-    json_object_put(j_response);
-    free(out);
+    run_aw_bpfctl_command(j_response, j_data, transport, cmd, "OK");
 }
 
 void handle_bpf_json_request(json_object *j_req, api_transport_context_t *transport)
@@ -262,9 +304,32 @@ void handle_bpf_json_request(json_object *j_req, api_transport_context_t *transp
     char cmd[256];
     snprintf(cmd, sizeof(cmd), "aw-bpfctl %s json", table);
 
+    if (!aw_bpfctl_available()) {
+        api_response_set_error(j_response, 2001, "aw-bpfctl not available on system");
+        if (j_data) {
+            json_object_object_add(j_data, "exit_code", json_object_new_int(-1));
+            json_object_object_add(j_data, "output", json_object_new_string(""));
+        }
+        send_json_response(transport, j_response);
+        json_object_put(j_response);
+        return;
+    }
+
     char *out = NULL;
     int status = 0;
     run_command_capture(cmd, &out, &status);
+
+    if (status != 0) {
+        api_response_set_error(j_response, 3001, "aw-bpfctl command failed");
+        if (j_data) {
+            json_object_object_add(j_data, "exit_code", json_object_new_int(status));
+            json_object_object_add(j_data, "output", json_object_new_string(out ? out : ""));
+        }
+        send_json_response(transport, j_response);
+        json_object_put(j_response);
+        free(out);
+        return;
+    }
 
     api_response_set_success(j_response, "OK");
     if (j_data) {
@@ -349,18 +414,7 @@ void handle_bpf_update_request(json_object *j_req, api_transport_context_t *tran
     char cmd[512];
     snprintf(cmd, sizeof(cmd), "aw-bpfctl %s update %s downrate %lld uprate %lld", table, target, down, up);
 
-    char *out = NULL;
-    int status = 0;
-    run_command_capture(cmd, &out, &status);
-
-    api_response_set_success(j_response, "OK");
-    if (j_data) {
-        json_object_object_add(j_data, "exit_code", json_object_new_int(status));
-        json_object_object_add(j_data, "output", json_object_new_string(out ? out : ""));
-    }
-    send_json_response(transport, j_response);
-    json_object_put(j_response);
-    free(out);
+    run_aw_bpfctl_command(j_response, j_data, transport, cmd, "OK");
 }
 
 void handle_bpf_update_all_request(json_object *j_req, api_transport_context_t *transport)
@@ -398,16 +452,5 @@ void handle_bpf_update_all_request(json_object *j_req, api_transport_context_t *
     char cmd[512];
     snprintf(cmd, sizeof(cmd), "aw-bpfctl %s update_all downrate %lld uprate %lld", table, down, up);
 
-    char *out = NULL;
-    int status = 0;
-    run_command_capture(cmd, &out, &status);
-
-    api_response_set_success(j_response, "OK");
-    if (j_data) {
-        json_object_object_add(j_data, "exit_code", json_object_new_int(status));
-        json_object_object_add(j_data, "output", json_object_new_string(out ? out : ""));
-    }
-    send_json_response(transport, j_response);
-    json_object_put(j_response);
-    free(out);
+    run_aw_bpfctl_command(j_response, j_data, transport, cmd, "OK");
 }

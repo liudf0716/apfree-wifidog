@@ -49,6 +49,16 @@ else()
 	message(STATUS "Building in RELEASE mode")
 endif()
 
+# If libbpf was detected at configure time, expose a define so source
+# can enable runtime features. Always build `dns_monitor.c` so the
+# monitor thread can run and gracefully handle missing kernel maps.
+if(HAVE_LIBBPF)
+	message(STATUS "Configuring build with libbpf support")
+	add_definitions(-DHAVE_LIBBPF)
+else()
+	message(STATUS "libbpf not found at configure time; building dns_monitor with runtime graceful fallback")
+endif()
+
 # Handle firewall version
 if(AW_FW3)
 	set(fw_source ${src_fw3})
@@ -67,7 +77,10 @@ elseif(AW_VPP)
 	)
 else()
 	set(fw_source ${src_fw4})
-	set(fw_libs nftnl mnl bpf)
+	set(fw_libs nftnl mnl)
+	if(HAVE_LIBBPF)
+		list(APPEND fw_libs bpf)
+	endif()
 	add_definitions(-DAW_FW4)
 	message(STATUS "Building with fw4")
 	set(src_fw4

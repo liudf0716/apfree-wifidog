@@ -14,8 +14,21 @@
 #include <sys/time.h>
 #include <pthread.h>
 #include <linux/types.h>
+ #ifdef HAVE_LIBBPF
 #include <bpf/libbpf.h>
 #include <bpf/bpf.h>
+#else
+#include <errno.h>
+/* Provide minimal stubs so this file can be compiled when libbpf
+ * headers are not available. At runtime the thread will retry
+ * attaching to kernel maps, so behavior will gracefully degrade. */
+typedef struct ring_buffer ring_buffer;
+static inline int bpf_obj_get(const char *path) { (void)path; errno = ENOENT; return -1; }
+static inline struct ring_buffer *ring_buffer__new(int map_fd, void *cb, void *ctx, void *opts) { (void)map_fd; (void)cb; (void)ctx; (void)opts; return NULL; }
+static inline int ring_buffer__poll(struct ring_buffer *rb, int timeout_ms) { (void)rb; (void)timeout_ms; return -ENOSYS; }
+static inline void ring_buffer__free(struct ring_buffer *rb) { (void)rb; }
+static inline int bpf_map_lookup_elem(int fd, const void *key, void *value) { (void)fd; (void)key; (void)value; errno = ENOENT; return -1; }
+#endif
 #include <fcntl.h>
 #include <sys/ioctl.h>
 #include <ctype.h>
@@ -285,66 +298,98 @@ static void *dns_monitor_thread(void *arg)
     // 从文件加载之前保存的域名统计
     load_domain_stats_from_file();
     
-    // 打开ring buffer map
-    ringbuf_map_fd = bpf_obj_get(DNS_RINGBUF_MAP_PATH);
-    if (ringbuf_map_fd < 0) {
-        debug(LOG_ERR, "Failed to open DNS ring buffer map: %s", strerror(errno));
-        debug(LOG_INFO, "Make sure DNS eBPF program is loaded");
-        goto cleanup;
-    }
-    
-    // 打开统计map
-    stats_map_fd = bpf_obj_get(DNS_STATS_MAP_PATH);
-    if (stats_map_fd < 0) {
-        debug(LOG_ERR, "Failed to open DNS stats map: %s", strerror(errno));
-        goto cleanup;
-    }
-    
-    // 创建ring buffer
-    rb = ring_buffer__new(ringbuf_map_fd, handle_dns_event, NULL, NULL);
-    if (!rb) {
-        debug(LOG_ERR, "Failed to create DNS ring buffer");
-        goto cleanup;
-    }
-    
-    debug(LOG_DEBUG, "DNS monitor initialized, waiting for DNS packets...");
-    
-    // 主循环
+    /* Attempt to attach to eBPF maps. If maps or libbpf are not
+     * available, keep the thread running and retry periodically so
+     * the monitor can start later when aw-bpf is loaded. */
     while (dns_monitor_running) {
-        err = ring_buffer__poll(rb, 1000); // 1秒超时
-        if (err == -EINTR) {
-            break;
+        // try to open ring buffer map
+        ringbuf_map_fd = bpf_obj_get(DNS_RINGBUF_MAP_PATH);
+        if (ringbuf_map_fd < 0) {
+            debug(LOG_WARNING, "DNS ring buffer map not available, retrying in 5s: %s", strerror(errno));
+            sleep(5);
+            continue;
         }
-        if (err < 0) {
-            debug(LOG_ERR, "Error polling DNS ring buffer: %d", err);
-            break;
+
+        // try to open stats map
+        stats_map_fd = bpf_obj_get(DNS_STATS_MAP_PATH);
+        if (stats_map_fd < 0) {
+            debug(LOG_WARNING, "DNS stats map not available, retrying in 5s: %s", strerror(errno));
+            close(ringbuf_map_fd);
+            ringbuf_map_fd = -1;
+            sleep(5);
+            continue;
         }
-        
-        // 定期任务检查
-        time_t current_time = time(NULL);
-        
-        // 每30秒打印一次eBPF统计信息
-        if (current_time - last_stats_time >= 30) {
-            print_dns_stats(stats_map_fd);
-            last_stats_time = current_time;
+
+        // 创建ring buffer
+        rb = ring_buffer__new(ringbuf_map_fd, handle_dns_event, NULL, NULL);
+        if (!rb) {
+            debug(LOG_ERR, "Failed to create DNS ring buffer, will retry in 5s");
+            close(ringbuf_map_fd);
+            close(stats_map_fd);
+            ringbuf_map_fd = stats_map_fd = -1;
+            sleep(5);
+            continue;
         }
-        
-        // 每10分钟报告一次热门域名
-        if (current_time - last_top_domains_report >= TOP_DOMAINS_REPORT_INTERVAL) {
-            print_top_domains(TOP_DOMAINS_COUNT);
-            last_top_domains_report = current_time;
+
+        debug(LOG_DEBUG, "DNS monitor initialized, waiting for DNS packets...");
+
+        /* Reset timers on successful attach */
+        last_stats_time = time(NULL);
+        last_top_domains_report = time(NULL);
+        last_save_time = time(NULL);
+
+        /* Inner loop: poll events while attached. If polling fails
+         * we will cleanup and retry attaching later. */
+        while (dns_monitor_running) {
+            err = ring_buffer__poll(rb, 1000); // 1秒超时
+            if (err == -EINTR) {
+                break;
+            }
+            if (err < 0) {
+                debug(LOG_ERR, "Error polling DNS ring buffer: %d", err);
+                break;
+            }
+
+            // 定期任务检查
+            time_t current_time = time(NULL);
+
+            // 每30秒打印一次eBPF统计信息
+            if (current_time - last_stats_time >= 30) {
+                print_dns_stats(stats_map_fd);
+                last_stats_time = current_time;
+            }
+
+            // 每10分钟报告一次热门域名
+            if (current_time - last_top_domains_report >= TOP_DOMAINS_REPORT_INTERVAL) {
+                print_top_domains(TOP_DOMAINS_COUNT);
+                last_top_domains_report = current_time;
+            }
+
+            // 每5分钟保存一次域名统计到文件
+            if (current_time - last_save_time >= 300) {
+                save_domain_stats_to_file();
+                export_dns_stats_to_file();  // 同时导出供aw-bpfctl读取
+                last_save_time = current_time;
+            }
         }
-        
-        // 每5分钟保存一次域名统计到文件
-        if (current_time - last_save_time >= 300) {
-            save_domain_stats_to_file();
-            export_dns_stats_to_file();  // 同时导出供aw-bpfctl读取
-            last_save_time = current_time;
+
+        debug(LOG_DEBUG, "DNS monitor detached from maps, will retry attach in 5s");
+
+        /* cleanup after detach and retry */
+        if (rb) {
+            ring_buffer__free(rb);
+            rb = NULL;
         }
-        if (current_time - last_save_time >= 300) {
-            save_domain_stats_to_file();
-            last_save_time = current_time;
+        if (ringbuf_map_fd >= 0) {
+            close(ringbuf_map_fd);
+            ringbuf_map_fd = -1;
         }
+        if (stats_map_fd >= 0) {
+            close(stats_map_fd);
+            stats_map_fd = -1;
+        }
+
+        sleep(5);
     }
     
     debug(LOG_DEBUG, "DNS monitor thread shutting down...");

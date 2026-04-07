@@ -10,6 +10,7 @@
 #include <time.h>
 #include <netinet/in.h>
 #include <errno.h>
+#include <limits.h>
 
 #include <linux/netfilter.h>
 #include <linux/netfilter/nf_tables.h>
@@ -21,8 +22,39 @@
 #include <libnftnl/set.h>
 #include <libnftnl/expr.h>
 #include <libnftnl/object.h>
+#ifdef HAVE_LIBBPF
 #include <bpf/bpf.h>
 #include <bpf/libbpf.h>
+#else
+#include <stdint.h>
+static inline int libbpf_num_possible_cpus(void)
+{
+    errno = ENOSYS;
+    return -1;
+}
+static inline int bpf_obj_get(const char *path)
+{
+    (void)path;
+    errno = ENOENT;
+    return -1;
+}
+static inline int bpf_map_lookup_elem(int fd, const void *key, void *value)
+{
+    (void)fd;
+    (void)key;
+    (void)value;
+    errno = ENOSYS;
+    return -1;
+}
+static inline int bpf_map_get_next_key(int fd, const void *key, void *next_key)
+{
+    (void)fd;
+    (void)key;
+    (void)next_key;
+    errno = ENOENT;
+    return -1;
+}
+#endif
 
 #include "debug.h"
 #include "util.h"
@@ -57,6 +89,8 @@ static int fw_quiet = 0;
 static int nft_fw_counters_update_ebpf(void);
 static int nft_fw_counters_update_nftables(void);
 static void nft_statistical_helper(const char *tab, const char *chain, char **output, uint32_t *output_len);
+static int aw_bpfctl_available(void);
+static int aw_bpfctl_execute_best_effort(const char *cmd, const char *context);
 
 static int get_possible_cpus_cached(void)
 {
@@ -115,6 +149,58 @@ static int lookup_agg_stats_percpu(int map_fd, const void *key, struct traffic_s
 
     free(percpu_vals);
     return 0;
+}
+
+static int aw_bpfctl_available(void)
+{
+    const char *name = "aw-bpfctl";
+    const char *cands[] = {"/usr/bin/aw-bpfctl", "/usr/local/bin/aw-bpfctl", NULL};
+
+    for (int i = 0; cands[i]; i++) {
+        if (access(cands[i], X_OK) == 0)
+            return 1;
+    }
+
+    const char *path = getenv("PATH");
+    if (!path)
+        return 0;
+
+    char *path_copy = safe_strdup(path);
+    if (!path_copy)
+        return 0;
+
+    char *tok = strtok(path_copy, ":");
+    while (tok) {
+        char buf[PATH_MAX];
+
+        if (snprintf(buf, sizeof(buf), "%s/%s", tok, name) > 0 && access(buf, X_OK) == 0) {
+            free(path_copy);
+            return 1;
+        }
+        tok = strtok(NULL, ":");
+    }
+
+    free(path_copy);
+    return 0;
+}
+
+static int aw_bpfctl_execute_best_effort(const char *cmd, const char *context)
+{
+    if (!cmd || !*cmd)
+        return -1;
+
+    if (!aw_bpfctl_available()) {
+        debug(LOG_INFO, "Skipping aw-bpfctl for %s: aw-bpfctl not available", context ? context : "unknown context");
+        return -1;
+    }
+
+    int ret = execute(cmd, 0);
+    if (ret != 0) {
+        debug(LOG_WARNING, "aw-bpfctl command failed for %s (ret=%d): %s",
+              context ? context : "unknown context", ret, cmd);
+    }
+
+    return ret;
 }
 
 const char *nft_wifidogx_init_script[] = {
@@ -751,7 +837,7 @@ nft_fw_access(fw_access_t type, const char *ip, const char *mac, int tag)
                                 "ip daddr %s counter accept", ip);
 
                 snprintf(cmd, sizeof(cmd), "aw-bpfctl ipv4 add %s", ip);
-                execute(cmd, 0);
+                aw_bpfctl_execute_best_effort(cmd, "FW_ACCESS_ALLOW ipv4");
             } else if (is_valid_ip6(ip)){
                 nftables_do_command("add rule inet wifidogx mangle_prerouting_wifidogx_outgoing "
                                 "ether saddr %s ip6 saddr %s counter mark set 0x20000 accept", 
@@ -762,14 +848,14 @@ nft_fw_access(fw_access_t type, const char *ip, const char *mac, int tag)
                                 "ip6 daddr %s counter accept", ip);
 
                 snprintf(cmd, sizeof(cmd), "aw-bpfctl ipv6 add %s", ip);
-                execute(cmd, 0);
+                aw_bpfctl_execute_best_effort(cmd, "FW_ACCESS_ALLOW ipv6");
             } else {
                 debug(LOG_ERR, "Invalid IP address: %s", ip);
             }
             
             if (is_valid_mac(mac)) {
                 snprintf(cmd, sizeof(cmd), "aw-bpfctl mac add %s", mac);
-                execute(cmd, 0);
+                aw_bpfctl_execute_best_effort(cmd, "FW_ACCESS_ALLOW mac");
             } 
 
             break;
@@ -783,17 +869,17 @@ nft_fw_access(fw_access_t type, const char *ip, const char *mac, int tag)
 
             if (is_valid_ip(ip)) {
                 snprintf(cmd, sizeof(cmd), "aw-bpfctl ipv4 del %s", ip);
-                execute(cmd, 0);
+                aw_bpfctl_execute_best_effort(cmd, "FW_ACCESS_DENY ipv4");
             } else if (is_valid_ip6(ip)) {
                 snprintf(cmd, sizeof(cmd), "aw-bpfctl ipv6 del %s", ip);
-                execute(cmd, 0);
+                aw_bpfctl_execute_best_effort(cmd, "FW_ACCESS_DENY ipv6");
             } else {
                 debug(LOG_ERR, "Invalid IP address: %s", ip);
             }
 
             if (is_valid_mac(mac)) {
                 snprintf(cmd, sizeof(cmd), "aw-bpfctl mac del %s", mac);
-                execute(cmd, 0);
+                aw_bpfctl_execute_best_effort(cmd, "FW_ACCESS_DENY mac");
             }
 
             break;
@@ -1232,11 +1318,16 @@ nft_fw_counters_update()
     // Check if eBPF maps are available
     if (access("/sys/fs/bpf/tc/globals/ipv4_map", F_OK) == 0) {
         debug(LOG_INFO, "Using eBPF maps for traffic statistics");
-        return nft_fw_counters_update_ebpf();
-    } else {
-        debug(LOG_INFO, "eBPF maps not available, using nftables for traffic statistics");
+        int ret = nft_fw_counters_update_ebpf();
+        if (ret == 0)
+            return 0;
+
+        debug(LOG_WARNING, "eBPF counters unavailable at runtime, falling back to nftables statistics");
         return nft_fw_counters_update_nftables();
     }
+
+    debug(LOG_INFO, "eBPF maps not available, using nftables for traffic statistics");
+    return nft_fw_counters_update_nftables();
 }
 
 /**
@@ -1662,7 +1753,7 @@ __nft_fw_add_trusted_mac(const char *mac, int timeout)
     
     char cmd[128] = {0};
     snprintf(cmd, sizeof(cmd), "aw-bpfctl mac add %s", mac);
-    execute(cmd, 0);
+    aw_bpfctl_execute_best_effort(cmd, "trusted mac add");
 }
 
 static void
@@ -1672,7 +1763,7 @@ __nft_fw_del_trusted_mac(const char *mac)
 
     char cmd[128] = {0};
     snprintf(cmd, sizeof(cmd), "aw-bpfctl mac del %s", mac);
-    execute(cmd, 0);
+    aw_bpfctl_execute_best_effort(cmd, "trusted mac del");
 }
 
 void
@@ -1913,4 +2004,3 @@ nft_check_core_rules(void)
     // If we received a valid message (not an error), the table exists
     return 1;
 }
-

@@ -281,9 +281,13 @@ if(NOT NFQUEUE_FOUND)
   message(FATAL_ERROR "libnetfilter_queue not found. Install with: sudo apt-get install libnetfilter-queue-dev")
 endif()
 
-pkg_check_modules(BPF REQUIRED libbpf)
-if(NOT BPF_FOUND)
-  message(FATAL_ERROR "libbpf not found. Install with: sudo apt-get install libbpf-dev")
+pkg_check_modules(BPF QUIET libbpf)
+if(BPF_FOUND)
+  message(STATUS "libbpf found - enabling eBPF features")
+  set(HAVE_LIBBPF 1 CACHE INTERNAL "libbpf available")
+else()
+  message(WARNING "libbpf not found - eBPF-related features will be disabled. Install with: sudo apt-get install libbpf-dev to enable them")
+  set(HAVE_LIBBPF 0 CACHE INTERNAL "libbpf available")
 endif()
 
 
