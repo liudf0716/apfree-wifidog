@@ -886,13 +886,12 @@ wdctl_add_auth_client(struct bufferevent *fd, const char *args)
         goto OUT;
     }
 
-    // Mark as local-authenticated and online, then allow through firewall
-    client->auth_type = AUTH_TYPE_LOCAL_PASS;
     client->is_online = 1;
     if (fw_allow(client, FW_MARK_KNOWN) != 0) {
         debug(LOG_WARNING, "wdctl_add_auth_client: fw_allow failed for %s %s", ip, mac);
     } else {
-        debug(LOG_INFO, "wdctl_add_auth_client: client %s %s added and allowed", ip, mac);
+        client_snapshot_save();
+        debug(LOG_INFO, "wdctl_add_auth_client: client %s %s added, allowed and snapshot saved", ip, mac);
     }
     
 OUT:
