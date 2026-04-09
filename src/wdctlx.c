@@ -191,7 +191,7 @@ static void display_help() {
     printf("  wdctlx clear <domain|wildcard_domain|mac>\n");
     printf("  wdctlx help|?\n");
     printf("  wdctlx stop\n");
-    printf("  wdctlx reset <value>\n");
+    printf("  wdctlx reset <ip|mac>\n");
     printf("  wdctlx status [client|auth|wifidogx]\n");
     printf("  wdctlx refresh\n");
     printf("  wdctlx apfree <user_list|user_info|user_auth|save_user|restore_user>\n");
@@ -211,7 +211,7 @@ static const CommandMapping COMMAND_MAP[] = {
     {"del", "del_trusted_", true, true},
     {"clear", "clear_trusted_", true, false},
     {"stop", "stop", false, false},
-    {"reset", "reset", false, true},
+    {"reset", "reset", false, false},
     {"status", "status", false, false},
     {"refresh", "refresh", false, false},
     {"apfree", "user_list", true, false},
@@ -282,6 +282,15 @@ main(int argc, char **argv) {
 
     for (const CommandMapping *cmd = COMMAND_MAP; cmd->command; cmd++) {
         if (strcmp(command, cmd->command) == 0) {
+            if (strcmp(command, "reset") == 0) {
+                if (!type) {
+                    fprintf(stderr, "Error: Missing client IP or MAC argument\n");
+                    return 1;
+                }
+                handle_command(cmd->server_cmd, type);
+                return 0;
+            }
+
             if (cmd->requires_type && (!type || !is_valid_type(type))) {
                 fprintf(stderr, "Error: Invalid or missing type argument\n");
                 return 1;
