@@ -327,9 +327,9 @@ wdctl_refresh(struct bufferevent *fd)
 
 static void
 wdctl_reset(struct bufferevent *fd, const char *arg)
-{
-    if (!request_ctx) {
-        bufferevent_write(fd, no_auth_response, strlen(no_auth_response));
+{    
+    if (!arg || strlen(arg) == 0) {
+        bufferevent_write(fd, "No", 2);
         return;
     }
 
@@ -834,11 +834,6 @@ OUT:
 static void
 wdctl_add_auth_client(struct bufferevent *fd, const char *args)
 {
-    if (!request_ctx) {
-        bufferevent_write(fd, no_auth_response, strlen(no_auth_response));
-        return;
-    }
-    
     json_object *client_info = json_tokener_parse(args);
     if(is_error(client_info) || json_object_get_type(client_info) != json_type_object) { 
         debug(LOG_ERR, "json_tokener_parse failed: args is %s", args);
