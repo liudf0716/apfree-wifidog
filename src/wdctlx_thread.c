@@ -347,8 +347,16 @@ wdctl_reset(struct bufferevent *fd, const char *arg)
     }
     UNLOCK_CLIENT_LIST();
 
-    /* deny.... */
-    ev_logout_client(request_ctx, node);
+    /* Immediately deny and remove the client locally, then save snapshot.
+     * We avoid the async auth-server logout path here (ev_logout_client)
+     * because wdctl reset should force immediate removal. */
+    fw_deny(node);
+    /* remove from client list and free */
+    client_list_delete(node);
+
+    /* Persist current client snapshot to disk */
+    client_snapshot_save();
+
     bufferevent_write(fd, "Yes", 3);
 }
 
