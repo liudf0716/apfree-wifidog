@@ -779,7 +779,7 @@ wdctl_user_cfg_save(struct bufferevent *fd)
  * @brief this interface should be called by dnsmasq by its new event
  * 
  * @args It's json of client's request like this:
- * {"mac":"device_mac", "ip":"device_ip", "name":"device_name"}
+ * {"mac":"device_mac", "ip":"device_ip"}
  * 
  */ 
 static void
@@ -839,10 +839,8 @@ wdctl_add_auth_client(struct bufferevent *fd, const char *args)
 
     json_object *mac_jo = NULL;
     json_object *ip_jo 	= NULL;
-    json_object *name_jo = NULL;
     if(!json_object_object_get_ex(client_info, "mac", &mac_jo) || 
-       !json_object_object_get_ex(client_info, "ip", &ip_jo) || 
-       !json_object_object_get_ex(client_info, "name", &name_jo)) { 
+       !json_object_object_get_ex(client_info, "ip", &ip_jo)) { 
         debug(LOG_ERR, "json_object_object_get_ex failed");
         goto OUT;
     }
@@ -850,16 +848,44 @@ wdctl_add_auth_client(struct bufferevent *fd, const char *args)
     const char *mac  = json_object_get_string(mac_jo);
     const char *ip	 = json_object_get_string(ip_jo);
     if (!is_valid_mac(mac) || 
-        !(is_valid_ip(ip) && is_valid_ip6(ip)) || 
+        !(is_valid_ip(ip) || is_valid_ip6(ip)) || 
         !is_trusted_mac(mac)) {
         debug(LOG_ERR, "is_valid_mac or is_valid_ip or is_trusted_mac failed");
         goto OUT;
     }
 
-    auth_req_info *auth = safe_malloc(sizeof(auth_req_info));
-    memcpy(auth->ip, ip, strlen(ip));
-    memcpy(auth->mac, mac, strlen(mac));
-    make_auth_request(request_ctx, auth);
+    /* Determine which gateway setting this client belongs to. Prefer matching
+     * by IP/network, then by interface, then fall back to head of gateway
+     * list if nothing matches. */
+    t_gateway_setting *gw = NULL;
+    int addr_type = 0; /* 1 = ipv4, 2 = ipv6 */
+    if (is_valid_ip(ip)) addr_type = 1;
+    else if (is_valid_ip6(ip)) addr_type = 2;
+
+    if (addr_type != 0) {
+        gw = get_gateway_setting_by_addr(ip, addr_type);
+    }
+
+    if (!gw) {
+        debug(LOG_WARNING, "wdctl_add_auth_client: cannot determine gateway for %s, using default settings", ip);
+        gw = get_gateway_settings();
+    }
+
+    /* Add client to client list; token is not available for wdctl command */
+    t_client *client = client_list_add(ip, mac, NULL, gw);
+    if (!client) {
+        debug(LOG_ERR, "wdctl_add_auth_client: failed to add client %s %s", ip, mac);
+        goto OUT;
+    }
+
+    // Mark as local-authenticated and online, then allow through firewall
+    client->auth_type = AUTH_TYPE_LOCAL_PASS;
+    client->is_online = 1;
+    if (fw_allow(client, FW_MARK_KNOWN) != 0) {
+        debug(LOG_WARNING, "wdctl_add_auth_client: fw_allow failed for %s %s", ip, mac);
+    } else {
+        debug(LOG_INFO, "wdctl_add_auth_client: client %s %s added and allowed", ip, mac);
+    }
     
 OUT:
     if (client_info) json_object_put(client_info);

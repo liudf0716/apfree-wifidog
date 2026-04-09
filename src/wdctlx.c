@@ -194,6 +194,7 @@ static void display_help() {
     printf("  wdctlx reset <ip|mac>\n");
     printf("  wdctlx status [client|auth|wifidogx]\n");
     printf("  wdctlx refresh\n");
+    printf("  wdctlx add_auth_client <json_value>\n");
     printf("  wdctlx apfree <user_list|user_info|user_auth|save_user|restore_user>\n");
     printf("  wdctlx hotplugin <json_value>\n");
 }
@@ -214,6 +215,7 @@ static const CommandMapping COMMAND_MAP[] = {
     {"reset", "reset", false, false},
     {"status", "status", false, false},
     {"refresh", "refresh", false, false},
+    {"add_auth_client", "add_auth_client", false, false},
     {"apfree", "user_list", true, false},
     {"apfree", "user_info", true, true},
     {"apfree", "user_auth", true, true},
@@ -285,6 +287,15 @@ main(int argc, char **argv) {
             if (strcmp(command, "reset") == 0) {
                 if (!type) {
                     fprintf(stderr, "Error: Missing client IP or MAC argument\n");
+                    return 1;
+                }
+                handle_command(cmd->server_cmd, type);
+                return 0;
+            }
+
+            if (strcmp(command, "add_auth_client") == 0) {
+                if (!type) {
+                    fprintf(stderr, "Error: Missing client JSON argument\n");
                     return 1;
                 }
                 handle_command(cmd->server_cmd, type);
