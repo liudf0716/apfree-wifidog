@@ -139,7 +139,13 @@ client_list_add(const char *ip, const char *mac, const char *token, t_gateway_se
         return NULL;
     }
     curclient->mac = safe_strdup(mac);
-    curclient->token = safe_strdup(token);
+    // Ensure token is always an allocated empty string when NULL to
+    // make later free() calls safe.
+    if (token) {
+        curclient->token = safe_strdup(token);
+    } else {
+        curclient->token = safe_strdup("");
+    }
     curclient->counters.incoming_bytes = curclient->counters.outgoing_bytes = 0;
     curclient->counters.incoming_packets = curclient->counters.outgoing_packets = 0;
     curclient->counters.incoming_rate = curclient->counters.outgoing_rate = 0;
@@ -152,7 +158,7 @@ client_list_add(const char *ip, const char *mac, const char *token, t_gateway_se
 
     client_list_insert_client(curclient);
 
-    debug(LOG_INFO, "Added a new client to linked list: IP: %s Token: %s", ip, token);
+    debug(LOG_INFO, "Added a new client to linked list: IP: %s Token: %s", ip, curclient->token);
 
     return curclient;
 }
