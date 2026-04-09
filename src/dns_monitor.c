@@ -403,8 +403,6 @@ static void *dns_monitor_thread(void *arg)
         print_dns_stats(stats_map_fd);
         print_top_domains(TOP_DOMAINS_COUNT);
     }
-
-cleanup:
     if (rb) {
         ring_buffer__free(rb);
     }
