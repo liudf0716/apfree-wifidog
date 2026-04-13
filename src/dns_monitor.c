@@ -58,7 +58,6 @@ static pthread_t dns_monitor_tid = 0;
 #define DNS_RR_TYPE_AAAA 28
 #define IPV4_ADDR_LEN 4
 #define IPV6_ADDR_LEN 16
-#define MAX_PARTS 5
 #define INITIAL_MAX_SID 0
 
 // DNS统计信息结构
@@ -139,15 +138,7 @@ static pthread_mutex_t domain_entries_mutex = PTHREAD_MUTEX_INITIALIZER;
 #define DOMAIN_STATS_FILE "/tmp/wifidog_domain_stats.dat"  // 持久化文件路径
 #define DNS_STATS_EXPORT_FILE "/tmp/dns_stats.txt"         // 统计导出文件（供aw-bpfctl读取）
 
-// 有效域名后缀列表
-static const char *valid_domain_suffixes[] = {
-    ".com", ".net", ".org", ".gov", ".edu", ".cn", ".com.cn", ".co.uk", 
-    ".io", ".me", ".app", ".xyz", ".site", ".top", ".club", ".vip", 
-    ".shop", ".store", ".tech", ".dev", ".cloud", ".fun", ".online", 
-    ".pro", ".work", ".link", ".live", ".run", ".group", ".red", 
-    ".blue", ".green", ".mobi", ".asia", ".name", ".today", ".news", 
-    ".website", ".space", ".icu", NULL
-};
+
 
 // 函数声明
 static int parse_dns_header(const struct dns_hdr *dns_hdr, __u16 *flags, __u16 *qdcount, __u16 *ancount);
@@ -341,7 +332,7 @@ static void *dns_monitor_thread(void *arg)
         /* Inner loop: poll events while attached. If polling fails
          * we will cleanup and retry attaching later. */
         while (dns_monitor_running) {
-            err = ring_buffer__poll(rb, 1000); // 1秒超时
+            err = ring_buffer__poll(rb, 100); /* 100ms — allows fast response to stop signal */
             if (err == -EINTR) {
                 break;
             }
@@ -633,20 +624,28 @@ static int parse_dns_question(const unsigned char *payload, int payload_len, str
  */
 static int get_xdpi_domain_count(void)
 {
-    FILE *fp;
-    char buf[16] = {0};
-    int count = 0;
-    
-    fp = fopen("/proc/xdpi_domain_num", "r");
+    static int   cached_count     = -1;
+    static time_t last_check_time = 0;
+
+    time_t now = time(NULL);
+    if (cached_count >= 0 && now - last_check_time < 30)
+        return cached_count;
+
+    FILE *fp = fopen("/proc/xdpi_domain_num", "r");
     if (!fp) {
+        cached_count = 0;
+        last_check_time = now;
         return 0;
     }
-    
-    if (fgets(buf, sizeof(buf), fp)) {
+
+    char buf[16] = {0};
+    int count = 0;
+    if (fgets(buf, sizeof(buf), fp))
         count = atoi(buf);
-    }
-    
     fclose(fp);
+
+    cached_count = count;
+    last_check_time = now;
     return count;
 }
 
@@ -697,118 +696,115 @@ static void sync_xdpi_domains_2_kern(void)
  */
 static int xdpi_add_domain(const char *input_domain)
 {
-    int fd = -1, result = 0;
-    struct domain_entry entry_for_ioctl;
+    int result = 0;
     int local_free_idx = -1;
     int local_max_sid = INITIAL_MAX_SID;
     char domain_to_process[MAX_DOMAIN_LEN] = {0};
     time_t current_time = time(NULL);
-    
-    if (!input_domain || input_domain[0] == '\0' || strlen(input_domain) >= MAX_DOMAIN_LEN) {
+
+    if (!input_domain || input_domain[0] == '\0' || strlen(input_domain) >= MAX_DOMAIN_LEN)
         return -1;
-    }
-    
-    // 域名缩短处理
+
+    /* Normalize to short domain form */
     char short_domain_buf[MAX_DOMAIN_LEN] = {0};
     int short_domain_len = 0;
-    if (xdpi_short_domain(input_domain, short_domain_buf, &short_domain_len) == 0 && short_domain_len > 0) {
+    if (xdpi_short_domain(input_domain, short_domain_buf, &short_domain_len) == 0 && short_domain_len > 0)
         strncpy(domain_to_process, short_domain_buf, MAX_DOMAIN_LEN - 1);
-    } else {
+    else
         strncpy(domain_to_process, input_domain, MAX_DOMAIN_LEN - 1);
+    domain_to_process[MAX_DOMAIN_LEN - 1] = '\0';
+
+    /* Open device early; if it fails there is nothing to do */
+    int fd = open("/dev/xdpi", O_RDWR);
+    if (fd < 0) {
+        debug(LOG_ERR, "Cannot open /dev/xdpi: %s", strerror(errno));
+        return -1;
     }
-    domain_to_process[MAX_DOMAIN_LEN-1] = '\0';
-    
-    // 查找重复、空闲位置和最大SID
+
+    /*
+     * Hold the mutex for the entire critical section — scan, optional LFU
+     * eviction (which also does an ioctl DEL), ioctl ADD, and local-cache
+     * update.  This eliminates the TOCTOU window that existed when the two
+     * lock regions were separate.
+     */
     pthread_mutex_lock(&domain_entries_mutex);
+
     for (int i = 0; i < XDPI_DOMAIN_MAX; i++) {
         if (domain_entries[i].used) {
             if (strcmp(domain_entries[i].domain, domain_to_process) == 0) {
-                // 域名已存在，增加访问计数
                 domain_entries[i].access_count++;
                 domain_entries[i].last_access_time = current_time;
                 pthread_mutex_unlock(&domain_entries_mutex);
+                close(fd);
                 return 0;
             }
-            if (domain_entries[i].sid > local_max_sid) {
+            if (domain_entries[i].sid > local_max_sid)
                 local_max_sid = domain_entries[i].sid;
-            }
         } else if (local_free_idx == -1) {
             local_free_idx = i;
         }
     }
-    
-    // 如果没有空闲位置，使用LFU算法淘汰
+
     if (local_free_idx == -1) {
         int lfu_idx = find_least_frequently_used_domain();
         if (lfu_idx >= 0) {
-            // 只有当访问次数低于阈值时才淘汰
             if (domain_entries[lfu_idx].access_count < LFU_MIN_ACCESS_THRESHOLD) {
-                // 从内核删除旧域名
                 remove_domain_from_kernel(lfu_idx);
-                // 清空该位置，准备添加新域名
                 memset(&domain_entries[lfu_idx], 0, sizeof(struct domain_entry));
                 domain_entries[lfu_idx].used = false;
                 local_free_idx = lfu_idx;
             } else {
-                // 所有域名访问次数都很高，拒绝添加新域名
                 pthread_mutex_unlock(&domain_entries_mutex);
-                debug(LOG_DEBUG, "All domains have high access count, rejecting new domain: %s", 
+                close(fd);
+                debug(LOG_DEBUG, "All domains have high access count, rejecting: %s",
                       domain_to_process);
                 return -1;
             }
         } else {
             pthread_mutex_unlock(&domain_entries_mutex);
+            close(fd);
             debug(LOG_WARNING, "xDPI domain cache is full and cannot find LFU candidate");
             return -1;
         }
     }
-    pthread_mutex_unlock(&domain_entries_mutex);
-    
-    // 添加到内核
-    fd = open("/dev/xdpi", O_RDWR);
-    if (fd < 0) {
-        debug(LOG_ERR, "Cannot open /dev/xdpi: %s", strerror(errno));
-        return -1;
-    }
-    
+
+    /* Build and submit the ioctl ADD while the lock is still held */
+    struct domain_entry entry_for_ioctl;
     memset(&entry_for_ioctl, 0, sizeof(entry_for_ioctl));
     size_t len_to_copy = strlen(domain_to_process);
     if (len_to_copy >= MAX_DOMAIN_LEN) len_to_copy = MAX_DOMAIN_LEN - 1;
-    
+
     memcpy(entry_for_ioctl.domain, domain_to_process, len_to_copy);
     entry_for_ioctl.domain[len_to_copy] = '\0';
     entry_for_ioctl.domain_len = len_to_copy;
     entry_for_ioctl.sid = local_max_sid + 1;
     entry_for_ioctl.used = true;
-    entry_for_ioctl.access_count = 1;  // 初始访问计数为1
+    entry_for_ioctl.access_count = 1;
     entry_for_ioctl.first_seen_time = current_time;
     entry_for_ioctl.last_access_time = current_time;
-    
+
     result = ioctl(fd, XDPI_IOC_ADD, &entry_for_ioctl);
     close(fd);
-    
+
     if (result < 0) {
-        debug(LOG_ERR, "Failed to add domain %s to xDPI kernel module: %s (errno=%d)", 
+        pthread_mutex_unlock(&domain_entries_mutex);
+        debug(LOG_ERR, "Failed to add domain %s to xDPI: %s (errno=%d)",
               domain_to_process, strerror(errno), errno);
         return -1;
     }
-    
-    // 更新本地缓存
-    pthread_mutex_lock(&domain_entries_mutex);
-    if (local_free_idx >= 0 && local_free_idx < XDPI_DOMAIN_MAX) {
-        memcpy(domain_entries[local_free_idx].domain, domain_to_process, len_to_copy);
-        domain_entries[local_free_idx].domain[len_to_copy] = '\0';
-        domain_entries[local_free_idx].domain_len = len_to_copy;
-        domain_entries[local_free_idx].sid = entry_for_ioctl.sid;
-        domain_entries[local_free_idx].used = true;
-        domain_entries[local_free_idx].access_count = 1;
-        domain_entries[local_free_idx].first_seen_time = current_time;
-        domain_entries[local_free_idx].last_access_time = current_time;
-    } else {
-        debug(LOG_WARNING, "Invalid local_free_idx: %d", local_free_idx);
-    }
+
+    /* Update local cache — slot is guaranteed free (we have held the lock) */
+    memcpy(domain_entries[local_free_idx].domain, domain_to_process, len_to_copy);
+    domain_entries[local_free_idx].domain[len_to_copy] = '\0';
+    domain_entries[local_free_idx].domain_len = len_to_copy;
+    domain_entries[local_free_idx].sid = entry_for_ioctl.sid;
+    domain_entries[local_free_idx].used = true;
+    domain_entries[local_free_idx].access_count = 1;
+    domain_entries[local_free_idx].first_seen_time = current_time;
+    domain_entries[local_free_idx].last_access_time = current_time;
+
     pthread_mutex_unlock(&domain_entries_mutex);
-    
+
     debug(LOG_DEBUG, "Added domain %s to xDPI (SID: %d)", domain_to_process, entry_for_ioctl.sid);
     return result;
 }
@@ -1016,15 +1012,10 @@ static int is_valid_domain_suffix(const char *domain)
 {
     if (!domain) return 0;
     size_t len = strlen(domain);
-    
-    for (int i = 0; valid_domain_suffixes[i]; i++) {
-        size_t suffix_len = strlen(valid_domain_suffixes[i]);
-        if (len >= suffix_len && 
-            strcasecmp(domain + len - suffix_len, valid_domain_suffixes[i]) == 0) {
-            return 1;
-        }
-    }
-    return 0;
+    if (len < 4) return 0;
+    /* Valid if it contains at least one dot with labels on both sides */
+    const char *dot = strchr(domain, '.');
+    return (dot != NULL && dot > domain && *(dot + 1) != '\0');
 }
 
 /**
@@ -1032,120 +1023,42 @@ static int is_valid_domain_suffix(const char *domain)
  */
 static int xdpi_short_domain(const char *full_domain, char *short_domain, int *olen)
 {
-    if (!full_domain || !short_domain || !olen) {
+    if (!full_domain || !short_domain || !olen)
         return -1;
-    }
-    
-    size_t full_domain_len = strlen(full_domain);
+    size_t len = strlen(full_domain);
+    if (len == 0 || len >= MAX_DOMAIN_LEN)
+        return -1;
+
     short_domain[0] = '\0';
     *olen = 0;
-    
-    if (full_domain_len == 0 || full_domain_len >= MAX_DOMAIN_LEN) {
-        return -1;
+
+    /*
+     * Find the rightmost up to 3 dot positions (right-to-left scan).
+     * Selection rule (no hardcoded TLD list):
+     *   4+ labels  →  keep last 3  (e.g. www.google.com.cn → google.com.cn)
+     *   3  labels  →  keep last 2  (e.g. www.baidu.com     → baidu.com)
+     *   2  labels  →  keep as-is   (e.g. baidu.com)
+     */
+    const char *dots[3] = {NULL, NULL, NULL};
+    int ndots = 0;
+    for (int i = (int)len - 1; i >= 0 && ndots < 3; i--) {
+        if (full_domain[i] == '.')
+            dots[ndots++] = full_domain + i;
     }
-    
-    const char *p = full_domain + full_domain_len - 1;
-    int part_count = 0;
-    const char *parts_ptr[MAX_PARTS] = {0};
-    int parts_len[MAX_PARTS] = {0};
-    
-    // 从右到左解析域名段
-    while (p >= full_domain && part_count < MAX_PARTS) {
-        const char *part_end = p;
-        
-        // 查找点号分隔符，防止指针越界
-        while (p >= full_domain && *p != '.') {
-            p--;
-        }
-        
-        // 验证段长度合法性，防止负数或过长
-        int segment_len = part_end - p;
-        if (segment_len <= 0 || segment_len > MAX_DOMAIN_LEN) {
-            debug(LOG_WARNING, "Invalid domain segment length: %d", segment_len);
-            return -1;
-        }
-        
-        parts_ptr[part_count] = p + 1;
-        parts_len[part_count] = segment_len;
-        part_count++;
-        
-        // 安全地移动指针
-        if (p >= full_domain && *p == '.') {
-            p--;
-        }
-    }
-    
-    if (part_count < 2) {
-        return -1;
-    }
-    
-    // 域名构建逻辑
-    #define PART_EQ(index, str_literal) \
-        (parts_len[index] == strlen(str_literal) && \
-         strncmp(parts_ptr[index], str_literal, strlen(str_literal)) == 0)
-    
-    int is_double_tld = 0;
-    
-    // Handle .cn hierarchy (.com.cn, .edu.cn, .gov.cn, .net.cn, .org.cn)
-    if (PART_EQ(0, "cn")) {
-        if (part_count >= 2 && (PART_EQ(1, "com") || PART_EQ(1, "edu") || 
-                                PART_EQ(1, "gov") || PART_EQ(1, "net") || 
-                                PART_EQ(1, "org"))) {
-            is_double_tld = 1;
-        }
-    }
-    // Handle .uk / .jp hierarchy (.co.uk, .ac.jp, etc.)
-    else if (PART_EQ(0, "uk") || PART_EQ(0, "jp")) {
-        if (part_count >= 2) {
-            if (PART_EQ(1, "co") || PART_EQ(1, "ac") || PART_EQ(1, "go") ||
-                PART_EQ(1, "ne") || PART_EQ(1, "or") || PART_EQ(1, "me")) {
-                is_double_tld = 1;
-            } else if (PART_EQ(1, "org") || PART_EQ(1, "gov") || 
-                       PART_EQ(1, "edu") || PART_EQ(1, "net")) {
-                is_double_tld = 1;
-            }
-        }
-    }
-    
-    if (is_double_tld) {
-        // 双层顶级域需保留三段（例如 sina.com.cn）
-        if (part_count >= 3) {
-            int total_len = parts_len[2] + 1 + parts_len[1] + 1 + parts_len[0];
-            if (total_len < MAX_DOMAIN_LEN) {
-                snprintf(short_domain, MAX_DOMAIN_LEN, "%.*s.%.*s.%.*s",
-                        parts_len[2], parts_ptr[2],
-                        parts_len[1], parts_ptr[1],
-                        parts_len[0], parts_ptr[0]);
-            }
-        } else {
-            // 如果只有两段且是双层顶级域（例如仅仅是 com.cn），本身就当作两段返回
-            int total_len = parts_len[1] + 1 + parts_len[0];
-            if (total_len < MAX_DOMAIN_LEN) {
-                snprintf(short_domain, MAX_DOMAIN_LEN, "%.*s.%.*s",
-                        parts_len[1], parts_ptr[1],
-                        parts_len[0], parts_ptr[0]);
-            }
-        }
-    } else {
-        // 普通域名保留两段（例如 baidu.com）
-        if (part_count >= 2) {
-            int total_len = parts_len[1] + 1 + parts_len[0];
-            if (total_len < MAX_DOMAIN_LEN) {
-                snprintf(short_domain, MAX_DOMAIN_LEN, "%.*s.%.*s",
-                        parts_len[1], parts_ptr[1],
-                        parts_len[0], parts_ptr[0]);
-            }
-        }
-    }
-    
-    #undef PART_EQ
-    
-    *olen = strlen(short_domain);
-    if (*olen == 0 && full_domain_len > 0) {
-        return -1;
-    }
-    
-    return 0;
+
+    if (ndots == 0)
+        return -1; /* single label — not a valid FQDN */
+
+    const char *start;
+    if (ndots >= 3)
+        start = dots[2] + 1; /* 4+ labels: keep last 3 */
+    else if (ndots == 2)
+        start = dots[1] + 1; /* 3 labels: keep last 2 */
+    else
+        start = full_domain; /* 2 labels: keep as-is */
+
+    *olen = snprintf(short_domain, MAX_DOMAIN_LEN, "%s", start);
+    return (*olen > 0 && *olen < MAX_DOMAIN_LEN) ? 0 : -1;
 }
 
 /**
@@ -1357,11 +1270,13 @@ static int save_domain_stats_to_file(void)
     
     pthread_mutex_lock(&domain_entries_mutex);
     
-    // 写入魔数和版本号
+    // 写入魔数、版本号和条目尺寸（用于加载时校验结构体布局是否匹配）
     uint32_t magic = 0x44535441;  // "DSTA" = Domain STAts
-    uint32_t version = 1;
-    fwrite(&magic, sizeof(magic), 1, fp);
-    fwrite(&version, sizeof(version), 1, fp);
+    uint32_t version = 2;
+    uint32_t entry_size = (uint32_t)sizeof(struct domain_entry);
+    fwrite(&magic,      sizeof(magic),      1, fp);
+    fwrite(&version,    sizeof(version),    1, fp);
+    fwrite(&entry_size, sizeof(entry_size), 1, fp);
     
     // 写入有效条目数量
     int valid_count = 0;
@@ -1406,12 +1321,21 @@ static int load_domain_stats_from_file(void)
         return -1;
     }
     
-    if (fread(&version, sizeof(version), 1, fp) != 1 || version != 1) {
-        debug(LOG_WARNING, "Unsupported domain stats file version: %u", version);
+    if (fread(&version, sizeof(version), 1, fp) != 1 || version != 2) {
+        debug(LOG_WARNING, "Unsupported domain stats file version: %u (expected 2)", version);
         fclose(fp);
         return -1;
     }
-    
+
+    uint32_t entry_size = 0;
+    if (fread(&entry_size, sizeof(entry_size), 1, fp) != 1 ||
+        entry_size != (uint32_t)sizeof(struct domain_entry)) {
+        debug(LOG_WARNING, "Domain stats file entry size mismatch: %u != %zu",
+              entry_size, sizeof(struct domain_entry));
+        fclose(fp);
+        return -1;
+    }
+
     // 读取条目数量
     int valid_count = 0;
     if (fread(&valid_count, sizeof(valid_count), 1, fp) != 1) {
