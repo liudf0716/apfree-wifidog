@@ -1084,31 +1084,50 @@ static int xdpi_short_domain(const char *full_domain, char *short_domain, int *o
         (parts_len[index] == strlen(str_literal) && \
          strncmp(parts_ptr[index], str_literal, strlen(str_literal)) == 0)
     
+    int is_double_tld = 0;
+    
+    // Handle .cn hierarchy (.com.cn, .edu.cn, .gov.cn, .net.cn, .org.cn)
     if (PART_EQ(0, "cn")) {
-        if (part_count >= 3 && PART_EQ(1, "com")) {
-            // .com.cn域名保留三段
-            if (part_count >= 3) {
-                int total_len = parts_len[2] + 1 + parts_len[1] + 1 + parts_len[0];
-                if (total_len < MAX_DOMAIN_LEN) {
-                    snprintf(short_domain, MAX_DOMAIN_LEN, "%.*s.%.*s.%.*s",
-                            parts_len[2], parts_ptr[2],
-                            parts_len[1], parts_ptr[1],
-                            parts_len[0], parts_ptr[0]);
-                }
+        if (part_count >= 2 && (PART_EQ(1, "com") || PART_EQ(1, "edu") || 
+                                PART_EQ(1, "gov") || PART_EQ(1, "net") || 
+                                PART_EQ(1, "org"))) {
+            is_double_tld = 1;
+        }
+    }
+    // Handle .uk / .jp hierarchy (.co.uk, .ac.jp, etc.)
+    else if (PART_EQ(0, "uk") || PART_EQ(0, "jp")) {
+        if (part_count >= 2) {
+            if (PART_EQ(1, "co") || PART_EQ(1, "ac") || PART_EQ(1, "go") ||
+                PART_EQ(1, "ne") || PART_EQ(1, "or") || PART_EQ(1, "me")) {
+                is_double_tld = 1;
+            } else if (PART_EQ(1, "org") || PART_EQ(1, "gov") || 
+                       PART_EQ(1, "edu") || PART_EQ(1, "net")) {
+                is_double_tld = 1;
+            }
+        }
+    }
+    
+    if (is_double_tld) {
+        // 双层顶级域需保留三段（例如 sina.com.cn）
+        if (part_count >= 3) {
+            int total_len = parts_len[2] + 1 + parts_len[1] + 1 + parts_len[0];
+            if (total_len < MAX_DOMAIN_LEN) {
+                snprintf(short_domain, MAX_DOMAIN_LEN, "%.*s.%.*s.%.*s",
+                        parts_len[2], parts_ptr[2],
+                        parts_len[1], parts_ptr[1],
+                        parts_len[0], parts_ptr[0]);
             }
         } else {
-            // 其他.cn域名取两段
-            if (part_count >= 2) {
-                int total_len = parts_len[1] + 1 + parts_len[0];
-                if (total_len < MAX_DOMAIN_LEN) {
-                    snprintf(short_domain, MAX_DOMAIN_LEN, "%.*s.%.*s",
-                            parts_len[1], parts_ptr[1],
-                            parts_len[0], parts_ptr[0]);
-                }
+            // 如果只有两段且是双层顶级域（例如仅仅是 com.cn），本身就当作两段返回
+            int total_len = parts_len[1] + 1 + parts_len[0];
+            if (total_len < MAX_DOMAIN_LEN) {
+                snprintf(short_domain, MAX_DOMAIN_LEN, "%.*s.%.*s",
+                        parts_len[1], parts_ptr[1],
+                        parts_len[0], parts_ptr[0]);
             }
         }
     } else {
-        // 非.cn域名取两段
+        // 普通域名保留两段（例如 baidu.com）
         if (part_count >= 2) {
             int total_len = parts_len[1] + 1 + parts_len[0];
             if (total_len < MAX_DOMAIN_LEN) {
