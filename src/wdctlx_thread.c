@@ -873,8 +873,13 @@ wdctl_add_auth_client(struct bufferevent *fd, const char *args)
         gw = get_gateway_settings();
     }
 
-    /* Add client to client list; token is not available for wdctl command */
-    t_client *client = client_list_add(ip, mac, NULL, gw);
+    /* Add client to client list; token is not available for wdctl command
+     * client_list_add() inserts at head and expects the caller to hold the
+     * client list lock. Acquire the lock to avoid races. */
+    t_client *client = NULL;
+    LOCK_CLIENT_LIST();
+    client = client_list_add(ip, mac, NULL, gw);
+    UNLOCK_CLIENT_LIST();
     if (!client) {
         debug(LOG_ERR, "wdctl_add_auth_client: failed to add client %s %s", ip, mac);
         goto OUT;
