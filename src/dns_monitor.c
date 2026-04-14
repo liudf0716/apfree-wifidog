@@ -45,8 +45,8 @@ static volatile int dns_monitor_running = 0;
 static pthread_t dns_monitor_tid = 0;
 
 // eBPF map文件路径
-#define DNS_RINGBUF_MAP_PATH    "/sys/fs/bpf/tc/globals/dns_ringbuf"
-#define DNS_STATS_MAP_PATH      "/sys/fs/bpf/tc/globals/dns_stats_map"
+#define DNS_RINGBUF_MAP_PATH    "/sys/fs/bpf/aw/dns_ringbuf"
+#define DNS_STATS_MAP_PATH      "/sys/fs/bpf/aw/dns_stats_map"
 
 // DNS相关常量
 #define MAX_DNS_PAYLOAD_LEN 512
