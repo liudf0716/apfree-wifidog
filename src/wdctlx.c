@@ -189,6 +189,7 @@ static void display_help() {
     printf("  wdctlx add <domain|wildcard_domain|mac> <value1,value2...>\n");
     printf("  wdctlx del <mac> <value1,value2...>\n");
     printf("  wdctlx clear <domain|wildcard_domain|mac>\n");
+    printf("  wdctlx localportal <url>\n");
     printf("  wdctlx help|?\n");
     printf("  wdctlx stop\n");
     printf("  wdctlx reset <ip|mac>\n");
@@ -279,6 +280,16 @@ main(int argc, char **argv) {
 
     if (strcmp(command, "help") == 0 || strcmp(command, "?") == 0) {
         display_help();
+        return 0;
+    }
+
+    if (strcmp(command, "localportal") == 0) {
+        if (argc != 3 || !type || !*type) {
+            fprintf(stderr, "Error: Usage: wdctlx localportal <url>\n");
+            return 1;
+        }
+
+        handle_command("set_local_portal", type);
         return 0;
     }
 

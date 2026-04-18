@@ -72,6 +72,13 @@ test_clear() {
     echo "--------------------------------------------------"
 }
 
+# Function to test wdctlx localportal command
+test_localportal() {
+    echo "Testing: wdctlx localportal http://portal.example.com"
+    "$WDCtlx" localportal "http://portal.example.com"
+    echo "--------------------------------------------------"
+}
+
 # Function to test wdctlx stop command
 test_stop() {
     echo "Testing: wdctlx stop"
@@ -136,6 +143,7 @@ test_del
 test_show
 test_clear
 test_show
+test_localportal
 test_apfree
 test_reset
 test_status

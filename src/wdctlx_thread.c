@@ -14,6 +14,7 @@
 #include "firewall.h"
 #include "client_list.h"
 #include "wdctlx_thread.h"
+#include "uci_helper.h"
 #include "commandline.h"
 #include "gateway.h"
 #include "safe.h"
@@ -59,6 +60,7 @@ static void wdctl_add_untrusted_maclist(struct bufferevent *, const char *);
 static void wdctl_del_untrusted_maclist(struct bufferevent *, const char *);
 static void wdctl_add_online_client(struct bufferevent *, const char *);
 static void wdctl_add_auth_client(struct bufferevent *, const char *);
+static void wdctl_set_local_portal(struct bufferevent *, const char *);
 
 static void wdctl_user_list(struct bufferevent *);
 static void wdctl_user_info(struct bufferevent *, const char *);
@@ -114,6 +116,7 @@ static struct wdctl_command {
     {"del_untrusted_mac", NULL, wdctl_del_untrusted_maclist},
     {"add_online_client", NULL, wdctl_add_online_client},
     {"add_auth_client", NULL, wdctl_add_auth_client},
+    {"set_local_portal", NULL, wdctl_set_local_portal},
 
     // apfree command
     {"user_list", wdctl_user_list, NULL},
@@ -895,6 +898,47 @@ wdctl_add_auth_client(struct bufferevent *fd, const char *args)
     
 OUT:
     if (client_info) json_object_put(client_info);
+    bufferevent_write(fd, "Yes", 3);
+}
+
+static void
+wdctl_set_local_portal(struct bufferevent *fd, const char *portal)
+{
+    s_config *config = config_get_config();
+    char *old_local_portal = NULL;
+
+    if (!config || !portal || *portal == '\0') {
+        bufferevent_write(fd, "Error: missing local portal URL", strlen("Error: missing local portal URL"));
+        return;
+    }
+
+    if (config->auth_server_mode != AUTH_MODE_LOCAL) {
+        bufferevent_write(fd, "Error: local portal can only be changed in local mode", strlen("Error: local portal can only be changed in local mode"));
+        return;
+    }
+
+    char *new_local_portal = safe_strdup(portal);
+    if (!new_local_portal) {
+        bufferevent_write(fd, "Error: failed to allocate local portal", strlen("Error: failed to allocate local portal"));
+        return;
+    }
+
+    if (uci_set_value("wifidogx", "common", "local_portal", portal) != 0) {
+        free(new_local_portal);
+        bufferevent_write(fd, "Error: failed to save local portal to UCI", strlen("Error: failed to save local portal to UCI"));
+        return;
+    }
+
+    LOCK_CONFIG();
+    old_local_portal = config->local_portal;
+    config->local_portal = new_local_portal;
+    UNLOCK_CONFIG();
+
+    if (old_local_portal) {
+        free(old_local_portal);
+    }
+
+    debug(LOG_INFO, "Local portal updated to %s", portal);
     bufferevent_write(fd, "Yes", 3);
 }
 
