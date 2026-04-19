@@ -6,79 +6,669 @@
 
 #include <arpa/inet.h>
 #include <ctype.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <linux/types.h>
+#include <sys/ioctl.h>
 #include <unistd.h>
 #include <limits.h>
 
-/* Check for aw-bpfctl availability in PATH or common locations */
-static int aw_bpfctl_available(void)
+#ifdef HAVE_LIBBPF
+#include <bpf/bpf.h>
+#include <bpf/libbpf.h>
+#else
+static inline int libbpf_num_possible_cpus(void)
 {
-    const char *name = "aw-bpfctl";
-    const char *cands[] = {"/usr/bin/aw-bpfctl", "/usr/local/bin/aw-bpfctl", NULL};
-    for (int i = 0; cands[i]; i++) {
-        if (access(cands[i], X_OK) == 0) return 1;
-    }
-    const char *path = getenv("PATH");
-    if (!path) return 0;
-    char *p = strdup(path);
-    if (!p) return 0;
-    char *tok = strtok(p, ":");
-    while (tok) {
-        char buf[PATH_MAX];
-        snprintf(buf, sizeof(buf), "%s/%s", tok, name);
-        if (access(buf, X_OK) == 0) {
-            free(p);
-            return 1;
-        }
-        tok = strtok(NULL, ":");
-    }
-    free(p);
-    return 0;
+    errno = ENOSYS;
+    return -1;
 }
 
-static int run_aw_bpfctl_command(json_object *j_response, json_object *j_data,
-                                 api_transport_context_t *transport,
-                                 const char *cmd, const char *ok_message)
+static inline int bpf_obj_get(const char *path)
+{
+    (void)path;
+    errno = ENOENT;
+    return -1;
+}
+
+static inline int bpf_map_lookup_elem(int fd, const void *key, void *value)
+{
+    (void)fd;
+    (void)key;
+    (void)value;
+    errno = ENOSYS;
+    return -1;
+}
+
+static inline int bpf_map_update_elem(int fd, const void *key, const void *value, __u64 flags)
+{
+    (void)fd;
+    (void)key;
+    (void)value;
+    (void)flags;
+    errno = ENOSYS;
+    return -1;
+}
+
+static inline int bpf_map_delete_elem(int fd, const void *key)
+{
+    (void)fd;
+    (void)key;
+    errno = ENOSYS;
+    return -1;
+}
+
+static inline int bpf_map_get_next_key(int fd, const void *key, void *next_key)
+{
+    (void)fd;
+    (void)key;
+    (void)next_key;
+    errno = ENOSYS;
+    return -1;
+}
+#endif
+
+#include <json-c/json.h>
+#include <uci.h>
+
+#include "aw_bpf_compat.h"
+
+#ifndef AW_BPF_PROTO_TRAITS_MAX_SIZE
+#define AW_BPF_PROTO_TRAITS_MAX_SIZE 128
+#endif
+
+#define AW_BPF_MAP_DIR "/sys/fs/bpf/tc/globals"
+#define AW_BPF_IPV4_MAP_PATH AW_BPF_MAP_DIR "/ipv4_map"
+#define AW_BPF_IPV6_MAP_PATH AW_BPF_MAP_DIR "/ipv6_map"
+#define AW_BPF_MAC_MAP_PATH AW_BPF_MAP_DIR "/mac_map"
+#define AW_BPF_SID_MAP_PATH AW_BPF_MAP_DIR "/xdpi_l7_map"
+#define AW_BPF_XDPI_DEVICE "/dev/xdpi"
+#define AW_BPF_XDPI_IOC_LIST XDPI_IOC_LIST
+#define AW_BPF_DOMAIN_CACHE_TTL_SEC 5
+
+struct aw_bpf_l7_proto {
+    __u32 id;
+    __u32 sid;
+    char proto_desc[32];
+};
+
+struct aw_bpf_domain_list {
+    int32_t count;
+    int32_t max_count;
+    struct domain_entry domains[XDPI_DOMAIN_MAX];
+};
+
+struct aw_bpf_mac_addr {
+    __u8 h_addr[6];
+} __attribute__((packed));
+
+static struct aw_bpf_l7_proto aw_bpf_l7_protos[AW_BPF_PROTO_TRAITS_MAX_SIZE];
+static int aw_bpf_l7_protos_count;
+static struct aw_bpf_domain_list aw_bpf_domain_cache;
+static bool aw_bpf_domain_cache_loaded;
+static time_t aw_bpf_domain_cache_loaded_at;
+
+static int aw_bpf_get_possible_cpus_cached(void)
+{
+    static int cached = -1;
+
+    if (cached > 0)
+        return cached;
+
+    cached = libbpf_num_possible_cpus();
+    if (cached <= 0)
+        cached = 0;
+    return cached;
+}
+
+static __u32 aw_bpf_sum_u32_sat(__u32 a, __u32 b)
+{
+    __u64 sum = (__u64)a + (__u64)b;
+    return sum > UINT32_MAX ? UINT32_MAX : (__u32)sum;
+}
+
+static int aw_bpf_open_map(const char *table)
+{
+    const char *path = NULL;
+    char map_path[128];
+
+    if (!table) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    if (strcmp(table, "ipv4") == 0) {
+        path = AW_BPF_IPV4_MAP_PATH;
+    } else if (strcmp(table, "ipv6") == 0) {
+        path = AW_BPF_IPV6_MAP_PATH;
+    } else if (strcmp(table, "mac") == 0) {
+        path = AW_BPF_MAC_MAP_PATH;
+    } else if (strcmp(table, "sid") == 0) {
+        path = AW_BPF_SID_MAP_PATH;
+    } else {
+        errno = EINVAL;
+        return -1;
+    }
+
+    if (snprintf(map_path, sizeof(map_path), "%s", path) <= 0)
+        return -1;
+    return bpf_obj_get(map_path);
+}
+
+static bool aw_bpf_is_valid_mac_address(const char *mac)
+{
+    if (!mac)
+        return false;
+
+    size_t len = strlen(mac);
+    if (len == 17) {
+        for (size_t i = 0; i < len; i++) {
+            if (i % 3 == 2) {
+                if (mac[i] != ':')
+                    return false;
+            } else if (!isxdigit((unsigned char)mac[i])) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    if (len == 12) {
+        for (size_t i = 0; i < len; i++) {
+            if (!isxdigit((unsigned char)mac[i]))
+                return false;
+        }
+        return true;
+    }
+
+    return false;
+}
+
+static void aw_bpf_parse_mac_address(struct aw_bpf_mac_addr *mac_addr, const char *value)
+{
+    unsigned int byte_value;
+    const char *cursor = value;
+
+    for (int i = 0; i < 6; i++) {
+        byte_value = 0;
+        sscanf(cursor, "%2x", &byte_value);
+        mac_addr->h_addr[i] = (__u8)byte_value;
+        cursor += (strlen(value) == 17) ? 3 : 2;
+    }
+}
+
+static void aw_bpf_format_mac_address(const struct aw_bpf_mac_addr *mac, char *buf, size_t buf_len)
+{
+    snprintf(buf, buf_len, "%02x:%02x:%02x:%02x:%02x:%02x",
+             mac->h_addr[0], mac->h_addr[1], mac->h_addr[2],
+             mac->h_addr[3], mac->h_addr[4], mac->h_addr[5]);
+}
+
+static bool aw_bpf_refresh_l7_proto_cache_from_payload(json_object *payload)
+{
+    json_object *j_protocols = NULL;
+
+    aw_bpf_l7_protos_count = 0;
+    if (!payload || !json_object_object_get_ex(payload, "protocols", &j_protocols) ||
+        !json_object_is_type(j_protocols, json_type_array)) {
+        return false;
+    }
+
+    size_t protocol_count = (size_t)json_object_array_length(j_protocols);
+    for (size_t i = 0; i < protocol_count && aw_bpf_l7_protos_count < AW_BPF_PROTO_TRAITS_MAX_SIZE; i++) {
+        json_object *j_entry = json_object_array_get_idx(j_protocols, (int)i);
+        json_object *j_id = NULL;
+        json_object *j_sid = NULL;
+        json_object *j_protocol = NULL;
+
+        if (!j_entry ||
+            !json_object_object_get_ex(j_entry, "id", &j_id) ||
+            !json_object_object_get_ex(j_entry, "sid", &j_sid) ||
+            !json_object_object_get_ex(j_entry, "protocol", &j_protocol)) {
+            continue;
+        }
+
+        const char *proto_desc = json_object_get_string(j_protocol);
+        if (!proto_desc)
+            continue;
+
+        aw_bpf_l7_protos[aw_bpf_l7_protos_count].id = (__u32)json_object_get_int64(j_id);
+        aw_bpf_l7_protos[aw_bpf_l7_protos_count].sid = (__u32)json_object_get_int64(j_sid);
+        strncpy(aw_bpf_l7_protos[aw_bpf_l7_protos_count].proto_desc, proto_desc,
+                sizeof(aw_bpf_l7_protos[aw_bpf_l7_protos_count].proto_desc) - 1);
+        aw_bpf_l7_protos[aw_bpf_l7_protos_count].proto_desc[sizeof(aw_bpf_l7_protos[aw_bpf_l7_protos_count].proto_desc) - 1] = '\0';
+        aw_bpf_l7_protos_count++;
+    }
+
+    return aw_bpf_l7_protos_count > 0;
+}
+
+static json_object *aw_bpf_fetch_l7_json_payload(void)
 {
     char *out = NULL;
-    int status = 0;
+    int exit_code = 0;
+    json_object *payload = NULL;
 
-    if (!aw_bpfctl_available()) {
-        api_response_set_error(j_response, 2001, "aw-bpfctl not available on system");
-        if (j_data) {
-            json_object_object_add(j_data, "exit_code", json_object_new_int(-1));
-            json_object_object_add(j_data, "output", json_object_new_string(""));
-        }
-        send_json_response(transport, j_response);
-        json_object_put(j_response);
-        return -1;
-    }
-
-    run_command_capture(cmd, &out, &status);
-
-    if (status != 0) {
-        api_response_set_error(j_response, 3001, "aw-bpfctl command failed");
-        if (j_data) {
-            json_object_object_add(j_data, "exit_code", json_object_new_int(status));
-            json_object_object_add(j_data, "output", json_object_new_string(out ? out : ""));
-        }
-        send_json_response(transport, j_response);
-        json_object_put(j_response);
+    if (run_command_capture("aw-bpfctl l7 json 2>&1", &out, &exit_code) != 0) {
         free(out);
+        return NULL;
+    }
+
+    if (exit_code != 0 || !out || !*out) {
+        free(out);
+        return NULL;
+    }
+
+    payload = json_tokener_parse(out);
+    if (payload) {
+        aw_bpf_refresh_l7_proto_cache_from_payload(payload);
+    }
+
+    free(out);
+    return payload;
+}
+
+static void aw_bpf_load_l7_protos(void)
+{
+    json_object *payload = aw_bpf_fetch_l7_json_payload();
+    if (payload) {
+        json_object_put(payload);
+    }
+}
+
+static const char *aw_bpf_get_l7_proto_desc_by_sid(__u32 sid)
+{
+    if (aw_bpf_l7_protos_count == 0) {
+        aw_bpf_load_l7_protos();
+    }
+
+    for (int i = 0; i < aw_bpf_l7_protos_count; i++) {
+        if (aw_bpf_l7_protos[i].sid == sid)
+            return aw_bpf_l7_protos[i].proto_desc;
+    }
+    return "unknown";
+}
+
+static bool aw_bpf_is_l7_sid(__u32 sid)
+{
+    if (aw_bpf_l7_protos_count == 0) {
+        aw_bpf_load_l7_protos();
+    }
+
+    for (int i = 0; i < aw_bpf_l7_protos_count; i++) {
+        if (aw_bpf_l7_protos[i].sid == sid)
+            return true;
+    }
+
+    return false;
+}
+
+static bool aw_bpf_domain_cache_valid(void)
+{
+    if (!aw_bpf_domain_cache_loaded)
+        return false;
+    return (time(NULL) - aw_bpf_domain_cache_loaded_at) <= AW_BPF_DOMAIN_CACHE_TTL_SEC;
+}
+
+static void aw_bpf_invalidate_domain_cache(void)
+{
+    aw_bpf_domain_cache_loaded = false;
+    aw_bpf_domain_cache_loaded_at = 0;
+}
+
+static void aw_bpf_load_domains(bool force_refresh)
+{
+    if (!force_refresh && aw_bpf_domain_cache_valid())
+        return;
+
+    int fd = open(AW_BPF_XDPI_DEVICE, O_RDWR);
+    if (fd < 0) {
+        aw_bpf_invalidate_domain_cache();
+        return;
+    }
+
+    memset(&aw_bpf_domain_cache, 0, sizeof(aw_bpf_domain_cache));
+    aw_bpf_domain_cache.max_count = XDPI_DOMAIN_MAX;
+
+    if (ioctl(fd, AW_BPF_XDPI_IOC_LIST, &aw_bpf_domain_cache) == 0) {
+        aw_bpf_domain_cache_loaded = true;
+        aw_bpf_domain_cache_loaded_at = time(NULL);
+    } else {
+        aw_bpf_invalidate_domain_cache();
+    }
+
+    close(fd);
+}
+
+static const char *aw_bpf_get_domain_name_by_sid(__u32 sid)
+{
+    aw_bpf_load_domains(false);
+
+    if (aw_bpf_domain_cache_loaded) {
+        for (int i = 0; i < aw_bpf_domain_cache.count; i++) {
+            struct domain_entry *entry = &aw_bpf_domain_cache.domains[i];
+            if (entry->used && entry->sid == sid)
+                return entry->domain;
+        }
+    }
+
+    aw_bpf_load_domains(true);
+    if (aw_bpf_domain_cache_loaded) {
+        for (int i = 0; i < aw_bpf_domain_cache.count; i++) {
+            struct domain_entry *entry = &aw_bpf_domain_cache.domains[i];
+            if (entry->used && entry->sid == sid)
+                return entry->domain;
+        }
+    }
+
+    return "unknown";
+}
+
+static int aw_bpf_lookup_stats_agg_percpu(int map_fd, const void *key, struct traffic_stats *agg)
+{
+    int ncpus = aw_bpf_get_possible_cpus_cached();
+
+    if (ncpus <= 0 || !agg)
+        return -1;
+
+    struct traffic_stats *percpu_vals = calloc(ncpus, sizeof(*percpu_vals));
+    if (!percpu_vals)
+        return -1;
+
+    if (bpf_map_lookup_elem(map_fd, key, percpu_vals) < 0) {
+        free(percpu_vals);
         return -1;
     }
 
-    api_response_set_success(j_response, ok_message ? ok_message : "OK");
-    if (j_data) {
-        json_object_object_add(j_data, "exit_code", json_object_new_int(status));
-        json_object_object_add(j_data, "output", json_object_new_string(out ? out : ""));
+    memset(agg, 0, sizeof(*agg));
+    for (int i = 0; i < ncpus; i++) {
+        agg->incoming.cur_s_bytes = aw_bpf_sum_u32_sat(agg->incoming.cur_s_bytes, percpu_vals[i].incoming.cur_s_bytes);
+        agg->incoming.prev_s_bytes = aw_bpf_sum_u32_sat(agg->incoming.prev_s_bytes, percpu_vals[i].incoming.prev_s_bytes);
+        agg->incoming.total_bytes += percpu_vals[i].incoming.total_bytes;
+        agg->incoming.total_packets += percpu_vals[i].incoming.total_packets;
+        if (percpu_vals[i].incoming.est_slot > agg->incoming.est_slot)
+            agg->incoming.est_slot = percpu_vals[i].incoming.est_slot;
+
+        agg->outgoing.cur_s_bytes = aw_bpf_sum_u32_sat(agg->outgoing.cur_s_bytes, percpu_vals[i].outgoing.cur_s_bytes);
+        agg->outgoing.prev_s_bytes = aw_bpf_sum_u32_sat(agg->outgoing.prev_s_bytes, percpu_vals[i].outgoing.prev_s_bytes);
+        agg->outgoing.total_bytes += percpu_vals[i].outgoing.total_bytes;
+        agg->outgoing.total_packets += percpu_vals[i].outgoing.total_packets;
+        if (percpu_vals[i].outgoing.est_slot > agg->outgoing.est_slot)
+            agg->outgoing.est_slot = percpu_vals[i].outgoing.est_slot;
+
+        if (percpu_vals[i].incoming_rate_limit.bps > agg->incoming_rate_limit.bps)
+            agg->incoming_rate_limit.bps = percpu_vals[i].incoming_rate_limit.bps;
+        if (percpu_vals[i].outgoing_rate_limit.bps > agg->outgoing_rate_limit.bps)
+            agg->outgoing_rate_limit.bps = percpu_vals[i].outgoing_rate_limit.bps;
+        if (percpu_vals[i].incoming_rate_limit.t_last > agg->incoming_rate_limit.t_last)
+            agg->incoming_rate_limit.t_last = percpu_vals[i].incoming_rate_limit.t_last;
+        if (percpu_vals[i].outgoing_rate_limit.t_last > agg->outgoing_rate_limit.t_last)
+            agg->outgoing_rate_limit.t_last = percpu_vals[i].outgoing_rate_limit.t_last;
+        if (percpu_vals[i].incoming_rate_limit.tokens > agg->incoming_rate_limit.tokens)
+            agg->incoming_rate_limit.tokens = percpu_vals[i].incoming_rate_limit.tokens;
+        if (percpu_vals[i].outgoing_rate_limit.tokens > agg->outgoing_rate_limit.tokens)
+            agg->outgoing_rate_limit.tokens = percpu_vals[i].outgoing_rate_limit.tokens;
     }
-    send_json_response(transport, j_response);
-    json_object_put(j_response);
-    free(out);
+
+    free(percpu_vals);
     return 0;
 }
 
-/* Validate requested aw-bpfctl table name */
+static int aw_bpf_update_rate_limits_percpu(int map_fd, const void *key, uint32_t downrate, uint32_t uprate, bool create_if_missing)
+{
+    int ncpus = aw_bpf_get_possible_cpus_cached();
+
+    if (ncpus <= 0)
+        return -1;
+
+    struct traffic_stats *percpu_vals = calloc(ncpus, sizeof(*percpu_vals));
+    if (!percpu_vals)
+        return -1;
+
+    if (!create_if_missing) {
+        if (bpf_map_lookup_elem(map_fd, key, percpu_vals) < 0) {
+            free(percpu_vals);
+            return -1;
+        }
+    }
+
+    for (int i = 0; i < ncpus; i++) {
+        percpu_vals[i].incoming_rate_limit.bps = downrate;
+        percpu_vals[i].outgoing_rate_limit.bps = uprate;
+    }
+
+    int ret = bpf_map_update_elem(map_fd, key, percpu_vals, create_if_missing ? BPF_NOEXIST : BPF_EXIST);
+    free(percpu_vals);
+    return ret;
+}
+
+static bool aw_bpf_get_global_qos_config(uint32_t *downrate, uint32_t *uprate)
+{
+    struct uci_context *ctx;
+    struct uci_package *pkg = NULL;
+    struct uci_element *e;
+
+    if (!downrate || !uprate)
+        return false;
+
+    *downrate = 0;
+    *uprate = 0;
+
+    ctx = uci_alloc_context();
+    if (!ctx)
+        return false;
+
+    if (uci_load(ctx, "wifidogx", &pkg) != UCI_OK) {
+        uci_free_context(ctx);
+        return false;
+    }
+
+    bool found = false;
+    uci_foreach_element(&pkg->sections, e) {
+        struct uci_section *s = uci_to_section(e);
+
+        if (strcmp(s->type, "wifidogx") != 0)
+            continue;
+
+        const char *enable_qos = uci_lookup_option_string(ctx, s, "enable_qos");
+        if (!enable_qos || strcmp(enable_qos, "1") != 0)
+            continue;
+
+        const char *qos_down = uci_lookup_option_string(ctx, s, "qos_down");
+        const char *qos_up = uci_lookup_option_string(ctx, s, "qos_up");
+
+        if (qos_down) {
+            long val = strtol(qos_down, NULL, 10);
+            if (val >= 0 && val <= (UINT32_MAX / (1024 * 1024)))
+                *downrate = (uint32_t)(val * 1024 * 1024);
+        }
+        if (qos_up) {
+            long val = strtol(qos_up, NULL, 10);
+            if (val >= 0 && val <= (UINT32_MAX / (1024 * 1024)))
+                *uprate = (uint32_t)(val * 1024 * 1024);
+        }
+
+        found = true;
+        break;
+    }
+
+    if (pkg)
+        uci_unload(ctx, pkg);
+    uci_free_context(ctx);
+    return found;
+}
+
+static bool aw_bpf_parse_key(const char *table, const char *value, void *key_storage)
+{
+    if (strcmp(table, "ipv4") == 0) {
+        return inet_pton(AF_INET, value, key_storage) == 1;
+    }
+
+    if (strcmp(table, "ipv6") == 0) {
+        return inet_pton(AF_INET6, value, key_storage) == 1;
+    }
+
+    if (strcmp(table, "mac") == 0) {
+        if (!aw_bpf_is_valid_mac_address(value))
+            return false;
+        aw_bpf_parse_mac_address((struct aw_bpf_mac_addr *)key_storage, value);
+        return true;
+    }
+
+    if (strcmp(table, "sid") == 0) {
+        char *end = NULL;
+        unsigned long sid = strtoul(value, &end, 10);
+        if (!value[0] || (end && *end != '\0'))
+            return false;
+        *((__u32 *)key_storage) = (__u32)sid;
+        return true;
+    }
+
+    return false;
+}
+
+static bool aw_bpf_delete_all_entries(int map_fd)
+{
+    if (map_fd < 0)
+        return false;
+
+    bool success = true;
+    bool has_key = false;
+    __u8 key_buf[sizeof(struct in6_addr)] = {0};
+    __u8 next_key_buf[sizeof(struct in6_addr)] = {0};
+
+    while (bpf_map_get_next_key(map_fd, has_key ? key_buf : NULL, next_key_buf) == 0) {
+        if (bpf_map_delete_elem(map_fd, next_key_buf) < 0)
+            success = false;
+        memcpy(key_buf, next_key_buf, sizeof(key_buf));
+        has_key = true;
+    }
+
+    return success;
+}
+
+static struct json_object *aw_bpf_parse_stats_ipv4_json(__be32 ip, struct traffic_stats *stats)
+{
+    char ip_str[INET_ADDRSTRLEN];
+    struct json_object *jobj = json_object_new_object();
+
+    if (inet_ntop(AF_INET, &ip, ip_str, sizeof(ip_str)) == NULL) {
+        json_object_put(jobj);
+        return NULL;
+    }
+
+    json_object_object_add(jobj, "ip", json_object_new_string(ip_str));
+
+    struct json_object *incoming = json_object_new_object();
+    struct json_object *outgoing = json_object_new_object();
+
+    json_object_object_add(incoming, "total_bytes", json_object_new_int64(stats->incoming.total_bytes));
+    json_object_object_add(incoming, "total_packets", json_object_new_int64(stats->incoming.total_packets));
+    json_object_object_add(incoming, "rate", json_object_new_int(calc_rate_estimator(stats, true)));
+    json_object_object_add(incoming, "incoming_rate_limit", json_object_new_uint64(stats->incoming_rate_limit.bps));
+    json_object_object_add(jobj, "incoming", incoming);
+
+    json_object_object_add(outgoing, "total_bytes", json_object_new_int64(stats->outgoing.total_bytes));
+    json_object_object_add(outgoing, "total_packets", json_object_new_int64(stats->outgoing.total_packets));
+    json_object_object_add(outgoing, "rate", json_object_new_int(calc_rate_estimator(stats, false)));
+    json_object_object_add(outgoing, "outgoing_rate_limit", json_object_new_uint64(stats->outgoing_rate_limit.bps));
+    json_object_object_add(jobj, "outgoing", outgoing);
+
+    return jobj;
+}
+
+static struct json_object *aw_bpf_parse_stats_ipv6_json(struct in6_addr ip, struct traffic_stats *stats)
+{
+    char ip_str[INET6_ADDRSTRLEN];
+    struct json_object *jobj = json_object_new_object();
+
+    if (inet_ntop(AF_INET6, &ip, ip_str, sizeof(ip_str)) == NULL) {
+        json_object_put(jobj);
+        return NULL;
+    }
+
+    json_object_object_add(jobj, "ip", json_object_new_string(ip_str));
+
+    struct json_object *incoming = json_object_new_object();
+    struct json_object *outgoing = json_object_new_object();
+
+    json_object_object_add(incoming, "total_bytes", json_object_new_int64(stats->incoming.total_bytes));
+    json_object_object_add(incoming, "total_packets", json_object_new_int64(stats->incoming.total_packets));
+    json_object_object_add(incoming, "rate", json_object_new_int(calc_rate_estimator(stats, true)));
+    json_object_object_add(incoming, "incoming_rate_limit", json_object_new_uint64(stats->incoming_rate_limit.bps));
+    json_object_object_add(jobj, "incoming", incoming);
+
+    json_object_object_add(outgoing, "total_bytes", json_object_new_int64(stats->outgoing.total_bytes));
+    json_object_object_add(outgoing, "total_packets", json_object_new_int64(stats->outgoing.total_packets));
+    json_object_object_add(outgoing, "rate", json_object_new_int(calc_rate_estimator(stats, false)));
+    json_object_object_add(outgoing, "outgoing_rate_limit", json_object_new_uint64(stats->outgoing_rate_limit.bps));
+    json_object_object_add(jobj, "outgoing", outgoing);
+
+    return jobj;
+}
+
+static struct json_object *aw_bpf_parse_stats_mac_json(struct aw_bpf_mac_addr mac, struct traffic_stats *stats)
+{
+    char mac_str[18];
+    struct json_object *jobj = json_object_new_object();
+
+    aw_bpf_format_mac_address(&mac, mac_str, sizeof(mac_str));
+    json_object_object_add(jobj, "mac", json_object_new_string(mac_str));
+
+    struct json_object *incoming = json_object_new_object();
+    struct json_object *outgoing = json_object_new_object();
+
+    json_object_object_add(incoming, "total_bytes", json_object_new_int64(stats->incoming.total_bytes));
+    json_object_object_add(incoming, "total_packets", json_object_new_int64(stats->incoming.total_packets));
+    json_object_object_add(incoming, "rate", json_object_new_int(calc_rate_estimator(stats, true)));
+    json_object_object_add(incoming, "incoming_rate_limit", json_object_new_uint64(stats->incoming_rate_limit.bps));
+    json_object_object_add(jobj, "incoming", incoming);
+
+    json_object_object_add(outgoing, "total_bytes", json_object_new_int64(stats->outgoing.total_bytes));
+    json_object_object_add(outgoing, "total_packets", json_object_new_int64(stats->outgoing.total_packets));
+    json_object_object_add(outgoing, "rate", json_object_new_int(calc_rate_estimator(stats, false)));
+    json_object_object_add(outgoing, "outgoing_rate_limit", json_object_new_uint64(stats->outgoing_rate_limit.bps));
+    json_object_object_add(jobj, "outgoing", outgoing);
+
+    return jobj;
+}
+
+static struct json_object *aw_bpf_parse_stats_sid_json(__u32 sid, struct traffic_stats *stats)
+{
+    struct json_object *jobj = json_object_new_object();
+    json_object_object_add(jobj, "sid", json_object_new_int(sid));
+
+    if (aw_bpf_is_l7_sid(sid)) {
+        json_object_object_add(jobj, "sid_type", json_object_new_string("L7"));
+        json_object_object_add(jobj, "l7_proto_desc", json_object_new_string(aw_bpf_get_l7_proto_desc_by_sid(sid)));
+    } else {
+        json_object_object_add(jobj, "sid_type", json_object_new_string("Domain"));
+        json_object_object_add(jobj, "domain", json_object_new_string(aw_bpf_get_domain_name_by_sid(sid)));
+    }
+
+    struct json_object *incoming = json_object_new_object();
+    struct json_object *outgoing = json_object_new_object();
+
+    json_object_object_add(incoming, "total_bytes", json_object_new_int64(stats->incoming.total_bytes));
+    json_object_object_add(incoming, "total_packets", json_object_new_int64(stats->incoming.total_packets));
+    json_object_object_add(incoming, "rate", json_object_new_int(calc_rate_estimator(stats, true)));
+    json_object_object_add(incoming, "incoming_rate_limit", json_object_new_uint64(stats->incoming_rate_limit.bps));
+    json_object_object_add(jobj, "incoming", incoming);
+
+    json_object_object_add(outgoing, "total_bytes", json_object_new_int64(stats->outgoing.total_bytes));
+    json_object_object_add(outgoing, "total_packets", json_object_new_int64(stats->outgoing.total_packets));
+    json_object_object_add(outgoing, "rate", json_object_new_int(calc_rate_estimator(stats, false)));
+    json_object_object_add(outgoing, "outgoing_rate_limit", json_object_new_uint64(stats->outgoing_rate_limit.bps));
+    json_object_object_add(jobj, "outgoing", outgoing);
+
+    return jobj;
+}
+
+static struct json_object *aw_bpf_parse_stats_l7_json(void)
+{
+    return aw_bpf_fetch_l7_json_payload();
+}
+
+/* Validate requested BPF table name */
 static int is_valid_bpf_table(const char *table)
 {
     if (!table) return 0;
@@ -190,16 +780,63 @@ void handle_bpf_add_request(json_object *j_req, api_transport_context_t *transpo
         }
     }
 
-    char cmd[512];
-    int ret = snprintf(cmd, sizeof(cmd), "aw-bpfctl %s add %s", table, addr);
-    if (ret <= 0 || ret >= (int)sizeof(cmd)) {
-        api_response_set_error(j_response, 3000, "Command buffer overflow");
+    int map_fd = aw_bpf_open_map(table);
+    if (map_fd < 0) {
+        api_response_set_error(j_response, 3001, "Failed to open BPF map");
         send_json_response(transport, j_response);
         json_object_put(j_response);
         return;
     }
 
-    run_aw_bpfctl_command(j_response, NULL, transport, cmd, "Entry added successfully");
+    union {
+        __be32 ipv4_key;
+        struct aw_bpf_mac_addr mac_key;
+        struct in6_addr ipv6_key;
+    } key_storage = {0};
+
+    if (!aw_bpf_parse_key(table, addr, &key_storage)) {
+        close(map_fd);
+        api_response_set_error(j_response, 1002, "Invalid address parameter");
+        send_json_response(transport, j_response);
+        json_object_put(j_response);
+        return;
+    }
+
+    struct traffic_stats existing_stats = {0};
+    if (aw_bpf_lookup_stats_agg_percpu(map_fd, &key_storage, &existing_stats) == 0) {
+        json_object *j_data = api_response_get_data(j_response);
+        api_response_set_success(j_response, "Entry already exists");
+        if (j_data) {
+            json_object_object_add(j_data, "exit_code", json_object_new_int(0));
+            json_object_object_add(j_data, "output", json_object_new_string("Entry already exists"));
+        }
+        send_json_response(transport, j_response);
+        json_object_put(j_response);
+        close(map_fd);
+        return;
+    }
+
+    uint32_t downrate = 0;
+    uint32_t uprate = 0;
+    aw_bpf_get_global_qos_config(&downrate, &uprate);
+
+    if (aw_bpf_update_rate_limits_percpu(map_fd, &key_storage, downrate, uprate, true) < 0) {
+        close(map_fd);
+        api_response_set_error(j_response, 3001, "Failed to update BPF map");
+        send_json_response(transport, j_response);
+        json_object_put(j_response);
+        return;
+    }
+
+    json_object *j_data = api_response_get_data(j_response);
+    api_response_set_success(j_response, "Entry added successfully");
+    if (j_data) {
+        json_object_object_add(j_data, "exit_code", json_object_new_int(0));
+        json_object_object_add(j_data, "output", json_object_new_string("Entry added successfully"));
+    }
+    send_json_response(transport, j_response);
+    json_object_put(j_response);
+    close(map_fd);
 }
 
 void handle_bpf_del_request(json_object *j_req, api_transport_context_t *transport)
@@ -247,10 +884,44 @@ void handle_bpf_del_request(json_object *j_req, api_transport_context_t *transpo
         }
     }
 
-    char cmd[512];
-    snprintf(cmd, sizeof(cmd), "aw-bpfctl %s del %s", table, addr);
+    int map_fd = aw_bpf_open_map(table);
+    if (map_fd < 0) {
+        api_response_set_error(j_response, 3001, "Failed to open BPF map");
+        send_json_response(transport, j_response);
+        json_object_put(j_response);
+        return;
+    }
 
-    run_aw_bpfctl_command(j_response, j_data, transport, cmd, "OK");
+    union {
+        __be32 ipv4_key;
+        struct aw_bpf_mac_addr mac_key;
+        struct in6_addr ipv6_key;
+    } key_storage = {0};
+
+    if (!aw_bpf_parse_key(table, addr, &key_storage)) {
+        close(map_fd);
+        api_response_set_error(j_response, 1002, "Invalid address parameter");
+        send_json_response(transport, j_response);
+        json_object_put(j_response);
+        return;
+    }
+
+    if (bpf_map_delete_elem(map_fd, &key_storage) < 0) {
+        close(map_fd);
+        api_response_set_error(j_response, 3001, "Failed to delete BPF entry");
+        send_json_response(transport, j_response);
+        json_object_put(j_response);
+        return;
+    }
+
+    api_response_set_success(j_response, "OK");
+    if (j_data) {
+        json_object_object_add(j_data, "exit_code", json_object_new_int(0));
+        json_object_object_add(j_data, "output", json_object_new_string("Deleted entry successfully"));
+    }
+    send_json_response(transport, j_response);
+    json_object_put(j_response);
+    close(map_fd);
 }
 
 void handle_bpf_flush_request(json_object *j_req, api_transport_context_t *transport)
@@ -274,10 +945,30 @@ void handle_bpf_flush_request(json_object *j_req, api_transport_context_t *trans
         return;
     }
 
-    char cmd[256];
-    snprintf(cmd, sizeof(cmd), "aw-bpfctl %s flush", table);
+    int map_fd = aw_bpf_open_map(table);
+    if (map_fd < 0) {
+        api_response_set_error(j_response, 3001, "Failed to open BPF map");
+        send_json_response(transport, j_response);
+        json_object_put(j_response);
+        return;
+    }
 
-    run_aw_bpfctl_command(j_response, j_data, transport, cmd, "OK");
+    bool success = aw_bpf_delete_all_entries(map_fd);
+    close(map_fd);
+    if (!success) {
+        api_response_set_error(j_response, 3001, "Failed to flush BPF map");
+        send_json_response(transport, j_response);
+        json_object_put(j_response);
+        return;
+    }
+
+    api_response_set_success(j_response, "OK");
+    if (j_data) {
+        json_object_object_add(j_data, "exit_code", json_object_new_int(0));
+        json_object_object_add(j_data, "output", json_object_new_string("Flushed all entries in the map"));
+    }
+    send_json_response(transport, j_response);
+    json_object_put(j_response);
 }
 
 void handle_bpf_json_request(json_object *j_req, api_transport_context_t *transport)
@@ -301,57 +992,115 @@ void handle_bpf_json_request(json_object *j_req, api_transport_context_t *transp
         return;
     }
 
-    char cmd[256];
-    snprintf(cmd, sizeof(cmd), "aw-bpfctl %s json", table);
-
-    if (!aw_bpfctl_available()) {
-        api_response_set_error(j_response, 2001, "aw-bpfctl not available on system");
-        if (j_data) {
-            json_object_object_add(j_data, "exit_code", json_object_new_int(-1));
-            json_object_object_add(j_data, "output", json_object_new_string(""));
+    json_object *payload = NULL;
+    if (strcmp(table, "l7") == 0) {
+        payload = aw_bpf_parse_stats_l7_json();
+        if (!payload) {
+            api_response_set_error(j_response, 3001, "Failed to query aw-bpfctl l7 json");
+            if (j_data) {
+                json_object_object_add(j_data, "exit_code", json_object_new_int(-1));
+                json_object_object_add(j_data, "output", json_object_new_string(""));
+            }
+            send_json_response(transport, j_response);
+            json_object_put(j_response);
+            return;
         }
-        send_json_response(transport, j_response);
-        json_object_put(j_response);
-        return;
-    }
-
-    char *out = NULL;
-    int status = 0;
-    run_command_capture(cmd, &out, &status);
-
-    if (status != 0) {
-        api_response_set_error(j_response, 3001, "aw-bpfctl command failed");
-        if (j_data) {
-            json_object_object_add(j_data, "exit_code", json_object_new_int(status));
-            json_object_object_add(j_data, "output", json_object_new_string(out ? out : ""));
+    } else {
+        int map_fd = aw_bpf_open_map(table);
+        if (map_fd < 0) {
+            api_response_set_error(j_response, 3001, "Failed to open BPF map");
+            if (j_data) {
+                json_object_object_add(j_data, "exit_code", json_object_new_int(-1));
+                json_object_object_add(j_data, "output", json_object_new_string(""));
+            }
+            send_json_response(transport, j_response);
+            json_object_put(j_response);
+            return;
         }
-        send_json_response(transport, j_response);
-        json_object_put(j_response);
-        free(out);
-        return;
+
+        payload = json_object_new_object();
+        struct json_object *jentries = json_object_new_array();
+
+        if (strcmp(table, "ipv4") == 0) {
+            __be32 cur_key = 0, next_key = 0;
+            struct traffic_stats stats = {0};
+
+            while (bpf_map_get_next_key(map_fd, cur_key ? &cur_key : NULL, &next_key) == 0) {
+                if (aw_bpf_lookup_stats_agg_percpu(map_fd, &next_key, &stats) == 0) {
+                    struct json_object *jentry = aw_bpf_parse_stats_ipv4_json(next_key, &stats);
+                    if (jentry)
+                        json_object_array_add(jentries, jentry);
+                }
+                cur_key = next_key;
+            }
+        } else if (strcmp(table, "mac") == 0) {
+            struct aw_bpf_mac_addr cur_key;
+            struct aw_bpf_mac_addr next_key;
+            struct aw_bpf_mac_addr zero_key;
+            struct traffic_stats stats = {0};
+
+            memset(&cur_key, 0, sizeof(cur_key));
+            memset(&next_key, 0, sizeof(next_key));
+            memset(&zero_key, 0, sizeof(zero_key));
+
+            while (bpf_map_get_next_key(map_fd,
+                   (memcmp(&cur_key, &zero_key, sizeof(cur_key)) ? &cur_key : NULL),
+                   &next_key) == 0) {
+                if (aw_bpf_lookup_stats_agg_percpu(map_fd, &next_key, &stats) == 0) {
+                    struct json_object *jentry = aw_bpf_parse_stats_mac_json(next_key, &stats);
+                    if (jentry)
+                        json_object_array_add(jentries, jentry);
+                }
+                cur_key = next_key;
+            }
+        } else if (strcmp(table, "sid") == 0) {
+            __u32 cur_key = 0, next_key = 0;
+            struct traffic_stats stats = {0};
+
+            while (bpf_map_get_next_key(map_fd, cur_key ? &cur_key : NULL, &next_key) == 0) {
+                if (aw_bpf_lookup_stats_agg_percpu(map_fd, &next_key, &stats) == 0) {
+                    struct json_object *jentry = aw_bpf_parse_stats_sid_json(next_key, &stats);
+                    if (jentry)
+                        json_object_array_add(jentries, jentry);
+                }
+                cur_key = next_key;
+            }
+        } else if (strcmp(table, "ipv6") == 0) {
+            struct in6_addr cur_key = {0}, next_key = {0};
+            struct traffic_stats stats = {0};
+
+            while (bpf_map_get_next_key(map_fd,
+                   (memcmp(&cur_key, &(struct in6_addr){0}, sizeof(cur_key)) ? &cur_key : NULL),
+                   &next_key) == 0) {
+                if (aw_bpf_lookup_stats_agg_percpu(map_fd, &next_key, &stats) == 0) {
+                    struct json_object *jentry = aw_bpf_parse_stats_ipv6_json(next_key, &stats);
+                    if (jentry)
+                        json_object_array_add(jentries, jentry);
+                }
+                cur_key = next_key;
+            }
+        }
+
+        json_object_object_add(payload, "status", json_object_new_string("success"));
+        json_object_object_add(payload, "type", json_object_new_string(table));
+        json_object_object_add(payload, "data", jentries);
+        close(map_fd);
     }
 
     api_response_set_success(j_response, "OK");
     if (j_data) {
-        json_object_object_add(j_data, "exit_code", json_object_new_int(status));
-    }
-
-    if (out && strlen(out) > 0) {
-        json_object *parsed = json_tokener_parse(out);
-        if (parsed && j_data) {
-            json_object_object_add(j_data, "payload", parsed);
-        } else if (j_data) {
-            json_object_object_add(j_data, "output", json_object_new_string(out));
-        }
-    } else {
-        if (j_data) {
+        json_object_object_add(j_data, "exit_code", json_object_new_int(0));
+        if (payload) {
+            json_object_object_add(j_data, "payload", payload);
+        } else {
             json_object_object_add(j_data, "output", json_object_new_string(""));
         }
+    } else if (payload) {
+        json_object_put(payload);
     }
 
     send_json_response(transport, j_response);
     json_object_put(j_response);
-    free(out);
 }
 
 void handle_bpf_update_request(json_object *j_req, api_transport_context_t *transport)
@@ -411,10 +1160,45 @@ void handle_bpf_update_request(json_object *j_req, api_transport_context_t *tran
         return;
     }
 
-    char cmd[512];
-    snprintf(cmd, sizeof(cmd), "aw-bpfctl %s update %s downrate %lld uprate %lld", table, target, down, up);
+    int map_fd = aw_bpf_open_map(table);
+    if (map_fd < 0) {
+        api_response_set_error(j_response, 3001, "Failed to open BPF map");
+        send_json_response(transport, j_response);
+        json_object_put(j_response);
+        return;
+    }
 
-    run_aw_bpfctl_command(j_response, j_data, transport, cmd, "OK");
+    union {
+        __be32 ipv4_key;
+        struct aw_bpf_mac_addr mac_key;
+        struct in6_addr ipv6_key;
+        __u32 sid_key;
+    } key_storage = {0};
+
+    if (!aw_bpf_parse_key(table, target, &key_storage)) {
+        close(map_fd);
+        api_response_set_error(j_response, 1002, "Invalid target parameter");
+        send_json_response(transport, j_response);
+        json_object_put(j_response);
+        return;
+    }
+
+    if (aw_bpf_update_rate_limits_percpu(map_fd, &key_storage, (uint32_t)down, (uint32_t)up, true) < 0) {
+        close(map_fd);
+        api_response_set_error(j_response, 3001, "Failed to update BPF entry");
+        send_json_response(transport, j_response);
+        json_object_put(j_response);
+        return;
+    }
+
+    api_response_set_success(j_response, "OK");
+    if (j_data) {
+        json_object_object_add(j_data, "exit_code", json_object_new_int(0));
+        json_object_object_add(j_data, "output", json_object_new_string("Entry updated successfully"));
+    }
+    send_json_response(transport, j_response);
+    json_object_put(j_response);
+    close(map_fd);
 }
 
 void handle_bpf_update_all_request(json_object *j_req, api_transport_context_t *transport)
@@ -449,8 +1233,70 @@ void handle_bpf_update_all_request(json_object *j_req, api_transport_context_t *
         return;
     }
 
-    char cmd[512];
-    snprintf(cmd, sizeof(cmd), "aw-bpfctl %s update_all downrate %lld uprate %lld", table, down, up);
+    int map_fd = aw_bpf_open_map(table);
+    if (map_fd < 0) {
+        api_response_set_error(j_response, 3001, "Failed to open BPF map");
+        send_json_response(transport, j_response);
+        json_object_put(j_response);
+        return;
+    }
 
-    run_aw_bpfctl_command(j_response, j_data, transport, cmd, "OK");
+    bool success = true;
+    if (strcmp(table, "ipv4") == 0) {
+        __be32 cur_key = 0, next_key = 0;
+
+        while (bpf_map_get_next_key(map_fd, cur_key ? &cur_key : NULL, &next_key) == 0) {
+            if (aw_bpf_update_rate_limits_percpu(map_fd, &next_key, (uint32_t)down, (uint32_t)up, false) < 0) {
+                success = false;
+                break;
+            }
+            cur_key = next_key;
+        }
+    } else if (strcmp(table, "mac") == 0) {
+        struct aw_bpf_mac_addr cur_key;
+        struct aw_bpf_mac_addr next_key;
+        struct aw_bpf_mac_addr zero_key;
+
+        memset(&cur_key, 0, sizeof(cur_key));
+        memset(&next_key, 0, sizeof(next_key));
+        memset(&zero_key, 0, sizeof(zero_key));
+
+        while (bpf_map_get_next_key(map_fd,
+               (memcmp(&cur_key, &zero_key, sizeof(cur_key)) ? &cur_key : NULL),
+               &next_key) == 0) {
+            if (aw_bpf_update_rate_limits_percpu(map_fd, &next_key, (uint32_t)down, (uint32_t)up, false) < 0) {
+                success = false;
+                break;
+            }
+            cur_key = next_key;
+        }
+    } else {
+        struct in6_addr cur_key = {0}, next_key = {0};
+
+        while (bpf_map_get_next_key(map_fd,
+               (memcmp(&cur_key, &(struct in6_addr){0}, sizeof(cur_key)) ? &cur_key : NULL),
+               &next_key) == 0) {
+            if (aw_bpf_update_rate_limits_percpu(map_fd, &next_key, (uint32_t)down, (uint32_t)up, false) < 0) {
+                success = false;
+                break;
+            }
+            cur_key = next_key;
+        }
+    }
+
+    close(map_fd);
+    if (!success) {
+        api_response_set_error(j_response, 3001, "Failed to update BPF entries");
+        send_json_response(transport, j_response);
+        json_object_put(j_response);
+        return;
+    }
+
+    api_response_set_success(j_response, "OK");
+    if (j_data) {
+        json_object_object_add(j_data, "exit_code", json_object_new_int(0));
+        json_object_object_add(j_data, "output", json_object_new_string("Updated all entries successfully"));
+    }
+    send_json_response(transport, j_response);
+    json_object_put(j_response);
 }

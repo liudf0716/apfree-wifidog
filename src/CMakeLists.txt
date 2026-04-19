@@ -39,6 +39,10 @@ set(common_libs
 	resolv mosquitto uci
 )
 
+if(HAVE_LIBBPF)
+	list(APPEND common_libs bpf)
+endif()
+
 # Set compiler flags
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall --std=gnu99 -Wmissing-declarations")
 if(AW_DEBUG)
