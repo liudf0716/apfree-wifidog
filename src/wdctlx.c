@@ -330,14 +330,14 @@ main(int argc, char **argv) {
                     const char *extra = (argc > 4) ? argv[4] : NULL;
                     const char *extra2 = (argc > 5) ? argv[5] : NULL;
                     if (extra2) {
-                        asprintf(&bpf_param, "%s %s %s %s", type, values, extra, extra2);
+                        asprintf(&bpf_param, "%s %s %s", values, extra, extra2);
                     } else if (extra) {
-                        asprintf(&bpf_param, "%s %s %s", type, values, extra);
+                        asprintf(&bpf_param, "%s %s", values, extra);
                     } else {
-                        asprintf(&bpf_param, "%s %s", type, values);
+                        bpf_param = strdup(values);
                     }
                 } else {
-                    bpf_param = strdup(type);
+                    bpf_param = strdup("");
                 }
                 
                 char *server_bpf_cmd = NULL;
