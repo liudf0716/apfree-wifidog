@@ -142,8 +142,8 @@ static struct wdctl_command {
     {"bpf_del", NULL, wdctl_bpf_del},
     {"bpf_list", NULL, wdctl_bpf_list},
     {"bpf_flush", NULL, wdctl_bpf_flush},
-    {"bpf_update", NULL, wdctl_bpf_update},
     {"bpf_update_all", NULL, wdctl_bpf_update_all},
+    {"bpf_update", NULL, wdctl_bpf_update},
 };
 
 static void 

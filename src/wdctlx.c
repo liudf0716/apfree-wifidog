@@ -326,15 +326,18 @@ main(int argc, char **argv) {
                     return 1;
                 }
                 char *bpf_param = NULL;
-                if (values) {
-                    const char *extra = (argc > 4) ? argv[4] : NULL;
-                    const char *extra2 = (argc > 5) ? argv[5] : NULL;
-                    if (extra2) {
-                        asprintf(&bpf_param, "%s %s %s", values, extra, extra2);
-                    } else if (extra) {
-                        asprintf(&bpf_param, "%s %s", values, extra);
-                    } else {
-                        bpf_param = strdup(values);
+                if (argc > 3) {
+                    size_t total_len = 0;
+                    for (int i = 3; i < argc; i++) {
+                        total_len += strlen(argv[i]) + 1;
+                    }
+                    bpf_param = malloc(total_len);
+                    if (bpf_param) {
+                        bpf_param[0] = '\0';
+                        for (int i = 3; i < argc; i++) {
+                            strcat(bpf_param, argv[i]);
+                            if (i < argc - 1) strcat(bpf_param, " ");
+                        }
                     }
                 } else {
                     bpf_param = strdup("");
