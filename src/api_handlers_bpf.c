@@ -83,8 +83,6 @@ static inline int bpf_map_get_next_key(int fd, const void *key, void *next_key)
 #define AW_BPF_SID_MAP_PATH AW_BPF_MAP_DIR "/xdpi_l7_map"
 #define AW_BPF_XDPI_DEVICE "/dev/xdpi"
 #define AW_BPF_XDPI_IOC_LIST XDPI_IOC_LIST
-#define AW_BPF_DOMAIN_CACHE_TTL_SEC 5
-
 struct aw_bpf_l7_proto {
     __u32 id;
     __u32 sid;
@@ -100,12 +98,6 @@ struct aw_bpf_domain_list {
 struct aw_bpf_mac_addr {
     __u8 h_addr[6];
 } __attribute__((packed));
-
-static struct aw_bpf_l7_proto aw_bpf_l7_protos[AW_BPF_PROTO_TRAITS_MAX_SIZE];
-static int aw_bpf_l7_protos_count;
-static struct aw_bpf_domain_list aw_bpf_domain_cache;
-static bool aw_bpf_domain_cache_loaded;
-static time_t aw_bpf_domain_cache_loaded_at;
 
 static int aw_bpf_get_possible_cpus_cached(void)
 {
@@ -203,18 +195,18 @@ static void aw_bpf_format_mac_address(const struct aw_bpf_mac_addr *mac, char *b
              mac->h_addr[3], mac->h_addr[4], mac->h_addr[5]);
 }
 
-static bool aw_bpf_refresh_l7_proto_cache_from_payload(json_object *payload)
+static size_t aw_bpf_collect_l7_protocols_from_payload(json_object *payload, struct aw_bpf_l7_proto *protocols, size_t max_protocols)
 {
     json_object *j_protocols = NULL;
 
-    aw_bpf_l7_protos_count = 0;
     if (!payload || !json_object_object_get_ex(payload, "protocols", &j_protocols) ||
         !json_object_is_type(j_protocols, json_type_array)) {
-        return false;
+        return 0;
     }
 
     size_t protocol_count = (size_t)json_object_array_length(j_protocols);
-    for (size_t i = 0; i < protocol_count && aw_bpf_l7_protos_count < AW_BPF_PROTO_TRAITS_MAX_SIZE; i++) {
+    size_t stored_count = 0;
+    for (size_t i = 0; i < protocol_count && stored_count < max_protocols; i++) {
         json_object *j_entry = json_object_array_get_idx(j_protocols, (int)i);
         json_object *j_id = NULL;
         json_object *j_sid = NULL;
@@ -231,15 +223,41 @@ static bool aw_bpf_refresh_l7_proto_cache_from_payload(json_object *payload)
         if (!proto_desc)
             continue;
 
-        aw_bpf_l7_protos[aw_bpf_l7_protos_count].id = (__u32)json_object_get_int64(j_id);
-        aw_bpf_l7_protos[aw_bpf_l7_protos_count].sid = (__u32)json_object_get_int64(j_sid);
-        strncpy(aw_bpf_l7_protos[aw_bpf_l7_protos_count].proto_desc, proto_desc,
-                sizeof(aw_bpf_l7_protos[aw_bpf_l7_protos_count].proto_desc) - 1);
-        aw_bpf_l7_protos[aw_bpf_l7_protos_count].proto_desc[sizeof(aw_bpf_l7_protos[aw_bpf_l7_protos_count].proto_desc) - 1] = '\0';
-        aw_bpf_l7_protos_count++;
+        protocols[stored_count].id = (__u32)json_object_get_int64(j_id);
+        protocols[stored_count].sid = (__u32)json_object_get_int64(j_sid);
+        strncpy(protocols[stored_count].proto_desc, proto_desc,
+                sizeof(protocols[stored_count].proto_desc) - 1);
+        protocols[stored_count].proto_desc[sizeof(protocols[stored_count].proto_desc) - 1] = '\0';
+        stored_count++;
     }
 
-    return aw_bpf_l7_protos_count > 0;
+    return stored_count;
+}
+
+static size_t aw_bpf_fetch_l7_protocols(struct aw_bpf_l7_proto *protocols, size_t max_protocols)
+{
+    char *out = NULL;
+    int exit_code = 0;
+
+    if (run_command_capture("aw-bpfctl l7 json 2>&1", &out, &exit_code) != 0) {
+        free(out);
+        return 0;
+    }
+
+    if (exit_code != 0 || !out || !*out) {
+        free(out);
+        return 0;
+    }
+
+    json_object *payload = json_tokener_parse(out);
+    free(out);
+    if (!payload) {
+        return 0;
+    }
+
+    size_t count = aw_bpf_collect_l7_protocols_from_payload(payload, protocols, max_protocols);
+    json_object_put(payload);
+    return count;
 }
 
 static json_object *aw_bpf_fetch_l7_json_payload(void)
@@ -259,108 +277,61 @@ static json_object *aw_bpf_fetch_l7_json_payload(void)
     }
 
     payload = json_tokener_parse(out);
-    if (payload) {
-        aw_bpf_refresh_l7_proto_cache_from_payload(payload);
-    }
-
     free(out);
     return payload;
 }
 
-static void aw_bpf_load_l7_protos(void)
+static const struct aw_bpf_l7_proto *aw_bpf_find_l7_proto_by_sid(const struct aw_bpf_l7_proto *protocols, size_t protocol_count, __u32 sid)
 {
-    json_object *payload = aw_bpf_fetch_l7_json_payload();
-    if (payload) {
-        json_object_put(payload);
+    if (!protocols) {
+        return NULL;
     }
+
+    for (size_t i = 0; i < protocol_count; i++) {
+        if (protocols[i].sid == sid)
+            return &protocols[i];
+    }
+
+    return NULL;
 }
 
-static const char *aw_bpf_get_l7_proto_desc_by_sid(__u32 sid)
+static bool aw_bpf_fetch_domains(struct aw_bpf_domain_list *domain_list)
 {
-    if (aw_bpf_l7_protos_count == 0) {
-        aw_bpf_load_l7_protos();
-    }
-
-    for (int i = 0; i < aw_bpf_l7_protos_count; i++) {
-        if (aw_bpf_l7_protos[i].sid == sid)
-            return aw_bpf_l7_protos[i].proto_desc;
-    }
-    return "unknown";
-}
-
-static bool aw_bpf_is_l7_sid(__u32 sid)
-{
-    if (aw_bpf_l7_protos_count == 0) {
-        aw_bpf_load_l7_protos();
-    }
-
-    for (int i = 0; i < aw_bpf_l7_protos_count; i++) {
-        if (aw_bpf_l7_protos[i].sid == sid)
-            return true;
-    }
-
-    return false;
-}
-
-static bool aw_bpf_domain_cache_valid(void)
-{
-    if (!aw_bpf_domain_cache_loaded)
+    if (!domain_list) {
         return false;
-    return (time(NULL) - aw_bpf_domain_cache_loaded_at) <= AW_BPF_DOMAIN_CACHE_TTL_SEC;
-}
+    }
 
-static void aw_bpf_invalidate_domain_cache(void)
-{
-    aw_bpf_domain_cache_loaded = false;
-    aw_bpf_domain_cache_loaded_at = 0;
-}
-
-static void aw_bpf_load_domains(bool force_refresh)
-{
-    if (!force_refresh && aw_bpf_domain_cache_valid())
-        return;
+    memset(domain_list, 0, sizeof(*domain_list));
 
     int fd = open(AW_BPF_XDPI_DEVICE, O_RDWR);
     if (fd < 0) {
-        aw_bpf_invalidate_domain_cache();
-        return;
+        return false;
     }
 
-    memset(&aw_bpf_domain_cache, 0, sizeof(aw_bpf_domain_cache));
-    aw_bpf_domain_cache.max_count = XDPI_DOMAIN_MAX;
-
-    if (ioctl(fd, AW_BPF_XDPI_IOC_LIST, &aw_bpf_domain_cache) == 0) {
-        aw_bpf_domain_cache_loaded = true;
-        aw_bpf_domain_cache_loaded_at = time(NULL);
-    } else {
-        aw_bpf_invalidate_domain_cache();
+    domain_list->max_count = XDPI_DOMAIN_MAX;
+    if (ioctl(fd, AW_BPF_XDPI_IOC_LIST, domain_list) != 0) {
+        close(fd);
+        return false;
     }
 
     close(fd);
+    return true;
 }
 
-static const char *aw_bpf_get_domain_name_by_sid(__u32 sid)
+static const struct domain_entry *aw_bpf_find_domain_by_sid(const struct aw_bpf_domain_list *domain_list, __u32 sid)
 {
-    aw_bpf_load_domains(false);
+    if (!domain_list) {
+        return NULL;
+    }
 
-    if (aw_bpf_domain_cache_loaded) {
-        for (int i = 0; i < aw_bpf_domain_cache.count; i++) {
-            struct domain_entry *entry = &aw_bpf_domain_cache.domains[i];
-            if (entry->used && entry->sid == sid)
-                return entry->domain;
+    for (int i = 0; i < domain_list->count; i++) {
+        const struct domain_entry *entry = &domain_list->domains[i];
+        if (entry->used && entry->sid == sid) {
+            return entry;
         }
     }
 
-    aw_bpf_load_domains(true);
-    if (aw_bpf_domain_cache_loaded) {
-        for (int i = 0; i < aw_bpf_domain_cache.count; i++) {
-            struct domain_entry *entry = &aw_bpf_domain_cache.domains[i];
-            if (entry->used && entry->sid == sid)
-                return entry->domain;
-        }
-    }
-
-    return "unknown";
+    return NULL;
 }
 
 static int aw_bpf_lookup_stats_agg_percpu(int map_fd, const void *key, struct traffic_stats *agg)
@@ -632,17 +603,24 @@ static struct json_object *aw_bpf_parse_stats_mac_json(struct aw_bpf_mac_addr ma
     return jobj;
 }
 
-static struct json_object *aw_bpf_parse_stats_sid_json(__u32 sid, struct traffic_stats *stats)
+static struct json_object *aw_bpf_parse_stats_sid_json(__u32 sid, struct traffic_stats *stats,
+                                                       const struct aw_bpf_l7_proto *protocols, size_t protocol_count,
+                                                       const struct aw_bpf_domain_list *domain_list)
 {
+    const struct aw_bpf_l7_proto *l7_proto = aw_bpf_find_l7_proto_by_sid(protocols, protocol_count, sid);
+    const struct domain_entry *domain = aw_bpf_find_domain_by_sid(domain_list, sid);
     struct json_object *jobj = json_object_new_object();
     json_object_object_add(jobj, "sid", json_object_new_int(sid));
 
-    if (aw_bpf_is_l7_sid(sid)) {
+    if (l7_proto) {
         json_object_object_add(jobj, "sid_type", json_object_new_string("L7"));
-        json_object_object_add(jobj, "l7_proto_desc", json_object_new_string(aw_bpf_get_l7_proto_desc_by_sid(sid)));
-    } else {
+        json_object_object_add(jobj, "l7_proto_desc", json_object_new_string(l7_proto->proto_desc));
+    } else if (domain) {
         json_object_object_add(jobj, "sid_type", json_object_new_string("Domain"));
-        json_object_object_add(jobj, "domain", json_object_new_string(aw_bpf_get_domain_name_by_sid(sid)));
+        json_object_object_add(jobj, "domain", json_object_new_string(domain->domain));
+    } else {
+        json_object_object_add(jobj, "sid_type", json_object_new_string("Unknown"));
+        json_object_object_add(jobj, "domain", json_object_new_string("unknown"));
     }
 
     struct json_object *incoming = json_object_new_object();
@@ -1054,12 +1032,18 @@ void handle_bpf_json_request(json_object *j_req, api_transport_context_t *transp
                 cur_key = next_key;
             }
         } else if (strcmp(table, "sid") == 0) {
+            struct aw_bpf_l7_proto l7_protocols[AW_BPF_PROTO_TRAITS_MAX_SIZE];
+            size_t l7_protocol_count = aw_bpf_fetch_l7_protocols(l7_protocols, AW_BPF_PROTO_TRAITS_MAX_SIZE);
+            struct aw_bpf_domain_list domain_list;
+            bool have_domains = aw_bpf_fetch_domains(&domain_list);
             __u32 cur_key = 0, next_key = 0;
             struct traffic_stats stats = {0};
 
             while (bpf_map_get_next_key(map_fd, cur_key ? &cur_key : NULL, &next_key) == 0) {
                 if (aw_bpf_lookup_stats_agg_percpu(map_fd, &next_key, &stats) == 0) {
-                    struct json_object *jentry = aw_bpf_parse_stats_sid_json(next_key, &stats);
+                    struct json_object *jentry = aw_bpf_parse_stats_sid_json(next_key, &stats,
+                                                                             l7_protocols, l7_protocol_count,
+                                                                             have_domains ? &domain_list : NULL);
                     if (jentry)
                         json_object_array_add(jentries, jentry);
                 }
