@@ -329,7 +329,7 @@ client_list_find(const char *ip, const char *mac)
 
     ptr = firstclient;
     while (ptr != NULL) {
-        if (strcmp(ptr->mac, mac) == 0) {
+        if (strcasecmp(ptr->mac, mac) == 0) {
             if (is_valid_ip(ip) && ptr->ip && strcmp(ptr->ip, ip) == 0) {
                 return ptr;
             }
@@ -388,7 +388,7 @@ client_list_find_by_mac(const char *mac)
 
     ptr = firstclient;
     while (NULL != ptr) {
-        if (0 == strcmp(ptr->mac, mac))
+        if (0 == strcasecmp(ptr->mac, mac))
             return ptr;
         ptr = ptr->next;
     }
