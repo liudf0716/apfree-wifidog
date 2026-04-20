@@ -1167,7 +1167,7 @@ void handle_bpf_update_request(json_object *j_req, api_transport_context_t *tran
         return;
     }
 
-    if (aw_bpf_update_rate_limits_percpu(map_fd, &key_storage, (uint32_t)down, (uint32_t)up, true) < 0) {
+    if (aw_bpf_update_rate_limits_percpu(map_fd, &key_storage, (uint32_t)down, (uint32_t)up, false) < 0) {
         close(map_fd);
         api_response_set_error(j_response, 3001, "Failed to update BPF entry");
         send_json_response(transport, j_response);

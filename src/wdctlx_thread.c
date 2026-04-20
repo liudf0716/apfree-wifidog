@@ -21,6 +21,7 @@
 #include "wd_client.h"
 #include "client_snapshot.h"
 #include "hotplug_listener.h"
+#include "api_handlers.h"
 
 static struct sockaddr_un *create_unix_socket(const char *);
 
@@ -71,6 +72,13 @@ static void wdctl_add_anti_nat_permit_device(struct bufferevent *, const char *m
 static void wdctl_del_anti_nat_permit_device(struct bufferevent *, const char *mac);
 
 static void wdctl_hotplugin_event(struct bufferevent *fd, const char *event);
+static void wdctl_bpf_add(struct bufferevent *fd, const char *args);
+static void wdctl_bpf_del(struct bufferevent *fd, const char *args);
+static void wdctl_bpf_list(struct bufferevent *fd, const char *args);
+static void wdctl_bpf_flush(struct bufferevent *fd, const char *args);
+static void wdctl_bpf_update(struct bufferevent *fd, const char *args);
+static void wdctl_bpf_update_all(struct bufferevent *fd, const char *args);
+static int wdctl_send_response_func(api_transport_context_t *transport, const char *message, size_t length);
 
 static struct wd_request_context *request_ctx;
 static const char *no_auth_response = "no auth server";
@@ -130,6 +138,12 @@ static struct wdctl_command {
 
     {"add_anti_nat_permit_device", NULL, wdctl_add_anti_nat_permit_device},
     {"del_anti_nat_permit_device", NULL, wdctl_del_anti_nat_permit_device},
+    {"bpf_add", NULL, wdctl_bpf_add},
+    {"bpf_del", NULL, wdctl_bpf_del},
+    {"bpf_list", NULL, wdctl_bpf_list},
+    {"bpf_flush", NULL, wdctl_bpf_flush},
+    {"bpf_update", NULL, wdctl_bpf_update},
+    {"bpf_update_all", NULL, wdctl_bpf_update_all},
 };
 
 static void 
@@ -1030,9 +1044,7 @@ wdctl_user_auth(struct bufferevent *fd, const char *json_value)
         } else {
             client_snapshot_add_trusted_mac(mac, remaining_time, serial);
             if (anti_nat) {
-            if (anti_nat) {
                 fw_add_anti_nat_permit_device(mac); 
-            }
             }
         }
     }
@@ -1071,4 +1083,95 @@ wdctl_del_anti_nat_permit_device(struct bufferevent *fd, const char *mac)
 static void 
 wdctl_hotplugin_event(struct bufferevent *fd, const char *event_json_data) {
     hotplug_handle_event(fd, event_json_data);
+}
+
+static int wdctl_send_response_func(api_transport_context_t *transport, const char *message, size_t length)
+{
+    struct bufferevent *bev = (struct bufferevent *)transport->transport_ctx;
+    if (bev) {
+        bufferevent_write(bev, message, length);
+        return 0;
+    }
+    return -1;
+}
+
+static void wdctl_bpf_add(struct bufferevent *fd, const char *args) {
+    char table[16], addr[64];
+    if (sscanf(args, "%15s %63s", table, addr) != 2) return;
+    
+    json_object *j_req = json_object_new_object();
+    json_object_object_add(j_req, "table", json_object_new_string(table));
+    json_object_object_add(j_req, "address", json_object_new_string(addr));
+    
+    api_transport_context_t transport = { .transport_ctx = fd, .send_response = wdctl_send_response_func };
+    handle_bpf_add_request(j_req, &transport);
+    json_object_put(j_req);
+}
+
+static void wdctl_bpf_del(struct bufferevent *fd, const char *args) {
+    char table[16], addr[64];
+    if (sscanf(args, "%15s %63s", table, addr) != 2) return;
+    
+    json_object *j_req = json_object_new_object();
+    json_object_object_add(j_req, "table", json_object_new_string(table));
+    json_object_object_add(j_req, "address", json_object_new_string(addr));
+    
+    api_transport_context_t transport = { .transport_ctx = fd, .send_response = wdctl_send_response_func };
+    handle_bpf_del_request(j_req, &transport);
+    json_object_put(j_req);
+}
+
+static void wdctl_bpf_flush(struct bufferevent *fd, const char *args) {
+    char table[16];
+    if (sscanf(args, "%15s", table) != 1) return;
+    
+    json_object *j_req = json_object_new_object();
+    json_object_object_add(j_req, "table", json_object_new_string(table));
+    
+    api_transport_context_t transport = { .transport_ctx = fd, .send_response = wdctl_send_response_func };
+    handle_bpf_flush_request(j_req, &transport);
+    json_object_put(j_req);
+}
+
+static void wdctl_bpf_list(struct bufferevent *fd, const char *args) {
+    char table[16];
+    if (sscanf(args, "%15s", table) != 1) return;
+    
+    json_object *j_req = json_object_new_object();
+    json_object_object_add(j_req, "table", json_object_new_string(table));
+    
+    api_transport_context_t transport = { .transport_ctx = fd, .send_response = wdctl_send_response_func };
+    handle_bpf_json_request(j_req, &transport);
+    json_object_put(j_req);
+}
+
+static void wdctl_bpf_update(struct bufferevent *fd, const char *args) {
+    char table[16], target[64];
+    long long down, up;
+    if (sscanf(args, "%15s %63s %lld %lld", table, target, &down, &up) != 4) return;
+    
+    json_object *j_req = json_object_new_object();
+    json_object_object_add(j_req, "table", json_object_new_string(table));
+    json_object_object_add(j_req, "target", json_object_new_string(target));
+    json_object_object_add(j_req, "downrate", json_object_new_int64(down));
+    json_object_object_add(j_req, "uprate", json_object_new_int64(up));
+    
+    api_transport_context_t transport = { .transport_ctx = fd, .send_response = wdctl_send_response_func };
+    handle_bpf_update_request(j_req, &transport);
+    json_object_put(j_req);
+}
+
+static void wdctl_bpf_update_all(struct bufferevent *fd, const char *args) {
+    char table[16];
+    long long down, up;
+    if (sscanf(args, "%15s %lld %lld", table, &down, &up) != 3) return;
+    
+    json_object *j_req = json_object_new_object();
+    json_object_object_add(j_req, "table", json_object_new_string(table));
+    json_object_object_add(j_req, "downrate", json_object_new_int64(down));
+    json_object_object_add(j_req, "uprate", json_object_new_int64(up));
+    
+    api_transport_context_t transport = { .transport_ctx = fd, .send_response = wdctl_send_response_func };
+    handle_bpf_update_all_request(j_req, &transport);
+    json_object_put(j_req);
 }

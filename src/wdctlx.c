@@ -198,6 +198,12 @@ static void display_help() {
     printf("  wdctlx add_auth_client <json_value>\n");
     printf("  wdctlx apfree <user_list|user_info|user_auth|save_user|restore_user>\n");
     printf("  wdctlx hotplugin <json_value>\n");
+    printf("  wdctlx bpf add <ipv4|ipv6|mac> <addr>\n");
+    printf("  wdctlx bpf del <ipv4|ipv6|mac> <addr>\n");
+    printf("  wdctlx bpf flush <ipv4|ipv6|mac>\n");
+    printf("  wdctlx bpf list <ipv4|ipv6|mac|sid|l7>\n");
+    printf("  wdctlx bpf update <ipv4|ipv6|mac> <addr> <downrate> <uprate>\n");
+    printf("  wdctlx bpf update_all <ipv4|ipv6|mac> <downrate> <uprate>\n");
 }
 
 typedef struct {
@@ -223,6 +229,7 @@ static const CommandMapping COMMAND_MAP[] = {
     {"apfree", "save_user", true, false},
     {"apfree", "restore_user", true, false},
     {"hotplugin", "hotplugin", false, false},
+    {"bpf", "bpf", false, false},
     {NULL, NULL, false, false}
 };
 
@@ -310,6 +317,34 @@ main(int argc, char **argv) {
                     return 1;
                 }
                 handle_command(cmd->server_cmd, type);
+                return 0;
+            }
+
+            if (strcmp(command, "bpf") == 0) {
+                if (!type) {
+                    fprintf(stderr, "Error: Missing BPF subcommand (add|del|list|flush|update|update_all)\n");
+                    return 1;
+                }
+                char *bpf_param = NULL;
+                if (values) {
+                    const char *extra = (argc > 4) ? argv[4] : NULL;
+                    const char *extra2 = (argc > 5) ? argv[5] : NULL;
+                    if (extra2) {
+                        asprintf(&bpf_param, "%s %s %s %s", type, values, extra, extra2);
+                    } else if (extra) {
+                        asprintf(&bpf_param, "%s %s %s", type, values, extra);
+                    } else {
+                        asprintf(&bpf_param, "%s %s", type, values);
+                    }
+                } else {
+                    bpf_param = strdup(type);
+                }
+                
+                char *server_bpf_cmd = NULL;
+                asprintf(&server_bpf_cmd, "bpf_%s", type);
+                handle_command(server_bpf_cmd, bpf_param);
+                free(server_bpf_cmd);
+                free(bpf_param);
                 return 0;
             }
 
