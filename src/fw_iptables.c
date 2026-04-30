@@ -93,8 +93,7 @@ add_ip_to_ipset(const char *name, const char *ip, int remove)
 	if(name == NULL)
 		return -1;
  
-	ipset_name = safe_malloc(strlen(name) + 1);
-	memcpy(ipset_name, name, strlen(name));
+	ipset_name = safe_strdup(name);
 	iptables_insert_gateway_id(&ipset_name);
 
 	int nret = add_to_ipset(ipset_name, ip, remove);
@@ -111,8 +110,7 @@ iptables_flush_ipset(const char *name)
 	if(name == NULL)
 		return -1;
  
-	ipset_name = safe_malloc(strlen(name) + 1);
-	memcpy(ipset_name, name, strlen(name));
+	ipset_name = safe_strdup(name);
 	iptables_insert_gateway_id(&ipset_name);
 
 	int nret = flush_ipset(ipset_name);
@@ -327,8 +325,7 @@ add_mac_to_ipset(const char *name, const char *mac, int timeout)
 	if(name == NULL)
 		return -1;
  
-	ipset_name = safe_malloc(strlen(name) + 1);
-	memcpy(ipset_name, name, strlen(name));
+	ipset_name = safe_strdup(name);
 	iptables_insert_gateway_id(&ipset_name);
 
 	int nret = add_to_ipset(ipset_name, mac, timeout);
