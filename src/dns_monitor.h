@@ -5,35 +5,37 @@
 #define _DNS_MONITOR_H_
 
 /**
- * @brief DNS监控线程入口函数
- * 
- * 用于在gateway.c中创建DNS监控线程的入口函数。
- * 
+ * @brief DNS监控线程入口函数（也是实际的长驻工作线程）
+ *
+ * 由 gateway.c 通过 create_detached_thread() 直接创建，是真正执行
+ * DNS 监控工作循环的线程。tid_dns_monitor 即对应该线程。
+ *
  * @param arg 线程参数（当前未使用）
  * @return NULL
  */
 void *thread_dns_monitor(void *arg);
 
 /**
- * @brief 启动DNS监控线程
- * 
- * 启动一个独立的线程来监控DNS eBPF程序传递的DNS响应数据。
- * 该线程会持续监听ring buffer中的DNS事件并进行解析处理。
- * 
- * @return 1 成功启动, 0 启动失败
+ * @brief 查询DNS监控线程是否已在运行（保留API兼容性）
+ *
+ * DNS监控线程由 gateway.c 通过 thread_dns_monitor 创建和管理，
+ * 该函数仅用于查询当前运行状态。
+ *
+ * @return 1 正在运行, 0 未运行
  */
 int dns_monitor_start(void);
 
 /**
- * @brief 停止DNS监控线程
- * 
- * 优雅地停止DNS监控线程，等待线程完成当前处理并退出。
+ * @brief 请求停止DNS监控线程
+ *
+ * 仅设置停止标志；实际工作线程（thread_dns_monitor）检测到标志后
+ * 会自然退出，无需额外同步。
  */
 void dns_monitor_stop(void);
 
 /**
  * @brief 检查DNS监控是否正在运行
- * 
+ *
  * @return 1 正在运行, 0 未运行
  */
 int dns_monitor_is_running(void);
