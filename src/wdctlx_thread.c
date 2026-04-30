@@ -150,12 +150,14 @@ static void
 wdctl_cmd_process(struct bufferevent *bev, const char *req)
 {
     for (int i = 0; i < ARRAYLEN(wdctl_cmd); i++) {
-        if (!strncmp(wdctl_cmd[i].command, req, strlen(wdctl_cmd[i].command))) {
+        size_t cmdlen = strlen(wdctl_cmd[i].command);
+        if (!strncmp(wdctl_cmd[i].command, req, cmdlen) &&
+            (req[cmdlen] == '\0' || req[cmdlen] == '\n' || req[cmdlen] == '\r' || req[cmdlen] == ' ')) {
             if (wdctl_cmd[i].process_cmd) {
                 wdctl_cmd[i].process_cmd(bev);
             } else if (wdctl_cmd[i].process_param_cmd) {
                 // 检查是否有参数
-                const char *param_start = req + strlen(wdctl_cmd[i].command);
+                const char *param_start = req + cmdlen;
                 if (*param_start == ' ') {
                     param_start++; // 跳过空格
                 }
