@@ -42,7 +42,6 @@ static inline int bpf_map_lookup_elem(int fd, const void *key, void *value) { (v
 
 // DNS监控状态
 static volatile int dns_monitor_running = 0;
-static pthread_t dns_monitor_tid = 0;
 
 // eBPF map文件路径
 #define DNS_RINGBUF_MAP_PATH    "/sys/fs/bpf/aw/dns_ringbuf"
@@ -274,8 +273,10 @@ static void print_dns_stats(int stats_map_fd)
     }
 }
 
-// DNS监控线程主函数
-static void *dns_monitor_thread(void *arg)
+// thread_dns_monitor — entry point created by gateway.c via create_detached_thread().
+// This function IS the long-running DNS monitor worker; no nested thread is created.
+// tid_dns_monitor in gateway.c therefore correctly tracks the actual worker thread.
+void *thread_dns_monitor(void *arg)
 {
     struct ring_buffer *rb = NULL;
     int ringbuf_map_fd = -1, stats_map_fd = -1;
@@ -283,12 +284,13 @@ static void *dns_monitor_thread(void *arg)
     time_t last_stats_time = time(NULL);
     time_t last_top_domains_report = time(NULL);
     time_t last_save_time = time(NULL);
-    
-    debug(LOG_INFO, "DNS Monitor thread started");
-    
+
+    debug(LOG_INFO, "DNS monitor thread started");
+    dns_monitor_running = 1;
+
     // 从文件加载之前保存的域名统计
     load_domain_stats_from_file();
-    
+
     /* Attempt to attach to eBPF maps. If maps or libbpf are not
      * available, keep the thread running and retry periodically so
      * the monitor can start later when aw-bpf is loaded. */
@@ -382,13 +384,13 @@ static void *dns_monitor_thread(void *arg)
 
         sleep(5);
     }
-    
+
     debug(LOG_DEBUG, "DNS monitor thread shutting down...");
-    
+
     // 退出前保存域名统计和导出
     save_domain_stats_to_file();
     export_dns_stats_to_file();
-    
+
     // 最后打印一次统计信息
     if (stats_map_fd >= 0) {
         print_dns_stats(stats_map_fd);
@@ -403,58 +405,33 @@ static void *dns_monitor_thread(void *arg)
     if (stats_map_fd >= 0) {
         close(stats_map_fd);
     }
-    
-    debug(LOG_INFO, "DNS Monitor thread terminated");
+
+    debug(LOG_INFO, "DNS monitor thread terminated");
+    dns_monitor_running = 0;
     return NULL;
 }
 
-// 线程包装函数，用于在gateway.c中启动
-void *thread_dns_monitor(void *arg)
-{
-    // 启动DNS监控
-    dns_monitor_start();
-    return NULL;
-}
-
-// 启动DNS监控
+// dns_monitor_start — retained for API compatibility.
+// The DNS monitor thread is created and managed by gateway.c via thread_dns_monitor.
+// Returns 1 if the monitor is already running, 0 otherwise.
 int dns_monitor_start(void)
 {
     if (dns_monitor_running) {
         debug(LOG_WARNING, "DNS monitor is already running");
         return 1;
     }
-    
-    dns_monitor_running = 1;
-    
-    int result = pthread_create(&dns_monitor_tid, NULL, dns_monitor_thread, NULL);
-    if (result != 0) {
-        debug(LOG_ERR, "Failed to create DNS monitor thread: %s", strerror(result));
-        dns_monitor_running = 0;
-        return 0;
-    }
-    
-    // 分离线程，不需要join
-    pthread_detach(dns_monitor_tid);
-    
-    debug(LOG_DEBUG, "DNS monitor thread created successfully");
-    return 1;
+    return 0;
 }
 
-// 停止DNS监控
+// 停止DNS监控：仅设置停止标志，实际工作线程（thread_dns_monitor）会自然退出
 void dns_monitor_stop(void)
 {
     if (!dns_monitor_running) {
         return;
     }
-    
+
     debug(LOG_DEBUG, "Stopping DNS monitor...");
     dns_monitor_running = 0;
-    
-    // 等待线程结束（最多等待2秒）
-    // 注意：由于使用了pthread_detach，不能使用pthread_join
-    // 这里只是标记停止，线程会自然退出
-    sleep(1); // 简单等待1秒让线程有时间退出
-    
     debug(LOG_DEBUG, "DNS monitor stop requested");
 }
 
