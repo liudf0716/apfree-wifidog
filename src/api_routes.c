@@ -27,7 +27,7 @@ static const api_route_entry_t api_routes[] = {
     {"shell",                           handle_shell_request},
 
 	// Firmware management
-	{"get_firmware_info",                handle_get_firmware_info_request},
+	{"get_firmware_info",               handle_get_firmware_info_request},
 	{"firmware_upgrade",                handle_firmware_upgrade_request},
 	{"ota",                             handle_firmware_upgrade_request},
 

@@ -8,6 +8,9 @@
 #include "ping_thread.h"
 #include "client_list.h"
 
+static pthread_mutex_t firmware_upgrade_mutex = PTHREAD_MUTEX_INITIALIZER;
+static bool firmware_upgrade_in_progress = false;
+
 json_object *build_gateway_report_message(const char *op)
 {
     if (!op || *op == '\0') {
@@ -185,11 +188,30 @@ void handle_get_firmware_info_request(json_object *j_req, api_transport_context_
 void handle_firmware_upgrade_request(json_object *j_req, api_transport_context_t *transport) {
     json_object *j_response = api_response_new("firmware_upgrade_response");
     json_object *j_url, *j_force;
+    bool mark_upgrade_in_progress = false;
 
     debug(LOG_INFO, "Firmware upgrade request received");
 
+    pthread_mutex_lock(&firmware_upgrade_mutex);
+    if (firmware_upgrade_in_progress) {
+        pthread_mutex_unlock(&firmware_upgrade_mutex);
+        debug(LOG_WARNING, "Firmware upgrade request rejected because an upgrade is already in progress");
+        api_response_set_error(j_response, 1004, "Firmware upgrade is already in progress");
+        send_json_response(transport, j_response);
+        json_object_put(j_response);
+        return;
+    }
+    firmware_upgrade_in_progress = true;
+    mark_upgrade_in_progress = true;
+    pthread_mutex_unlock(&firmware_upgrade_mutex);
+
     if (!json_object_object_get_ex(j_req, "url", &j_url)) {
         debug(LOG_ERR, "Missing 'url' field in firmware upgrade request");
+        if (mark_upgrade_in_progress) {
+            pthread_mutex_lock(&firmware_upgrade_mutex);
+            firmware_upgrade_in_progress = false;
+            pthread_mutex_unlock(&firmware_upgrade_mutex);
+        }
         api_response_set_error(j_response, 1000, "Missing or invalid 'url' field");
         send_json_response(transport, j_response);
         json_object_put(j_response);
@@ -199,6 +221,11 @@ void handle_firmware_upgrade_request(json_object *j_req, api_transport_context_t
     const char *url_str = json_object_get_string(j_url);
     if (!url_str || strlen(url_str) == 0) {
         debug(LOG_ERR, "Invalid URL in firmware upgrade request");
+        if (mark_upgrade_in_progress) {
+            pthread_mutex_lock(&firmware_upgrade_mutex);
+            firmware_upgrade_in_progress = false;
+            pthread_mutex_unlock(&firmware_upgrade_mutex);
+        }
         api_response_set_error(j_response, 1002, "Missing or invalid 'url' field");
         send_json_response(transport, j_response);
         json_object_put(j_response);
@@ -207,6 +234,11 @@ void handle_firmware_upgrade_request(json_object *j_req, api_transport_context_t
 
     if (strncmp(url_str, "http://", 7) != 0 && strncmp(url_str, "https://", 8) != 0) {
         debug(LOG_ERR, "Invalid URL protocol in firmware upgrade request: %s", url_str);
+        if (mark_upgrade_in_progress) {
+            pthread_mutex_lock(&firmware_upgrade_mutex);
+            firmware_upgrade_in_progress = false;
+            pthread_mutex_unlock(&firmware_upgrade_mutex);
+        }
         api_response_set_error(j_response, 1002, "Invalid URL protocol, only HTTP/HTTPS allowed");
         send_json_response(transport, j_response);
         json_object_put(j_response);
@@ -215,6 +247,11 @@ void handle_firmware_upgrade_request(json_object *j_req, api_transport_context_t
 
     if (strlen(url_str) > 1024) {
         debug(LOG_ERR, "URL too long in firmware upgrade request");
+        if (mark_upgrade_in_progress) {
+            pthread_mutex_lock(&firmware_upgrade_mutex);
+            firmware_upgrade_in_progress = false;
+            pthread_mutex_unlock(&firmware_upgrade_mutex);
+        }
         api_response_set_error(j_response, 1002, "URL too long");
         send_json_response(transport, j_response);
         json_object_put(j_response);
@@ -261,12 +298,18 @@ void handle_firmware_upgrade_request(json_object *j_req, api_transport_context_t
 
     if (ret >= (int)sizeof(command)) {
         debug(LOG_ERR, "Sysupgrade command too long");
+        pthread_mutex_lock(&firmware_upgrade_mutex);
+        firmware_upgrade_in_progress = false;
+        pthread_mutex_unlock(&firmware_upgrade_mutex);
         return;
     }
 
     FILE *fp = popen(command, "r");
     if (fp == NULL) {
         debug(LOG_ERR, "Failed to execute sysupgrade command");
+        pthread_mutex_lock(&firmware_upgrade_mutex);
+        firmware_upgrade_in_progress = false;
+        pthread_mutex_unlock(&firmware_upgrade_mutex);
         return;
     }
 
