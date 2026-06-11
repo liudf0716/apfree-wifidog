@@ -274,7 +274,7 @@ tls_process_loop () {
             EVHTTP_REQ_POST |
             EVHTTP_REQ_OPTIONS);
 	
- 	SSL_CTX *ctx = SSL_CTX_new (SSLv23_server_method ());
+ 	SSL_CTX *ctx = SSL_CTX_new (TLS_server_method ());
   	SSL_CTX_set_options (ctx,
                        SSL_OP_SINGLE_DH_USE |
                        SSL_OP_SINGLE_ECDH_USE |
@@ -297,7 +297,7 @@ tls_process_loop () {
 		t_auth_serv *auth_server = get_auth_server();
 		SSL_CTX *ssl_ctx = NULL;
 		SSL *ssl = NULL;
-        ssl_ctx = SSL_CTX_new(SSLv23_method());
+        ssl_ctx = SSL_CTX_new(TLS_method());
         if (!ssl_ctx) termination_handler(0);
 
         ssl = SSL_new(ssl_ctx);

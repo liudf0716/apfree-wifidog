@@ -54,9 +54,10 @@ client_timeout_check_cb(evutil_socket_t fd, short event, void *arg)
  * @param arg Thread arguments (unused)
  */
 void
-thread_client_timeout_check(const void *arg)
+*thread_client_timeout_check(void *arg)
 {
     wd_request_loop(client_timeout_check_cb);
+    return NULL;
 }
 
 /**

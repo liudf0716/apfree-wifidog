@@ -696,10 +696,16 @@ add_online_client(const char *ip, const char *mac, json_object *client)
             }
             fw_allow(client, FW_MARK_KNOWN);
         }
-    } else if (strcmp(old_client->ip, ip) != 0) { // The client has logined; but its ip changed
+    } else if ((old_client->ip && strcmp(old_client->ip, ip) != 0) ||
+               (!old_client->ip && old_client->ip6 && strcmp(old_client->ip6, ip) != 0)) { // The client has logined; but its ip changed
         fw_deny(old_client);
-        free(old_client->ip);
-        old_client->ip = safe_strdup(ip);
+        if (is_valid_ip(ip)) {
+            free(old_client->ip);
+            old_client->ip = safe_strdup(ip);
+        } else if (is_valid_ip6(ip)) {
+            free(old_client->ip6);
+            old_client->ip6 = safe_strdup(ip);
+        }
         fw_allow(old_client, FW_MARK_KNOWN);
     }
 

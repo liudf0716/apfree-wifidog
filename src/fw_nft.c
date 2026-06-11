@@ -69,7 +69,7 @@ static inline int bpf_map_get_next_key(int fd, const void *key, void *next_key)
 // Include the eBPF compatibility header for required structures
 #include "aw_bpf_compat.h"
 
-#define NFT_FILENAME_OUT "/tmp/fw4_apfree-wifiodg_init.conf.out"
+#define NFT_FILENAME_OUT "/tmp/fw4_apfree-wifidog_init.conf.out"
 #define NFT_WIFIDOGX_CLIENT_LIST "/tmp/nftables_wifidogx_client_list"
 #define NFT_WIFIDOGX_TRUST_CLIENTS "/tmp/nftables_wifidogx_trust_clients"
 

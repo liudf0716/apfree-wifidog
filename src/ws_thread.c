@@ -1144,7 +1144,7 @@ setup_ssl(const char *hostname) // hostname parameter is no longer strictly need
 		return -1;
 	}
 
-	ssl_state.ctx = SSL_CTX_new(SSLv23_method());
+	ssl_state.ctx = SSL_CTX_new(TLS_method());
 	if (!ssl_state.ctx) {
 		debug(LOG_ERR, "SSL_CTX_new() failed");
 		return -1;

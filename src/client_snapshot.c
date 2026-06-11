@@ -110,10 +110,10 @@ int client_snapshot_save(void)
             UNLOCK_CLIENT_LIST();
             json_object_put(root);
             debug(LOG_ERR,
-                "Fatal: online client %s (%s) missing required gw_id/gw_channel; aborting",
+                "Fatal: online client %s (%s) missing required gw_id/gw_channel; aborting snapshot save",
                 client->mac ? client->mac : "N/A",
                 client->ip ? client->ip : "N/A");
-            exit(EXIT_FAILURE);
+            return -1;
         }
 
         json_object *c_obj = json_object_new_object();
@@ -279,31 +279,28 @@ int __client_snapshot_load(void)
             }
 
             if (!gw_id || gw_id[0] == '\0' || !gw_channel || gw_channel[0] == '\0') {
-                json_object_put(root);
                 debug(LOG_ERR,
-                    "Fatal: snapshot client %s (%s) missing required gw_id/gw_channel",
+                    "Snapshot client %s (%s) missing required gw_id/gw_channel, skipping",
                     mac ? mac : "N/A", ip ? ip : "N/A");
-                exit(EXIT_FAILURE);
+                continue;
             }
 
             t_gateway_setting *gw_setting = get_gateway_setting_by_id(gw_id);
 
             if (!gw_setting) {
-                json_object_put(root);
                 debug(LOG_ERR,
-                    "Fatal: snapshot gw_id '%s' for client %s (%s) not found in gateway settings",
+                    "Snapshot gw_id '%s' for client %s (%s) not found in gateway settings, skipping",
                     gw_id, mac ? mac : "N/A", ip ? ip : "N/A");
-                exit(EXIT_FAILURE);
+                continue;
             }
 
             if (!gw_setting->gw_channel || strcmp(gw_setting->gw_channel, gw_channel) != 0) {
-                json_object_put(root);
                 debug(LOG_ERR,
-                    "Fatal: snapshot gw_channel '%s' mismatch for gw_id '%s' (expected '%s')",
+                    "Snapshot gw_channel '%s' mismatch for gw_id '%s' (expected '%s'), skipping",
                     gw_channel,
                     gw_id,
                     gw_setting->gw_channel ? gw_setting->gw_channel : "N/A");
-                exit(EXIT_FAILURE);
+                continue;
             }
 
             debug(LOG_INFO, "Restoring online client: %s (%s)", mac, ip);

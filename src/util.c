@@ -24,13 +24,14 @@ static unsigned short rand16(void);
 int
 init_icmp_socket(void)
 {
-    int flags, oneopt = 1, zeroopt = 0;
+    int flags, zeroopt = 0;
+    int rcvbuf_size = 65536; // 64KB receive buffer
 
     debug(LOG_INFO, "Creating ICMP socket");
     if ((icmp_fd = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP)) == -1 ||
         (flags = fcntl(icmp_fd, F_GETFL, 0)) == -1 ||
         fcntl(icmp_fd, F_SETFL, flags | O_NONBLOCK) == -1 ||
-        setsockopt(icmp_fd, SOL_SOCKET, SO_RCVBUF, &oneopt, sizeof(oneopt)) ||
+        setsockopt(icmp_fd, SOL_SOCKET, SO_RCVBUF, &rcvbuf_size, sizeof(rcvbuf_size)) ||
         setsockopt(icmp_fd, SOL_SOCKET, SO_DONTROUTE, &zeroopt, sizeof(zeroopt)) == -1) {
         debug(LOG_ERR, "Cannot create ICMP raw socket.");
         return 0;
@@ -39,7 +40,7 @@ init_icmp_socket(void)
 	if ((icmp6_fd = socket(AF_INET6, SOCK_RAW, IPPROTO_ICMPV6)) == -1 ||
 		(flags = fcntl(icmp6_fd, F_GETFL, 0)) == -1 ||
 		fcntl(icmp6_fd, F_SETFL, flags | O_NONBLOCK) == -1 ||
-		setsockopt(icmp6_fd, SOL_SOCKET, SO_RCVBUF, &oneopt, sizeof(oneopt)) ||
+		setsockopt(icmp6_fd, SOL_SOCKET, SO_RCVBUF, &rcvbuf_size, sizeof(rcvbuf_size)) ||
 		setsockopt(icmp6_fd, SOL_SOCKET, SO_DONTROUTE, &zeroopt, sizeof(zeroopt)) == -1) {
 		debug(LOG_ERR, "Cannot create ICMP6 raw socket.");
 		close(icmp_fd);

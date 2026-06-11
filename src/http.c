@@ -495,13 +495,29 @@ ev_http_reply_client_error(struct evhttp_request *req, enum reply_client_page_ty
         // lock extern pthread_mutex_t g_resource_lock;
         pthread_mutex_lock(&g_resource_lock);
         // copy evb_internet_offline_page to evb
-        evbuffer_add(evb, evbuffer_pullup(evb_internet_offline_page, -1), evbuffer_get_length(evb_internet_offline_page));
+        {
+            size_t len = evbuffer_get_length(evb_internet_offline_page);
+            if (len > 0) {
+                const void *data = evbuffer_pullup(evb_internet_offline_page, -1);
+                if (data) {
+                    evbuffer_add(evb, data, len);
+                }
+            }
+        }
         pthread_mutex_unlock(&g_resource_lock);
         break;
     case AUTHSERVER_OFFLINE:
         evb = evbuffer_new();
         pthread_mutex_lock(&g_resource_lock);
-        evbuffer_add(evb, evbuffer_pullup(evb_authserver_offline_page, -1), evbuffer_get_length(evb_authserver_offline_page));
+        {
+            size_t len = evbuffer_get_length(evb_authserver_offline_page);
+            if (len > 0) {
+                const void *data = evbuffer_pullup(evb_authserver_offline_page, -1);
+                if (data) {
+                    evbuffer_add(evb, data, len);
+                }
+            }
+        }
         pthread_mutex_unlock(&g_resource_lock);
         break;
     case LOCAL_CUSTROM_AUTH:
@@ -787,13 +803,41 @@ ev_http_send_redirect(struct evhttp_request * req, const char *url, const char *
         return;
     }
 
+    // Escape URL for safe embedding in JavaScript string
+    // Replace ' with \' and \ with \\ to prevent XSS
+    size_t url_len = strlen(url);
+    char *escaped_url = malloc(url_len * 2 + 1);
+    if (escaped_url) {
+        char *dst = escaped_url;
+        for (const char *src = url; *src; src++) {
+            if (*src == '\'') {
+                *dst++ = '\\';
+                *dst++ = '\'';
+            } else if (*src == '\\') {
+                *dst++ = '\\';
+                *dst++ = '\\';
+            } else if (*src == '<') {
+                *dst++ = '<';
+            } else if (*src == '>') {
+                *dst++ = '>';
+            } else {
+                *dst++ = *src;
+            }
+        }
+        *dst = '\0';
+    } else {
+        escaped_url = (char *)url;
+    }
+
     evbuffer_add_printf(evb, 
         "<html><head>"
         "<script type=\"text/javascript\">"
         "setTimeout(function() { window.location.href = '%s'; }, %d);"
         "</script></head>"
         "<body>Please wait, redirecting... If nothing happens, <a href='%s'>click here</a>.</body></html>",
-        url, timeout?timeout:100, url);
+        escaped_url, timeout?timeout:100, escaped_url);
+    
+    if (escaped_url != url) free(escaped_url);
     
     evhttp_add_header(evhttp_request_get_output_headers(req), "Connection", "close");
     evhttp_send_reply(req, 200, text, evb);
@@ -975,8 +1019,25 @@ static void
 gen_random_token(char *token, size_t len)
 {
     static const char charset[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-    for (size_t i = 0; i < len; i++) {
-        token[i] = charset[rand() % (sizeof(charset) - 1)];
+    unsigned char randbuf[len];
+    FILE *fp = fopen("/dev/urandom", "r");
+    if (fp) {
+        if (fread(randbuf, 1, len, fp) != len) {
+            // Fallback to rand() if urandom read fails
+            for (size_t i = 0; i < len; i++) {
+                token[i] = charset[rand() % (sizeof(charset) - 1)];
+            }
+        } else {
+            for (size_t i = 0; i < len; i++) {
+                token[i] = charset[randbuf[i] % (sizeof(charset) - 1)];
+            }
+        }
+        fclose(fp);
+    } else {
+        // Fallback to rand() if urandom cannot be opened
+        for (size_t i = 0; i < len; i++) {
+            token[i] = charset[rand() % (sizeof(charset) - 1)];
+        }
     }
     token[len] = '\0';
 }

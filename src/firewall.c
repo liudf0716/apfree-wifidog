@@ -195,6 +195,7 @@ arp_get(const char *req_ip)
 	char ip[IP_LENGTH] = {0}, mac[MAC_LENGTH] = {0};
 	while (!feof(proc) && (fscanf(proc, " %15[0-9.] %*s %*s %17[a-fa-f0-9:] %*s %*s", ip, mac) == 2)) {
 		if (strcmp(ip, req_ip) == 0) {
+			fclose(proc);
 			return safe_strdup(mac);
 		}
 	}

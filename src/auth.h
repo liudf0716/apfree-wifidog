@@ -58,6 +58,6 @@ void ev_authenticate_client(struct evhttp_request *request,
  * @brief Periodic connection timeout checker
  * @param arg Thread arguments
  */
-void thread_client_timeout_check(const void *arg);
+void *thread_client_timeout_check(void *arg);
 
 #endif

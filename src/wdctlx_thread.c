@@ -256,7 +256,7 @@ thread_wdctl(void *arg)
     if (!wdctl_base) termination_handler(0);
 
     if (get_auth_server()) {
-        SSL_CTX *ssl_ctx = SSL_CTX_new(SSLv23_method());
+        SSL_CTX *ssl_ctx = SSL_CTX_new(TLS_method());
         if (!ssl_ctx) termination_handler(0);
 
         SSL *ssl = SSL_new(ssl_ctx);

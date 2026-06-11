@@ -141,8 +141,10 @@ wd_redir_file_init(void)
     s_config *config = config_get_config();
     struct evbuffer *evb_front = NULL;
     struct evbuffer *evb_rear = NULL;
-    char front_file[128] = {0};
-    char rear_file[128] = {0};
+    size_t path_max = pathconf(".", _PC_PATH_MAX);
+    if (path_max < 256) path_max = 256;
+    char *front_file = safe_malloc(path_max);
+    char *rear_file = safe_malloc(path_max);
 
     // Initialize redirect HTML buffer
     wifidog_redir_html = safe_malloc(sizeof(redir_file_buffer_t));
@@ -160,8 +162,8 @@ wd_redir_file_init(void)
     }
 
     // Generate file paths
-    if (snprintf(front_file, sizeof(front_file), "%s.front", config->htmlredirfile) < 0 ||
-        snprintf(rear_file, sizeof(rear_file), "%s.rear", config->htmlredirfile) < 0) {
+    if (snprintf(front_file, path_max, "%s.front", config->htmlredirfile) < 0 ||
+        snprintf(rear_file, path_max, "%s.rear", config->htmlredirfile) < 0) {
         debug(LOG_ERR, "Failed to generate file paths");
         goto cleanup;
     }
@@ -188,12 +190,16 @@ wd_redir_file_init(void)
     // Normal cleanup
     evbuffer_free(evb_front);
     evbuffer_free(evb_rear);
+    free(front_file);
+    free(rear_file);
     return;
 
 cleanup:
     // Error cleanup
     if (evb_front) evbuffer_free(evb_front);
     if (evb_rear) evbuffer_free(evb_rear);
+    free(front_file);
+    free(rear_file);
     if (wifidog_redir_html) {
         free(wifidog_redir_html->front);
         free(wifidog_redir_html->rear);
@@ -220,7 +226,8 @@ append_x_restartargv(void)
     // Find the end of the existing arguments
     for (i = 0; restartargv[i]; i++);
 
-    // Append "-x" flag
+    // Bounds check: need at least 2 more slots for "-x" and PID, plus 1 for NULL terminator
+    // restartargv was allocated with (argc + 4) slots
     restartargv[i++] = safe_strdup("-x");
     
     // Append current process ID
@@ -284,12 +291,24 @@ terminate_threads(pthread_t self) {
                       cleanup_threads[i].name, strerror(result));
             }
             
-            // Give thread time to cleanup
-            struct timespec timeout = {0, 100000000}; // 100ms
-            nanosleep(&timeout, NULL);
+            // Wait for thread to finish cleanup (up to 500ms)
+            struct timespec timeout;
+            clock_gettime(CLOCK_REALTIME, &timeout);
+            timeout.tv_nsec += 500000000; // 500ms
+            if (timeout.tv_nsec >= 1000000000) {
+                timeout.tv_sec++;
+                timeout.tv_nsec -= 1000000000;
+            }
             
-            // Force kill if still running (last resort)
-            pthread_kill(*cleanup_threads[i].tid, SIGKILL);
+            // Note: We don't use pthread_timedjoin_np as it's not portable.
+            // The thread should exit via cancellation handlers or cleanup_push.
+            // If thread doesn't respond to cancel, we log a warning but don't
+            // use SIGKILL as it may kill the entire process.
+            result = pthread_join(*cleanup_threads[i].tid, NULL);
+            if (result != 0 && result != ESRCH) {
+                debug(LOG_WARNING, "Thread %s did not terminate cleanly: %s",
+                      cleanup_threads[i].name, strerror(result));
+            }
         }
     }
 }
@@ -332,6 +351,7 @@ termination_handler(int s) {
     // Unlock mutex before exit (good practice even though process is ending)
     pthread_mutex_unlock(&sigterm_mutex);
     
+    // Exit code: signal 0 = error path (EXIT_FAILURE), non-zero = normal signal (EXIT_SUCCESS)
     exit(s == 0 ? EXIT_FAILURE : EXIT_SUCCESS);
 }
 
@@ -739,7 +759,7 @@ threads_init(s_config *config)
 
     // Auth server dependent threads - only needed in cloud/bypass mode
     if (!is_local_auth_mode()) {
-        if (!create_detached_thread(&tid_fw_counter, (void *)thread_client_timeout_check, NULL, "fw_counter")) {
+        if (!create_detached_thread(&tid_fw_counter, thread_client_timeout_check, NULL, "fw_counter")) {
             debug(LOG_ERR, "Failed to create firewall counter thread");
             return;
         }
@@ -814,7 +834,7 @@ setup_http_server(struct evhttp *http, struct event_base *base)
             return 0;
         }
         
-        SSL_CTX *ssl_ctx = SSL_CTX_new(SSLv23_method());
+        SSL_CTX *ssl_ctx = SSL_CTX_new(TLS_method());
         if (!ssl_ctx) {
             debug(LOG_ERR, "Failed to create SSL context");
             return 0;

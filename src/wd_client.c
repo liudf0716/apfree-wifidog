@@ -283,7 +283,7 @@ wd_request_loop(void (*callback)(evutil_socket_t, short, void *))
 	}
 
 	// Initialize SSL context and configuration
-	ssl_ctx = SSL_CTX_new(SSLv23_method());
+	ssl_ctx = SSL_CTX_new(TLS_method());
 	if (!ssl_ctx) {
 		debug(LOG_ERR, "Failed to create SSL context");
 		goto cleanup;
