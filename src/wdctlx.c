@@ -10,6 +10,7 @@
 #include <event2/buffer.h>
 #include "common.h"
 #include "wd_util.h"
+#include "version.h"
 
 #include <string.h>
 #include <stdlib.h>
@@ -287,6 +288,11 @@ main(int argc, char **argv) {
 
     if (strcmp(command, "help") == 0 || strcmp(command, "?") == 0) {
         display_help();
+        return 0;
+    }
+
+    if (strcmp(command, "-v") == 0 || strcmp(command, "--version") == 0 || strcmp(command, "version") == 0) {
+        printf("wdctlx %s\n", VERSION);
         return 0;
     }
 
