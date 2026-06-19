@@ -167,7 +167,7 @@ check_auth_server_available_cb(int errcode, struct evutil_addrinfo *res, void *p
 		if (addr->ai_family == PF_INET) {
 			char ip[INET_ADDRSTRLEN] = {0};
 			struct sockaddr_in *sin = (struct sockaddr_in*)addr->ai_addr;
-			evutil_inet_ntop(AF_INET, &sin->sin_addr, ip, INET_ADDRSTRLEN-1);
+			evutil_inet_ntop(AF_INET, &sin->sin_addr, ip, INET_ADDRSTRLEN);
 			if (is_address_exist(ips_auth_server, ip, AF_INET)) {
 				continue;
 			}
@@ -179,7 +179,7 @@ check_auth_server_available_cb(int errcode, struct evutil_addrinfo *res, void *p
 		} else if (addr->ai_family == PF_INET6) {
 			char ip[INET6_ADDRSTRLEN] = {0};
 			struct sockaddr_in6 *sin6 = (struct sockaddr_in6*)addr->ai_addr;
-			evutil_inet_ntop(AF_INET6, &sin6->sin6_addr, ip, INET6_ADDRSTRLEN-1);
+			evutil_inet_ntop(AF_INET6, &sin6->sin6_addr, ip, INET6_ADDRSTRLEN);
 			if (is_address_exist(ips_auth_server, ip, AF_INET6)) {
 				continue;
 			}
