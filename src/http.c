@@ -10,6 +10,7 @@
 #include <sys/ioctl.h>
 #include <net/if.h>
 #include <unistd.h> 
+#include <strings.h>
 
 #include "common.h"
 #include "auth.h"
@@ -706,6 +707,26 @@ ev_http_callback_404(struct evhttp_request *req, void *arg)
         free(remote_host);
         return;
     }    
+
+    // Detect redirect loop: if the request host matches the auth server hostname,
+    // the redirect URL has looped back to the gateway (because DNS resolves the auth
+    // server domain to the gateway IP for unauthenticated clients). In this case,
+    // we must NOT generate another redirect, or it will create an infinite loop.
+    t_auth_serv *auth_server = get_auth_server();
+    const char *req_host = evhttp_uri_get_host(evhttp_request_get_evhttp_uri(req));
+    if (!req_host) req_host = evhttp_request_get_host(req);
+    if (req_host && auth_server && auth_server->authserv_hostname &&
+        strcasecmp(req_host, auth_server->authserv_hostname) == 0) {
+        debug(LOG_WARNING, "Redirect loop detected: request host [%s] matches auth server hostname, "
+              "serving offline page to break the loop for client [%s]", req_host, remote_host);
+        char gw_port[8] = {0};
+        snprintf(gw_port, sizeof(gw_port), "%d", config_get_config()->gw_port);
+        ev_http_reply_client_error(req, AUTHSERVER_OFFLINE,
+            addr_type==1?gw_setting->gw_address_v4:gw_setting->gw_address_v6,
+            gw_port, "http", remote_host, mac);
+        free(remote_host);
+        return;
+    }
 
     char *redir_url = wd_get_redir_url_to_auth(req, gw_setting, mac, remote_host, config->gw_port, config->device_id, is_ssl);
     if (!redir_url) {

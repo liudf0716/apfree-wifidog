@@ -59,3 +59,4 @@ build/
 build_shell/
 .github/copilot-instructions.md
 scripts/package_wifidogx_to_openwrt_dl.sh
+.mimocode/
