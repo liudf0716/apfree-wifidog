@@ -129,6 +129,14 @@ wd_get_redir_url_to_auth(struct evhttp_request *req,
 	} else
 		gw_address = gw_setting->gw_address_v4;
 
+	// 通过桥接 FDB 获取客户端实际连接的 SSID
+	char client_ssid[64] = {0};
+	get_client_ssid(mac, gw_setting->gw_interface, client_ssid, sizeof(client_ssid));
+	// fallback: 用全局 g_ssid
+	if (client_ssid[0] == '\0' && g_ssid) {
+		strncpy(client_ssid, g_ssid, sizeof(client_ssid) - 1);
+	}
+
 	char *redir_url = NULL;
 	if ((auth_server->authserv_use_ssl && auth_server->authserv_ssl_port == 443) ||
 		(!auth_server->authserv_use_ssl && auth_server->authserv_http_port == 80)) {
@@ -143,7 +151,7 @@ wd_get_redir_url_to_auth(struct evhttp_request *req,
 			device_id,
 			gw_setting->gw_id, 
 			gw_setting->gw_channel?gw_setting->gw_channel:"null",
-			g_ssid?g_ssid:"",
+			client_ssid,
 			remote_host, 
 			mac, 
 			is_ssl?"https":"http",
@@ -161,7 +169,7 @@ wd_get_redir_url_to_auth(struct evhttp_request *req,
 			device_id,
 			gw_setting->gw_id, 
 			gw_setting->gw_channel?gw_setting->gw_channel:"null",
-			g_ssid?g_ssid:"",
+			client_ssid,
 			remote_host, 
 			mac, 
 			is_ssl?"https":"http",

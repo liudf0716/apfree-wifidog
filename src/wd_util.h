@@ -105,6 +105,9 @@ int is_device_wired_intern(const char *, const char *);
 
 int br_is_device_wired(const char *); // no popen impl
 
+/** @brief Get SSID by client MAC via bridge FDB lookup. Returns 1=WiFi, 0=wired/not found */
+int get_client_ssid(const char *mac, const char *bridge, char *ssid, size_t ssid_len);
+
 /** @brief Is ip online or domain parsable */
 int is_device_online(const char *);
 

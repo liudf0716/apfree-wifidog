@@ -1403,6 +1403,102 @@ is_device_wired_intern(const char *mac, const char *bridge)
 }
 
 /*
+ * 根据桥接端口号获取接口名称
+ * 成功返回 1，失败返回 0
+ */
+static int
+get_br_port_ifname(const char *brname, int port_no, char *ifname, size_t len)
+{
+    int i, count;
+    struct dirent **namelist;
+    char path[SYSFS_PATH_MAX] = {0};
+
+    snprintf(path, SYSFS_PATH_MAX, SYSFS_CLASS_NET "%s/brif", brname);
+    count = scandir(path, &namelist, 0, alphasort);
+    if (count < 0)
+        return 0;
+
+    for (i = 0; i < count; i++) {
+        if (namelist[i]->d_name[0] == '.'
+            && (namelist[i]->d_name[1] == '\0'
+            || (namelist[i]->d_name[1] == '.'
+                && namelist[i]->d_name[2] == '\0')))
+            continue;
+
+        if (port_no == get_portno(brname, namelist[i]->d_name)) {
+            strncpy(ifname, namelist[i]->d_name, len - 1);
+            ifname[len - 1] = '\0';
+            for (i = 0; i < count; i++) free(namelist[i]);
+            free(namelist);
+            return 1;
+        }
+    }
+    for (i = 0; i < count; i++) free(namelist[i]);
+    free(namelist);
+    return 0;
+}
+
+/*
+ * 通过客户端 MAC 地址获取其连接的 SSID
+ * 返回值: 1=WiFi(SSID已填充), 0=有线或未找到(ssid为空)
+ */
+int
+get_client_ssid(const char *mac, const char *bridge, char *ssid, size_t ssid_len)
+{
+    if (!mac || !bridge || !ssid || ssid_len == 0)
+        return 0;
+
+    ssid[0] = '\0';
+
+    // 1. 从桥接 FDB 查 MAC 对应的端口号
+    int port_no = get_device_br_port_no(mac, bridge);
+    if (port_no <= 0) {
+        debug(LOG_DEBUG, "get_client_ssid: mac %s not found in bridge %s", mac, bridge);
+        return 0;
+    }
+
+    // 2. 端口号 → 接口名
+    char ifname[IFNAMSIZ] = {0};
+    if (!get_br_port_ifname(bridge, port_no, ifname, sizeof(ifname))) {
+        debug(LOG_DEBUG, "get_client_ssid: port_no %d has no ifname in bridge %s", port_no, bridge);
+        return 0;
+    }
+
+    // 3. 判断是否无线接口 (phy*-ap*)
+    if (strncmp(ifname, "phy", 3) != 0) {
+        debug(LOG_DEBUG, "get_client_ssid: mac %s on wired port %s", mac, ifname);
+        return 0; // 有线
+    }
+
+    // 4. 通过 iwinfo 获取 SSID
+    char cmd[128];
+    snprintf(cmd, sizeof(cmd), "iwinfo %s info 2>/dev/null | grep ESSID", ifname);
+    FILE *fp = popen(cmd, "r");
+    if (!fp) return 0;
+
+    char buf[128] = {0};
+    if (fgets(buf, sizeof(buf), fp)) {
+        trim_newline(buf);
+        // 解析 ESSID: "xxx" 格式
+        char *p = strstr(buf, "ESSID:");
+        if (p) {
+            p += 6;
+            while (*p == ' ' || *p == '"') p++;
+            char *end = strchr(p, '"');
+            if (end) *end = '\0';
+            if (strlen(p) > 0) {
+                strncpy(ssid, p, ssid_len - 1);
+                ssid[ssid_len - 1] = '\0';
+            }
+        }
+    }
+    pclose(fp);
+
+    debug(LOG_INFO, "get_client_ssid: mac %s on %s -> ssid '%s'", mac, ifname, ssid);
+    return strlen(ssid) > 0 ? 1 : 0;
+}
+
+/*
  * 1: wired; 0: wireless
  */
 int

@@ -300,7 +300,7 @@ get_ping_v2_uri(const struct sys_info *info)
 			 check_and_get_wifidog_uptime(info->sys_uptime),
 			 g_online_clients,
 			 offline_client_ageout(),
-			 NULL != g_ssid?g_ssid:"",
+			 NULL != g_ssid?g_ssid:"NULL",
 			 NULL != g_version?g_version:"null",
 			 NULL != g_type?g_type:"null",
 			 NULL != g_name?g_name:"null",
@@ -341,7 +341,7 @@ get_ping_uri(const struct sys_info *info, t_gateway_setting *gw_setting)
              check_and_get_wifidog_uptime(info->sys_uptime),
 			 g_online_clients,
 			 offline_client_ageout(),
-			 NULL != g_ssid?g_ssid:"",
+			 NULL != g_ssid?g_ssid:"NULL",
 			 NULL != g_version?g_version:"null",
 			 NULL != g_type?g_type:"null",
 			 NULL != g_name?g_name:"null",
@@ -456,13 +456,26 @@ get_sys_info(struct sys_info *info)
 		fh = NULL;
     }
 	
-	// get first ssid
-	if (uci_get_value("wireless", "wifi-iface", "ssid", ssid, 31)) {
-		trim_newline(ssid);
-		if(strlen(ssid) > 0) {
-			if(g_ssid) 
-				free(g_ssid);
-			g_ssid = evhttp_encode_uri(ssid);
+	// get first ssid via iwinfo
+	{
+		FILE *iw_fp = popen("iwinfo 2>/dev/null | grep 'ESSID:' | head -1", "r");
+		if (iw_fp) {
+			char iw_buf[128] = {0};
+			if (fgets(iw_buf, sizeof(iw_buf), iw_fp)) {
+				trim_newline(iw_buf);
+				char *p = strstr(iw_buf, "ESSID:");
+				if (p) {
+					p += 6;
+					while (*p == ' ' || *p == '"') p++;
+					char *end = strchr(p, '"');
+					if (end) *end = '\0';
+					if (strlen(p) > 0) {
+						if (g_ssid) free(g_ssid);
+						g_ssid = evhttp_encode_uri(p);
+					}
+				}
+			}
+			pclose(iw_fp);
 		}
 	}
 	
