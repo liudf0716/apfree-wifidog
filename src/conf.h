@@ -390,7 +390,6 @@ extern int g_online_clients;    // Total connected client count
 extern char *g_version;         // Software version
 extern char *g_type;            // Hardware type
 extern char *g_name;            // Firmware name
-extern char *g_ssid;            // Network SSID
 
 // Domain locking macros
 #define LOCK_DOMAIN() do { \

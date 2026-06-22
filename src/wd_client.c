@@ -132,10 +132,6 @@ wd_get_redir_url_to_auth(struct evhttp_request *req,
 	// 通过桥接 FDB 获取客户端实际连接的 SSID
 	char client_ssid[64] = {0};
 	get_client_ssid(mac, gw_setting->gw_interface, client_ssid, sizeof(client_ssid));
-	// fallback: 用全局 g_ssid
-	if (client_ssid[0] == '\0' && g_ssid) {
-		strncpy(client_ssid, g_ssid, sizeof(client_ssid) - 1);
-	}
 
 	char *redir_url = NULL;
 	if ((auth_server->authserv_use_ssl && auth_server->authserv_ssl_port == 443) ||
