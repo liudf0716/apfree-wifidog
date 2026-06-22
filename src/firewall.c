@@ -57,11 +57,12 @@ fw_allow(t_client * client, int new_fw_connection_state)
 	result = iptables_fw_access(FW_ACCESS_ALLOW, client->ip, client->mac, new_fw_connection_state);
 #elif AW_FW4
 	if (client->ip6) {
-		result = nft_fw_access(FW_ACCESS_ALLOW, client->ip6, client->mac, new_fw_connection_state);
-	} 
-	 
+		int r6 = nft_fw_access(FW_ACCESS_ALLOW, client->ip6, client->mac, new_fw_connection_state);
+		if (r6 != 0) result = r6;
+	}
 	if (client->ip) {
-		result = nft_fw_access(FW_ACCESS_ALLOW, client->ip, client->mac, new_fw_connection_state);
+		int r4 = nft_fw_access(FW_ACCESS_ALLOW, client->ip, client->mac, new_fw_connection_state);
+		if (r4 != 0) result = r4;
 	}
 #else
 	result = vpp_fw_access(FW_ACCESS_ALLOW, client->ip, client->mac, new_fw_connection_state);
@@ -101,12 +102,14 @@ fw_deny(t_client * client)
 	client->fw_connection_state = FW_MARK_NONE; /* Clear */
 	int nret = 0;
 	if (client->ip6) {
-		nret = _fw_deny_raw(client->ip6, client->mac, fw_connection_state);
+		int r6 = _fw_deny_raw(client->ip6, client->mac, fw_connection_state);
+		if (r6 != 0) nret = r6;
 		conntrack_flush(client->ip6);
 	}
 
 	if (client->ip) {
-		nret = _fw_deny_raw(client->ip, client->mac, fw_connection_state);
+		int r4 = _fw_deny_raw(client->ip, client->mac, fw_connection_state);
+		if (r4 != 0) nret = r4;
 		conntrack_flush(client->ip);
 	}
 	return nret;
