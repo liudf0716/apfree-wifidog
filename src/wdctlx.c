@@ -205,6 +205,10 @@ static void display_help() {
     printf("  wdctlx bpf list <ipv4|ipv6|mac|sid|l7>\n");
     printf("  wdctlx bpf update <ipv4|ipv6|mac> <addr> <downrate> <uprate>\n");
     printf("  wdctlx bpf update_all <ipv4|ipv6|mac> <downrate> <uprate>\n");
+    printf("  wdctlx blacklist mac show\n");
+    printf("  wdctlx blacklist mac add <mac1,mac2...>\n");
+    printf("  wdctlx blacklist mac del <mac1,mac2...>\n");
+    printf("  wdctlx blacklist mac clear\n");
 }
 
 typedef struct {
@@ -323,6 +327,40 @@ main(int argc, char **argv) {
                     return 1;
                 }
                 handle_command(cmd->server_cmd, type);
+                return 0;
+            }
+
+            if (strcmp(command, "blacklist") == 0) {
+                if (!type || strcmp(type, "mac") != 0) {
+                    fprintf(stderr, "Error: Usage: wdctlx blacklist mac <show|add|del|clear> [values]\n");
+                    return 1;
+                }
+                const char *action = (argc > 3) ? argv[3] : NULL;
+                if (!action) {
+                    fprintf(stderr, "Error: Missing blacklist action (show|add|del|clear)\n");
+                    return 1;
+                }
+                const char *mac_values = (argc > 4) ? argv[4] : NULL;
+                if (strcmp(action, "show") == 0) {
+                    handle_command("show_untrusted_mac", NULL);
+                } else if (strcmp(action, "clear") == 0) {
+                    handle_command("clear_untrusted_mac", NULL);
+                } else if (strcmp(action, "add") == 0) {
+                    if (!mac_values) {
+                        fprintf(stderr, "Error: Missing MAC address(es)\n");
+                        return 1;
+                    }
+                    handle_command("add_untrusted_mac", mac_values);
+                } else if (strcmp(action, "del") == 0) {
+                    if (!mac_values) {
+                        fprintf(stderr, "Error: Missing MAC address(es)\n");
+                        return 1;
+                    }
+                    handle_command("del_untrusted_mac", mac_values);
+                } else {
+                    fprintf(stderr, "Error: Unknown blacklist action '%s'. Use show|add|del|clear\n", action);
+                    return 1;
+                }
                 return 0;
             }
 

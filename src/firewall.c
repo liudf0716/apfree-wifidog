@@ -620,7 +620,7 @@ fw_set_untrusted_maclist()
 #ifdef AW_FW3
 	iptables_fw_set_untrusted_maclist();
 #elif AW_FW4
-	//nft_fw_set_untrusted_maclist();
+	nft_fw_set_untrusted_maclist();
 #endif
 }
 
@@ -631,7 +631,7 @@ fw_clear_untrusted_maclist()
 #ifdef AW_FW3
 	iptables_fw_clear_untrusted_maclist();
 #elif AW_FW4
-	//nft_fw_clear_untrusted_maclist();
+	nft_fw_clear_untrusted_maclist();
 #endif
 }
 

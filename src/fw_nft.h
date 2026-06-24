@@ -71,6 +71,14 @@ void nft_fw_del_trusted_mac(const char *mac);
 void nft_fw_update_trusted_mac(const char *mac, int timeout);
 
 /**
+ * @brief untrusted mac (blacklist) operations
+ */
+void nft_fw_set_untrusted_maclist();
+void nft_fw_clear_untrusted_maclist();
+void nft_fw_add_untrusted_mac(const char *mac);
+void nft_fw_del_untrusted_mac(const char *mac);
+
+/**
  * @brief anti nat permit operations
  */
 void nft_fw_add_anti_nat_permit(const char *mac);

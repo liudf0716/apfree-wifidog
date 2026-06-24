@@ -220,6 +220,7 @@ const char *nft_wifidogx_init_script[] = {
     "add set inet wifidogx set_wifidogx_bypass_clients_v6 { type ipv6_addr; flags interval; }",
     "add set inet wifidogx set_wifidogx_trust_clients_out { type ether_addr; flags timeout; timeout 1d; counter; }",
     "add set inet wifidogx set_wifidogx_tmp_trust_clients { type ether_addr; flags timeout; timeout 1m; counter; }",
+    "add set inet wifidogx set_wifidogx_untrust_macs { type ether_addr; flags timeout; timeout 30m; counter; }",
     "add chain inet wifidogx prerouting { type nat hook prerouting priority -100; policy accept; }",
     "add chain inet wifidogx forward { type filter hook forward priority -100; policy accept; }",
     "add chain inet wifidogx mangle_prerouting { type filter hook prerouting priority -100; policy accept; }",
@@ -407,6 +408,7 @@ generate_nft_wifidogx_init_script()
     // Add per-interface jumps
     t_gateway_setting *curr_gw = gw_settings;
     while(curr_gw) {
+        fprintf(output_file, "add rule inet wifidogx prerouting ether saddr @set_wifidogx_untrust_macs drop\n");
         fprintf(output_file, "add rule inet wifidogx prerouting iifname \"%s\" jump wifidogx_antinat\n", curr_gw->gw_interface);
         fprintf(output_file, "add rule inet wifidogx prerouting iifname \"%s\" jump dstnat_wifidogx_outgoing\n", curr_gw->gw_interface);
         fprintf(output_file, "add rule inet wifidogx forward iifname \"%s\" jump forward_wifidogx_wan\n", curr_gw->gw_interface);
@@ -1855,8 +1857,60 @@ nft_fw_set_mac_temporary(const char *mac, int which)
 			which = 60*10;
 		nftables_do_command("add element inet wifidogx set_wifidogx_tmp_trust_clients { %s timeout %ds}", mac, which);
 	} else if(which < 0) { // untrusted
-		// TODO
+		nftables_do_command("add element inet wifidogx set_wifidogx_untrust_macs { %s }", mac);
 	}
+    UNLOCK_CONFIG();
+}
+
+static void
+__nft_fw_set_untrusted_maclist()
+{
+    const s_config *config = config_get_config();
+    for (t_trusted_mac *p = config->mac_blacklist; p != NULL; p = p->next) {
+        if (p->remaining_time > 0)
+            nftables_do_command("add element inet wifidogx set_wifidogx_untrust_macs { %s timeout %ds }", p->mac, p->remaining_time);
+        else
+            nftables_do_command("add element inet wifidogx set_wifidogx_untrust_macs { %s }", p->mac);
+    }
+}
+
+void
+nft_fw_set_untrusted_maclist()
+{
+    NFT_WIFIDOGX_BYPASS_MODE();
+
+    LOCK_CONFIG();
+    __nft_fw_set_untrusted_maclist();
+    UNLOCK_CONFIG();
+}
+
+void
+nft_fw_clear_untrusted_maclist()
+{
+    NFT_WIFIDOGX_BYPASS_MODE();
+
+    LOCK_CONFIG();
+    nftables_do_command("flush set inet wifidogx set_wifidogx_untrust_macs");
+    UNLOCK_CONFIG();
+}
+
+void
+nft_fw_add_untrusted_mac(const char *mac)
+{
+    NFT_WIFIDOGX_BYPASS_MODE();
+
+    LOCK_CONFIG();
+    nftables_do_command("add element inet wifidogx set_wifidogx_untrust_macs { %s }", mac);
+    UNLOCK_CONFIG();
+}
+
+void
+nft_fw_del_untrusted_mac(const char *mac)
+{
+    NFT_WIFIDOGX_BYPASS_MODE();
+
+    LOCK_CONFIG();
+    nftables_do_command("delete element inet wifidogx set_wifidogx_untrust_macs { %s }", mac);
     UNLOCK_CONFIG();
 }
 
