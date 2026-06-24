@@ -310,6 +310,40 @@ main(int argc, char **argv) {
         return 0;
     }
 
+    if (strcmp(command, "blacklist") == 0) {
+        if (!type || strcmp(type, "mac") != 0) {
+            fprintf(stderr, "Error: Usage: wdctlx blacklist mac <show|add|del|clear> [values]\n");
+            return 1;
+        }
+        const char *action = (argc > 3) ? argv[3] : NULL;
+        if (!action) {
+            fprintf(stderr, "Error: Missing blacklist action (show|add|del|clear)\n");
+            return 1;
+        }
+        const char *mac_values = (argc > 4) ? argv[4] : NULL;
+        if (strcmp(action, "show") == 0) {
+            handle_command("show_untrusted_mac", NULL);
+        } else if (strcmp(action, "clear") == 0) {
+            handle_command("clear_untrusted_mac", NULL);
+        } else if (strcmp(action, "add") == 0) {
+            if (!mac_values) {
+                fprintf(stderr, "Error: Missing MAC address(es)\n");
+                return 1;
+            }
+            handle_command("add_untrusted_mac", mac_values);
+        } else if (strcmp(action, "del") == 0) {
+            if (!mac_values) {
+                fprintf(stderr, "Error: Missing MAC address(es)\n");
+                return 1;
+            }
+            handle_command("del_untrusted_mac", mac_values);
+        } else {
+            fprintf(stderr, "Error: Unknown blacklist action '%s'. Use show|add|del|clear\n", action);
+            return 1;
+        }
+        return 0;
+    }
+
     for (const CommandMapping *cmd = COMMAND_MAP; cmd->command; cmd++) {
         if (strcmp(command, cmd->command) == 0) {
             if (strcmp(command, "reset") == 0) {
@@ -327,40 +361,6 @@ main(int argc, char **argv) {
                     return 1;
                 }
                 handle_command(cmd->server_cmd, type);
-                return 0;
-            }
-
-            if (strcmp(command, "blacklist") == 0) {
-                if (!type || strcmp(type, "mac") != 0) {
-                    fprintf(stderr, "Error: Usage: wdctlx blacklist mac <show|add|del|clear> [values]\n");
-                    return 1;
-                }
-                const char *action = (argc > 3) ? argv[3] : NULL;
-                if (!action) {
-                    fprintf(stderr, "Error: Missing blacklist action (show|add|del|clear)\n");
-                    return 1;
-                }
-                const char *mac_values = (argc > 4) ? argv[4] : NULL;
-                if (strcmp(action, "show") == 0) {
-                    handle_command("show_untrusted_mac", NULL);
-                } else if (strcmp(action, "clear") == 0) {
-                    handle_command("clear_untrusted_mac", NULL);
-                } else if (strcmp(action, "add") == 0) {
-                    if (!mac_values) {
-                        fprintf(stderr, "Error: Missing MAC address(es)\n");
-                        return 1;
-                    }
-                    handle_command("add_untrusted_mac", mac_values);
-                } else if (strcmp(action, "del") == 0) {
-                    if (!mac_values) {
-                        fprintf(stderr, "Error: Missing MAC address(es)\n");
-                        return 1;
-                    }
-                    handle_command("del_untrusted_mac", mac_values);
-                } else {
-                    fprintf(stderr, "Error: Unknown blacklist action '%s'. Use show|add|del|clear\n", action);
-                    return 1;
-                }
                 return 0;
             }
 
