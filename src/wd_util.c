@@ -1426,8 +1426,10 @@ get_br_port_ifname(const char *brname, int port_no, char *ifname, size_t len)
             continue;
 
         if (port_no == get_portno(brname, namelist[i]->d_name)) {
-            strncpy(ifname, namelist[i]->d_name, len - 1);
-            ifname[len - 1] = '\0';
+            size_t dlen = strlen(namelist[i]->d_name);
+            if (dlen >= len) dlen = len - 1;
+            memcpy(ifname, namelist[i]->d_name, dlen);
+            ifname[dlen] = '\0';
             for (i = 0; i < count; i++) free(namelist[i]);
             free(namelist);
             return 1;

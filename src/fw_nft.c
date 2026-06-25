@@ -223,6 +223,7 @@ const char *nft_wifidogx_init_script[] = {
     "add set inet wifidogx set_wifidogx_untrust_macs { type ether_addr; flags timeout; timeout 30m; counter; }",
     "add chain inet wifidogx prerouting { type nat hook prerouting priority -100; policy accept; }",
     "add chain inet wifidogx forward { type filter hook forward priority -100; policy accept; }",
+    "add chain inet wifidogx filter_prerouting { type filter hook prerouting priority -300; policy accept; }",
     "add chain inet wifidogx mangle_prerouting { type filter hook prerouting priority -100; policy accept; }",
     "add chain inet wifidogx mangle_postrouting { type filter hook postrouting priority mangle; policy accept; }",
     "add chain inet wifidogx wifidogx_antinat",
@@ -405,10 +406,12 @@ generate_nft_wifidogx_init_script()
         }
     }
 
+    // Blacklist rule: filter hook at priority -300 (executes before all NAT/fw4)
+    fprintf(output_file, "add rule inet wifidogx filter_prerouting ether saddr @set_wifidogx_untrust_macs drop\n");
+
     // Add per-interface jumps
     t_gateway_setting *curr_gw = gw_settings;
     while(curr_gw) {
-        fprintf(output_file, "add rule inet wifidogx prerouting ether saddr @set_wifidogx_untrust_macs drop\n");
         fprintf(output_file, "add rule inet wifidogx prerouting iifname \"%s\" jump wifidogx_antinat\n", curr_gw->gw_interface);
         fprintf(output_file, "add rule inet wifidogx prerouting iifname \"%s\" jump dstnat_wifidogx_outgoing\n", curr_gw->gw_interface);
         fprintf(output_file, "add rule inet wifidogx forward iifname \"%s\" jump forward_wifidogx_wan\n", curr_gw->gw_interface);
