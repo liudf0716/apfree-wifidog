@@ -101,6 +101,9 @@ static const api_route_entry_t api_routes[] = {
     // Trusted MACs (added)
     {"sync_trusted_mac",                handle_sync_trusted_mac_request},
     {"get_trusted_mac",                 handle_get_trusted_mac_request},
+    // Untrusted MACs (blacklist)
+    {"sync_untrusted_mac",              handle_sync_untrusted_mac_request},
+    {"get_untrusted_mac",               handle_get_untrusted_mac_request},
 
 	// End marker
 	{NULL, NULL}

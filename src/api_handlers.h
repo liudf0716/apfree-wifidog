@@ -106,6 +106,8 @@ void handle_get_trusted_wildcard_domains_request(json_object *j_req, api_transpo
 // Trusted MAC management handlers (new)
 void handle_sync_trusted_mac_request(json_object *j_req, api_transport_context_t *transport);
 void handle_get_trusted_mac_request(json_object *j_req, api_transport_context_t *transport);
+void handle_get_untrusted_mac_request(json_object *j_req, api_transport_context_t *transport);
+void handle_sync_untrusted_mac_request(json_object *j_req, api_transport_context_t *transport);
 
 // System information handlers
 void handle_get_sys_info_request(json_object *j_req, api_transport_context_t *transport);

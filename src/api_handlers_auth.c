@@ -1483,3 +1483,61 @@ void handle_sync_trusted_mac_request(json_object *j_req, api_transport_context_t
     send_json_response(transport, j_response);
     json_object_put(j_response);
 }
+
+void handle_get_untrusted_mac_request(json_object *j_req, api_transport_context_t *transport) {
+    json_object *j_response = api_response_new("get_untrusted_mac_response");
+    json_object *j_data = api_response_get_data(j_response);
+    json_object *j_macs = json_object_new_array();
+
+    char *macs = mqtt_get_serialize_maclist(UNTRUSTED_MAC);
+    if (macs && strlen(macs) > 0) {
+        char *saveptr = NULL;
+        char *token = strtok_r(macs, ",", &saveptr);
+        while (token) {
+            trim_newline(token);
+            json_object_array_add(j_macs, json_object_new_string(token));
+            token = strtok_r(NULL, ",", &saveptr);
+        }
+    }
+    if (macs) free(macs);
+
+    if (j_data) {
+        json_object_object_add(j_data, "macs", j_macs);
+    }
+    api_response_set_success(j_response, "OK");
+    send_json_response(transport, j_response);
+    json_object_put(j_response);
+}
+
+void handle_sync_untrusted_mac_request(json_object *j_req, api_transport_context_t *transport) {
+    json_object *j_response = api_response_new("sync_untrusted_mac_response");
+
+    clear_untrusted_mac_list();
+    uci_del_list_option("wifidogx", "common", "untrust_macs");
+
+    json_object *j_macs = NULL;
+    if (json_object_object_get_ex(j_req, "macs", &j_macs) && json_object_is_type(j_macs, json_type_array)) {
+        int len = json_object_array_length(j_macs);
+        size_t buf_len = len * 18 + 16;
+        char *buf = calloc(1, buf_len);
+        if (buf) {
+            char *p = buf;
+            for (int i = 0; i < len; i++) {
+                json_object *j_mac = json_object_array_get_idx(j_macs, i);
+                if (!json_object_is_type(j_mac, json_type_string)) continue;
+                const char *mac = json_object_get_string(j_mac);
+                if (!mac) continue;
+                uci_add_list_value("wifidogx", "common", "untrust_macs", mac);
+                if (p != buf) { *p++ = ','; }
+                strncpy(p, mac, buf_len - (p - buf) - 1);
+                p += strlen(p);
+            }
+            if (strlen(buf) > 0) parse_untrusted_mac_list(buf);
+            free(buf);
+        }
+    }
+
+    api_response_set_success(j_response, "Untrusted MACs synchronized successfully");
+    send_json_response(transport, j_response);
+    json_object_put(j_response);
+}
