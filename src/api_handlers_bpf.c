@@ -3,6 +3,7 @@
 #include "common.h"
 #include "api_handlers.h"
 #include "api_handlers_internal.h"
+#include "debug.h"
 
 #include <arpa/inet.h>
 #include <ctype.h>
@@ -782,6 +783,21 @@ void handle_bpf_add_request(json_object *j_req, api_transport_context_t *transpo
 
     struct traffic_stats existing_stats = {0};
     if (aw_bpf_lookup_stats_agg_percpu(map_fd, &key_storage, &existing_stats) == 0) {
+        // 条目已存在，如果请求中指定了限速值则更新
+        json_object *j_downrate_exist = json_object_object_get(j_req, "downrate");
+        json_object *j_uprate_exist = json_object_object_get(j_req, "uprate");
+        
+        if (j_downrate_exist && j_uprate_exist) {
+            uint32_t new_downrate = (uint32_t)json_object_get_int64(j_downrate_exist);
+            uint32_t new_uprate = (uint32_t)json_object_get_int64(j_uprate_exist);
+            
+            if (aw_bpf_update_rate_limits_percpu(map_fd, &key_storage, new_downrate, new_uprate, false) < 0) {
+                debug(LOG_WARNING, "Failed to update rate limits for existing entry");
+            } else {
+                debug(LOG_DEBUG, "Updated existing entry rate limits: downrate=%u, uprate=%u", new_downrate, new_uprate);
+            }
+        }
+        
         json_object *j_data = api_response_get_data(j_response);
         api_response_set_success(j_response, "Entry already exists");
         if (j_data) {
@@ -794,9 +810,23 @@ void handle_bpf_add_request(json_object *j_req, api_transport_context_t *transpo
         return;
     }
 
+    // 优先使用请求中的限速值，否则使用全局默认配置
     uint32_t downrate = 0;
     uint32_t uprate = 0;
-    aw_bpf_get_global_qos_config(&downrate, &uprate);
+    
+    json_object *j_downrate = json_object_object_get(j_req, "downrate");
+    json_object *j_uprate = json_object_object_get(j_req, "uprate");
+    
+    if (j_downrate && j_uprate) {
+        // 使用请求中指定的限速值
+        downrate = (uint32_t)json_object_get_int64(j_downrate);
+        uprate = (uint32_t)json_object_get_int64(j_uprate);
+        debug(LOG_DEBUG, "Using request rate limits: downrate=%u, uprate=%u", downrate, uprate);
+    } else {
+        // 使用全局默认配置
+        aw_bpf_get_global_qos_config(&downrate, &uprate);
+        debug(LOG_DEBUG, "Using global default rate limits: downrate=%u, uprate=%u", downrate, uprate);
+    }
 
     if (aw_bpf_update_rate_limits_percpu(map_fd, &key_storage, downrate, uprate, true) < 0) {
         close(map_fd);
