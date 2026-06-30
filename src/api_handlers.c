@@ -270,18 +270,19 @@ int send_response(api_transport_context_t *transport, const char *message) {
         debug(LOG_ERR, "Invalid transport context or message");
         return -1;
     }
-    
-    debug(LOG_DEBUG, "Sending response via %s: %.100s%s", 
-          transport->protocol_name ? transport->protocol_name : "unknown",
-          message, strlen(message) > 100 ? "..." : "");
+
+    size_t msg_len = strlen(message);
+    debug(LOG_DEBUG, "[BPF_DEBUG] send_response entered, msg_len=%zu", msg_len);
 
     json_object *j_message = json_tokener_parse(message);
+    debug(LOG_DEBUG, "[BPF_DEBUG] json_tokener_parse done, j_message=%p", (void*)j_message);
     if (j_message && json_object_is_type(j_message, json_type_object)) {
         json_object *existing_response = NULL;
         if (json_object_object_get_ex(j_message, "response", &existing_response)) {
             /* Already in MQTT envelope format (e.g. error response), only ensure req_id exists. */
             maybe_attach_req_id(transport, j_message);
             const char *annotated = json_object_to_json_string(j_message);
+            debug(LOG_DEBUG, "[BPF_DEBUG] annotated send, len=%zu", strlen(annotated));
             int rc = transport->send_response(transport, annotated, strlen(annotated));
             json_object_put(j_message);
             return rc;
@@ -290,6 +291,7 @@ int send_response(api_transport_context_t *transport, const char *message) {
         /* Wrap handler output into unified MQTT-style success envelope. */
         json_object *j_envelope = json_object_new_object();
         if (!j_envelope) {
+            debug(LOG_ERR, "[BPF_DEBUG] j_envelope alloc FAILED");
             json_object_put(j_message);
             return transport->send_response(transport, message, strlen(message));
         }
@@ -301,8 +303,10 @@ int send_response(api_transport_context_t *transport, const char *message) {
         json_object_object_add(j_envelope, "data", j_message);
 
         const char *wrapped = json_object_to_json_string(j_envelope);
+        debug(LOG_DEBUG, "[BPF_DEBUG] wrapped send, len=%zu", strlen(wrapped));
         int rc = transport->send_response(transport, wrapped, strlen(wrapped));
         json_object_put(j_envelope);
+        debug(LOG_DEBUG, "[BPF_DEBUG] send_response done, rc=%d", rc);
         return rc;
     }
 

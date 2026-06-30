@@ -1139,11 +1139,13 @@ static void wdctl_bpf_list(struct bufferevent *fd, const char *args) {
     char table[16];
     if (sscanf(args, "%15s", table) != 1) return;
     
+    debug(LOG_DEBUG, "[BPF_DEBUG] wdctl_bpf_list entered, table='%s'", table);
     json_object *j_req = json_object_new_object();
     json_object_object_add(j_req, "table", json_object_new_string(table));
     
     api_transport_context_t transport = { .transport_ctx = fd, .send_response = wdctl_send_response_func };
     handle_bpf_json_request(j_req, &transport);
+    debug(LOG_DEBUG, "[BPF_DEBUG] wdctl_bpf_list: handle_bpf_json_request returned");
     json_object_put(j_req);
 }
 
