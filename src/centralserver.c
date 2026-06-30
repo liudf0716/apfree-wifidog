@@ -153,7 +153,13 @@ make_roam_request(struct wd_request_context *context, struct roam_req_info *roam
     context->data = roam;
 
     if (!wd_make_request(context, &evcon, &req, process_auth_server_roam)) {
-        evhttp_make_request(evcon, req, EVHTTP_REQ_GET, uri);
+        if (evhttp_make_request(evcon, req, EVHTTP_REQ_GET, uri) != 0) {
+            debug(LOG_ERR, "Failed to queue roaming request to auth server");
+            evhttp_request_free(req);
+            evhttp_connection_free(evcon);
+            free(roam);
+            context->data = NULL;
+        }
     } else {
         debug(LOG_ERR, "Failed to create HTTP request");
         free(roam);
@@ -300,7 +306,13 @@ make_auth_request(struct wd_request_context *context, auth_req_info *auth)
 
     // Create and send HTTP request
     if (!wd_make_request(context, &evcon, &req, process_auth_server_login_v2)) {
-        evhttp_make_request(evcon, req, EVHTTP_REQ_GET, uri);
+        if (evhttp_make_request(evcon, req, EVHTTP_REQ_GET, uri) != 0) {
+            debug(LOG_ERR, "Failed to queue v2 login request to auth server");
+            evhttp_request_free(req);
+            evhttp_connection_free(evcon);
+            free(auth);
+            context->data = NULL;
+        }
     } else {
         debug(LOG_ERR, "Failed to create HTTP request");
         free(auth);

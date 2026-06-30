@@ -224,7 +224,11 @@ ping_work_cb(evutil_socket_t fd, short event, void *arg) {
 		return;
 	}
 	
-	evhttp_make_request(evcon, req, EVHTTP_REQ_GET, uri);
+	if (evhttp_make_request(evcon, req, EVHTTP_REQ_GET, uri) != 0) {
+		debug(LOG_ERR, "Failed to queue ping request to auth server");
+		evhttp_request_free(req);
+		evhttp_connection_free(evcon);
+	}
 	free(uri);	
 }
 
@@ -556,5 +560,3 @@ process_ping_response(struct evhttp_request *req, void *ctx)
         }
     }
 }
-
-

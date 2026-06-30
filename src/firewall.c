@@ -865,18 +865,22 @@ sync_gw_clients_counter(struct wd_request_context *context, t_gateway_setting *g
 	char *uri = get_auth_counter_v2_uri();
 	struct evhttp_connection *evcon = NULL;
 	struct evhttp_request *req = NULL;
-	if (!wd_make_request(context, &evcon, &req, process_auth_server_counter_v2)) {
-		const char *param = get_gw_clients_counter(gw_setting, worklist);
-		assert(param != NULL);
-		char len[20] = {0};
-		snprintf(len, 20, "%lu", strlen(param));
-		evhttp_remove_header(evhttp_request_get_output_headers(req), "Content-Type");
-		evhttp_add_header(evhttp_request_get_output_headers(req), "Content-Type", "application/json");
-		evhttp_add_header(evhttp_request_get_output_headers(req), "Content-Length", len);
-		evbuffer_add_printf(evhttp_request_get_output_buffer(req), "%s", param);
-		evhttp_make_request(evcon, req, EVHTTP_REQ_POST, uri);
-		free((void *)param);
-	}
+		if (!wd_make_request(context, &evcon, &req, process_auth_server_counter_v2)) {
+			const char *param = get_gw_clients_counter(gw_setting, worklist);
+			assert(param != NULL);
+			char len[20] = {0};
+			snprintf(len, 20, "%lu", strlen(param));
+			evhttp_remove_header(evhttp_request_get_output_headers(req), "Content-Type");
+			evhttp_add_header(evhttp_request_get_output_headers(req), "Content-Type", "application/json");
+			evhttp_add_header(evhttp_request_get_output_headers(req), "Content-Length", len);
+			evbuffer_add_printf(evhttp_request_get_output_buffer(req), "%s", param);
+			if (evhttp_make_request(evcon, req, EVHTTP_REQ_POST, uri) != 0) {
+				debug(LOG_ERR, "Failed to queue counter v2 request to auth server");
+				evhttp_request_free(req);
+				evhttp_connection_free(evcon);
+			}
+			free((void *)param);
+		}
 	free(uri);
 }
 
@@ -982,7 +986,14 @@ ev_fw_sync_with_authserver(struct wd_request_context *context)
 			req_ctx->per_request = 1;
 
 			if (!wd_make_request(req_ctx, &evcon, &req, process_auth_server_counter)) {
-				evhttp_make_request(evcon, req, EVHTTP_REQ_GET, uri);
+				if (evhttp_make_request(evcon, req, EVHTTP_REQ_GET, uri) != 0) {
+					debug(LOG_ERR, "Failed to queue counter request to auth server");
+					evhttp_request_free(req);
+					evhttp_connection_free(evcon);
+					client_free_node(client_for_context);
+					req_ctx->data = NULL;
+					wd_request_context_destroy(req_ctx);
+				}
 			} else {
 				// wd_make_request failed: free client and destroy per-request context
 				debug(LOG_ERR, "wd_make_request failed for client %s. Cleaning up per-request context.", client_for_context->mac);

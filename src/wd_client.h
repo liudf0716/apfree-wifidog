@@ -13,16 +13,14 @@
 /**
  * @brief Context structure for wifidog HTTP requests
  * 
- * @param ssl SSL connection context
+ * @param ssl Borrowed SSL template used to derive per-request SSL objects
  * @param base Event base for libevent
- * @param bev Buffered event
  * @param clt_req Client HTTP request
  * @param data Additional user data
  */
 struct wd_request_context {
     SSL *ssl;
     struct event_base *base;
-    struct bufferevent *bev;
     struct evhttp_request *clt_req;
     void *data; /**< Additional user data. Its lifecycle is managed by the user of this context,
                      *   not by wd_request_context_destroy(). The callback or the setup code
@@ -59,6 +57,7 @@ char *wd_get_redir_url_to_auth(struct evhttp_request *request, t_gateway_setting
  * @param context Request context to destroy
  * @note This function does NOT free the memory pointed to by context->data.
  *       The lifecycle of context->data must be managed externally.
+ * @note The SSL object stored in context is borrowed and owned by the caller.
  */
 void wd_request_context_destroy(struct wd_request_context *context);
 
@@ -72,11 +71,11 @@ void wd_set_request_header(struct evhttp_request *request, const char *mac);
 /**
  * @brief Create new request context
  * @param base Event base for libevent
- * @param ssl SSL context
- * @param port Port number
+ * @param ssl Borrowed SSL template, required when auth server uses SSL
+ * @param authserv_use_ssl Whether the auth server uses SSL/TLS
  * @return New request context or NULL on failure
  */
-struct wd_request_context *wd_request_context_new(struct event_base *base, SSL *ssl, int port);
+struct wd_request_context *wd_request_context_new(struct event_base *base, SSL *ssl, int authserv_use_ssl);
 
 /**
  * @brief Initialize and make HTTP request to auth server
@@ -84,7 +83,10 @@ struct wd_request_context *wd_request_context_new(struct event_base *base, SSL *
  * @param evcon Connection object pointer
  * @param req Request object pointer
  * @param cb Callback function for request completion
- * @return 0 on success, -1 on failure
+ * @return 0 on success, 1 on failure
+ * @note The returned connection is scheduled for automatic release on
+ *       request completion. If queueing the request fails, the caller must
+ *       free both @p req and @p evcon.
  */
 int wd_make_request(struct wd_request_context *context, struct evhttp_connection **evcon,
                    struct evhttp_request **req, void (*cb)(struct evhttp_request *, void *));

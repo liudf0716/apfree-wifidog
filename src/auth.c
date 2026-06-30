@@ -120,10 +120,10 @@ ev_logout_client(struct wd_request_context *context, t_client *client)
     req_ctx->data = client_snapshot;
     req_ctx->per_request = 1;
 
-    if (!wd_make_request(req_ctx, &evcon, &req, process_auth_server_logout)) {
-        evhttp_make_request(evcon, req, EVHTTP_REQ_GET, uri);
-    } else {
+    if (wd_make_request(req_ctx, &evcon, &req, process_auth_server_logout) && evhttp_make_request(evcon, req, EVHTTP_REQ_GET, uri)) {
         debug(LOG_ERR, "Failed to create auth server request");
+        if (req) evhttp_request_free(req);
+        if (evcon) evhttp_connection_free(evcon);
         client_free_node(client_snapshot);
         req_ctx->data = NULL;
         wd_request_context_destroy(req_ctx);
@@ -183,11 +183,11 @@ ev_authenticate_client(struct evhttp_request *req,
     struct evhttp_connection *wd_evcon = NULL;
     struct evhttp_request *wd_req = NULL;
     
-    if (!wd_make_request(context, &wd_evcon, &wd_req, process_auth_server_login)) {
-        evhttp_make_request(wd_evcon, wd_req, EVHTTP_REQ_GET, uri);
-    } else {
+    if (wd_make_request(context, &wd_evcon, &wd_req, process_auth_server_login) && evhttp_make_request(wd_evcon, wd_req, EVHTTP_REQ_GET, uri)) {
         debug(LOG_ERR, "Failed to create auth server request");
         evhttp_send_error(req, HTTP_INTERNAL, "Internal Server Error");
+        if (wd_req) evhttp_request_free(wd_req);
+        if (wd_evcon) evhttp_connection_free(wd_evcon);
         safe_client_list_delete(client);
         context->data = NULL;
         context->clt_req = NULL;
@@ -195,4 +195,3 @@ ev_authenticate_client(struct evhttp_request *req,
     
     free(uri);
 }
-

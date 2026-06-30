@@ -185,12 +185,6 @@ void
 wd_request_context_destroy(struct wd_request_context *context)
 {
     if (context) {
-        if (context->bev) {
-            bufferevent_free(context->bev); // This should free context->ssl too
-            context->bev = NULL;
-        }
-        // context->ssl is managed by bev, no need to free here explicitly
-        // context->base is managed elsewhere
         free(context);
     }
 }
@@ -204,45 +198,30 @@ wd_request_context_destroy(struct wd_request_context *context)
  * @return struct wd_request_context* New context that must be freed by caller, or NULL on failure
  *
  * This function initializes a request context by:
- * 1. Creating an appropriate bufferevent based on SSL/non-SSL connection
- * 2. Setting buffer event options for reliable operation
+ * 1. Recording the shared event base
+ * 2. Recording the borrowed SSL template used to derive per-request SSL objects
  * 3. Allocating and initializing the context structure
  *
- * The caller is responsible for freeing the returned context using wd_request_context_free()
+ * The caller is responsible for freeing the returned context using
+ * wd_request_context_destroy()
  */
 struct wd_request_context *
 wd_request_context_new(struct event_base *base, SSL *ssl, int authserv_use_ssl)
 {
-	struct bufferevent *bev = NULL;
 	struct wd_request_context *context = NULL;
 
 	if (!base) return NULL;
 
-	// Create appropriate bufferevent based on SSL usage
-	if (!authserv_use_ssl) {
-		bev = bufferevent_socket_new(base, -1, BEV_OPT_CLOSE_ON_FREE);
-	} else {
-		if (!ssl) return NULL;
-		bev = bufferevent_openssl_socket_new(base, -1, ssl,
-			BUFFEREVENT_SSL_CONNECTING,
-			BEV_OPT_CLOSE_ON_FREE | BEV_OPT_DEFER_CALLBACKS);
-	}
-
-	if (!bev) return NULL;
-
-	// Allow dirty shutdown for SSL connections
-	bufferevent_openssl_set_allow_dirty_shutdown(bev, 1);
+	if (authserv_use_ssl && !ssl) return NULL;
 
 	// Initialize context structure
 	context = safe_malloc(sizeof(struct wd_request_context));
-	if (!context) {
-		bufferevent_free(bev);
-		return NULL;
-	}
+	if (!context) return NULL;
 
 	context->base = base;
 	context->ssl = ssl;
-	context->bev = bev;
+	context->clt_req = NULL;
+	context->data = NULL;
 
 	// By default contexts created here are shared; callers can mark
 	// per-request contexts by setting ->per_request = 1.
@@ -339,10 +318,10 @@ wd_request_loop(void (*callback)(evutil_socket_t, short, void *))
 	}
 
 cleanup:
+	if (request_ctx) wd_request_context_destroy(request_ctx);
 	if (base) event_base_free(base);
 	if (ssl) SSL_free(ssl);
 	if (ssl_ctx) SSL_CTX_free(ssl_ctx);
-	if (request_ctx) wd_request_context_destroy(request_ctx);
 	
 	termination_handler(0);
 }
@@ -391,14 +370,15 @@ wd_set_request_header(struct evhttp_request *req, const char *host)
  * @return int 0 on success, 1 on failure
  *
  * This function:
- * 1. Creates an HTTP connection using the bufferevent from request context
- * 2. Sets connection timeout
- * 3. Creates new HTTP request with callback
- * 4. Sets standard HTTP headers
+ * 1. Creates a request-scoped bufferevent
+ * 2. Creates an HTTP connection that will be released automatically on completion
+ * 3. Sets connection timeout
+ * 4. Creates new HTTP request with callback
+ * 5. Sets standard HTTP headers
  *
  * The caller is responsible for:
- * - Freeing the connection with evhttp_connection_free()
- * - Handling request lifecycle in the callback
+ * - Queueing the request with evhttp_make_request()
+ * - Freeing the request and connection manually if queueing fails
  */
 int
 wd_make_request(struct wd_request_context *request_ctx, 
@@ -412,31 +392,71 @@ wd_make_request(struct wd_request_context *request_ctx,
 	}
 
 	t_auth_serv *auth_server = get_auth_server();
-	struct bufferevent *bev = request_ctx->bev;
 	struct event_base *base = request_ctx->base;
 	int port = auth_server->authserv_use_ssl ? 
 			   auth_server->authserv_ssl_port : 
 			   auth_server->authserv_http_port;
+	struct bufferevent *bev = NULL;
+	SSL *req_ssl = NULL;
 	
 	debug(LOG_DEBUG, "Creating %s connection to auth server", 
 		  auth_server->authserv_use_ssl ? "HTTPS" : "HTTP");
+
+	if (auth_server->authserv_use_ssl) {
+		SSL_CTX *ssl_ctx = SSL_get_SSL_CTX(request_ctx->ssl);
+		if (!ssl_ctx) {
+			debug(LOG_ERR, "Failed to get SSL_CTX from request context");
+			return 1;
+		}
+
+		req_ssl = SSL_new(ssl_ctx);
+		if (!req_ssl) {
+			debug(LOG_ERR, "Failed to create SSL object for auth server request");
+			return 1;
+		}
+
+		if (!SSL_set_tlsext_host_name(req_ssl, auth_server->authserv_hostname)) {
+			debug(LOG_ERR, "Failed to set SSL hostname for auth server request");
+			SSL_free(req_ssl);
+			return 1;
+		}
+
+		bev = bufferevent_openssl_socket_new(base, -1, req_ssl,
+			BUFFEREVENT_SSL_CONNECTING,
+			BEV_OPT_CLOSE_ON_FREE | BEV_OPT_DEFER_CALLBACKS);
+		if (!bev) {
+			debug(LOG_ERR, "bufferevent_openssl_socket_new() failed");
+			SSL_free(req_ssl);
+			return 1;
+		}
+
+		bufferevent_openssl_set_allow_dirty_shutdown(bev, 1);
+	} else {
+		bev = bufferevent_socket_new(base, -1, BEV_OPT_CLOSE_ON_FREE);
+		if (!bev) {
+			debug(LOG_ERR, "Failed to create plain HTTP bufferevent");
+			return 1;
+		}
+	}
 
 	// Create HTTP connection with bufferevent
 	*evcon = evhttp_connection_base_bufferevent_new(base, NULL, bev,
 				auth_server->authserv_hostname, port);
 	if (!*evcon) {
 		debug(LOG_ERR, "Failed to create HTTP connection");
+		bufferevent_free(bev);
 		return 1;
 	}
-
-	// Set connection timeout
 	evhttp_connection_set_timeout(*evcon, WD_CONNECT_TIMEOUT);
+	evhttp_connection_free_on_completion(*evcon);
 
 	// Create HTTP request with callback
 	*req = evhttp_request_new(cb, request_ctx);
 	if (!*req) {
 		debug(LOG_ERR, "Failed to create HTTP request");
+		bufferevent_free(bev);
 		evhttp_connection_free(*evcon);
+		*evcon = NULL;
 		return 1;
 	}
 

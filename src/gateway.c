@@ -291,19 +291,6 @@ terminate_threads(pthread_t self) {
                       cleanup_threads[i].name, strerror(result));
             }
             
-            // Wait for thread to finish cleanup (up to 500ms)
-            struct timespec timeout;
-            clock_gettime(CLOCK_REALTIME, &timeout);
-            timeout.tv_nsec += 500000000; // 500ms
-            if (timeout.tv_nsec >= 1000000000) {
-                timeout.tv_sec++;
-                timeout.tv_nsec -= 1000000000;
-            }
-            
-            // Note: We don't use pthread_timedjoin_np as it's not portable.
-            // The thread should exit via cancellation handlers or cleanup_push.
-            // If thread doesn't respond to cancel, we log a warning but don't
-            // use SIGKILL as it may kill the entire process.
             result = pthread_join(*cleanup_threads[i].tid, NULL);
             if (result != 0 && result != ESRCH) {
                 debug(LOG_WARNING, "Thread %s did not terminate cleanly: %s",
@@ -332,19 +319,18 @@ termination_handler(int s) {
         return; // This won't be reached but good for clarity
     }
 
-    /* Cleanup firewall rules */
-    debug(LOG_INFO, "Flushing firewall rules...");
-    
-    /* Save client snapshot before exit */
-    client_snapshot_save();
-
-    fw_destroy();
-
     /* Stop DNS monitor */
     dns_monitor_stop();
 
     /* Clean up threads */
     terminate_threads(self);
+
+    /* Cleanup firewall rules */
+    debug(LOG_INFO, "Flushing firewall rules...");
+    fw_destroy();
+
+    /* Save client snapshot before exit */
+    client_snapshot_save();
 
     debug(LOG_NOTICE, "Exiting...");
     
@@ -667,17 +653,8 @@ wd_init(s_config *config)
     }
 }
 
-/**
- * @brief Creates a detached thread with proper error handling
- * 
- * @param tid Pointer to thread ID storage
- * @param routine Thread function to execute
- * @param arg Argument to pass to thread function
- * @param name Thread name for debugging
- * @return 1 on success, 0 on failure
- */
-static int 
-create_detached_thread(pthread_t *tid, void *(*routine)(void*), void *arg, const char *name) 
+static int
+create_thread(pthread_t *tid, void *(*routine)(void*), void *arg, const char *name) 
 {
     if (!tid || !routine || !name) {
         debug(LOG_ERR, "Invalid parameters for thread creation");
@@ -691,13 +668,7 @@ create_detached_thread(pthread_t *tid, void *(*routine)(void*), void *arg, const
         return 0;
     }
     
-    result = pthread_detach(*tid);
-    if (result != 0) {
-        debug(LOG_WARNING, "Failed to detach thread '%s': %s", name, strerror(result));
-        // Continue anyway as the thread was created successfully
-    }
-    
-    debug(LOG_DEBUG, "Successfully created and detached thread '%s'", name);
+    debug(LOG_DEBUG, "Successfully created thread '%s'", name);
     return 1;
 }
 
@@ -717,7 +688,7 @@ threads_init(s_config *config)
     // Core service threads - these are always required
     // Skip HTTPS server thread if portal auth is disabled
     if (!is_portal_auth_disabled()) {
-        if (!create_detached_thread(&tid_tls_server, (void *)thread_tls_server, NULL, "https_server")) {
+        if (!create_thread(&tid_tls_server, (void *)thread_tls_server, NULL, "https_server")) {
             debug(LOG_ERR, "Failed to create HTTPS server thread");
             return;
         }
@@ -734,7 +705,7 @@ threads_init(s_config *config)
         }
     }
     
-    if (!create_detached_thread(&tid_wdctl, (void *)thread_wdctl, 
+    if (!create_thread(&tid_wdctl, (void *)thread_wdctl, 
                                (void *)wdctl_sock_copy, "wdctl")) {
         debug(LOG_ERR, "Failed to create wdctl thread");
         if (wdctl_sock_copy) free(wdctl_sock_copy);
@@ -742,24 +713,24 @@ threads_init(s_config *config)
     }
 
     if (is_openwrt_platform()) {
-        if (!create_detached_thread(&tid_hotplug, (void *)thread_hotplug_listener, NULL, "hotplug_listener")) {
+        if (!create_thread(&tid_hotplug, (void *)thread_hotplug_listener, NULL, "hotplug_listener")) {
             debug(LOG_WARNING, "Failed to create hotplug listener thread (optional)");
         }
     }
 
-    if (!create_detached_thread(&tid_dns_monitor, (void *)thread_dns_monitor, NULL, "dns_monitor")) {
+    if (!create_thread(&tid_dns_monitor, (void *)thread_dns_monitor, NULL, "dns_monitor")) {
         debug(LOG_ERR, "Failed to create DNS monitor thread");
         return;
     }
 
-    if (!create_detached_thread(&tid_ping, (void *)thread_ping, NULL, "ping")) {
+    if (!create_thread(&tid_ping, (void *)thread_ping, NULL, "ping")) {
         debug(LOG_ERR, "Failed to create ping thread");
         return;
     }
 
     // Auth server dependent threads - only needed in cloud/bypass mode
     if (!is_local_auth_mode()) {
-        if (!create_detached_thread(&tid_fw_counter, thread_client_timeout_check, NULL, "fw_counter")) {
+        if (!create_thread(&tid_fw_counter, thread_client_timeout_check, NULL, "fw_counter")) {
             debug(LOG_ERR, "Failed to create firewall counter thread");
             return;
         }
@@ -769,20 +740,20 @@ threads_init(s_config *config)
 
     // Optional websocket thread - runs in any auth mode for remote management (e.g. OpenClaw)
     if (get_ws_server()) {
-        if (!create_detached_thread(&tid_ws, (void *)thread_websocket, NULL, "websocket")) {
+        if (!create_thread(&tid_ws, (void *)thread_websocket, NULL, "websocket")) {
             debug(LOG_WARNING, "Failed to create WebSocket thread (optional)");
         }
     }
 
     // Optional MQTT thread - runs in any auth mode for remote management (e.g. OpenClaw)
     if (get_mqtt_server()) {
-        if (!create_detached_thread(&tid_mqtt_server, (void *)thread_mqtt, config, "mqtt")) {
+        if (!create_thread(&tid_mqtt_server, (void *)thread_mqtt, config, "mqtt")) {
             debug(LOG_WARNING, "Failed to create MQTT thread (optional)");
         }
     }
 
     // Resilience thread - always run as system watchdog
-    if (!create_detached_thread(&tid_resilience, (void *)thread_resilience, NULL, "resilience")) {
+    if (!create_thread(&tid_resilience, (void *)thread_resilience, NULL, "resilience")) {
         debug(LOG_ERR, "Failed to create resilience thread");
         return;
     }
