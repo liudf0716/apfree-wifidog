@@ -1452,7 +1452,7 @@ void handle_sync_trusted_mac_request(json_object *j_req, api_transport_context_t
                 if (!mac) continue;
                 uci_add_list_value("wifidogx", "common", "trustd_macs", mac);
                 if (p != buf) { *p++ = ','; }
-                strncpy(p, mac, buf_len - (p - buf) - 1);
+                snprintf(p, buf_len - (p - buf), "%s", mac);
                 p += strlen(p);
             }
             if (strlen(buf) > 0) add_trusted_maclist(buf);
@@ -1471,7 +1471,7 @@ void handle_sync_trusted_mac_request(json_object *j_req, api_transport_context_t
                 if (!mac) continue;
                 uci_add_list_value("wifidogx", "common", "trustd_macs", mac);
                 if (p != buf) { *p++ = ','; }
-                strncpy(p, mac, buf_len - (p - buf) - 1);
+                snprintf(p, buf_len - (p - buf), "%s", mac);
                 p += strlen(p);
             }
             if (strlen(buf) > 0) add_trusted_maclist(buf);
@@ -1529,7 +1529,7 @@ void handle_sync_untrusted_mac_request(json_object *j_req, api_transport_context
                 if (!mac) continue;
                 uci_add_list_value("wifidogx", "common", "untrust_macs", mac);
                 if (p != buf) { *p++ = ','; }
-                strncpy(p, mac, buf_len - (p - buf) - 1);
+                snprintf(p, buf_len - (p - buf), "%s", mac);
                 p += strlen(p);
             }
             if (strlen(buf) > 0) parse_untrusted_mac_list(buf);
