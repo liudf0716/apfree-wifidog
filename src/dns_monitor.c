@@ -129,6 +129,7 @@ struct dns_hdr {
 // xDPI域名缓存数组和互斥锁
 static struct domain_entry domain_entries[XDPI_DOMAIN_MAX];
 static pthread_mutex_t domain_entries_mutex = PTHREAD_MUTEX_INITIALIZER;
+static int domains_synced = 0;
 
 // LFU淘汰阈值和统计周期
 #define LFU_MIN_ACCESS_THRESHOLD 5      // 最少访问次数才能保留
@@ -150,7 +151,6 @@ static void handle_xdpi_domain_processing(const char *query_name);
 static int is_valid_domain_suffix(const char *domain);
 static int xdpi_short_domain(const char *full_domain, char *short_domain, int *olen);
 static int xdpi_add_domain(const char *input_domain);
-static int get_xdpi_domain_count(void);
 static void sync_xdpi_domains_2_kern(void);
 static int is_safe_ip_str(const char *ip_str);
 static int process_dns_response_extended(const struct raw_dns_data *dns_data);
@@ -597,36 +597,6 @@ static int parse_dns_question(const unsigned char *payload, int payload_len, str
 // ========== xDPI集成功能 ==========
 
 /**
- * @brief 获取xDPI域名数量
- */
-static int get_xdpi_domain_count(void)
-{
-    static int   cached_count     = -1;
-    static time_t last_check_time = 0;
-
-    time_t now = time(NULL);
-    if (cached_count >= 0 && now - last_check_time < 30)
-        return cached_count;
-
-    FILE *fp = fopen("/proc/xdpi_domain_num", "r");
-    if (!fp) {
-        cached_count = 0;
-        last_check_time = now;
-        return 0;
-    }
-
-    char buf[16] = {0};
-    int count = 0;
-    if (fgets(buf, sizeof(buf), fp))
-        count = atoi(buf);
-    fclose(fp);
-
-    cached_count = count;
-    last_check_time = now;
-    return count;
-}
-
-/**
  * @brief 同步域名到内核
  */
 static void sync_xdpi_domains_2_kern(void)
@@ -637,6 +607,11 @@ static void sync_xdpi_domains_2_kern(void)
     
     pthread_mutex_lock(&domain_entries_mutex);
     
+    if (domains_synced) {
+        pthread_mutex_unlock(&domain_entries_mutex);
+        return;
+    }
+    
     fd = open("/dev/xdpi", O_RDWR);
     if (fd < 0) {
         debug(LOG_ERR, "Cannot open /dev/xdpi: %s", strerror(errno));
@@ -644,10 +619,6 @@ static void sync_xdpi_domains_2_kern(void)
         return;
     }
     
-    debug(LOG_DEBUG, "Syncing domain entries to kernel");
-    
-    int success_count = 0;
-    int fail_count = 0;
     for (int i = 0; i < XDPI_DOMAIN_MAX; i++) {
         if (domain_entries[i].used) {
             memcpy(&entry, &domain_entries[i], sizeof(entry));
@@ -655,17 +626,13 @@ static void sync_xdpi_domains_2_kern(void)
             if (result < 0) {
                 debug(LOG_WARNING, "Failed to sync domain %s to kernel: %s (errno=%d)", 
                       entry.domain, strerror(errno), errno);
-                fail_count++;
-            } else {
-                success_count++;
             }
         }
     }
     
     close(fd);
+    domains_synced = 1;
     pthread_mutex_unlock(&domain_entries_mutex);
-    debug(LOG_DEBUG, "Domain sync to kernel completed: %d succeeded, %d failed", 
-          success_count, fail_count);
 }
 
 /**
@@ -1048,11 +1015,6 @@ static void handle_xdpi_domain_processing(const char *query_name)
     }
     
     if (is_valid_domain_suffix(query_name)) {
-        int domain_count = get_xdpi_domain_count();
-        if (domain_count == 0) {
-            sync_xdpi_domains_2_kern();
-        }
-        
         xdpi_add_domain(query_name);
     }
 }
@@ -1349,6 +1311,9 @@ static int load_domain_stats_from_file(void)
     debug(LOG_INFO, "Loaded %d domain entries from %s", loaded_count, DOMAIN_STATS_FILE);
     
     // 加载后同步到内核
+    pthread_mutex_lock(&domain_entries_mutex);
+    domains_synced = 0;
+    pthread_mutex_unlock(&domain_entries_mutex);
     sync_xdpi_domains_2_kern();
     
     return loaded_count;
