@@ -588,31 +588,6 @@ static struct json_object *aw_bpf_parse_stats_ipv6_json(struct in6_addr ip, stru
     return jobj;
 }
 
-static struct json_object *aw_bpf_parse_stats_mac_json(struct aw_bpf_mac_addr mac, struct traffic_stats *stats)
-{
-    char mac_str[18];
-    struct json_object *jobj = json_object_new_object();
-
-    aw_bpf_format_mac_address(&mac, mac_str, sizeof(mac_str));
-    json_object_object_add(jobj, "mac", json_object_new_string(mac_str));
-
-    struct json_object *incoming = json_object_new_object();
-    struct json_object *outgoing = json_object_new_object();
-
-    json_object_object_add(incoming, "total_bytes", json_object_new_int64(stats->incoming.total_bytes));
-    json_object_object_add(incoming, "total_packets", json_object_new_int64(stats->incoming.total_packets));
-    json_object_object_add(incoming, "rate", json_object_new_int(calc_rate_estimator(stats, true)));
-    json_object_object_add(incoming, "incoming_rate_limit", json_object_new_uint64(stats->incoming_rate_limit.bps));
-    json_object_object_add(jobj, "incoming", incoming);
-
-    json_object_object_add(outgoing, "total_bytes", json_object_new_int64(stats->outgoing.total_bytes));
-    json_object_object_add(outgoing, "total_packets", json_object_new_int64(stats->outgoing.total_packets));
-    json_object_object_add(outgoing, "rate", json_object_new_int(calc_rate_estimator(stats, false)));
-    json_object_object_add(outgoing, "outgoing_rate_limit", json_object_new_uint64(stats->outgoing_rate_limit.bps));
-    json_object_object_add(jobj, "outgoing", outgoing);
-
-    return jobj;
-}
 
 static struct json_object *aw_bpf_parse_stats_sid_json(__u32 sid, struct traffic_stats *stats,
                                                        const struct aw_bpf_l7_proto *protocols, size_t protocol_count,
@@ -1082,14 +1057,26 @@ void handle_bpf_json_request(json_object *j_req, api_transport_context_t *transp
                     debug(LOG_WARNING, "[BPF_DEBUG] mac traversal: bpf_map_get_next_key returned same key, breaking");
                     break;
                 }
-                debug(LOG_DEBUG, "[BPF_DEBUG] mac iter %d, key=%02x:%02x:%02x:%02x:%02x:%02x",
-                      mac_iter_count,
-                      next_key.h_addr[0], next_key.h_addr[1], next_key.h_addr[2],
-                      next_key.h_addr[3], next_key.h_addr[4], next_key.h_addr[5]);
                 if (aw_bpf_lookup_stats_agg_percpu(map_fd, &next_key, &stats) == 0) {
-                    struct json_object *jentry = aw_bpf_parse_stats_mac_json(next_key, &stats);
-                    if (jentry)
-                        json_object_array_add(jentries, jentry);
+                    char mac_buf[18];
+                    snprintf(mac_buf, sizeof(mac_buf), "%02x:%02x:%02x:%02x:%02x:%02x",
+                             next_key.h_addr[0], next_key.h_addr[1], next_key.h_addr[2],
+                             next_key.h_addr[3], next_key.h_addr[4], next_key.h_addr[5]);
+                    struct json_object *jobj = json_object_new_object();
+                    json_object_object_add(jobj, "mac", json_object_new_string(mac_buf));
+                    struct json_object *incoming = json_object_new_object();
+                    json_object_object_add(incoming, "total_bytes", json_object_new_int64(stats.incoming.total_bytes));
+                    json_object_object_add(incoming, "total_packets", json_object_new_int64(stats.incoming.total_packets));
+                    json_object_object_add(incoming, "rate", json_object_new_int(calc_rate_estimator(&stats, true)));
+                    json_object_object_add(incoming, "incoming_rate_limit", json_object_new_uint64(stats.incoming_rate_limit.bps));
+                    json_object_object_add(jobj, "incoming", incoming);
+                    struct json_object *outgoing = json_object_new_object();
+                    json_object_object_add(outgoing, "total_bytes", json_object_new_int64(stats.outgoing.total_bytes));
+                    json_object_object_add(outgoing, "total_packets", json_object_new_int64(stats.outgoing.total_packets));
+                    json_object_object_add(outgoing, "rate", json_object_new_int(calc_rate_estimator(&stats, false)));
+                    json_object_object_add(outgoing, "outgoing_rate_limit", json_object_new_uint64(stats.outgoing_rate_limit.bps));
+                    json_object_object_add(jobj, "outgoing", outgoing);
+                    json_object_array_add(jentries, jobj);
                 }
                 cur_key = next_key;
             }

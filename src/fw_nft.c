@@ -861,7 +861,7 @@ nft_fw_access(fw_access_t type, const char *ip, const char *mac, int tag)
             if (is_valid_mac(mac)) {
                 snprintf(cmd, sizeof(cmd), "aw-bpfctl mac add %s", mac);
                 aw_bpfctl_execute_best_effort(cmd, "FW_ACCESS_ALLOW mac");
-            } 
+            }
 
             break;
 
