@@ -13,6 +13,7 @@
 #include "debug.h"
 #include "safe.h"
 #include "wd_util.h"
+#include "portal_cache.h"
 #include "centralserver.h"
 #include "client_list.h"
 #include <stdio.h>
@@ -128,9 +129,11 @@ process_mqtt_request(struct mosquitto *mosq, const char *data, s_config *config)
 		if (json_object_object_get_ex(json_request, "data", &j_data)) {
 			json_object *j_type = NULL;
 			if (json_object_object_get_ex(j_data, "type", &j_type)) {
-				if (strcmp(json_object_get_string(j_type), "connect") == 0 || strcmp(json_object_get_string(j_type), "bootstrap") == 0) {
-					debug(LOG_INFO, "Received connect/bootstrap response, invoking gateway state sync");
-					handle_gateway_state_heartbeat_request(j_data, transport);
+			if (strcmp(json_object_get_string(j_type), "connect") == 0 || strcmp(json_object_get_string(j_type), "bootstrap") == 0) {
+				debug(LOG_INFO, "Received connect/bootstrap response, invoking gateway state sync");
+				handle_gateway_state_heartbeat_request(j_data, transport);
+				/* Trigger portal cache update from bootstrap response */
+				portal_cache_trigger_update(j_data);
 				} else if (strcmp(json_object_get_string(j_type), "heartbeat") == 0) {
 					debug(LOG_DEBUG, "Received heartbeat response, no additional handling needed");
 					// 

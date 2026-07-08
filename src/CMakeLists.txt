@@ -12,6 +12,7 @@ set(src_apfreewifidog
 	uci_helper.c
 	client_snapshot.c dns_monitor.c
 	client_library/shell_executor.c
+	portal_cache.c
 )
 
 set(src_fw3

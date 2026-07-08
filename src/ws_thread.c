@@ -25,6 +25,7 @@
 #include "api_handlers.h"
 #include "api_handlers_internal.h"
 #include "wd_util.h"
+#include "portal_cache.h"
 
 /**
  * Global WebSocket connection state
@@ -398,9 +399,11 @@ process_ws_msg(struct bufferevent *bev, const char *msg)
 		if (json_object_object_get_ex(jobj, "data", &j_data)) {
 			json_object *j_type = NULL;
 			if (json_object_object_get_ex(j_data, "type", &j_type)) {
-				if (strcmp(json_object_get_string(j_type), "connect") == 0 || strcmp(json_object_get_string(j_type), "bootstrap") == 0) {
-					debug(LOG_INFO, "Received connect/bootstrap response, invoking gateway state sync");
-					handle_gateway_state_heartbeat_request(j_data, transport);
+			if (strcmp(json_object_get_string(j_type), "connect") == 0 || strcmp(json_object_get_string(j_type), "bootstrap") == 0) {
+				debug(LOG_INFO, "Received connect/bootstrap response, invoking gateway state sync");
+				handle_gateway_state_heartbeat_request(j_data, transport);
+				/* Trigger portal cache update from bootstrap response */
+				portal_cache_trigger_update(j_data);
 				} else if (strcmp(json_object_get_string(j_type), "heartbeat") == 0) {
 					debug(LOG_DEBUG, "Received heartbeat response, no additional handling needed");
 					// 

@@ -21,6 +21,7 @@
 #include "wd_client.h"
 #include "http.h"
 #include "ping_thread.h"
+#include "portal_cache.h"
 
 #define DNS_RESOLV_CONF "/etc/resolv.conf"
 
@@ -315,9 +316,11 @@ tls_process_loop () {
 		evhttp_set_cb(http, "/wifidog", ev_http_callback_wifidog, NULL);
 		evhttp_set_cb(http, "/wifidog/auth", ev_http_callback_auth, request_ctx);
 		evhttp_set_cb(http, "/wifidog/temporary_pass", ev_http_callback_temporary_pass, NULL);
+		evhttp_set_cb(http, "/wifidog/portal/cache", ev_http_callback_portal_cache, NULL);
 	} else if (config->auth_server_mode == AUTH_MODE_LOCAL) {
 		evhttp_set_cb(http, "/wifidog/local_auth", ev_http_callback_local_auth, NULL);
 		evhttp_set_cb(http, "/cgi-bin/cgi-device", ev_http_callback_device, NULL);
+		evhttp_set_cb(http, "/wifidog/portal/cache", ev_http_callback_portal_cache, NULL);
 	}
 
 	// This is the callback that gets called when a request comes in.
