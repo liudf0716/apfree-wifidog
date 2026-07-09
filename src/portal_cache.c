@@ -12,12 +12,15 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <openssl/evp.h>
+#include <openssl/bio.h>
+#include <openssl/buffer.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/wait.h>
 #include <unistd.h>
 #include <event2/http.h>
 #include <json-c/json.h>
@@ -410,7 +413,85 @@ portal_cache_trigger_update(json_object *j_data)
     portal_cache_cleanup_expired();
 }
 
-/* ---- HTTP callback: /wifidog/portal/cache/{key} ---- */
+/* ---- Base64URL decode helper ---- */
+static int
+base64url_decode(const char *encoded, char *decoded, size_t decoded_size)
+{
+    if (!encoded || !decoded || decoded_size == 0) return -1;
+
+    size_t len = strlen(encoded);
+    /* Allocate temp buffer for standard base64 */
+    char *buf = malloc(len + 4);
+    if (!buf) return -1;
+
+    /* Convert base64url to standard base64 */
+    memcpy(buf, encoded, len);
+    buf[len] = '\0';
+    for (size_t i = 0; i < len; i++) {
+        if (buf[i] == '-') buf[i] = '+';
+        else if (buf[i] == '_') buf[i] = '/';
+    }
+    /* Add padding */
+    while (len % 4 != 0) {
+        buf[len++] = '=';
+    }
+    buf[len] = '\0';
+
+    /* Decode */
+    BIO *b64 = BIO_new(BIO_f_base64());
+    BIO *mem = BIO_new_mem_buf(buf, len);
+    BIO_push(b64, mem);
+    BIO_set_flags(b64, BIO_FLAGS_BASE64_NO_NL);
+
+    int decoded_len = BIO_read(b64, decoded, decoded_size - 1);
+    BIO_free_all(b64);
+    free(buf);
+
+    if (decoded_len < 0) return -1;
+    decoded[decoded_len] = '\0';
+    return decoded_len;
+}
+
+/* ---- Synchronous download (blocking) ---- */
+static int
+portal_cache_download_sync(const char *url, const char *local_path)
+{
+    char tmp_path[260];
+    snprintf(tmp_path, sizeof(tmp_path), "%s.tmp", local_path);
+
+    char max_size_str[32];
+    snprintf(max_size_str, sizeof(max_size_str), "%u", PORTAL_CACHE_MAX_SIZE);
+
+    pid_t pid = fork();
+    if (pid == 0) {
+        /* Child: exec curl */
+        execl("/usr/bin/curl", "curl",
+              "-s", "-f",
+              "-o", tmp_path,
+              "--max-filesize", max_size_str,
+              "--connect-timeout", "10",
+              "--max-time", "30",
+              "-L",
+              url, (char *)NULL);
+        _exit(127);
+    } else if (pid > 0) {
+        int status;
+        waitpid(pid, &status, 0);
+
+        if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
+            /* Rename temp to final */
+            if (rename(tmp_path, local_path) == 0) {
+                debug(LOG_INFO, "Portal cache sync download ok: %s", url);
+                return 0;
+            }
+        }
+        unlink(tmp_path);
+        return -1;
+    }
+    return -1;
+}
+
+/* ---- HTTP callback: /wifidog/portal/cache/{key}?orig={base64url} ---- */
 void
 ev_http_callback_portal_cache(struct evhttp_request *req, void *arg)
 {
@@ -443,11 +524,72 @@ ev_http_callback_portal_cache(struct evhttp_request *req, void *arg)
     }
     key[64] = '\0';
 
+    /* Extract orig query parameter */
+    char original_url[512] = {0};
+    const char *orig_param = strstr(uri, "orig=");
+    if (orig_param) {
+        orig_param += 5; /* skip "orig=" */
+        base64url_decode(orig_param, original_url, sizeof(original_url));
+        debug(LOG_DEBUG, "Portal cache: decoded orig URL: %s", original_url);
+    }
+
     pthread_mutex_lock(&g_cache.lock);
     portal_cache_entry_t *entry = portal_cache_lookup(key);
 
     if (!entry || !portal_cache_is_valid(entry)) {
         pthread_mutex_unlock(&g_cache.lock);
+
+        /* Lazy download: if we have original URL, download synchronously */
+        if (original_url[0]) {
+            debug(LOG_INFO, "Portal cache miss, lazy downloading: %s", original_url);
+
+            char local_path[260];
+            snprintf(local_path, sizeof(local_path), "%s/%s", g_cache.cache_dir, key);
+            const char *content_type = portal_cache_get_content_type(original_url);
+
+            if (portal_cache_download_sync(original_url, local_path) == 0) {
+                /* Success: register in cache and serve */
+                pthread_mutex_lock(&g_cache.lock);
+                entry = portal_cache_lookup(key);
+                if (!entry) {
+                    entry = find_free_entry();
+                }
+                if (entry) {
+                    strncpy(entry->url, original_url, sizeof(entry->url) - 1);
+                    strncpy(entry->cache_key, key, sizeof(entry->cache_key) - 1);
+                    strncpy(entry->local_path, local_path, sizeof(entry->local_path) - 1);
+                    strncpy(entry->content_type, content_type, sizeof(entry->content_type) - 1);
+                    entry->file_size = get_file_size(local_path);
+                    entry->download_time = time(NULL);
+                    entry->expire_time = entry->download_time + PORTAL_CACHE_DEFAULT_TTL;
+                    entry->state = CACHE_READY;
+                }
+                pthread_mutex_unlock(&g_cache.lock);
+
+                /* Serve the file */
+                struct stat st;
+                int fd = open(local_path, O_RDONLY);
+                if (fd >= 0 && stat(local_path, &st) == 0) {
+                    struct evbuffer *evb = evbuffer_new();
+                    if (evb) {
+                        evbuffer_add_file(evb, fd, 0, st.st_size);
+                        struct evkeyvalq *headers = evhttp_request_get_output_headers(req);
+                        evhttp_add_header(headers, "Content-Type", content_type);
+                        evhttp_add_header(headers, "Cache-Control", "public, max-age=3600");
+                        evhttp_add_header(headers, "Connection", "close");
+                        evhttp_add_header(headers, "Access-Control-Allow-Origin", "*");
+                        evhttp_send_reply(req, HTTP_OK, "OK", evb);
+                        evbuffer_free(evb);
+                        return;
+                    }
+                    close(fd);
+                }
+            }
+            /* Download failed */
+            evhttp_send_error(req, HTTP_NOTFOUND, "Download Failed");
+            return;
+        }
+
         evhttp_send_error(req, HTTP_NOTFOUND, "Cache Miss");
         return;
     }

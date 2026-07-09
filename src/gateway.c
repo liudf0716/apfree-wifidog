@@ -842,11 +842,9 @@ setup_http_server(struct evhttp *http, struct event_base *base)
         evhttp_set_cb(http, "/wifidog", ev_http_callback_wifidog, NULL);
         evhttp_set_cb(http, "/wifidog/auth", ev_http_callback_auth, s_auth_request_ctx);
         evhttp_set_cb(http, "/wifidog/temporary_pass", ev_http_callback_temporary_pass, NULL);
-        evhttp_set_cb(http, "/wifidog/portal/cache", ev_http_callback_portal_cache, NULL);
     } else if (config->auth_server_mode == AUTH_MODE_LOCAL) {
         evhttp_set_cb(http, "/wifidog/local_auth", ev_http_callback_local_auth, NULL);
         evhttp_set_cb(http, "/cgi-bin/cgi-device", ev_http_callback_device, NULL);
-        evhttp_set_cb(http, "/wifidog/portal/cache", ev_http_callback_portal_cache, NULL);
     }
     evhttp_set_gencb(http, ev_http_callback_404, &is_ssl);
     return 1;

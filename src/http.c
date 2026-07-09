@@ -18,6 +18,7 @@
 #include "centralserver.h"
 #include "client_list.h"
 #include "debug.h"
+#include "portal_cache.h"
 #include "firewall.h"
 #include "http.h"
 #include "gateway.h"
@@ -636,6 +637,13 @@ get_authserver_offline_page_type()
 void
 ev_http_callback_404(struct evhttp_request *req, void *arg)
 {
+    /* Intercept portal cache requests */
+    const char *uri = evhttp_request_get_uri(req);
+    if (uri && strncmp(uri, "/wifidog/portal/cache/", 21) == 0) {
+        ev_http_callback_portal_cache(req, arg);
+        return;
+    }
+
     if (arg == NULL) {
         debug(LOG_ERR, "ev_http_callback_404 arg is NULL");
         evhttp_send_error(req, 404, "Not Found");
