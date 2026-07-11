@@ -134,10 +134,13 @@ wd_get_redir_url_to_auth(struct evhttp_request *req,
 	get_client_ssid(mac, gw_setting->gw_interface, client_ssid, sizeof(client_ssid));
 
 	char *redir_url = NULL;
+	// 使用用户实际请求的协议(is_ssl)来决定跳转URL的协议
+	const char *redir_protocol = is_ssl ? "https" : "http";
+	
 	if ((auth_server->authserv_use_ssl && auth_server->authserv_ssl_port == 443) ||
 		(!auth_server->authserv_use_ssl && auth_server->authserv_http_port == 80)) {
 		safe_asprintf(&redir_url, "%s://%s%s%sgw_address=%s&is_ipv6=%d&gw_port=%d&device_id=%s&gw_id=%s&gw_channel=%s&ssid=%s&ip=%s&mac=%s&protocol=%s&url=%s",
-			auth_server->authserv_use_ssl?"https":"http",
+			redir_protocol,
 			auth_server->authserv_hostname,
 			auth_server->authserv_path,
 			auth_server->authserv_login_script_path_fragment,
@@ -154,7 +157,7 @@ wd_get_redir_url_to_auth(struct evhttp_request *req,
 			orig_url);
 	} else {
 		safe_asprintf(&redir_url, "%s://%s:%d%s%sgw_address=%s&is_ipv6=%d&gw_port=%d&device_id=%s&gw_id=%s&gw_channel=%s&ssid=%s&ip=%s&mac=%s&protocol=%s&url=%s",
-			auth_server->authserv_use_ssl?"https":"http",
+			redir_protocol,
 			auth_server->authserv_hostname,
 			auth_server->authserv_use_ssl?auth_server->authserv_ssl_port:auth_server->authserv_http_port,
 			auth_server->authserv_path,
