@@ -298,17 +298,14 @@ portal_cache_download(const char *channel, const char *url, int ttl)
 
     pid_t pid = fork();
     if (pid == 0) {
-        /* Child: exec curl */
-        char max_size_str[32];
-        snprintf(max_size_str, sizeof(max_size_str), "%u", PORTAL_CACHE_MAX_SIZE);
-
-        execl("/usr/bin/curl", "curl",
-              "-s", "-f",              /* silent, fail on HTTP error */
-              "-o", tmp_path,          /* output file */
-              "--max-filesize", max_size_str,
-              "--connect-timeout", "10",
-              "--max-time", "60",
-              "-L",                    /* follow redirects */
+        /* Child: exec wget */
+        execl("/usr/bin/wget", "wget",
+              "-q",                      /* quiet */
+              "-O", tmp_path,            /* output file */
+              "--timeout=10",            /* connection timeout */
+              "-T", "60",                /* total timeout */
+              "--tries=1",               /* single attempt */
+              "-t", "1",                 /* retry count */
               url, (char *)NULL);
         _exit(127); /* exec failed */
     } else if (pid > 0) {
@@ -464,14 +461,13 @@ portal_cache_download_sync(const char *url, const char *local_path)
 
     pid_t pid = fork();
     if (pid == 0) {
-        /* Child: exec curl */
-        execl("/usr/bin/curl", "curl",
-              "-s", "-f",
-              "-o", tmp_path,
-              "--max-filesize", max_size_str,
-              "--connect-timeout", "10",
-              "--max-time", "30",
-              "-L",
+        /* Child: exec wget */
+        execl("/usr/bin/wget", "wget",
+              "-q",
+              "-O", tmp_path,
+              "--timeout=10",
+              "-T", "30",
+              "--tries=1",
               url, (char *)NULL);
         _exit(127);
     } else if (pid > 0) {
