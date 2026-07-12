@@ -487,6 +487,21 @@ portal_cache_download_sync(const char *url, const char *local_path)
     return -1;
 }
 
+/* ---- CORS header helper: echo Origin dynamically for credentialed requests ---- */
+static void
+add_cors_headers(struct evhttp_request *req, struct evkeyvalq *headers)
+{
+    const char *origin = evhttp_find_header(evhttp_request_get_input_headers(req), "Origin");
+    if (origin) {
+        evhttp_add_header(headers, "Access-Control-Allow-Origin", origin);
+        evhttp_add_header(headers, "Access-Control-Allow-Credentials", "true");
+    } else {
+        evhttp_add_header(headers, "Access-Control-Allow-Origin", "*");
+    }
+    evhttp_add_header(headers, "Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    evhttp_add_header(headers, "Access-Control-Allow-Headers", "*");
+}
+
 /* ---- HTTP callback: /wifidog/portal/cache/{key}?orig={base64url} ---- */
 void
 ev_http_callback_portal_cache(struct evhttp_request *req, void *arg)
@@ -496,9 +511,7 @@ ev_http_callback_portal_cache(struct evhttp_request *req, void *arg)
     /* Handle CORS preflight */
     if (evhttp_request_get_command(req) == EVHTTP_REQ_OPTIONS) {
         struct evkeyvalq *headers = evhttp_request_get_output_headers(req);
-        evhttp_add_header(headers, "Access-Control-Allow-Origin", "*");
-        evhttp_add_header(headers, "Access-Control-Allow-Methods", "GET, OPTIONS");
-        evhttp_add_header(headers, "Access-Control-Allow-Headers", "*");
+        add_cors_headers(req, headers);
         evhttp_send_reply(req, HTTP_OK, "OK", NULL);
         return;
     }
@@ -583,7 +596,7 @@ ev_http_callback_portal_cache(struct evhttp_request *req, void *arg)
                         evhttp_add_header(headers, "Content-Type", content_type);
                         evhttp_add_header(headers, "Cache-Control", "public, max-age=3600");
                         evhttp_add_header(headers, "Connection", "close");
-                        evhttp_add_header(headers, "Access-Control-Allow-Origin", "*");
+                        add_cors_headers(req, headers);
                         evhttp_send_reply(req, HTTP_OK, "OK", evb);
                         evbuffer_free(evb);
                         return;
@@ -635,7 +648,7 @@ ev_http_callback_portal_cache(struct evhttp_request *req, void *arg)
     evhttp_add_header(headers, "Content-Type", content_type);
     evhttp_add_header(headers, "Cache-Control", "public, max-age=3600");
     evhttp_add_header(headers, "Connection", "close");
-    evhttp_add_header(headers, "Access-Control-Allow-Origin", "*");
+    add_cors_headers(req, headers);
 
     evhttp_send_reply(req, HTTP_OK, "OK", evb);
     evbuffer_free(evb);
