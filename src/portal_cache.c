@@ -493,6 +493,16 @@ ev_http_callback_portal_cache(struct evhttp_request *req, void *arg)
 {
     (void)arg;
 
+    /* Handle CORS preflight */
+    if (evhttp_request_get_command(req) == EVHTTP_REQ_OPTIONS) {
+        struct evkeyvalq *headers = evhttp_request_get_output_headers(req);
+        evhttp_add_header(headers, "Access-Control-Allow-Origin", "*");
+        evhttp_add_header(headers, "Access-Control-Allow-Methods", "GET, OPTIONS");
+        evhttp_add_header(headers, "Access-Control-Allow-Headers", "*");
+        evhttp_send_reply(req, HTTP_OK, "OK", NULL);
+        return;
+    }
+
     const char *uri = evhttp_request_get_uri(req);
     if (!uri) {
         evhttp_send_error(req, HTTP_NOTFOUND, "Not Found");
