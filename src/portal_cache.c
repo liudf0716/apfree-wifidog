@@ -14,13 +14,10 @@
 #include <openssl/evp.h>
 #include <openssl/bio.h>
 #include <openssl/buffer.h>
-#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
-#include <sys/types.h>
-#include <sys/wait.h>
 #include <unistd.h>
 #include <event2/http.h>
 #include <json-c/json.h>
@@ -29,6 +26,12 @@
 static portal_cache_t g_cache;
 static int g_cache_initialized = 0;
 static struct event_base *g_evbase = NULL;  /* Global event base for async downloads */
+
+/* ---- Pending client request for concurrent downloads ---- */
+typedef struct pending_client_s {
+    struct evhttp_request           *req;
+    struct pending_client_s         *next;
+} pending_client_t;
 
 /* ---- Async download context ---- */
 typedef struct {
@@ -39,7 +42,8 @@ typedef struct {
     char                        content_type[64];
     int                         fd;
     size_t                      bytes_written;
-    struct evhttp_request       *client_req;    /* Deferred client request */
+    struct evhttp_request       *client_req;    /* First deferred client request */
+    pending_client_t            *pending;       /* Additional pending clients */
     struct evhttp_connection    *evcon;         /* HTTP connection for cleanup */
     portal_cache_entry_t        *entry;
 } download_context_t;
@@ -61,16 +65,6 @@ static const struct {
     {".html", "text/html"},
     {NULL,    "application/octet-stream"}
 };
-
-/* ---- Utility: get file size ---- */
-static unsigned long
-get_file_size(const char *path)
-{
-    struct stat st;
-    if (stat(path, &st) != 0)
-        return 0;
-    return (unsigned long)st.st_size;
-}
 
 /* ---- SHA256 key generation ---- */
 void
@@ -149,61 +143,6 @@ find_entry_by_key(const char *key)
     return NULL;
 }
 
-/* ---- Reap completed download children (safe to call from event loop) ---- */
-static void
-portal_cache_reap_children(void)
-{
-    pid_t pid;
-    int status;
-
-    pthread_mutex_lock(&g_cache.lock);
-    for (int i = 0; i < PORTAL_CACHE_MAX_FILES; i++) {
-        portal_cache_entry_t *e = &g_cache.entries[i];
-        if (e->state != CACHE_DOWNLOADING || e->download_pid <= 0)
-            continue;
-
-        pid = waitpid(e->download_pid, &status, WNOHANG);
-        if (pid <= 0)
-            continue; /* Not yet finished or error */
-
-        char tmp_path[330];
-        snprintf(tmp_path, sizeof(tmp_path), "%s/.%s.tmp",
-                 g_cache.cache_dir, e->cache_key);
-
-        if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
-            if (rename(tmp_path, e->local_path) == 0) {
-                e->file_size = get_file_size(e->local_path);
-                e->download_time = time(NULL);
-                e->expire_time = e->download_time + PORTAL_CACHE_DEFAULT_TTL;
-                e->state = CACHE_READY;
-                debug(LOG_INFO, "Portal cache download complete: %s (%lu bytes)",
-                      e->cache_key, e->file_size);
-            } else {
-                debug(LOG_WARNING, "Portal cache rename failed: %s -> %s: %s",
-                      tmp_path, e->local_path, strerror(errno));
-                unlink(tmp_path);
-                e->state = CACHE_ERROR;
-            }
-        } else {
-            debug(LOG_WARNING, "Portal cache download failed: %s", e->cache_key);
-            unlink(tmp_path);
-            e->state = CACHE_ERROR;
-        }
-        e->download_pid = 0;
-    }
-    pthread_mutex_unlock(&g_cache.lock);
-}
-
-/* ---- Timer callback for periodic child reaping ---- */
-static void
-portal_cache_reap_timer_cb(evutil_socket_t fd, short events, void *arg)
-{
-    (void)fd;
-    (void)events;
-    (void)arg;
-    portal_cache_reap_children();
-}
-
 /* ---- Initialize ---- */
 int
 portal_cache_init(void)
@@ -221,34 +160,17 @@ portal_cache_init(void)
         return -1;
     }
 
-    /* No SIGCHLD handler needed - use timer-based reaping instead.
-     * This avoids async-signal-safety issues and competing with
-     * gateway.c's sigchld_handler for waitpid(-1). */
-
     g_cache_initialized = 1;
     debug(LOG_INFO, "Portal cache initialized at %s", g_cache.cache_dir);
     return 0;
 }
 
-/* ---- Start periodic child reaping timer (call after event base is ready) ---- */
-static struct event *g_reap_timer = NULL;
-
+/* ---- Save event base for async downloads ---- */
 int
 portal_cache_start_reap_timer(struct event_base *base)
 {
     if (!base) return -1;
-
-    /* Save global event base for async downloads */
     g_evbase = base;
-
-    if (g_reap_timer) return 0;  /* Already started */
-
-    struct timeval tv = {2, 0}; /* Every 2 seconds */
-    g_reap_timer = event_new(base, -1, EV_PERSIST, portal_cache_reap_timer_cb, NULL);
-    if (!g_reap_timer) return -1;
-
-    event_add(g_reap_timer, &tv);
-    debug(LOG_INFO, "Portal cache reap timer started (interval: 2s)");
     return 0;
 }
 
@@ -257,14 +179,6 @@ void
 portal_cache_destroy(void)
 {
     if (!g_cache_initialized) return;
-
-    /* Wait for any in-progress downloads */
-    for (int i = 0; i < PORTAL_CACHE_MAX_FILES; i++) {
-        if (g_cache.entries[i].state == CACHE_DOWNLOADING &&
-            g_cache.entries[i].download_pid > 0) {
-            kill(g_cache.entries[i].download_pid, SIGTERM);
-        }
-    }
 
     pthread_mutex_destroy(&g_cache.lock);
     g_cache_initialized = 0;
@@ -369,10 +283,26 @@ portal_cache_cleanup_expired(void)
         if (e->state == CACHE_READY && now > e->expire_time) {
             debug(LOG_INFO, "Portal cache expired: %s", e->cache_key);
             unlink(e->local_path);
+            /* Free pending clients list */
+            pending_client_t *pc = e->pending_clients;
+            while (pc) {
+                pending_client_t *next = pc->next;
+                evhttp_send_error(pc->req, HTTP_NOTFOUND, "Cache Expired");
+                free(pc);
+                pc = next;
+            }
             memset(e, 0, sizeof(*e));
             e->state = CACHE_EMPTY;
         }
         if (e->state == CACHE_ERROR) {
+            /* Free pending clients list */
+            pending_client_t *pc = e->pending_clients;
+            while (pc) {
+                pending_client_t *next = pc->next;
+                evhttp_send_error(pc->req, HTTP_NOTFOUND, "Download Failed");
+                free(pc);
+                pc = next;
+            }
             memset(e, 0, sizeof(*e));
             e->state = CACHE_EMPTY;
         }
@@ -556,19 +486,37 @@ download_complete_cb(struct evhttp_request *down_req, void *arg)
             debug(LOG_INFO, "Portal cache async download ok: %s (%zu bytes)",
                   ctx->key, ctx->bytes_written);
 
-            /* Serve deferred client request */
+            /* Serve all pending clients (first request + queued requests) */
             if (ctx->client_req) {
                 serve_cache_file_deferred(ctx->client_req, ctx->entry);
                 ctx->client_req = NULL;
+            }
+            /* Serve queued pending clients */
+            pending_client_t *pc = ctx->entry->pending_clients;
+            ctx->entry->pending_clients = NULL;
+            while (pc) {
+                pending_client_t *next = pc->next;
+                serve_cache_file_deferred(pc->req, ctx->entry);
+                free(pc);
+                pc = next;
             }
         } else {
             debug(LOG_WARNING, "Portal cache rename failed: %s -> %s: %s",
                   ctx->tmp_path, ctx->local_path, strerror(errno));
             unlink(ctx->tmp_path);
             ctx->entry->state = CACHE_ERROR;
+            /* Send error to all pending clients */
             if (ctx->client_req) {
                 evhttp_send_error(ctx->client_req, HTTP_SERVUNAVAIL, "Internal Error");
                 ctx->client_req = NULL;
+            }
+            pending_client_t *pc = ctx->entry->pending_clients;
+            ctx->entry->pending_clients = NULL;
+            while (pc) {
+                pending_client_t *next = pc->next;
+                evhttp_send_error(pc->req, HTTP_SERVUNAVAIL, "Internal Error");
+                free(pc);
+                pc = next;
             }
         }
     } else {
@@ -577,16 +525,24 @@ download_complete_cb(struct evhttp_request *down_req, void *arg)
         unlink(ctx->tmp_path);
         debug(LOG_WARNING, "Portal cache async download failed (status=%d): %s",
               status_code, ctx->url);
+        /* Send error to all pending clients */
         if (ctx->client_req) {
             evhttp_send_error(ctx->client_req, HTTP_NOTFOUND, "Download Failed");
             ctx->client_req = NULL;
+        }
+        pending_client_t *pc = ctx->entry->pending_clients;
+        ctx->entry->pending_clients = NULL;
+        while (pc) {
+            pending_client_t *next = pc->next;
+            evhttp_send_error(pc->req, HTTP_NOTFOUND, "Download Failed");
+            free(pc);
+            pc = next;
         }
     }
 
     pthread_mutex_unlock(&g_cache.lock);
 
     /* Cleanup */
-    if (ctx->entry) ctx->entry->download_pid = 0;
     if (ctx->evcon) evhttp_connection_free(ctx->evcon);
     free(ctx);
 }
@@ -788,50 +744,76 @@ ev_http_callback_portal_cache(struct evhttp_request *req, void *arg)
     portal_cache_entry_t *entry = portal_cache_lookup(key);
 
     if (!entry || !portal_cache_is_valid(entry)) {
-        pthread_mutex_unlock(&g_cache.lock);
+        /* Entry is missing, expired, or in error state */
+        if (!entry || entry->state == CACHE_EMPTY || entry->state == CACHE_ERROR) {
+            /* Start new download if we have original URL */
+            if (original_url[0]) {
+                debug(LOG_INFO, "Portal cache miss, async downloading: %s", original_url);
 
-        /* Lazy download: if we have original URL, start async download */
-        if (original_url[0]) {
-            debug(LOG_INFO, "Portal cache miss, async downloading: %s", original_url);
+                char local_path[330];
+                snprintf(local_path, sizeof(local_path), "%s/%s", g_cache.cache_dir, key);
+                const char *content_type = portal_cache_get_content_type(original_url);
 
-            char local_path[330];
-            snprintf(local_path, sizeof(local_path), "%s/%s", g_cache.cache_dir, key);
-            const char *content_type = portal_cache_get_content_type(original_url);
-
-            /* Find or create cache entry */
-            pthread_mutex_lock(&g_cache.lock);
-            entry = portal_cache_lookup(key);
-            if (!entry) {
-                entry = find_free_entry();
-            }
-            if (!entry) {
+                /* Find or create cache entry */
+                if (!entry) {
+                    entry = find_free_entry();
+                }
+                if (!entry) {
+                    pthread_mutex_unlock(&g_cache.lock);
+                    evhttp_send_error(req, HTTP_SERVUNAVAIL, "Cache Full");
+                    return;
+                }
+                /* Initialize entry for downloading */
+                strncpy(entry->url, original_url, sizeof(entry->url) - 1);
+                strncpy(entry->cache_key, key, sizeof(entry->cache_key) - 1);
+                strncpy(entry->local_path, local_path, sizeof(entry->local_path) - 1);
+                strncpy(entry->content_type, content_type, sizeof(entry->content_type) - 1);
+                entry->state = CACHE_DOWNLOADING;
+                entry->pending_clients = NULL;
                 pthread_mutex_unlock(&g_cache.lock);
-                evhttp_send_error(req, HTTP_SERVUNAVAIL, "Cache Full");
+
+                /* Defer client response until download completes */
+                evhttp_request_own(req);
+
+                /* Start async download */
+                if (portal_cache_download_async(original_url, local_path, key,
+                                                content_type, entry, req) != 0) {
+                    entry->state = CACHE_EMPTY;
+                    evhttp_send_error(req, HTTP_NOTFOUND, "Download Failed");
+                    return;
+                }
+
+                /* Response will be sent in download_complete_cb */
                 return;
             }
-            /* Initialize entry for downloading */
-            strncpy(entry->url, original_url, sizeof(entry->url) - 1);
-            strncpy(entry->cache_key, key, sizeof(entry->cache_key) - 1);
-            strncpy(entry->local_path, local_path, sizeof(entry->local_path) - 1);
-            strncpy(entry->content_type, content_type, sizeof(entry->content_type) - 1);
-            entry->state = CACHE_DOWNLOADING;
+
             pthread_mutex_unlock(&g_cache.lock);
-
-            /* Defer client response until download completes */
-            evhttp_request_own(req);
-
-            /* Start async download */
-            if (portal_cache_download_async(original_url, local_path, key,
-                                            content_type, entry, req) != 0) {
-                entry->state = CACHE_EMPTY;
-                evhttp_send_error(req, HTTP_NOTFOUND, "Download Failed");
-                return;
-            }
-
-            /* Response will be sent in download_complete_cb */
+            evhttp_send_error(req, HTTP_NOTFOUND, "Cache Miss");
             return;
         }
 
+        /* Entry is currently downloading - add to pending queue */
+        if (entry->state == CACHE_DOWNLOADING) {
+            debug(LOG_INFO, "Portal cache download in progress, queuing request for: %s", key);
+
+            /* Create pending client node */
+            pending_client_t *pc = malloc(sizeof(pending_client_t));
+            if (!pc) {
+                pthread_mutex_unlock(&g_cache.lock);
+                evhttp_send_error(req, HTTP_SERVUNAVAIL, "No Memory");
+                return;
+            }
+            pc->req = req;
+            pc->next = entry->pending_clients;
+            entry->pending_clients = pc;
+
+            /* Defer client response until download completes */
+            evhttp_request_own(req);
+            pthread_mutex_unlock(&g_cache.lock);
+            return;
+        }
+
+        pthread_mutex_unlock(&g_cache.lock);
         evhttp_send_error(req, HTTP_NOTFOUND, "Cache Miss");
         return;
     }

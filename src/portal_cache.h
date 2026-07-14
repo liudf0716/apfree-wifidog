@@ -25,6 +25,9 @@ typedef enum {
     CACHE_ERROR
 } cache_state_t;
 
+/* Forward declaration for pending client queue */
+struct pending_client_s;
+
 typedef struct {
     char            url[512];
     char            cache_key[PORTAL_CACHE_KEY_LEN];
@@ -34,7 +37,7 @@ typedef struct {
     time_t          download_time;
     time_t          expire_time;
     cache_state_t   state;
-    pid_t           download_pid;
+    struct pending_client_s *pending_clients;  /* Queue of waiting clients */
 } portal_cache_entry_t;
 
 typedef struct {
