@@ -133,6 +133,9 @@ wd_get_redir_url_to_auth(struct evhttp_request *req,
 	char client_ssid[64] = {0};
 	get_client_ssid(mac, gw_setting->gw_interface, client_ssid, sizeof(client_ssid));
 
+	// URL encode SSID to handle special characters (Chinese, spaces, etc.)
+	char *encoded_ssid = evhttp_encode_uri(client_ssid);
+
 	char *redir_url = NULL;
 	// 使用用户实际请求的协议(is_ssl)来决定跳转URL的协议
 	const char *redir_protocol = is_ssl ? "https" : "http";
@@ -148,11 +151,11 @@ wd_get_redir_url_to_auth(struct evhttp_request *req,
 			is_ipv6,
 			gw_port,
 			device_id,
-			gw_setting->gw_id, 
+			gw_setting->gw_id,
 			gw_setting->gw_channel?gw_setting->gw_channel:"null",
-			client_ssid,
-			remote_host, 
-			mac, 
+			encoded_ssid,
+			remote_host,
+			mac,
 			is_ssl?"https":"http",
 			orig_url);
 	} else {
@@ -166,15 +169,16 @@ wd_get_redir_url_to_auth(struct evhttp_request *req,
 			is_ipv6,
 			gw_port,
 			device_id,
-			gw_setting->gw_id, 
+			gw_setting->gw_id,
 			gw_setting->gw_channel?gw_setting->gw_channel:"null",
-			client_ssid,
-			remote_host, 
-			mac, 
+			encoded_ssid,
+			remote_host,
+			mac,
 			is_ssl?"https":"http",
 			orig_url);
 	}
-		
+
+	free(encoded_ssid);
 	free(orig_url);
 	debug(LOG_DEBUG, "redir_url: %s", redir_url);
 	return redir_url;
