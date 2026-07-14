@@ -28,7 +28,7 @@ typedef enum {
 typedef struct {
     char            url[512];
     char            cache_key[PORTAL_CACHE_KEY_LEN];
-    char            local_path[260];
+    char            local_path[330];   /* cache_dir(256) + '/' + key(64) + '\0' */
     char            content_type[64];
     unsigned long   file_size;
     time_t          download_time;
@@ -46,6 +46,7 @@ typedef struct {
 
 int     portal_cache_init(void);
 void    portal_cache_destroy(void);
+int     portal_cache_start_reap_timer(struct event_base *base);
 void    portal_cache_make_key(const char *channel, const char *url,
                               char *key, size_t key_size);
 portal_cache_entry_t *portal_cache_lookup(const char *cache_key);

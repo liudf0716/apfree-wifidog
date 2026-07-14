@@ -29,6 +29,19 @@
 static portal_cache_t g_cache;
 static int g_cache_initialized = 0;
 
+/* ---- Async download context ---- */
+typedef struct {
+    char                    url[512];
+    char                    key[PORTAL_CACHE_KEY_LEN];
+    char                    tmp_path[330];
+    char                    local_path[330];
+    char                    content_type[64];
+    int                     fd;
+    size_t                  bytes_written;
+    struct evhttp_request   *client_req;    /* Deferred client request */
+    portal_cache_entry_t    *entry;
+} download_context_t;
+
 /* MIME type table */
 static const struct {
     const char *ext;
@@ -134,50 +147,59 @@ find_entry_by_key(const char *key)
     return NULL;
 }
 
-/* ---- SIGCHLD handler for reap downloads ---- */
+/* ---- Reap completed download children (safe to call from event loop) ---- */
 static void
-sigchld_handler(int sig)
+portal_cache_reap_children(void)
 {
-    (void)sig;
-    int saved_errno = errno;
     pid_t pid;
     int status;
 
-    while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
-        for (int i = 0; i < PORTAL_CACHE_MAX_FILES; i++) {
-            portal_cache_entry_t *e = &g_cache.entries[i];
-            if (e->state == CACHE_DOWNLOADING && e->download_pid == pid) {
-                if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
-                    /* Rename temp file to final path */
-                    char tmp_path[260];
-                    snprintf(tmp_path, sizeof(tmp_path), "%s/.%s.tmp",
-                             g_cache.cache_dir, e->cache_key);
-                    if (rename(tmp_path, e->local_path) != 0) {
-                        debug(LOG_WARNING, "Portal cache rename failed: %s -> %s: %s",
-                              tmp_path, e->local_path, strerror(errno));
-                        unlink(tmp_path);
-                        e->state = CACHE_ERROR;
-                        e->download_pid = 0;
-                        break;
-                    }
-                    e->file_size = get_file_size(e->local_path);
-                    e->download_time = time(NULL);
-                    e->expire_time = e->download_time + PORTAL_CACHE_DEFAULT_TTL;
-                    e->state = CACHE_READY;
-                    debug(LOG_INFO, "Portal cache download complete: %s (%lu bytes)",
-                          e->cache_key, e->file_size);
-                } else {
-                    e->state = CACHE_ERROR;
-                    debug(LOG_WARNING, "Portal cache download failed: %s", e->cache_key);
-                    /* Remove failed temp file */
-                    unlink(e->local_path);
-                }
-                e->download_pid = 0;
-                break;
+    pthread_mutex_lock(&g_cache.lock);
+    for (int i = 0; i < PORTAL_CACHE_MAX_FILES; i++) {
+        portal_cache_entry_t *e = &g_cache.entries[i];
+        if (e->state != CACHE_DOWNLOADING || e->download_pid <= 0)
+            continue;
+
+        pid = waitpid(e->download_pid, &status, WNOHANG);
+        if (pid <= 0)
+            continue; /* Not yet finished or error */
+
+        char tmp_path[330];
+        snprintf(tmp_path, sizeof(tmp_path), "%s/.%s.tmp",
+                 g_cache.cache_dir, e->cache_key);
+
+        if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
+            if (rename(tmp_path, e->local_path) == 0) {
+                e->file_size = get_file_size(e->local_path);
+                e->download_time = time(NULL);
+                e->expire_time = e->download_time + PORTAL_CACHE_DEFAULT_TTL;
+                e->state = CACHE_READY;
+                debug(LOG_INFO, "Portal cache download complete: %s (%lu bytes)",
+                      e->cache_key, e->file_size);
+            } else {
+                debug(LOG_WARNING, "Portal cache rename failed: %s -> %s: %s",
+                      tmp_path, e->local_path, strerror(errno));
+                unlink(tmp_path);
+                e->state = CACHE_ERROR;
             }
+        } else {
+            debug(LOG_WARNING, "Portal cache download failed: %s", e->cache_key);
+            unlink(tmp_path);
+            e->state = CACHE_ERROR;
         }
+        e->download_pid = 0;
     }
-    errno = saved_errno;
+    pthread_mutex_unlock(&g_cache.lock);
+}
+
+/* ---- Timer callback for periodic child reaping ---- */
+static void
+portal_cache_reap_timer_cb(evutil_socket_t fd, short events, void *arg)
+{
+    (void)fd;
+    (void)events;
+    (void)arg;
+    portal_cache_reap_children();
 }
 
 /* ---- Initialize ---- */
@@ -197,15 +219,29 @@ portal_cache_init(void)
         return -1;
     }
 
-    /* Install SIGCHLD handler */
-    struct sigaction sa;
-    memset(&sa, 0, sizeof(sa));
-    sa.sa_handler = sigchld_handler;
-    sa.sa_flags = SA_RESTART | SA_NOCLDSTOP;
-    sigaction(SIGCHLD, &sa, NULL);
+    /* No SIGCHLD handler needed - use timer-based reaping instead.
+     * This avoids async-signal-safety issues and competing with
+     * gateway.c's sigchld_handler for waitpid(-1). */
 
     g_cache_initialized = 1;
     debug(LOG_INFO, "Portal cache initialized at %s", g_cache.cache_dir);
+    return 0;
+}
+
+/* ---- Start periodic child reaping timer (call after event base is ready) ---- */
+static struct event *g_reap_timer = NULL;
+
+int
+portal_cache_start_reap_timer(struct event_base *base)
+{
+    if (!base || g_reap_timer) return -1;
+
+    struct timeval tv = {2, 0}; /* Every 2 seconds */
+    g_reap_timer = event_new(base, -1, EV_PERSIST, portal_cache_reap_timer_cb, NULL);
+    if (!g_reap_timer) return -1;
+
+    event_add(g_reap_timer, &tv);
+    debug(LOG_INFO, "Portal cache reap timer started (interval: 2s)");
     return 0;
 }
 
@@ -293,7 +329,7 @@ portal_cache_download(const char *channel, const char *url, int ttl)
     pthread_mutex_unlock(&g_cache.lock);
 
     /* Fork a child to download */
-    char tmp_path[260];
+    char tmp_path[330];
     snprintf(tmp_path, sizeof(tmp_path), "%s/.%s.tmp", g_cache.cache_dir, key);
 
     pid_t pid = fork();
@@ -317,15 +353,7 @@ portal_cache_download(const char *channel, const char *url, int ttl)
         debug(LOG_DEBUG, "Portal cache download started: pid=%d key=%s url=%s",
               pid, key, url);
 
-        /* We'll let SIGCHLD handle the completion.
-         * But we need to rename tmp -> final in the handler.
-         * For simplicity, use a helper: spawn a reaper that waits and renames. */
-        /* Actually, let's do the rename in a short-lived grandchild or
-         * just handle it in SIGCHLD by checking the tmp file. */
-
-        /* Simple approach: parent renames after a short delay won't work.
-         * Better: use a pipe or just check in SIGCHLD. Let's update
-         * the SIGCHLD handler to do the rename. */
+        /* Completion handled by timer-based reaper (portal_cache_reap_children) */
         return 0;
     } else {
         debug(LOG_ERR, "fork failed for portal cache download: %s", strerror(errno));
@@ -449,42 +477,238 @@ base64url_decode(const char *encoded, char *decoded, size_t decoded_size)
     return decoded_len;
 }
 
-/* ---- Synchronous download (blocking) ---- */
-static int
-portal_cache_download_sync(const char *url, const char *local_path)
+/* Forward declaration */
+static void add_cors_headers(struct evhttp_request *req, struct evkeyvalq *headers);
+
+/* ---- Serve cached file to deferred request ---- */
+static void
+serve_cache_file_deferred(struct evhttp_request *client_req, portal_cache_entry_t *entry)
 {
-    char tmp_path[260];
-    snprintf(tmp_path, sizeof(tmp_path), "%s.tmp", local_path);
+    struct stat st;
+    int fd = open(entry->local_path, O_RDONLY);
+    if (fd < 0 || stat(entry->local_path, &st) != 0) {
+        evhttp_send_error(client_req, HTTP_NOTFOUND, "File Not Found");
+        if (fd >= 0) close(fd);
+        return;
+    }
 
-    char max_size_str[32];
-    snprintf(max_size_str, sizeof(max_size_str), "%u", PORTAL_CACHE_MAX_SIZE);
+    struct evbuffer *evb = evbuffer_new();
+    if (!evb) {
+        close(fd);
+        evhttp_send_error(client_req, HTTP_SERVUNAVAIL, "No Memory");
+        return;
+    }
 
-    pid_t pid = fork();
-    if (pid == 0) {
-        /* Child: exec wget */
-        execl("/usr/bin/wget", "wget",
-              "-q",
-              "-O", tmp_path,
-              "--timeout=10",
-              "-T", "30",
-              "--tries=1",
-              url, (char *)NULL);
-        _exit(127);
-    } else if (pid > 0) {
-        int status;
-        waitpid(pid, &status, 0);
+    if (evbuffer_add_file(evb, fd, 0, st.st_size) < 0) {
+        close(fd);
+        evbuffer_free(evb);
+        evhttp_send_error(client_req, HTTP_SERVUNAVAIL, "Internal Error");
+        return;
+    }
 
-        if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
-            /* Rename temp to final */
-            if (rename(tmp_path, local_path) == 0) {
-                debug(LOG_INFO, "Portal cache sync download ok: %s", url);
-                return 0;
+    struct evkeyvalq *headers = evhttp_request_get_output_headers(client_req);
+    evhttp_add_header(headers, "Content-Type", entry->content_type);
+    evhttp_add_header(headers, "Cache-Control", "public, max-age=3600");
+    evhttp_add_header(headers, "Connection", "close");
+    add_cors_headers(client_req, headers);
+
+    evhttp_send_reply(client_req, HTTP_OK, "OK", evb);
+    evbuffer_free(evb);
+}
+
+/* ---- Async download: chunk callback ---- */
+static void
+download_chunk_cb(struct evhttp_request *down_req, void *arg)
+{
+    download_context_t *ctx = arg;
+    struct evbuffer *input = evhttp_request_get_input_buffer(down_req);
+    size_t chunk_len = evbuffer_get_length(input);
+
+    if (chunk_len == 0) return;
+
+    /* Enforce file size limit */
+    if (ctx->bytes_written + chunk_len > PORTAL_CACHE_MAX_SIZE) {
+        debug(LOG_WARNING, "Portal cache download exceeds size limit: %s", ctx->url);
+        evhttp_cancel_request(down_req);
+        return;
+    }
+
+    /* Write chunk to temp file */
+    int written = evbuffer_write(input, ctx->fd);
+    if (written > 0) {
+        ctx->bytes_written += written;
+    }
+}
+
+/* ---- Async download: complete callback ---- */
+static void
+download_complete_cb(struct evhttp_request *down_req, void *arg)
+{
+    download_context_t *ctx = arg;
+    int status_code = down_req ? evhttp_request_get_response_code(down_req) : 0;
+
+    close(ctx->fd);
+    ctx->fd = -1;
+
+    pthread_mutex_lock(&g_cache.lock);
+
+    if (status_code == HTTP_OK && ctx->bytes_written > 0) {
+        /* Success: rename temp to final */
+        if (rename(ctx->tmp_path, ctx->local_path) == 0) {
+            ctx->entry->file_size = ctx->bytes_written;
+            ctx->entry->download_time = time(NULL);
+            ctx->entry->expire_time = ctx->entry->download_time + PORTAL_CACHE_DEFAULT_TTL;
+            ctx->entry->state = CACHE_READY;
+            debug(LOG_INFO, "Portal cache async download ok: %s (%zu bytes)",
+                  ctx->key, ctx->bytes_written);
+
+            /* Serve deferred client request */
+            if (ctx->client_req) {
+                serve_cache_file_deferred(ctx->client_req, ctx->entry);
+                ctx->client_req = NULL;
+            }
+        } else {
+            debug(LOG_WARNING, "Portal cache rename failed: %s -> %s: %s",
+                  ctx->tmp_path, ctx->local_path, strerror(errno));
+            unlink(ctx->tmp_path);
+            ctx->entry->state = CACHE_ERROR;
+            if (ctx->client_req) {
+                evhttp_send_error(ctx->client_req, HTTP_SERVUNAVAIL, "Internal Error");
+                ctx->client_req = NULL;
             }
         }
-        unlink(tmp_path);
+    } else {
+        /* Failure */
+        ctx->entry->state = CACHE_ERROR;
+        unlink(ctx->tmp_path);
+        debug(LOG_WARNING, "Portal cache async download failed (status=%d): %s",
+              status_code, ctx->url);
+        if (ctx->client_req) {
+            evhttp_send_error(ctx->client_req, HTTP_NOTFOUND, "Download Failed");
+            ctx->client_req = NULL;
+        }
+    }
+
+    pthread_mutex_unlock(&g_cache.lock);
+
+    /* Cleanup */
+    if (ctx->entry) ctx->entry->download_pid = 0;
+    free(ctx);
+}
+
+/* ---- Async download: start ---- */
+static int
+portal_cache_download_async(const char *url, const char *local_path,
+                            const char *key, const char *content_type,
+                            portal_cache_entry_t *entry,
+                            struct evhttp_request *client_req)
+{
+    /* Parse URL */
+    struct evhttp_uri *parsed_uri = evhttp_uri_parse(url);
+    if (!parsed_uri) return -1;
+
+    const char *scheme = evhttp_uri_get_scheme(parsed_uri);
+    const char *host = evhttp_uri_get_host(parsed_uri);
+    int port = evhttp_uri_get_port(parsed_uri);
+    const char *path = evhttp_uri_get_path(parsed_uri);
+    const char *query = evhttp_uri_get_query(parsed_uri);
+
+    if (!host) {
+        evhttp_uri_free(parsed_uri);
         return -1;
     }
-    return -1;
+
+    int is_https = (scheme && strcasecmp(scheme, "https") == 0);
+    if (port == -1) port = is_https ? 443 : 80;
+
+    /* Build full path with query */
+    char full_path[1024];
+    if (query) {
+        snprintf(full_path, sizeof(full_path), "%s?%s", path ? path : "/", query);
+    } else {
+        snprintf(full_path, sizeof(full_path), "%s", path ? path : "/");
+    }
+
+    /* Create download context */
+    download_context_t *ctx = calloc(1, sizeof(download_context_t));
+    if (!ctx) {
+        evhttp_uri_free(parsed_uri);
+        return -1;
+    }
+
+    strncpy(ctx->url, url, sizeof(ctx->url) - 1);
+    strncpy(ctx->key, key, sizeof(ctx->key) - 1);
+    snprintf(ctx->tmp_path, sizeof(ctx->tmp_path), "%s/.%s.tmp", g_cache.cache_dir, key);
+    strncpy(ctx->local_path, local_path, sizeof(ctx->local_path) - 1);
+    strncpy(ctx->content_type, content_type, sizeof(ctx->content_type) - 1);
+    ctx->client_req = client_req;
+    ctx->entry = entry;
+
+    /* Open temp file */
+    ctx->fd = open(ctx->tmp_path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    if (ctx->fd < 0) {
+        debug(LOG_ERR, "Portal cache: failed to create temp file %s: %s",
+              ctx->tmp_path, strerror(errno));
+        free(ctx);
+        evhttp_uri_free(parsed_uri);
+        return -1;
+    }
+
+    /* Get event base from client request */
+    struct evhttp_connection *client_con = evhttp_request_get_connection(client_req);
+    struct event_base *base = evhttp_connection_get_base(client_con);
+
+    /* Create HTTP connection */
+    struct evhttp_connection *evcon = evhttp_connection_base_new(base, NULL, host, port);
+
+    if (!evcon) {
+        close(ctx->fd);
+        unlink(ctx->tmp_path);
+        free(ctx);
+        evhttp_uri_free(parsed_uri);
+        return -1;
+    }
+
+    evhttp_connection_set_timeout(evcon, 30);
+
+    /* Create request */
+    struct evhttp_request *down_req = evhttp_request_new(download_complete_cb, ctx);
+    if (!down_req) {
+        evhttp_connection_free(evcon);
+        close(ctx->fd);
+        unlink(ctx->tmp_path);
+        free(ctx);
+        evhttp_uri_free(parsed_uri);
+        return -1;
+    }
+
+    /* Set chunk callback for streaming to disk */
+    evhttp_request_set_chunked_cb(down_req, download_chunk_cb);
+
+    /* Set headers */
+    evhttp_add_header(evhttp_request_get_output_headers(down_req), "Host", host);
+    evhttp_add_header(evhttp_request_get_output_headers(down_req), "Connection", "close");
+
+    /* Mark entry as downloading */
+    entry->state = CACHE_DOWNLOADING;
+
+    /* Make the request */
+    int ret = evhttp_make_request(evcon, down_req, EVHTTP_REQ_GET, full_path);
+    if (ret != 0) {
+        debug(LOG_ERR, "Portal cache: failed to make request to %s", host);
+        evhttp_request_free(down_req);
+        evhttp_connection_free(evcon);
+        close(ctx->fd);
+        unlink(ctx->tmp_path);
+        entry->state = CACHE_EMPTY;
+        free(ctx);
+        evhttp_uri_free(parsed_uri);
+        return -1;
+    }
+
+    debug(LOG_INFO, "Portal cache async download started: %s", url);
+    evhttp_uri_free(parsed_uri);
+    return 0;
 }
 
 /* ---- CORS header helper: echo Origin dynamically for credentialed requests ---- */
@@ -545,11 +769,16 @@ ev_http_callback_portal_cache(struct evhttp_request *req, void *arg)
 
     /* Extract orig query parameter */
     char original_url[512] = {0};
-    const char *orig_param = strstr(uri, "orig=");
-    if (orig_param) {
-        orig_param += 5; /* skip "orig=" */
-        base64url_decode(orig_param, original_url, sizeof(original_url));
-        debug(LOG_DEBUG, "Portal cache: decoded orig URL: %s", original_url);
+    const char *query_string = strchr(uri, '?');
+    if (query_string) {
+        struct evkeyvalq params;
+        evhttp_parse_query(query_string, &params);
+        const char *orig_value = evhttp_find_header(&params, "orig");
+        if (orig_value) {
+            base64url_decode(orig_value, original_url, sizeof(original_url));
+            debug(LOG_DEBUG, "Portal cache: decoded orig URL: %s", original_url);
+        }
+        evhttp_clear_headers(&params);
     }
 
     pthread_mutex_lock(&g_cache.lock);
@@ -558,54 +787,45 @@ ev_http_callback_portal_cache(struct evhttp_request *req, void *arg)
     if (!entry || !portal_cache_is_valid(entry)) {
         pthread_mutex_unlock(&g_cache.lock);
 
-        /* Lazy download: if we have original URL, download synchronously */
+        /* Lazy download: if we have original URL, start async download */
         if (original_url[0]) {
-            debug(LOG_INFO, "Portal cache miss, lazy downloading: %s", original_url);
+            debug(LOG_INFO, "Portal cache miss, async downloading: %s", original_url);
 
-            char local_path[260];
+            char local_path[330];
             snprintf(local_path, sizeof(local_path), "%s/%s", g_cache.cache_dir, key);
             const char *content_type = portal_cache_get_content_type(original_url);
 
-            if (portal_cache_download_sync(original_url, local_path) == 0) {
-                /* Success: register in cache and serve */
-                pthread_mutex_lock(&g_cache.lock);
-                entry = portal_cache_lookup(key);
-                if (!entry) {
-                    entry = find_free_entry();
-                }
-                if (entry) {
-                    strncpy(entry->url, original_url, sizeof(entry->url) - 1);
-                    strncpy(entry->cache_key, key, sizeof(entry->cache_key) - 1);
-                    strncpy(entry->local_path, local_path, sizeof(entry->local_path) - 1);
-                    strncpy(entry->content_type, content_type, sizeof(entry->content_type) - 1);
-                    entry->file_size = get_file_size(local_path);
-                    entry->download_time = time(NULL);
-                    entry->expire_time = entry->download_time + PORTAL_CACHE_DEFAULT_TTL;
-                    entry->state = CACHE_READY;
-                }
-                pthread_mutex_unlock(&g_cache.lock);
-
-                /* Serve the file */
-                struct stat st;
-                int fd = open(local_path, O_RDONLY);
-                if (fd >= 0 && stat(local_path, &st) == 0) {
-                    struct evbuffer *evb = evbuffer_new();
-                    if (evb) {
-                        evbuffer_add_file(evb, fd, 0, st.st_size);
-                        struct evkeyvalq *headers = evhttp_request_get_output_headers(req);
-                        evhttp_add_header(headers, "Content-Type", content_type);
-                        evhttp_add_header(headers, "Cache-Control", "public, max-age=3600");
-                        evhttp_add_header(headers, "Connection", "close");
-                        add_cors_headers(req, headers);
-                        evhttp_send_reply(req, HTTP_OK, "OK", evb);
-                        evbuffer_free(evb);
-                        return;
-                    }
-                    close(fd);
-                }
+            /* Find or create cache entry */
+            pthread_mutex_lock(&g_cache.lock);
+            entry = portal_cache_lookup(key);
+            if (!entry) {
+                entry = find_free_entry();
             }
-            /* Download failed */
-            evhttp_send_error(req, HTTP_NOTFOUND, "Download Failed");
+            if (!entry) {
+                pthread_mutex_unlock(&g_cache.lock);
+                evhttp_send_error(req, HTTP_SERVUNAVAIL, "Cache Full");
+                return;
+            }
+            /* Initialize entry for downloading */
+            strncpy(entry->url, original_url, sizeof(entry->url) - 1);
+            strncpy(entry->cache_key, key, sizeof(entry->cache_key) - 1);
+            strncpy(entry->local_path, local_path, sizeof(entry->local_path) - 1);
+            strncpy(entry->content_type, content_type, sizeof(entry->content_type) - 1);
+            entry->state = CACHE_DOWNLOADING;
+            pthread_mutex_unlock(&g_cache.lock);
+
+            /* Defer client response until download completes */
+            evhttp_request_own(req);
+
+            /* Start async download */
+            if (portal_cache_download_async(original_url, local_path, key,
+                                            content_type, entry, req) != 0) {
+                entry->state = CACHE_EMPTY;
+                evhttp_send_error(req, HTTP_NOTFOUND, "Download Failed");
+                return;
+            }
+
+            /* Response will be sent in download_complete_cb */
             return;
         }
 
@@ -642,7 +862,12 @@ ev_http_callback_portal_cache(struct evhttp_request *req, void *arg)
         return;
     }
 
-    evbuffer_add_file(evb, fd, 0, st.st_size);
+    if (evbuffer_add_file(evb, fd, 0, st.st_size) < 0) {
+        close(fd);
+        evbuffer_free(evb);
+        evhttp_send_error(req, HTTP_SERVUNAVAIL, "Internal Error");
+        return;
+    }
 
     struct evkeyvalq *headers = evhttp_request_get_output_headers(req);
     evhttp_add_header(headers, "Content-Type", content_type);

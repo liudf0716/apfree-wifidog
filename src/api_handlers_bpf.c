@@ -189,13 +189,6 @@ static void aw_bpf_parse_mac_address(struct aw_bpf_mac_addr *mac_addr, const cha
     }
 }
 
-static void aw_bpf_format_mac_address(const struct aw_bpf_mac_addr *mac, char *buf, size_t buf_len)
-{
-    snprintf(buf, buf_len, "%02x:%02x:%02x:%02x:%02x:%02x",
-             mac->h_addr[0], mac->h_addr[1], mac->h_addr[2],
-             mac->h_addr[3], mac->h_addr[4], mac->h_addr[5]);
-}
-
 static size_t aw_bpf_collect_l7_protocols_from_payload(json_object *payload, struct aw_bpf_l7_proto *protocols, size_t max_protocols)
 {
     json_object *j_protocols = NULL;

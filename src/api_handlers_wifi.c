@@ -868,38 +868,6 @@ static int enforce_mesh_iface_disabled(void) {
     return 0;
 }
 
-static int verify_sta_connection(int timeout_seconds) {
-    // Poll ubus for wwan status
-    for (int i = 0; i < timeout_seconds; i++) {
-        FILE *fp = popen("ubus call network.interface.wwan status 2>/dev/null", "r");
-        if (!fp) { sleep(1); continue; }
-        size_t buf_size = 2048, len = 0; char *out = malloc(buf_size);
-        if (!out) { pclose(fp); sleep(1); continue; }
-        out[0] = '\0'; char chunk[512];
-        while (fgets(chunk, sizeof(chunk), fp) != NULL) {
-            size_t cl = strlen(chunk);
-            if (len + cl + 1 > buf_size) { buf_size = (len + cl + 1) * 2; char *n = realloc(out, buf_size); if (!n) break; out = n; }
-            memcpy(out + len, chunk, cl); len += cl; out[len] = '\0';
-        }
-        pclose(fp);
-        if (len == 0) { free(out); sleep(1); continue; }
-        json_object *j = json_tokener_parse(out);
-        free(out);
-        if (!j) { sleep(1); continue; }
-        json_object *j_up = NULL;
-        if (json_object_object_get_ex(j, "up", &j_up) && json_object_is_type(j_up, json_type_boolean)) {
-            int up = json_object_get_boolean(j_up);
-            json_object_put(j);
-            if (up) return 0;
-            sleep(1);
-            continue;
-        }
-        json_object_put(j);
-        sleep(1);
-    }
-    return -1;
-}
-
 void handle_set_wifi_relay_request(json_object *j_req, api_transport_context_t *transport) {
     // Validate required SSID
     json_object *j_ssid = json_object_object_get(j_req, "ssid");

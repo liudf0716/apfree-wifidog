@@ -933,12 +933,15 @@ http_redir_loop(s_config *config)
     setbuf(stdout, NULL);
     setbuf(stderr, NULL);
 
-    if (!setup_http_server(http, base)) 
+    if (!setup_http_server(http, base))
         termination_handler(0);
 
     if (!bind_http_server(http, base, config->gw_port))
         termination_handler(0);
-    
+
+    /* Start portal cache child reaping timer */
+    portal_cache_start_reap_timer(base);
+
     debug(LOG_INFO, "HTTP server started on port %d", config->gw_port);
     event_base_dispatch(base);
 

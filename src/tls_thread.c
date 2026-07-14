@@ -367,7 +367,10 @@ tls_process_loop () {
     event_add(&timeout, &tv);
 	
 	debug(LOG_INFO, "https server started on port %d", config->gw_https_port);
-	
+
+	/* Start portal cache child reaping timer */
+	portal_cache_start_reap_timer(base);
+
     event_base_dispatch (base);
 
 	event_del(&timeout);
