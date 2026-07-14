@@ -282,7 +282,7 @@ portal_cache_is_valid(const portal_cache_entry_t *entry)
     return 1;
 }
 
-/* ---- Download via fork+exec curl ---- */
+/* ---- Proactive cache download (triggered by bootstrap response) ---- */
 int
 portal_cache_download(const char *channel, const char *url, int ttl)
 {
@@ -328,37 +328,18 @@ portal_cache_download(const char *channel, const char *url, int ttl)
 
     pthread_mutex_unlock(&g_cache.lock);
 
-    /* Fork a child to download */
-    char tmp_path[330];
-    snprintf(tmp_path, sizeof(tmp_path), "%s/.%s.tmp", g_cache.cache_dir, key);
+    /* Start async download via libevent (no client request to defer) */
+    char local_path[330];
+    snprintf(local_path, sizeof(local_path), "%s/%s", g_cache.cache_dir, key);
 
-    pid_t pid = fork();
-    if (pid == 0) {
-        /* Child: exec wget */
-        execl("/usr/bin/wget", "wget",
-              "-q",                      /* quiet */
-              "-O", tmp_path,            /* output file */
-              "--timeout=10",            /* connection timeout */
-              "-T", "60",                /* total timeout */
-              "--tries=1",               /* single attempt */
-              "-t", "1",                 /* retry count */
-              url, (char *)NULL);
-        _exit(127); /* exec failed */
-    } else if (pid > 0) {
-        /* Parent: record PID and wait for rename after download */
-        pthread_mutex_lock(&g_cache.lock);
-        entry->download_pid = pid;
-        pthread_mutex_unlock(&g_cache.lock);
-
-        debug(LOG_DEBUG, "Portal cache download started: pid=%d key=%s url=%s",
-              pid, key, url);
-
-        /* Completion handled by timer-based reaper (portal_cache_reap_children) */
-        return 0;
-    } else {
-        debug(LOG_ERR, "fork failed for portal cache download: %s", strerror(errno));
+    int ret = portal_cache_download_async(url, local_path, key,
+                                          entry->content_type, entry, NULL);
+    if (ret != 0) {
+        entry->state = CACHE_EMPTY;
         return -1;
     }
+
+    return 0;
 }
 
 /* ---- Cleanup expired entries ---- */
