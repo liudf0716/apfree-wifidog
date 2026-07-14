@@ -28,18 +28,20 @@
 /* Global cache instance */
 static portal_cache_t g_cache;
 static int g_cache_initialized = 0;
+static struct event_base *g_evbase = NULL;  /* Global event base for async downloads */
 
 /* ---- Async download context ---- */
 typedef struct {
-    char                    url[512];
-    char                    key[PORTAL_CACHE_KEY_LEN];
-    char                    tmp_path[330];
-    char                    local_path[330];
-    char                    content_type[64];
-    int                     fd;
-    size_t                  bytes_written;
-    struct evhttp_request   *client_req;    /* Deferred client request */
-    portal_cache_entry_t    *entry;
+    char                        url[512];
+    char                        key[PORTAL_CACHE_KEY_LEN];
+    char                        tmp_path[330];
+    char                        local_path[330];
+    char                        content_type[64];
+    int                         fd;
+    size_t                      bytes_written;
+    struct evhttp_request       *client_req;    /* Deferred client request */
+    struct evhttp_connection    *evcon;         /* HTTP connection for cleanup */
+    portal_cache_entry_t        *entry;
 } download_context_t;
 
 /* MIME type table */
@@ -234,7 +236,12 @@ static struct event *g_reap_timer = NULL;
 int
 portal_cache_start_reap_timer(struct event_base *base)
 {
-    if (!base || g_reap_timer) return -1;
+    if (!base) return -1;
+
+    /* Save global event base for async downloads */
+    g_evbase = base;
+
+    if (g_reap_timer) return 0;  /* Already started */
 
     struct timeval tv = {2, 0}; /* Every 2 seconds */
     g_reap_timer = event_new(base, -1, EV_PERSIST, portal_cache_reap_timer_cb, NULL);
@@ -580,6 +587,7 @@ download_complete_cb(struct evhttp_request *down_req, void *arg)
 
     /* Cleanup */
     if (ctx->entry) ctx->entry->download_pid = 0;
+    if (ctx->evcon) evhttp_connection_free(ctx->evcon);
     free(ctx);
 }
 
@@ -630,6 +638,7 @@ portal_cache_download_async(const char *url, const char *local_path,
     strncpy(ctx->content_type, content_type, sizeof(ctx->content_type) - 1);
     ctx->client_req = client_req;
     ctx->entry = entry;
+    ctx->evcon = NULL;
 
     /* Open temp file */
     ctx->fd = open(ctx->tmp_path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
@@ -641,12 +650,18 @@ portal_cache_download_async(const char *url, const char *local_path,
         return -1;
     }
 
-    /* Get event base from client request */
-    struct evhttp_connection *client_con = evhttp_request_get_connection(client_req);
-    struct event_base *base = evhttp_connection_get_base(client_con);
+    /* Use global event base (works for both proactive and lazy downloads) */
+    if (!g_evbase) {
+        debug(LOG_ERR, "Portal cache: event base not initialized");
+        close(ctx->fd);
+        unlink(ctx->tmp_path);
+        free(ctx);
+        evhttp_uri_free(parsed_uri);
+        return -1;
+    }
 
     /* Create HTTP connection */
-    struct evhttp_connection *evcon = evhttp_connection_base_new(base, NULL, host, port);
+    struct evhttp_connection *evcon = evhttp_connection_base_new(g_evbase, NULL, host, port);
 
     if (!evcon) {
         close(ctx->fd);
@@ -657,6 +672,7 @@ portal_cache_download_async(const char *url, const char *local_path,
     }
 
     evhttp_connection_set_timeout(evcon, 30);
+    ctx->evcon = evcon;  /* Save for cleanup in download_complete_cb */
 
     /* Create request */
     struct evhttp_request *down_req = evhttp_request_new(download_complete_cb, ctx);
