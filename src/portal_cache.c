@@ -412,6 +412,7 @@ serve_cache_file_deferred(struct evhttp_request *client_req, portal_cache_entry_
     int fd = open(entry->local_path, O_RDONLY);
     if (fd < 0 || stat(entry->local_path, &st) != 0) {
         evhttp_send_error(client_req, HTTP_NOTFOUND, "File Not Found");
+        evhttp_request_free(client_req);
         if (fd >= 0) close(fd);
         return;
     }
@@ -420,6 +421,7 @@ serve_cache_file_deferred(struct evhttp_request *client_req, portal_cache_entry_
     if (!evb) {
         close(fd);
         evhttp_send_error(client_req, HTTP_SERVUNAVAIL, "No Memory");
+        evhttp_request_free(client_req);
         return;
     }
 
@@ -427,6 +429,7 @@ serve_cache_file_deferred(struct evhttp_request *client_req, portal_cache_entry_
         close(fd);
         evbuffer_free(evb);
         evhttp_send_error(client_req, HTTP_SERVUNAVAIL, "Internal Error");
+        evhttp_request_free(client_req);
         return;
     }
 
@@ -438,6 +441,7 @@ serve_cache_file_deferred(struct evhttp_request *client_req, portal_cache_entry_
 
     evhttp_send_reply(client_req, HTTP_OK, "OK", evb);
     evbuffer_free(evb);
+    evhttp_request_free(client_req);
 }
 
 /* ---- Async download: chunk callback ---- */
@@ -474,6 +478,16 @@ download_complete_cb(struct evhttp_request *down_req, void *arg)
     close(ctx->fd);
     ctx->fd = -1;
 
+    /* Check if cache was destroyed during download */
+    if (!g_cache_initialized) {
+        if (ctx->client_req) evhttp_request_free(ctx->client_req);
+        /* Pending clients are in entry, but entry may be invalid */
+        unlink(ctx->tmp_path);
+        if (ctx->evcon) evhttp_connection_free(ctx->evcon);
+        free(ctx);
+        return;
+    }
+
     pthread_mutex_lock(&g_cache.lock);
 
     if (status_code == HTTP_OK && ctx->bytes_written > 0) {
@@ -508,6 +522,7 @@ download_complete_cb(struct evhttp_request *down_req, void *arg)
             /* Send error to all pending clients */
             if (ctx->client_req) {
                 evhttp_send_error(ctx->client_req, HTTP_SERVUNAVAIL, "Internal Error");
+                evhttp_request_free(ctx->client_req);
                 ctx->client_req = NULL;
             }
             pending_client_t *pc = ctx->entry->pending_clients;
@@ -515,6 +530,7 @@ download_complete_cb(struct evhttp_request *down_req, void *arg)
             while (pc) {
                 pending_client_t *next = pc->next;
                 evhttp_send_error(pc->req, HTTP_SERVUNAVAIL, "Internal Error");
+                evhttp_request_free(pc->req);
                 free(pc);
                 pc = next;
             }
@@ -528,6 +544,7 @@ download_complete_cb(struct evhttp_request *down_req, void *arg)
         /* Send error to all pending clients */
         if (ctx->client_req) {
             evhttp_send_error(ctx->client_req, HTTP_NOTFOUND, "Download Failed");
+            evhttp_request_free(ctx->client_req);
             ctx->client_req = NULL;
         }
         pending_client_t *pc = ctx->entry->pending_clients;
@@ -535,6 +552,7 @@ download_complete_cb(struct evhttp_request *down_req, void *arg)
         while (pc) {
             pending_client_t *next = pc->next;
             evhttp_send_error(pc->req, HTTP_NOTFOUND, "Download Failed");
+            evhttp_request_free(pc->req);
             free(pc);
             pc = next;
         }
@@ -761,6 +779,7 @@ ev_http_callback_portal_cache(struct evhttp_request *req, void *arg)
                 if (!entry) {
                     pthread_mutex_unlock(&g_cache.lock);
                     evhttp_send_error(req, HTTP_SERVUNAVAIL, "Cache Full");
+                    evhttp_request_free(req);
                     return;
                 }
                 /* Initialize entry for downloading */
@@ -780,6 +799,7 @@ ev_http_callback_portal_cache(struct evhttp_request *req, void *arg)
                                                 content_type, entry, req) != 0) {
                     entry->state = CACHE_EMPTY;
                     evhttp_send_error(req, HTTP_NOTFOUND, "Download Failed");
+                    evhttp_request_free(req);
                     return;
                 }
 
