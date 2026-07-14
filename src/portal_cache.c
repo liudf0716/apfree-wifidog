@@ -282,6 +282,12 @@ portal_cache_is_valid(const portal_cache_entry_t *entry)
     return 1;
 }
 
+/* Forward declaration */
+static int portal_cache_download_async(const char *url, const char *local_path,
+                                       const char *key, const char *content_type,
+                                       portal_cache_entry_t *entry,
+                                       struct evhttp_request *client_req);
+
 /* ---- Proactive cache download (triggered by bootstrap response) ---- */
 int
 portal_cache_download(const char *channel, const char *url, int ttl)
