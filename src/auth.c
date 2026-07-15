@@ -120,8 +120,14 @@ ev_logout_client(struct wd_request_context *context, t_client *client)
     req_ctx->data = client_snapshot;
     req_ctx->per_request = 1;
 
-    if (wd_make_request(req_ctx, &evcon, &req, process_auth_server_logout) && evhttp_make_request(evcon, req, EVHTTP_REQ_GET, uri)) {
-        debug(LOG_ERR, "Failed to create auth server request");
+    /* wd_make_request returns 0 on success, non-zero on failure. */
+    if (wd_make_request(req_ctx, &evcon, &req, process_auth_server_logout)) {
+        debug(LOG_ERR, "Failed to create auth server logout request");
+        client_free_node(client_snapshot);
+        req_ctx->data = NULL;
+        wd_request_context_destroy(req_ctx);
+    } else if (evhttp_make_request(evcon, req, EVHTTP_REQ_GET, uri) != 0) {
+        debug(LOG_ERR, "Failed to queue auth server logout request");
         if (req) evhttp_request_free(req);
         if (evcon) evhttp_connection_free(evcon);
         client_free_node(client_snapshot);
@@ -182,9 +188,16 @@ ev_authenticate_client(struct evhttp_request *req,
     // Setup and send auth server request
     struct evhttp_connection *wd_evcon = NULL;
     struct evhttp_request *wd_req = NULL;
-    
-    if (wd_make_request(context, &wd_evcon, &wd_req, process_auth_server_login) && evhttp_make_request(wd_evcon, wd_req, EVHTTP_REQ_GET, uri)) {
-        debug(LOG_ERR, "Failed to create auth server request");
+
+    /* wd_make_request returns 0 on success, non-zero on failure. */
+    if (wd_make_request(context, &wd_evcon, &wd_req, process_auth_server_login)) {
+        debug(LOG_ERR, "Failed to create auth server login request");
+        evhttp_send_error(req, HTTP_INTERNAL, "Internal Server Error");
+        safe_client_list_delete(client);
+        context->data = NULL;
+        context->clt_req = NULL;
+    } else if (evhttp_make_request(wd_evcon, wd_req, EVHTTP_REQ_GET, uri) != 0) {
+        debug(LOG_ERR, "Failed to queue auth server login request");
         evhttp_send_error(req, HTTP_INTERNAL, "Internal Server Error");
         if (wd_req) evhttp_request_free(wd_req);
         if (wd_evcon) evhttp_connection_free(wd_evcon);
@@ -192,6 +205,6 @@ ev_authenticate_client(struct evhttp_request *req,
         context->data = NULL;
         context->clt_req = NULL;
     }
-    
+
     free(uri);
 }

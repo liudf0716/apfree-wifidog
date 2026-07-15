@@ -1213,40 +1213,27 @@ END:
 
 
 /**
- * @brief Temporaray allow client to access internet a minute
- * 
+ * @brief Temporary-pass endpoint (DISABLED)
+ *
+ * Previously allowed unauthenticated MAC temporary internet access via query
+ * params and fed unvalidated MAC into shell-backed nft rules (auth bypass +
+ * command injection). Feature is disabled until a signed/authenticated design
+ * is in place.
+ *
  * @param req Client http request
- * 
  */
-void 
+void
 ev_http_callback_temporary_pass(struct evhttp_request *req, void *arg)
 {
+    (void)arg;
+
     if (evhttp_request_get_command(req) == EVHTTP_REQ_OPTIONS) {
         ev_http_respond_options(req);
         return;
     }
-    
-    const char *mac = ev_http_find_query(req, "mac");
-    const char *timeout = ev_http_find_query(req, "timeout");
-    if (!timeout) timeout = safe_strdup("0"); // default 5 minutes
 
-	evhttp_add_header(evhttp_request_get_output_headers(req), "Access-Control-Allow-Origin", "*");
-    evhttp_add_header(evhttp_request_get_output_headers(req), "Access-Control-Allow-Methods", "GET,POST,OPTIONS,DELETE,PUT");
-	
-    if (mac) {
-        debug(LOG_INFO, "Temporary passed %s timeout %s", mac, timeout);
-        int ntimeout = atoi(timeout);
-        if (ntimeout < 0) ntimeout = 0;
-        fw_set_mac_temporary(mac, ntimeout);
-        evhttp_add_header(evhttp_request_get_output_headers(req), "Connection", "close");	
-        evhttp_send_reply(req, HTTP_OK, "OK", NULL);
-    } else {
-        debug(LOG_INFO, "Temporary pass called without  MAC given");
-        evhttp_send_error(req, HTTP_OK, "MAC need to be specified");
-    }
-
-    if (mac) free((void *)mac);
-    if (timeout) free((void *)timeout);
+    debug(LOG_WARNING, "temporary_pass endpoint is disabled; rejecting request");
+    evhttp_send_error(req, HTTP_SERVUNAVAIL, "temporary_pass is disabled");
 } 
 
 /**

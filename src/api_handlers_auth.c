@@ -17,6 +17,7 @@
 #include "wdctlx_thread.h"
 #include "safe.h"
 #include "uci_helper.h"
+#include "util.h"
 #include "client_library/shell_executor.h"
 
 void handle_gateway_state_heartbeat_request(json_object *j_heartbeat, api_transport_context_t *transport)
@@ -87,6 +88,15 @@ void handle_tmp_pass_request(json_object *j_tmp_pass, api_transport_context_t *t
         return;
     }
     const char *client_mac_str = json_object_get_string(client_mac);
+
+    /* Reject invalid MAC before shell-backed nft temporary rules. */
+    if (!client_mac_str || !is_valid_mac(client_mac_str)) {
+        debug(LOG_ERR, "Temporary pass: Invalid client MAC address");
+        api_response_set_error(j_response, 1002, "Invalid client_mac");
+        send_json_response(transport, j_response);
+        json_object_put(j_response);
+        return;
+    }
 
     uint32_t timeout_value = 5 * 60;
     json_object *timeout = json_object_object_get(j_tmp_pass, "timeout");
