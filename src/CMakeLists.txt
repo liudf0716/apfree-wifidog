@@ -13,6 +13,7 @@ set(src_apfreewifidog
 	client_snapshot.c dns_monitor.c
 	client_library/shell_executor.c
 	portal_cache.c
+	portal_ticket.c
 )
 
 set(src_fw3

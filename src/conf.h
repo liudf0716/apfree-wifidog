@@ -302,6 +302,13 @@ typedef struct {
 	char *ttl_values; /* ttl values */
 	char *anti_nat_permit_macs; /* anti nat permit mac */
 
+	/* Portal session ticket (P2 dual-track compatible) */
+	char *portal_ticket_secret;   /* hex or raw; NULL => auto-generate in memory */
+	int portal_ticket_ttl;        /* seconds, default 300 */
+	int portal_ticket_store_max;  /* max pending tickets in memory, default 1024 */
+	short portal_ticket_strict_ip;/* 1: require ARP(ip)==mac at allow time */
+	short portal_ticket_required; /* 1: reject auth without ticket (Phase 2) */
+
 	// Misc
 	char *dns_timeout;
 } s_config;

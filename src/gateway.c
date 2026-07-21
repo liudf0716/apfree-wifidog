@@ -26,6 +26,7 @@
 #include "client_snapshot.h"
 #include "hotplug_listener.h"
 #include "portal_cache.h"
+#include "portal_ticket.h"
 
 /* Global mutexes and buffers */
 pthread_mutex_t g_resource_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -332,6 +333,9 @@ termination_handler(int s) {
 
     /* Save client snapshot before exit */
     client_snapshot_save();
+
+    /* Release portal ticket store and wipe in-memory HMAC secret */
+    portal_ticket_cleanup();
 
     debug(LOG_NOTICE, "Exiting...");
     
@@ -1006,6 +1010,9 @@ aw_clean_before_exit(void)
         offline_client_list_destroy(first_offline_client);
     }
 
+    /* Portal ticket store + secret (idempotent if already cleaned in termination_handler) */
+    portal_ticket_cleanup();
+
     // Clean up firewall
     fw_destroy();
     
@@ -1073,6 +1080,7 @@ gw_main(int argc, char **argv)
     config_validate();
     gateway_setting_init();
     client_list_init();
+    portal_ticket_init();
 
     if (config_get_config()->daemon) {
         debug(LOG_INFO, "Forking into background");

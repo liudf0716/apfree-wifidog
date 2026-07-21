@@ -29,6 +29,7 @@
 #include "wd_util.h"
 #include "version.h"
 #include "wd_client.h"
+#include "portal_ticket.h"
 
 // Define max allowed file size (10KB)
 #define MAX_HTML_FILE_SIZE (10 * 1024)
@@ -889,9 +890,11 @@ ev_http_callback_auth(struct evhttp_request *req, void *arg)
     char *remote_host = NULL;
     char *mac = NULL;
     char *logout = NULL;
+    char *portal_ticket = NULL;
     t_gateway_setting *gw_setting = NULL;
     int new_client = 0;
     t_client *client = NULL;
+    s_config *cfg = config_get_config();
 
     struct wd_request_context *context = (struct wd_request_context *)arg;
     debug(LOG_DEBUG, "ev_http_callback_auth: the request is %s", evhttp_request_get_uri(req));
@@ -918,47 +921,95 @@ ev_http_callback_auth(struct evhttp_request *req, void *arg)
         evhttp_send_error(req, 200, "Invalid gateway id");
         goto CLEAN_UP;
     }
-    
-    remote_host = ev_http_find_query(req, "client_ip");
-    mac = ev_http_find_query(req, "client_mac");
 
-    if (!remote_host || !mac) {
-        char *peer_ip_temp = NULL;
-        uint16_t port_temp;
+    portal_ticket = ev_http_find_query(req, "portal_ticket");
 
-        if (remote_host) { free(remote_host); remote_host = NULL; }
-        if (mac) { free(mac); mac = NULL; }
+    /* Always resolve peer identity from the connection for ticket path. */
+    char *peer_ip_temp = NULL;
+    uint16_t port_temp;
+    char peer_mac_buf[MAC_LENGTH] = {0};
+    char peer_mac_norm[PORTAL_TICKET_MAC_LEN] = {0};
+    int have_peer = 0;
 
-        // gw_setting is assumed to be valid here from earlier gw_id processing.
-        // If gw_id wasn't found, it would have gone to CLEAN_UP.
+    int addr_type = ev_http_connection_get_peer(evhttp_request_get_connection(req), &peer_ip_temp, &port_temp);
+    if (addr_type != 0 && peer_ip_temp &&
+        br_arp_get_mac(gw_setting, peer_ip_temp, peer_mac_buf) &&
+        portal_ticket_normalize_mac(peer_mac_buf, peer_mac_norm, sizeof(peer_mac_norm)) == 0) {
+        have_peer = 1;
+    }
 
-        int addr_type = ev_http_connection_get_peer(evhttp_request_get_connection(req), &peer_ip_temp, &port_temp);
-        if (addr_type == 0 || !peer_ip_temp) {
-            evhttp_send_error(req, 200, "Failed to retrieve your IP address from connection");
+    if (portal_ticket && portal_ticket[0]) {
+        portal_ticket_payload_t payload;
+        if (portal_ticket_verify(portal_ticket, &payload) != 0) {
+            evhttp_send_error(req, 200, "Invalid or expired portal_ticket");
+            if (peer_ip_temp) free(peer_ip_temp);
             goto CLEAN_UP;
         }
-        remote_host = safe_strdup(peer_ip_temp); // remote_host is now alloc'd
-
-        char actual_mac_buffer[MAC_LENGTH];
-        // Ensure gw_setting is not NULL before dereferencing
-        if (gw_setting && br_arp_get_mac(gw_setting, remote_host, actual_mac_buffer)) {
-            mac = safe_strdup(actual_mac_buffer); // mac is now alloc'd
-            free(peer_ip_temp); // Free peer_ip_temp after successful MAC retrieval
-        } else {
-            // Provide a more specific error if gw_setting was the issue
-            if (!gw_setting) { // This case should ideally be caught by gw_id check
-                 evhttp_send_error(req, 200, "Gateway configuration missing for MAC retrieval");
-            } else {
-                 evhttp_send_error(req, 200, "Failed to retrieve your MAC address (ARP/NDP failed)");
-            }
-            free(peer_ip_temp); // Free peer_ip_temp in the error path
-            // remote_host will be freed at CLEAN_UP
+        if (strcasecmp(payload.gw_id, gw_id) != 0) {
+            evhttp_send_error(req, 200, "portal_ticket gw_id mismatch");
+            if (peer_ip_temp) free(peer_ip_temp);
             goto CLEAN_UP;
+        }
+        if (!have_peer) {
+            evhttp_send_error(req, 200, "Failed to resolve peer MAC for portal_ticket");
+            if (peer_ip_temp) free(peer_ip_temp);
+            goto CLEAN_UP;
+        }
+        if (strcasecmp(payload.mac, peer_mac_norm) != 0) {
+            debug(LOG_WARNING, "AUTH_REJECT classic path peer mac %s != ticket mac %s",
+                  peer_mac_norm, payload.mac);
+            evhttp_send_error(req, 200, "portal_ticket peer mismatch");
+            if (peer_ip_temp) free(peer_ip_temp);
+            goto CLEAN_UP;
+        }
+        if (cfg && cfg->portal_ticket_strict_ip &&
+            peer_ip_temp && strcmp(payload.ip, peer_ip_temp) != 0) {
+            evhttp_send_error(req, 200, "portal_ticket peer IP mismatch");
+            if (peer_ip_temp) free(peer_ip_temp);
+            goto CLEAN_UP;
+        }
+        if (portal_ticket_consume(payload.tid) != 0) {
+            evhttp_send_error(req, 200, "portal_ticket already used");
+            if (peer_ip_temp) free(peer_ip_temp);
+            goto CLEAN_UP;
+        }
+        remote_host = safe_strdup(peer_ip_temp);
+        mac = safe_strdup(payload.mac);
+        free(peer_ip_temp);
+        peer_ip_temp = NULL;
+    } else {
+        if (cfg && cfg->portal_ticket_required) {
+            evhttp_send_error(req, 200, "portal_ticket required");
+            if (peer_ip_temp) free(peer_ip_temp);
+            goto CLEAN_UP;
+        }
+
+        /* Legacy dual-track: prefer query client_ip/mac when both present (old AWAS). */
+        remote_host = ev_http_find_query(req, "client_ip");
+        mac = ev_http_find_query(req, "client_mac");
+
+        if (!remote_host || !mac) {
+            if (remote_host) { free(remote_host); remote_host = NULL; }
+            if (mac) { free(mac); mac = NULL; }
+
+            if (!have_peer || !peer_ip_temp) {
+                evhttp_send_error(req, 200, "Failed to retrieve client IP/MAC");
+                if (peer_ip_temp) free(peer_ip_temp);
+                goto CLEAN_UP;
+            }
+            remote_host = safe_strdup(peer_ip_temp);
+            mac = safe_strdup(peer_mac_norm);
+            free(peer_ip_temp);
+            peer_ip_temp = NULL;
+        } else {
+            if (peer_ip_temp) {
+                free(peer_ip_temp);
+                peer_ip_temp = NULL;
+            }
         }
     }
     
     if (!remote_host || !mac) {
-        // This is a safeguard; previous block should ensure both are set or jump to CLEAN_UP
         evhttp_send_error(req, 200, "Failed to determine client IP or MAC address");
         goto CLEAN_UP;
     }
@@ -996,12 +1047,12 @@ ev_http_callback_auth(struct evhttp_request *req, void *arg)
     }
 
 CLEAN_UP:
-    // Clean up allocated memory
     if (mac) free(mac);
     if (remote_host) free(remote_host);
     if (gw_id) free(gw_id);
     if (token) free(token);
     if (logout) free(logout);
+    if (portal_ticket) free(portal_ticket);
 }
 
 /**

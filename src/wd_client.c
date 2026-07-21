@@ -12,6 +12,7 @@
 #include "wd_util.h"
 #include "wd_client.h"
 #include "gateway.h"
+#include "portal_ticket.h"
 
 /**
  * @brief Extract and encode the original URL from an HTTP request
@@ -136,13 +137,26 @@ wd_get_redir_url_to_auth(struct evhttp_request *req,
 	// URL encode SSID to handle special characters (Chinese, spaces, etc.)
 	char *encoded_ssid = evhttp_encode_uri(client_ssid);
 
+	/* Issue portal session ticket (display ip/mac remain non-authoritative). */
+	char *portal_ticket = portal_ticket_issue(device_id, gw_setting->gw_id, mac, remote_host);
+	char *encoded_ticket = NULL;
+	if (portal_ticket) {
+		encoded_ticket = evhttp_encode_uri(portal_ticket);
+		free(portal_ticket);
+	} else {
+		debug(LOG_WARNING, "portal_ticket_issue failed for mac=%s ip=%s", mac, remote_host);
+	}
+
 	char *redir_url = NULL;
 	// 使用用户实际请求的协议(is_ssl)来决定跳转URL的协议
 	const char *redir_protocol = is_ssl ? "https" : "http";
-	
+	const char *ticket_q = encoded_ticket ? encoded_ticket : "";
+	const char *ticket_prefix = encoded_ticket ? "&portal_ticket=" : "";
+
 	if ((auth_server->authserv_use_ssl && auth_server->authserv_ssl_port == 443) ||
 		(!auth_server->authserv_use_ssl && auth_server->authserv_http_port == 80)) {
-		safe_asprintf(&redir_url, "%s://%s%s%sgw_address=%s&is_ipv6=%d&gw_port=%d&device_id=%s&gw_id=%s&gw_channel=%s&ssid=%s&ip=%s&mac=%s&protocol=%s&url=%s",
+		safe_asprintf(&redir_url,
+			"%s://%s%s%sgw_address=%s&is_ipv6=%d&gw_port=%d&device_id=%s&gw_id=%s&gw_channel=%s&ssid=%s&ip=%s&mac=%s&protocol=%s&url=%s%s%s",
 			redir_protocol,
 			auth_server->authserv_hostname,
 			auth_server->authserv_path,
@@ -157,9 +171,12 @@ wd_get_redir_url_to_auth(struct evhttp_request *req,
 			remote_host,
 			mac,
 			is_ssl?"https":"http",
-			orig_url);
+			orig_url,
+			ticket_prefix,
+			ticket_q);
 	} else {
-		safe_asprintf(&redir_url, "%s://%s:%d%s%sgw_address=%s&is_ipv6=%d&gw_port=%d&device_id=%s&gw_id=%s&gw_channel=%s&ssid=%s&ip=%s&mac=%s&protocol=%s&url=%s",
+		safe_asprintf(&redir_url,
+			"%s://%s:%d%s%sgw_address=%s&is_ipv6=%d&gw_port=%d&device_id=%s&gw_id=%s&gw_channel=%s&ssid=%s&ip=%s&mac=%s&protocol=%s&url=%s%s%s",
 			redir_protocol,
 			auth_server->authserv_hostname,
 			auth_server->authserv_use_ssl?auth_server->authserv_ssl_port:auth_server->authserv_http_port,
@@ -175,9 +192,13 @@ wd_get_redir_url_to_auth(struct evhttp_request *req,
 			remote_host,
 			mac,
 			is_ssl?"https":"http",
-			orig_url);
+			orig_url,
+			ticket_prefix,
+			ticket_q);
 	}
 
+	if (encoded_ticket)
+		free(encoded_ticket);
 	free(encoded_ssid);
 	free(orig_url);
 	debug(LOG_DEBUG, "redir_url: %s", redir_url);

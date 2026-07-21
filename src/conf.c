@@ -115,6 +115,11 @@ typedef enum {
 	oApLongitude,
 	oApLatitude,
 	oLocationId,
+	oPortalTicketSecret,
+	oPortalTicketTTL,
+	oPortalTicketStoreMax,
+	oPortalTicketStrictIp,
+	oPortalTicketRequired,
 } OpCodes;
 
 /** @internal
@@ -199,6 +204,11 @@ static const struct {
 	"aplongitude", oApLongitude}, {
 	"aplatitude", oApLatitude}, {
 	"locationid", oLocationId}, {
+	"portalticketsecret", oPortalTicketSecret}, {
+	"portalticketttl", oPortalTicketTTL}, {
+	"portalticketstoremax", oPortalTicketStoreMax}, {
+	"portalticketstrictip", oPortalTicketStrictIp}, {
+	"portalticketrequired", oPortalTicketRequired}, {
 	NULL, oBadOption},
 };
 
@@ -370,6 +380,13 @@ void config_init(void)
 	config.ttl_values 			= safe_strdup(DEFAULT_TTL_VALUES);
 	config.anti_nat_permit_macs = NULL;
 	config.disable_portal_auth  = 1;
+
+	/* Portal ticket defaults: dual-track compatible (not required) */
+	config.portal_ticket_secret    = NULL;
+	config.portal_ticket_ttl       = 100;
+	config.portal_ticket_store_max = 1024;
+	config.portal_ticket_strict_ip = 0;
+	config.portal_ticket_required  = 0;
 
 	// Initialize device info
 	config.device_info = NULL;
@@ -1265,6 +1282,34 @@ config_read()
 					break;
 				case oDisablePortalAuth:
 					config.disable_portal_auth = parse_boolean_value(p1);
+					break;
+				case oPortalTicketSecret:
+					if (config.portal_ticket_secret)
+						free(config.portal_ticket_secret);
+					config.portal_ticket_secret = safe_strdup(p1);
+					break;
+				case oPortalTicketTTL: {
+					int ttl = atoi(p1);
+					if (ttl > 0 && ttl <= 86400)
+						config.portal_ticket_ttl = ttl;
+					else
+						debug(LOG_ERR, "Invalid PortalTicketTTL %s (1-86400)", p1);
+					break;
+				}
+				case oPortalTicketStoreMax: {
+					int n = atoi(p1);
+					/* Keep small routers safe while allowing larger AC deployments */
+					if (n >= 16 && n <= 65536)
+						config.portal_ticket_store_max = n;
+					else
+						debug(LOG_ERR, "Invalid PortalTicketStoreMax %s (16-65536)", p1);
+					break;
+				}
+				case oPortalTicketStrictIp:
+					config.portal_ticket_strict_ip = parse_boolean_value(p1);
+					break;
+				case oPortalTicketRequired:
+					config.portal_ticket_required = parse_boolean_value(p1);
 					break;
 				case oDeviceID:
 					if(config.device_id) free(config.device_id);

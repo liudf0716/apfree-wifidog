@@ -19,6 +19,9 @@
 #include "uci_helper.h"
 #include "util.h"
 #include "client_library/shell_executor.h"
+#include "portal_ticket.h"
+#include "util.h"
+#include "wd_util.h"
 
 void handle_gateway_state_heartbeat_request(json_object *j_heartbeat, api_transport_context_t *transport)
 {
@@ -904,6 +907,7 @@ void handle_get_websocket_server_request(json_object *j_req, api_transport_conte
 
 void handle_auth_request(json_object *j_auth, api_transport_context_t *transport) {
     json_object *j_response = api_response_new("auth_response");
+    s_config *cfg = config_get_config();
     if (is_portal_auth_disabled()) {
         debug(LOG_WARNING, "Portal authentication is disabled, ignoring auth request from server");
         api_response_set_success(j_response, "Portal authentication is currently disabled on this gateway");
@@ -918,16 +922,39 @@ void handle_auth_request(json_object *j_auth, api_transport_context_t *transport
     json_object *gw_id = json_object_object_get(j_auth, "gw_id");
     json_object *once_auth = json_object_object_get(j_auth, "once_auth");
     json_object *client_name = json_object_object_get(j_auth, "client_name");
+    json_object *j_portal_ticket = json_object_object_get(j_auth, "portal_ticket");
 
-    if (!token || !client_ip || !client_mac || !gw_id || !once_auth) {
-        debug(LOG_ERR, "Auth: Missing required fields in JSON response");
+    const char *token_str = token ? json_object_get_string(token) : NULL;
+    const char *gw_id_str = gw_id ? json_object_get_string(gw_id) : NULL;
+    const char *ticket_blob = (j_portal_ticket && json_object_is_type(j_portal_ticket, json_type_string))
+                                  ? json_object_get_string(j_portal_ticket) : NULL;
+    int has_ticket = (ticket_blob && ticket_blob[0] != '\0');
+
+    /* Dual-track: ticket path needs token+gw_id; legacy needs ip/mac too. */
+    if (!token_str || !gw_id_str || !once_auth) {
+        debug(LOG_ERR, "Auth: Missing required fields (token/gw_id/once_auth)");
         api_response_set_error(j_response, 1000, "Missing required fields in JSON response");
         send_json_response(transport, j_response);
         json_object_put(j_response);
         return;
     }
 
-    const char *gw_id_str = json_object_get_string(gw_id);
+    if (!has_ticket && cfg && cfg->portal_ticket_required) {
+        debug(LOG_ERR, "Auth: portal_ticket required but missing");
+        api_response_set_error(j_response, 1000, "portal_ticket required");
+        send_json_response(transport, j_response);
+        json_object_put(j_response);
+        return;
+    }
+
+    if (!has_ticket && (!client_ip || !client_mac)) {
+        debug(LOG_ERR, "Auth: Missing client_ip/client_mac for legacy auth");
+        api_response_set_error(j_response, 1000, "Missing required fields in JSON response");
+        send_json_response(transport, j_response);
+        json_object_put(j_response);
+        return;
+    }
+
     t_gateway_setting *gw_setting = get_gateway_setting_by_id(gw_id_str);
     if (!gw_setting) {
         debug(LOG_ERR, "Auth: Gateway %s not found", gw_id_str);
@@ -949,12 +976,92 @@ void handle_auth_request(json_object *j_auth, api_transport_context_t *transport
         return;
     }
 
-    const char *client_ip_str = json_object_get_string(client_ip);
-    const char *client_mac_str = json_object_get_string(client_mac);
-    const char *token_str = json_object_get_string(token);
+    char allow_ip[PORTAL_TICKET_IP_LEN] = {0};
+    char allow_mac[PORTAL_TICKET_MAC_LEN] = {0};
+    portal_ticket_payload_t ticket_payload;
 
-    if (client_list_find(client_ip_str, client_mac_str)) {
-        debug(LOG_DEBUG, "Auth: Client %s (%s) already authenticated", client_mac_str, client_ip_str);
+    if (has_ticket) {
+        if (portal_ticket_verify(ticket_blob, &ticket_payload) != 0) {
+            api_response_set_error(j_response, 1001, "Invalid or expired portal_ticket");
+            send_json_response(transport, j_response);
+            json_object_put(j_response);
+            return;
+        }
+        if (strcasecmp(ticket_payload.gw_id, gw_id_str) != 0) {
+            debug(LOG_ERR, "Auth: ticket gw_id mismatch");
+            api_response_set_error(j_response, 1001, "portal_ticket gw_id mismatch");
+            send_json_response(transport, j_response);
+            json_object_put(j_response);
+            return;
+        }
+
+        snprintf(allow_mac, sizeof(allow_mac), "%s", ticket_payload.mac);
+        snprintf(allow_ip, sizeof(allow_ip), "%s", ticket_payload.ip);
+
+        if (cfg && cfg->portal_ticket_strict_ip) {
+            char arp_mac[MAC_LENGTH] = {0};
+            if (!br_arp_get_mac(gw_setting, ticket_payload.ip, arp_mac) ||
+                portal_ticket_normalize_mac(arp_mac, allow_mac, sizeof(allow_mac)) != 0 ||
+                strcasecmp(allow_mac, ticket_payload.mac) != 0) {
+                debug(LOG_ERR, "Auth: strict IP ARP check failed for %s", ticket_payload.ip);
+                api_response_set_error(j_response, 1001, "portal_ticket LAN check failed");
+                send_json_response(transport, j_response);
+                json_object_put(j_response);
+                return;
+            }
+            snprintf(allow_mac, sizeof(allow_mac), "%s", ticket_payload.mac);
+            snprintf(allow_ip, sizeof(allow_ip), "%s", ticket_payload.ip);
+        } else {
+            /* Prefer current ARP IP for this MAC when available (DHCP rebind). */
+            char arp_mac[MAC_LENGTH] = {0};
+            if (br_arp_get_mac(gw_setting, ticket_payload.ip, arp_mac)) {
+                char norm[PORTAL_TICKET_MAC_LEN];
+                if (portal_ticket_normalize_mac(arp_mac, norm, sizeof(norm)) == 0 &&
+                    strcasecmp(norm, ticket_payload.mac) == 0) {
+                    /* ticket.ip still maps to ticket.mac — fine */
+                }
+            }
+            /* keep allow_ip from ticket unless we later resolve better; ticket.ip is OK */
+        }
+
+        if (portal_ticket_consume(ticket_payload.tid) != 0) {
+            api_response_set_error(j_response, 1001, "portal_ticket already used");
+            send_json_response(transport, j_response);
+            json_object_put(j_response);
+            return;
+        }
+        /* Ignore bare client_ip/client_mac when ticket is present. */
+    } else {
+        /* Legacy path for old auth servers / dual-track compatibility. */
+        const char *client_ip_str = json_object_get_string(client_ip);
+        const char *client_mac_str = json_object_get_string(client_mac);
+        if (!client_ip_str || !client_mac_str ||
+            portal_ticket_normalize_mac(client_mac_str, allow_mac, sizeof(allow_mac)) != 0) {
+            api_response_set_error(j_response, 1000, "Invalid client_ip/client_mac");
+            send_json_response(transport, j_response);
+            json_object_put(j_response);
+            return;
+        }
+        snprintf(allow_ip, sizeof(allow_ip), "%s", client_ip_str);
+
+        /* Soft LAN check: if ARP resolves, MAC must match (P0-ish). */
+        char arp_mac[MAC_LENGTH] = {0};
+        if (br_arp_get_mac(gw_setting, allow_ip, arp_mac)) {
+            char norm[PORTAL_TICKET_MAC_LEN];
+            if (portal_ticket_normalize_mac(arp_mac, norm, sizeof(norm)) == 0 &&
+                strcasecmp(norm, allow_mac) != 0) {
+                debug(LOG_ERR, "Auth: legacy ARP mac mismatch ip=%s expected=%s arp=%s",
+                      allow_ip, allow_mac, norm);
+                api_response_set_error(j_response, 1001, "client_ip/client_mac LAN mismatch");
+                send_json_response(transport, j_response);
+                json_object_put(j_response);
+                return;
+            }
+        }
+    }
+
+    if (client_list_find(allow_ip, allow_mac)) {
+        debug(LOG_DEBUG, "Auth: Client %s (%s) already authenticated", allow_mac, allow_ip);
         api_response_set_error(j_response, 1002, "Client already authenticated");
         send_json_response(transport, j_response);
         json_object_put(j_response);
@@ -962,7 +1069,7 @@ void handle_auth_request(json_object *j_auth, api_transport_context_t *transport
     }
 
     LOCK_CLIENT_LIST();
-    t_client *client = client_list_add(client_ip_str, client_mac_str, token_str, gw_setting);
+    t_client *client = client_list_add(allow_ip, allow_mac, token_str, gw_setting);
     client->auth_type = AUTH_TYPE_AUTH_SERVER;
     fw_allow(client, FW_MARK_KNOWN);
 
@@ -991,7 +1098,8 @@ void handle_auth_request(json_object *j_auth, api_transport_context_t *transport
     }
     UNLOCK_OFFLINE_CLIENT_LIST();
 
-    debug(LOG_DEBUG, "Auth: Added client %s (%s) with token %s", client_mac_str, client_ip_str, token_str);
+    debug(LOG_DEBUG, "Auth: Added client %s (%s) with token %s (ticket=%s)",
+          allow_mac, allow_ip, token_str, has_ticket ? "yes" : "legacy");
 
     api_response_set_success(j_response, "Client authenticated successfully");
     send_json_response(transport, j_response);
