@@ -28,6 +28,7 @@ static inline struct ring_buffer *ring_buffer__new(int map_fd, void *cb, void *c
 static inline int ring_buffer__poll(struct ring_buffer *rb, int timeout_ms) { (void)rb; (void)timeout_ms; return -ENOSYS; }
 static inline void ring_buffer__free(struct ring_buffer *rb) { (void)rb; }
 static inline int bpf_map_lookup_elem(int fd, const void *key, void *value) { (void)fd; (void)key; (void)value; errno = ENOENT; return -1; }
+static inline int libbpf_num_possible_cpus(void) { errno = ENOSYS; return -1; }
 #endif
 #include <fcntl.h>
 #include <sys/ioctl.h>
@@ -257,21 +258,44 @@ static int handle_dns_event(void *ctx, void *data, size_t data_sz)
 }
 
 
+#if 0
 static void print_dns_stats(int stats_map_fd)
 {
     __u32 key = 0;
-    struct dns_stats stats;
+    int num_cpus = libbpf_num_possible_cpus();
+    if (num_cpus <= 0) {
+        num_cpus = sysconf(_SC_NPROCESSORS_CONF);
+        if (num_cpus <= 0) num_cpus = 1;
+    }
+
+    struct dns_stats *stats_arr = calloc(num_cpus, sizeof(struct dns_stats));
+    if (!stats_arr) {
+        debug(LOG_ERR, "Failed to allocate memory for dns stats");
+        return;
+    }
     
-    if (bpf_map_lookup_elem(stats_map_fd, &key, &stats) == 0) {
+    if (bpf_map_lookup_elem(stats_map_fd, &key, stats_arr) == 0) {
+        struct dns_stats total_stats = {0};
+        for (int i = 0; i < num_cpus; i++) {
+            total_stats.dns_queries += stats_arr[i].dns_queries;
+            total_stats.dns_responses += stats_arr[i].dns_responses;
+            total_stats.dns_errors += stats_arr[i].dns_errors;
+            total_stats.ipv4_packets += stats_arr[i].ipv4_packets;
+            total_stats.ipv6_packets += stats_arr[i].ipv6_packets;
+        }
+
         debug(LOG_DEBUG, "=== DNS Statistics ===");
-        debug(LOG_DEBUG, "Queries: %llu", (unsigned long long)stats.dns_queries);
-        debug(LOG_DEBUG, "Responses: %llu", (unsigned long long)stats.dns_responses);
-        debug(LOG_DEBUG, "Errors: %llu", (unsigned long long)stats.dns_errors);
-        debug(LOG_DEBUG, "IPv4 Packets: %llu", (unsigned long long)stats.ipv4_packets);
-        debug(LOG_DEBUG, "IPv6 Packets: %llu", (unsigned long long)stats.ipv6_packets);
+        debug(LOG_DEBUG, "Queries: %llu", (unsigned long long)total_stats.dns_queries);
+        debug(LOG_DEBUG, "Responses: %llu", (unsigned long long)total_stats.dns_responses);
+        debug(LOG_DEBUG, "Errors: %llu", (unsigned long long)total_stats.dns_errors);
+        debug(LOG_DEBUG, "IPv4 Packets: %llu", (unsigned long long)total_stats.ipv4_packets);
+        debug(LOG_DEBUG, "IPv6 Packets: %llu", (unsigned long long)total_stats.ipv6_packets);
         debug(LOG_DEBUG, "======================");
     }
+    
+    free(stats_arr);
 }
+#endif
 
 // thread_dns_monitor — entry point created by gateway.c via create_detached_thread().
 // This function IS the long-running DNS monitor worker; no nested thread is created.
@@ -348,7 +372,9 @@ void *thread_dns_monitor(void *arg)
 
             // 每30秒打印一次eBPF统计信息
             if (current_time - last_stats_time >= 30) {
+#if 0
                 print_dns_stats(stats_map_fd);
+#endif
                 last_stats_time = current_time;
             }
 
@@ -393,7 +419,9 @@ void *thread_dns_monitor(void *arg)
 
     // 最后打印一次统计信息
     if (stats_map_fd >= 0) {
+#if 0
         print_dns_stats(stats_map_fd);
+#endif
         print_top_domains(TOP_DOMAINS_COUNT);
     }
     if (rb) {
