@@ -111,14 +111,13 @@ ev_logout_client(struct wd_request_context *context, t_client *client)
         context->ssl,
         get_auth_server()->authserv_use_ssl);
     if (!req_ctx) {
-        debug(LOG_ERR, "Failed to create per-request context for logout");
+        debug(LOG_ERR, "Failed to create request context for logout");
         client_free_node(client_snapshot);
         free(uri);
         return;
     }
 
     req_ctx->data = client_snapshot;
-    req_ctx->per_request = 1;
 
     /* wd_make_request returns 0 on success, non-zero on failure. */
     if (wd_make_request(req_ctx, &evcon, &req, process_auth_server_logout)) {
@@ -147,11 +146,13 @@ ev_logout_client(struct wd_request_context *context, t_client *client)
  * 3. Processing the auth server's response via callback
  * 
  * @param req The client's original HTTP request to respond to
- * @param context Request context containing connection state and callbacks
- * @param client The client to be authenticated
+ * @param context Shared request context (only base/ssl are borrowed; not mutated)
+ * @param client The client to be authenticated (live list node; callback owns cleanup on failure paths)
  * 
- * @note The function will free the client structure if authentication fails
- * @note context->data and context->clt_req are modified by this function
+ * @note Like logout/counter, a dedicated request-owned context carries data/clt_req
+ *       so concurrent logins do not overwrite each other's async state.
+ * @note The function will free the client structure if authentication fails before
+ *       the auth-server request is successfully queued.
  */
 void
 ev_authenticate_client(struct evhttp_request *req, 
@@ -175,36 +176,48 @@ ev_authenticate_client(struct evhttp_request *req,
 
     debug(LOG_DEBUG, "Processing login request with URI [%s]", uri);
 
-    // Validate context state
-    if (context->data != NULL) {
-        debug(LOG_WARNING, "Context data not NULL, potential memory leak");
-        context->data = NULL;
+    // Dedicated context so concurrent logins do not race on shared data/clt_req.
+    // Reuse base/ssl from the shared HTTP auth context (infrastructure only).
+    struct wd_request_context *req_ctx = wd_request_context_new(
+        context->base,
+        context->ssl,
+        get_auth_server()->authserv_use_ssl);
+    if (!req_ctx) {
+        debug(LOG_ERR, "Failed to create request context for login");
+        evhttp_send_error(req, HTTP_INTERNAL, "Internal Server Error");
+        safe_client_list_delete(client);
+        free(uri);
+        return;
     }
 
-    // Setup request context
-    context->data = client;
-    context->clt_req = req;
+    // Keep the live client list node: login must update firewall and list state
+    // on the real entry (unlike logout, which only needs a snapshot for id lookup).
+    req_ctx->data = client;
+    req_ctx->clt_req = req;
 
     // Setup and send auth server request
     struct evhttp_connection *wd_evcon = NULL;
     struct evhttp_request *wd_req = NULL;
 
     /* wd_make_request returns 0 on success, non-zero on failure. */
-    if (wd_make_request(context, &wd_evcon, &wd_req, process_auth_server_login)) {
+    if (wd_make_request(req_ctx, &wd_evcon, &wd_req, process_auth_server_login)) {
         debug(LOG_ERR, "Failed to create auth server login request");
         evhttp_send_error(req, HTTP_INTERNAL, "Internal Server Error");
         safe_client_list_delete(client);
-        context->data = NULL;
-        context->clt_req = NULL;
+        req_ctx->data = NULL;
+        req_ctx->clt_req = NULL;
+        wd_request_context_destroy(req_ctx);
     } else if (evhttp_make_request(wd_evcon, wd_req, EVHTTP_REQ_GET, uri) != 0) {
         debug(LOG_ERR, "Failed to queue auth server login request");
         evhttp_send_error(req, HTTP_INTERNAL, "Internal Server Error");
         if (wd_req) evhttp_request_free(wd_req);
         if (wd_evcon) evhttp_connection_free(wd_evcon);
         safe_client_list_delete(client);
-        context->data = NULL;
-        context->clt_req = NULL;
+        req_ctx->data = NULL;
+        req_ctx->clt_req = NULL;
+        wd_request_context_destroy(req_ctx);
     }
+    /* On success: process_auth_server_login owns req_ctx and destroys it when done. */
 
     free(uri);
 }

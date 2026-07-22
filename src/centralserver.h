@@ -29,8 +29,6 @@ struct roam_req_info {
     char mac[HTTP_MAC_LEN];
 };
 
-typedef struct roam_req_info auth_req_info;
-
 /* Forward declarations */
 struct evhttp_request;
 struct wd_request_context;
@@ -41,7 +39,6 @@ char *get_auth_counter_v2_uri(void);
 
 /* Request handler functions */
 void make_roam_request(struct wd_request_context *context, struct roam_req_info *info);
-void make_auth_request(struct wd_request_context *context, auth_req_info *info);
 
 /* Response processor functions */
 void process_auth_server_login(struct evhttp_request *req, void *ctx);

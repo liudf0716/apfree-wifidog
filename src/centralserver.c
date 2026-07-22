@@ -39,12 +39,17 @@
 static void
 process_auth_server_roam(struct evhttp_request *req, void *ctx)
 {
-    struct roam_req_info *roam = ((struct wd_request_context *)ctx)->data;
-    
+    struct wd_request_context *context = (struct wd_request_context *)ctx;
+    struct roam_req_info *roam = context ? (struct roam_req_info *)context->data : NULL;
+    if (context)
+        context->data = NULL;
+
     // Validate request
     if (!req) {
         mark_auth_offline();
         free(roam);
+        if (context)
+            wd_request_context_destroy(context);
         return;
     }
 
@@ -57,6 +62,8 @@ process_auth_server_roam(struct evhttp_request *req, void *ctx)
     } else {
         mark_auth_offline();
         free(roam);
+        if (context)
+            wd_request_context_destroy(context);
         return;
     }
 
@@ -65,6 +72,8 @@ process_auth_server_roam(struct evhttp_request *req, void *ctx)
     if (!roam_info) {
         debug(LOG_ERR, "Failed to parse JSON response: %s", buffer);
         free(roam);
+        if (context)
+            wd_request_context_destroy(context);
         return;
     }
 
@@ -73,6 +82,8 @@ process_auth_server_roam(struct evhttp_request *req, void *ctx)
     if (!json_object_object_get_ex(roam_info, "roam", &roam_jo)) {
         json_object_put(roam_info);
         free(roam);
+        if (context)
+            wd_request_context_destroy(context);
         return;
     }
     
@@ -89,6 +100,8 @@ process_auth_server_roam(struct evhttp_request *req, void *ctx)
 
     json_object_put(roam_info);
     free(roam);
+    if (context)
+        wd_request_context_destroy(context);
 }
 
 /**
@@ -148,174 +161,34 @@ make_roam_request(struct wd_request_context *context, struct roam_req_info *roam
 
     debug(LOG_DEBUG, "Roaming request URI: [%s]", uri);
 
+    struct wd_request_context *req_ctx = wd_request_context_new(
+        context->base, context->ssl, get_auth_server()->authserv_use_ssl);
+    if (!req_ctx) {
+        debug(LOG_ERR, "Failed to create request context for roam");
+        free(roam);
+        free(uri);
+        return;
+    }
+
     struct evhttp_connection *evcon = NULL;
     struct evhttp_request *req = NULL;
-    context->data = roam;
+    req_ctx->data = roam;
 
-    if (!wd_make_request(context, &evcon, &req, process_auth_server_roam)) {
+    if (!wd_make_request(req_ctx, &evcon, &req, process_auth_server_roam)) {
         if (evhttp_make_request(evcon, req, EVHTTP_REQ_GET, uri) != 0) {
             debug(LOG_ERR, "Failed to queue roaming request to auth server");
             evhttp_request_free(req);
             evhttp_connection_free(evcon);
             free(roam);
-            context->data = NULL;
+            req_ctx->data = NULL;
+            wd_request_context_destroy(req_ctx);
         }
+        /* success: process_auth_server_roam destroys req_ctx */
     } else {
         debug(LOG_ERR, "Failed to create HTTP request");
         free(roam);
-    }
-
-    free(uri);
-}
-
-/**
- * @brief Process authentication server's v2 login response
- *
- * Handles JSON response from auth server for v2 login requests.
- * Expected JSON format:
- * {
- *   "ret_code": 0,            // 0 = success, non-zero = failure
- *   "client": {               // Client authentication details
- *     "token": "...",
- *     "first_login": "...",
- *     ...
- *   }
- * }
- *
- * @param req HTTP request containing auth server response
- * @param ctx Request context containing auth info that must be freed
- */
-static void
-process_auth_server_login_v2(struct evhttp_request *req, void *ctx)
-{
-    auth_req_info *auth = ((struct wd_request_context *)ctx)->data;
-    debug(LOG_DEBUG, "Processing auth server login v2 response");
-
-    // Read response data
-    char buffer[MAX_BUF] = {0};
-    if (evbuffer_remove(evhttp_request_get_input_buffer(req), buffer, MAX_BUF-1) <= 0) {
-        debug(LOG_ERR, "Failed to read auth server response");
-        free(auth);
-        return;
-    }
-
-    // Parse JSON response
-    json_object *json_resp = json_tokener_parse(buffer);
-    if (!json_resp) {
-        debug(LOG_ERR, "Failed to parse JSON response");
-        free(auth);
-        return;
-    }
-
-    // Check return code
-    json_object *ret_code = NULL;
-    if (!json_object_object_get_ex(json_resp, "ret_code", &ret_code)) {
-        debug(LOG_ERR, "Missing ret_code in response");
-        json_object_put(json_resp);
-        free(auth);
-        return;
-    }
-
-    int retCode = json_object_get_int(ret_code);
-    if (retCode != 0) {
-        debug(LOG_INFO, "Authentication failed with code: %d", retCode);
-        json_object_put(json_resp);
-        free(auth);
-        return;
-    }
-
-    // Process client info if present
-    json_object *client = NULL;
-    if (json_object_object_get_ex(json_resp, "client", &client)) {
-        add_online_client(auth->ip, auth->mac, client);
-    } else {
-        debug(LOG_ERR, "Missing client info in successful response");
-    }
-
-    json_object_put(json_resp);
-    free(auth);
-}
-
-/**
- * @brief Get login v2 request URI for authenticating clients
- *
- * Constructs the URI used for v2 login requests to the auth server.
- * The URI includes parameters like:
- * - Gateway ID and channel 
- * - Gateway address and port
- * - Client MAC and IP address
- *
- * @param gw_setting Gateway settings containing ID, address etc
- * @param auth_server Auth server configuration 
- * @param auth Authentication request info with client details
- * @return Dynamically allocated string containing complete URI.
- *         Must be freed by caller.
- *         Returns NULL on memory allocation failure.
- */
-static char *
-get_login_v2_request_uri(t_gateway_setting *gw_setting, 
-                        t_auth_serv *auth_server,
-                        const auth_req_info *auth)
-{
-    char *login_uri = NULL;
-    if (safe_asprintf(&login_uri,
-            "%slogin2?gw_id=%s&gw_address=%s&gw_port=%d"
-            "&mac=%s&gw_channel=%s&ip=%s",
-            auth_server->authserv_path,
-            gw_setting->gw_id,
-            gw_setting->gw_address_v4,
-            config_get_config()->gw_port,
-            auth->mac,
-            gw_setting->gw_channel,
-            auth->ip) < 0) {
-        return NULL;
-    }
-    return login_uri;
-}
-
-/**
- * @brief Make authentication request to auth server
- *
- * Sends a v2 login request to authenticate a client with the auth server.
- * Request flow:
- * 1. Constructs login URI with client and gateway details
- * 2. Creates HTTP connection and request
- * 3. Sends request to auth server
- * 4. Response handled by process_auth_server_login_v2()
- *
- * @param context Request context for tracking state
- * @param auth Authentication request data, freed after use
- */
-void 
-make_auth_request(struct wd_request_context *context, auth_req_info *auth)
-{
-    char *uri = get_login_v2_request_uri(get_gateway_settings(), 
-                                        get_auth_server(), 
-                                        auth);
-    if (!uri) {
-        debug(LOG_ERR, "Failed to create login v2 URI");
-        free(auth);
-        return;
-    }
-
-    debug(LOG_DEBUG, "Login v2 request URI: [%s]", uri);
-
-    struct evhttp_connection *evcon = NULL;
-    struct evhttp_request *req = NULL;
-    context->data = auth;
-
-    // Create and send HTTP request
-    if (!wd_make_request(context, &evcon, &req, process_auth_server_login_v2)) {
-        if (evhttp_make_request(evcon, req, EVHTTP_REQ_GET, uri) != 0) {
-            debug(LOG_ERR, "Failed to queue v2 login request to auth server");
-            evhttp_request_free(req);
-            evhttp_connection_free(evcon);
-            free(auth);
-            context->data = NULL;
-        }
-    } else {
-        debug(LOG_ERR, "Failed to create HTTP request");
-        free(auth);
+        req_ctx->data = NULL;
+        wd_request_context_destroy(req_ctx);
     }
 
     free(uri);
@@ -586,8 +459,9 @@ cleanup:
         // context->data stores a client snapshot owned by this callback.
         client_free_node(client);
     }
-    context->data = NULL; // Clear client pointer from context
-    if (context->per_request) {
+    if (context) {
+        context->data = NULL;
+        /* Request-owned context: always destroy after the async round-trip. */
         wd_request_context_destroy(context);
     }
 }
@@ -677,10 +551,17 @@ client_login_request_reply(t_authresponse *authresponse,
     t_auth_serv *auth_server = get_auth_server();
     char *url_fragment = NULL;
 
-    // Validate request
+    if (!client) {
+        debug(LOG_ERR, "Got NULL client in client_login_request_reply");
+        if (req) {
+            evhttp_send_error(req, 200, "Internal Error: Unable to validate request");
+        }
+        return;
+    }
+
+    // Validate browser request; never call HTTP APIs on a NULL req
     if (!req) {
         debug(LOG_ERR, "Got NULL request in client_login_request_reply");
-        evhttp_send_error(req, 200, "Internal Error: Unable to validate request");
         safe_client_list_delete(client);
         return;
     }
@@ -750,6 +631,7 @@ client_login_request_reply(t_authresponse *authresponse,
  * 1. Parses the auth server response to get authentication code
  * 2. If successful, processes the login response and updates client state 
  * 3. If parsing fails, removes client and sends error response
+ * 4. Always destroys the request-owned context after handling
  *
  * The login response determines whether to:
  * - Allow/deny client access
@@ -764,25 +646,41 @@ process_auth_server_login(struct evhttp_request *req, void *ctx)
 {
     t_authresponse authresponse;
     struct wd_request_context *context = (struct wd_request_context *)ctx;
-    t_client *client = (t_client *)context->data;
+    t_client *client;
+    struct evhttp_request *clt_req;
+
+    if (!context) {
+        debug(LOG_ERR, "process_auth_server_login: NULL context");
+        return;
+    }
+
+    client = (t_client *)context->data;
+    clt_req = context->clt_req;
 
     memset(&authresponse, 0, sizeof(t_authresponse));
 
     if (parse_auth_server_response(&authresponse, req)) {
         // Successfully parsed - process the login response
-        client_login_request_reply(&authresponse, context->clt_req, context);
+        client_login_request_reply(&authresponse, clt_req, context);
     } else {
         // Failed to parse - remove client and send error
         debug(LOG_ERR, "Failed to parse auth server response for client %s",
               client ? client->ip : "unknown");
 
+        context->data = NULL;
         if (client) {
             safe_client_list_delete(client);
         }
 
-        evhttp_send_error(context->clt_req, 200,
-            "Internal Error: Unable to validate your request at this time");
+        if (clt_req) {
+            evhttp_send_error(clt_req, 200,
+                "Internal Error: Unable to validate your request at this time");
+        }
     }
+
+    context->clt_req = NULL;
+    /* Request-owned context: always destroy after the async round-trip. */
+    wd_request_context_destroy(context);
 }
 
 static time_t
@@ -872,34 +770,32 @@ client_counter_request_reply(t_authresponse *authresponse,
 void
 process_auth_server_counter(struct evhttp_request *req, void *ctx)
 {
+    struct wd_request_context *context = (struct wd_request_context *)ctx;
     t_authresponse authresponse;
     memset(&authresponse, 0, sizeof(t_authresponse));
 
     // Parse the auth server's response
     if (parse_auth_server_response(&authresponse, req)) {
         // Successfully parsed - process the counter response
-        client_counter_request_reply(&authresponse, req, ctx);
-        /* If this context was created per-request, destroy it now. */
-        struct wd_request_context *rctx = (struct wd_request_context *)ctx;
-        if (rctx && rctx->per_request) {
-            wd_request_context_destroy(rctx);
-        }
+        client_counter_request_reply(&authresponse, req, context);
     } else {
-        // Failed to parse - clean up client data
-        t_client *client = (t_client *)((struct wd_request_context *)ctx)->data;
+        // Failed to parse - clean up client snapshot
+        t_client *client = context ? (t_client *)context->data : NULL;
         debug(LOG_ERR, "Failed to parse auth server response for client %s", 
               client ? client->ip : "unknown");
         
-        t_client *client_to_free = (t_client *)((struct wd_request_context *)ctx)->data;
-        if (client_to_free) {
-            client_free_node(client_to_free);
+        if (client) {
+            client_free_node(client);
         }
-        ((struct wd_request_context *)ctx)->data = NULL;
-        struct wd_request_context *rctx = (struct wd_request_context *)ctx;
-        if (rctx && rctx->per_request) {
-            wd_request_context_destroy(rctx);
-        }
+        if (context)
+            context->data = NULL;
     }
+
+    /* Request-owned context: always destroy after the async round-trip.
+     * Note: client_counter_request_reply may call ev_logout_client(), which
+     * only borrows base/ssl and creates its own request context. */
+    if (context)
+        wd_request_context_destroy(context);
 }
 
 /**
@@ -1110,8 +1006,12 @@ handle_json_array_from_auth_server(json_object *j_result, struct evhttp_request 
 void
 process_auth_server_counter_v2(struct evhttp_request *req, void *ctx)
 {
+    struct wd_request_context *context = (struct wd_request_context *)ctx;
+
     if (!req) {
         mark_auth_offline();
+        if (context)
+            wd_request_context_destroy(context);
         return;
     }
 
@@ -1119,6 +1019,8 @@ process_auth_server_counter_v2(struct evhttp_request *req, void *ctx)
     char *response_data = read_api_response(req);
     if (!response_data) {
         debug(LOG_ERR, "Failed to read API response");
+        if (context)
+            wd_request_context_destroy(context);
         return;
     }
 
@@ -1129,6 +1031,8 @@ process_auth_server_counter_v2(struct evhttp_request *req, void *ctx)
     if (!json_response) {
         debug(LOG_ERR, "Failed to parse JSON response");
         free(response_data);
+        if (context)
+            wd_request_context_destroy(context);
         return;
     }
 
@@ -1138,13 +1042,17 @@ process_auth_server_counter_v2(struct evhttp_request *req, void *ctx)
         debug(LOG_ERR, "No 'result' field in JSON response");
         json_object_put(json_response);
         free(response_data);
+        if (context)
+            wd_request_context_destroy(context);
         return;
     }
 
-    // Process the result array
-    handle_json_array_from_auth_server(result_array, req, ctx);
+    // Process the result array (may call ev_logout_client using context->base/ssl)
+    handle_json_array_from_auth_server(result_array, req, context);
 
     // Cleanup
     json_object_put(json_response);
     free(response_data);
+    if (context)
+        wd_request_context_destroy(context);
 }

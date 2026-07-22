@@ -251,10 +251,6 @@ wd_request_context_new(struct event_base *base, SSL *ssl, int authserv_use_ssl)
 	context->clt_req = NULL;
 	context->data = NULL;
 
-	// By default contexts created here are shared; callers can mark
-	// per-request contexts by setting ->per_request = 1.
-	context->per_request = 0;
-
 	return context;
 }
 

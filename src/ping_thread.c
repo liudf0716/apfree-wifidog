@@ -201,7 +201,7 @@ ping_work_cb(evutil_socket_t fd, short event, void *arg) {
 		first_online = 0;
 	}
 
-	struct wd_request_context *request_ctx = (struct wd_request_context *)arg;
+	struct wd_request_context *factory_ctx = (struct wd_request_context *)arg;
 	t_gateway_setting *gw_settings = get_gateway_settings();
 	if (!gw_settings) {
 		debug(LOG_INFO, "no gateway setting");
@@ -216,10 +216,20 @@ ping_work_cb(evutil_socket_t fd, short event, void *arg) {
 	if (!uri) return; // impossibe
 	debug(LOG_DEBUG, "uri is %s", uri);
 
+	/* Request-owned context: factory only supplies base/ssl. */
+	struct wd_request_context *req_ctx = wd_request_context_new(
+		factory_ctx->base, factory_ctx->ssl, get_auth_server()->authserv_use_ssl);
+	if (!req_ctx) {
+		debug(LOG_ERR, "Failed to create request context for ping");
+		free(uri);
+		return;
+	}
+
 	struct evhttp_request *req = NULL;
 	struct evhttp_connection *evcon = NULL;
-	if (wd_make_request(request_ctx, &evcon, &req, process_ping_response)) {
+	if (wd_make_request(req_ctx, &evcon, &req, process_ping_response)) {
 		debug(LOG_ERR, "Failed to make request to auth server");
+		wd_request_context_destroy(req_ctx);
 		free(uri);
 		return;
 	}
@@ -228,7 +238,9 @@ ping_work_cb(evutil_socket_t fd, short event, void *arg) {
 		debug(LOG_ERR, "Failed to queue ping request to auth server");
 		evhttp_request_free(req);
 		evhttp_connection_free(evcon);
+		wd_request_context_destroy(req_ctx);
 	}
+	/* success: process_ping_response destroys req_ctx */
 	free(uri);	
 }
 
@@ -523,6 +535,7 @@ static void
 process_ping_response(struct evhttp_request *req, void *ctx)
 {
 	static int authdown = 0;
+	struct wd_request_context *context = (struct wd_request_context *)ctx;
 	
 	if (!req) {
 		mark_auth_offline();
@@ -530,6 +543,8 @@ process_ping_response(struct evhttp_request *req, void *ctx)
             fw_set_authdown();
             authdown = 1;
         }
+		if (context)
+			wd_request_context_destroy(context);
 		return;
 	}
 	
@@ -559,4 +574,7 @@ process_ping_response(struct evhttp_request *req, void *ctx)
             authdown = 0;
         }
     }
+
+	if (context)
+		wd_request_context_destroy(context);
 }

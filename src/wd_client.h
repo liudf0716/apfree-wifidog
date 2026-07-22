@@ -11,22 +11,26 @@
 #define WD_CONNECT_TIMEOUT  2
 
 /**
- * @brief Context structure for wifidog HTTP requests
- * 
- * @param ssl Borrowed SSL template used to derive per-request SSL objects
+ * @brief Context for auth-server HTTP work (libevent)
+ *
+ * Two usage modes:
+ * - **Factory** (long-lived): holds base/ssl only. Used by the HTTP portal
+ *   server and wd_request_loop. Never passed as wd_make_request() callback arg.
+ * - **Request-owned** (short-lived): created with wd_request_context_new() for
+ *   one async auth-server call. Always passed to wd_make_request(); the response
+ *   callback must always call wd_request_context_destroy().
+ *
+ * @param ssl Borrowed SSL template used to derive per-connection SSL objects
  * @param base Event base for libevent
- * @param clt_req Client HTTP request
- * @param data Additional user data
+ * @param clt_req Optional browser HTTP request (login path)
+ * @param data Optional user data; not freed by wd_request_context_destroy()
  */
 struct wd_request_context {
     SSL *ssl;
     struct event_base *base;
     struct evhttp_request *clt_req;
-    void *data; /**< Additional user data. Its lifecycle is managed by the user of this context,
-                     *   not by wd_request_context_destroy(). The callback or the setup code
-                     *   is responsible for allocating and freeing this data if necessary. */
-    int per_request; /**< If set, context was created for a single request and should be
-                        * destroyed by the response callback after handling. */
+    void *data; /**< Request-private user data. Lifecycle is managed by the
+                     *   setup code / response callback, not by destroy(). */
 };
 
 /**

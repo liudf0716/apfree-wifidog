@@ -46,9 +46,10 @@ void ev_logout_client(struct wd_request_context *context, t_client *client);
 
 /**
  * @brief Processes client authentication
- * @param request HTTP request object
- * @param context Request context
- * @param client Client to authenticate
+ * @param request HTTP request object (browser); held until auth-server callback
+ * @param context Shared auth context (base/ssl only; not used for data/clt_req)
+ * @param client Live client list node to authenticate
+ * @note Allocates a request-owned context for the async auth-server round-trip
  */
 void ev_authenticate_client(struct evhttp_request *request, 
                           struct wd_request_context *context, 
