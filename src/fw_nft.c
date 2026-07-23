@@ -169,7 +169,8 @@ static int aw_bpfctl_available(void)
     if (!path_copy)
         return 0;
 
-    char *tok = strtok(path_copy, ":");
+    char *saveptr = NULL;
+    char *tok = strtok_r(path_copy, ":", &saveptr);
     while (tok) {
         char buf[PATH_MAX];
 
@@ -177,7 +178,7 @@ static int aw_bpfctl_available(void)
             free(path_copy);
             return 1;
         }
-        tok = strtok(NULL, ":");
+        tok = strtok_r(NULL, ":", &saveptr);
     }
 
     free(path_copy);
@@ -923,9 +924,12 @@ nft_fw_reload_client()
 {
     NFT_WIFIDOGX_BYPASS_MODE_RETURN(0);
 
+    LOCK_CLIENT_LIST();
+
     t_client *first_client = client_get_first_client();
     if (first_client == NULL) {
         debug(LOG_INFO, "No clients in list!");
+        UNLOCK_CLIENT_LIST();
         return 1;
     }
 
@@ -934,6 +938,7 @@ nft_fw_reload_client()
     if (fp == NULL) {
         debug(LOG_ERR, "Failed to open %s: %s", 
               NFT_WIFIDOGX_CLIENT_LIST, strerror(errno));
+        UNLOCK_CLIENT_LIST();
         return 1;
     }
 
@@ -943,7 +948,7 @@ nft_fw_reload_client()
     
     // Add rules for each client
     t_client *current = first_client;
-    char rule[256];
+    char rule[512];
     do {
         // Add outgoing rule with counters
         snprintf(rule, sizeof(rule), 
@@ -968,6 +973,7 @@ nft_fw_reload_client()
     } while (current != NULL);
 
     fclose(fp);
+    UNLOCK_CLIENT_LIST();
 
     // Apply the rules
     return nftables_do_command(" -f %s", NFT_WIFIDOGX_CLIENT_LIST);
