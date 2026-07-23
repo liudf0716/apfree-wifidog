@@ -89,8 +89,6 @@ void fw_clear_inner_domains_trusted(void);
 void fw_refresh_inner_domains_trusted(void);
 
 
-void fw_clear_roam_maclist(void);
-void fw_set_roam_mac(const char *);
 
 void fw_set_trusted_local_maclist();
 void fw_clear_trusted_local_maclist();

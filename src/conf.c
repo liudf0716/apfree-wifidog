@@ -340,7 +340,6 @@ void config_init(void)
 	config.wildcard_domains_trusted      = NULL;
 	config.domains_trusted          = NULL;
 	config.inner_domains_trusted    = NULL;
-	config.roam_maclist             = NULL;
 	config.trusted_local_maclist    = NULL;
 	config.mac_blacklist            = NULL;
 
@@ -1593,12 +1592,6 @@ parse_del_untrusted_mac_list(const char *pstr)
 	parse_mac_list_action(pstr, UNTRUSTED_MAC, 0);
 }
 
-void
-parse_roam_mac_list(const char *pstr)
-{
-	parse_mac_list_action(pstr, ROAM_MAC, 1);
-}
-
 /** @internal
  * Add a popular server to the list. It prepends for simplicity.
  * @param server The hostname to add.
@@ -2164,7 +2157,6 @@ __clear_mac_list(mac_choice_t which)
 	case TRUSTED_MAC: list_head_ptr = &config.trustedmaclist; break;
 	case UNTRUSTED_MAC: list_head_ptr = (t_trusted_mac**)&config.mac_blacklist; break; // Cast needed
 	case TRUSTED_LOCAL_MAC: list_head_ptr = &config.trusted_local_maclist; break;
-	case ROAM_MAC: list_head_ptr = &config.roam_maclist; break;
 	default: return;
 	}
 	
@@ -2177,20 +2169,6 @@ __clear_mac_list(mac_choice_t which)
 		p = next;
 	}
 	*list_head_ptr = NULL;
-}
-
-void
-clear_roam_mac_list()
-{
-	LOCK_CONFIG();
-	__clear_mac_list(ROAM_MAC); // Will be replaced by free_trusted_mac_list
-	UNLOCK_CONFIG();
-}
-
-t_trusted_mac *
-get_roam_maclist()
-{
-	return config.roam_maclist;
 }
 
 bool
@@ -2444,10 +2422,6 @@ void config_cleanup(void) {
     if (cfg->trustedmaclist) {
         free_trusted_mac_list(cfg->trustedmaclist);
         cfg->trustedmaclist = NULL;
-    }
-    if (cfg->roam_maclist) {
-        free_trusted_mac_list(cfg->roam_maclist);
-        cfg->roam_maclist = NULL;
     }
     if (cfg->trusted_local_maclist) {
         free_trusted_mac_list(cfg->trusted_local_maclist);

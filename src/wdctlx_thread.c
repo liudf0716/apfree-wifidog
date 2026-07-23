@@ -10,7 +10,6 @@
 #include "conf.h"
 #include "debug.h"
 #include "auth.h"
-#include "centralserver.h"
 #include "firewall.h"
 #include "client_list.h"
 #include "wdctlx_thread.h"
@@ -18,7 +17,6 @@
 #include "commandline.h"
 #include "gateway.h"
 #include "safe.h"
-#include "wd_client.h"
 #include "client_snapshot.h"
 #include "hotplug_listener.h"
 #include "api_handlers.h"
@@ -34,8 +32,6 @@ static void wdctl_clear_trusted_iplist(struct bufferevent *);
 static void wdctl_reparse_trusted_domains(struct bufferevent *);
 static void wdctl_clear_trusted_domains(struct bufferevent *);
 static void wdctl_show_trusted_domains(struct bufferevent *);
-static void wdctl_show_roam_maclist(struct bufferevent *);
-static void wdctl_clear_roam_maclist(struct bufferevent *);
 static void wdctl_show_trusted_maclist(struct bufferevent *);
 static void wdctl_clear_trusted_maclist(struct bufferevent *);
 static void wdctl_show_trusted_local_maclist(struct bufferevent *);
@@ -52,14 +48,12 @@ static void wdctl_del_trusted_domains(struct bufferevent *, const char *);
 static void wdctl_add_trusted_iplist(struct bufferevent *, const char *);
 static void wdctl_del_trusted_iplist(struct bufferevent *, const char *);
 static void wdctl_add_domain_ip(struct bufferevent *, const char *);
-static void wdctl_add_roam_maclist(struct bufferevent *, const char *);
 static void wdctl_add_trusted_maclist(struct bufferevent *, const char *);
 static void wdctl_del_trusted_maclist(struct bufferevent *, const char *);
 static void wdctl_add_trusted_local_maclist(struct bufferevent *, const char *);
 static void wdctl_del_trusted_local_maclist(struct bufferevent *, const char *);
 static void wdctl_add_untrusted_maclist(struct bufferevent *, const char *);
 static void wdctl_del_untrusted_maclist(struct bufferevent *, const char *);
-static void wdctl_add_online_client(struct bufferevent *, const char *);
 static void wdctl_add_auth_client(struct bufferevent *, const char *);
 static void wdctl_set_local_portal(struct bufferevent *, const char *);
 
@@ -80,9 +74,6 @@ static void wdctl_bpf_update(struct bufferevent *fd, const char *args);
 static void wdctl_bpf_update_all(struct bufferevent *fd, const char *args);
 static int wdctl_send_response_func(api_transport_context_t *transport, const char *message, size_t length);
 
-static struct wd_request_context *request_ctx;
-static const char *no_auth_response = "no auth server";
-
 static struct wdctl_command {
     const char *command;
     void (*process_cmd)(struct bufferevent *bev);
@@ -97,8 +88,6 @@ static struct wdctl_command {
     {"reparse_trusted_domains", wdctl_reparse_trusted_domains, NULL},
     {"clear_trusted_domains", wdctl_clear_trusted_domains, NULL},
     {"show_trusted_domains", wdctl_show_trusted_domains, NULL},
-    {"show_roam_mac", wdctl_show_roam_maclist, NULL},
-    {"clear_roam_mac", wdctl_clear_roam_maclist, NULL},
     {"show_trusted_mac", wdctl_show_trusted_maclist, NULL},
     {"clear_trusted_mac", wdctl_clear_trusted_maclist, NULL},
     {"show_trusted_local_mac", wdctl_show_trusted_local_maclist, NULL},
@@ -115,14 +104,12 @@ static struct wdctl_command {
     {"add_trusted_iplist", NULL, wdctl_add_trusted_iplist},
     {"del_trusted_iplist", NULL, wdctl_del_trusted_iplist},
     {"add_domain_ip", NULL, wdctl_add_domain_ip},
-    {"add_roam_mac", NULL, wdctl_add_roam_maclist},
     {"add_trusted_mac", NULL, wdctl_add_trusted_maclist},
     {"del_trusted_mac", NULL, wdctl_del_trusted_maclist},
     {"add_trusted_local_mac", NULL, wdctl_add_trusted_local_maclist},
     {"del_trusted_local_mac", NULL, wdctl_del_trusted_local_maclist},
     {"add_untrusted_mac", NULL, wdctl_add_untrusted_maclist},
     {"del_untrusted_mac", NULL, wdctl_del_untrusted_maclist},
-    {"add_online_client", NULL, wdctl_add_online_client},
     {"add_auth_client", NULL, wdctl_add_auth_client},
     {"set_local_portal", NULL, wdctl_set_local_portal},
 
@@ -254,18 +241,6 @@ thread_wdctl(void *arg)
 
     struct event_base *wdctl_base = event_base_new();
     if (!wdctl_base) termination_handler(0);
-
-    if (get_auth_server()) {
-        SSL_CTX *ssl_ctx = SSL_CTX_new(TLS_method());
-        if (!ssl_ctx) termination_handler(0);
-
-        SSL *ssl = SSL_new(ssl_ctx);
-        if (!ssl) termination_handler(0);
-
-        request_ctx = wd_request_context_new(
-            wdctl_base, ssl, get_auth_server()->authserv_use_ssl);
-        if (!request_ctx) termination_handler(0);
-    }
 
     struct evconnlistener *listener = evconnlistener_new_bind(wdctl_base, wdctl_listen_new_client, wdctl_base,
         LEV_OPT_CLOSE_ON_FREE|LEV_OPT_CLOSE_ON_EXEC|LEV_OPT_REUSEABLE,
@@ -565,39 +540,6 @@ wdctl_add_domain_ip(struct bufferevent *fd, const char *args)
     bufferevent_write(fd, "Yes", 3);
 }
 
-// roam maclist
-static void
-wdctl_add_roam_maclist(struct bufferevent *fd, const char *args)
-{
-    LOCK_CONFIG();
-    parse_roam_mac_list(args);	
-    UNLOCK_CONFIG();
-    
-    bufferevent_write(fd, "Yes", 3);
-}
-
-static void
-wdctl_show_roam_maclist(struct bufferevent *fd)
-{
-    char *status = get_roam_maclist_text();
-    if (status) {
-        size_t len = strlen(status);
-        bufferevent_write(fd, status, len);   /* XXX Not handling error because we'd just print the same log line. */
-        free(status);
-    } else {
-        bufferevent_write(fd, "No", 2);
-    }
-}
-
-static void
-wdctl_clear_roam_maclist(struct bufferevent *fd)
-{
-    clear_roam_mac_list();
-    fw_clear_roam_maclist();
-
-    bufferevent_write(fd, "Yes", 3);
-}
-
 void 
 del_trusted_maclist(const char *args)
 {
@@ -799,50 +741,6 @@ static void
 wdctl_user_cfg_save(struct bufferevent *fd)
 {
     user_cfg_save();	
-    bufferevent_write(fd, "Yes", 3);
-}
-
-/**
- * @brief this interface should be called by dnsmasq by its new event
- * 
- * @args It's json of client's request like this:
- * {"mac":"device_mac", "ip":"device_ip"}
- * 
- */ 
-static void
-wdctl_add_online_client(struct bufferevent *fd, const char *args)
-{  
-    if (!request_ctx) {
-        bufferevent_write(fd, no_auth_response, strlen(no_auth_response));
-        return;
-    }
-
-    json_object *client_info = json_tokener_parse(args);
-    if(is_error(client_info) || json_object_get_type(client_info) != json_type_object) { 
-        goto OUT;
-    }
-
-    json_object *mac_jo = NULL;
-    json_object *ip_jo 	= NULL;
-    json_object *name_jo = NULL;
-    if(!json_object_object_get_ex(client_info, "mac", &mac_jo) || 
-       !json_object_object_get_ex(client_info, "ip", &ip_jo) || 
-       !json_object_object_get_ex(client_info, "name", &name_jo)) { 
-        goto OUT;
-    }
-
-    const char *mac  = json_object_get_string(mac_jo);
-    const char *ip	 = json_object_get_string(ip_jo);
-    if (!is_valid_mac(mac) || !is_valid_ip(ip) || !is_trusted_mac(mac))
-        goto OUT;
-
-    struct roam_req_info *roam = safe_malloc(sizeof(struct roam_req_info));
-    memcpy(roam->ip, ip, strlen(ip));
-    memcpy(roam->mac, mac, strlen(mac));
-    make_roam_request(request_ctx, roam);
-    
-OUT:
-    if (client_info) json_object_put(client_info);
     bufferevent_write(fd, "Yes", 3);
 }
 

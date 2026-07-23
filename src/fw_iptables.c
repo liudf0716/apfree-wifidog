@@ -444,18 +444,6 @@ iptables_fw_set_inner_domains_trusted(void)
 
 
 void
-iptables_fw_clear_roam_maclist(void)
-{
-	iptables_flush_ipset(CHAIN_ROAM);
-}
-
-void
-iptables_fw_set_roam_mac(const char *mac)
-{
-	ipset_do_command("add " CHAIN_ROAM " %s", mac);
-}
-
-void
 iptables_fw_clear_trusted_maclist(void)
 {
 	iptables_flush_ipset(CHAIN_TRUSTED);
@@ -686,7 +674,6 @@ iptables_fw_init(void)
 	// add ipset support
 	ipset_do_command("create " CHAIN_TRUSTED " hash:mac timeout 0 ");
 	ipset_do_command("create " CHAIN_TRUSTED_LOCAL " hash:mac timeout 0 ");
-	ipset_do_command("create " CHAIN_ROAM " hash:mac timeout 0 ");
 	ipset_do_command("create " CHAIN_UNTRUSTED " hash:mac timeout 0 ");
 	ipset_do_command("create " CHAIN_DOMAIN_TRUSTED " hash:ip ");
 	ipset_do_command("create " CHAIN_INNER_DOMAIN_TRUSTED " hash:ip ");
@@ -702,7 +689,6 @@ iptables_fw_init(void)
 	handle = fw3_ipt_open(FW3_TABLE_MANGLE);
 
 	/* Create new chains */
-	iptables_do_append_command(handle, "-t mangle -N " CHAIN_ROAM);
 	iptables_do_append_command(handle, "-t mangle -N " CHAIN_TRUSTED);
 	iptables_do_append_command(handle, "-t mangle -N " CHAIN_OUTGOING);
 	iptables_do_append_command(handle, "-t mangle -N " CHAIN_INCOMING);
@@ -718,9 +704,6 @@ iptables_fw_init(void)
 		debug(LOG_DEBUG, "No auth set");
 		iptables_do_append_command(handle, "-t mangle -A " CHAIN_TO_PASS " -j MARK --set-mark 0x%02x0000/0xff0000", FW_MARK_KNOWN);
 	}
-
-	iptables_do_append_command(handle, "-t mangle -I PREROUTING 1 -i %s -j " CHAIN_ROAM, config->gw_interface);
-	iptables_do_append_command(handle, "-t mangle -A " CHAIN_ROAM " -m set --match-set " CHAIN_ROAM " src -j MARK --set-mark 0x%02x0000/0xff0000", FW_MARK_KNOWN);
 
 	if (got_authdown_ruleset)
 		iptables_do_append_command(handle, "-t mangle -I PREROUTING 1 -i %s -j " CHAIN_AUTH_IS_DOWN, config->gw_interface);
@@ -893,21 +876,18 @@ iptables_fw_destroy(void)
 	 */
 	debug(LOG_DEBUG, "Destroying chains in the MANGLE table");
 	iptables_fw_destroy_mention("mangle", "PREROUTING", CHAIN_TO_PASS, NULL);
-	iptables_fw_destroy_mention("mangle", "PREROUTING", CHAIN_ROAM, NULL);
 	iptables_fw_destroy_mention("mangle", "PREROUTING", CHAIN_TRUSTED, NULL);
 	iptables_fw_destroy_mention("mangle", "PREROUTING", CHAIN_OUTGOING, NULL);
 	if (got_authdown_ruleset)
 		iptables_fw_destroy_mention("mangle", "PREROUTING", CHAIN_AUTH_IS_DOWN, NULL);
 	iptables_fw_destroy_mention("mangle", "POSTROUTING", CHAIN_INCOMING, NULL);
 	iptables_do_command("-t mangle -F " CHAIN_TO_PASS);
-	iptables_do_command("-t mangle -F " CHAIN_ROAM);
 	iptables_do_command("-t mangle -F " CHAIN_TRUSTED);
 	iptables_do_command("-t mangle -F " CHAIN_OUTGOING);
 	if (got_authdown_ruleset)
 		iptables_do_command("-t mangle -F " CHAIN_AUTH_IS_DOWN);
 	iptables_do_command("-t mangle -F " CHAIN_INCOMING);
 	iptables_do_command("-t mangle -X " CHAIN_TO_PASS);
-	iptables_do_command("-t mangle -X " CHAIN_ROAM);
 	iptables_do_command("-t mangle -X " CHAIN_TRUSTED);
 	iptables_do_command("-t mangle -X " CHAIN_OUTGOING);
 	if (got_authdown_ruleset)
@@ -972,7 +952,6 @@ iptables_fw_destroy(void)
 	
 	ipset_do_command("destroy " CHAIN_TRUSTED);
 	ipset_do_command("destroy " CHAIN_TRUSTED_LOCAL);
-	ipset_do_command("destroy " CHAIN_ROAM);
 	ipset_do_command("destroy " CHAIN_UNTRUSTED);
 	ipset_do_command("destroy " CHAIN_DOMAIN_TRUSTED);
 	ipset_do_command("destroy " CHAIN_INNER_DOMAIN_TRUSTED);

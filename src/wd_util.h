@@ -92,7 +92,6 @@ char *get_trusted_maclist_text(void);
 
 char *get_trusted_local_maclist_text(void);
 
-char *get_roam_maclist_text(void);
 
 char *get_serialize_trusted_wildcard_domains(void);
 

@@ -14,8 +14,7 @@
 typedef enum mac_choice_t_ {
 	TRUSTED_MAC,
 	UNTRUSTED_MAC,
-	TRUSTED_LOCAL_MAC,
-	ROAM_MAC
+	TRUSTED_LOCAL_MAC
 } mac_choice_t;
 
 /**
@@ -272,7 +271,7 @@ typedef struct {
 	t_domain_trusted *domains_trusted;
 	t_domain_trusted *inner_domains_trusted;
 	t_trusted_mac *trustedmaclist;
-	t_trusted_mac *roam_maclist;
+
 	t_trusted_mac *trusted_local_maclist;
 	t_untrusted_mac *mac_blacklist;
 	
@@ -353,11 +352,6 @@ void clear_trusted_wildcard_domains(void);
 t_domain_trusted *get_trusted_domains(void);
 t_domain_trusted *get_trusted_wildcard_domains(void);
 void add_trusted_wildcard_domains(const char *domains);
-
-/** Roam MAC List operation */
-void parse_roam_mac_list(const char *); 
-void clear_roam_mac_list();
-t_trusted_mac *get_roam_maclist();
 
 /** Trusted MAC List Operations */
 bool is_trusted_mac(const char *);

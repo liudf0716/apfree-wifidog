@@ -18,7 +18,6 @@
 #define CHAIN_IPSET_TDOMAIN	"WiFiDog_IPSET_TDomains"
 #define CHAIN_DOMAIN_TRUSTED "WiFiDog_$ID$_TDomains"
 #define CHAIN_INNER_DOMAIN_TRUSTED "WiFiDog_$ID$_ITDomains"
-#define	CHAIN_ROAM			"WiFiDog_$ID$_Roam"
 #define	CHAIN_UNTRUSTED		"WiFiDog_$ID$_Untrusted"
 #define	CHAIN_TO_PASS		"WiFiDog_$ID$_Pass"
 #define CHAIN_GLOBAL  "WiFiDog_$ID$_Global"
@@ -79,10 +78,6 @@ void iptables_fw_set_ipset_domains_trusted(void);
 void iptables_fw_refresh_inner_domains_trusted(void);
 void iptables_fw_set_inner_domains_trusted(void);
 void iptables_fw_clear_inner_domains_trusted(void);
-
-void iptables_fw_set_roam_mac(const char *);
-
-void iptables_fw_clear_roam_maclist(void);
 
 void iptables_fw_set_trusted_maclist(void);
 

@@ -547,28 +547,6 @@ fw_set_user_domains_trusted(void)
 }
 
 void
-fw_set_roam_mac(const char *mac)
-{
-	debug(LOG_DEBUG, "Set roam mac");
-#ifdef AW_FW3
-	iptables_fw_set_roam_mac(mac);
-#elif AW_FW4
-	//nft_fw_set_roam_mac(mac);
-#endif
-}
-
-void
-fw_clear_roam_maclist(void)
-{
-	debug(LOG_DEBUG, "Clear roam maclist");
-#ifdef AW_FW3
-	iptables_fw_clear_roam_maclist();
-#elif AW_FW4
-	//nft_fw_clear_roam_maclist();
-#endif
-}
-
-void
 fw_set_trusted_maclist()
 {
 	debug(LOG_DEBUG, "Set trusted maclist");

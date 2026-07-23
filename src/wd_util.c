@@ -1049,8 +1049,7 @@ mqtt_get_serialize_maclist(int which)
  * @param which Type of MAC list to serialize:
  *        TRUSTED_MAC - Global trusted MAC list
  *        UNTRUSTED_MAC - MAC blacklist
- *        TRUSTED_LOCAL_MAC - Local network trusted MACs  
- *        ROAM_MAC - Roaming MAC addresses
+ *        TRUSTED_LOCAL_MAC - Local network trusted MACs
  * @return Newly allocated string with comma-separated MACs, NULL if list empty
  *         Caller must free the returned string
  */
@@ -1073,9 +1072,6 @@ get_serialize_maclist(int which)
 			break;
 		case TRUSTED_LOCAL_MAC:
 			maclist = config->trusted_local_maclist;
-			break;
-		case ROAM_MAC:
-			maclist = config->roam_maclist;
 			break;
 		default:
 			return NULL;
@@ -1124,7 +1120,6 @@ get_serialize_maclist(int which)
  *        TRUSTED_MAC - Global trusted MAC list
  *        UNTRUSTED_MAC - MAC blacklist  
  *        TRUSTED_LOCAL_MAC - Local network trusted MACs
- *        ROAM_MAC - Roaming MAC addresses
  * @return Newly allocated string containing the formatted text,
  *         NULL if list is empty. Caller must free the returned string.
  */
@@ -1150,10 +1145,6 @@ get_maclist_text(int which)
 		case TRUSTED_LOCAL_MAC:
 			header = "\nTrusted local mac list:\n";
 			maclist = config->trusted_local_maclist;
-			break;
-		case ROAM_MAC:
-			header = "\nRoam mac list:\n";
-			maclist = config->roam_maclist;
 			break;
 		default:
 			return NULL;
@@ -1193,12 +1184,6 @@ get_maclist_text(int which)
 	char *retstr = evb_2_string(evb, NULL);
 	evbuffer_free(evb);
 	return retstr;
-}
-
-char *
-get_roam_maclist_text()
-{
-	return get_maclist_text(ROAM_MAC);
 }
 
 char *
