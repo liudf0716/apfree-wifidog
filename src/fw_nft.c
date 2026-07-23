@@ -1320,19 +1320,22 @@ nft_fw_counters_update()
     LOCK_CLIENT_LIST();
     reset_client_list();
 
+    int ret = -1;
     // Check if eBPF maps are available
     if (access("/sys/fs/bpf/tc/globals/ipv4_map", F_OK) == 0) {
         debug(LOG_INFO, "Using eBPF maps for traffic statistics");
-        int ret = nft_fw_counters_update_ebpf();
-        if (ret == 0)
-            return 0;
-
-        debug(LOG_WARNING, "eBPF counters unavailable at runtime, falling back to nftables statistics");
-        return nft_fw_counters_update_nftables();
+        ret = nft_fw_counters_update_ebpf();
+        if (ret != 0) {
+            debug(LOG_WARNING, "eBPF counters unavailable at runtime, falling back to nftables statistics");
+            ret = nft_fw_counters_update_nftables();
+        }
+    } else {
+        debug(LOG_INFO, "eBPF maps not available, using nftables for traffic statistics");
+        ret = nft_fw_counters_update_nftables();
     }
 
-    debug(LOG_INFO, "eBPF maps not available, using nftables for traffic statistics");
-    return nft_fw_counters_update_nftables();
+    UNLOCK_CLIENT_LIST();
+    return ret;
 }
 
 /**
@@ -1350,7 +1353,6 @@ nft_fw_counters_update_ebpf()
     int ipv4_map_fd = bpf_obj_get("/sys/fs/bpf/tc/globals/ipv4_map");
     if (ipv4_map_fd < 0) {
         debug(LOG_ERR, "Failed to open IPv4 map: %s", strerror(errno));
-        UNLOCK_CLIENT_LIST();
         return -1;
     }
 
@@ -1468,7 +1470,6 @@ nft_fw_counters_update_ebpf()
         debug(LOG_WARNING, "Failed to open IPv6 map: %s", strerror(errno));
     }
 
-    UNLOCK_CLIENT_LIST();
     return 0;
 }
 
@@ -1489,7 +1490,6 @@ nft_fw_counters_update_nftables()
     nft_statistical_outgoing(&outgoing, &outgoing_len);
     if (outgoing == NULL) {
         debug(LOG_ERR, "Failed to get outgoing traffic");
-        UNLOCK_CLIENT_LIST();
         return -1;
     }
     debug(LOG_DEBUG, "outgoing: %s", outgoing);
@@ -1497,7 +1497,6 @@ nft_fw_counters_update_nftables()
     if (jobj_outgoing == NULL) {
         debug(LOG_ERR, "Failed to parse outgoing json");
         free(outgoing);
-        UNLOCK_CLIENT_LIST();
         return -1;
     }
 
@@ -1512,7 +1511,6 @@ nft_fw_counters_update_nftables()
     nft_statistical_incoming(&incoming, &incoming_len);
     if (incoming == NULL) {
         debug(LOG_ERR, "Failed to get incoming traffic");
-        UNLOCK_CLIENT_LIST();
         return -1;
     }
     debug(LOG_DEBUG, "incoming: %s", incoming);
@@ -1520,7 +1518,6 @@ nft_fw_counters_update_nftables()
     if (jobj_incoming == NULL) {
         debug(LOG_ERR, "Failed to parse incoming json");
         free(incoming);
-        UNLOCK_CLIENT_LIST();
         return -1;
     }
 
@@ -1529,7 +1526,6 @@ nft_fw_counters_update_nftables()
     json_object_put(jobj_incoming);
     free(incoming);
 
-    UNLOCK_CLIENT_LIST();
     return 0;
 }
 
