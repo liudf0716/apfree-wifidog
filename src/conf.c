@@ -85,7 +85,6 @@ typedef enum {
 	oParseChecked,
 	oTrustedIpList,
 	oUpdateDomainInterval,
-	oTrustedLocalMACList,
 	oAppleCNA,
 	oMQTT,
 	oMQTTServer,
@@ -174,7 +173,6 @@ static const struct {
 	"parseChecked", oParseChecked}, {
 	"trustedIpList", oTrustedIpList}, {
 	"updateDomainInterval", oUpdateDomainInterval}, {
-	"trustedlocalmaclist", oTrustedLocalMACList}, {
 	"bypassAppleCNA", oAppleCNA}, {
 	"mqtt", oMQTT}, {
 	"serveraddr", oMQTTServer}, {
@@ -340,7 +338,6 @@ void config_init(void)
 	config.wildcard_domains_trusted      = NULL;
 	config.domains_trusted          = NULL;
 	config.inner_domains_trusted    = NULL;
-	config.trusted_local_maclist    = NULL;
 	config.mac_blacklist            = NULL;
 
 	config.is_custom_auth_offline_file = 0;
@@ -1183,9 +1180,7 @@ config_read()
 				case oTrustedMACList:
 					parse_trusted_mac_list(p1);
 					break;
-				case oTrustedLocalMACList:
-					parse_trusted_local_mac_list(p1);
-					break;
+
 				case oPopularServers:
 					parse_popular_servers(rawarg);
 					break;
@@ -1563,21 +1558,9 @@ parse_trusted_mac_list(const char *pstr)
 }
 
 void
-parse_trusted_local_mac_list(const char *pstr)
-{
-	parse_mac_list_action(pstr, TRUSTED_LOCAL_MAC, 1);
-}
-
-void
 parse_del_trusted_mac_list(const char *pstr)
 {
 	parse_mac_list_action(pstr, TRUSTED_MAC, 0);
-}
-
-void
-parse_del_trusted_local_mac_list(const char *pstr)
-{
-	parse_mac_list_action(pstr, TRUSTED_LOCAL_MAC, 0);
 }
 
 void
@@ -2156,7 +2139,6 @@ __clear_mac_list(mac_choice_t which)
 	switch (which) {
 	case TRUSTED_MAC: list_head_ptr = &config.trustedmaclist; break;
 	case UNTRUSTED_MAC: list_head_ptr = (t_trusted_mac**)&config.mac_blacklist; break; // Cast needed
-	case TRUSTED_LOCAL_MAC: list_head_ptr = &config.trusted_local_maclist; break;
 	default: return;
 	}
 	
@@ -2198,13 +2180,6 @@ clear_trusted_mac_list()
 	UNLOCK_CONFIG();
 }
 
-void
-clear_trusted_local_mac_list()
-{
-	LOCK_CONFIG();
-	__clear_mac_list(TRUSTED_LOCAL_MAC); // Will be replaced
-	UNLOCK_CONFIG();
-}
 
 void
 clear_untrusted_mac_list()
@@ -2422,10 +2397,6 @@ void config_cleanup(void) {
     if (cfg->trustedmaclist) {
         free_trusted_mac_list(cfg->trustedmaclist);
         cfg->trustedmaclist = NULL;
-    }
-    if (cfg->trusted_local_maclist) {
-        free_trusted_mac_list(cfg->trusted_local_maclist);
-        cfg->trusted_local_maclist = NULL;
     }
     if (cfg->mac_blacklist) {
         free_trusted_mac_list((t_trusted_mac*)cfg->mac_blacklist);

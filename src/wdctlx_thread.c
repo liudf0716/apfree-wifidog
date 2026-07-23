@@ -34,8 +34,6 @@ static void wdctl_clear_trusted_domains(struct bufferevent *);
 static void wdctl_show_trusted_domains(struct bufferevent *);
 static void wdctl_show_trusted_maclist(struct bufferevent *);
 static void wdctl_clear_trusted_maclist(struct bufferevent *);
-static void wdctl_show_trusted_local_maclist(struct bufferevent *);
-static void wdctl_clear_trusted_local_maclist(struct bufferevent *);
 static void wdctl_show_untrusted_maclist(struct bufferevent *);
 static void wdctl_clear_untrusted_maclist(struct bufferevent *);
 static void wdctl_user_cfg_save(struct bufferevent *);
@@ -50,8 +48,6 @@ static void wdctl_del_trusted_iplist(struct bufferevent *, const char *);
 static void wdctl_add_domain_ip(struct bufferevent *, const char *);
 static void wdctl_add_trusted_maclist(struct bufferevent *, const char *);
 static void wdctl_del_trusted_maclist(struct bufferevent *, const char *);
-static void wdctl_add_trusted_local_maclist(struct bufferevent *, const char *);
-static void wdctl_del_trusted_local_maclist(struct bufferevent *, const char *);
 static void wdctl_add_untrusted_maclist(struct bufferevent *, const char *);
 static void wdctl_del_untrusted_maclist(struct bufferevent *, const char *);
 static void wdctl_add_auth_client(struct bufferevent *, const char *);
@@ -90,8 +86,6 @@ static struct wdctl_command {
     {"show_trusted_domains", wdctl_show_trusted_domains, NULL},
     {"show_trusted_mac", wdctl_show_trusted_maclist, NULL},
     {"clear_trusted_mac", wdctl_clear_trusted_maclist, NULL},
-    {"show_trusted_local_mac", wdctl_show_trusted_local_maclist, NULL},
-    {"clear_trusted_local_mac", wdctl_clear_trusted_local_maclist, NULL},
     {"show_untrusted_mac", wdctl_show_untrusted_maclist, NULL},
     {"clear_untrusted_mac", wdctl_clear_untrusted_maclist, NULL},
     {"user_cfg_save", wdctl_user_cfg_save, NULL},
@@ -106,8 +100,6 @@ static struct wdctl_command {
     {"add_domain_ip", NULL, wdctl_add_domain_ip},
     {"add_trusted_mac", NULL, wdctl_add_trusted_maclist},
     {"del_trusted_mac", NULL, wdctl_del_trusted_maclist},
-    {"add_trusted_local_mac", NULL, wdctl_add_trusted_local_maclist},
-    {"del_trusted_local_mac", NULL, wdctl_del_trusted_local_maclist},
     {"add_untrusted_mac", NULL, wdctl_add_untrusted_maclist},
     {"del_untrusted_mac", NULL, wdctl_del_untrusted_maclist},
     {"add_auth_client", NULL, wdctl_add_auth_client},
@@ -601,70 +593,6 @@ static void
 wdctl_clear_trusted_maclist(struct bufferevent *fd)
 {
     clear_trusted_maclist();
-    bufferevent_write(fd, "Yes", 3);
-}
-
-// trusted local maclist operation
-void 
-del_trusted_local_maclist(const char *args)
-{
-    parse_del_trusted_local_mac_list(args);      
-    fw_clear_trusted_local_maclist();
-    fw_set_trusted_local_maclist();   
-}
-
-// trusted maclist
-static void
-wdctl_del_trusted_local_maclist(struct bufferevent *fd, const char *args)
-{
-    del_trusted_local_maclist(args);
-    bufferevent_write(fd, "Yes", 3);
-}
-
-void 
-add_trusted_local_maclist(const char *args)
-{
-    parse_trusted_local_mac_list(args);     
-    fw_clear_trusted_local_maclist();
-    fw_set_trusted_local_maclist();   
-}
-
-static void
-wdctl_add_trusted_local_maclist(struct bufferevent *fd, const char *args)
-{
-    add_trusted_local_maclist(args);
-    bufferevent_write(fd, "Yes", 3);
-}
-
-char *
-show_trusted_local_maclist()
-{
-    return mqtt_get_serialize_maclist(TRUSTED_LOCAL_MAC);
-}
-
-static void
-wdctl_show_trusted_local_maclist(struct bufferevent *fd)
-{
-    char *status = get_trusted_local_maclist_text();
-    if (status) {
-        size_t len = strlen(status);
-        bufferevent_write(fd, status, len);   /* XXX Not handling error because we'd just print the same log line. */
-        free(status);
-    } else 
-        bufferevent_write(fd, "No", 2);
-}
-
-void
-clear_trusted_local_maclist(void)
-{
-    clear_trusted_local_mac_list();   
-    fw_clear_trusted_local_maclist();
-}
-
-static void
-wdctl_clear_trusted_local_maclist(struct bufferevent *fd)
-{
-    clear_trusted_local_maclist();
     bufferevent_write(fd, "Yes", 3);
 }
 

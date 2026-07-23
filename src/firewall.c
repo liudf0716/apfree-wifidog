@@ -568,27 +568,6 @@ fw_clear_trusted_maclist()
 #endif
 }
 
-void
-fw_set_trusted_local_maclist()
-{
-	debug(LOG_DEBUG, "Set trusted local maclist");
-#ifdef AW_FW3
-	iptables_fw_set_trusted_local_maclist();
-#elif AW_FW4
-	//nft_fw_set_trusted_local_maclist();
-#endif
-}
-
-void
-fw_clear_trusted_local_maclist()
-{
-	debug(LOG_DEBUG, "Clear trusted local maclist");
-#ifdef AW_FW3
-	iptables_fw_clear_trusted_local_maclist();
-#elif AW_FW4
-	//nft_fw_clear_trusted_local_maclist();
-#endif
-}
 
 
 void

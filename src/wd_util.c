@@ -1049,7 +1049,6 @@ mqtt_get_serialize_maclist(int which)
  * @param which Type of MAC list to serialize:
  *        TRUSTED_MAC - Global trusted MAC list
  *        UNTRUSTED_MAC - MAC blacklist
- *        TRUSTED_LOCAL_MAC - Local network trusted MACs
  * @return Newly allocated string with comma-separated MACs, NULL if list empty
  *         Caller must free the returned string
  */
@@ -1069,9 +1068,6 @@ get_serialize_maclist(int which)
 			break; 
 		case UNTRUSTED_MAC:
 			maclist = config->mac_blacklist;
-			break;
-		case TRUSTED_LOCAL_MAC:
-			maclist = config->trusted_local_maclist;
 			break;
 		default:
 			return NULL;
@@ -1118,8 +1114,7 @@ get_serialize_maclist(int which)
  *
  * @param which Type of MAC list to display:
  *        TRUSTED_MAC - Global trusted MAC list
- *        UNTRUSTED_MAC - MAC blacklist  
- *        TRUSTED_LOCAL_MAC - Local network trusted MACs
+ *        UNTRUSTED_MAC - MAC blacklist
  * @return Newly allocated string containing the formatted text,
  *         NULL if list is empty. Caller must free the returned string.
  */
@@ -1141,10 +1136,6 @@ get_maclist_text(int which)
 		case UNTRUSTED_MAC:
 			header = "\nUntrusted mac list:\n";
 			maclist = config->mac_blacklist;
-			break;
-		case TRUSTED_LOCAL_MAC:
-			header = "\nTrusted local mac list:\n";
-			maclist = config->trusted_local_maclist;
 			break;
 		default:
 			return NULL;
@@ -1190,12 +1181,6 @@ char *
 get_trusted_maclist_text()
 {
 	return get_maclist_text(TRUSTED_MAC);
-}
-
-char *
-get_trusted_local_maclist_text()
-{
-	return get_maclist_text(TRUSTED_LOCAL_MAC);
 }
 
 char *
