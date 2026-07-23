@@ -750,6 +750,7 @@ get_gw_clients_counter(t_gateway_setting *gw_setting, t_client *worklist)
         json_object *gw_obj = json_object_new_object();
         if (!gw_obj) {
             debug(LOG_ERR, "Could not create gw_obj for gateway %s", gw_setting->gw_id);
+            gw_setting = gw_setting->next;
             continue;
         }
         json_object_object_add(gw_obj, "gw_id", json_object_new_string(gw_setting->gw_id));

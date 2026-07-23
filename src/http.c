@@ -391,25 +391,37 @@ replace_placeholder_multi(const char *template, const char **placeholders, const
         return safe_strdup(template);
     }
 
-    // Calculate required buffer size
+    // Calculate required buffer size by counting exact occurrences of each placeholder
     size_t total_len = strlen(template) + 1;
     size_t *placeholder_lens = malloc(count * sizeof(size_t));
     size_t *value_lens = malloc(count * sizeof(size_t));
+    size_t *occurrences = calloc(count, sizeof(size_t));
     
-    if (!placeholder_lens || !value_lens) {
+    if (!placeholder_lens || !value_lens || !occurrences) {
         free(placeholder_lens);
         free(value_lens);
+        free(occurrences);
         return NULL;
     }
 
     for (size_t i = 0; i < count; i++) {
         placeholder_lens[i] = strlen(placeholders[i]);
         value_lens[i] = strlen(values[i]);
-        // Adjust total length by difference between placeholder and value lengths
+        
+        // Count exact occurrences of placeholders[i] in template
+        const char *pos = template;
+        while ((pos = strstr(pos, placeholders[i])) != NULL) {
+            occurrences[i]++;
+            pos += placeholder_lens[i];
+        }
+
+        // Adjust total length for all occurrences
         if (value_lens[i] > placeholder_lens[i]) {
-            total_len += value_lens[i] - placeholder_lens[i];
+            total_len += occurrences[i] * (value_lens[i] - placeholder_lens[i]);
         }
     }
+
+    free(occurrences);
 
     // Allocate final buffer
     char *result = malloc(total_len);
