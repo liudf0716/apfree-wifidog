@@ -13,6 +13,7 @@
 #include "util.h"
 #include "centralserver.h"
 #include "wd_util.h"
+#include "roam_sync.h"
 
 /** @internal
  * Holds a pointer to the first element of the list 
@@ -513,6 +514,7 @@ offline_client_ageout()
 	int number = 0;
 	
 	debug(LOG_DEBUG, "offline_client_ageout !");
+	roam_cache_purge_expired();
 	LOCK_OFFLINE_CLIENT_LIST();	
 	t_offline_client *ptr = first_offline_client;
 	while(ptr) {

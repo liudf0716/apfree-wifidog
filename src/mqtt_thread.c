@@ -16,6 +16,7 @@
 #include "portal_cache.h"
 #include "centralserver.h"
 #include "client_list.h"
+#include "roam_sync.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -98,6 +99,15 @@ process_mqtt_request(struct mosquitto *mosq, const char *data, s_config *config)
 	if (is_error(json_request)) {
 		debug(LOG_INFO, "user request is not valid");
 		send_mqtt_error_response(mosq, NULL, 400, "Invalid JSON request", NULL);
+		return;
+	}
+
+	// Check if this is a roaming broadcast event
+	json_object *j_event = NULL;
+	if (json_object_object_get_ex(json_request, "event", &j_event)) {
+		debug(LOG_INFO, "Dispatching roaming event from MQTT: %s", data);
+		roam_sync_dispatch_event(data);
+		json_object_put(json_request);
 		return;
 	}
 
@@ -219,6 +229,19 @@ mqtt_connect_callback(struct mosquitto *mosq, void *obj, int rc)
 
 		free(s2c_request_topic);
 		free(c2s_response_topic);
+
+		/* Subscribe to Venue Roaming Topic if venue_id is set */
+		char v_id[64] = {0};
+		roam_sync_get_venue_id(v_id, sizeof(v_id));
+		if (strlen(v_id) > 0) {
+			char *venue_topic = NULL;
+			safe_asprintf(&venue_topic, "wifidogx/v1/venue/%s/roam", v_id);
+			if (venue_topic) {
+				mosquitto_subscribe(mosq, NULL, venue_topic, 0);
+				debug(LOG_INFO, "MQTT subscribed to venue roaming topic: %s", venue_topic);
+				free(venue_topic);
+			}
+		}
 
 		/* Publish a one-time connect report on MQTT (device -> server) */
 		publish_gateway_report(mosq, "connect");
@@ -478,5 +501,21 @@ void mqtt_request_reconnect(void)
 	} else {
 		debug(LOG_WARNING, "mosquitto_connect_async failed: %s", mosquitto_strerror(rc));
 	}
+}
+
+void mqtt_subscribe_venue_topic(const char *venue_id)
+{
+	if (!venue_id || strlen(venue_id) == 0) return;
+	pthread_mutex_lock(&mqtt_client_lock);
+	if (mqtt_client_instance && mqtt_connected) {
+		char *venue_topic = NULL;
+		safe_asprintf(&venue_topic, "wifidogx/v1/venue/%s/roam", venue_id);
+		if (venue_topic) {
+			mosquitto_subscribe(mqtt_client_instance, NULL, venue_topic, 0);
+			debug(LOG_INFO, "MQTT subscribed to venue roaming topic: %s", venue_topic);
+			free(venue_topic);
+		}
+	}
+	pthread_mutex_unlock(&mqtt_client_lock);
 }
 

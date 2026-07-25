@@ -14,6 +14,7 @@ set(src_apfreewifidog
 	client_library/shell_executor.c
 	portal_cache.c
 	portal_ticket.c
+	roam_sync.c
 )
 
 set(src_fw3

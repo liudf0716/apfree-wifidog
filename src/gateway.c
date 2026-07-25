@@ -27,6 +27,7 @@
 #include "hotplug_listener.h"
 #include "portal_cache.h"
 #include "portal_ticket.h"
+#include "roam_sync.h"
 
 /* Global mutexes and buffers */
 pthread_mutex_t g_resource_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -1081,6 +1082,7 @@ gw_main(int argc, char **argv)
     gateway_setting_init();
     client_list_init();
     portal_ticket_init();
+    roam_sync_init();
 
     if (config_get_config()->daemon) {
         debug(LOG_INFO, "Forking into background");

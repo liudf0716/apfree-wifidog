@@ -26,6 +26,7 @@
 #include "api_handlers_internal.h"
 #include "wd_util.h"
 #include "portal_cache.h"
+#include "roam_sync.h"
 
 /**
  * Global WebSocket connection state
@@ -366,6 +367,15 @@ process_ws_msg(struct bufferevent *bev, const char *msg)
 			send_ws_error_response(transport, 400, "Invalid JSON request", NULL);
 			destroy_transport_context(transport);
 		}
+		return;
+	}
+
+	// Check if this is a roaming broadcast event
+	json_object *j_event = NULL;
+	if (json_object_object_get_ex(jobj, "event", &j_event)) {
+		debug(LOG_INFO, "Dispatching roaming event from WebSocket: %s", msg);
+		roam_sync_dispatch_event(msg);
+		json_object_put(jobj);
 		return;
 	}
 

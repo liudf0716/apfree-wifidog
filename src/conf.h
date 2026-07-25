@@ -252,6 +252,7 @@ typedef struct {
 	// Network settings
 	char *external_interface;
 	char *device_id;
+	char *venue_id;
 	uint16_t gw_port;
 	uint16_t gw_https_port;
 	int proxy_port;

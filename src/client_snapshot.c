@@ -39,6 +39,8 @@ auth_type_to_string(client_auth_type_t auth_type)
         return "LOCAL_PASS";
     case AUTH_TYPE_TRUSTED_MAC:
         return "TRUSTED_MAC";
+    case AUTH_TYPE_ROAMING:
+        return "ROAMING";
     case AUTH_TYPE_UNKNOWN:
     default:
         return "UNKNOWN";
@@ -52,6 +54,7 @@ auth_type_from_string(const char *auth_type)
     if (strcasecmp(auth_type, "AUTH_SERVER") == 0) return AUTH_TYPE_AUTH_SERVER;
     if (strcasecmp(auth_type, "LOCAL_PASS") == 0) return AUTH_TYPE_LOCAL_PASS;
     if (strcasecmp(auth_type, "TRUSTED_MAC") == 0) return AUTH_TYPE_TRUSTED_MAC;
+    if (strcasecmp(auth_type, "ROAMING") == 0) return AUTH_TYPE_ROAMING;
     return AUTH_TYPE_UNKNOWN;
 }
 

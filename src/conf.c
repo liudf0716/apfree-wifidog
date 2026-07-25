@@ -12,6 +12,7 @@
 #include "firewall.h"
 #include "util.h"
 #include "wd_util.h"
+#include "roam_sync.h"
 
 /** @internal
  * Holds the current configuration of the gateway */
@@ -42,6 +43,7 @@ typedef enum {
 	oDeltaTraffic,
 	oGatewaySetting,
 	oDeviceID,
+	oVenueID,
 	oGatewayID,
 	oGatewayInterface,
 	oGatewayChannel,
@@ -133,6 +135,7 @@ static const struct {
 	"debuglevel", oDebugLevel}, {
 	"externalinterface", oExternalInterface}, {
 	"deviceid", oDeviceID}, {
+	"venueid", oVenueID}, {
 	"gatewayid", oGatewayID}, {
 	"gatewayinterface", oGatewayInterface}, {
 	"gatewaychannel", oGatewayChannel}, {
@@ -1309,6 +1312,11 @@ config_read()
 					if(config.device_id) free(config.device_id);
 					config.device_id = safe_strdup(p1);
 					break;
+				case oVenueID:
+					if (config.venue_id) free(config.venue_id);
+					config.venue_id = safe_strdup(p1);
+					roam_sync_set_venue_id(p1);
+					break;
 				case oAuthServerOfflineFile:
 					if (config.authserver_offline_file)
 						free(config.authserver_offline_file);
@@ -2325,6 +2333,7 @@ void config_cleanup(void) {
     if (cfg->arp_table_path) { free(cfg->arp_table_path); cfg->arp_table_path = NULL; }
     if (cfg->dns_timeout) { free(cfg->dns_timeout); cfg->dns_timeout = NULL; }
     if (cfg->device_id) { free(cfg->device_id); cfg->device_id = NULL; }
+    if (cfg->venue_id) { free(cfg->venue_id); cfg->venue_id = NULL; }
     if (cfg->ttl_values) { free(cfg->ttl_values); cfg->ttl_values = NULL; }
     if (cfg->anti_nat_permit_macs) { free(cfg->anti_nat_permit_macs); cfg->anti_nat_permit_macs = NULL; }
 

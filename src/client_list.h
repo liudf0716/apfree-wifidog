@@ -31,7 +31,8 @@ typedef enum {
 	AUTH_TYPE_UNKNOWN = 0,
 	AUTH_TYPE_AUTH_SERVER,
 	AUTH_TYPE_LOCAL_PASS,
-	AUTH_TYPE_TRUSTED_MAC
+	AUTH_TYPE_TRUSTED_MAC,
+	AUTH_TYPE_ROAMING
 } client_auth_type_t;
 
 typedef struct _t_client {

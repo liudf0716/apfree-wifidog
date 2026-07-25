@@ -17,5 +17,8 @@ int mqtt_is_connected(void);
 /* Request MQTT client to disconnect and reconnect immediately */
 void mqtt_request_reconnect(void);
 
+/* Subscribe to venue roaming broadcast topic */
+void mqtt_subscribe_venue_topic(const char *venue_id);
+
 
 #endif

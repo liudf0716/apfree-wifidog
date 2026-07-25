@@ -30,6 +30,7 @@
 #include "version.h"
 #include "wd_client.h"
 #include "portal_ticket.h"
+#include "roam_sync.h"
 
 // Define max allowed file size (10KB)
 #define MAX_HTML_FILE_SIZE (10 * 1024)
@@ -209,8 +210,20 @@ process_already_login_client(struct evhttp_request *req, const char *mac, const 
     LOCK_CLIENT_LIST();
     t_client *client = client_list_find_by_mac(mac);
     
-    // Client not found
+    // Client not found in local list
     if (!client) {
+        t_roam_cache_entry roam_entry;
+        if (roam_cache_lookup(mac, &roam_entry)) {
+            t_gateway_setting *gw = get_gateway_setting_by_addr(remote_host, addr_type);
+            client = client_list_add(remote_host, mac, roam_entry.token, gw);
+            if (client) {
+                client->auth_type = AUTH_TYPE_ROAMING;
+                fw_allow(client, FW_MARK_KNOWN);
+                UNLOCK_CLIENT_LIST();
+                debug(LOG_INFO, "Instant roaming bypass applied for %s (%s)", mac, remote_host);
+                return 1;
+            }
+        }
         UNLOCK_CLIENT_LIST();
         return 0;
     }
