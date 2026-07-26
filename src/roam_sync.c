@@ -25,7 +25,6 @@ static unsigned char hash_mac(const char *mac) {
 void roam_sync_init(void) {
     memset(&g_roam_table, 0, sizeof(g_roam_table));
     pthread_rwlock_init(&g_roam_table.rwlock, NULL);
-    g_roam_table.enabled = 1;
     debug(LOG_INFO, "Roaming sync module initialized");
 }
 
@@ -33,20 +32,6 @@ void roam_sync_cleanup(void) {
     roam_cache_clear();
     pthread_rwlock_destroy(&g_roam_table.rwlock);
     debug(LOG_INFO, "Roaming sync module cleaned up");
-}
-
-void roam_sync_set_enabled(int enabled) {
-    pthread_rwlock_wrlock(&g_roam_table.rwlock);
-    g_roam_table.enabled = enabled;
-    pthread_rwlock_unlock(&g_roam_table.rwlock);
-    debug(LOG_INFO, "Roaming sync status set to: %d", enabled);
-}
-
-int roam_sync_is_enabled(void) {
-    pthread_rwlock_rdlock(&g_roam_table.rwlock);
-    int enabled = g_roam_table.enabled;
-    pthread_rwlock_unlock(&g_roam_table.rwlock);
-    return enabled;
 }
 
 void roam_sync_set_venue_id(const char *venue_id) {
@@ -93,7 +78,7 @@ void roam_cache_purge_expired(void) {
 }
 
 int roam_cache_lookup(const char *mac, t_roam_cache_entry *out_entry) {
-    if (!mac || !g_roam_table.enabled) return 0;
+    if (!mac) return 0;
 
     unsigned char idx = hash_mac(mac);
     uint64_t now = (uint64_t)time(NULL);
@@ -280,10 +265,7 @@ void roam_sync_dispatch_event(const char *json_raw) {
             debug(LOG_INFO, "Applied roaming snapshot sync with %d entries", len);
         }
     } else if (strcmp(event, "CONFIG_UPDATE") == 0) {
-        json_object *j_enable = NULL, *j_venue = NULL;
-        if (json_object_object_get_ex(jobj, "roam_enabled", &j_enable)) {
-            roam_sync_set_enabled(json_object_get_boolean(j_enable));
-        }
+        json_object *j_venue = NULL;
         if (json_object_object_get_ex(jobj, "venue_id", &j_venue)) {
             roam_sync_set_venue_id(json_object_get_string(j_venue));
         }

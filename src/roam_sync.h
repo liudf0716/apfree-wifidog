@@ -19,15 +19,12 @@ typedef struct _roam_cache_entry {
 typedef struct {
     t_roam_cache_entry *buckets[256];
     pthread_rwlock_t rwlock;
-    int enabled;
     char venue_id[64];
 } t_roam_table;
 
 void roam_sync_init(void);
 void roam_sync_cleanup(void);
 
-void roam_sync_set_enabled(int enabled);
-int roam_sync_is_enabled(void);
 void roam_sync_set_venue_id(const char *venue_id);
 void roam_sync_get_venue_id(char *out_buf, size_t max_len);
 
