@@ -15,6 +15,7 @@ set(src_apfreewifidog
 	portal_cache.c
 	portal_ticket.c
 	roam_sync.c
+	bpf_qos.c
 )
 
 set(src_fw3

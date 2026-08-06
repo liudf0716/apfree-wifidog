@@ -16,6 +16,8 @@
 #include "wd_client.h"
 #include "http.h"
 #include "ping_thread.h"
+#include "bpf_qos.h"
+#include <limits.h>
 
 /**
  * @brief Get the URI for v2 counter authentication requests
@@ -204,6 +206,13 @@ parse_auth_server_response(t_authresponse *authresponse, struct evhttp_request *
 
     char buffer[MAX_BUF] = {0};
     char *auth_marker = NULL;
+    char *line;
+    char *saveptr = NULL;
+    int present = 0;
+    unsigned long down = 0;
+    unsigned long up = 0;
+    int have_down = 0;
+    int have_up = 0;
     
     // Read response into buffer
     if (evbuffer_remove(evhttp_request_get_input_buffer(req), buffer, MAX_BUF-1) <= 0) {
@@ -222,14 +231,43 @@ parse_auth_server_response(t_authresponse *authresponse, struct evhttp_request *
 
     // Parse auth code
     mark_auth_online();
-    if (sscanf(auth_marker, "Auth: %d", (int *)&authresponse->authcode) == 1) {
-        debug(LOG_INFO, "Auth server returned authentication code %d", 
-              authresponse->authcode);
-        return 1;
+    if (sscanf(auth_marker, "Auth: %d", (int *)&authresponse->authcode) != 1) {
+        debug(LOG_WARNING, "Failed to parse auth code from server response");
+        return 0;
     }
 
-    debug(LOG_WARNING, "Failed to parse auth code from server response");
-    return 0;
+    debug(LOG_INFO, "Auth server returned authentication code %d",
+          authresponse->authcode);
+
+    /* Optional multi-line QoS fields (new AWAS). Missing = leave qos_present=0. */
+    authresponse->qos_present = 0;
+    authresponse->qos_downrate_bps = 0;
+    authresponse->qos_uprate_bps = 0;
+
+    for (line = strtok_r(buffer, "\r\n", &saveptr); line;
+         line = strtok_r(NULL, "\r\n", &saveptr)) {
+        unsigned long v;
+
+        if (sscanf(line, "QoS-Present: %lu", &v) == 1) {
+            present = (v != 0);
+        } else if (sscanf(line, "QoS-Downrate-Bps: %lu", &v) == 1) {
+            down = v > UINT32_MAX ? UINT32_MAX : v;
+            have_down = 1;
+        } else if (sscanf(line, "QoS-Uprate-Bps: %lu", &v) == 1) {
+            up = v > UINT32_MAX ? UINT32_MAX : v;
+            have_up = 1;
+        }
+    }
+
+    if (present && have_down && have_up) {
+        authresponse->qos_present = 1;
+        authresponse->qos_downrate_bps = (uint32_t)down;
+        authresponse->qos_uprate_bps = (uint32_t)up;
+        debug(LOG_INFO, "Auth QoS present: down=%u up=%u",
+              authresponse->qos_downrate_bps, authresponse->qos_uprate_bps);
+    }
+
+    return 1;
 }
 
 /**
@@ -304,7 +342,7 @@ cleanup:
  */
 static void 
 handle_auth_allowed(t_client *client, struct evhttp_request *req, 
-                   t_auth_serv *auth_server)
+                   t_auth_serv *auth_server, t_authresponse *authresponse)
 {
     char *url_fragment = NULL;
     
@@ -317,6 +355,22 @@ handle_auth_allowed(t_client *client, struct evhttp_request *req,
     client->first_login = time(NULL);
     client->is_online = 1;
     served_this_session++;
+
+    /* Auth-path QoS / traffic-monitor map entry (0/0 still upserts) */
+    if (authresponse && authresponse->qos_present) {
+        if (aw_bpf_qos_apply_client(client->ip, client->ip6,
+                                    authresponse->qos_downrate_bps,
+                                    authresponse->qos_uprate_bps) < 0) {
+            debug(LOG_WARNING,
+                  "bpf_qos apply failed after auth allow ip=%s ip6=%s mac=%s down=%u up=%u errno=%d",
+                  client->ip ? client->ip : "N/A",
+                  client->ip6 ? client->ip6 : "N/A",
+                  client->mac ? client->mac : "N/A",
+                  authresponse->qos_downrate_bps,
+                  authresponse->qos_uprate_bps,
+                  errno);
+        }
+    }
 
     // Remove from offline list if present
     LOCK_OFFLINE_CLIENT_LIST();
@@ -423,7 +477,7 @@ client_login_request_reply(t_authresponse *authresponse,
         break;
 
     case AUTH_ALLOWED:
-        handle_auth_allowed(client, req, auth_server);
+        handle_auth_allowed(client, req, auth_server, authresponse);
         break;
 
     case AUTH_VALIDATION_FAILED:
@@ -766,11 +820,31 @@ handle_json_object_from_auth_server(json_object *j_result, struct evhttp_request
         json_object *j_auth_code = json_object_object_get(j_op, "auth_code");
         if (!j_id || !j_auth_code) continue;
 
-        // Create auth response and process it
+        // Create auth response and process it (optional QoS fields)
         t_authresponse authresponse = {
-            .client_id = json_object_get_int(j_id),
-            .authcode = json_object_get_int(j_auth_code)
+            .client_id = json_object_get_int64(j_id),
+            .authcode = json_object_get_int(j_auth_code),
+            .qos_present = 0,
+            .qos_downrate_bps = 0,
+            .qos_uprate_bps = 0
         };
+        {
+            json_object *j_qos_present = json_object_object_get(j_op, "qos_present");
+            json_object *j_down = json_object_object_get(j_op, "downrate_bps");
+            json_object *j_up = json_object_object_get(j_op, "uprate_bps");
+            if (j_qos_present && json_object_get_boolean(j_qos_present) &&
+                j_down && j_up) {
+                int64_t down = json_object_get_int64(j_down);
+                int64_t up = json_object_get_int64(j_up);
+                if (down < 0) down = 0;
+                if (up < 0) up = 0;
+                if (down > UINT32_MAX) down = UINT32_MAX;
+                if (up > UINT32_MAX) up = UINT32_MAX;
+                authresponse.qos_present = 1;
+                authresponse.qos_downrate_bps = (uint32_t)down;
+                authresponse.qos_uprate_bps = (uint32_t)up;
+            }
+        }
         client_counter_request_reply_v2(&authresponse, req, ctx);
     }
 }

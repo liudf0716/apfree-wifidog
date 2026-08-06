@@ -17,6 +17,8 @@
 #include "commandline.h"
 #include "wd_util.h"
 #include "wd_client.h"
+#include "bpf_qos.h"
+#include <arpa/inet.h>
 #ifdef AW_FW3
 	#include "fw_iptables.h"
 #elif AW_VPP
@@ -96,8 +98,21 @@ int
 fw_deny(t_client * client)
 {
 	int fw_connection_state = client->fw_connection_state;
+	char ip4_copy[INET6_ADDRSTRLEN] = {0};
+	char ip6_copy[INET6_ADDRSTRLEN] = {0};
+
 	debug(LOG_INFO, "Denying %s %s %s with fw_connection_state %d",
 		client->ip?client->ip:"N/A", client->ip6?client->ip6:"N/A", client->mac, client->fw_connection_state);
+
+	/* Snapshot addresses before any state clear (for BPF map cleanup). */
+	if (client->ip)
+		strncpy(ip4_copy, client->ip, sizeof(ip4_copy) - 1);
+	if (client->ip6)
+		strncpy(ip6_copy, client->ip6, sizeof(ip6_copy) - 1);
+
+	/* 1) Remove auth QoS / monitor map entries first */
+	aw_bpf_qos_remove_client(ip4_copy[0] ? ip4_copy : NULL,
+				 ip6_copy[0] ? ip6_copy : NULL);
 
 	client->fw_connection_state = FW_MARK_NONE; /* Clear */
 	int nret = 0;
@@ -694,6 +709,18 @@ fw_client_process_from_authserver_response(t_authresponse *authresponse, t_clien
 					debug(LOG_INFO,
 						  "%s - Skipped clearing counters after all, the user was previously in validation",
 						  tmp_c->ip);
+				}
+				fw_client_operation(AUTH_ALLOWED, tmp_c);
+			}
+			/* counters_v2 may refresh channel QoS (including 0/0 monitor entries) */
+			if (authresponse->qos_present) {
+				if (aw_bpf_qos_apply_client(tmp_c->ip, tmp_c->ip6,
+							    authresponse->qos_downrate_bps,
+							    authresponse->qos_uprate_bps) < 0) {
+					debug(LOG_WARNING,
+					      "bpf_qos apply failed on counters sync ip=%s mac=%s",
+					      tmp_c->ip ? tmp_c->ip : "N/A",
+					      tmp_c->mac ? tmp_c->mac : "N/A");
 				}
 			}
 			break;
