@@ -121,6 +121,7 @@ typedef enum {
 	oPortalTicketStoreMax,
 	oPortalTicketStrictIp,
 	oPortalTicketRequired,
+	oEnableRemoteShell,
 } OpCodes;
 
 /** @internal
@@ -210,6 +211,7 @@ static const struct {
 	"portalticketstoremax", oPortalTicketStoreMax}, {
 	"portalticketstrictip", oPortalTicketStrictIp}, {
 	"portalticketrequired", oPortalTicketRequired}, {
+	"enableremoteshell", oEnableRemoteShell}, {
 	NULL, oBadOption},
 };
 
@@ -386,6 +388,7 @@ void config_init(void)
 	config.portal_ticket_store_max = 1024;
 	config.portal_ticket_strict_ip = 0;
 	config.portal_ticket_required  = 0;
+	config.enable_remote_shell     = 0;
 
 	// Initialize device info
 	config.device_info = NULL;
@@ -1307,6 +1310,9 @@ config_read()
 					break;
 				case oPortalTicketRequired:
 					config.portal_ticket_required = parse_boolean_value(p1);
+					break;
+				case oEnableRemoteShell:
+					config.enable_remote_shell = parse_boolean_value(p1);
 					break;
 				case oDeviceID:
 					if(config.device_id) free(config.device_id);

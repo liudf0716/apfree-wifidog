@@ -296,6 +296,7 @@ typedef struct {
 	short enable_smart_qos; /* 1, enable smart qos */
 	short enable_user_reload; /* 1, enable user reload */
 	short disable_portal_auth; /* 1, disable portal authentication */
+	short enable_remote_shell; /* 1, allow MQTT/WS shell op (off by default) */
 	char *ttl_values; /* ttl values */
 	char *anti_nat_permit_macs; /* anti nat permit mac */
 

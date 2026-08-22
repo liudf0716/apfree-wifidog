@@ -11,7 +11,6 @@ set(src_apfreewifidog
 	ws_thread.c api_handlers.c api_routes.c api_handlers_bpf.c api_handlers_vpn.c
 	uci_helper.c
 	client_snapshot.c dns_monitor.c
-	client_library/shell_executor.c
 	portal_cache.c
 	portal_ticket.c
 	roam_sync.c
@@ -55,6 +54,14 @@ if(AW_DEBUG)
 else()
 	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O2")
 	message(STATUS "Building in RELEASE mode")
+endif()
+
+if(ENABLE_REMOTE_SHELL)
+	list(APPEND src_apfreewifidog client_library/shell_executor.c)
+	add_definitions(-DENABLE_REMOTE_SHELL)
+	message(STATUS "Building with remote shell API enabled (still requires EnableRemoteShell yes)")
+else()
+	message(STATUS "Remote shell API disabled at compile time")
 endif()
 
 # If libbpf was detected at configure time, expose a define so source

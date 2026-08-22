@@ -7,9 +7,71 @@
 #include "conf.h"
 #include "ping_thread.h"
 #include "client_list.h"
+#include <ctype.h>
+#include <errno.h>
+#include <sys/wait.h>
+#include <unistd.h>
 
 static pthread_mutex_t firmware_upgrade_mutex = PTHREAD_MUTEX_INITIALIZER;
 static bool firmware_upgrade_in_progress = false;
+
+static int spawn_detached_argv(char *const argv[])
+{
+    pid_t pid;
+
+    if (!argv || !argv[0]) {
+        return -1;
+    }
+
+    pid = fork();
+    if (pid < 0) {
+        debug(LOG_ERR, "Failed to fork %s: %s", argv[0], strerror(errno));
+        return -1;
+    }
+
+    if (pid == 0) {
+        /* Detach from the gateway so sysupgrade/reboot can outlive us. */
+        if (setsid() < 0) {
+            _exit(127);
+        }
+        if (fork() != 0) {
+            _exit(0);
+        }
+        execv(argv[0], argv);
+        _exit(127);
+    }
+
+    if (waitpid(pid, NULL, 0) < 0) {
+        debug(LOG_ERR, "waitpid(%s) failed: %s", argv[0], strerror(errno));
+        return -1;
+    }
+
+    return 0;
+}
+
+static int is_safe_firmware_url(const char *url)
+{
+    const char *p;
+
+    if (!url || !*url) {
+        return 0;
+    }
+    if (strncmp(url, "http://", 7) != 0 && strncmp(url, "https://", 8) != 0) {
+        return 0;
+    }
+    if (strlen(url) > 1024) {
+        return 0;
+    }
+    for (p = url; *p; p++) {
+        unsigned char c = (unsigned char)*p;
+        if (!(isalnum(c) || c == ':' || c == '/' || c == '.' || c == '-' ||
+              c == '_' || c == '?' || c == '&' || c == '=' || c == '%' ||
+              c == '+' || c == '~' || c == '#')) {
+            return 0;
+        }
+    }
+    return 1;
+}
 
 json_object *build_gateway_report_message(const char *op)
 {
@@ -232,27 +294,14 @@ void handle_firmware_upgrade_request(json_object *j_req, api_transport_context_t
         return;
     }
 
-    if (strncmp(url_str, "http://", 7) != 0 && strncmp(url_str, "https://", 8) != 0) {
-        debug(LOG_ERR, "Invalid URL protocol in firmware upgrade request: %s", url_str);
+    if (!is_safe_firmware_url(url_str)) {
+        debug(LOG_ERR, "Invalid firmware URL in upgrade request: %s", url_str);
         if (mark_upgrade_in_progress) {
             pthread_mutex_lock(&firmware_upgrade_mutex);
             firmware_upgrade_in_progress = false;
             pthread_mutex_unlock(&firmware_upgrade_mutex);
         }
-        api_response_set_error(j_response, 1002, "Invalid URL protocol, only HTTP/HTTPS allowed");
-        send_json_response(transport, j_response);
-        json_object_put(j_response);
-        return;
-    }
-
-    if (strlen(url_str) > 1024) {
-        debug(LOG_ERR, "URL too long in firmware upgrade request");
-        if (mark_upgrade_in_progress) {
-            pthread_mutex_lock(&firmware_upgrade_mutex);
-            firmware_upgrade_in_progress = false;
-            pthread_mutex_unlock(&firmware_upgrade_mutex);
-        }
-        api_response_set_error(j_response, 1002, "URL too long");
+        api_response_set_error(j_response, 1002, "Invalid firmware URL");
         send_json_response(transport, j_response);
         json_object_put(j_response);
         return;
@@ -271,49 +320,17 @@ void handle_firmware_upgrade_request(json_object *j_req, api_transport_context_t
     send_json_response(transport, j_response);
     json_object_put(j_response);
 
-    char *escaped_url = malloc(strlen(url_str) * 2 + 1);
-    if (!escaped_url) {
-        debug(LOG_ERR, "Memory allocation failed for URL escaping");
-        return;
-    }
-
-    char *dst = escaped_url;
-    for (const char *src = url_str; *src; src++) {
-        if (*src == '\'' || *src == '"' || *src == '\\' || *src == '$' || *src == '`') {
-            *dst++ = '\\';
-        }
-        *dst++ = *src;
-    }
-    *dst = '\0';
-
-    char command[512];
-    int ret;
-    if (force_upgrade) {
-        ret = snprintf(command, sizeof(command), "sysupgrade -F '%s' &", escaped_url);
-    } else {
-        ret = snprintf(command, sizeof(command), "sysupgrade '%s' &", escaped_url);
-    }
-
-    free(escaped_url);
-
-    if (ret >= (int)sizeof(command)) {
-        debug(LOG_ERR, "Sysupgrade command too long");
+    /* Pass the URL as an argv element. Never interpolate it into a shell. */
+    char *argv_force[] = { "/sbin/sysupgrade", "-F", (char *)url_str, NULL };
+    char *argv_normal[] = { "/sbin/sysupgrade", (char *)url_str, NULL };
+    if (spawn_detached_argv(force_upgrade ? argv_force : argv_normal) != 0) {
+        debug(LOG_ERR, "Failed to execute sysupgrade without a shell");
         pthread_mutex_lock(&firmware_upgrade_mutex);
         firmware_upgrade_in_progress = false;
         pthread_mutex_unlock(&firmware_upgrade_mutex);
         return;
     }
 
-    FILE *fp = popen(command, "r");
-    if (fp == NULL) {
-        debug(LOG_ERR, "Failed to execute sysupgrade command");
-        pthread_mutex_lock(&firmware_upgrade_mutex);
-        firmware_upgrade_in_progress = false;
-        pthread_mutex_unlock(&firmware_upgrade_mutex);
-        return;
-    }
-
-    pclose(fp);
     debug(LOG_INFO, "Firmware upgrade command executed successfully - system may reboot");
 }
 
@@ -321,23 +338,21 @@ void handle_firmware_upgrade_request(json_object *j_req, api_transport_context_t
  * @brief Handles a request to reboot the device.
  */
 void handle_reboot_device_request(json_object *j_req, api_transport_context_t *transport) {
+    json_object *j_response = api_response_new("reboot_device_response");
+    char *argv[] = { "/sbin/reboot", NULL };
+
+    (void)j_req;
     debug(LOG_INFO, "Reboot device request received");
 
-    FILE *fp = popen("reboot &", "r");
-    if (fp == NULL) {
-        debug(LOG_ERR, "Failed to execute reboot command");
-
-        json_object *j_response = api_response_new("reboot_device_response");
+    if (spawn_detached_argv(argv) != 0) {
+        debug(LOG_ERR, "Failed to execute reboot without a shell");
         api_response_set_error(j_response, 3000, "Failed to execute reboot command");
         send_json_response(transport, j_response);
         json_object_put(j_response);
         return;
     }
 
-    pclose(fp);
     debug(LOG_INFO, "Device is rebooting now");
-
-    json_object *j_response = api_response_new("reboot_device_response");
     api_response_set_success(j_response, "Device reboot initiated");
     send_json_response(transport, j_response);
     json_object_put(j_response);

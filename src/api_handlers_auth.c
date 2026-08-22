@@ -18,7 +18,9 @@
 #include "safe.h"
 #include "uci_helper.h"
 #include "util.h"
+#ifdef ENABLE_REMOTE_SHELL
 #include "client_library/shell_executor.h"
+#endif
 #include "portal_ticket.h"
 #include "util.h"
 #include "wd_util.h"
@@ -122,11 +124,36 @@ void handle_shell_request(json_object *j_req, api_transport_context_t *transport
 {
     json_object *j_response = api_response_new("shell_response");
     json_object *j_data = api_response_get_data(j_response);
+#ifndef ENABLE_REMOTE_SHELL
+    (void)j_req;
+    debug(LOG_WARNING, "Remote shell API is disabled at compile time");
+    api_response_set_error(j_response, 1003, "Remote shell is disabled");
+    if (j_data) {
+        json_object_object_add(j_data, "output", json_object_new_string(""));
+        json_object_object_add(j_data, "exit_code", json_object_new_int(-1));
+    }
+    send_json_response(transport, j_response);
+    json_object_put(j_response);
+    return;
+#else
     json_object *jo_command = NULL;
     json_object *jo_timeout = NULL;
     const char *command = NULL;
     int timeout = shell_executor_get_timeout();
     shell_exec_result_t result;
+    s_config *cfg = config_get_config();
+
+    if (!cfg || !cfg->enable_remote_shell) {
+        debug(LOG_WARNING, "Remote shell request rejected (EnableRemoteShell is off)");
+        api_response_set_error(j_response, 1003, "Remote shell is disabled");
+        if (j_data) {
+            json_object_object_add(j_data, "output", json_object_new_string(""));
+            json_object_object_add(j_data, "exit_code", json_object_new_int(-1));
+        }
+        send_json_response(transport, j_response);
+        json_object_put(j_response);
+        return;
+    }
 
     if (!j_req || !transport) {
         if (j_response) {
@@ -203,6 +230,7 @@ void handle_shell_request(json_object *j_req, api_transport_context_t *transport
 
     send_json_response(transport, j_response);
     json_object_put(j_response);
+#endif
 }
 
 void handle_get_client_info_request(json_object *j_req, api_transport_context_t *transport) {
