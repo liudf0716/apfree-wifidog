@@ -724,12 +724,11 @@ wdctl_add_auth_client(struct bufferevent *fd, const char *args)
     t_client *client = NULL;
     LOCK_CLIENT_LIST();
     client = client_list_add(ip, mac, NULL, gw);
-    UNLOCK_CLIENT_LIST();
     if (!client) {
+        UNLOCK_CLIENT_LIST();
         debug(LOG_ERR, "wdctl_add_auth_client: failed to add client %s %s", ip, mac);
         goto OUT;
     }
-
     client->is_online = 1;
     if (fw_allow(client, FW_MARK_KNOWN) != 0) {
         debug(LOG_WARNING, "wdctl_add_auth_client: fw_allow failed for %s %s", ip, mac);
@@ -737,6 +736,7 @@ wdctl_add_auth_client(struct bufferevent *fd, const char *args)
         client_snapshot_save();
         debug(LOG_INFO, "wdctl_add_auth_client: client %s %s added, allowed and snapshot saved", ip, mac);
     }
+    UNLOCK_CLIENT_LIST();
     
 OUT:
     if (client_info) json_object_put(client_info);

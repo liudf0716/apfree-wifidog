@@ -377,15 +377,6 @@ void handle_kickoff_request(json_object *j_auth, api_transport_context_t *transp
     const char *device_id_str = json_object_get_string(device_id);
     const char *gw_id_str = json_object_get_string(gw_id);
 
-    t_client *client = client_list_find(client_ip_str, client_mac_str);
-    if (!client) {
-        debug(LOG_ERR, "Kickoff: Client %s (%s) not found", client_mac_str, client_ip_str);
-        api_response_set_error(j_response, 2000, "Client not found");
-        send_json_response(transport, j_response);
-        json_object_put(j_response);
-        return;
-    }
-
     const char *local_device_id = get_device_id();
     if (!local_device_id || strcmp(local_device_id, device_id_str) != 0) {
         debug(LOG_ERR, "Kickoff: Device ID mismatch - expected %s", device_id_str);
@@ -395,7 +386,19 @@ void handle_kickoff_request(json_object *j_auth, api_transport_context_t *transp
         return;
     }
 
+    LOCK_CLIENT_LIST();
+    t_client *client = client_list_find(client_ip_str, client_mac_str);
+    if (!client) {
+        UNLOCK_CLIENT_LIST();
+        debug(LOG_ERR, "Kickoff: Client %s (%s) not found", client_mac_str, client_ip_str);
+        api_response_set_error(j_response, 2000, "Client not found");
+        send_json_response(transport, j_response);
+        json_object_put(j_response);
+        return;
+    }
+
     if (!client->gw_setting || strcmp(client->gw_setting->gw_id, gw_id_str) != 0) {
+        UNLOCK_CLIENT_LIST();
         debug(LOG_ERR, "Kickoff: Gateway mismatch for client %s - expected %s", client_mac_str, gw_id_str);
         api_response_set_error(j_response, 1002, "Gateway ID mismatch");
         send_json_response(transport, j_response);
@@ -403,7 +406,6 @@ void handle_kickoff_request(json_object *j_auth, api_transport_context_t *transp
         return;
     }
 
-    LOCK_CLIENT_LIST();
     fw_deny(client);
     client_list_remove(client);
     client_free_node(client);
@@ -1088,7 +1090,9 @@ void handle_auth_request(json_object *j_auth, api_transport_context_t *transport
         }
     }
 
+    LOCK_CLIENT_LIST();
     if (client_list_find(allow_ip, allow_mac)) {
+        UNLOCK_CLIENT_LIST();
         debug(LOG_DEBUG, "Auth: Client %s (%s) already authenticated", allow_mac, allow_ip);
         api_response_set_error(j_response, 1002, "Client already authenticated");
         send_json_response(transport, j_response);
@@ -1096,8 +1100,15 @@ void handle_auth_request(json_object *j_auth, api_transport_context_t *transport
         return;
     }
 
-    LOCK_CLIENT_LIST();
     t_client *client = client_list_add(allow_ip, allow_mac, token_str, gw_setting);
+    if (!client) {
+        UNLOCK_CLIENT_LIST();
+        debug(LOG_ERR, "Auth: Failed to add client %s (%s)", allow_mac, allow_ip);
+        api_response_set_error(j_response, 3001, "Failed to add client");
+        send_json_response(transport, j_response);
+        json_object_put(j_response);
+        return;
+    }
     client->auth_type = AUTH_TYPE_AUTH_SERVER;
     fw_allow(client, FW_MARK_KNOWN);
 

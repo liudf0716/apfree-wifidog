@@ -1045,6 +1045,11 @@ ev_http_callback_auth(struct evhttp_request *req, void *arg)
         client = client_list_find_by_mac(mac);
         if (!client) {
             client = client_list_add(remote_host, mac, token, gw_setting);
+            if (!client) {
+                UNLOCK_CLIENT_LIST();
+                evhttp_send_error(req, 200, "Failed to add client");
+                goto CLEAN_UP;
+            }
             new_client = 1;
         } else {
             fw_deny(client);
