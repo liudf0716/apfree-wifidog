@@ -118,6 +118,9 @@ char *evb_2_string(struct evbuffer *, int *);
 /** @brief Execute a shell command */
 int execute(const char *, int);
 
+/** @brief Execute a program with argv, without /bin/sh -c */
+int execute_argv(char *const argv[], int quiet);
+
 /** @brief Thread safe gethostbyname */
 struct in_addr *wd_gethostbyname(const char *);
 

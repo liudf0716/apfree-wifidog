@@ -8,9 +8,11 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <time.h>
+#include <ctype.h>
 #include <netinet/in.h>
 #include <errno.h>
 #include <limits.h>
+#include <sys/wait.h>
 
 #include <linux/netfilter.h>
 #include <linux/netfilter/nf_tables.h>
@@ -428,34 +430,151 @@ generate_nft_wifidogx_init_script()
  * 
 */
 static int
+is_safe_nft_handle(const char *handle)
+{
+	size_t i;
+
+	if (!handle || !*handle || strlen(handle) > 20) {
+		return 0;
+	}
+	for (i = 0; handle[i]; i++) {
+		if (!isdigit((unsigned char)handle[i])) {
+			return 0;
+		}
+	}
+	return 1;
+}
+
+static int
+is_safe_nft_chain(const char *chain)
+{
+	size_t i;
+
+	if (!chain || !*chain || strlen(chain) > 64) {
+		return 0;
+	}
+	for (i = 0; chain[i]; i++) {
+		unsigned char c = (unsigned char)chain[i];
+		if (!(isalnum(c) || c == '_' || c == '-')) {
+			return 0;
+		}
+	}
+	return 1;
+}
+
+static int
+nftables_exec_script(const char *nft_cmd)
+{
+	int pipefd[2];
+	pid_t pid;
+	sighandler_t old_handler;
+	int status;
+	int rc;
+
+	if (!nft_cmd || !*nft_cmd) {
+		return 1;
+	}
+
+	if (pipe(pipefd) < 0) {
+		debug(LOG_ERR, "nft pipe() failed: %s", strerror(errno));
+		return 1;
+	}
+
+	old_handler = signal(SIGCHLD, SIG_DFL);
+	pid = fork();
+	if (pid < 0) {
+		debug(LOG_ERR, "nft fork() failed: %s", strerror(errno));
+		close(pipefd[0]);
+		close(pipefd[1]);
+		signal(SIGCHLD, old_handler);
+		return 1;
+	}
+
+	if (pid == 0) {
+		char *argv[] = { "nft", "-f", "-", NULL };
+
+		close(pipefd[1]);
+		if (dup2(pipefd[0], STDIN_FILENO) < 0) {
+			_exit(127);
+		}
+		close(pipefd[0]);
+		if (fw_quiet) {
+			close(STDERR_FILENO);
+		}
+		execvp(argv[0], argv);
+		_exit(127);
+	}
+
+	close(pipefd[0]);
+	if (dprintf(pipefd[1], "%s\n", nft_cmd) < 0) {
+		debug(LOG_ERR, "nft write failed: %s", strerror(errno));
+		close(pipefd[1]);
+		waitpid(pid, NULL, 0);
+		signal(SIGCHLD, old_handler);
+		return 1;
+	}
+	close(pipefd[1]);
+
+	rc = waitpid(pid, &status, 0);
+	signal(SIGCHLD, old_handler);
+	if (rc < 0) {
+		debug(LOG_ERR, "nft waitpid() failed: %s", strerror(errno));
+		return 1;
+	}
+	if (WIFEXITED(status)) {
+		return WEXITSTATUS(status);
+	}
+	return 1;
+}
+
+static int
+nftables_load_file(const char *path)
+{
+	char *argv[4];
+	int rc;
+
+	if (!path || !*path || access(path, R_OK) != 0) {
+		debug(LOG_ERR, "nft rule file not readable: %s", path ? path : "(null)");
+		return 1;
+	}
+
+	argv[0] = "nft";
+	argv[1] = "-f";
+	argv[2] = (char *)path;
+	argv[3] = NULL;
+	debug(LOG_DEBUG, "Executing nft -f %s", path);
+	rc = execute_argv(argv, fw_quiet);
+	if (rc != 0) {
+		if (fw_quiet == 0)
+			debug(LOG_ERR, "nft -f failed(%d): %s", rc, path);
+		else if (fw_quiet == 1)
+			debug(LOG_DEBUG, "nft -f failed(%d): %s", rc, path);
+	}
+	return rc;
+}
+
+static int
 nftables_do_command(const char *format, ...)
 {
 	va_list vlist;
 	char *fmt_cmd;
-	char *cmd;
 	int rc;
 
 	va_start(vlist, format);
 	safe_vasprintf(&fmt_cmd, format, vlist);
 	va_end(vlist);
 
-	safe_asprintf(&cmd, "nft %s", fmt_cmd);
-	free(fmt_cmd);
-
-	debug(LOG_DEBUG, "Executing command: %s", cmd);
-
-	rc = execute(cmd, fw_quiet);
+	debug(LOG_DEBUG, "Executing nft -f -: %s", fmt_cmd);
+	rc = nftables_exec_script(fmt_cmd);
 
 	if (rc != 0) {
-		// If quiet, do not display the error
 		if (fw_quiet == 0)
-			debug(LOG_ERR, "nft command failed(%d): %s", rc, cmd);
+			debug(LOG_ERR, "nft command failed(%d): %s", rc, fmt_cmd);
 		else if (fw_quiet == 1)
-			debug(LOG_DEBUG, "nft command failed(%d): %s", rc, cmd);
+			debug(LOG_DEBUG, "nft command failed(%d): %s", rc, fmt_cmd);
 	}
 
-	free(cmd);
-
+	free(fmt_cmd);
 	return rc;
 }
 
@@ -467,7 +586,7 @@ nft_do_init_script_command()
         termination_handler(0);
     }
 
-	nftables_do_command("-f %s", NFT_FILENAME_OUT);
+	nftables_load_file(NFT_FILENAME_OUT);
 }
 
 
@@ -791,8 +910,13 @@ nft_fw_del_rule_by_ip_and_mac(const char *ip, const char *mac, const char *chain
             }
 
             const char *handle = json_object_get_string(jobj_rule_handle);
+            if (!is_safe_nft_chain(chain) || !is_safe_nft_handle(handle)) {
+                debug(LOG_ERR, "Refusing unsafe nft delete: chain=%s handle=%s",
+                      chain ? chain : "(null)", handle ? handle : "(null)");
+                continue;
+            }
             snprintf(cmd, sizeof(cmd), "delete rule inet wifidogx %s handle %s", chain, handle);
-            nftables_do_command(cmd);
+            nftables_do_command("%s", cmd);
             memset(cmd, 0, sizeof(cmd));
         }
     }
@@ -827,6 +951,11 @@ nft_fw_access(fw_access_t type, const char *ip, const char *mac, int tag)
     
     if (!ip || !mac) {
         debug(LOG_ERR, "Invalid parameters: ip or mac is NULL");
+        return 1;
+    }
+
+    if (!is_valid_mac(mac) || (!is_valid_ip(ip) && !is_valid_ip6(ip))) {
+        debug(LOG_ERR, "Invalid IP/MAC for nft access: ip=%s mac=%s", ip, mac);
         return 1;
     }
 
@@ -976,7 +1105,7 @@ nft_fw_reload_client()
     UNLOCK_CLIENT_LIST();
 
     // Apply the rules
-    return nftables_do_command(" -f %s", NFT_WIFIDOGX_CLIENT_LIST);
+    return nftables_load_file(NFT_WIFIDOGX_CLIENT_LIST);
 }
 
 /**
@@ -1016,7 +1145,7 @@ nft_fw_reload_trusted_maclist()
     fclose(fp);
 
     // Apply the rules
-    return nftables_do_command(" -f %s", NFT_WIFIDOGX_TRUST_CLIENTS);
+    return nftables_load_file(NFT_WIFIDOGX_TRUST_CLIENTS);
 }
 
 /** 
@@ -1753,6 +1882,14 @@ nft_fw_set_wildcard_domains_trusted()
 static void
 __nft_fw_add_trusted_mac(const char *mac, int timeout)
 {
+    char norm_mac[18];
+
+    if (normalize_mac(mac, norm_mac, sizeof(norm_mac)) != 0) {
+        debug(LOG_ERR, "Invalid MAC for trusted add: %s", mac ? mac : "(null)");
+        return;
+    }
+    mac = norm_mac;
+
     if (timeout == 0)
         nftables_do_command("add element inet wifidogx set_wifidogx_trust_clients_out { %s }", mac);
     else
@@ -1766,6 +1903,14 @@ __nft_fw_add_trusted_mac(const char *mac, int timeout)
 static void
 __nft_fw_del_trusted_mac(const char *mac)
 {
+    char norm_mac[18];
+
+    if (normalize_mac(mac, norm_mac, sizeof(norm_mac)) != 0) {
+        debug(LOG_ERR, "Invalid MAC for trusted delete: %s", mac ? mac : "(null)");
+        return;
+    }
+    mac = norm_mac;
+
     nftables_do_command("delete element inet wifidogx set_wifidogx_trust_clients_out { %s }", mac);
 
     char cmd[128] = {0};
@@ -1852,7 +1997,15 @@ nft_fw_refresh_trusted_maclist()
 void 
 nft_fw_set_mac_temporary(const char *mac, int which)
 {
+    char norm_mac[18];
+
     NFT_WIFIDOGX_BYPASS_MODE();
+
+    if (normalize_mac(mac, norm_mac, sizeof(norm_mac)) != 0) {
+        debug(LOG_ERR, "Invalid MAC for temporary trust: %s", mac ? mac : "(null)");
+        return;
+    }
+    mac = norm_mac;
 
     LOCK_CONFIG();
     if (which == 0) {
@@ -1902,40 +2055,68 @@ nft_fw_clear_untrusted_maclist()
 void
 nft_fw_add_untrusted_mac(const char *mac)
 {
+    char norm_mac[18];
+
     NFT_WIFIDOGX_BYPASS_MODE();
 
+    if (normalize_mac(mac, norm_mac, sizeof(norm_mac)) != 0) {
+        debug(LOG_ERR, "Invalid MAC for untrusted add: %s", mac ? mac : "(null)");
+        return;
+    }
+
     LOCK_CONFIG();
-    nftables_do_command("add element inet wifidogx set_wifidogx_untrust_macs { %s }", mac);
+    nftables_do_command("add element inet wifidogx set_wifidogx_untrust_macs { %s }", norm_mac);
     UNLOCK_CONFIG();
 }
 
 void
 nft_fw_del_untrusted_mac(const char *mac)
 {
+    char norm_mac[18];
+
     NFT_WIFIDOGX_BYPASS_MODE();
 
+    if (normalize_mac(mac, norm_mac, sizeof(norm_mac)) != 0) {
+        debug(LOG_ERR, "Invalid MAC for untrusted delete: %s", mac ? mac : "(null)");
+        return;
+    }
+
     LOCK_CONFIG();
-    nftables_do_command("delete element inet wifidogx set_wifidogx_untrust_macs { %s }", mac);
+    nftables_do_command("delete element inet wifidogx set_wifidogx_untrust_macs { %s }", norm_mac);
     UNLOCK_CONFIG();
 }
 
 void
 nft_fw_add_anti_nat_permit(const char *mac)
 {
+    char norm_mac[18];
+
     NFT_WIFIDOGX_BYPASS_MODE();
 
+    if (normalize_mac(mac, norm_mac, sizeof(norm_mac)) != 0) {
+        debug(LOG_ERR, "Invalid MAC for anti-nat add: %s", mac ? mac : "(null)");
+        return;
+    }
+
     LOCK_CONFIG();
-    nftables_do_command("add element inet wifidogx set_wifidogx_antinat_local_macs { %s }", mac);
+    nftables_do_command("add element inet wifidogx set_wifidogx_antinat_local_macs { %s }", norm_mac);
     UNLOCK_CONFIG();
 }
 
 void
 nft_fw_del_anti_nat_permit(const char *mac)
 {
+    char norm_mac[18];
+
     NFT_WIFIDOGX_BYPASS_MODE();
 
+    if (normalize_mac(mac, norm_mac, sizeof(norm_mac)) != 0) {
+        debug(LOG_ERR, "Invalid MAC for anti-nat delete: %s", mac ? mac : "(null)");
+        return;
+    }
+
     LOCK_CONFIG();
-    nftables_do_command("delete element inet wifidogx set_wifidogx_antinat_local_macs { %s }", mac);
+    nftables_do_command("delete element inet wifidogx set_wifidogx_antinat_local_macs { %s }", norm_mac);
     UNLOCK_CONFIG();
 }
 

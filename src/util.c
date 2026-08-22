@@ -274,7 +274,21 @@ is_valid_mac(const char *mac)
 	return (i == 12 && (s == 5 || s == 0));
 }
 
+int
+normalize_mac(const char *mac, char *out, size_t out_len)
+{
+	int i;
 
+	if (!mac || !out || out_len < 18 || !is_valid_mac(mac)) {
+		return -1;
+	}
+
+	for (i = 0; i < 17; i++) {
+		out[i] = (mac[i] == '-') ? ':' : (char)tolower((unsigned char)mac[i]);
+	}
+	out[17] = '\0';
+	return 0;
+}
 
 #define	BUF_MAX		1024
 

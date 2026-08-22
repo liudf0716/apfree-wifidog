@@ -7,6 +7,7 @@
 #ifndef _UTIL_H_
 #define _UTIL_H_
 
+#include <stddef.h>
 #include <stdbool.h>
 
 /** @brief Initialize the ICMP socket */
@@ -28,6 +29,9 @@ bool is_valid_ip(const char *);
 bool is_valid_ip6(const char *);
 
 bool is_valid_mac(const char *);
+
+/** Normalize MAC to lowercase colon form (aa:bb:cc:dd:ee:ff). */
+int normalize_mac(const char *mac, char *out, size_t out_len);
 
 float get_cpu_usage();
 

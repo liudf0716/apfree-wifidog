@@ -1679,6 +1679,46 @@ evdns_parse_trusted_domain_2_ip(trusted_domain_t which)
  * @return Return code of the command
  */
 int
+execute_argv(char *const argv[], int quiet)
+{
+    int pid, status, rc;
+    sighandler_t old_handler;
+
+    if (!argv || !argv[0]) {
+        return 1;
+    }
+
+    old_handler = signal(SIGCHLD, SIG_DFL);
+
+    pid = fork();
+    if (pid == 0) {
+        if (quiet)
+            close(2);
+        execvp(argv[0], argv);
+        debug(LOG_ERR, "execvp(%s): %s", argv[0], strerror(errno));
+        exit(1);
+    }
+
+    debug(LOG_DEBUG, "Waiting for PID %d to exit", pid);
+    rc = waitpid(pid, &status, 0);
+    debug(LOG_DEBUG, "Process PID %d exited", rc);
+
+    signal(SIGCHLD, old_handler);
+
+    if (-1 == rc) {
+        debug(LOG_ERR, "waitpid() failed (%s)", strerror(errno));
+        return 1;
+    }
+
+    if (WIFEXITED(status)) {
+        return (WEXITSTATUS(status));
+    }
+
+    debug(LOG_DEBUG, "Child may have been killed.");
+    return 1;
+}
+
+int
 execute(const char *cmd_line, int quiet)
 {
     int pid, status, rc;
