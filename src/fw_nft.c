@@ -12,6 +12,7 @@
 #include <netinet/in.h>
 #include <errno.h>
 #include <limits.h>
+#include <signal.h>
 #include <sys/wait.h>
 
 #include <linux/netfilter.h>
@@ -467,7 +468,7 @@ nftables_exec_script(const char *nft_cmd)
 {
 	int pipefd[2];
 	pid_t pid;
-	sighandler_t old_handler;
+	void (*old_handler)(int);
 	int status;
 	int rc;
 
