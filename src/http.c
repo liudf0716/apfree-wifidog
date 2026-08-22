@@ -1197,75 +1197,93 @@ void
 ev_http_callback_local_auth(struct evhttp_request *req, void *arg)
 {
     s_config *config = config_get_config();
+    char *peer_ip = NULL;
+    uint16_t peer_port = 0;
+    char arp_mac[MAC_LENGTH] = {0};
+    int addr_type;
+    t_gateway_setting *gw = NULL;
+    t_client *client = NULL;
+    const char *claimed_mac;
+    const char *claimed_ip;
+
+    (void)arg;
+
     if (config->auth_servers) {
         evhttp_send_error(req, HTTP_OK, "Only no auth server configured can use local pass");
         return;
     }
 
-    // get the ip and mac of the client
-    const char *mac = ev_http_find_query(req, "mac");
-    const char *ip = ev_http_find_query(req, "ip");
-    if (!mac || !ip) {
-        debug(LOG_INFO, "Local auth called without MAC and IP specified");
-        evhttp_send_error(req, HTTP_OK, "MAC and IP need to be specified");
+    /* Query ip/mac are only informational. Identity comes from the TCP peer
+     * and the ARP/NDP mapping on the gateway interface. */
+    claimed_mac = ev_http_find_query(req, "mac");
+    claimed_ip = ev_http_find_query(req, "ip");
+
+    addr_type = ev_http_connection_get_peer(evhttp_request_get_connection(req), &peer_ip, &peer_port);
+    if (addr_type == 0 || !peer_ip) {
+        debug(LOG_INFO, "Local auth rejected: cannot resolve peer address");
+        evhttp_send_error(req, HTTP_OK, "Cannot resolve client address");
         goto END;
     }
 
-    uint32_t addr_type = 0;
-    if (is_valid_ip(ip))
-        addr_type = 1;
-    else if (is_valid_ip6(ip))
-        addr_type = 2;
-    if (!addr_type) {
-        debug(LOG_INFO, "Invalid IP address format [%s]", ip);
-        evhttp_send_error(req, HTTP_OK, "Invalid IP address format");
-        goto END;
-    }
-
-    t_gateway_setting *gw = get_gateway_setting_by_addr(ip, addr_type);
+    gw = get_gateway_setting_by_addr(peer_ip, addr_type);
     if (!gw) {
+        debug(LOG_INFO, "Local auth rejected: no gateway for peer %s", peer_ip);
         evhttp_send_error(req, HTTP_OK, "Cant get gateway setting by client's ip");
         goto END;
     }
 
-    // fw_allow the client
+    if (!br_arp_get_mac(gw, peer_ip, arp_mac) || !is_valid_mac(arp_mac)) {
+        debug(LOG_INFO, "Local auth rejected: ARP/NDP lookup failed for %s", peer_ip);
+        evhttp_send_error(req, HTTP_OK, "Cannot resolve client MAC");
+        goto END;
+    }
+
+    if (claimed_mac && is_valid_mac(claimed_mac) && strcasecmp(claimed_mac, arp_mac) != 0) {
+        debug(LOG_WARNING, "Local auth ignored claimed MAC %s; using ARP MAC %s", claimed_mac, arp_mac);
+    }
+    if (claimed_ip && strcmp(claimed_ip, peer_ip) != 0) {
+        debug(LOG_WARNING, "Local auth ignored claimed IP %s; using peer IP %s", claimed_ip, peer_ip);
+    }
+
     LOCK_CLIENT_LIST();
-    t_client *client = client_list_find_by_mac(mac);
+    client = client_list_find_by_mac(arp_mac);
     if (!client) {
-        // New client - add and allow
         char rtoken[16] = {0};
         gen_random_token(rtoken, sizeof(rtoken) - 1);
-        client = client_list_add(ip, mac, rtoken, gw);
+        client = client_list_add(peer_ip, arp_mac, rtoken, gw);
+        if (!client) {
+            UNLOCK_CLIENT_LIST();
+            debug(LOG_ERR, "Local auth failed to add client %s %s", arp_mac, peer_ip);
+            evhttp_send_error(req, HTTP_INTERNAL, "Failed to add client");
+            goto END;
+        }
         client->auth_type = AUTH_TYPE_LOCAL_PASS;
         fw_allow(client, FW_MARK_KNOWN);
-        debug(LOG_INFO, "Local pass %s %s ", mac, ip);
-    } else if ((addr_type == 1 && client->ip && strcmp(client->ip, ip) != 0) ||
-               (addr_type == 2 && client->ip6 && strcmp(client->ip6, ip) != 0)) {
-        // Client exists but IP changed - deny old and allow new
-        debug(LOG_INFO, "Local pass %s with different IP %s", mac, ip);
+        debug(LOG_INFO, "Local pass %s %s", arp_mac, peer_ip);
+    } else if ((addr_type == 1 && client->ip && strcmp(client->ip, peer_ip) != 0) ||
+               (addr_type == 2 && client->ip6 && strcmp(client->ip6, peer_ip) != 0)) {
+        debug(LOG_INFO, "Local pass %s with different IP %s", arp_mac, peer_ip);
         fw_deny(client);
         client->auth_type = AUTH_TYPE_LOCAL_PASS;
         if (addr_type == 1) {
             if (client->ip) free(client->ip);
-            client->ip = safe_strdup(ip);
+            client->ip = safe_strdup(peer_ip);
         } else {
             if (client->ip6) free(client->ip6);
-            client->ip6 = safe_strdup(ip);
+            client->ip6 = safe_strdup(peer_ip);
         }
         fw_allow(client, FW_MARK_KNOWN);
     } else if ((addr_type == 1 && !client->ip) || (addr_type == 2 && !client->ip6)) {
-        // Client exists but missing IP field - deny and allow
-        debug(LOG_INFO, "Local pass %s adding missing IP type %d", mac, addr_type);
+        debug(LOG_INFO, "Local pass %s adding missing IP type %d", arp_mac, addr_type);
         client->auth_type = AUTH_TYPE_LOCAL_PASS;
         if (addr_type == 1) {
-            client->ip = safe_strdup(ip);
+            client->ip = safe_strdup(peer_ip);
         } else {
-            client->ip6 = safe_strdup(ip);
+            client->ip6 = safe_strdup(peer_ip);
         }
-        fw_allow_ip_mac(ip, mac , FW_MARK_KNOWN);
+        fw_allow_ip_mac(peer_ip, arp_mac, FW_MARK_KNOWN);
     } else {
-        // Existing client with same IP - just allow
-        debug(LOG_INFO, "Local pass %s %s already login", mac, ip);
+        debug(LOG_INFO, "Local pass %s %s already login", arp_mac, peer_ip);
         client->auth_type = AUTH_TYPE_LOCAL_PASS;
         UNLOCK_CLIENT_LIST();
         ev_http_send_user_redirect_page(req, config->local_portal);
@@ -1273,18 +1291,18 @@ ev_http_callback_local_auth(struct evhttp_request *req, void *arg)
     }
     UNLOCK_CLIENT_LIST();
 
-    // redirect the client to the internet
     if (client->ip && client->ip6) {
-        debug(LOG_INFO, "Local pass %s %s %s", mac, client->ip, client->ip6);
+        debug(LOG_INFO, "Local pass %s %s %s", arp_mac, client->ip, client->ip6);
         ev_http_send_redirect(req, config->local_portal, "Redirect to internet", 0);
     } else {
-        debug(LOG_INFO, "Local pass %s %s", mac, ip);
+        debug(LOG_INFO, "Local pass %s %s", arp_mac, peer_ip);
         ev_http_send_redirect(req, config->local_portal, "Redirect to internet", 1000);
     }
 
 END:
-    if (mac) free((void *)mac);
-    if (ip) free((void *)ip);
+    if (claimed_mac) free((void *)claimed_mac);
+    if (claimed_ip) free((void *)claimed_ip);
+    if (peer_ip) free(peer_ip);
 }
 
 
