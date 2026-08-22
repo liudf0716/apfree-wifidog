@@ -162,9 +162,15 @@ typedef void (*api_handler_fn)(json_object *req, api_transport_context_t *transp
  * 
  * Defines a mapping from message type/operation name to handler function.
  */
+typedef enum {
+	API_ACL_NORMAL = 0,                // Always allowed once authenticated
+	API_ACL_PRIVILEGED = 1             // Requires EnablePrivilegedOps yes
+} api_acl_level_t;
+
 typedef struct {
 	const char *name;                  // Message type or operation name
 	api_handler_fn handler;            // Handler function (with transport)
+	api_acl_level_t acl;               // Control-plane privilege required
 } api_route_entry_t;
 
 /**

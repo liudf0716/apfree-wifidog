@@ -7,6 +7,7 @@
 #include "common.h"
 #include "api_handlers.h"
 #include "debug.h"
+#include "conf.h"
 #include "api_handlers_internal.h"
 #include <limits.h>
 
@@ -124,6 +125,19 @@ api_dispatch_request(const char *op_name, json_object *json_req, api_transport_c
     const api_route_entry_t *routes = api_get_routes();
     for (const api_route_entry_t *route = routes; route->name != NULL; route++) {
 		if (strcmp(op_name, route->name) == 0) {
+			if (route->acl == API_ACL_PRIVILEGED) {
+				const s_config *cfg = config_get_config();
+				if (!cfg || !cfg->enable_privileged_ops) {
+					debug(LOG_WARNING, "Privileged op '%s' rejected (EnablePrivilegedOps is off)", op_name);
+					if (transport) {
+						json_object *j_response = api_response_new("acl_denied");
+						api_response_set_error(j_response, 1003, "Privileged operation is disabled");
+						send_json_response(transport, j_response);
+						json_object_put(j_response);
+					}
+					return true;
+				}
+			}
 			if (route->handler) {
                 route->handler(json_req, transport);
                 return true;

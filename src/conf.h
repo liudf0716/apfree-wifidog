@@ -297,6 +297,7 @@ typedef struct {
 	short enable_user_reload; /* 1, enable user reload */
 	short disable_portal_auth; /* 1, disable portal authentication */
 	short enable_remote_shell; /* 1, allow MQTT/WS shell op (off by default) */
+	short enable_privileged_ops; /* 1, allow OTA/reboot/network-change APIs */
 	char *ttl_values; /* ttl values */
 	char *anti_nat_permit_macs; /* anti nat permit mac */
 

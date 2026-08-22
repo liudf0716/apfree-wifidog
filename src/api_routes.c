@@ -24,45 +24,45 @@ static const api_route_entry_t api_routes[] = {
 	{"tmp_pass",                        handle_tmp_pass_request},
 	{"get_client_info",                 handle_get_client_info_request},
 	{"get_clients",                     handle_get_clients_request},
-    {"shell",                           handle_shell_request},
+    {"shell",                           handle_shell_request, API_ACL_PRIVILEGED},
 
 	// Firmware management
 	{"get_firmware_info",               handle_get_firmware_info_request},
-	{"firmware_upgrade",                handle_firmware_upgrade_request},
-	{"ota",                             handle_firmware_upgrade_request},
+	{"firmware_upgrade",                handle_firmware_upgrade_request, API_ACL_PRIVILEGED},
+	{"ota",                             handle_firmware_upgrade_request, API_ACL_PRIVILEGED},
 
 	// Device configuration
-    {"update_device_info",              handle_update_device_info_request},
+    {"update_device_info",              handle_update_device_info_request, API_ACL_PRIVILEGED},
     {"get_device_info",                 handle_get_device_info_request},
-	{"set_auth_serv",                   handle_set_auth_server_request},
+	{"set_auth_serv",                   handle_set_auth_server_request, API_ACL_PRIVILEGED},
     {"get_auth_serv",                   handle_get_auth_server_request},
-    {"set_mqtt_serv",                   handle_set_mqtt_server_request},
+    {"set_mqtt_serv",                   handle_set_mqtt_server_request, API_ACL_PRIVILEGED},
     {"get_mqtt_serv",                   handle_get_mqtt_server_request},
-    {"set_websocket_serv",              handle_set_websocket_server_request},
+    {"set_websocket_serv",              handle_set_websocket_server_request, API_ACL_PRIVILEGED},
     {"get_websocket_serv",              handle_get_websocket_server_request},
-    {"reboot_device",                   handle_reboot_device_request},
+    {"reboot_device",                   handle_reboot_device_request, API_ACL_PRIVILEGED},
 
 	// WiFi management
 	{"get_wifi_info",                   handle_get_wifi_info_request},
-    {"set_wifi_info",                   handle_set_wifi_info_request},
+    {"set_wifi_info",                   handle_set_wifi_info_request, API_ACL_PRIVILEGED},
     {"scan_wifi",                       handle_scan_wifi_request},
-    {"set_wifi_relay",                  handle_set_wifi_relay_request},
-    {"delete_wifi_relay",               handle_delete_wifi_relay_request},
-    {"unset_wifi_relay",                handle_delete_wifi_relay_request},
+    {"set_wifi_relay",                  handle_set_wifi_relay_request, API_ACL_PRIVILEGED},
+    {"delete_wifi_relay",               handle_delete_wifi_relay_request, API_ACL_PRIVILEGED},
+    {"unset_wifi_relay",                handle_delete_wifi_relay_request, API_ACL_PRIVILEGED},
 
     // VPN management
     {"get_ipsec_vpn",                   handle_get_ipsec_vpn_request},
-    {"set_ipsec_vpn",                   handle_set_ipsec_vpn_request},
+    {"set_ipsec_vpn",                   handle_set_ipsec_vpn_request, API_ACL_PRIVILEGED},
     {"get_ipsec_vpn_status",            handle_get_ipsec_vpn_status_request},
     {"get_wireguard_vpn",               handle_get_wireguard_vpn_request},
-    {"set_wireguard_vpn",               handle_set_wireguard_vpn_request},
+    {"set_wireguard_vpn",               handle_set_wireguard_vpn_request, API_ACL_PRIVILEGED},
     {"get_wireguard_vpn_status",        handle_get_wireguard_vpn_status_request},
-    {"generate_wireguard_keys",         handle_generate_wireguard_keys_request},
+    {"generate_wireguard_keys",         handle_generate_wireguard_keys_request, API_ACL_PRIVILEGED},
 
     // VPN route management
     {"get_vpn_routes",                  handle_get_vpn_routes_request},
-    {"set_vpn_routes",                  handle_set_vpn_routes_request},
-    {"delete_vpn_routes",               handle_delete_vpn_routes_request},
+    {"set_vpn_routes",                  handle_set_vpn_routes_request, API_ACL_PRIVILEGED},
+    {"delete_vpn_routes",               handle_delete_vpn_routes_request, API_ACL_PRIVILEGED},
 
     // Flow control / BPF management (aw-bpfctl wrapper)
     {"bpf_add",                         handle_bpf_add_request},
