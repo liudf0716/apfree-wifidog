@@ -342,5 +342,7 @@ include_directories(
 # Project include directory (compat headers, local headers)
 include_directories(${CMAKE_SOURCE_DIR}/include)
 
+enable_testing()
+
 # Add subdirectories
 add_subdirectory(src)

@@ -125,3 +125,23 @@ target_link_libraries(wdctlx
 install(TARGETS wifidogx wdctlx
 	RUNTIME DESTINATION bin
 )
+
+# Review-fix unit tests (auth / local_auth / nft / no-eBPF)
+add_executable(test_review_fixes
+	${CMAKE_SOURCE_DIR}/test/test_review_fixes.c
+	util.c
+	debug.c
+	safe.c
+	client_list.c
+)
+target_include_directories(test_review_fixes PRIVATE
+	${CMAKE_CURRENT_SOURCE_DIR}
+	${CMAKE_SOURCE_DIR}/include
+	${JSONC_INCLUDE_DIRS}
+	${UCI_INCLUDE_DIRS}
+	${LIBEVENT_INCLUDE_DIRS}
+	${OPENSSL_INCLUDE_DIRS}
+	${MOSQUITTO_INCLUDE_DIRS}
+)
+target_link_libraries(test_review_fixes pthread)
+add_test(NAME review_fixes COMMAND test_review_fixes)
