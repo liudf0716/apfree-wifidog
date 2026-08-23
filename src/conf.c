@@ -123,6 +123,7 @@ typedef enum {
 	oPortalTicketRequired,
 	oEnableRemoteShell,
 	oEnablePrivilegedOps,
+	oPrivilegedOpsSecret,
 } OpCodes;
 
 /** @internal
@@ -214,6 +215,7 @@ static const struct {
 	"portalticketrequired", oPortalTicketRequired}, {
 	"enableremoteshell", oEnableRemoteShell}, {
 	"enableprivilegedops", oEnablePrivilegedOps}, {
+	"privilegedopssecret", oPrivilegedOpsSecret}, {
 	NULL, oBadOption},
 };
 
@@ -392,6 +394,7 @@ void config_init(void)
 	config.portal_ticket_required  = 0;
 	config.enable_remote_shell     = 0;
 	config.enable_privileged_ops   = 0;
+	config.privileged_ops_secret   = safe_strdup(DEFAULT_PRIVILEGED_OPS_SECRET);
 
 	// Initialize device info
 	config.device_info = NULL;
@@ -1319,6 +1322,13 @@ config_read()
 					break;
 				case oEnablePrivilegedOps:
 					config.enable_privileged_ops = parse_boolean_value(p1);
+					break;
+				case oPrivilegedOpsSecret:
+					if (p1 && p1[0]) {
+						if (config.privileged_ops_secret)
+							free(config.privileged_ops_secret);
+						config.privileged_ops_secret = safe_strdup(p1);
+					}
 					break;
 				case oDeviceID:
 					if(config.device_id) free(config.device_id);
@@ -2348,6 +2358,7 @@ void config_cleanup(void) {
     if (cfg->venue_id) { free(cfg->venue_id); cfg->venue_id = NULL; }
     if (cfg->ttl_values) { free(cfg->ttl_values); cfg->ttl_values = NULL; }
     if (cfg->anti_nat_permit_macs) { free(cfg->anti_nat_permit_macs); cfg->anti_nat_permit_macs = NULL; }
+    if (cfg->privileged_ops_secret) { free(cfg->privileged_ops_secret); cfg->privileged_ops_secret = NULL; }
 
     if (cfg->https_server) {
         if (cfg->https_server->ca_crt_file) { free(cfg->https_server->ca_crt_file); cfg->https_server->ca_crt_file = NULL; }

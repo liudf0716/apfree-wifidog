@@ -126,7 +126,6 @@ install(TARGETS wifidogx wdctlx
 	RUNTIME DESTINATION bin
 )
 
-# Review-fix unit tests (auth / local_auth / nft / no-eBPF)
 add_executable(test_review_fixes
 	${CMAKE_SOURCE_DIR}/test/test_review_fixes.c
 	util.c

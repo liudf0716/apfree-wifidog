@@ -1691,6 +1691,11 @@ execute_argv(char *const argv[], int quiet)
     old_handler = signal(SIGCHLD, SIG_DFL);
 
     pid = fork();
+    if (pid < 0) {
+        debug(LOG_ERR, "fork(): %s", strerror(errno));
+        signal(SIGCHLD, old_handler);
+        return 1;
+    }
     if (pid == 0) {
         if (quiet)
             close(2);
@@ -1734,6 +1739,11 @@ execute(const char *cmd_line, int quiet)
    	old_handler = signal(SIGCHLD, SIG_DFL);	
 
     pid = fork();
+    if (pid < 0) {
+        debug(LOG_ERR, "fork(): %s", strerror(errno));
+        signal(SIGCHLD, old_handler);
+        return 1;
+    }
     if (pid == 0) {             /* for the child process:         */
         /* We don't want to see any errors if quiet flag is on */
         if (quiet)

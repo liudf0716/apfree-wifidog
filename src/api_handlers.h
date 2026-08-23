@@ -133,6 +133,8 @@ void handle_set_mqtt_server_request(json_object *j_req, api_transport_context_t 
 void handle_get_mqtt_server_request(json_object *j_req, api_transport_context_t *transport);
 void handle_set_websocket_server_request(json_object *j_req, api_transport_context_t *transport);
 void handle_get_websocket_server_request(json_object *j_req, api_transport_context_t *transport);
+void handle_set_privileged_ops_request(json_object *j_req, api_transport_context_t *transport);
+void handle_get_privileged_ops_request(json_object *j_req, api_transport_context_t *transport);
 
 // Connection management handlers
 void handle_gateway_state_heartbeat_request(json_object *j_heartbeat, api_transport_context_t *transport);

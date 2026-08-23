@@ -21,7 +21,7 @@ static const api_route_entry_t api_routes[] = {
     {"gateway_heartbeat",               handle_gateway_state_heartbeat_request},
 	{"auth",                            handle_auth_request},
 	{"kickoff",                         handle_kickoff_request},
-	{"tmp_pass",                        handle_tmp_pass_request},
+	{"tmp_pass",                        handle_tmp_pass_request, API_ACL_PRIVILEGED},
 	{"get_client_info",                 handle_get_client_info_request},
 	{"get_clients",                     handle_get_clients_request},
     {"shell",                           handle_shell_request, API_ACL_PRIVILEGED},
@@ -41,6 +41,8 @@ static const api_route_entry_t api_routes[] = {
     {"set_websocket_serv",              handle_set_websocket_server_request, API_ACL_PRIVILEGED},
     {"get_websocket_serv",              handle_get_websocket_server_request},
     {"reboot_device",                   handle_reboot_device_request, API_ACL_PRIVILEGED},
+    {"set_privileged_ops",              handle_set_privileged_ops_request},
+    {"get_privileged_ops",              handle_get_privileged_ops_request},
 
 	// WiFi management
 	{"get_wifi_info",                   handle_get_wifi_info_request},
@@ -65,32 +67,32 @@ static const api_route_entry_t api_routes[] = {
     {"delete_vpn_routes",               handle_delete_vpn_routes_request, API_ACL_PRIVILEGED},
 
     // Flow control / BPF management (aw-bpfctl wrapper)
-    {"bpf_add",                         handle_bpf_add_request},
-    {"qos_monitor_add_by_ipv4",         handle_bpf_add_request}, // Alias for bpf_add
-    {"qos_monitor_add_by_ipv6",         handle_bpf_add_request}, // Alias for bpf_add
-    {"qos_monitor_add_by_mac",          handle_bpf_add_request}, // Alias for bpf_add
-    {"bpf_del",                         handle_bpf_del_request},
-    {"qos_monitor_del_by_ipv4",         handle_bpf_del_request}, // Alias for bpf_del
-    {"qos_monitor_del_by_ipv6",         handle_bpf_del_request}, // Alias for bpf_del
-    {"qos_monitor_del_by_mac",          handle_bpf_del_request}, // Alias for bpf_del
-    {"bpf_flush",                       handle_bpf_flush_request},
-    {"qos_monitor_flush_by_ipv4",       handle_bpf_flush_request}, // Alias for bpf_flush
-    {"qos_monitor_flush_by_ipv6",       handle_bpf_flush_request}, // Alias for bpf_flush
-    {"qos_monitor_flush_by_mac",        handle_bpf_flush_request}, // Alias for bpf_flush
+    {"bpf_add",                         handle_bpf_add_request, API_ACL_PRIVILEGED},
+    {"qos_monitor_add_by_ipv4",         handle_bpf_add_request, API_ACL_PRIVILEGED},
+    {"qos_monitor_add_by_ipv6",         handle_bpf_add_request, API_ACL_PRIVILEGED},
+    {"qos_monitor_add_by_mac",          handle_bpf_add_request, API_ACL_PRIVILEGED},
+    {"bpf_del",                         handle_bpf_del_request, API_ACL_PRIVILEGED},
+    {"qos_monitor_del_by_ipv4",         handle_bpf_del_request, API_ACL_PRIVILEGED},
+    {"qos_monitor_del_by_ipv6",         handle_bpf_del_request, API_ACL_PRIVILEGED},
+    {"qos_monitor_del_by_mac",          handle_bpf_del_request, API_ACL_PRIVILEGED},
+    {"bpf_flush",                       handle_bpf_flush_request, API_ACL_PRIVILEGED},
+    {"qos_monitor_flush_by_ipv4",       handle_bpf_flush_request, API_ACL_PRIVILEGED},
+    {"qos_monitor_flush_by_ipv6",       handle_bpf_flush_request, API_ACL_PRIVILEGED},
+    {"qos_monitor_flush_by_mac",        handle_bpf_flush_request, API_ACL_PRIVILEGED},
     {"bpf_json",                        handle_bpf_json_request},
     {"qos_get_traffic_json_by_ipv4",    handle_bpf_json_request}, // Alias for bpf_json
     {"qos_get_traffic_json_by_ipv6",    handle_bpf_json_request}, // Alias for bpf_json
     {"qos_get_traffic_json_by_mac",     handle_bpf_json_request}, // Alias for bpf_json
     {"qos_get_l7_traffic_json",         handle_bpf_json_request}, // Alias for bpf_json
     {"qos_get_supported_l7_lib_json",   handle_bpf_json_request}, // Alias for bpf_json
-    {"bpf_update",                      handle_bpf_update_request},
-    {"qos_rule_update_by_ipv4",         handle_bpf_update_request}, // Alias for bpf_update
-    {"qos_rule_update_by_ipv6",         handle_bpf_update_request}, // Alias for bpf_update
-    {"qos_rule_update_by_mac",          handle_bpf_update_request}, // Alias for bpf_update
-    {"bpf_update_all",                  handle_bpf_update_all_request},
-    {"qos_update_all_by_ipv4",          handle_bpf_update_all_request}, // Alias for bpf_update_all
-    {"qos_update_all_by_ipv6",          handle_bpf_update_all_request}, // Alias for bpf_update_all
-    {"qos_update_all_by_mac",           handle_bpf_update_all_request}, // Alias for bpf_update_all
+    {"bpf_update",                      handle_bpf_update_request, API_ACL_PRIVILEGED},
+    {"qos_rule_update_by_ipv4",         handle_bpf_update_request, API_ACL_PRIVILEGED},
+    {"qos_rule_update_by_ipv6",         handle_bpf_update_request, API_ACL_PRIVILEGED},
+    {"qos_rule_update_by_mac",          handle_bpf_update_request, API_ACL_PRIVILEGED},
+    {"bpf_update_all",                  handle_bpf_update_all_request, API_ACL_PRIVILEGED},
+    {"qos_update_all_by_ipv4",          handle_bpf_update_all_request, API_ACL_PRIVILEGED},
+    {"qos_update_all_by_ipv6",          handle_bpf_update_all_request, API_ACL_PRIVILEGED},
+    {"qos_update_all_by_mac",           handle_bpf_update_all_request, API_ACL_PRIVILEGED},
 
     // Trusted domains
     // Note: Use `sync_trusted_domain` as the canonical operation name.

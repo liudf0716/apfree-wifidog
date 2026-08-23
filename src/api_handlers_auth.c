@@ -1465,6 +1465,129 @@ void handle_get_device_info_request(json_object *j_req, api_transport_context_t 
     debug(LOG_INFO, "Device info sent successfully");
 }
 
+static int
+privileged_ops_secrets_equal(const char *a, const char *b)
+{
+    size_t la = a ? strlen(a) : 0;
+    size_t lb = b ? strlen(b) : 0;
+    size_t n = la > lb ? la : lb;
+    unsigned char diff = (unsigned char)(la != lb);
+    size_t i;
+
+    for (i = 0; i < n; i++) {
+        unsigned char ca = i < la ? (unsigned char)a[i] : 0;
+        unsigned char cb = i < lb ? (unsigned char)b[i] : 0;
+        diff |= (unsigned char)(ca ^ cb);
+    }
+    return diff == 0;
+}
+
+void handle_set_privileged_ops_request(json_object *j_req, api_transport_context_t *transport)
+{
+    json_object *j_response = api_response_new("set_privileged_ops_response");
+    json_object *j_data = api_response_get_data(j_response);
+    json_object *j_enable = NULL;
+    json_object *j_secret = NULL;
+    const char *provided;
+    char *expected = NULL;
+    int enable;
+    int enable_only;
+    s_config *cfg;
+
+    if (!j_req) {
+        api_response_set_error(j_response, 1001, "Invalid request");
+        send_json_response(transport, j_response);
+        json_object_put(j_response);
+        return;
+    }
+
+    if (!json_object_object_get_ex(j_req, "enable", &j_enable) &&
+        !json_object_object_get_ex(j_req, "enabled", &j_enable)) {
+        api_response_set_error(j_response, 1001, "Missing enable field");
+        send_json_response(transport, j_response);
+        json_object_put(j_response);
+        return;
+    }
+
+    if (json_object_is_type(j_enable, json_type_boolean) ||
+        json_object_is_type(j_enable, json_type_int)) {
+        enable = json_object_get_boolean(j_enable) ? 1 : 0;
+    } else if (json_object_is_type(j_enable, json_type_string)) {
+        const char *s = json_object_get_string(j_enable);
+        enable = (s && (strcmp(s, "1") == 0 || strcasecmp(s, "true") == 0 ||
+                        strcasecmp(s, "yes") == 0)) ? 1 : 0;
+    } else {
+        api_response_set_error(j_response, 1001, "Invalid enable field");
+        send_json_response(transport, j_response);
+        json_object_put(j_response);
+        return;
+    }
+
+    enable_only = enable ? 1 : 0;
+    json_object_object_get_ex(j_req, "secret", &j_secret);
+    provided = j_secret ? json_object_get_string(j_secret) : NULL;
+
+    /* Enabling requires the local secret. Disabling does not. */
+    if (enable_only) {
+        cfg = config_get_config();
+        LOCK_CONFIG();
+        if (cfg && cfg->privileged_ops_secret && cfg->privileged_ops_secret[0]) {
+            expected = safe_strdup(cfg->privileged_ops_secret);
+        }
+        UNLOCK_CONFIG();
+
+        if (!expected || !privileged_ops_secrets_equal(provided, expected)) {
+            if (expected) {
+                free(expected);
+            }
+            debug(LOG_WARNING, "set_privileged_ops rejected: bad secret");
+            api_response_set_error(j_response, 1003, "Invalid secret");
+            send_json_response(transport, j_response);
+            json_object_put(j_response);
+            return;
+        }
+        free(expected);
+    }
+
+    cfg = config_get_config();
+    LOCK_CONFIG();
+    if (cfg) {
+        cfg->enable_privileged_ops = (short)enable;
+    }
+    UNLOCK_CONFIG();
+
+    uci_set_value("wifidogx", "common", "enable_privileged_ops", enable ? "1" : "0");
+
+    if (j_data) {
+        json_object_object_add(j_data, "enabled", json_object_new_int(enable));
+    }
+    api_response_set_success(j_response, enable ? "Privileged ops enabled" : "Privileged ops disabled");
+    send_json_response(transport, j_response);
+    json_object_put(j_response);
+}
+
+void handle_get_privileged_ops_request(json_object *j_req, api_transport_context_t *transport)
+{
+    json_object *j_response = api_response_new("get_privileged_ops_response");
+    json_object *j_data = api_response_get_data(j_response);
+    const s_config *cfg = config_get_config();
+    int enabled = 0;
+
+    (void)j_req;
+    LOCK_CONFIG();
+    if (cfg) {
+        enabled = cfg->enable_privileged_ops ? 1 : 0;
+    }
+    UNLOCK_CONFIG();
+
+    if (j_data) {
+        json_object_object_add(j_data, "enabled", json_object_new_int(enabled));
+    }
+    api_response_set_success(j_response, "OK");
+    send_json_response(transport, j_response);
+    json_object_put(j_response);
+}
+
 void handle_get_trusted_domains_request(json_object *j_req, api_transport_context_t *transport) {
     json_object *j_response = api_response_new("get_trusted_domains_response");
     json_object *j_data = api_response_get_data(j_response);

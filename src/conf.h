@@ -93,6 +93,7 @@ typedef enum {
 #define DEFAULT_SVR_KEY_FILE "/etc/apfree.key"
 #define DEFAULT_WWW_PATH "/etc/www/"
 #define DEFAULT_TTL_VALUES	"64,128,255"
+#define DEFAULT_PRIVILEGED_OPS_SECRET "chawrt@2026"
 
 /** Firewall rulesets */
 #define FWRULESET_GLOBAL "global"
@@ -298,6 +299,7 @@ typedef struct {
 	short disable_portal_auth; /* 1, disable portal authentication */
 	short enable_remote_shell; /* 1, allow MQTT/WS shell op (off by default) */
 	short enable_privileged_ops; /* 1, allow OTA/reboot/network-change APIs */
+	char *privileged_ops_secret; /* local secret required to toggle privileged ops */
 	char *ttl_values; /* ttl values */
 	char *anti_nat_permit_macs; /* anti nat permit mac */
 

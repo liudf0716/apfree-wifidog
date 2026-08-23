@@ -2125,12 +2125,25 @@ static void
 __nft_fw_set_anti_nat_permit()
 {
     const s_config *config = config_get_config();
+    char *copy;
+    char *tok;
+    char *saveptr;
+    char norm_mac[18];
+
     if (config->anti_nat_permit_macs == NULL) {
         debug(LOG_WARNING, "anti_nat_permit_macs is NULL");
         return;
     }
 
-    nftables_do_command("add element inet wifidogx set_wifidogx_antinat_local_macs { %s }", config->anti_nat_permit_macs);
+    copy = safe_strdup(config->anti_nat_permit_macs);
+    for (tok = strtok_r(copy, ", \t", &saveptr); tok; tok = strtok_r(NULL, ", \t", &saveptr)) {
+        if (normalize_mac(tok, norm_mac, sizeof(norm_mac)) != 0) {
+            debug(LOG_ERR, "Invalid MAC in anti_nat_permit_macs: %s", tok);
+            continue;
+        }
+        nftables_do_command("add element inet wifidogx set_wifidogx_antinat_local_macs { %s }", norm_mac);
+    }
+    free(copy);
 }
 
 void

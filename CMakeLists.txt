@@ -7,6 +7,11 @@ project(apfree-wifidog
 
 INCLUDE(GNUInstallDirs)
 
+# Off by default: cmake must not sudo/apt/git-clone into the host.
+option(AW_AUTO_INSTALL_DEPS
+  "If ON, missing packages may be installed via sudo apt-get or source builds into /usr/local"
+  OFF)
+
 # Set C standard and module path
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -17,6 +22,9 @@ set(ENV{PKG_CONFIG_PATH} "/usr/local/lib/pkgconfig:/usr/local/lib64/pkgconfig:/u
 set(_AW_APT_UPDATED FALSE)
 
 function(aw_apt_update_once)
+  if(NOT AW_AUTO_INSTALL_DEPS)
+    return()
+  endif()
   if(_AW_APT_UPDATED)
     return()
   endif()
@@ -37,6 +45,10 @@ endfunction()
 
 function(try_apt_install)
   if(NOT ARGN)
+    return()
+  endif()
+  if(NOT AW_AUTO_INSTALL_DEPS)
+    message(STATUS "AW_AUTO_INSTALL_DEPS=OFF; not installing: ${ARGN}")
     return()
   endif()
   find_program(APT_GET_EXECUTABLE apt-get)
@@ -143,6 +155,9 @@ endfunction()
 
 # Function to build and install libubox from source
 function(build_and_install_libubox)
+  if(NOT AW_AUTO_INSTALL_DEPS)
+    return()
+  endif()
   find_path(LIBUBOX_INCLUDE_DIRS libubox/uloop.h)
   
   if(NOT LIBUBOX_INCLUDE_DIRS)
@@ -208,6 +223,9 @@ endfunction()
 
 # Function to build and install libuci from source
 function(build_and_install_libuci)
+  if(NOT AW_AUTO_INSTALL_DEPS)
+    return()
+  endif()
   find_path(LIBUCI_INCLUDE_DIRS uci.h)
   
   if(NOT LIBUCI_INCLUDE_DIRS)
@@ -276,6 +294,9 @@ endfunction()
 
 # Function to build and install libmosquitto from source
 function(build_and_install_libmosquitto)
+  if(NOT AW_AUTO_INSTALL_DEPS)
+    return()
+  endif()
   message(STATUS "libmosquitto not found. Building and installing from source...")
 
   set(MOSQUITTO_BUILD_DIR "/tmp/libmosquitto-build")

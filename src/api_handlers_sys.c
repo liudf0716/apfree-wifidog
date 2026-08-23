@@ -320,7 +320,6 @@ void handle_firmware_upgrade_request(json_object *j_req, api_transport_context_t
     send_json_response(transport, j_response);
     json_object_put(j_response);
 
-    /* Pass the URL as an argv element. Never interpolate it into a shell. */
     char *argv_force[] = { "/sbin/sysupgrade", "-F", (char *)url_str, NULL };
     char *argv_normal[] = { "/sbin/sysupgrade", (char *)url_str, NULL };
     if (spawn_detached_argv(force_upgrade ? argv_force : argv_normal) != 0) {
