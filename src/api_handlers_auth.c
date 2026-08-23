@@ -1561,6 +1561,7 @@ void handle_set_privileged_ops_request(json_object *j_req, api_transport_context
     if (j_data) {
         json_object_object_add(j_data, "enabled", json_object_new_int(enable));
     }
+    json_object_object_add(j_response, "enabled", json_object_new_int(enable));
     api_response_set_success(j_response, enable ? "Privileged ops enabled" : "Privileged ops disabled");
     send_json_response(transport, j_response);
     json_object_put(j_response);
@@ -1583,7 +1584,9 @@ void handle_get_privileged_ops_request(json_object *j_req, api_transport_context
     if (j_data) {
         json_object_object_add(j_data, "enabled", json_object_new_int(enabled));
     }
-    api_response_set_success(j_response, "OK");
+    json_object_object_add(j_response, "enabled", json_object_new_int(enabled));
+    api_response_set_success(j_response,
+                             enabled ? "Privileged ops is on" : "Privileged ops is off");
     send_json_response(transport, j_response);
     json_object_put(j_response);
 }

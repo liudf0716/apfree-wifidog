@@ -373,6 +373,16 @@ void handle_get_sys_info_request(json_object *j_req, api_transport_context_t *tr
     json_object_object_add(j_data, "cpu_usage", json_object_new_double(sysinfo.cpu_usage));
     json_object_object_add(j_data, "wifidog_uptime", json_object_new_int64(sysinfo.wifidog_uptime));
     json_object_object_add(j_data, "cpu_temp", json_object_new_int(sysinfo.cpu_temp));
+    {
+        const s_config *cfg = config_get_config();
+        int privileged_on = 0;
+        LOCK_CONFIG();
+        if (cfg) {
+            privileged_on = cfg->enable_privileged_ops ? 1 : 0;
+        }
+        UNLOCK_CONFIG();
+        json_object_object_add(j_data, "privileged_ops_enabled", json_object_new_int(privileged_on));
+    }
 
     api_response_set_success(j_response, "OK");
 
