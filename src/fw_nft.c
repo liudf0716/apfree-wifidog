@@ -10,6 +10,7 @@
 #include <time.h>
 #include <ctype.h>
 #include <netinet/in.h>
+#include <arpa/inet.h>
 #include <errno.h>
 #include <limits.h>
 #include <signal.h>
@@ -1878,6 +1879,21 @@ nft_fw_set_wildcard_domains_trusted()
     __nft_fw_clear_wildcard_domains_trusted();
     __nft_fw_set_wildcard_domains_trusted();
     UNLOCK_DOMAIN();
+}
+
+void
+nft_fw_add_wildcard_ip(const char *ip)
+{
+    struct in6_addr a6;
+    struct in_addr a4;
+
+    if (!ip || !ip[0])
+        return;
+    NFT_WIFIDOGX_BYPASS_MODE();
+    if (strchr(ip, ':') && inet_pton(AF_INET6, ip, &a6) == 1)
+        nftables_do_command("add element inet wifidogx set_wifidogx_wildcard_trust_domains_v6 { %s }", ip);
+    else if (inet_pton(AF_INET, ip, &a4) == 1)
+        nftables_do_command("add element inet wifidogx set_wifidogx_wildcard_trust_domains { %s }", ip);
 }
 
 static void

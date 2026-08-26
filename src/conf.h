@@ -354,6 +354,8 @@ void clear_trusted_wildcard_domains(void);
 t_domain_trusted *get_trusted_domains(void);
 t_domain_trusted *get_trusted_wildcard_domains(void);
 void add_trusted_wildcard_domains(const char *domains);
+/* Add a DNS-resolved IP to a matching wildcard trust domain. Returns 1 if newly added. */
+int add_wildcard_resolved_ip(const char *query_name, const char *ip);
 
 /** Trusted MAC List Operations */
 bool is_trusted_mac(const char *);

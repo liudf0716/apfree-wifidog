@@ -104,7 +104,11 @@ no_ebpf_maps_present(void)
 		"/sys/fs/bpf/tc/globals/ipv6_map",
 		"/sys/fs/bpf/tc/globals/mac_map",
 		"/sys/fs/bpf/tc/globals/xdpi_l7_map",
+		"/sys/fs/bpf/tc/globals/dns_ringbuf",
+		"/sys/fs/bpf/tc/globals/dns_ringbuf_portal",
+		"/sys/fs/bpf/tc/globals/dns_stats_map",
 		"/sys/fs/bpf/aw/dns_ringbuf",
+		"/sys/fs/bpf/aw/dns_ringbuf_portal",
 		"/sys/fs/bpf/aw/dns_stats_map",
 		NULL
 	};

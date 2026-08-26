@@ -22,9 +22,9 @@
 #include "wd_util.h"
 #include "wd_client.h"
 #include "ws_thread.h"
-#include "dns_monitor.h"
 #include "client_snapshot.h"
 #include "hotplug_listener.h"
+#include "dns_snoop.h"
 #include "portal_cache.h"
 #include "portal_ticket.h"
 #include "roam_sync.h"
@@ -45,7 +45,7 @@ static pthread_t tid_tls_server = 0;   /* TLS redirect thread */
 static pthread_t tid_mqtt_server = 0;    /* MQTT server thread */
 static pthread_t tid_ws = 0;            /* WebSocket thread */
 static pthread_t tid_hotplug = 0;       /* OpenWrt hotplug listener thread */
-static pthread_t tid_dns_monitor = 0;    /* DNS monitor thread */
+static pthread_t tid_dns_snoop = 0;      /* Portal DNS consumer (dns_ringbuf_portal) */
 static pthread_t tid_resilience = 0;     /* Firewall resilience thread */
 
 /* Signal handling */
@@ -272,7 +272,7 @@ static const struct {
     {&tid_mqtt_server, "mqtt_server"},
     {&tid_ws, "websocket"},
     {&tid_hotplug, "hotplug_listener"},
-    {&tid_dns_monitor, "dns_monitor"},
+    {&tid_dns_snoop, "dns_snoop"},
     {&tid_resilience, "resilience"}
 };
 
@@ -321,9 +321,6 @@ termination_handler(int s) {
         pthread_exit(NULL);
         return; // This won't be reached but good for clarity
     }
-
-    /* Stop DNS monitor */
-    dns_monitor_stop();
 
     /* Clean up threads */
     terminate_threads(self);
@@ -727,9 +724,8 @@ threads_init(s_config *config)
         }
     }
 
-    if (!create_thread(&tid_dns_monitor, (void *)thread_dns_monitor, NULL, "dns_monitor")) {
-        debug(LOG_ERR, "Failed to create DNS monitor thread");
-        return;
+    if (!create_thread(&tid_dns_snoop, (void *)thread_dns_snoop, NULL, "dns_snoop")) {
+        debug(LOG_WARNING, "Failed to create DNS snoop thread (wildcard trust IPs)");
     }
 
     if (!create_thread(&tid_ping, (void *)thread_ping, NULL, "ping")) {

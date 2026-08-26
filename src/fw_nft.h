@@ -54,6 +54,7 @@ void nft_fw_clear_inner_domains_trusted();
  */
 void nft_fw_set_wildcard_domains_trusted();
 void nft_fw_clear_wildcard_domains_trusted();
+void nft_fw_add_wildcard_ip(const char *ip);
 
 /**
  * @brief trusted temporary mac operations

@@ -1923,13 +1923,66 @@ __add_ip_2_domain(t_domain_trusted *dt, const char *ip)
 
 	if(ipt == NULL) {
 		ipt = (t_ip_trusted *)malloc(sizeof(t_ip_trusted));
+		memset(ipt, 0, sizeof(t_ip_trusted));
 		strncpy(ipt->ip, ip, INET6_ADDRSTRLEN); // Use INET6_ADDRSTRLEN
 		ipt->ip[INET6_ADDRSTRLEN-1] = '\0';
+		if (inet_pton(AF_INET, ip, &ipt->uip.ipv4) == 1)
+			ipt->ip_type = IP_TYPE_IPV4;
+		else if (inet_pton(AF_INET6, ip, &ipt->uip.ipv6) == 1)
+			ipt->ip_type = IP_TYPE_IPV6;
 		ipt->next = dt->ips_trusted;
 		dt->ips_trusted = ipt;
 	}
 
 	return ipt;
+}
+
+static int
+wildcard_query_matches(const char *query_name, const char *domain_pattern)
+{
+	if (!query_name || !domain_pattern)
+		return 0;
+	if (strncmp(domain_pattern, "*.", 2) == 0) {
+		const char *suffix = domain_pattern + 1;
+		size_t query_len = strlen(query_name);
+		size_t suffix_len = strlen(suffix);
+		return (query_len >= suffix_len && suffix_len > 0 &&
+			strcmp(query_name + query_len - suffix_len, suffix) == 0);
+	}
+	if (domain_pattern[0] == '.') {
+		size_t query_len = strlen(query_name);
+		size_t pattern_len = strlen(domain_pattern);
+		return (query_len >= pattern_len && pattern_len > 0 &&
+			strcmp(query_name + query_len - pattern_len, domain_pattern) == 0);
+	}
+	return strcmp(query_name, domain_pattern) == 0;
+}
+
+int
+add_wildcard_resolved_ip(const char *query_name, const char *ip)
+{
+	t_domain_trusted *p;
+	t_ip_trusted *exist;
+	int added = 0;
+
+	if (!query_name || !ip)
+		return 0;
+
+	LOCK_DOMAIN();
+	for (p = config.wildcard_domains_trusted; p; p = p->next) {
+		if (!p->domain || !wildcard_query_matches(query_name, p->domain))
+			continue;
+		exist = p->ips_trusted;
+		while (exist && strcmp(exist->ip, ip) != 0)
+			exist = exist->next;
+		if (!exist) {
+			__add_ip_2_domain(p, ip);
+			added = 1;
+		}
+		break;
+	}
+	UNLOCK_DOMAIN();
+	return added;
 }
 
 static void

@@ -491,6 +491,16 @@ fw_set_wildcard_domains_trusted(void)
 }
 
 void
+fw_add_wildcard_resolved_ip(const char *ip)
+{
+#ifdef AW_FW4
+	nft_fw_add_wildcard_ip(ip);
+#else
+	(void)ip;
+#endif
+}
+
+void
 fw_refresh_inner_domains_trusted(void)
 {
 	debug(LOG_DEBUG, "Refresh inner trust domains list");

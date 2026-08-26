@@ -26,6 +26,10 @@
 #define XDPI_IOC_UPDATE 0x40584003
 #define XDPI_IOC_LIST   0x40584004
 
+#define MAX_DNS_PAYLOAD_LEN 512
+#define DNS_RINGBUF_PORTAL_MAP_PATH     "/sys/fs/bpf/tc/globals/dns_ringbuf_portal"
+#define DNS_RINGBUF_PORTAL_MAP_PATH_ALT "/sys/fs/bpf/aw/dns_ringbuf_portal"
+
 #define MAX_DOMAIN_LEN 64
 #define XDPI_DOMAIN_MAX 256
 

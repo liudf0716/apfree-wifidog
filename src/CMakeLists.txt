@@ -10,7 +10,7 @@ set(src_apfreewifidog
 	hotplug_listener.c
 	ws_thread.c api_handlers.c api_routes.c api_handlers_bpf.c api_handlers_vpn.c
 	uci_helper.c
-	client_snapshot.c dns_monitor.c
+	client_snapshot.c dns_snoop.c
 	portal_cache.c
 	portal_ticket.c
 	roam_sync.c
@@ -65,13 +65,12 @@ else()
 endif()
 
 # If libbpf was detected at configure time, expose a define so source
-# can enable runtime features. Always build `dns_monitor.c` so the
-# monitor thread can run and gracefully handle missing kernel maps.
+# can enable runtime features (bpf_qos, nft helpers, portal DNS ringbuf).
 if(HAVE_LIBBPF)
 	message(STATUS "Configuring build with libbpf support")
 	add_definitions(-DHAVE_LIBBPF)
 else()
-	message(STATUS "libbpf not found at configure time; building dns_monitor with runtime graceful fallback")
+	message(STATUS "libbpf not found at configure time")
 endif()
 
 # Handle firewall version
