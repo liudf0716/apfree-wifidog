@@ -110,6 +110,9 @@ no_ebpf_maps_present(void)
 		"/sys/fs/bpf/aw/dns_ringbuf",
 		"/sys/fs/bpf/aw/dns_ringbuf_portal",
 		"/sys/fs/bpf/aw/dns_stats_map",
+		"/sys/fs/bpf/xdp/globals/dns_ringbuf",
+		"/sys/fs/bpf/xdp/globals/dns_ringbuf_portal",
+		"/sys/fs/bpf/xdp/globals/dns_stats_map",
 		NULL
 	};
 	int i;

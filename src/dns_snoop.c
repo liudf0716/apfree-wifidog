@@ -38,6 +38,7 @@ static inline void ring_buffer__free(struct ring_buffer *rb) { (void)rb; }
 #define MAX_DNS_NAME 256
 #define DNS_PORTAL_MAP_PATH     "/sys/fs/bpf/tc/globals/dns_ringbuf_portal"
 #define DNS_PORTAL_MAP_PATH_ALT "/sys/fs/bpf/aw/dns_ringbuf_portal"
+#define DNS_PORTAL_MAP_PATH_XDP "/sys/fs/bpf/xdp/globals/dns_ringbuf_portal"
 
 struct raw_dns_data {
 	uint32_t pkt_len;
@@ -61,6 +62,7 @@ static int parse_dns_name(const unsigned char *payload, int payload_len, int off
 {
 	int pos = offset, name_pos = 0, jumped = 0, jumps = 0;
 	int skip_only = (name == NULL || max_len <= 0);
+	int completed = 0;
 
 	if (!payload || offset < 0 || offset >= payload_len)
 		return -1;
@@ -71,6 +73,7 @@ static int parse_dns_name(const unsigned char *payload, int payload_len, int off
 		int len = payload[pos];
 		if (len == 0) {
 			pos++;
+			completed = 1;
 			break;
 		}
 		if ((len & 0xC0) == 0xC0) {
@@ -97,6 +100,10 @@ static int parse_dns_name(const unsigned char *payload, int payload_len, int off
 		}
 		pos += len + 1;
 	}
+
+	if (!completed)
+		return -1;
+
 	if (!skip_only && max_len > 0)
 		name[name_pos] = '\0';
 	return jumped ? jumped : pos;
@@ -178,7 +185,10 @@ static int open_portal_map(void)
 	int fd = bpf_obj_get(DNS_PORTAL_MAP_PATH);
 	if (fd >= 0)
 		return fd;
-	return bpf_obj_get(DNS_PORTAL_MAP_PATH_ALT);
+	fd = bpf_obj_get(DNS_PORTAL_MAP_PATH_ALT);
+	if (fd >= 0)
+		return fd;
+	return bpf_obj_get(DNS_PORTAL_MAP_PATH_XDP);
 }
 
 void *
