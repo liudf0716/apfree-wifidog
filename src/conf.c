@@ -1749,7 +1749,7 @@ __del_domain_common(const char *domain, trusted_domain_t which)
 
 	if (*list_head_ptr != NULL) {
 		for(p = *list_head_ptr; p != NULL; p1 = p, p = p->next) {
-			if(strcmp(p->domain, domain) == 0) {
+			if(strcasecmp(p->domain, domain) == 0) {
 				break;
 			}
 		}
@@ -1780,7 +1780,7 @@ __del_ip_domain_common(const char *domain, trusted_domain_t which)
 	
     if (*list_head_ptr != NULL) {
 		for(p = *list_head_ptr; p != NULL; p = p->next) {
-			if(strcmp(p->domain, domain) == 0) {
+			if(strcasecmp(p->domain, domain) == 0) {
 				break;
 			}
 		}
@@ -1809,7 +1809,7 @@ __add_domain_common(const char *domain, trusted_domain_t which)
 		*list_head_ptr = p;
 	} else {
 		for(p = *list_head_ptr; p != NULL; p = p->next) {
-			if(strcmp(p->domain, domain) == 0)
+			if(strcasecmp(p->domain, domain) == 0)
 				break;
 		}
 		if(p == NULL) { // Domain not found, add to head
@@ -1942,20 +1942,24 @@ wildcard_query_matches(const char *query_name, const char *domain_pattern)
 {
 	if (!query_name || !domain_pattern)
 		return 0;
-	if (strncmp(domain_pattern, "*.", 2) == 0) {
+	if (strncasecmp(domain_pattern, "*.", 2) == 0) {
+		if (strcasecmp(query_name, domain_pattern + 2) == 0)
+			return 1;
 		const char *suffix = domain_pattern + 1;
 		size_t query_len = strlen(query_name);
 		size_t suffix_len = strlen(suffix);
 		return (query_len >= suffix_len && suffix_len > 0 &&
-			strcmp(query_name + query_len - suffix_len, suffix) == 0);
+			strcasecmp(query_name + query_len - suffix_len, suffix) == 0);
 	}
 	if (domain_pattern[0] == '.') {
+		if (strcasecmp(query_name, domain_pattern + 1) == 0)
+			return 1;
 		size_t query_len = strlen(query_name);
 		size_t pattern_len = strlen(domain_pattern);
 		return (query_len >= pattern_len && pattern_len > 0 &&
-			strcmp(query_name + query_len - pattern_len, domain_pattern) == 0);
+			strcasecmp(query_name + query_len - pattern_len, domain_pattern) == 0);
 	}
-	return strcmp(query_name, domain_pattern) == 0;
+	return strcasecmp(query_name, domain_pattern) == 0;
 }
 
 int

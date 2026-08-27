@@ -299,6 +299,50 @@ test_privileged_acl(void)
 		    "reboot allowed when explicitly enabled");
 }
 
+static int
+test_wildcard_query_matches(const char *query_name, const char *domain_pattern)
+{
+	if (!query_name || !domain_pattern)
+		return 0;
+	if (strncasecmp(domain_pattern, "*.", 2) == 0) {
+		if (strcasecmp(query_name, domain_pattern + 2) == 0)
+			return 1;
+		const char *suffix = domain_pattern + 1;
+		size_t query_len = strlen(query_name);
+		size_t suffix_len = strlen(suffix);
+		return (query_len >= suffix_len && suffix_len > 0 &&
+			strcasecmp(query_name + query_len - suffix_len, suffix) == 0);
+	}
+	if (domain_pattern[0] == '.') {
+		if (strcasecmp(query_name, domain_pattern + 1) == 0)
+			return 1;
+		size_t query_len = strlen(query_name);
+		size_t pattern_len = strlen(domain_pattern);
+		return (query_len >= pattern_len && pattern_len > 0 &&
+			strcasecmp(query_name + query_len - pattern_len, domain_pattern) == 0);
+	}
+	return strcasecmp(query_name, domain_pattern) == 0;
+}
+
+static void
+test_wildcard_domain_matching(void)
+{
+	/* Case-insensitive matching */
+	EXPECT_TRUE(test_wildcard_query_matches("login.example.com", "*.example.com"), "exact case *. match");
+	EXPECT_TRUE(test_wildcard_query_matches("LoGiN.ExAmPlE.cOm", "*.example.com"), "mixed case *. match");
+	EXPECT_TRUE(test_wildcard_query_matches("login.example.com", "*.EXAMPLE.COM"), "upper pattern *. match");
+	EXPECT_TRUE(test_wildcard_query_matches("a.b.c.example.com", "*.example.com"), "multi-subdomain *. match");
+	EXPECT_TRUE(test_wildcard_query_matches("example.com", "*.example.com"), "apex domain *. match");
+
+	EXPECT_TRUE(test_wildcard_query_matches("LoGiN.ExAmPlE.cOm", ".example.com"), "mixed case . match");
+	EXPECT_TRUE(test_wildcard_query_matches("example.com", ".example.com"), "apex domain . match");
+
+	EXPECT_TRUE(test_wildcard_query_matches("AuTh.ExAmPlE.cOm", "auth.example.com"), "exact domain mixed case");
+	EXPECT_TRUE(!test_wildcard_query_matches("evil-example.com", "*.example.com"), "reject fake prefix *. match");
+	EXPECT_TRUE(!test_wildcard_query_matches("evil-example.com", ".example.com"), "reject fake prefix . match");
+	EXPECT_TRUE(!test_wildcard_query_matches("other.com", "*.example.com"), "reject other domain");
+}
+
 static void
 test_no_ebpf_fallback(void)
 {
@@ -327,6 +371,7 @@ main(void)
 	test_client_list_add_and_find();
 	test_concurrent_auth_add();
 	test_privileged_acl();
+	test_wildcard_domain_matching();
 	test_no_ebpf_fallback();
 
 	if (failures) {

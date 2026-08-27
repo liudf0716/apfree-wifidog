@@ -8,7 +8,9 @@
 #include <errno.h>
 #include <stddef.h>
 #include <string.h>
+#include <strings.h>
 #include <unistd.h>
+#include <ctype.h>
 #ifdef HAVE_LIBBPF
 #include <bpf/libbpf.h>
 #include <bpf/bpf.h>
@@ -90,7 +92,7 @@ static int parse_dns_name(const unsigned char *payload, int payload_len, int off
 				name[name_pos++] = '.';
 			for (int i = 0; i < len && name_pos < max_len - 1; i++) {
 				unsigned char c = payload[pos + 1 + i];
-				name[name_pos++] = (c >= 32 && c <= 126) ? (char)c : '?';
+				name[name_pos++] = (c >= 32 && c <= 126) ? (char)tolower(c) : '?';
 			}
 		}
 		pos += len + 1;
