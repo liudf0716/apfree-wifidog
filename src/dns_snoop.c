@@ -180,6 +180,23 @@ static int handle_portal_dns_event(void *ctx, void *data, size_t data_sz)
 	return 0;
 }
 
+#include <time.h>
+
+static uint32_t get_portal_map_id(int fd)
+{
+#ifdef HAVE_LIBBPF
+	struct bpf_map_info info;
+	uint32_t len = sizeof(info);
+	memset(&info, 0, sizeof(info));
+	if (fd >= 0 && bpf_obj_get_info_by_fd(fd, &info, &len) == 0) {
+		return info.id;
+	}
+#else
+	(void)fd;
+#endif
+	return 0;
+}
+
 static int open_portal_map(void)
 {
 	int fd = bpf_obj_get(DNS_PORTAL_MAP_PATH);
@@ -196,6 +213,8 @@ thread_dns_snoop(void *arg)
 {
 	struct ring_buffer *rb = NULL;
 	int map_fd = -1;
+	uint32_t attached_map_id = 0;
+	time_t last_check = 0;
 
 	(void)arg;
 	debug(LOG_INFO, "Portal DNS consumer started (dns_ringbuf_portal)");
@@ -209,15 +228,18 @@ thread_dns_snoop(void *arg)
 				sleep(5);
 				continue;
 			}
+			attached_map_id = get_portal_map_id(map_fd);
 			rb = ring_buffer__new(map_fd, handle_portal_dns_event, NULL, NULL);
 			if (!rb) {
 				debug(LOG_ERR, "Failed to attach dns_ringbuf_portal, retry in 5s");
 				close(map_fd);
 				map_fd = -1;
+				attached_map_id = 0;
 				sleep(5);
 				continue;
 			}
-			debug(LOG_INFO, "Attached dns_ringbuf_portal for wildcard trust");
+			last_check = time(NULL);
+			debug(LOG_INFO, "Attached dns_ringbuf_portal for wildcard trust (map_id=%u)", attached_map_id);
 		}
 
 		int err = ring_buffer__poll(rb, 200);
@@ -231,7 +253,44 @@ thread_dns_snoop(void *arg)
 				close(map_fd);
 				map_fd = -1;
 			}
+			attached_map_id = 0;
 			sleep(5);
+			continue;
+		}
+
+		/* Periodic self-healing: detect if aw-bpf reloaded and recreated the map */
+		time_t now = time(NULL);
+		if (now - last_check >= 2) {
+			last_check = now;
+			int cur_fd = open_portal_map();
+			if (cur_fd >= 0) {
+				uint32_t cur_id = get_portal_map_id(cur_fd);
+				close(cur_fd);
+				if (cur_id != 0 && attached_map_id != 0 && cur_id != attached_map_id) {
+					debug(LOG_INFO, "dns_ringbuf_portal map ID changed (%u -> %u), aw-bpf reloaded, reconnecting...",
+					      attached_map_id, cur_id);
+					ring_buffer__free(rb);
+					rb = NULL;
+					if (map_fd >= 0) {
+						close(map_fd);
+						map_fd = -1;
+					}
+					attached_map_id = 0;
+					continue;
+				}
+			} else {
+				/* Map file disappeared during aw-bpf restart/reload */
+				debug(LOG_DEBUG, "dns_ringbuf_portal map pin disappeared, aw-bpf restarting, reconnecting...");
+				ring_buffer__free(rb);
+				rb = NULL;
+				if (map_fd >= 0) {
+					close(map_fd);
+					map_fd = -1;
+				}
+				attached_map_id = 0;
+				sleep(1);
+				continue;
+			}
 		}
 	}
 }
