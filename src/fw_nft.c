@@ -1607,6 +1607,28 @@ nft_fw_counters_update_ebpf()
         debug(LOG_WARNING, "Failed to open IPv6 map: %s", strerror(errno));
     }
 
+    // Sync trusted MACs into eBPF mac_map if missing
+    int mac_map_fd = bpf_obj_get("/sys/fs/bpf/tc/globals/mac_map");
+    if (mac_map_fd >= 0) {
+        LOCK_CONFIG();
+        const s_config *config = config_get_config();
+        for (t_trusted_mac *p = config->trustedmaclist; p != NULL; p = p->next) {
+            unsigned char mac_bytes[6];
+            if (sscanf(p->mac, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
+                       &mac_bytes[0], &mac_bytes[1], &mac_bytes[2],
+                       &mac_bytes[3], &mac_bytes[4], &mac_bytes[5]) == 6) {
+                struct traffic_stats stats;
+                if (lookup_agg_stats_percpu(mac_map_fd, mac_bytes, &stats) != 0) {
+                    char cmd[128];
+                    snprintf(cmd, sizeof(cmd), "aw-bpfctl mac add %s", p->mac);
+                    aw_bpfctl_execute_best_effort(cmd, "trusted mac sync");
+                }
+            }
+        }
+        UNLOCK_CONFIG();
+        close(mac_map_fd);
+    }
+
     return 0;
 }
 
