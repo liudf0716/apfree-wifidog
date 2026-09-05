@@ -692,14 +692,13 @@ threads_init(s_config *config)
     }
     
     // Core service threads - these are always required
-    // Skip HTTPS server thread if portal auth is disabled
-    if (!is_portal_auth_disabled()) {
-        if (!create_thread(&tid_tls_server, (void *)thread_tls_server, NULL, "https_server")) {
-            debug(LOG_ERR, "Failed to create HTTPS server thread");
-            return;
-        }
-    } else {
-        debug(LOG_INFO, "Portal auth is disabled, skipping HTTPS server thread");
+    // Always run the HTTP/HTTPS service threads: they serve the portal page,
+    // auth API and status endpoints, which are needed even when portal
+    // enforcement is disabled (DisablePortalAuth). Enforcement logic is
+    // gated separately inside the firewall/auth paths.
+    if (!create_thread(&tid_tls_server, (void *)thread_tls_server, NULL, "https_server")) {
+        debug(LOG_ERR, "Failed to create HTTPS server thread");
+        return;
     }
     
     char *wdctl_sock_copy = NULL;
@@ -796,7 +795,8 @@ static int
 setup_http_server(struct evhttp *http, struct event_base *base)
 {
     s_config *config = config_get_config();
-    int is_ssl = 0;
+    /* static: its address outlives this function (passed as the gencb arg) */
+    static int is_ssl = 0;
     
     if (!http || !base) {
         debug(LOG_ERR, "Invalid parameters for HTTP server setup");
@@ -1032,29 +1032,11 @@ main_loop(void)
     wd_init(config);
     threads_init(config);
     
-    // Skip HTTP service if portal auth is disabled
-    if (!is_portal_auth_disabled()) {
-        http_redir_loop(config);
-    } else {
-        debug(LOG_INFO, "Portal auth is disabled, skipping HTTP redirect service");
-        
-        // Create event base for signal handling when HTTP service is disabled
-        struct event_base *base = event_base_new();
-        if (!base) {
-            debug(LOG_ERR, "Failed to create event base for signal handling");
-            termination_handler(0);
-        }
-        
-        // Initialize signal handlers
-        wd_signals_init(base);
-        
-        debug(LOG_INFO, "Starting minimal event loop for signal handling");
-        // Run event loop to handle signals gracefully
-        event_base_dispatch(base);
-        
-        // Cleanup
-        event_base_free(base);
-    }
+    // Always run the HTTP redirect service: it serves the portal page, auth
+    // API and status endpoints even when portal enforcement is disabled
+    // (DisablePortalAuth). Enforcement logic is gated separately in the
+    // firewall/auth paths, not here.
+    http_redir_loop(config);
 }
 
 /**
