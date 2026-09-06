@@ -18,6 +18,15 @@
 #include <bpf/bpf.h>
 #include <bpf/libbpf.h>
 #else
+#ifndef BPF_ANY
+#define BPF_ANY 0
+#endif
+#ifndef BPF_NOEXIST
+#define BPF_NOEXIST 1
+#endif
+#ifndef BPF_EXIST
+#define BPF_EXIST 2
+#endif
 static inline int libbpf_num_possible_cpus(void)
 {
     errno = ENOSYS;
