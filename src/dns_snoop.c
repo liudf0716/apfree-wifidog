@@ -40,6 +40,122 @@ static inline void ring_buffer__free(struct ring_buffer *rb) { (void)rb; }
 #define DNS_PORTAL_MAP_PATH_ALT "/sys/fs/bpf/aw/dns_ringbuf_portal"
 #define DNS_PORTAL_MAP_PATH_XDP "/sys/fs/bpf/xdp/globals/dns_ringbuf_portal"
 
+/* captive_domain_map: pinned by aw-bpf tc/ingress, must mirror the
+ * definition in aw_bpf.c */
+#define CAPTIVE_DOMAIN_KEY_LEN  64
+
+#define CAPTIVE_DOMAIN_MAP_PATH     "/sys/fs/bpf/tc/globals/captive_domain_map"
+#define CAPTIVE_DOMAIN_MAP_PATH_ALT "/sys/fs/bpf/aw/captive_domain_map"
+#define CAPTIVE_DOMAIN_MAP_PATH_XDP "/sys/fs/bpf/xdp/globals/captive_domain_map"
+
+struct captive_domain_value {
+	uint32_t ip;      /* network order */
+	uint8_t learned;  /* 1 = real IP learned from upstream response */
+	uint8_t pad[3];
+};
+
+#ifdef HAVE_LIBBPF
+static int open_captive_map(void)
+{
+	int fd = bpf_obj_get(CAPTIVE_DOMAIN_MAP_PATH);
+	if (fd >= 0)
+		return fd;
+	fd = bpf_obj_get(CAPTIVE_DOMAIN_MAP_PATH_ALT);
+	if (fd >= 0)
+		return fd;
+	return bpf_obj_get(CAPTIVE_DOMAIN_MAP_PATH_XDP);
+}
+
+/* Map keys hold the qname in DNS wire format (label-encoded, lowercase,
+ * zero padded) — must match what the BPF program builds from queries. */
+static int domain_to_wire_key(const char *domain, char *key, size_t keylen)
+{
+	memset(key, 0, keylen);
+	size_t pos = 0;
+	const char *p = domain;
+
+	while (*p) {
+		const char *dot = strchr(p, '.');
+		size_t len = dot ? (size_t)(dot - p) : strlen(p);
+		if (len == 0 || len > 63 || pos + 1 + len >= keylen)
+			return -1;
+		key[pos++] = (char)len;
+		for (size_t i = 0; i < len; i++) {
+			char c = p[i];
+			key[pos++] = (c >= 'A' && c <= 'Z') ? (char)(c + 32) : c;
+		}
+		p = dot ? dot + 1 : p + len;
+	}
+	return pos ? 0 : -1;
+}
+
+static int captive_map_fd = -1;
+
+static int get_captive_map_fd(void)
+{
+	if (captive_map_fd < 0)
+		captive_map_fd = open_captive_map();
+	return captive_map_fd;
+}
+
+/* flags: BPF_ANY to seed an entry, BPF_EXIST to learn real IPs only for
+ * domains already in the map */
+static int captive_domain_map_update(const char *domain, const char *ip,
+				     uint8_t learned, uint64_t flags)
+{
+	int fd = get_captive_map_fd();
+
+	if (fd < 0)
+		return -1;
+
+	struct in_addr addr;
+
+	if (inet_pton(AF_INET, ip, &addr) != 1)
+		return -1;
+
+	char key[CAPTIVE_DOMAIN_KEY_LEN];
+	if (domain_to_wire_key(domain, key, sizeof(key)))
+		return -1;
+
+	struct captive_domain_value val;
+	memset(&val, 0, sizeof(val));
+	val.ip = addr.s_addr;
+	val.learned = learned;
+
+	int ret = bpf_map_update_elem(fd, key, &val, flags);
+	if (ret < 0 && errno == EBADF) {
+		/* stale fd after aw-bpf reload recreated the map */
+		close(fd);
+		captive_map_fd = -1;
+		fd = get_captive_map_fd();
+		if (fd < 0)
+			return -1;
+		ret = bpf_map_update_elem(fd, key, &val, flags);
+	}
+	return ret;
+}
+#endif
+
+int captive_domain_map_set(const char *domain, const char *ip)
+{
+#ifdef HAVE_LIBBPF
+	return captive_domain_map_update(domain, ip, 0, BPF_ANY);
+#else
+	(void)domain; (void)ip;
+	return -1;
+#endif
+}
+
+int captive_domain_map_learn(const char *domain, const char *ip)
+{
+#ifdef HAVE_LIBBPF
+	return captive_domain_map_update(domain, ip, 1, BPF_EXIST);
+#else
+	(void)domain; (void)ip;
+	return -1;
+#endif
+}
+
 struct raw_dns_data {
 	uint32_t pkt_len;
 	uint8_t ip_version;
@@ -155,6 +271,8 @@ static void handle_dns_payload(const unsigned char *payload, int payload_len)
 			inet_ntop(AF_INET, payload + offset, ip, sizeof(ip));
 			if (add_wildcard_resolved_ip(qname, ip))
 				fw_add_wildcard_resolved_ip(ip);
+			/* refresh the captive fast-answer map with the real IP */
+			captive_domain_map_learn(qname, ip);
 		} else if (type == 28 && rdlength == 16) {
 			char ip[INET6_ADDRSTRLEN];
 			inet_ntop(AF_INET6, payload + offset, ip, sizeof(ip));

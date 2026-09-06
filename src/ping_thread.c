@@ -16,6 +16,7 @@
 #include "version.h"
 #include "wd_client.h"
 #include "client_list.h"
+#include "dns_snoop.h"
 
 struct captive_entry {
 	char domain[64];
@@ -73,67 +74,15 @@ char *g_version;
 char *g_type;
 char *g_name;
 
-#define CUSTOM_HOSTS_FILE "/etc/aw-captive-domains-hosts"
+#define CAPTIVE_FAKE_IP "1.1.1.1"
 
 static void ping_work_cb(evutil_socket_t, short, void *);
 static void process_ping_response(struct evhttp_request *, void *);
 
-static void
-update_captive_domains_with_real_ips(void)
-{
-	if (!is_openwrt_platform()) {
-		debug(LOG_INFO, "Not openwrt platform, skipping update captive domains setup");
-		return;
-	}
-
-	if (is_portal_auth_disabled()) {
-		debug(LOG_DEBUG, "Portal authentication is disabled, no need to check firewall rules");
-		return;
-	}
-
-	// First, delete existing addnhosts entries and restart dnsmasq to clear cache
-	if (execute("uci -q delete dhcp.@dnsmasq[0].addnhosts && uci commit dhcp && /etc/init.d/dnsmasq restart >/dev/null 2>&1", 0) != 0) {
-		debug(LOG_ERR, "Failed to remove existing addnhosts configuration");
-		return;
-	}
-
-	// Wait a short moment for dnsmasq to fully restart
-	usleep(100000);  // 100ms delay
-
-	// Create or truncate the custom hosts file
-	FILE *fp = fopen(CUSTOM_HOSTS_FILE, "w");
-	if (!fp) {
-		debug(LOG_ERR, "Failed to create custom hosts file: %s", strerror(errno));
-		return;
-	}
-
-	// Get real IPs and write to file
-	for (int i = 0; i < (int)(sizeof(captive_entries)/sizeof(captive_entries[0])); i++) {
-		struct hostent *he = gethostbyname(captive_entries[i].domain);
-		if (he != NULL) {
-			struct in_addr **addr_list = (struct in_addr **)he->h_addr_list;
-			if (addr_list[0] != NULL) {
-				char real_ip[16];
-				inet_ntop(AF_INET, addr_list[0], real_ip, sizeof(real_ip));
-				fprintf(fp, "%s %s\n", real_ip, captive_entries[i].domain);
-				continue;
-			}
-		}
-		// If resolution failed, use default IP
-		fprintf(fp, "%s %s\n", captive_entries[i].ip, captive_entries[i].domain);
-	}
-	fclose(fp);
-
-	// Add new addnhosts entry as a list and restart dnsmasq
-	if (execute("uci -q add_list dhcp.@dnsmasq[0].addnhosts='" CUSTOM_HOSTS_FILE "' && "
-				"uci commit dhcp && /etc/init.d/dnsmasq restart >/dev/null 2>&1", 0) != 0) {
-		debug(LOG_ERR, "Failed to update dnsmasq configuration");
-		return;
-	}
-
-	debug(LOG_INFO, "Updated captive domains with real IPs");
-}
-
+/* Seed the aw-bpf captive_domain_map with the default fake IP for every
+ * captive detection domain. aw-bpf answers matching LAN DNS queries with
+ * this IP at wire speed (the query still reaches dnsmasq), and dns_snoop
+ * learns the real IPs back into the map from upstream responses. */
 static void
 init_captive_domains(void)
 {
@@ -142,64 +91,42 @@ init_captive_domains(void)
 		return;
 	}
 
+	/* One-time migration: older releases answered the captive domains via
+	 * a dnsmasq addnhosts file. That must go, or dnsmasq keeps answering
+	 * them locally and the fast-answer map never learns real IPs. */
+	if (access("/etc/aw-captive-domains-hosts", F_OK) == 0) {
+		execute("uci -q del_list dhcp.@dnsmasq[0].addnhosts='/etc/aw-captive-domains-hosts';"
+			"uci -q delete dhcp.aw_captive_hosts;"
+			"uci commit dhcp;"
+			"rm -f /etc/aw-captive-domains-hosts;"
+			"/etc/init.d/dnsmasq restart >/dev/null 2>&1", 0);
+		unlink("/etc/aw-captive-domains-hosts");
+		debug(LOG_INFO, "Removed legacy aw-captive-domains-hosts from dnsmasq");
+	}
+
 	// if no auth portal; skip it
 	if (is_portal_auth_disabled()) {
 		debug(LOG_DEBUG, "Portal authentication is disabled, no need to check firewall rules");
 		return;
 	}
 
-	// Create or truncate the custom hosts file
-	FILE *fp = fopen(CUSTOM_HOSTS_FILE, "w");
-	if (!fp) {
-		debug(LOG_ERR, "Failed to create custom hosts file: %s", strerror(errno));
-		return;
-	}
-
-	// Write all entries to the file
+	int seeded = 0;
 	for (int i = 0; i < (int)(sizeof(captive_entries)/sizeof(captive_entries[0])); i++) {
-		if (fprintf(fp, "%s %s\n", captive_entries[i].ip, captive_entries[i].domain) < 0) {
-			debug(LOG_ERR, "Failed to write to custom hosts file: %s", strerror(errno));
-			fclose(fp);
-			return;
-		}
-	}
-	fclose(fp);
-
-	// Configure dnsmasq to use the custom hosts file
-	// First, only delete CUSTOM_HOSTS_FILE entry if it exists
-	if (execute("uci -q del_list dhcp.@dnsmasq[0].addnhosts='" CUSTOM_HOSTS_FILE "' >/dev/null 2>&1", 0) != 0) {
-		debug(LOG_ERR, "Failed to delete existing custom hosts file from dnsmasq config");
-		return;
-	}
-	
-	// Add new addnhosts entry as a list
-	if (execute("uci -q add_list dhcp.@dnsmasq[0].addnhosts='" CUSTOM_HOSTS_FILE "' >/dev/null 2>&1", 0) != 0) {
-		debug(LOG_ERR, "Failed to add custom hosts file to dnsmasq config");
-		return;
+		if (captive_domain_map_set(captive_entries[i].domain, CAPTIVE_FAKE_IP) == 0)
+			seeded++;
 	}
 
-	// Commit changes and restart dnsmasq
-	if (execute("uci commit dhcp && /etc/init.d/dnsmasq restart >/dev/null 2>&1", 0) != 0) {
-		debug(LOG_ERR, "Failed to commit changes and restart dnsmasq");
-		return;
+	if (seeded > 0) {
+		debug(LOG_INFO, "Seeded %d captive domains into aw-bpf captive_domain_map", seeded);
+	} else {
+		debug(LOG_ERR, "Failed to seed captive_domain_map (aw-bpf too old or not loaded?)");
 	}
-
-	debug(LOG_INFO, "Initialized captive domains using custom hosts file");
 }
 
 		
 
-static void 
+static void
 ping_work_cb(evutil_socket_t fd, short event, void *arg) {
-	static int first_online = 1;
-	int now_online = is_online();
-
-	// When internet becomes available for the first time, update captive domains with real IPs
-	// Only if portal auth is enabled
-	if (now_online && first_online && !is_portal_auth_disabled()) {
-		update_captive_domains_with_real_ips();
-		first_online = 0;
-	}
 
 	struct wd_request_context *factory_ctx = (struct wd_request_context *)arg;
 	t_gateway_setting *gw_settings = get_gateway_settings();
@@ -251,31 +178,22 @@ ping_work_cb(evutil_socket_t fd, short event, void *arg) {
 void
 thread_ping(void *arg)
 {
-	// Only parse trusted domains and initialize captive domains when portal auth is enabled
+	// Always run the captive domains init: it also migrates away the
+	// legacy dnsmasq hosts file on every platform that needs it.
+	init_captive_domains();
+
+	// Only parse trusted domains when portal auth is enabled
 	if (!is_portal_auth_disabled()) {
 		parse_user_trusted_domain_list();
 		parse_inner_trusted_domain_list();
-		
-		// Initialize captive domains with default IPs at startup
-		init_captive_domains();
 	} else {
-		debug(LOG_INFO, "Portal authentication is disabled, skipping domain parsing and captive domains initialization");
+		debug(LOG_INFO, "Portal authentication is disabled, skipping domain parsing");
 	}
 
 	if (is_local_auth_mode()) {
 		debug(LOG_DEBUG, "auth mode is local, no need to ping auth server");
-		int first_online = 1;
-		while(1) {
+		while(1)
 			sleep(60);
-			
-			// When internet becomes available for the first time in local mode, update captive domains with real IPs
-			// Only if portal auth is enabled
-			if (is_online() && first_online && !is_portal_auth_disabled()) {
-				debug(LOG_INFO, "Internet is available in local mode, updating captive domains with real IPs");
-				update_captive_domains_with_real_ips();
-				first_online = 0;
-			}
-		}
 	} else {
 		debug(LOG_DEBUG, "auth mode is cloud, start to ping auth server");
 		wd_request_loop(ping_work_cb);
