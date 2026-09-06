@@ -119,7 +119,10 @@ init_captive_domains(void)
 	if (seeded > 0) {
 		debug(LOG_INFO, "Seeded %d captive domains into aw-bpf captive_domain_map", seeded);
 	} else {
-		debug(LOG_ERR, "Failed to seed captive_domain_map (aw-bpf too old or not loaded?)");
+		/* aw-bpf is optional: without it the fast-answer path is simply
+		 * unavailable; keep running normally. */
+		debug(LOG_WARNING, "captive_domain_map unavailable (aw-bpf not loaded?), "
+			"offline captive DNS fast-answer disabled");
 	}
 }
 
