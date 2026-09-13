@@ -40,6 +40,9 @@ int fw_is_ready(void);
 /** @brief Resilience thread */
 void thread_resilience(void *arg);
 
+/** @brief Periodically check and age out timed out clients locally */
+void fw_check_client_timeouts(void);
+
 /** @brief Clears the authservers list */
 void fw_clear_authservers(void);
 

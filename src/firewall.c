@@ -390,6 +390,55 @@ recover_default_route(void)
 }
 
 void
+fw_check_client_timeouts(void)
+{
+	s_config *config = config_get_config();
+	if (!config) {
+		return;
+	}
+
+	/* Update firewall traffic counters before checking idle time */
+	fw_counters_update();
+
+	time_t current_time = time(NULL);
+	time_t checkinterval = (config->checkinterval > 0) ? config->checkinterval : DEFAULT_CHECKINTERVAL;
+	time_t clienttimeout = (config->clienttimeout > 0) ? config->clienttimeout : DEFAULT_CLIENTTIMEOUT;
+	time_t timeout = checkinterval * clienttimeout;
+
+	while (1) {
+		t_client *timed_out_snapshot = NULL;
+
+		LOCK_CLIENT_LIST();
+		t_client *curr = client_get_first_client();
+		while (curr) {
+			time_t last_activity = (curr->counters6.last_updated > curr->counters.last_updated)
+						? curr->counters6.last_updated
+						: curr->counters.last_updated;
+			if (last_activity > 0 && (current_time - last_activity) >= timeout) {
+				timed_out_snapshot = client_dup(curr);
+				break;
+			}
+			curr = curr->next;
+		}
+		UNLOCK_CLIENT_LIST();
+
+		if (!timed_out_snapshot) {
+			break;
+		}
+
+		time_t last_act = (timed_out_snapshot->counters6.last_updated > timed_out_snapshot->counters.last_updated)
+					? timed_out_snapshot->counters6.last_updated
+					: timed_out_snapshot->counters.last_updated;
+		debug(LOG_INFO, "Client %s (%s) timed out locally after %ld seconds of inactivity",
+		      timed_out_snapshot->ip ? timed_out_snapshot->ip : "unknown",
+		      timed_out_snapshot->mac ? timed_out_snapshot->mac : "unknown",
+		      (long)(current_time - last_act));
+		logout_client(timed_out_snapshot);
+		client_free_node(timed_out_snapshot);
+	}
+}
+
+void
 thread_resilience(void *arg)
 {
     debug(LOG_INFO, "Resilience thread started");
@@ -417,6 +466,8 @@ thread_resilience(void *arg)
 				debug(LOG_WARNING, "Firewall rules out of sync! Reconciling...");
 				fw_reconcile();
 			}
+			/* Periodically check and age out timed-out authenticated clients locally */
+			fw_check_client_timeouts();
         }
 		last_fw_check_skipped = fw_check_skipped;
 

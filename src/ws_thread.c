@@ -310,8 +310,10 @@ start_ws_heartbeat(struct bufferevent *b_ws)
 		ws_state.heartbeat_ev = NULL;
 	}
 
+	s_config *config = config_get_config();
+	int heartbeat_interval = (config && config->checkinterval > 0) ? config->checkinterval : WS_HEARTBEAT_INTERVAL;
 	struct timeval tv = {
-		.tv_sec = WS_HEARTBEAT_INTERVAL,
+		.tv_sec = heartbeat_interval,
 		.tv_usec = 0
 	};
 

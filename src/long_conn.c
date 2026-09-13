@@ -44,6 +44,11 @@ long_conn_is_healthy(void)
 {
 	time_t ack;
 	int connected;
+	s_config *config = config_get_config();
+	int stale_sec = (config && config->checkinterval > 0) ? (config->checkinterval * 2) : LONG_CONN_ACK_STALE_SEC;
+	if (stale_sec < LONG_CONN_ACK_STALE_SEC) {
+		stale_sec = LONG_CONN_ACK_STALE_SEC;
+	}
 
 	if (!get_mqtt_server() && !get_ws_server()) {
 		return 0;
@@ -57,7 +62,7 @@ long_conn_is_healthy(void)
 	if (!connected || ack == 0) {
 		return 0;
 	}
-	return (time(NULL) - ack) <= LONG_CONN_ACK_STALE_SEC;
+	return (time(NULL) - ack) <= stale_sec;
 }
 
 void

@@ -373,7 +373,8 @@ void thread_mqtt(void *arg)
 		retval = mosquitto_loop_forever(mosq, -1, 1);
 		/* mosquitto_loop_forever only returns on error or finish */
 	} else {
-		time_t next_heartbeat_at = time(NULL) + mqtt_heartbeat_interval_sec;
+		int heartbeat_interval = (config && config->checkinterval > 0) ? config->checkinterval : mqtt_heartbeat_interval_sec;
+		time_t next_heartbeat_at = time(NULL) + heartbeat_interval;
 
 		/* Wait for stop signal and provide a periodic reconnect backstop. */
 		pthread_mutex_lock(&mqtt_thread_ctrl_lock);
@@ -397,7 +398,7 @@ void thread_mqtt(void *arg)
 				pthread_mutex_unlock(&mqtt_thread_ctrl_lock);
 				publish_gateway_report(mosq, "heartbeat");
 				long_conn_publish_counters();
-				next_heartbeat_at = now + mqtt_heartbeat_interval_sec;
+				next_heartbeat_at = now + heartbeat_interval;
 				pthread_mutex_lock(&mqtt_thread_ctrl_lock);
 			}
 		}
