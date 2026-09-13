@@ -917,7 +917,6 @@ ev_http_callback_auth(struct evhttp_request *req, void *arg)
     char *logout = NULL;
     char *portal_ticket = NULL;
     t_gateway_setting *gw_setting = NULL;
-    int new_client = 0;
     t_client *client = NULL;
     s_config *cfg = config_get_config();
 
@@ -1039,41 +1038,27 @@ ev_http_callback_auth(struct evhttp_request *req, void *arg)
         goto CLEAN_UP;
     }
 
-    LOCK_CLIENT_LIST();
-    client = client_list_find(remote_host, mac);
-    if (!client) {
-        client = client_list_find_by_mac(mac);
-        if (!client) {
-            client = client_list_add(remote_host, mac, token, gw_setting);
-            if (!client) {
-                UNLOCK_CLIENT_LIST();
-                evhttp_send_error(req, 200, "Failed to add client");
-                goto CLEAN_UP;
-            }
-            new_client = 1;
-        } else {
-            fw_deny(client);
-            free(client->ip);
-            free(client->token);
-            client->ip = safe_strdup(remote_host);
-            client->token = safe_strdup(token);
-        }
-    }
-    UNLOCK_CLIENT_LIST();
-    
+    (void)context;
+    (void)token;
+
     logout = ev_http_find_query(req, "logout");
+    LOCK_CLIENT_LIST();
+    client = client_list_find_by_mac(mac);
+    UNLOCK_CLIENT_LIST();
+
     if (logout) {
-        if (new_client) {
-            debug(LOG_INFO, "Logout request from %s, but client not found, impossible here!", client->ip);
-            safe_client_list_delete(client);
+        if (!client) {
             evhttp_send_error(req, 200, "Logout request from unknown client");
         } else {
             debug(LOG_INFO, "Logout request from %s", client->ip);
-            ev_logout_client(context, client);
+            logout_client(client);
+            evhttp_send_error(req, 200, "OK");
         }
+    } else if (client) {
+        s_config *config = config_get_config();
+        ev_http_send_user_redirect_page(req, config->local_portal);
     } else {
-        debug(LOG_INFO, "Login request from %s", client->ip);
-        ev_authenticate_client(req, context, client);
+        evhttp_send_error(req, 200, "Use portal auth; allow is pushed over MQTT/WebSocket");
     }
 
 CLEAN_UP:
@@ -1095,7 +1080,7 @@ CLEAN_UP:
 void 
 ev_http_callback_disconnect(struct evhttp_request *req, void *arg)
 {
-    struct wd_request_context *context = (struct wd_request_context *)arg;
+    (void)arg;
     const char *token = ev_http_find_query(req, "token");
     const char *mac = ev_http_find_query(req, "mac");
 
@@ -1113,7 +1098,8 @@ ev_http_callback_disconnect(struct evhttp_request *req, void *arg)
     UNLOCK_CLIENT_LIST();
 
     if (client && !strcmp(client->token, token)) {
-        ev_logout_client(context, client);
+        logout_client(client);
+        evhttp_send_error(req, HTTP_OK, "OK");
     } else {
         debug(LOG_INFO, "Disconnect %s with incorrect token %s", mac, token);
         evhttp_send_error(req, HTTP_OK, "Invalid token for MAC");

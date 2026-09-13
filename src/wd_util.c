@@ -42,7 +42,6 @@
 #include "gateway.h"
 #include "commandline.h"
 #include "client_list.h"
-#include "ping_thread.h"
 #include "conf.h"
 #include "safe.h"
 #include "util.h"
@@ -2332,4 +2331,135 @@ is_openwrt_platform(void)
 	if (access("/etc/openwrt_release", F_OK) == 0)
 		return true;
 	return false;
+}
+
+int g_online_clients;
+char *g_version;
+char *g_type;
+char *g_name;
+
+static int
+get_cpu_temperature(void)
+{
+	const char *thermal_paths[] = {
+		"/sys/class/thermal/thermal_zone0/temp",
+		"/sys/class/thermal/thermal_zone1/temp",
+		"/sys/class/thermal/thermal_zone2/temp",
+		"/sys/class/hwmon/hwmon0/temp1_input",
+		"/sys/class/hwmon/hwmon1/temp1_input",
+		"/sys/class/hwmon/hwmon2/temp1_input",
+		NULL
+	};
+	FILE *fh = NULL;
+	int raw_temp = 0;
+	int temp_celsius = -1;
+
+	for (int i = 0; thermal_paths[i] != NULL; i++) {
+		fh = fopen(thermal_paths[i], "r");
+		if (fh) {
+			if (fscanf(fh, "%d", &raw_temp) == 1) {
+				temp_celsius = (raw_temp + 500) / 1000;
+				fclose(fh);
+				break;
+			}
+			fclose(fh);
+		}
+	}
+	return temp_celsius;
+}
+
+void
+get_sys_info(struct sys_info *info)
+{
+	FILE *fh = NULL;
+
+	if (info == NULL)
+		return;
+
+	info->cpu_usage = get_cpu_usage();
+	info->cpu_temp = get_cpu_temperature();
+	info->wifidog_uptime = time(NULL) - started_time;
+
+	if ((fh = fopen("/proc/uptime", "r"))) {
+		if (fscanf(fh, "%lu", &info->sys_uptime) != 1)
+			debug(LOG_CRIT, "Failed to read uptime");
+		fclose(fh);
+	}
+
+	if ((fh = fopen("/proc/meminfo", "r"))) {
+		while (!feof(fh)) {
+			if (fscanf(fh, "MemFree: %u", &info->sys_memfree) == 0) {
+				while (!feof(fh) && fgetc(fh) != '\n')
+					;
+			} else {
+				break;
+			}
+		}
+		fclose(fh);
+	}
+
+	if ((fh = fopen("/proc/loadavg", "r"))) {
+		if (fscanf(fh, "%f", &info->sys_load) != 1)
+			debug(LOG_CRIT, "Failed to read loadavg");
+		fclose(fh);
+	}
+
+	if ((fh = fopen("/proc/sys/net/netfilter/nf_conntrack_count", "r"))) {
+		if (fscanf(fh, "%lu", &info->nf_conntrack_count) != 1)
+			debug(LOG_CRIT, "Failed to read nf_conntrack_count");
+		fclose(fh);
+	}
+
+	if (!g_version) {
+		FILE *release_file = fopen("/etc/openwrt_release", "r");
+		if (release_file) {
+			char line[256];
+			while (fgets(line, sizeof(line), release_file)) {
+				if (strncmp(line, "DISTRIB_REVISION=", 17) == 0) {
+					char *value = line + 17;
+					if (value[0] == '\'' && strlen(value) > 1) {
+						value++;
+						char *end_quote = strchr(value, '\'');
+						if (end_quote)
+							*end_quote = '\0';
+					}
+					char *newline = strchr(value, '\n');
+					if (newline)
+						*newline = '\0';
+					if (value[0] == 'r') {
+						char *dash = strchr(value, '-');
+						if (dash)
+							*dash = '\0';
+						g_version = safe_strdup(value);
+					}
+					break;
+				}
+			}
+			fclose(release_file);
+		}
+	}
+
+	if (!g_type) {
+		if ((fh = fopen("/var/sysinfo/board_type", "r"))) {
+			char name[32] = {0};
+			if (fgets(name, 31, fh)) {
+				trim_newline(name);
+				if (strlen(name) > 0)
+					g_type = safe_strdup(name);
+			}
+			fclose(fh);
+		}
+	}
+
+	if (!g_name) {
+		if ((fh = fopen("/var/sysinfo/board_name", "r"))) {
+			char name[32] = {0};
+			if (fgets(name, 31, fh)) {
+				trim_newline(name);
+				if (strlen(name) > 0)
+					g_name = safe_strdup(name);
+			}
+			fclose(fh);
+		}
+	}
 }

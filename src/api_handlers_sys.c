@@ -5,8 +5,9 @@
 #include "api_handlers_internal.h"
 #include "debug.h"
 #include "conf.h"
-#include "ping_thread.h"
+#include "wd_util.h"
 #include "client_list.h"
+#include "version.h"
 #include <ctype.h>
 #include <errno.h>
 #include <sys/wait.h>
@@ -160,6 +161,19 @@ json_object *build_gateway_report_message(const char *op)
         extern int g_online_clients;
         json_object_object_add(sys_info_obj, "online_clients", json_object_new_int(g_online_clients));
         json_object_object_add(sys_info_obj, "offline_clients", json_object_new_int(offline_client_ageout()));
+
+        extern char *g_version;
+        extern char *g_type;
+        extern char *g_name;
+        json_object_object_add(sys_info_obj, "fm_version",
+            json_object_new_string(g_version ? g_version : "null"));
+        json_object_object_add(sys_info_obj, "type",
+            json_object_new_string(g_type ? g_type : "null"));
+        json_object_object_add(sys_info_obj, "name",
+            json_object_new_string(g_name ? g_name : "null"));
+        json_object_object_add(sys_info_obj, "aw_version", json_object_new_string(VERSION));
+        json_object_object_add(sys_info_obj, "wired_passed",
+            json_object_new_int(config_get_config()->wired_passed));
 
         json_object_object_add(root, "sys_info", sys_info_obj);
     }

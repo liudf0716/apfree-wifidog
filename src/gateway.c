@@ -11,11 +11,9 @@
 #include "gateway.h"
 #include "firewall.h"
 #include "commandline.h"
-#include "auth.h"
 #include "http.h"
 #include "client_list.h"
 #include "wdctlx_thread.h"
-#include "ping_thread.h"
 #include "util.h"
 #include "tls_thread.h"
 #include "mqtt_thread.h"
@@ -38,8 +36,6 @@ time_t started_time = 0;
 static struct wd_request_context *s_auth_request_ctx = NULL;
 
 /* Thread identifiers for various services */
-static pthread_t tid_fw_counter = 0;    /* Firewall counter thread */
-static pthread_t tid_ping = 0;          /* Ping thread */
 static pthread_t tid_wdctl = 0;         /* Control interface thread */
 static pthread_t tid_tls_server = 0;   /* TLS redirect thread */
 static pthread_t tid_mqtt_server = 0;    /* MQTT server thread */
@@ -265,8 +261,6 @@ static const struct {
     pthread_t *tid;
     const char *name;
 } cleanup_threads[] = {
-    {&tid_fw_counter, "fw_counter"},
-    {&tid_ping, "ping"},
     {&tid_wdctl, "wdctl"},
     {&tid_tls_server, "https_server"},
     {&tid_mqtt_server, "mqtt_server"},
@@ -727,19 +721,9 @@ threads_init(s_config *config)
         debug(LOG_WARNING, "Failed to create DNS snoop thread (wildcard trust IPs)");
     }
 
-    if (!create_thread(&tid_ping, (void *)thread_ping, NULL, "ping")) {
-        debug(LOG_ERR, "Failed to create ping thread");
-        return;
-    }
-
-    // Auth server dependent threads - only needed in cloud/bypass mode
-    if (!is_local_auth_mode()) {
-        if (!create_thread(&tid_fw_counter, thread_client_timeout_check, NULL, "fw_counter")) {
-            debug(LOG_ERR, "Failed to create firewall counter thread");
-            return;
-        }
-    } else {
-        debug(LOG_INFO, "Auth mode is local, skipping auth server dependent threads");
+    if (!is_portal_auth_disabled()) {
+        parse_user_trusted_domain_list();
+        parse_inner_trusted_domain_list();
     }
 
     // Optional websocket thread - runs in any auth mode for remote management (e.g. OpenClaw)

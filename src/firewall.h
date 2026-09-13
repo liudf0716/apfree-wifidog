@@ -108,9 +108,8 @@ void fw_update_trusted_mac(const char *, uint32_t);
 
 void fw_client_process_from_authserver_response(t_authresponse *, t_client *p1);
 
-/** @brief Refreshes the entire client list */
-void ev_fw_sync_with_authserver(struct wd_request_context *);
-void ev_fw_sync_with_authserver_v2(struct wd_request_context *);
+/** JSON body for counters_v2 (device_id + gateway[]). Caller frees. */
+char *fw_build_counter_v2_payload(void);
 
 void conntrack_flush(const char *);
 

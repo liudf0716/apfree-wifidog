@@ -20,7 +20,6 @@
 #include "safe.h"
 #include "wd_client.h"
 #include "http.h"
-#include "ping_thread.h"
 #include "portal_cache.h"
 
 #define DNS_RESOLV_CONF "/etc/resolv.conf"

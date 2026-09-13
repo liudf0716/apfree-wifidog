@@ -17,6 +17,7 @@
 #include "centralserver.h"
 #include "client_list.h"
 #include "roam_sync.h"
+#include "long_conn.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -134,24 +135,7 @@ process_mqtt_request(struct mosquitto *mosq, const char *data, s_config *config)
 	// if message is response from server
 	json_object *j_response = NULL;
 	if (json_object_object_get_ex(json_request, "response", &j_response)) {
-		// get data field and get type field in data
-		json_object *j_data = NULL;
-		if (json_object_object_get_ex(json_request, "data", &j_data)) {
-			json_object *j_type = NULL;
-			if (json_object_object_get_ex(j_data, "type", &j_type)) {
-			if (strcmp(json_object_get_string(j_type), "connect") == 0 || strcmp(json_object_get_string(j_type), "bootstrap") == 0) {
-				debug(LOG_INFO, "Received connect/bootstrap response, invoking gateway state sync");
-				handle_gateway_state_heartbeat_request(j_data, transport);
-				/* Trigger portal cache update from bootstrap response */
-				portal_cache_trigger_update(j_data);
-				} else if (strcmp(json_object_get_string(j_type), "heartbeat") == 0) {
-					debug(LOG_DEBUG, "Received heartbeat response, no additional handling needed");
-					// 
-				}
-				// For other response types, we currently do not have specific handling logic here
-				// but we could add it in the future if needed.
-			}
-		}
+		long_conn_handle_server_response(json_request);
 		destroy_transport_context(transport);
 		json_object_put(json_request);
 		return;
@@ -245,6 +229,7 @@ mqtt_connect_callback(struct mosquitto *mosq, void *obj, int rc)
 
 		/* Publish a one-time connect report on MQTT (device -> server) */
 		publish_gateway_report(mosq, "connect");
+		long_conn_publish_counters();
 	} else {
 		mqtt_connected = 0;
 		debug(LOG_WARNING, "MQTT connect callback: failed with rc=%d (%s)", rc, mosquitto_strerror(rc));
@@ -398,6 +383,7 @@ void thread_mqtt(void *arg)
 			if (mqtt_connected && now >= next_heartbeat_at) {
 				pthread_mutex_unlock(&mqtt_thread_ctrl_lock);
 				publish_gateway_report(mosq, "heartbeat");
+				long_conn_publish_counters();
 				next_heartbeat_at = now + mqtt_heartbeat_interval_sec;
 				pthread_mutex_lock(&mqtt_thread_ctrl_lock);
 			}
@@ -426,6 +412,33 @@ void thread_mqtt(void *arg)
 int mqtt_is_connected(void)
 {
 	return mqtt_connected != 0;
+}
+
+int mqtt_publish_c2s(const char *payload)
+{
+	char *topic = NULL;
+	int rc = -1;
+
+	if (!payload) {
+		return -1;
+	}
+
+	pthread_mutex_lock(&mqtt_client_lock);
+	if (mqtt_client_instance && mqtt_connected) {
+		safe_asprintf(&topic, "wifidogx/v1/%s/c2s/request", get_device_id());
+		if (topic) {
+			rc = mosquitto_publish(mqtt_client_instance, NULL, topic,
+					       (int)strlen(payload), payload, 0, false);
+			free(topic);
+		}
+	}
+	pthread_mutex_unlock(&mqtt_client_lock);
+	if (rc != MOSQ_ERR_SUCCESS) {
+		debug(LOG_WARNING, "mqtt_publish_c2s failed: %s",
+		      rc < 0 ? "not connected" : mosquitto_strerror(rc));
+		return -1;
+	}
+	return 0;
 }
 
 static bool has_default_route(void)

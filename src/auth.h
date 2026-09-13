@@ -10,59 +10,24 @@
 #include <stdint.h>
 #include "client_list.h"
 
-/**
- * @brief Authentication codes returned by auth server.
- *
- * Defines possible authentication states returned by the authentication server,
- * ranging from error conditions to successful authentication.
- */
 typedef enum {
-    AUTH_ERROR = -1,        /**< Authentication process error */
-    AUTH_DENIED = 0,        /**< Access denied by auth server */
-    AUTH_ALLOWED = 1,       /**< Access granted by auth server */
-    AUTH_VALIDATION = 5,    /**< Client in 15-minute probation period */
-    AUTH_VALIDATION_FAILED = 6, /**< Failed to validate account within time limit */
-    AUTH_LOCKED = 254       /**< Account is locked */
+    AUTH_ERROR = -1,
+    AUTH_DENIED = 0,
+    AUTH_ALLOWED = 1,
+    AUTH_VALIDATION = 5,
+    AUTH_VALIDATION_FAILED = 6,
+    AUTH_LOCKED = 254
 } t_authcode;
 
-/**
- * @brief Authentication response structure
- *
- * Contains the server's response data including authentication status
- * and client identification.
- */
 typedef struct _t_authresponse {
-    t_authcode authcode;         /**< Authentication result code */
-    unsigned long long client_id; /**< Unique client identifier */
-    int qos_present;             /**< 1 if auth server sent explicit QoS fields */
-    uint32_t qos_downrate_bps;   /**< Incoming (internet->client) rate limit */
-    uint32_t qos_uprate_bps;     /**< Outgoing (client->internet) rate limit */
+    t_authcode authcode;
+    unsigned long long client_id;
+    int qos_present;
+    uint32_t qos_downrate_bps;
+    uint32_t qos_uprate_bps;
 } t_authresponse;
 
-struct wd_request_context;
-
-/**
- * @brief Handles client logout process
- * @param context Request context
- * @param client Client to be logged out
- */
-void ev_logout_client(struct wd_request_context *context, t_client *client);
-
-/**
- * @brief Processes client authentication
- * @param request HTTP request object (browser); held until auth-server callback
- * @param context Shared auth context (base/ssl only; not used for data/clt_req)
- * @param client Live client list node to authenticate
- * @note Allocates a request-owned context for the async auth-server round-trip
- */
-void ev_authenticate_client(struct evhttp_request *request, 
-                          struct wd_request_context *context, 
-                          t_client *client);
-
-/**
- * @brief Periodic connection timeout checker
- * @param arg Thread arguments
- */
-void *thread_client_timeout_check(void *arg);
+/** Deny locally and notify AWAS over the long connection. */
+void logout_client(t_client *client);
 
 #endif

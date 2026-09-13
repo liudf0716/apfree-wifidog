@@ -7,6 +7,12 @@
 #ifndef _GATEWAY_H_
 #define _GATEWAY_H_
 
+#include <time.h>
+
+#define MINIMUM_STARTED_TIME 1041379200 /* 2003-01-01 */
+
+extern time_t started_time;
+
 /**
  * @brief Structure to hold redirect file buffer data
  */

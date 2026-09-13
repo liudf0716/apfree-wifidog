@@ -57,6 +57,8 @@ test/test_short_domain
 *:Zone.Identifier
 build/
 build_shell/
+build-*/
+*.log
 .github/copilot-instructions.md
 scripts/package_wifidogx_to_openwrt_dl.sh
 .mimocode/

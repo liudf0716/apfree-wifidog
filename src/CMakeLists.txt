@@ -2,13 +2,14 @@
 set(src_apfreewifidog
 	main.c gateway.c commandline.c conf.c debug.c
 	firewall.c centralserver.c http.c auth.c client_list.c
-	util.c wdctlx_thread.c ping_thread.c safe.c
+	util.c wdctlx_thread.c safe.c
 	tls_thread.c wd_client.c wd_util.c mqtt_thread.c
 	api_handlers_auth.c
 	api_handlers_wifi.c
 	api_handlers_sys.c
 	hotplug_listener.c
 	ws_thread.c api_handlers.c api_routes.c api_handlers_bpf.c api_handlers_vpn.c
+	long_conn.c
 	uci_helper.c
 	client_snapshot.c dns_snoop.c
 	portal_cache.c

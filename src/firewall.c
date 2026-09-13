@@ -8,7 +8,6 @@
 #include "util.h"
 #include "debug.h"
 #include "conf.h"
-#include "ping_thread.h"
 #include "firewall.h"
 #include "auth.h"
 #include "centralserver.h"
@@ -848,175 +847,27 @@ get_gw_clients_counter(t_gateway_setting *gw_setting, t_client *worklist)
     return result;
 }
 
-static void
-sync_gw_clients_counter(struct wd_request_context *context, t_gateway_setting *gw_setting, t_client *worklist)
-{
-	t_auth_serv *auth_server = get_auth_server();
-	if (!auth_server) {
-		debug(LOG_ERR, "Could not get auth server");
-		return;
-	}
-
-	char *uri = get_auth_counter_v2_uri();
-	if (!uri) {
-		debug(LOG_ERR, "Could not get counter v2 uri");
-		return;
-	}
-
-	struct wd_request_context *req_ctx = wd_request_context_new(
-		context->base, context->ssl, auth_server->authserv_use_ssl);
-	if (!req_ctx) {
-		debug(LOG_ERR, "Failed to create request context for counter v2");
-		free(uri);
-		return;
-	}
-
-	struct evhttp_connection *evcon = NULL;
-	struct evhttp_request *req = NULL;
-	if (!wd_make_request(req_ctx, &evcon, &req, process_auth_server_counter_v2)) {
-		const char *param = get_gw_clients_counter(gw_setting, worklist);
-		assert(param != NULL);
-		char len[20] = {0};
-		snprintf(len, 20, "%lu", strlen(param));
-		evhttp_remove_header(evhttp_request_get_output_headers(req), "Content-Type");
-		evhttp_add_header(evhttp_request_get_output_headers(req), "Content-Type", "application/json");
-		evhttp_add_header(evhttp_request_get_output_headers(req), "Content-Length", len);
-		evbuffer_add_printf(evhttp_request_get_output_buffer(req), "%s", param);
-		if (evhttp_make_request(evcon, req, EVHTTP_REQ_POST, uri) != 0) {
-			debug(LOG_ERR, "Failed to queue counter v2 request to auth server");
-			evhttp_request_free(req);
-			evhttp_connection_free(evcon);
-			wd_request_context_destroy(req_ctx);
-		}
-		/* success: process_auth_server_counter_v2 destroys req_ctx */
-		free((void *)param);
-	} else {
-		debug(LOG_ERR, "wd_make_request failed for counter v2");
-		wd_request_context_destroy(req_ctx);
-	}
-	free(uri);
-}
-
-/**
- * @brief send clients counter info to auth server by json  
- * 
- */ 
-void
-ev_fw_sync_with_authserver_v2(struct wd_request_context *context)
+char *
+fw_build_counter_v2_payload(void)
 {
 	t_client *worklist = NULL;
 	t_gateway_setting *gw_settings = get_gateway_settings();
 	if (!gw_settings) {
-		debug(LOG_INFO, "no gateway settings");
-		return;
-	}
-	
-	debug(LOG_DEBUG, "Syncing client counters with auth server");
-	if (-1 == fw_counters_update())
-	{
-		debug(LOG_ERR, "Could not get counters from firewall!");
-		return;
+		return NULL;
 	}
 
-	LOCK_CLIENT_LIST();
-	g_online_clients = client_list_dup(&worklist);
-	UNLOCK_CLIENT_LIST();
-
-	sync_gw_clients_counter(context, gw_settings, worklist);
-		
-	client_list_destroy(worklist);
-}
-
-/**
- * @brief refreshes the entire client list's traffic counter, 
- *        and update's the central servers traffic counters 
- * 
- * @param context The context for request auth server
- * 
- */ 
-void
-ev_fw_sync_with_authserver(struct wd_request_context *context)
-{
-	t_client *p1 = NULL, *p2 = NULL, *worklist = NULL;
-	s_config *config = config_get_config();
-
-	debug(LOG_DEBUG, "Syncing client counters with auth server");
 	if (-1 == fw_counters_update()) {
 		debug(LOG_ERR, "Could not get counters from firewall!");
-		return;
+		return NULL;
 	}
 
 	LOCK_CLIENT_LIST();
 	g_online_clients = client_list_dup(&worklist);
 	UNLOCK_CLIENT_LIST();
 
-	if (!worklist) {
-		debug(LOG_DEBUG, "No clients to sync with auth server");
-		return;
-	}
-
-	for (p1 = p2 = worklist; NULL != p1; p1 = p2) {
-		p2 = p1->next;	
-
-		/* Ping the client, if he responds it'll keep activity on the link.
-		 * However, if the firewall blocks it, it will not help.  The suggested
-		 * way to deal witht his is to keep the DHCP lease time extremely
-		 * short:  Shorter than config->checkinterval * config->clienttimeout */
-		if (p1->ip) {
-			icmp_ping(p1->ip);
-		}
-
-		/* Update the counters on the remote server only if we have an auth server */
-		if (config->auth_servers != NULL) {
-			char *uri = get_auth_uri(REQUEST_TYPE_COUNTERS, ONLINE_CLIENT, p1);
-			if (!uri) {
-				debug(LOG_ERR, "Could not get auth uri for client %s!", p1->mac); // Added more info to log
-				continue;
-			} 
-
-			debug(LOG_DEBUG, "client's counter uri [%s]", uri);
-
-			struct evhttp_connection *evcon = NULL;
-			struct evhttp_request *req = NULL;
-
-			t_client *client_for_context = client_dup(p1); // Create a second duplicate
-			if (!client_for_context) {
-				debug(LOG_ERR, "Failed to duplicate client %s for context!", p1->mac);
-				free(uri); // Free the allocated URI before continuing
-				continue;  // Skip to the next client
-			}
-
-			// Request-owned context so concurrent counters do not share data
-			struct wd_request_context *req_ctx = wd_request_context_new(context->base, context->ssl,
-																		get_auth_server()->authserv_use_ssl);
-			if (!req_ctx) {
-				debug(LOG_ERR, "Failed to create request context for client %s", p1->mac);
-				client_free_node(client_for_context);
-				free(uri);
-				continue;
-			}
-			req_ctx->data = client_for_context;
-
-			if (!wd_make_request(req_ctx, &evcon, &req, process_auth_server_counter)) {
-				if (evhttp_make_request(evcon, req, EVHTTP_REQ_GET, uri) != 0) {
-					debug(LOG_ERR, "Failed to queue counter request to auth server");
-					evhttp_request_free(req);
-					evhttp_connection_free(evcon);
-					client_free_node(client_for_context);
-					req_ctx->data = NULL;
-					wd_request_context_destroy(req_ctx);
-				}
-			} else {
-				// wd_make_request failed: free client and destroy request context
-				debug(LOG_ERR, "wd_make_request failed for client %s. Cleaning up request context.", client_for_context->mac);
-				client_free_node(client_for_context);
-				req_ctx->data = NULL;
-				wd_request_context_destroy(req_ctx);
-			}
-			free(uri);
-		}
-	}
+	const char *param = get_gw_clients_counter(gw_settings, worklist);
 	client_list_destroy(worklist);
+	return (char *)param;
 }
 
 void 

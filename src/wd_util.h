@@ -152,4 +152,16 @@ void get_client_name(t_client *client);
 
 bool is_openwrt_platform(void);
 
+struct sys_info {
+    unsigned long int   sys_uptime;
+    unsigned int        sys_memfree;
+    unsigned long int   nf_conntrack_count;
+    unsigned long int   wifidog_uptime;
+    float   sys_load;
+    float   cpu_usage;
+    int     cpu_temp;
+};
+
+void get_sys_info(struct sys_info *info);
+
 #endif /* _WD_UTIL_H_ */

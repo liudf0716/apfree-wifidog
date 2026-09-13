@@ -29,7 +29,76 @@ static inline void ring_buffer__free(struct ring_buffer *rb) { (void)rb; }
 #include "conf.h"
 #include "firewall.h"
 #include "dns_snoop.h"
+#include "wd_util.h"
 #include "aw_bpf_compat.h"
+
+#define CAPTIVE_FAKE_IP "1.1.1.1"
+
+/* Domains answered by aw-bpf captive_domain_map with a fake IP until
+ * dns_snoop learns the real address from an upstream response. */
+static const char *captive_seed_domains[] = {
+	"captive.apple.com",
+	"www.apple.com",
+	"connect.rom.miui.com",
+	"www.msftconnecttest.com",
+	"www.gstatic.com",
+	"www.gstatic.cn",
+	"www.google.cn",
+	"www.qualcomm.cn",
+	"conn1.oppomobile.com",
+	"conn2.oppomobile.com",
+	"connectivitycheck.platform.hicloud.com",
+	"connectivitycheck.cbg-app.huawei.com",
+	"connectivitycheck.gstatic.com",
+	"cp.cloudflare.com",
+	"wifi.vivo.com.cn",
+	"connectivitycheck.platform.hihonorcloud.com",
+	"detectportal.firefox.com",
+	"services.googleapis.cn",
+	"g.cn",
+	"developer.android.google.cn",
+	"source.android.google.cn",
+	"www.google-analytics.com",
+	"clients1.google.com",
+	"clients2.google.com",
+	"clients3.google.com",
+	"clients4.google.com",
+	"clients5.google.com",
+	"goo.gl",
+	"google.cn",
+	"google.com.hk",
+	"google.com.tw",
+	"google.com",
+	"googleapis.com",
+	"play.googleapis.com",
+	"www.g.cn",
+	"www.google.com.hk",
+	"www.google.com.tw",
+	"www.google.com",
+	"www.googleapis.com",
+	"www.youtube.com",
+	"yt.be",
+};
+
+static void
+seed_captive_domain_map(void)
+{
+	if (!is_openwrt_platform() || is_portal_auth_disabled()) {
+		return;
+	}
+
+	int seeded = 0;
+	for (size_t i = 0; i < sizeof(captive_seed_domains) / sizeof(captive_seed_domains[0]); i++) {
+		if (captive_domain_map_set(captive_seed_domains[i], CAPTIVE_FAKE_IP) == 0)
+			seeded++;
+	}
+
+	if (seeded > 0) {
+		debug(LOG_INFO, "Seeded %d captive domains into aw-bpf captive_domain_map", seeded);
+	} else {
+		debug(LOG_DEBUG, "captive_domain_map not ready yet; will learn if aw-bpf loads later");
+	}
+}
 
 #ifndef MAX_DNS_PAYLOAD_LEN
 #define MAX_DNS_PAYLOAD_LEN 512
@@ -358,6 +427,7 @@ thread_dns_snoop(void *arg)
 			}
 			last_check = time(NULL);
 			debug(LOG_INFO, "Attached dns_ringbuf_portal for wildcard trust (map_id=%u)", attached_map_id);
+			seed_captive_domain_map();
 		}
 
 		int err = ring_buffer__poll(rb, 200);

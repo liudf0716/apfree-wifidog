@@ -14,6 +14,9 @@ void thread_mqtt(void *arg);
 /* Return non-zero if MQTT client is currently connected to broker */
 int mqtt_is_connected(void);
 
+/* Publish payload to device c2s/request topic. Returns 0 on success. */
+int mqtt_publish_c2s(const char *payload);
+
 /* Request MQTT client to disconnect and reconnect immediately */
 void mqtt_request_reconnect(void);
 

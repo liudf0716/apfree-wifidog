@@ -55,6 +55,9 @@ void ws_request_reconnect(void);
 /* Return non-zero if WebSocket is currently upgraded/connected */
 int ws_is_connected(void);
 
+/* Send a JSON text frame on the active WebSocket (same thread as ws loop). */
+int ws_publish_text(const char *payload);
+
 // WebSocket utility functions for handlers
 void ws_send(struct evbuffer *buf, const char *msg, const size_t len, enum WebSocketFrameType frame_type);
 

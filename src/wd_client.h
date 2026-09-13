@@ -15,7 +15,7 @@
  *
  * Two usage modes:
  * - **Factory** (long-lived): holds base/ssl only. Used by the HTTP portal
- *   server and wd_request_loop. Never passed as wd_make_request() callback arg.
+ *   server. Never passed as wd_make_request() callback arg.
  * - **Request-owned** (short-lived): created with wd_request_context_new() for
  *   one async auth-server call. Always passed to wd_make_request(); the response
  *   callback must always call wd_request_context_destroy().
@@ -94,11 +94,5 @@ struct wd_request_context *wd_request_context_new(struct event_base *base, SSL *
  */
 int wd_make_request(struct wd_request_context *context, struct evhttp_connection **evcon,
                    struct evhttp_request **req, void (*cb)(struct evhttp_request *, void *));
-
-/**
- * @brief Start request event loop
- * @param callback Function to call on event trigger
- */
-void wd_request_loop(void (*callback)(evutil_socket_t, short, void *));
 
 #endif

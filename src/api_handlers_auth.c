@@ -13,7 +13,6 @@
 #include "version.h"
 #include "commandline.h"
 #include "mqtt_thread.h"
-#include "ping_thread.h"
 #include "wdctlx_thread.h"
 #include "safe.h"
 #include "uci_helper.h"
