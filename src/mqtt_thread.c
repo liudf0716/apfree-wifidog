@@ -233,6 +233,7 @@ mqtt_connect_callback(struct mosquitto *mosq, void *obj, int rc)
 	} else {
 		mqtt_connected = 0;
 		debug(LOG_WARNING, "MQTT connect callback: failed with rc=%d (%s)", rc, mosquitto_strerror(rc));
+		mark_auth_offline();
 	}
 }
 
@@ -245,6 +246,7 @@ mqtt_disconnect_callback(struct mosquitto *mosq, void *obj, int rc)
 	/* clear connected flag */
 	mqtt_connected = 0;
 	debug(LOG_INFO, "MQTT disconnected (rc=%d)", rc);
+	mark_auth_offline();
 }
 
 /* removed mosquitto log callback */
@@ -339,6 +341,17 @@ void thread_mqtt(void *arg)
 	if (username != NULL) {
 		mosquitto_username_pw_set(mosq, username, password);
 	}
+
+	/* Set MQTT LWT (Last Will and Testament) so AWAS is notified immediately if device drops */
+	char *will_topic = NULL;
+	char *will_payload = NULL;
+	safe_asprintf(&will_topic, "wifidogx/v1/%s/c2s/request", get_device_id());
+	safe_asprintf(&will_payload, "{\"op\":\"offline\",\"device_id\":\"%s\"}", get_device_id());
+	if (will_topic && will_payload) {
+		mosquitto_will_set(mosq, will_topic, (int)strlen(will_payload), will_payload, 0, false);
+	}
+	free(will_topic);
+	free(will_payload);
 
 	/* Use libmosquitto automatic reconnect handling instead of app-level retry loop.
 	 * Configure reconnect delay (initial 5s, max 60s) with exponential backoff. */

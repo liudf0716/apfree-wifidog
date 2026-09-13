@@ -50,6 +50,7 @@
 #include "version.h"
 #include "mqtt_thread.h"
 #include "ws_thread.h"
+#include "long_conn.h"
 
 #define LOCK_GHBN() do { \
 	debug(LOG_DEBUG, "Locking wd_gethostbyname()"); \
@@ -139,6 +140,10 @@ mark_offline()
 int
 is_online()
 {
+    if (get_mqtt_server() || get_ws_server()) {
+        return long_conn_is_healthy();
+    }
+
     if (last_online_time == 0 || (last_offline_time - last_online_time) >= (config_get_config()->checkinterval * 2 - 10)) {
         /* We're probably offline */
         return (0);
@@ -191,6 +196,10 @@ is_auth_online()
 	if (config->auth_server_mode == AUTH_MODE_LOCAL) {
 		debug(LOG_DEBUG, "Auth server is in local mode, always returning online");
 		return 1;
+	}
+
+	if (get_mqtt_server() || get_ws_server()) {
+		return long_conn_is_healthy();
 	}
 
 	if (!is_online()) {
