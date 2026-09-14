@@ -51,7 +51,25 @@ struct domain_update {
     int index;
 };
 
-/* Traffic statistics structures (simplified user-space view) */
+/* Time-based traffic control matching */
+#define AW_TIME_FLAG_ENABLED        (1 << 0)  /* Whether time control is enabled */
+#define AW_TIME_FLAG_LOCAL_TZ       (1 << 1)  /* Calculate using local timezone */
+#define AW_TIME_FLAG_INVERT         (1 << 2)  /* Invert match condition */
+#define AW_TIME_FLAG_CONTIGUOUS     (1 << 3)  /* Contiguous cross-midnight match */
+
+struct aw_time_rule {
+    uint8_t   flags;            /* AW_TIME_FLAG_* */
+    uint8_t   weekdays_match;   /* Weekdays mask: bit0=Sun, bit1=Mon ... bit6=Sat (0x7F=all, 0=any) */
+    uint16_t  reserved;         /* Alignment padding */
+    uint32_t  daytime_start;    /* Day start seconds (0~86399, e.g. 09:30:00 = 34200) */
+    uint32_t  daytime_stop;     /* Day stop seconds (0~86399, e.g. 18:30:00 = 66600) */
+    uint32_t  date_start;       /* Epoch seconds start (0 = unlimited) */
+    uint32_t  date_stop;        /* Epoch seconds stop (0 = unlimited) */
+    int32_t   tz_offset_sec;    /* Local timezone offset in seconds (e.g. +28800 for UTC+8) */
+    uint32_t  reserved2;        /* Reserved for future expansion */
+};
+
+/* Traffic statistics structures */
 struct counters {
     uint32_t cur_s_bytes;
     uint32_t prev_s_bytes;
@@ -59,7 +77,7 @@ struct counters {
     uint64_t total_packets;
     uint32_t est_slot;
     uint32_t reserved;
-};
+} __attribute__((packed));
 
 struct rate_limit {
     uint64_t bps;
@@ -72,7 +90,10 @@ struct traffic_stats {
     struct counters outgoing;
     struct rate_limit incoming_rate_limit;
     struct rate_limit outgoing_rate_limit;
+    struct aw_time_rule time_rule;
 };
+
+_Static_assert(sizeof(struct traffic_stats) == 144, "struct traffic_stats must match aw-bpf map value size (144 bytes)");
 
 /* Session data used by ring buffer events */
 struct session_data_t {
