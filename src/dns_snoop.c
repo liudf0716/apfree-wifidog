@@ -105,9 +105,12 @@ seed_captive_domain_map(void)
 #endif
 
 #define MAX_DNS_NAME 256
-#define DNS_PORTAL_MAP_PATH     "/sys/fs/bpf/tc/globals/dns_ringbuf_portal"
-#define DNS_PORTAL_MAP_PATH_ALT "/sys/fs/bpf/aw/dns_ringbuf_portal"
-#define DNS_PORTAL_MAP_PATH_XDP "/sys/fs/bpf/xdp/globals/dns_ringbuf_portal"
+#define DNS_PORTAL_MAP_PATH         "/sys/fs/bpf/tc/globals/dns_ringbuf_portal"
+#define DNS_PORTAL_MAP_PATH_ALT     "/sys/fs/bpf/aw/dns_ringbuf_portal"
+#define DNS_PORTAL_MAP_PATH_XDP     "/sys/fs/bpf/xdp/globals/dns_ringbuf_portal"
+#define DNS_PORTAL_BUF_MAP_PATH     "/sys/fs/bpf/tc/globals/dns_portal_buf"
+#define DNS_PORTAL_BUF_MAP_PATH_ALT "/sys/fs/bpf/aw/dns_portal_buf"
+#define DNS_PORTAL_BUF_MAP_PATH_XDP "/sys/fs/bpf/xdp/globals/dns_portal_buf"
 
 /* captive_domain_map: pinned by aw-bpf tc/ingress, must mirror the
  * definition in aw_bpf.c */
@@ -386,13 +389,24 @@ static uint32_t get_portal_map_id(int fd)
 
 static int open_portal_map(void)
 {
-	int fd = bpf_obj_get(DNS_PORTAL_MAP_PATH);
-	if (fd >= 0)
-		return fd;
-	fd = bpf_obj_get(DNS_PORTAL_MAP_PATH_ALT);
-	if (fd >= 0)
-		return fd;
-	return bpf_obj_get(DNS_PORTAL_MAP_PATH_XDP);
+	static const char *paths[] = {
+		DNS_PORTAL_BUF_MAP_PATH,
+		DNS_RINGBUF_PORTAL_MAP_PATH,
+		DNS_PORTAL_BUF_MAP_PATH_ALT,
+		DNS_RINGBUF_PORTAL_MAP_PATH_ALT,
+		DNS_PORTAL_BUF_MAP_PATH_XDP,
+		DNS_RINGBUF_PORTAL_MAP_PATH_XDP,
+		DNS_PORTAL_BUF_MAP_PATH_ROOT,
+		DNS_RINGBUF_PORTAL_MAP_PATH_ROOT,
+		NULL
+	};
+
+	for (int i = 0; paths[i]; i++) {
+		int fd = bpf_obj_get(paths[i]);
+		if (fd >= 0)
+			return fd;
+	}
+	return -1;
 }
 
 void *

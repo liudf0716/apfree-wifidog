@@ -12,6 +12,14 @@
 #  if __has_include(<linux/types.h>)
 #    include <linux/types.h>
 #  endif
+#  if __has_include(<linux/bpf.h>)
+#    include <linux/bpf.h>
+#  endif
+#endif
+#ifndef __LINUX_BPF_H__
+struct bpf_spin_lock {
+    uint32_t val;
+};
 #endif
 #include <time.h>
 #include <string.h>
@@ -27,8 +35,14 @@
 #define XDPI_IOC_LIST   0x40584004
 
 #define MAX_DNS_PAYLOAD_LEN 512
-#define DNS_RINGBUF_PORTAL_MAP_PATH     "/sys/fs/bpf/tc/globals/dns_ringbuf_portal"
-#define DNS_RINGBUF_PORTAL_MAP_PATH_ALT "/sys/fs/bpf/aw/dns_ringbuf_portal"
+#define DNS_RINGBUF_PORTAL_MAP_PATH      "/sys/fs/bpf/tc/globals/dns_ringbuf_portal"
+#define DNS_RINGBUF_PORTAL_MAP_PATH_ALT  "/sys/fs/bpf/aw/dns_ringbuf_portal"
+#define DNS_RINGBUF_PORTAL_MAP_PATH_XDP  "/sys/fs/bpf/xdp/globals/dns_ringbuf_portal"
+#define DNS_RINGBUF_PORTAL_MAP_PATH_ROOT "/sys/fs/bpf/dns_ringbuf_portal"
+#define DNS_PORTAL_BUF_MAP_PATH          "/sys/fs/bpf/tc/globals/dns_portal_buf"
+#define DNS_PORTAL_BUF_MAP_PATH_ALT      "/sys/fs/bpf/aw/dns_portal_buf"
+#define DNS_PORTAL_BUF_MAP_PATH_XDP      "/sys/fs/bpf/xdp/globals/dns_portal_buf"
+#define DNS_PORTAL_BUF_MAP_PATH_ROOT     "/sys/fs/bpf/dns_portal_buf"
 
 #define MAX_DOMAIN_LEN 64
 #define XDPI_DOMAIN_MAX 256
@@ -38,13 +52,15 @@
 
 struct domain_entry {
     char domain[MAX_DOMAIN_LEN];
-    int domain_len;
-    int sid;
-    bool used;
+    uint32_t domain_len;
+    uint32_t sid;
+    uint32_t used;
+    uint32_t padding;
     uint64_t access_count;
     uint64_t last_access_time;
     uint64_t first_seen_time;
 };
+_Static_assert(sizeof(struct domain_entry) == 104, "struct domain_entry must match aw-bpf ABI size (104 bytes)");
 
 struct domain_update {
     struct domain_entry entry;
@@ -55,7 +71,6 @@ struct domain_update {
 #define AW_TIME_FLAG_ENABLED        (1 << 0)  /* Whether time control is enabled */
 #define AW_TIME_FLAG_LOCAL_TZ       (1 << 1)  /* Calculate using local timezone */
 #define AW_TIME_FLAG_INVERT         (1 << 2)  /* Invert match condition */
-#define AW_TIME_FLAG_CONTIGUOUS     (1 << 3)  /* Contiguous cross-midnight match */
 
 struct aw_time_rule {
     uint8_t   flags;            /* AW_TIME_FLAG_* */
@@ -94,6 +109,37 @@ struct traffic_stats {
 };
 
 _Static_assert(sizeof(struct traffic_stats) == 144, "struct traffic_stats must match aw-bpf map value size (144 bytes)");
+
+/* Non-percpu QoS rate limit structures */
+struct qos_rate_limit {
+    uint64_t bps;
+    uint64_t t_last;
+    uint64_t tokens;
+};
+
+struct qos_limit_cfg {
+    struct bpf_spin_lock lock;
+    uint32_t pad;
+    struct qos_rate_limit incoming;
+    struct qos_rate_limit outgoing;
+    struct aw_time_rule time_rule;
+};
+
+_Static_assert(sizeof(struct qos_limit_cfg) == 88, "struct qos_limit_cfg size mismatch");
+
+struct router_ip_cfg {
+    uint32_t lan_ip;
+    uint32_t wan_ip;
+};
+
+_Static_assert(sizeof(struct router_ip_cfg) == 8, "struct router_ip_cfg size mismatch");
+
+#define AW_BPF_PIN_BASE "/sys/fs/bpf/tc/globals"
+#define AW_BPF_IPV4_QOS_MAP_PATH AW_BPF_PIN_BASE "/ipv4_qos_map"
+#define AW_BPF_IPV6_QOS_MAP_PATH AW_BPF_PIN_BASE "/ipv6_qos_map"
+#define AW_BPF_MAC_QOS_MAP_PATH  AW_BPF_PIN_BASE "/mac_qos_map"
+#define AW_BPF_SID_QOS_MAP_PATH  AW_BPF_PIN_BASE "/xdpi_l7_qos_map"
+#define AW_BPF_ROUTER_IP_MAP_PATH AW_BPF_PIN_BASE "/router_ip_map"
 
 /* Session data used by ring buffer events */
 struct session_data_t {

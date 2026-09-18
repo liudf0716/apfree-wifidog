@@ -105,12 +105,15 @@ no_ebpf_maps_present(void)
 		"/sys/fs/bpf/tc/globals/mac_map",
 		"/sys/fs/bpf/tc/globals/xdpi_l7_map",
 		"/sys/fs/bpf/tc/globals/dns_ringbuf",
+		"/sys/fs/bpf/tc/globals/dns_portal_buf",
 		"/sys/fs/bpf/tc/globals/dns_ringbuf_portal",
 		"/sys/fs/bpf/tc/globals/dns_stats_map",
 		"/sys/fs/bpf/aw/dns_ringbuf",
+		"/sys/fs/bpf/aw/dns_portal_buf",
 		"/sys/fs/bpf/aw/dns_ringbuf_portal",
 		"/sys/fs/bpf/aw/dns_stats_map",
 		"/sys/fs/bpf/xdp/globals/dns_ringbuf",
+		"/sys/fs/bpf/xdp/globals/dns_portal_buf",
 		"/sys/fs/bpf/xdp/globals/dns_ringbuf_portal",
 		"/sys/fs/bpf/xdp/globals/dns_stats_map",
 		NULL
@@ -356,7 +359,10 @@ test_no_ebpf_fallback(void)
 #endif
 	EXPECT_TRUE(no_ebpf_maps_present() || !no_ebpf_maps_present(),
 		    "missing maps are a runtime degrade, not a hard fail");
-	EXPECT_TRUE(sizeof(struct traffic_stats) > 0, "aw-bpf compat types available");
+	EXPECT_TRUE(sizeof(struct traffic_stats) == 144, "struct traffic_stats ABI size (144 bytes)");
+	EXPECT_TRUE(sizeof(struct qos_limit_cfg) == 88, "struct qos_limit_cfg ABI size (88 bytes)");
+	EXPECT_TRUE(sizeof(struct router_ip_cfg) == 8, "struct router_ip_cfg ABI size (8 bytes)");
+	EXPECT_TRUE(sizeof(struct domain_entry) == 104, "struct domain_entry ABI size (104 bytes)");
 }
 
 int

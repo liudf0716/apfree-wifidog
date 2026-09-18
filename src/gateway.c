@@ -26,6 +26,7 @@
 #include "portal_cache.h"
 #include "portal_ticket.h"
 #include "roam_sync.h"
+#include "bpf_qos.h"
 
 /* Global mutexes and buffers */
 pthread_mutex_t g_resource_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -505,6 +506,10 @@ gateway_setting_init(void)
               gateway_settings->gw_id,
               gateway_settings->gw_address_v4,
               gateway_settings->gw_address_v6 ? gateway_settings->gw_address_v6 : "none");
+
+        if (gateway_settings->gw_address_v4) {
+            aw_bpf_router_ip_sync(gateway_settings->gw_address_v4, NULL);
+        }
 
         gateway_settings = gateway_settings->next;
     }

@@ -1496,8 +1496,10 @@ nft_fw_counters_update_ebpf()
     // Process IPv4 traffic statistics
     __be32 ipv4_key = 0, next_ipv4_key = 0;
     struct traffic_stats ipv4_stats;
+    int first_key = 1;
     
-    while (bpf_map_get_next_key(ipv4_map_fd, ipv4_key ? &ipv4_key : NULL, &next_ipv4_key) == 0) {
+    while (bpf_map_get_next_key(ipv4_map_fd, first_key ? NULL : &ipv4_key, &next_ipv4_key) == 0) {
+        first_key = 0;
         if (lookup_agg_stats_percpu(ipv4_map_fd, &next_ipv4_key, &ipv4_stats) == 0) {
             // Convert IPv4 address to string
             char ip_str[INET_ADDRSTRLEN];

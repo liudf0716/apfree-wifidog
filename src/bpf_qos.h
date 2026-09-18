@@ -27,4 +27,9 @@ int aw_bpf_qos_apply_client(const char *ipv4, const char *ipv6,
  */
 int aw_bpf_qos_remove_client(const char *ipv4, const char *ipv6);
 
+/**
+ * Sync gateway/router LAN/WAN IPs to router_ip_map to exempt router traffic from client QoS.
+ */
+int aw_bpf_router_ip_sync(const char *lan_ip, const char *wan_ip);
+
 #endif /* _BPF_QOS_H_ */
