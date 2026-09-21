@@ -32,9 +32,12 @@ static inline void ring_buffer__free(struct ring_buffer *rb) { (void)rb; }
 #include "wd_util.h"
 #include "aw_bpf_compat.h"
 
+#include <netdb.h>
+#include <pthread.h>
+
 #define CAPTIVE_FAKE_IP "1.1.1.1"
 
-/* Domains answered by aw-bpf captive_domain_map with a fake IP until
+/* Domains answered by aw-bpf captive_domain_map with a synthetic IP until
  * dns_snoop learns the real address from an upstream response. */
 static const char *captive_seed_domains[] = {
 	"captive.apple.com",
@@ -80,6 +83,25 @@ static const char *captive_seed_domains[] = {
 	"yt.be",
 };
 
+static void *
+thread_preload_captive_domains(void *arg)
+{
+	(void)arg;
+	/* Allow network and dns_portal_buf to settle before preloading */
+	sleep(2);
+	for (size_t i = 0; i < sizeof(captive_seed_domains) / sizeof(captive_seed_domains[0]); i++) {
+		struct addrinfo hints, *res = NULL;
+		memset(&hints, 0, sizeof(hints));
+		hints.ai_family = AF_INET;
+		hints.ai_socktype = SOCK_STREAM;
+		getaddrinfo(captive_seed_domains[i], NULL, &hints, &res);
+		if (res) {
+			freeaddrinfo(res);
+		}
+	}
+	return NULL;
+}
+
 static void
 seed_captive_domain_map(void)
 {
@@ -95,6 +117,10 @@ seed_captive_domain_map(void)
 
 	if (seeded > 0) {
 		debug(LOG_INFO, "Seeded %d captive domains into aw-bpf captive_domain_map", seeded);
+		pthread_t tid;
+		if (pthread_create(&tid, NULL, thread_preload_captive_domains, NULL) == 0) {
+			pthread_detach(tid);
+		}
 	} else {
 		debug(LOG_DEBUG, "captive_domain_map not ready yet; will learn if aw-bpf loads later");
 	}
@@ -243,7 +269,7 @@ struct raw_dns_data {
 		uint8_t daddr_v6[16];
 	} dst_ip;
 	unsigned char dns_payload[MAX_DNS_PAYLOAD_LEN];
-};
+} __attribute__((packed));
 
 static int parse_dns_name(const unsigned char *payload, int payload_len, int offset,
 			  char *name, int max_len)
