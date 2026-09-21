@@ -90,14 +90,7 @@ static int recover_default_route_local(void)
         return 1;
     }
 
-    debug(LOG_WARNING, "recover_default_route_local: trying /etc/init.d/network restart");
-    execute("/etc/init.d/network restart >/dev/null 2>&1", 0);
-    if (wait_default_route_v4_local(12)) {
-        debug(LOG_INFO, "recover_default_route_local: default route restored by network restart");
-        return 1;
-    }
-
-    debug(LOG_ERR, "recover_default_route_local: failed to recover default route");
+    debug(LOG_WARNING, "recover_default_route_local: default route not recovered yet");
     return 0;
 }
 
