@@ -357,10 +357,36 @@ wait_default_route_v4(int timeout_seconds)
 }
 
 static int
+has_interface_carrier(const char *iface)
+{
+	if (!iface || iface[0] == '\0')
+		return 0;
+
+	char path[128];
+	snprintf(path, sizeof(path), "/sys/class/net/%s/carrier", iface);
+	FILE *fp = fopen(path, "r");
+	if (!fp)
+		return 1;
+
+	int carrier = 0;
+	if (fscanf(fp, "%d", &carrier) != 1)
+		carrier = 0;
+	fclose(fp);
+	return carrier;
+}
+
+static int
 recover_default_route(void)
 {
 	if (has_default_route_v4()) {
 		return 1;
+	}
+
+	s_config *config = config_get_config();
+	const char *ext_if = config && config->external_interface ? config->external_interface : "wan";
+	if (!has_interface_carrier(ext_if) && !has_interface_carrier("eth1")) {
+		debug(LOG_INFO, "WAN link has no carrier (cable unplugged), skipping default route recovery");
+		return 0;
 	}
 
 	debug(LOG_WARNING, "Default route missing, trying ifup wan/wwan");
@@ -378,14 +404,7 @@ recover_default_route(void)
 		return 1;
 	}
 
-	debug(LOG_WARNING, "Default route still missing, trying /etc/init.d/network restart");
-	execute("/etc/init.d/network restart >/dev/null 2>&1", 0);
-	if (wait_default_route_v4(12)) {
-		debug(LOG_INFO, "Default route restored by network restart");
-		return 1;
-	}
-
-	debug(LOG_ERR, "Failed to recover default route after staged recovery");
+	debug(LOG_WARNING, "Default route not recovered yet, waiting for link/DHCP");
 	return 0;
 }
 
