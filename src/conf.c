@@ -343,7 +343,6 @@ void config_init(void)
 	config.parse_checked            = 1; // Enable domain IP parsing with fping check
 	config.update_domain_interval   = 60; // Update trusted domains every 60 seconds
 	config.dns_timeout              = safe_strdup("1.0"); // DNS parsing timeout set to 1.0 seconds
-	config.bypass_apple_cna         = 1; // Enable Apple CNA bypass by default
 	config.wildcard_domains_trusted      = NULL;
 	config.domains_trusted          = NULL;
 	config.inner_domains_trusted    = NULL;
@@ -1254,7 +1253,7 @@ config_read()
 					config.dns_timeout = safe_strdup(p1);
 					break;
 				case oAppleCNA:
-					sscanf(p1, "%hu", &config.bypass_apple_cna);
+					/* Deprecated: Apple CNA bypass logic removed, standard 302 redirect is always used */
 					break;
 				case oFW4Enable:
 					config.fw4_enable = parse_boolean_value(p1);
