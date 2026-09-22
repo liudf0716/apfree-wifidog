@@ -83,49 +83,6 @@ static const char *captive_seed_domains[] = {
 	"yt.be",
 };
 
-static void *
-thread_preload_captive_domains(void *arg)
-{
-	(void)arg;
-	/* Allow network and dns_portal_buf to settle before preloading */
-	sleep(2);
-	for (size_t i = 0; i < sizeof(captive_seed_domains) / sizeof(captive_seed_domains[0]); i++) {
-		struct addrinfo hints, *res = NULL;
-		memset(&hints, 0, sizeof(hints));
-		hints.ai_family = AF_INET;
-		hints.ai_socktype = SOCK_STREAM;
-		getaddrinfo(captive_seed_domains[i], NULL, &hints, &res);
-		if (res) {
-			freeaddrinfo(res);
-		}
-	}
-	return NULL;
-}
-
-static void
-seed_captive_domain_map(void)
-{
-	if (!is_openwrt_platform() || is_portal_auth_disabled()) {
-		return;
-	}
-
-	int seeded = 0;
-	for (size_t i = 0; i < sizeof(captive_seed_domains) / sizeof(captive_seed_domains[0]); i++) {
-		if (captive_domain_map_set(captive_seed_domains[i], CAPTIVE_FAKE_IP) == 0)
-			seeded++;
-	}
-
-	if (seeded > 0) {
-		debug(LOG_INFO, "Seeded %d captive domains into aw-bpf captive_domain_map", seeded);
-		pthread_t tid;
-		if (pthread_create(&tid, NULL, thread_preload_captive_domains, NULL) == 0) {
-			pthread_detach(tid);
-		}
-	} else {
-		debug(LOG_DEBUG, "captive_domain_map not ready yet; will learn if aw-bpf loads later");
-	}
-}
-
 #ifndef MAX_DNS_PAYLOAD_LEN
 #define MAX_DNS_PAYLOAD_LEN 512
 #endif
@@ -247,11 +204,108 @@ int captive_domain_map_set(const char *domain, const char *ip)
 int captive_domain_map_learn(const char *domain, const char *ip)
 {
 #ifdef HAVE_LIBBPF
-	return captive_domain_map_update(domain, ip, 1, BPF_EXIST);
+	int ret = captive_domain_map_update(domain, ip, 1, BPF_EXIST);
+	if (ret == 0) {
+		debug(LOG_INFO, "aw-bpf captive domain learned: %s -> %s", domain, ip);
+	}
+	return ret;
 #else
 	(void)domain; (void)ip;
 	return -1;
 #endif
+}
+
+int captive_domain_map_is_learned(const char *domain)
+{
+#ifdef HAVE_LIBBPF
+	int fd = get_captive_map_fd();
+	if (fd < 0)
+		return 0;
+
+	char key[CAPTIVE_DOMAIN_KEY_LEN];
+	if (domain_to_wire_key(domain, key, sizeof(key)))
+		return 0;
+
+	struct captive_domain_value val;
+	if (bpf_map_lookup_elem(fd, key, &val) == 0)
+		return val.learned;
+#else
+	(void)domain;
+#endif
+	return 0;
+}
+
+static void *
+thread_preload_captive_domains(void *arg)
+{
+	(void)arg;
+	/* Allow network and dns_portal_buf to settle before preloading */
+	sleep(2);
+
+	/* Try up to 5 attempts (every 5s) in case WAN/DNS is slow to establish */
+	for (int attempt = 0; attempt < 5; attempt++) {
+		int unlearned = 0;
+		for (size_t i = 0; i < sizeof(captive_seed_domains) / sizeof(captive_seed_domains[0]); i++) {
+			if (captive_domain_map_is_learned(captive_seed_domains[i]))
+				continue;
+
+			struct addrinfo hints, *res = NULL;
+			memset(&hints, 0, sizeof(hints));
+			hints.ai_family = AF_INET;
+			hints.ai_socktype = SOCK_STREAM;
+			if (getaddrinfo(captive_seed_domains[i], NULL, &hints, &res) == 0 && res) {
+				for (struct addrinfo *p = res; p; p = p->ai_next) {
+					if (p->ai_family == AF_INET) {
+						struct sockaddr_in *sin = (struct sockaddr_in *)p->ai_addr;
+						char ip_str[INET_ADDRSTRLEN];
+						if (inet_ntop(AF_INET, &sin->sin_addr, ip_str, sizeof(ip_str))) {
+							captive_domain_map_learn(captive_seed_domains[i], ip_str);
+							break;
+						}
+					}
+				}
+				freeaddrinfo(res);
+			}
+
+			if (!captive_domain_map_is_learned(captive_seed_domains[i]))
+				unlearned++;
+		}
+
+		if (unlearned == 0) {
+			debug(LOG_INFO, "Preload captive domains completed: all %zu domains learned",
+			      sizeof(captive_seed_domains) / sizeof(captive_seed_domains[0]));
+			break;
+		}
+
+		debug(LOG_DEBUG, "Preload captive domains attempt %d: %d domains still unlearned, retrying in 5s",
+		      attempt + 1, unlearned);
+		sleep(5);
+	}
+	return NULL;
+}
+
+static void
+seed_captive_domain_map(void)
+{
+	if (!is_openwrt_platform() || is_portal_auth_disabled()) {
+		return;
+	}
+
+	int seeded = 0;
+	for (size_t i = 0; i < sizeof(captive_seed_domains) / sizeof(captive_seed_domains[0]); i++) {
+		if (captive_domain_map_set(captive_seed_domains[i], CAPTIVE_FAKE_IP) == 0)
+			seeded++;
+	}
+
+	if (seeded > 0) {
+		debug(LOG_INFO, "Seeded %d captive domains into aw-bpf captive_domain_map", seeded);
+		pthread_t tid;
+		if (pthread_create(&tid, NULL, thread_preload_captive_domains, NULL) == 0) {
+			pthread_detach(tid);
+		}
+	} else {
+		debug(LOG_DEBUG, "captive_domain_map not ready yet; will learn if aw-bpf loads later");
+	}
 }
 
 struct raw_dns_data {

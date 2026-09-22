@@ -9,5 +9,6 @@ void *thread_dns_snoop(void *arg);
  * set the initial fake IP and learn real IPs from snooped DNS responses. */
 int captive_domain_map_set(const char *domain, const char *ip);
 int captive_domain_map_learn(const char *domain, const char *ip);
+int captive_domain_map_is_learned(const char *domain);
 
 #endif
