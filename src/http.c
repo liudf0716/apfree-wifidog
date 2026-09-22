@@ -522,6 +522,42 @@ get_authserver_offline_page_type()
     return is_custom_auth_offline_page() ? LOCAL_CUSTROM_AUTH : LOCAL_AUTH;
 }
 
+static int
+is_captive_probe(struct evhttp_request *req)
+{
+    if (!req) return 0;
+    const char *host = evhttp_request_get_host(req);
+    const char *uri = evhttp_request_get_uri(req);
+    const char *ua = evhttp_find_header(evhttp_request_get_input_headers(req), "User-Agent");
+
+    if (ua && (strstr(ua, "CaptiveNetworkSupport") || strstr(ua, "wispr") || strstr(ua, "CaptivePortal")))
+        return 1;
+
+    if (host) {
+        if (strstr(host, "apple.com") || strstr(host, "google") ||
+            strstr(host, "gstatic") || strstr(host, "msftconnecttest") ||
+            strstr(host, "msftncsi") || strstr(host, "miui") ||
+            strstr(host, "oppomobile") || strstr(host, "huawei") ||
+            strstr(host, "hicloud") || strstr(host, "hihonorcloud") ||
+            strstr(host, "vivo") || strstr(host, "cloudflare") ||
+            strstr(host, "qualcomm"))
+            return 1;
+    }
+
+    if (uri) {
+        if (strstr(uri, "hotspot-detect.html") ||
+            strstr(uri, "generate_204") ||
+            strstr(uri, "gen_204") ||
+            strstr(uri, "connecttest.txt") ||
+            strstr(uri, "ncsi.txt") ||
+            strstr(uri, "canonical.html") ||
+            strstr(uri, "mobile/status.php"))
+            return 1;
+    }
+
+    return 0;
+}
+
 /**
  * @brief The 404 handler is also responsible for redirecting to the auth server
  * 
@@ -635,7 +671,7 @@ ev_http_callback_404(struct evhttp_request *req, void *arg)
         return;
     }
     
-    if (config->js_redir)
+    if (!is_captive_probe(req) && config->js_redir)
         ev_http_send_js_redirect(req, redir_url);
     else
         ev_http_send_redirect(req, redir_url, "Redirect to login page", 0);
@@ -745,17 +781,21 @@ ev_http_send_redirect(struct evhttp_request * req, const char *url, const char *
     }
 
     evbuffer_add_printf(evb, 
-        "<html><head>"
+        "<html><head><title>302 Found</title>"
         "<script type=\"text/javascript\">"
-        "setTimeout(function() { window.location.href = '%s'; }, %d);"
+        "window.location.href = '%s';"
         "</script></head>"
         "<body>Please wait, redirecting... If nothing happens, <a href='%s'>click here</a>.</body></html>",
-        escaped_url, timeout?timeout:100, escaped_url);
+        escaped_url, escaped_url);
     
     if (escaped_url != url) free(escaped_url);
     
+    evhttp_add_header(evhttp_request_get_output_headers(req), "Location", url);
     evhttp_add_header(evhttp_request_get_output_headers(req), "Connection", "close");
-    evhttp_send_reply(req, 200, text, evb);
+    evhttp_add_header(evhttp_request_get_output_headers(req), "Cache-Control", "no-cache, no-store, must-revalidate");
+    evhttp_add_header(evhttp_request_get_output_headers(req), "Pragma", "no-cache");
+    evhttp_add_header(evhttp_request_get_output_headers(req), "Expires", "0");
+    evhttp_send_reply(req, 302, "Found", evb);
     evbuffer_free(evb);
 }
 
@@ -1389,7 +1429,7 @@ ev_http_send_js_redirect(struct evhttp_request *req, const char *redir_url)
 	evhttp_add_header(evhttp_request_get_output_headers(req),
 		    "Expires", "0");
 	evhttp_add_header(evhttp_request_get_output_headers(req),
-		    "Pragma", "no-cache");
+		    "Location", redir_url);
 	evhttp_add_header(evhttp_request_get_output_headers(req),
 		    "Connection", "close");
 
