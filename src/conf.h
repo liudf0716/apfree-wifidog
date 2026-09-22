@@ -288,7 +288,6 @@ typedef struct {
 	short wired_passed;
 	short parse_checked;
 	short js_redir;
-	short bypass_apple_cna;
 	short fw4_enable;
 	short enable_bypass_auth;
 	short enable_del_conntrack;

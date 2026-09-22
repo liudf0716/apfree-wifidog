@@ -35,18 +35,7 @@
 // Define max allowed file size (10KB)
 #define MAX_HTML_FILE_SIZE (10 * 1024)
 
-#define APPLE_REDIRECT_MSG  "<!DOCTYPE html>"	\
-				"<html>"						\
-				"<title>Success</title>"		\
-				"<script type=\"text/javascript\">"	\
-					"window.location.replace(\"%s\");"	\
-				"</script>"	\
-				"<body>"	\
-				"Success"	\
-				"</body>"	\
-				"</html>"
-
-#define WISPER_SUCCESS_MSG  "<!DOCTYPE html>"	\
+#define SUCCESS_PAGE_MSG  "<!DOCTYPE html>"	\
 				"<html>"						\
 				"<title>Success</title>"		\
 				"<body>"	\
@@ -69,101 +58,17 @@ extern struct evbuffer *evb_internet_offline_page, *evb_authserver_offline_page;
 extern redir_file_buffer_t *wifidog_redir_html;
 extern pthread_mutex_t g_resource_lock;
 
-const char *apple_domains[] = {
-					"captive.apple.com",
-					"www.apple.com",
-					NULL
-};
-
-const char *apple_wisper = "<!DOCTYPE html>"
-				"<html>"
-				"<script type=\"text/javascript\">"
-					"window.setTimeout(function() {location.href = \"captive.apple.com/hotspot-detect.html\";}, 12000);"
-				"</script>"
-				"<body>"
-				"</body>"
-				"</html>";
-
 static void ev_http_resend(struct evhttp_request *req, const int is_ssl);
 static int process_wired_device_pass(struct evhttp_request *req, const char *mac);
 static void ev_http_respond_options(struct evhttp_request *req);
-static int process_apple_wisper(struct evhttp_request *req, const char *mac, const char *remote_host, const char *redir_url, const int mode);
-static void ev_http_send_apple_redirect(struct evhttp_request *req, const char *redir_url);
-static void ev_http_replay_wisper(struct evhttp_request *req);
-static void ev_http_wisper_success(struct evhttp_request *req);
+static void ev_http_send_success_page(struct evhttp_request *req);
 static void ev_send_http_page(struct evhttp_request *req, const char *title, const char *msg);
 static void ev_http_send_redirect(struct evhttp_request *req, const char *redir_url, const char *msg, const uint32_t delay);
 #ifndef AW_VPP
 static int process_already_login_client(struct evhttp_request *req, const char *mac, const char *remote_host, const int addr_type, const int is_ssl);
 #endif
 
-static int
-is_apple_captive(const char *domain)
-{
-    if (!domain) return 0;
 
-	int i = 0;
-	while(apple_domains[i]) {
-		if(strcmp(domain, apple_domains[i++]) == 0)
-			return 1;
-	}
-
-	return 0;
-}
-
-/**
- * @brief Treat apple wisper protocol
- * 
- * @param req The client http request
- * @param mac The client's mac
- * @param remote_host The client's ip address
- * @param redir_url The client redirect url
- * @param mode 2 not allow show apple device's captive page, 
- *             1 show apple's captive page and ok button appear
- * @return 1 end the http request or 0 continue it
- * 
- */
-static int
-process_apple_wisper(struct evhttp_request *req, const char *mac, const char *remote_host, const char *redir_url, const int mode)
-{
-	if(!is_apple_captive(evhttp_request_get_host(req))) return 0;
-
-    if (mode == 2) { // not allow apple show its default captive page
-        evhttp_send_reply(req, HTTP_OK, "OK", NULL);
-        return 1;
-    }
-
-    int interval = 0;
-    LOCK_OFFLINE_CLIENT_LIST();
-
-    t_offline_client *o_client = offline_client_list_find_by_mac(mac);
-    if(o_client == NULL) {
-        o_client = offline_client_list_add(remote_host, mac);
-    } else {
-        o_client->last_login = time(NULL);
-        interval = o_client->last_login - o_client->first_login;
-    }
-    
-    o_client->hit_counts++;
-
-    if(o_client->client_type == 1 ) {
-        UNLOCK_OFFLINE_CLIENT_LIST();
-        if(interval > 20) {
-            // fw_set_mac_temporary(mac, 0);	
-            ev_http_send_apple_redirect(req, redir_url);
-        } else if(o_client->hit_counts > 2)
-            ev_http_send_apple_redirect(req, redir_url);
-        else {
-            ev_http_send_redirect(req, redir_url, "Redirect to login page", 0);
-        }
-    } else {	
-        o_client->client_type = 1;
-        UNLOCK_OFFLINE_CLIENT_LIST();
-        ev_http_replay_wisper(req);
-    }
-    return 1;
-	
-}
 
 /**
  * @brief reply client to resend its request
@@ -273,11 +178,11 @@ process_already_login_client(struct evhttp_request *req, const char *mac, const 
 
     // Update firewall rules if needed
     if (action == 1) {
-        ev_http_wisper_success(req);
+        ev_http_send_success_page(req);
         debug(LOG_INFO, "Updated client %s with new %s address: %s", 
             mac, (addr_type == 1) ? "IPv4" : "IPv6", remote_host);
     } else if (action == 2) {
-        ev_http_wisper_success(req);
+        ev_http_send_success_page(req);
         debug(LOG_INFO, "Added %s address %s to existing client %s",
             (addr_type == 1) ? "IPv4" : "IPv6", remote_host, mac);
     }
@@ -317,57 +222,18 @@ ev_http_respond_options(struct evhttp_request *req)
 }
 
 /**
- * @brief tell apple device to redirect to redir_url
+ * @brief reply success page to client
  * 
- * @param req The http request
- * @param redir_url redirect url of response
- * 
- */ 
+ */
 static void
-ev_http_send_apple_redirect(struct evhttp_request *req, const char *redir_url)
+ev_http_send_success_page(struct evhttp_request *req)
 {
     struct evbuffer *evb = evbuffer_new();
     if (!evb) {
         evhttp_send_error(req, HTTP_INTERNAL, "Failed to evbuffer_new");
         return;
     }
-    evbuffer_add_printf(evb, APPLE_REDIRECT_MSG, redir_url);
-    evhttp_add_header(evhttp_request_get_output_headers(req), "Connection", "close");
-    evhttp_send_reply(req, HTTP_OK, "OK", evb);
-    evbuffer_free(evb);
-}
-
-/**
- * @brief replay apple wisper detect request
- * 
- */
-static void
-ev_http_replay_wisper(struct evhttp_request *req)
-{
-    struct evbuffer *evb = evbuffer_new ();
-    if (!evb) {
-        evhttp_send_error(req, HTTP_INTERNAL, "Failed to evbuffer_new");
-        return;
-    }	
-    evbuffer_add(evb, apple_wisper, strlen(apple_wisper));
-    evhttp_add_header(evhttp_request_get_output_headers(req), "Connection", "close");
-    evhttp_send_reply(req, HTTP_OK, "OK", evb);
-    evbuffer_free(evb);
-}
-
-/**
- * @brief reply wisper success
- * 
- */
-static void
-ev_http_wisper_success(struct evhttp_request *req)
-{
-    struct evbuffer *evb = evbuffer_new();
-    if (!evb) {
-        evhttp_send_error(req, HTTP_INTERNAL, "Failed to evbuffer_new");
-        return;
-    }
-    evbuffer_add(evb, WISPER_SUCCESS_MSG, strlen(WISPER_SUCCESS_MSG));
+    evbuffer_add(evb, SUCCESS_PAGE_MSG, strlen(SUCCESS_PAGE_MSG));
     evhttp_add_header(evhttp_request_get_output_headers(req), "Connection", "close");
     evhttp_send_reply(req, HTTP_OK, "OK", evb);
     evbuffer_free(evb);
@@ -769,17 +635,11 @@ ev_http_callback_404(struct evhttp_request *req, void *arg)
         return;
     }
     
-    if (!is_ssl &&
-        config->bypass_apple_cna && 
-        process_apple_wisper(req, mac, remote_host, redir_url, config->bypass_apple_cna))
-        goto END;
-
     if (config->js_redir)
         ev_http_send_js_redirect(req, redir_url);
     else
         ev_http_send_redirect(req, redir_url, "Redirect to login page", 0);
 
-END:
     free(remote_host);
     free(redir_url);
 }
