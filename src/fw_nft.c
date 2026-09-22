@@ -975,9 +975,6 @@ nft_fw_access(fw_access_t type, const char *ip, const char *mac, int tag)
 
                 snprintf(cmd, sizeof(cmd), "aw-bpfctl ipv4 add %s", ip);
                 aw_bpfctl_execute_best_effort(cmd, "FW_ACCESS_ALLOW ipv4");
-
-                snprintf(cmd, sizeof(cmd), "conntrack -D -s %s >/dev/null 2>&1", ip);
-                execute(cmd, 0);
             } else if (is_valid_ip6(ip)){
                 nftables_do_command("add rule inet wifidogx mangle_prerouting_wifidogx_outgoing "
                                 "ether saddr %s ip6 saddr %s counter mark set 0x20000 accept", 
@@ -989,9 +986,6 @@ nft_fw_access(fw_access_t type, const char *ip, const char *mac, int tag)
 
                 snprintf(cmd, sizeof(cmd), "aw-bpfctl ipv6 add %s", ip);
                 aw_bpfctl_execute_best_effort(cmd, "FW_ACCESS_ALLOW ipv6");
-
-                snprintf(cmd, sizeof(cmd), "conntrack -D -s %s >/dev/null 2>&1", ip);
-                execute(cmd, 0);
             } else {
                 debug(LOG_ERR, "Invalid IP address: %s", ip);
             }
