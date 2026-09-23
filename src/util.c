@@ -385,3 +385,13 @@ is_file_exist(const char *file)
 		return true;
 	return false;
 }
+
+time_t
+get_monotonic_time(void)
+{
+	struct timespec ts;
+	if (clock_gettime(CLOCK_MONOTONIC, &ts) == 0) {
+		return ts.tv_sec;
+	}
+	return time(NULL);
+}

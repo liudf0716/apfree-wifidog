@@ -37,4 +37,7 @@ float get_cpu_usage();
 
 bool is_file_exist(const char *file);
 
+/** @brief Get monotonic time in seconds, immune to NTP / wall clock adjustments */
+time_t get_monotonic_time(void);
+
 #endif                          /* _UTIL_H_ */
