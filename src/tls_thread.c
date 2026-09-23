@@ -24,10 +24,17 @@
 
 #define DNS_RESOLV_CONF "/etc/resolv.conf"
 
+/* Fast retry: check internet every 2s at startup, up to 30 attempts (60s). */
+#define FAST_RETRY_INTERVAL_SEC  2
+#define FAST_RETRY_MAX_ATTEMPTS  30
+
 static struct event_base *base		= NULL;
 static struct evdns_base *dnsbase 	= NULL;
+static struct event fast_retry_ev;
+static int fast_retry_count = 0;
 
 static void check_internet_available_cb(int errcode, struct evutil_addrinfo *addr, void *ptr);
+static void fast_retry_internet_check_cb(evutil_socket_t fd, short event, void *arg);
 
 static void 
 die_most_horribly_from_openssl_error (const char *func) { 
@@ -219,6 +226,38 @@ check_auth_server_available() {
 }
 
 /**
+ * @brief Fast-retry callback for internet detection at startup.
+ *
+ * Runs every FAST_RETRY_INTERVAL_SEC seconds after boot until internet is
+ * detected online or FAST_RETRY_MAX_ATTEMPTS is reached.  This closes the
+ * gap where the initial DNS check fails (WAN not ready) and the next
+ * regular check only fires after checkinterval (typically 60 s).
+ */
+static void
+fast_retry_internet_check_cb(evutil_socket_t fd, short event, void *arg) {
+	if (is_online()) {
+		debug(LOG_INFO, "Fast retry: internet is online, stopping fast retry");
+		event_del(&fast_retry_ev);
+		return;
+	}
+
+	fast_retry_count++;
+	debug(LOG_INFO, "Fast retry: attempt %d/%d, internet still offline",
+		  fast_retry_count, FAST_RETRY_MAX_ATTEMPTS);
+
+	if (fast_retry_count >= FAST_RETRY_MAX_ATTEMPTS) {
+		debug(LOG_WARNING,
+			  "Fast retry: reached max attempts (%d), falling back to regular interval",
+			  FAST_RETRY_MAX_ATTEMPTS);
+		event_del(&fast_retry_ev);
+		return;
+	}
+
+	check_internet_available(config_get_config()->popular_servers);
+	check_auth_server_available();
+}
+
+/**
  * @brief periodically check whether internet and auth server were Ok or not
  * 
  */ 
@@ -367,12 +406,21 @@ tls_process_loop () {
 	
 	debug(LOG_INFO, "https server started on port %d", config->gw_https_port);
 
+	/* Fast retry timer: check internet every 2s until online (max 60s).
+	 * Covers the boot race where WAN/DNS may not be ready yet. */
+	fast_retry_count = 0;
+	struct timeval fast_tv = { .tv_sec = FAST_RETRY_INTERVAL_SEC, .tv_usec = 0 };
+	event_assign(&fast_retry_ev, base, -1, EV_PERSIST,
+				 fast_retry_internet_check_cb, NULL);
+	event_add(&fast_retry_ev, &fast_tv);
+
 	/* Start portal cache child reaping timer */
 	portal_cache_start_reap_timer(base);
 
     event_base_dispatch (base);
 
 	event_del(&timeout);
+	event_del(&fast_retry_ev);
 	if (http) evhttp_free(http);
 	if (dnsbase) evdns_base_free(dnsbase, 0);
 	event_base_free(base);

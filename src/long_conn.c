@@ -12,6 +12,7 @@
 #include "debug.h"
 #include "safe.h"
 #include "api_handlers_internal.h"
+#include "util.h"
 #include <pthread.h>
 #include <string.h>
 #include <time.h>
@@ -28,7 +29,7 @@ long_conn_note_ack(void)
 	int was_down;
 
 	pthread_mutex_lock(&long_conn_lock);
-	last_ack_at = time(NULL);
+	last_ack_at = get_monotonic_time();
 	was_down = authdown_latched;
 	authdown_latched = 0;
 	pthread_mutex_unlock(&long_conn_lock);
@@ -62,7 +63,11 @@ long_conn_is_healthy(void)
 	if (!connected || ack == 0) {
 		return 0;
 	}
-	return (time(NULL) - ack) <= stale_sec;
+	time_t now = get_monotonic_time();
+	if (now < ack) {
+		return 1;
+	}
+	return (now - ack) <= stale_sec;
 }
 
 void

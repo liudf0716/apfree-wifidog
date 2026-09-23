@@ -95,7 +95,7 @@ mark_online()
 {
     pthread_mutex_lock(&online_status_mutex);
     int before = is_online();
-    time(&last_online_time);
+    last_online_time = get_monotonic_time();
     int after = is_online();
     pthread_mutex_unlock(&online_status_mutex);
 	
@@ -110,7 +110,7 @@ mark_offline_time()
 {
     pthread_mutex_lock(&online_status_mutex);
     int before = is_online();
-    time(&last_offline_time);
+    last_offline_time = get_monotonic_time();
     int after = is_online();
     pthread_mutex_unlock(&online_status_mutex);
 	
@@ -124,7 +124,7 @@ mark_offline()
 {
     pthread_mutex_lock(&online_status_mutex);
     int before = is_online();
-    time(&last_offline_time);
+    last_offline_time = get_monotonic_time();
     int after = is_online();
     pthread_mutex_unlock(&online_status_mutex);
 		  
@@ -144,7 +144,7 @@ is_online()
         return long_conn_is_healthy();
     }
 
-    if (last_online_time == 0 || (last_offline_time - last_online_time) >= (config_get_config()->checkinterval * 2 - 10)) {
+    if (last_online_time == 0 || (last_offline_time > last_online_time && (last_offline_time - last_online_time) >= (config_get_config()->checkinterval * 2 - 10))) {
         /* We're probably offline */
         return (0);
     } else {
@@ -158,7 +158,7 @@ mark_auth_online()
 {
     pthread_mutex_lock(&online_status_mutex);
     int before = is_auth_online();
-    time(&last_auth_online_time);
+    last_auth_online_time = get_monotonic_time();
     int after = is_auth_online();
     pthread_mutex_unlock(&online_status_mutex);
 
@@ -179,7 +179,7 @@ mark_auth_offline()
 
     pthread_mutex_lock(&online_status_mutex);
     before = is_auth_online();
-    time(&last_auth_offline_time);
+    last_auth_offline_time = get_monotonic_time();
     after = is_auth_online();
     pthread_mutex_unlock(&online_status_mutex);
 
@@ -206,7 +206,7 @@ is_auth_online()
         /* If we're not online auth is definately not online :) */
         return (0);
     } else if ((last_auth_online_time == 0) || 
-			   (last_auth_offline_time - last_auth_online_time) >= (config_get_config()->checkinterval * 2)) {
+			   (last_auth_offline_time > last_auth_online_time && (last_auth_offline_time - last_auth_online_time) >= (config_get_config()->checkinterval * 2))) {
         /* Auth is  probably offline */
         return (0);
     } else {
