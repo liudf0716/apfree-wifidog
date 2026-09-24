@@ -791,8 +791,9 @@ fw_client_process_from_authserver_response(t_authresponse *authresponse, t_clien
 				}
 				fw_client_operation(AUTH_ALLOWED, tmp_c);
 			}
-			/* counters_v2 may refresh channel QoS (including 0/0 monitor entries) */
-			if (authresponse->qos_present) {
+			/* counters_v2 may refresh channel QoS (only if explicit non-zero limits are provided) */
+			if (authresponse->qos_present &&
+			    (authresponse->qos_downrate_bps > 0 || authresponse->qos_uprate_bps > 0)) {
 				if (aw_bpf_qos_apply_client(tmp_c->ip, tmp_c->ip6,
 							    authresponse->qos_downrate_bps,
 							    authresponse->qos_uprate_bps) < 0) {

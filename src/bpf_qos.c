@@ -97,8 +97,10 @@ static int aw_bpf_qos_upsert_percpu(int map_fd, const void *key,
 
 	for (i = 0; i < ncpus; i++) {
 		/* keep counters/tokens when updating existing entry */
-		percpu_vals[i].incoming_rate_limit.bps = downrate_bps;
-		percpu_vals[i].outgoing_rate_limit.bps = uprate_bps;
+		if (downrate_bps > 0 || !exists)
+			percpu_vals[i].incoming_rate_limit.bps = downrate_bps;
+		if (uprate_bps > 0 || !exists)
+			percpu_vals[i].outgoing_rate_limit.bps = uprate_bps;
 	}
 
 	ret = bpf_map_update_elem(map_fd, key, percpu_vals, BPF_ANY);
@@ -151,9 +153,6 @@ static int aw_bpf_qos_apply_one(int family, const char *ip,
 			} else {
 				used_qos_map = true;
 			}
-		} else {
-			bpf_map_delete_elem(qos_fd, &key);
-			used_qos_map = true;
 		}
 		close(qos_fd);
 	}
@@ -161,9 +160,7 @@ static int aw_bpf_qos_apply_one(int family, const char *ip,
 	/* Also ensure client is in percpu traffic_stats map for packet accounting */
 	int stats_fd = aw_bpf_open_map(stats_path, stats_alt);
 	if (stats_fd >= 0) {
-		uint32_t percpu_down = used_qos_map ? 0 : downrate_bps;
-		uint32_t percpu_up   = used_qos_map ? 0 : uprate_bps;
-		ret = aw_bpf_qos_upsert_percpu(stats_fd, &key, percpu_down, percpu_up);
+		ret = aw_bpf_qos_upsert_percpu(stats_fd, &key, downrate_bps, uprate_bps);
 		close(stats_fd);
 	} else if (!used_qos_map) {
 		debug(LOG_WARNING, "bpf_qos: open stats map failed: %s", strerror(errno));
@@ -213,12 +210,44 @@ static int aw_bpf_qos_remove_one(int family, const char *ip)
 	const char *stats_alt  = (family == AF_INET) ? AW_BPF_IPV4_MAP_PATH_ALT : AW_BPF_IPV6_MAP_PATH_ALT;
 
 	int qos_fd = aw_bpf_open_map(qos_path, qos_alt);
+	bool has_local_qos = false;
+	if (qos_fd >= 0) {
+		struct qos_limit_cfg qcfg;
+		if (bpf_map_lookup_elem(qos_fd, &key, &qcfg) == 0) {
+			if (qcfg.incoming.bps > 0 || qcfg.outgoing.bps > 0)
+				has_local_qos = true;
+		}
+	}
+
+	int stats_fd = aw_bpf_open_map(stats_path, stats_alt);
+	if (stats_fd >= 0 && !has_local_qos) {
+		int ncpus = aw_bpf_qos_ncpus();
+		if (ncpus > 0) {
+			struct traffic_stats *percpu_vals = calloc((size_t)ncpus, sizeof(*percpu_vals));
+			if (percpu_vals) {
+				if (bpf_map_lookup_elem(stats_fd, &key, percpu_vals) == 0) {
+					if (percpu_vals[0].incoming_rate_limit.bps > 0 ||
+					    percpu_vals[0].outgoing_rate_limit.bps > 0)
+						has_local_qos = true;
+				}
+				free(percpu_vals);
+			}
+		}
+	}
+
+	if (has_local_qos) {
+		debug(LOG_INFO, "bpf_qos: retain %s %s (has active local QoS limit)",
+		      family == AF_INET ? "ipv4" : "ipv6", ip);
+		if (qos_fd >= 0) close(qos_fd);
+		if (stats_fd >= 0) close(stats_fd);
+		return 0;
+	}
+
 	if (qos_fd >= 0) {
 		bpf_map_delete_elem(qos_fd, &key);
 		close(qos_fd);
 	}
 
-	int stats_fd = aw_bpf_open_map(stats_path, stats_alt);
 	if (stats_fd >= 0) {
 		ret = bpf_map_delete_elem(stats_fd, &key);
 		if (ret < 0 && errno == ENOENT)
