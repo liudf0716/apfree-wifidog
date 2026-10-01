@@ -249,7 +249,7 @@ static size_t aw_bpf_fetch_l7_protocols(struct aw_bpf_l7_proto *protocols, size_
         return 0;
     }
 
-    if (exit_code != 0 || !out || !*out) {
+    if (!out || !*out) {
         free(out);
         return 0;
     }
@@ -276,7 +276,7 @@ static json_object *aw_bpf_fetch_l7_json_payload(void)
         return NULL;
     }
 
-    if (exit_code != 0 || !out || !*out) {
+    if (!out || !*out) {
         free(out);
         return NULL;
     }
