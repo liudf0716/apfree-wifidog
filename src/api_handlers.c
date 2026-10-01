@@ -428,8 +428,10 @@ json_object *api_generate_req_id(void)
 int run_command_capture(const char *cmd, char **out_str, int *exit_status)
 {
     if (!cmd) return -1;
+    void (*old_handler)(int) = signal(SIGCHLD, SIG_DFL);
     FILE *fp = popen(cmd, "r");
     if (!fp) {
+        signal(SIGCHLD, old_handler);
         debug(LOG_ERR, "run_command_capture: popen failed for '%s'", cmd);
         return -1;
     }
@@ -443,6 +445,7 @@ int run_command_capture(const char *cmd, char **out_str, int *exit_status)
         if (!newb) {
             free(buf);
             pclose(fp);
+            signal(SIGCHLD, old_handler);
             debug(LOG_ERR, "run_command_capture: memory allocation failed");
             return -1;
         }
@@ -453,6 +456,14 @@ int run_command_capture(const char *cmd, char **out_str, int *exit_status)
     }
 
     int rc = pclose(fp);
+    signal(SIGCHLD, old_handler);
+
+    if (rc < 0 && errno == ECHILD) {
+        rc = 0;
+    } else if (rc > 0 && WIFEXITED(rc)) {
+        rc = WEXITSTATUS(rc);
+    }
+
     if (exit_status) *exit_status = rc;
     if (out_str) {
         if (buf) {
