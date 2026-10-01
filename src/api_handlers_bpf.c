@@ -93,6 +93,7 @@ static inline int bpf_map_get_next_key(int fd, const void *key, void *next_key)
 #define AW_BPF_SID_MAP_PATH AW_BPF_MAP_DIR "/xdpi_l7_map"
 #define AW_BPF_XDPI_DEVICE "/dev/xdpi"
 #define AW_BPF_XDPI_IOC_LIST XDPI_IOC_LIST
+#define AW_BPF_MAX_ITER_ENTRIES 4096
 struct aw_bpf_l7_proto {
     __u32 id;
     __u32 sid;
@@ -106,8 +107,9 @@ struct aw_bpf_domain_list {
 };
 
 struct aw_bpf_mac_addr {
-    __u8 h_addr[6];
+    __u8 addr[6];
 } __attribute__((packed));
+_Static_assert(sizeof(struct aw_bpf_mac_addr) == 6, "struct aw_bpf_mac_addr must be 6 bytes");
 
 static int aw_bpf_get_possible_cpus_cached(void)
 {
@@ -193,7 +195,7 @@ static void aw_bpf_parse_mac_address(struct aw_bpf_mac_addr *mac_addr, const cha
     for (int i = 0; i < 6; i++) {
         byte_value = 0;
         sscanf(cursor, "%2x", &byte_value);
-        mac_addr->h_addr[i] = (__u8)byte_value;
+        mac_addr->addr[i] = (__u8)byte_value;
         cursor += (strlen(value) == 17) ? 3 : 2;
     }
 }
@@ -1027,6 +1029,14 @@ void handle_bpf_json_request(json_object *j_req, api_transport_context_t *transp
             debug(LOG_DEBUG, "[BPF_DEBUG] ipv4 traversal start, map_fd=%d", map_fd);
             while (bpf_map_get_next_key(map_fd, have_cur_key ? &cur_key : NULL, &next_key) == 0) {
                 ipv4_iter_count++;
+                if (have_cur_key && cur_key == next_key) {
+                    debug(LOG_WARNING, "[BPF_DEBUG] ipv4 traversal cycle detected, breaking");
+                    break;
+                }
+                if (ipv4_iter_count > AW_BPF_MAX_ITER_ENTRIES) {
+                    debug(LOG_WARNING, "[BPF_DEBUG] ipv4 traversal reached max limit, breaking");
+                    break;
+                }
                 debug(LOG_DEBUG, "[BPF_DEBUG] ipv4 iter %d, key=%u", ipv4_iter_count, ntohl(next_key));
                 if (aw_bpf_lookup_stats_agg_percpu(map_fd, &next_key, &stats) == 0) {
                     struct json_object *jentry = aw_bpf_parse_stats_ipv4_json(next_key, &stats);
@@ -1038,23 +1048,28 @@ void handle_bpf_json_request(json_object *j_req, api_transport_context_t *transp
             }
             debug(LOG_DEBUG, "[BPF_DEBUG] ipv4 traversal done, total=%d", ipv4_iter_count);
         } else if (strcmp(table, "mac") == 0) {
-            struct aw_bpf_mac_addr cur_key;
-            struct aw_bpf_mac_addr next_key;
+            struct aw_bpf_mac_addr cur_key = {{0}};
+            struct aw_bpf_mac_addr next_key = {{0}};
             bool have_cur_key = false;
             struct traffic_stats stats = {0};
             int mac_iter_count = 0;
 
-            memset(&cur_key, 0, sizeof(cur_key));
-            memset(&next_key, 0, sizeof(next_key));
-
             debug(LOG_DEBUG, "[BPF_DEBUG] mac traversal start, map_fd=%d", map_fd);
             while (bpf_map_get_next_key(map_fd, have_cur_key ? &cur_key : NULL, &next_key) == 0) {
                 mac_iter_count++;
+                if (have_cur_key && memcmp(&cur_key, &next_key, sizeof(cur_key)) == 0) {
+                    debug(LOG_WARNING, "[BPF_DEBUG] mac traversal cycle detected, breaking");
+                    break;
+                }
+                if (mac_iter_count > AW_BPF_MAX_ITER_ENTRIES) {
+                    debug(LOG_WARNING, "[BPF_DEBUG] mac traversal reached max limit, breaking");
+                    break;
+                }
                 if (aw_bpf_lookup_stats_agg_percpu(map_fd, &next_key, &stats) == 0) {
                     char mac_buf[18];
                     snprintf(mac_buf, sizeof(mac_buf), "%02x:%02x:%02x:%02x:%02x:%02x",
-                             next_key.h_addr[0], next_key.h_addr[1], next_key.h_addr[2],
-                             next_key.h_addr[3], next_key.h_addr[4], next_key.h_addr[5]);
+                             next_key.addr[0], next_key.addr[1], next_key.addr[2],
+                             next_key.addr[3], next_key.addr[4], next_key.addr[5]);
                     struct json_object *jobj = json_object_new_object();
                     json_object_object_add(jobj, "mac", json_object_new_string(mac_buf));
                     struct json_object *incoming = json_object_new_object();
@@ -1071,7 +1086,7 @@ void handle_bpf_json_request(json_object *j_req, api_transport_context_t *transp
                     json_object_object_add(jobj, "outgoing", outgoing);
                     json_object_array_add(jentries, jobj);
                 }
-                cur_key = next_key;
+                memcpy(&cur_key, &next_key, sizeof(cur_key));
                 have_cur_key = true;
             }
             debug(LOG_DEBUG, "[BPF_DEBUG] mac traversal done, total=%d", mac_iter_count);
@@ -1087,6 +1102,14 @@ void handle_bpf_json_request(json_object *j_req, api_transport_context_t *transp
             int sid_iter_count = 0;
             while (bpf_map_get_next_key(map_fd, have_cur_key ? &cur_key : NULL, &next_key) == 0) {
                 sid_iter_count++;
+                if (have_cur_key && cur_key == next_key) {
+                    debug(LOG_WARNING, "[BPF_DEBUG] sid traversal cycle detected, breaking");
+                    break;
+                }
+                if (sid_iter_count > AW_BPF_MAX_ITER_ENTRIES) {
+                    debug(LOG_WARNING, "[BPF_DEBUG] sid traversal reached max limit, breaking");
+                    break;
+                }
                 if (aw_bpf_lookup_stats_agg_percpu(map_fd, &next_key, &stats) == 0) {
                     struct json_object *jentry = aw_bpf_parse_stats_sid_json(next_key, &stats,
                                                                              l7_protocols, l7_protocol_count,
@@ -1105,12 +1128,20 @@ void handle_bpf_json_request(json_object *j_req, api_transport_context_t *transp
 
             while (bpf_map_get_next_key(map_fd, have_cur_key ? &cur_key : NULL, &next_key) == 0) {
                 ipv6_iter_count++;
+                if (have_cur_key && memcmp(&cur_key, &next_key, sizeof(cur_key)) == 0) {
+                    debug(LOG_WARNING, "[BPF_DEBUG] ipv6 traversal cycle detected, breaking");
+                    break;
+                }
+                if (ipv6_iter_count > AW_BPF_MAX_ITER_ENTRIES) {
+                    debug(LOG_WARNING, "[BPF_DEBUG] ipv6 traversal reached max limit, breaking");
+                    break;
+                }
                 if (aw_bpf_lookup_stats_agg_percpu(map_fd, &next_key, &stats) == 0) {
                     struct json_object *jentry = aw_bpf_parse_stats_ipv6_json(next_key, &stats);
                     if (jentry)
                         json_object_array_add(jentries, jentry);
                 }
-                cur_key = next_key;
+                memcpy(&cur_key, &next_key, sizeof(cur_key));
                 have_cur_key = true;
             }
         }
@@ -1283,8 +1314,14 @@ void handle_bpf_update_all_request(json_object *j_req, api_transport_context_t *
     if (strcmp(table, "ipv4") == 0) {
         __be32 cur_key = 0, next_key = 0;
         bool have_cur_key = false;
+        int count = 0;
 
         while (bpf_map_get_next_key(map_fd, have_cur_key ? &cur_key : NULL, &next_key) == 0) {
+            count++;
+            if (have_cur_key && cur_key == next_key)
+                break;
+            if (count > AW_BPF_MAX_ITER_ENTRIES)
+                break;
             if (aw_bpf_update_rate_limits_percpu(map_fd, &next_key, (uint32_t)down, (uint32_t)up, false) < 0) {
                 success = false;
                 break;
@@ -1293,31 +1330,40 @@ void handle_bpf_update_all_request(json_object *j_req, api_transport_context_t *
             have_cur_key = true;
         }
     } else if (strcmp(table, "mac") == 0) {
-        struct aw_bpf_mac_addr cur_key;
-        struct aw_bpf_mac_addr next_key;
+        struct aw_bpf_mac_addr cur_key = {{0}};
+        struct aw_bpf_mac_addr next_key = {{0}};
         bool have_cur_key = false;
-
-        memset(&cur_key, 0, sizeof(cur_key));
-        memset(&next_key, 0, sizeof(next_key));
+        int count = 0;
 
         while (bpf_map_get_next_key(map_fd, have_cur_key ? &cur_key : NULL, &next_key) == 0) {
+            count++;
+            if (have_cur_key && memcmp(&cur_key, &next_key, sizeof(cur_key)) == 0)
+                break;
+            if (count > AW_BPF_MAX_ITER_ENTRIES)
+                break;
             if (aw_bpf_update_rate_limits_percpu(map_fd, &next_key, (uint32_t)down, (uint32_t)up, false) < 0) {
                 success = false;
                 break;
             }
-            cur_key = next_key;
+            memcpy(&cur_key, &next_key, sizeof(cur_key));
             have_cur_key = true;
         }
     } else {
         struct in6_addr cur_key = {0}, next_key = {0};
         bool have_cur_key = false;
+        int count = 0;
 
         while (bpf_map_get_next_key(map_fd, have_cur_key ? &cur_key : NULL, &next_key) == 0) {
+            count++;
+            if (have_cur_key && memcmp(&cur_key, &next_key, sizeof(cur_key)) == 0)
+                break;
+            if (count > AW_BPF_MAX_ITER_ENTRIES)
+                break;
             if (aw_bpf_update_rate_limits_percpu(map_fd, &next_key, (uint32_t)down, (uint32_t)up, false) < 0) {
                 success = false;
                 break;
             }
-            cur_key = next_key;
+            memcpy(&cur_key, &next_key, sizeof(cur_key));
             have_cur_key = true;
         }
     }

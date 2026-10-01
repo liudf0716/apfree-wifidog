@@ -1503,8 +1503,13 @@ nft_fw_counters_update_ebpf()
     __be32 ipv4_key = 0, next_ipv4_key = 0;
     struct traffic_stats ipv4_stats;
     int first_key = 1;
+    int ipv4_count = 0;
     
     while (bpf_map_get_next_key(ipv4_map_fd, first_key ? NULL : &ipv4_key, &next_ipv4_key) == 0) {
+        if (!first_key && ipv4_key == next_ipv4_key)
+            break;
+        if (++ipv4_count > 4096)
+            break;
         first_key = 0;
         if (lookup_agg_stats_percpu(ipv4_map_fd, &next_ipv4_key, &ipv4_stats) == 0) {
             // Convert IPv4 address to string
@@ -1560,10 +1565,15 @@ nft_fw_counters_update_ebpf()
         struct in6_addr ipv6_key, next_ipv6_key;
         struct traffic_stats ipv6_stats;
         int first_key = 1;
+        int ipv6_count = 0;
         
         memset(&ipv6_key, 0, sizeof(ipv6_key));
         
         while (bpf_map_get_next_key(ipv6_map_fd, first_key ? NULL : &ipv6_key, &next_ipv6_key) == 0) {
+            if (!first_key && memcmp(&ipv6_key, &next_ipv6_key, sizeof(ipv6_key)) == 0)
+                break;
+            if (++ipv6_count > 4096)
+                break;
             first_key = 0;
             
             if (lookup_agg_stats_percpu(ipv6_map_fd, &next_ipv6_key, &ipv6_stats) == 0) {
