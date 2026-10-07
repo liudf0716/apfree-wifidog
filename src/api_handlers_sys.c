@@ -43,6 +43,10 @@ static int spawn_detached_argv(char *const argv[])
     }
 
     if (waitpid(pid, NULL, 0) < 0) {
+        if (errno == ECHILD) {
+            /* Child process was already reaped by sigchld_handler */
+            return 0;
+        }
         debug(LOG_ERR, "waitpid(%s) failed: %s", argv[0], strerror(errno));
         return -1;
     }
