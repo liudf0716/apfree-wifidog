@@ -373,6 +373,7 @@ static void
 wdctl_del_trusted_wildcard_domains(struct bufferevent *fd, const char *arg)
 {
     del_trusted_pdomains(arg);
+    bufferevent_write(fd, "Yes", 3);
 }
 
 void 
@@ -386,6 +387,7 @@ static void
 wdctl_clear_trusted_wildcard_domains(struct bufferevent *fd)
 {
     clear_trusted_pdomains();
+    bufferevent_write(fd, "Yes", 3);
 }
 
 char *
