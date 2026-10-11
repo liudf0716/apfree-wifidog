@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 /*
- * Portal DNS consumer: reads dns_ringbuf_portal produced by aw-bpf XDP.
+ * Portal DNS consumer: reads dns_ringbuf_portal produced by aw-bpf br-lan TC egress monitor.
  * Only fills inet wifidogx wildcard trust sets. Does not use inet awbpf.
  */
 
@@ -524,7 +524,7 @@ thread_dns_snoop(void *arg)
 			seed_captive_domain_map();
 		}
 
-		int err = ring_buffer__poll(rb, 200);
+		int err = ring_buffer__poll(rb, 20);
 		if (err == -EINTR)
 			continue;
 		if (err < 0) {
