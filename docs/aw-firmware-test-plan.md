@@ -37,12 +37,14 @@
 - [ ] **B5** 持续刷新：间隔查询后 map IP 跟随 CDN 轮换（dump 对比 IP 变化且 `learned=1`）
 - [ ] **B6** 旧机制迁移：`/etc/aw-captive-domains-hosts` 不存在；`uci -q get dhcp.@dnsmasq[0].addnhosts` 无该条目；dnsmasq 正常解析
 
-## C. 离线场景（依赖决策点 2）
+## C. 离线场景（⚠️ 仅限人工离线测试，禁止自动化执行）
 
-- [ ] **C1** 离线抢答：`ip link set eth1 down` 后，`learned=0` 的 captive 域名 dig 仍 <10ms 返回 1.1.1.1
-- [ ] **C2** 离线不劫持：非 map 域名（baidu.com）dig 正常超时，无假应答
-- [ ] **C3** 联网自愈：eth1 恢复后 map 学到真实 IP，后续查询返回真实 IP
-- [ ] **C4** 真机检测（可选）：断网时手机连 WiFi 仍能弹 captive 提示；恢复后提示消失
+> ⚠️ 注意：断开 WAN 口（`ip link set eth1 down`）会导致路由器默认路由丢失、整个局域网外网中断，自动化 Agent 网络会因此断连。因此本组用例**移出自动化测试流程**，仅供人工物理断网测试。
+
+- [ ] **C1（人工）** 离线抢答：物理拔掉 WAN 网线后，captive 域名 dig 仍 <10ms 返回 1.1.1.1
+- [ ] **C2（人工）** 离线不劫持：非 map 域名（baidu.com）dig 正常超时，无假应答
+- [ ] **C3（人工）** 联网自愈：插回 WAN 网线后 map 学到真实 IP，后续查询返回真实 IP
+- [ ] **C4（人工）** 真机检测：断网时手机连 WiFi 仍能弹 captive 提示；恢复后提示消失
 
 ## D. 回归测试
 
