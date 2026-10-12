@@ -92,6 +92,8 @@ struct counters {
     uint64_t total_packets;
     uint32_t est_slot;
     uint32_t reserved;
+    uint64_t ppe_bytes;
+    uint64_t ppe_packets;
 } __attribute__((packed));
 
 struct rate_limit {
@@ -108,7 +110,7 @@ struct traffic_stats {
     struct aw_time_rule time_rule;
 };
 
-_Static_assert(sizeof(struct traffic_stats) == 144, "struct traffic_stats must match aw-bpf map value size (144 bytes)");
+_Static_assert(sizeof(struct traffic_stats) == 176, "struct traffic_stats must match aw-bpf map value size (176 bytes)");
 
 /* Non-percpu QoS rate limit structures */
 struct qos_rate_limit {

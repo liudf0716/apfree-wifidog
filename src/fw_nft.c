@@ -135,6 +135,8 @@ static int lookup_agg_stats_percpu(int map_fd, const void *key, struct traffic_s
         agg->incoming.prev_s_bytes = sum_u32_sat(agg->incoming.prev_s_bytes, percpu_vals[i].incoming.prev_s_bytes);
         agg->incoming.total_bytes += percpu_vals[i].incoming.total_bytes;
         agg->incoming.total_packets += percpu_vals[i].incoming.total_packets;
+        agg->incoming.ppe_bytes += percpu_vals[i].incoming.ppe_bytes;
+        agg->incoming.ppe_packets += percpu_vals[i].incoming.ppe_packets;
         if (percpu_vals[i].incoming.est_slot > agg->incoming.est_slot)
             agg->incoming.est_slot = percpu_vals[i].incoming.est_slot;
 
@@ -142,6 +144,8 @@ static int lookup_agg_stats_percpu(int map_fd, const void *key, struct traffic_s
         agg->outgoing.prev_s_bytes = sum_u32_sat(agg->outgoing.prev_s_bytes, percpu_vals[i].outgoing.prev_s_bytes);
         agg->outgoing.total_bytes += percpu_vals[i].outgoing.total_bytes;
         agg->outgoing.total_packets += percpu_vals[i].outgoing.total_packets;
+        agg->outgoing.ppe_bytes += percpu_vals[i].outgoing.ppe_bytes;
+        agg->outgoing.ppe_packets += percpu_vals[i].outgoing.ppe_packets;
         if (percpu_vals[i].outgoing.est_slot > agg->outgoing.est_slot)
             agg->outgoing.est_slot = percpu_vals[i].outgoing.est_slot;
 
@@ -1524,16 +1528,16 @@ nft_fw_counters_update_ebpf()
                     uint64_t old_in_bytes = client->counters.incoming_bytes;
                     uint64_t old_out_bytes = client->counters.outgoing_bytes;
 
-                    client->counters.incoming_bytes = ipv4_stats.incoming.total_bytes;
-                    client->counters.incoming_packets = ipv4_stats.incoming.total_packets;
+                    client->counters.incoming_bytes = ipv4_stats.incoming.total_bytes + ipv4_stats.incoming.ppe_bytes;
+                    client->counters.incoming_packets = ipv4_stats.incoming.total_packets + ipv4_stats.incoming.ppe_packets;
                     client->counters.incoming_rate = calc_rate_estimator(&ipv4_stats, true);
 
-                    client->counters.outgoing_bytes = ipv4_stats.outgoing.total_bytes;
-                    client->counters.outgoing_packets = ipv4_stats.outgoing.total_packets;
+                    client->counters.outgoing_bytes = ipv4_stats.outgoing.total_bytes + ipv4_stats.outgoing.ppe_bytes;
+                    client->counters.outgoing_packets = ipv4_stats.outgoing.total_packets + ipv4_stats.outgoing.ppe_packets;
                     client->counters.outgoing_rate = calc_rate_estimator(&ipv4_stats, false);
 
-                    int has_activity = (ipv4_stats.incoming.total_bytes > old_in_bytes) ||
-                                       (ipv4_stats.outgoing.total_bytes > old_out_bytes);
+                    int has_activity = (client->counters.incoming_bytes > old_in_bytes) ||
+                                       (client->counters.outgoing_bytes > old_out_bytes);
                     if (has_activity) {
                         client->counters.last_updated = time(NULL);
                         client->is_online = 1;
@@ -1550,7 +1554,7 @@ nft_fw_counters_update_ebpf()
                     }
                     
                     debug(LOG_DEBUG, "Updated IPv4 client: %s, IN: %llu bytes, OUT: %llu bytes", 
-                          ip_str, ipv4_stats.incoming.total_bytes, ipv4_stats.outgoing.total_bytes);
+                          ip_str, client->counters.incoming_bytes, client->counters.outgoing_bytes);
                 }
             }
         }
@@ -1588,16 +1592,16 @@ nft_fw_counters_update_ebpf()
                         uint64_t old_in6_bytes = client->counters6.incoming_bytes;
                         uint64_t old_out6_bytes = client->counters6.outgoing_bytes;
 
-                        client->counters6.incoming_bytes = ipv6_stats.incoming.total_bytes;
-                        client->counters6.incoming_packets = ipv6_stats.incoming.total_packets;
+                        client->counters6.incoming_bytes = ipv6_stats.incoming.total_bytes + ipv6_stats.incoming.ppe_bytes;
+                        client->counters6.incoming_packets = ipv6_stats.incoming.total_packets + ipv6_stats.incoming.ppe_packets;
                         client->counters6.incoming_rate = calc_rate_estimator(&ipv6_stats, true);
 
-                        client->counters6.outgoing_bytes = ipv6_stats.outgoing.total_bytes;
-                        client->counters6.outgoing_packets = ipv6_stats.outgoing.total_packets;
+                        client->counters6.outgoing_bytes = ipv6_stats.outgoing.total_bytes + ipv6_stats.outgoing.ppe_bytes;
+                        client->counters6.outgoing_packets = ipv6_stats.outgoing.total_packets + ipv6_stats.outgoing.ppe_packets;
                         client->counters6.outgoing_rate = calc_rate_estimator(&ipv6_stats, false);
 
-                        int has_activity6 = (ipv6_stats.incoming.total_bytes > old_in6_bytes) ||
-                                           (ipv6_stats.outgoing.total_bytes > old_out6_bytes);
+                        int has_activity6 = (client->counters6.incoming_bytes > old_in6_bytes) ||
+                                           (client->counters6.outgoing_bytes > old_out6_bytes);
                         if (has_activity6) {
                             client->counters6.last_updated = time(NULL);
                             client->is_online = 1;

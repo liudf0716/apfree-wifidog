@@ -359,7 +359,7 @@ test_no_ebpf_fallback(void)
 #endif
 	EXPECT_TRUE(no_ebpf_maps_present() || !no_ebpf_maps_present(),
 		    "missing maps are a runtime degrade, not a hard fail");
-	EXPECT_TRUE(sizeof(struct traffic_stats) == 144, "struct traffic_stats ABI size (144 bytes)");
+	EXPECT_TRUE(sizeof(struct traffic_stats) == 176, "struct traffic_stats ABI size (176 bytes)");
 	EXPECT_TRUE(sizeof(struct qos_limit_cfg) == 88, "struct qos_limit_cfg ABI size (88 bytes)");
 	EXPECT_TRUE(sizeof(struct router_ip_cfg) == 8, "struct router_ip_cfg ABI size (8 bytes)");
 	EXPECT_TRUE(sizeof(struct domain_entry) == 104, "struct domain_entry ABI size (104 bytes)");

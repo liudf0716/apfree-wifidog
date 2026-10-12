@@ -369,6 +369,8 @@ static int aw_bpf_lookup_stats_agg_percpu(int map_fd, const void *key, struct tr
         agg->incoming.prev_s_bytes = aw_bpf_sum_u32_sat(agg->incoming.prev_s_bytes, percpu_vals[i].incoming.prev_s_bytes);
         agg->incoming.total_bytes += percpu_vals[i].incoming.total_bytes;
         agg->incoming.total_packets += percpu_vals[i].incoming.total_packets;
+        agg->incoming.ppe_bytes += percpu_vals[i].incoming.ppe_bytes;
+        agg->incoming.ppe_packets += percpu_vals[i].incoming.ppe_packets;
         if (percpu_vals[i].incoming.est_slot > agg->incoming.est_slot)
             agg->incoming.est_slot = percpu_vals[i].incoming.est_slot;
 
@@ -376,6 +378,8 @@ static int aw_bpf_lookup_stats_agg_percpu(int map_fd, const void *key, struct tr
         agg->outgoing.prev_s_bytes = aw_bpf_sum_u32_sat(agg->outgoing.prev_s_bytes, percpu_vals[i].outgoing.prev_s_bytes);
         agg->outgoing.total_bytes += percpu_vals[i].outgoing.total_bytes;
         agg->outgoing.total_packets += percpu_vals[i].outgoing.total_packets;
+        agg->outgoing.ppe_bytes += percpu_vals[i].outgoing.ppe_bytes;
+        agg->outgoing.ppe_packets += percpu_vals[i].outgoing.ppe_packets;
         if (percpu_vals[i].outgoing.est_slot > agg->outgoing.est_slot)
             agg->outgoing.est_slot = percpu_vals[i].outgoing.est_slot;
 
