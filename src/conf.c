@@ -88,6 +88,7 @@ typedef enum {
 	oTrustedIpList,
 	oUpdateDomainInterval,
 	oAppleCNA,
+	oEnableDNSForward,
 	oMQTT,
 	oMQTTServer,
 	oMQTTServerPort,
@@ -180,6 +181,7 @@ static const struct {
 	"trustedIpList", oTrustedIpList}, {
 	"updateDomainInterval", oUpdateDomainInterval}, {
 	"bypassAppleCNA", oAppleCNA}, {
+	"enableDNSForward", oEnableDNSForward}, {
 	"mqtt", oMQTT}, {
 	"serveraddr", oMQTTServer}, {
 	"serverport", oMQTTServerPort}, {
@@ -1254,6 +1256,10 @@ config_read()
 					break;
 				case oAppleCNA:
 					/* Deprecated: Apple CNA bypass logic removed, standard 302 redirect is always used */
+					break;
+				case oEnableDNSForward:
+					/* Deprecated: DNS forward logic replaced by dns_monitor, ignored for backward compatibility */
+					debug(LOG_WARNING, "EnableDNSForward is deprecated and ignored; dns_monitor is used instead");
 					break;
 				case oFW4Enable:
 					config.fw4_enable = parse_boolean_value(p1);
