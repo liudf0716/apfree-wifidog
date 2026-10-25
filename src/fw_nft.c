@@ -1734,6 +1734,11 @@ nft_fw_clear_authservers()
 {
     NFT_WIFIDOGX_BYPASS_MODE();
 
+    if (is_portal_auth_disabled()) {
+        debug(LOG_DEBUG, "Portal authentication is disabled, skip clear_authservers operation");
+        return;
+    }
+
     LOCK_CONFIG();
     __nft_fw_clear_authservers();
     UNLOCK_CONFIG();
@@ -1767,6 +1772,11 @@ nft_fw_set_authservers()
 {
     NFT_WIFIDOGX_BYPASS_MODE();
 
+    if (is_portal_auth_disabled()) {
+        debug(LOG_DEBUG, "Portal authentication is disabled, skip set_authservers operation");
+        return;
+    }
+
     LOCK_CONFIG();
     __nft_fw_set_authservers();
     UNLOCK_CONFIG();
@@ -1783,6 +1793,11 @@ void
 nft_fw_clear_inner_domains_trusted()
 {
     NFT_WIFIDOGX_BYPASS_MODE();
+
+    if (is_portal_auth_disabled()) {
+        debug(LOG_DEBUG, "Portal authentication is disabled, skip clear_inner_domains_trusted operation");
+        return;
+    }
 
     LOCK_CONFIG();
     __nft_fw_clear_inner_domains_trusted();
@@ -1811,6 +1826,11 @@ nft_fw_set_inner_domains_trusted()
 {
     NFT_WIFIDOGX_BYPASS_MODE();
 
+    if (is_portal_auth_disabled()) {
+        debug(LOG_DEBUG, "Portal authentication is disabled, skip set_inner_domains_trusted operation");
+        return;
+    }
+
     LOCK_CONFIG();
     __nft_fw_set_inner_domains_trusted();
     UNLOCK_CONFIG();
@@ -1820,6 +1840,11 @@ void
 nft_fw_refresh_inner_domains_trusted()
 {
     NFT_WIFIDOGX_BYPASS_MODE();
+
+    if (is_portal_auth_disabled()) {
+        debug(LOG_DEBUG, "Portal authentication is disabled, skip refresh_inner_domains_trusted operation");
+        return;
+    }
 
     LOCK_CONFIG();
     __nft_fw_clear_inner_domains_trusted();
@@ -1846,6 +1871,11 @@ nft_fw_set_user_domains_trusted()
 {
     NFT_WIFIDOGX_BYPASS_MODE();
 
+    if (is_portal_auth_disabled()) {
+        debug(LOG_DEBUG, "Portal authentication is disabled, skip set_user_domains_trusted operation");
+        return;
+    }
+
 	LOCK_DOMAIN();
 	__nft_fw_set_user_domains_trusted();
 	UNLOCK_DOMAIN();
@@ -1863,6 +1893,11 @@ nft_fw_clear_user_domains_trusted()
 {
     NFT_WIFIDOGX_BYPASS_MODE();
 
+    if (is_portal_auth_disabled()) {
+        debug(LOG_DEBUG, "Portal authentication is disabled, skip clear_user_domains_trusted operation");
+        return;
+    }
+
     LOCK_DOMAIN();
     __nft_fw_clear_user_domains_trusted();
     UNLOCK_DOMAIN();
@@ -1872,6 +1907,11 @@ void
 nft_fw_refresh_user_domains_trusted()
 {
     NFT_WIFIDOGX_BYPASS_MODE();
+
+    if (is_portal_auth_disabled()) {
+        debug(LOG_DEBUG, "Portal authentication is disabled, skip refresh_user_domains_trusted operation");
+        return;
+    }
 
     LOCK_DOMAIN();
     __nft_fw_clear_user_domains_trusted();
@@ -1909,6 +1949,11 @@ nft_fw_clear_wildcard_domains_trusted()
 {
     NFT_WIFIDOGX_BYPASS_MODE();
 
+    if (is_portal_auth_disabled()) {
+        debug(LOG_DEBUG, "Portal authentication is disabled, skip clear_wildcard_domains_trusted operation");
+        return;
+    }
+
     LOCK_DOMAIN();
     __nft_fw_clear_wildcard_domains_trusted();
     UNLOCK_DOMAIN();
@@ -1918,6 +1963,11 @@ void
 nft_fw_set_wildcard_domains_trusted()
 {
     NFT_WIFIDOGX_BYPASS_MODE();
+
+    if (is_portal_auth_disabled()) {
+        debug(LOG_DEBUG, "Portal authentication is disabled, skip set_wildcard_domains_trusted operation");
+        return;
+    }
 
     LOCK_DOMAIN();
     __nft_fw_clear_wildcard_domains_trusted();
@@ -1934,6 +1984,12 @@ nft_fw_add_wildcard_ip(const char *ip)
     if (!ip || !ip[0])
         return;
     NFT_WIFIDOGX_BYPASS_MODE();
+
+    if (is_portal_auth_disabled()) {
+        debug(LOG_DEBUG, "Portal authentication is disabled, skip add_wildcard_ip operation");
+        return;
+    }
+
     if (strchr(ip, ':') && inet_pton(AF_INET6, ip, &a6) == 1)
         nftables_do_command("add element inet wifidogx set_wifidogx_wildcard_trust_domains_v6 { %s }", ip);
     else if (inet_pton(AF_INET, ip, &a4) == 1)
@@ -2023,6 +2079,11 @@ nft_fw_set_trusted_maclist()
 {
     NFT_WIFIDOGX_BYPASS_MODE();
 
+    if (is_portal_auth_disabled()) {
+        debug(LOG_DEBUG, "Portal authentication is disabled, skip set_trusted_maclist operation");
+        return;
+    }
+
     LOCK_CONFIG();
     __nft_fw_set_trusted_maclist();
     UNLOCK_CONFIG();
@@ -2039,6 +2100,11 @@ nft_fw_clear_trusted_maclist()
 {
     NFT_WIFIDOGX_BYPASS_MODE();
 
+    if (is_portal_auth_disabled()) {
+        debug(LOG_DEBUG, "Portal authentication is disabled, skip clear_trusted_maclist operation");
+        return;
+    }
+
     LOCK_CONFIG();
     __nft_fw_clear_trusted_maclist();
     UNLOCK_CONFIG();
@@ -2048,6 +2114,11 @@ void
 nft_fw_refresh_trusted_maclist()
 {
     NFT_WIFIDOGX_BYPASS_MODE();
+
+    if (is_portal_auth_disabled()) {
+        debug(LOG_DEBUG, "Portal authentication is disabled, skip refresh_trusted_maclist operation");
+        return;
+    }
 
     LOCK_CONFIG();
     __nft_fw_clear_trusted_maclist();
@@ -2061,6 +2132,11 @@ nft_fw_set_mac_temporary(const char *mac, int which)
     char norm_mac[18];
 
     NFT_WIFIDOGX_BYPASS_MODE();
+
+    if (is_portal_auth_disabled()) {
+        debug(LOG_DEBUG, "Portal authentication is disabled, skip set_mac_temporary operation");
+        return;
+    }
 
     if (normalize_mac(mac, norm_mac, sizeof(norm_mac)) != 0) {
         debug(LOG_ERR, "Invalid MAC for temporary trust: %s", mac ? mac : "(null)");
@@ -2098,6 +2174,11 @@ nft_fw_set_untrusted_maclist()
 {
     NFT_WIFIDOGX_BYPASS_MODE();
 
+    if (is_portal_auth_disabled()) {
+        debug(LOG_DEBUG, "Portal authentication is disabled, skip set_untrusted_maclist operation");
+        return;
+    }
+
     LOCK_CONFIG();
     __nft_fw_set_untrusted_maclist();
     UNLOCK_CONFIG();
@@ -2107,6 +2188,11 @@ void
 nft_fw_clear_untrusted_maclist()
 {
     NFT_WIFIDOGX_BYPASS_MODE();
+
+    if (is_portal_auth_disabled()) {
+        debug(LOG_DEBUG, "Portal authentication is disabled, skip clear_untrusted_maclist operation");
+        return;
+    }
 
     LOCK_CONFIG();
     nftables_do_command("flush set inet wifidogx set_wifidogx_untrust_macs");
@@ -2119,6 +2205,11 @@ nft_fw_add_untrusted_mac(const char *mac)
     char norm_mac[18];
 
     NFT_WIFIDOGX_BYPASS_MODE();
+
+    if (is_portal_auth_disabled()) {
+        debug(LOG_DEBUG, "Portal authentication is disabled, skip untrusted_mac operation");
+        return;
+    }
 
     if (normalize_mac(mac, norm_mac, sizeof(norm_mac)) != 0) {
         debug(LOG_ERR, "Invalid MAC for untrusted add: %s", mac ? mac : "(null)");
@@ -2137,6 +2228,11 @@ nft_fw_del_untrusted_mac(const char *mac)
 
     NFT_WIFIDOGX_BYPASS_MODE();
 
+    if (is_portal_auth_disabled()) {
+        debug(LOG_DEBUG, "Portal authentication is disabled, skip untrusted_mac operation");
+        return;
+    }
+
     if (normalize_mac(mac, norm_mac, sizeof(norm_mac)) != 0) {
         debug(LOG_ERR, "Invalid MAC for untrusted delete: %s", mac ? mac : "(null)");
         return;
@@ -2154,6 +2250,11 @@ nft_fw_add_anti_nat_permit(const char *mac)
 
     NFT_WIFIDOGX_BYPASS_MODE();
 
+    if (is_portal_auth_disabled()) {
+        debug(LOG_DEBUG, "Portal authentication is disabled, skip anti_nat_permit operation");
+        return;
+    }
+
     if (normalize_mac(mac, norm_mac, sizeof(norm_mac)) != 0) {
         debug(LOG_ERR, "Invalid MAC for anti-nat add: %s", mac ? mac : "(null)");
         return;
@@ -2170,6 +2271,11 @@ nft_fw_del_anti_nat_permit(const char *mac)
     char norm_mac[18];
 
     NFT_WIFIDOGX_BYPASS_MODE();
+
+    if (is_portal_auth_disabled()) {
+        debug(LOG_DEBUG, "Portal authentication is disabled, skip anti_nat_permit operation");
+        return;
+    }
 
     if (normalize_mac(mac, norm_mac, sizeof(norm_mac)) != 0) {
         debug(LOG_ERR, "Invalid MAC for anti-nat delete: %s", mac ? mac : "(null)");
@@ -2210,6 +2316,11 @@ void
 nft_fw_set_anti_nat_permit()
 {
     NFT_WIFIDOGX_BYPASS_MODE();
+
+    if (is_portal_auth_disabled()) {
+        debug(LOG_DEBUG, "Portal authentication is disabled, skip set_anti_nat_permit operation");
+        return;
+    }
 
     LOCK_CONFIG();
     __nft_fw_set_anti_nat_permit();
@@ -2260,6 +2371,10 @@ nft_fw_init()
 int
 nft_check_core_rules(void)
 {
+    if (is_portal_auth_disabled()) {
+        return 1;
+    }
+
     struct mnl_socket *nl;
     struct nlmsghdr *nlh;
     struct nftnl_table *table;

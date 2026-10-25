@@ -385,7 +385,7 @@ void config_init(void)
 	config.enable_user_reload 	= 1;
 	config.ttl_values 			= safe_strdup(DEFAULT_TTL_VALUES);
 	config.anti_nat_permit_macs = NULL;
-	config.disable_portal_auth  = 1;
+	config.disable_portal_auth  = 0;
 
 	/* Portal ticket defaults: dual-track compatible (not required) */
 	config.portal_ticket_secret    = NULL;

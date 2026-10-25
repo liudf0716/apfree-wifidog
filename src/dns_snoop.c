@@ -496,6 +496,7 @@ thread_dns_snoop(void *arg)
 	int map_fd = -1;
 	uint32_t attached_map_id = 0;
 	time_t last_check = 0;
+	static int logged_not_ready = 0;
 
 	(void)arg;
 	debug(LOG_INFO, "Portal DNS consumer started (dns_ringbuf_portal)");
@@ -504,11 +505,15 @@ thread_dns_snoop(void *arg)
 		if (!rb) {
 			map_fd = open_portal_map();
 			if (map_fd < 0) {
-				debug(LOG_DEBUG, "dns_ringbuf_portal not ready, retry in 5s: %s",
-				      strerror(errno));
+				if (!logged_not_ready) {
+					debug(LOG_DEBUG, "dns_ringbuf_portal not ready, retry in 5s: %s",
+					      strerror(errno));
+					logged_not_ready = 1;
+				}
 				sleep(5);
 				continue;
 			}
+			logged_not_ready = 0;
 			attached_map_id = get_portal_map_id(map_fd);
 			rb = ring_buffer__new(map_fd, handle_portal_dns_event, NULL, NULL);
 			if (!rb) {

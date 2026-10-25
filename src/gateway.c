@@ -722,11 +722,10 @@ threads_init(s_config *config)
         }
     }
 
-    if (!create_thread(&tid_dns_snoop, (void *)thread_dns_snoop, NULL, "dns_snoop")) {
-        debug(LOG_WARNING, "Failed to create DNS snoop thread (wildcard trust IPs)");
-    }
-
     if (!is_portal_auth_disabled()) {
+        if (!create_thread(&tid_dns_snoop, (void *)thread_dns_snoop, NULL, "dns_snoop")) {
+            debug(LOG_WARNING, "Failed to create DNS snoop thread (wildcard trust IPs)");
+        }
         parse_user_trusted_domain_list();
         parse_inner_trusted_domain_list();
     }

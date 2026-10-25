@@ -61,6 +61,12 @@ config_get_config(void)
 	return &g_test_config;
 }
 
+bool
+is_portal_auth_disabled(void)
+{
+	return g_test_config.disable_portal_auth == 1;
+}
+
 void
 roam_cache_purge_expired(void)
 {
@@ -365,6 +371,16 @@ test_no_ebpf_fallback(void)
 	EXPECT_TRUE(sizeof(struct domain_entry) == 104, "struct domain_entry ABI size (104 bytes)");
 }
 
+static void
+test_portal_auth_defaults(void)
+{
+	g_test_config.disable_portal_auth = 0;
+	EXPECT_TRUE(!is_portal_auth_disabled(), "portal auth is enabled by default (disable_portal_auth=0)");
+	g_test_config.disable_portal_auth = 1;
+	EXPECT_TRUE(is_portal_auth_disabled(), "portal auth is disabled when disable_portal_auth=1");
+	g_test_config.disable_portal_auth = 0;
+}
+
 int
 main(void)
 {
@@ -382,6 +398,7 @@ main(void)
 	test_privileged_acl();
 	test_wildcard_domain_matching();
 	test_no_ebpf_fallback();
+	test_portal_auth_defaults();
 
 	if (failures) {
 		fprintf(stderr, "%d review-fix checks failed\n", failures);
