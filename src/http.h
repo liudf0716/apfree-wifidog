@@ -18,8 +18,6 @@ enum reply_client_page_type {
 
 /* HTTP Request Callback Functions */
 void ev_http_callback_404(struct evhttp_request *, void *);
-void ev_http_callback_wifidog(struct evhttp_request *, void *);
-void ev_http_callback_about(struct evhttp_request *, void *);
 void ev_http_callback_status(struct evhttp_request *, void *);
 void ev_http_callback_auth(struct evhttp_request *, void *);
 void ev_http_callback_disconnect(struct evhttp_request *, void *);

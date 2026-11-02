@@ -39,13 +39,11 @@ typedef enum {
 /** Configuration file paths */
 #ifndef SYSCONFDIR
 #define DEFAULT_CONFIGFILE "/etc/wifidog.conf"
-#define DEFAULT_HTMLMSGFILE "/etc/wifidog-msg.html"
 #define DEFAULT_REDIRECTFILE "/etc/wifidog-redir.html"
 #define DEFAULT_INTERNET_OFFLINE_FILE "/etc/internet-offline.html"
 #define DEFAULT_AUTHSERVER_OFFLINE_FILE "/etc/authserver-offline.html"
 #else
 #define DEFAULT_CONFIGFILE SYSCONFDIR"/wifidog.conf"
-#define DEFAULT_HTMLMSGFILE SYSCONFDIR"/wifidog-msg.html"
 #define DEFAULT_REDIRECTFILE SYSCONFDIR"/wifidog-redir.html"
 #define DEFAULT_INTERNET_OFFLINE_FILE SYSCONFDIR"/internet-offline.html"
 #define DEFAULT_AUTHSERVER_OFFLINE_FILE SYSCONFDIR"/authserver-offline.html"
@@ -239,7 +237,6 @@ typedef struct _popular_server_t {
 typedef struct {
 	// File paths
 	char *configfile;
-	char *htmlmsgfile;
 	char *wdctl_sock;
 	char *internal_sock;
 	char *pidfile;

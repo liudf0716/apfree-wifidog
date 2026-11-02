@@ -62,7 +62,6 @@ static void ev_http_resend(struct evhttp_request *req, const int is_ssl);
 static int process_wired_device_pass(struct evhttp_request *req, const char *mac);
 static void ev_http_respond_options(struct evhttp_request *req);
 static void ev_http_send_success_page(struct evhttp_request *req);
-static void ev_send_http_page(struct evhttp_request *req, const char *title, const char *msg);
 static void ev_http_send_redirect(struct evhttp_request *req, const char *redir_url, const char *msg, const uint32_t delay);
 #ifndef AW_VPP
 static int process_already_login_client(struct evhttp_request *req, const char *mac, const char *remote_host, const int addr_type, const int is_ssl);
@@ -678,24 +677,6 @@ ev_http_callback_404(struct evhttp_request *req, void *arg)
 
     free(remote_host);
     free(redir_url);
-}
-
-/**
- * 
- */ 
-void
-ev_http_callback_wifidog(struct evhttp_request *req, void *arg)
-{
-    ev_send_http_page(req, "WiFiDog", "Please use the menu to navigate the features of this WiFiDog installation.");
-}
-
-/**
- * 
- */ 
-void
-ev_http_callback_about(struct evhttp_request *req, void *arg)
-{
-    ev_send_http_page(req, "About WiFiDog", "This is WiFiDog version <strong>" VERSION "</strong>");
 }
 
 /**
@@ -1350,54 +1331,6 @@ ev_http_read_html_file(const char *filename, struct evbuffer *evb)
 
     close(fd);
     return evb;
-}
-
-/**
- * @brief Send html file to client; 
- * 
- * @param req The http request
- * @param title Replace $title of the html file with it
- * @param message Replace $message of the html file with it
- * @todo need more complex process engine
- */ 
-static void
-ev_send_http_page(struct evhttp_request *req, const char *title, const char *message)
-{
-    struct stat st;
-    s_config *config = config_get_config();
-    int fd = open(config->htmlmsgfile, O_RDONLY);
-    if (fd == -1) {
-        debug(LOG_CRIT, "Failed to open HTML message file %s: %s", config->htmlmsgfile, strerror(errno));
-        evhttp_send_error(req, HTTP_NOCONTENT, NULL);
-        return;
-    }
-
-    if (fstat(fd, &st) == -1) {
-        debug(LOG_CRIT, "Failed to stat HTML message file %s: %s", config->htmlmsgfile, strerror(errno));
-        close(fd);
-        evhttp_send_error(req, HTTP_NOCONTENT, NULL);
-        return;
-    }
-
-    struct evbuffer *buffer = evbuffer_new();
-    if (!buffer) {
-        debug(LOG_CRIT, "Failed to evbuffer_new");
-        close(fd);
-        evhttp_send_error(req, HTTP_INTERNAL, "Failed to evbuffer_new");
-        return;
-    }
-
-    if (evbuffer_add_file(buffer, fd, 0, st.st_size)) {
-        debug(LOG_CRIT, "Failed to read HTML message file");
-        close(fd);
-        evbuffer_free(buffer);
-        evhttp_send_error(req, HTTP_INTERNAL, NULL);
-        return;
-    }
-
-	evhttp_add_header(evhttp_request_get_output_headers(req), "Connection", "close");
-    evhttp_send_reply(req, HTTP_OK, "OK", buffer);
-    evbuffer_free(buffer);
 }
 
 /** 

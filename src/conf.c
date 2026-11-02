@@ -76,7 +76,6 @@ typedef enum {
 	oSyslogFacility,
 	oTrustedMACList,
 	oPopularServers,
-	oHtmlMessageFile,
 	oProxyPort,
 	oTrustedWildcardDomains,
 	oTrustedDomains,
@@ -170,7 +169,6 @@ static const struct {
 	"localportal", oLocalPortal}, {
 	"trustedmaclist", oTrustedMACList}, {
 	"popularservers", oPopularServers}, {
-	"htmlmessagefile", oHtmlMessageFile}, {
 	"proxyport", oProxyPort}, {
 	"trustedWildcardDomains", oTrustedWildcardDomains}, {
 	"trustedDomains", oTrustedDomains}, {
@@ -319,7 +317,6 @@ void config_init(void)
 
 	// Initialize basic configuration parameters
 	config.configfile               = safe_strdup(DEFAULT_CONFIGFILE);
-	config.htmlmsgfile              = safe_strdup(DEFAULT_HTMLMSGFILE);
 	config.external_interface       = safe_strdup(DEFAULT_EXT_IF);
 	config.gw_port                  = DEFAULT_GATEWAYPORT;
 	config.gw_https_port            = DEFAULT_GATEWAY_HTTPS_PORT;
@@ -1218,10 +1215,6 @@ config_read()
 					break;
 				case oSyslogFacility:
 					sscanf(p1, "%d", &debugconf.syslog_facility);
-					break;
-				case oHtmlMessageFile:
-					free(config.htmlmsgfile);
-					config.htmlmsgfile = safe_strdup(p1);
 					break;
 				case oProxyPort:
 					sscanf(p1, "%d", &config.proxy_port);
@@ -2405,7 +2398,6 @@ void config_cleanup(void) {
     s_config *cfg = &config;
 
     if (cfg->configfile) { free(cfg->configfile); cfg->configfile = NULL; }
-    if (cfg->htmlmsgfile) { free(cfg->htmlmsgfile); cfg->htmlmsgfile = NULL; }
     if (cfg->external_interface) { free(cfg->external_interface); cfg->external_interface = NULL; }
     if (cfg->wdctl_sock) { free(cfg->wdctl_sock); cfg->wdctl_sock = NULL; }
     if (cfg->internal_sock) { free(cfg->internal_sock); cfg->internal_sock = NULL; }
