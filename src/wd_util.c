@@ -1507,10 +1507,20 @@ is_device_online(const char *val)
 	char cmd[256] = {0};
 	FILE *fd = NULL;
 
-	if(val == NULL || strlen(val) < 4)
+	if(val == NULL || strlen(val) < 4 || strlen(val) >= 200)
 		return 0;
+
+	for (const char *p = val; *p; p++) {
+		char c = *p;
+		if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+		    (c >= '0' && c <= '9') || c == '.' || c == '-' ||
+		    c == '_' || c == ':') {
+			continue;
+		}
+		return 0;
+	}
 	
-	snprintf(cmd, 256, "/usr/sbin/wdping %s", val);
+	snprintf(cmd, sizeof(cmd), "/usr/sbin/wdping %s", val);
 	if((fd = popen(cmd, "r")) != NULL) {
 		char result[4] = {0};
 		char *pret = fgets(result, 3, fd);

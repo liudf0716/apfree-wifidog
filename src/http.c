@@ -735,31 +735,57 @@ ev_http_send_redirect(struct evhttp_request * req, const char *url, const char *
         return;
     }
 
-    // Escape URL for safe embedding in JavaScript string
-    // Replace ' with \' and \ with \\ to prevent XSS
+    // Escape URL for safe embedding in JavaScript string and HTML attribute
     size_t url_len = strlen(url);
-    char *escaped_url = malloc(url_len * 2 + 1);
-    if (escaped_url) {
-        char *dst = escaped_url;
-        for (const char *src = url; *src; src++) {
-            if (*src == '\'') {
-                *dst++ = '\\';
-                *dst++ = '\'';
-            } else if (*src == '\\') {
-                *dst++ = '\\';
-                *dst++ = '\\';
-            } else if (*src == '<') {
-                *dst++ = '<';
-            } else if (*src == '>') {
-                *dst++ = '>';
-            } else {
-                *dst++ = *src;
-            }
-        }
-        *dst = '\0';
-    } else {
-        escaped_url = (char *)url;
+    char *js_url = malloc(url_len * 4 + 1);
+    char *html_url = malloc(url_len * 6 + 1);
+    if (!js_url || !html_url) {
+        free(js_url);
+        free(html_url);
+        evbuffer_free(evb);
+        evhttp_send_error(req, 500, "Internal error");
+        return;
     }
+
+    char *jdst = js_url;
+    char *hdst = html_url;
+    for (const char *src = url; *src; src++) {
+        switch (*src) {
+            case '\'':
+                *jdst++ = '\\'; *jdst++ = '\'';
+                memcpy(hdst, "&#39;", 5); hdst += 5;
+                break;
+            case '"':
+                *jdst++ = '\\'; *jdst++ = '"';
+                memcpy(hdst, "&quot;", 6); hdst += 6;
+                break;
+            case '\\':
+                *jdst++ = '\\'; *jdst++ = '\\';
+                *hdst++ = '\\';
+                break;
+            case '<':
+                memcpy(jdst, "\\x3c", 4); jdst += 4;
+                memcpy(hdst, "&lt;", 4); hdst += 4;
+                break;
+            case '>':
+                memcpy(jdst, "\\x3e", 4); jdst += 4;
+                memcpy(hdst, "&gt;", 4); hdst += 4;
+                break;
+            case '&':
+                *jdst++ = '&';
+                memcpy(hdst, "&amp;", 5); hdst += 5;
+                break;
+            case '\r':
+            case '\n':
+                break;
+            default:
+                *jdst++ = *src;
+                *hdst++ = *src;
+                break;
+        }
+    }
+    *jdst = '\0';
+    *hdst = '\0';
 
     evbuffer_add_printf(evb, 
         "<html><head><title>302 Found</title>"
@@ -767,9 +793,10 @@ ev_http_send_redirect(struct evhttp_request * req, const char *url, const char *
         "window.location.href = '%s';"
         "</script></head>"
         "<body>Please wait, redirecting... If nothing happens, <a href='%s'>click here</a>.</body></html>",
-        escaped_url, escaped_url);
+        js_url, html_url);
     
-    if (escaped_url != url) free(escaped_url);
+    free(js_url);
+    free(html_url);
     
     evhttp_add_header(evhttp_request_get_output_headers(req), "Location", url);
     evhttp_add_header(evhttp_request_get_output_headers(req), "Connection", "close");

@@ -14,7 +14,9 @@
 #include <openssl/evp.h>
 #include <openssl/rand.h>
 #include <ctype.h>
+#include <fcntl.h>
 #include <pthread.h>
+#include <unistd.h>
 
 #define SECRET_MAX 64
 
@@ -242,10 +244,14 @@ portal_ticket_init(void)
 
     if (s_secret_len < 16) {
         if (RAND_bytes(rnd, sizeof(rnd)) != 1) {
-            /* weak fallback */
-            size_t i;
-            for (i = 0; i < sizeof(rnd); i++)
-                rnd[i] = (unsigned char)(rand() & 0xff);
+            int urand_fd = open("/dev/urandom", O_RDONLY);
+            ssize_t got = (urand_fd >= 0) ? read(urand_fd, rnd, sizeof(rnd)) : -1;
+            if (urand_fd >= 0) close(urand_fd);
+            if (got != (ssize_t)sizeof(rnd)) {
+                size_t i;
+                for (i = 0; i < sizeof(rnd); i++)
+                    rnd[i] = (unsigned char)(rand() & 0xff);
+            }
         }
         memcpy(s_secret, rnd, sizeof(rnd));
         s_secret_len = sizeof(rnd);

@@ -163,12 +163,13 @@ create_unix_socket(const char *sock_name)
     if (!sock_name || strlen(sock_name) > (sizeof(sa_un->sun_path) - 1)) {
         /* TODO: Die handler with logging.... */
         debug(LOG_ERR, "WDCTL socket name too long");
+        free(sa_un);
         return NULL;
     }
 
     /* If it exists, delete... Not the cleanest way to deal. */
     unlink(sock_name);
-    strcpy(sa_un->sun_path, sock_name);
+    snprintf(sa_un->sun_path, sizeof(sa_un->sun_path), "%s", sock_name);
     sa_un->sun_family = AF_UNIX;
 
     return sa_un;

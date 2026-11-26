@@ -860,6 +860,22 @@ static int is_valid_route_destination(const char *dest)
     return strchr(dest, '/') != NULL;
 }
 
+static int is_valid_iface_name(const char *iface)
+{
+    if (!iface || iface[0] == '\0') return 0;
+    size_t len = strlen(iface);
+    if (len >= 16) return 0; /* IFNAMSIZ - 1 */
+    for (size_t i = 0; i < len; i++) {
+        char c = iface[i];
+        if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+            (c >= '0' && c <= '9') || c == '_' || c == '-' || c == '.') {
+            continue;
+        }
+        return 0;
+    }
+    return 1;
+}
+
 void handle_get_vpn_routes_request(json_object *j_req, api_transport_context_t *transport)
 {
     (void)j_req;
@@ -935,6 +951,13 @@ void handle_set_vpn_routes_request(json_object *j_req, api_transport_context_t *
     json_object *j_iface = json_object_object_get(j_data_in, "interface");
     const char *iface = (j_iface && json_object_is_type(j_iface, json_type_string))
                         ? json_object_get_string(j_iface) : WG_IFACE_NAME;
+    if (!is_valid_iface_name(iface)) {
+        json_object *j_err = api_response_new("set_vpn_routes_response");
+        api_response_set_error(j_err, 1000, "Invalid interface name");
+        send_json_response(transport, j_err);
+        json_object_put(j_err);
+        return;
+    }
 
     /* Extract mode: "selective" or "full_tunnel" */
     json_object *j_mode = json_object_object_get(j_data_in, "mode");
@@ -988,6 +1011,7 @@ void handle_set_vpn_routes_request(json_object *j_req, api_transport_context_t *
                         "Cannot detect default gateway; exclude_ips would cause routing loop. "
                         "Ensure a default route exists before enabling full tunnel mode.");
                     send_json_response(transport, j_err);
+                    json_object_put(j_err);
                     return;
                 }
                 if (gw_out[0] != '\0') {
@@ -1022,6 +1046,7 @@ void handle_set_vpn_routes_request(json_object *j_req, api_transport_context_t *
             json_object *j_err = api_response_new("set_vpn_routes_response");
             api_response_set_error(j_err, 1000, "Missing or invalid 'routes' array in selective mode");
             send_json_response(transport, j_err);
+            json_object_put(j_err);
             return;
         }
 
@@ -1102,6 +1127,13 @@ void handle_delete_vpn_routes_request(json_object *j_req, api_transport_context_
     json_object *j_iface = json_object_object_get(j_data_in, "interface");
     const char *iface = (j_iface && json_object_is_type(j_iface, json_type_string))
                         ? json_object_get_string(j_iface) : WG_IFACE_NAME;
+    if (!is_valid_iface_name(iface)) {
+        json_object *j_err = api_response_new("delete_vpn_routes_response");
+        api_response_set_error(j_err, 1000, "Invalid interface name");
+        send_json_response(transport, j_err);
+        json_object_put(j_err);
+        return;
+    }
 
     /* Check if flush_all is requested */
     json_object *j_flush = json_object_object_get(j_data_in, "flush_all");
@@ -1128,6 +1160,7 @@ void handle_delete_vpn_routes_request(json_object *j_req, api_transport_context_
             json_object *j_err = api_response_new("delete_vpn_routes_response");
             api_response_set_error(j_err, 1000, "Missing 'routes' array or 'flush_all' flag");
             send_json_response(transport, j_err);
+            json_object_put(j_err);
             return;
         }
 

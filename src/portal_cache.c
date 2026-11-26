@@ -90,7 +90,7 @@ portal_cache_make_key(const char *channel, const char *url,
     EVP_MD_CTX_free(ctx);
 
     for (unsigned int i = 0; i < hash_len && (i * 2 + 2) < key_size; i++)
-        sprintf(key + i * 2, "%02x", hash[i]);
+        snprintf(key + i * 2, 3, "%02x", hash[i]);
 }
 
 /* ---- Content-Type inference ---- */

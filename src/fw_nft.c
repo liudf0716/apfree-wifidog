@@ -92,7 +92,7 @@ if (is_bypass_mode()) { \
 static int fw_quiet = 0;
 static int nft_fw_counters_update_ebpf(void);
 static int nft_fw_counters_update_nftables(void);
-static void nft_statistical_helper(const char *tab, const char *chain, char **output, uint32_t *output_len);
+static void nft_statistical_set_helper(const char *tab, const char *set_name, char **output, uint32_t *output_len);
 static int aw_bpfctl_available(void);
 static int aw_bpfctl_execute_best_effort(const char *cmd, const char *context);
 
@@ -193,6 +193,11 @@ static int aw_bpfctl_available(void)
     return 0;
 }
 
+static int aw_bpf_stats_active(void)
+{
+    return access("/sys/fs/bpf/tc/globals/ipv4_map", F_OK) == 0;
+}
+
 static int aw_bpfctl_execute_best_effort(const char *cmd, const char *context)
 {
     if (!cmd || !*cmd)
@@ -230,6 +235,10 @@ const char *nft_wifidogx_init_script[] = {
     "add set inet wifidogx set_wifidogx_trust_clients_out { type ether_addr; flags timeout; timeout 1d; counter; }",
     "add set inet wifidogx set_wifidogx_tmp_trust_clients { type ether_addr; flags timeout; timeout 1m; counter; }",
     "add set inet wifidogx set_wifidogx_untrust_macs { type ether_addr; flags timeout; timeout 30m; counter; }",
+    "add set inet wifidogx set_wifidogx_auth_clients_v4 { type ether_addr . ipv4_addr; counter; }",
+    "add set inet wifidogx set_wifidogx_auth_clients_v6 { type ether_addr . ipv6_addr; counter; }",
+    "add set inet wifidogx set_wifidogx_auth_in_v4 { type ipv4_addr; counter; }",
+    "add set inet wifidogx set_wifidogx_auth_in_v6 { type ipv6_addr; counter; }",
     "add chain inet wifidogx prerouting { type nat hook prerouting priority -100; policy accept; }",
     "add chain inet wifidogx forward { type filter hook forward priority -100; policy accept; }",
     "add chain inet wifidogx filter_prerouting { type filter hook prerouting priority -300; policy accept; }",
@@ -243,13 +252,17 @@ const char *nft_wifidogx_init_script[] = {
     "add chain inet wifidogx forward_wifidogx_unknown",
     "add chain inet wifidogx mangle_prerouting_wifidogx_outgoing",
     "add chain inet wifidogx mangle_postrouting_wifidogx_incoming",
+    "add rule inet wifidogx mangle_prerouting_wifidogx_outgoing ether saddr . ip saddr @set_wifidogx_auth_clients_v4 meta mark set mark or 0x20000 accept",
+    "add rule inet wifidogx mangle_prerouting_wifidogx_outgoing ether saddr . ip6 saddr @set_wifidogx_auth_clients_v6 meta mark set mark or 0x20000 accept",
+    "add rule inet wifidogx mangle_postrouting_wifidogx_incoming ip daddr @set_wifidogx_auth_in_v4 accept",
+    "add rule inet wifidogx mangle_postrouting_wifidogx_incoming ip6 daddr @set_wifidogx_auth_in_v6 accept",
     "add rule inet wifidogx dstnat_wifidogx_unknown jump wifidogx_redirect",
     "add rule inet wifidogx wifidogx_redirect tcp dport 443 redirect to $HTTPS_PORT$",
     "add rule inet wifidogx wifidogx_redirect udp dport 443 drop",
     "add rule inet wifidogx wifidogx_redirect tcp dport 80 redirect to $HTTP_PORT$",
     "add rule inet wifidogx wifidogx_redirect udp dport 80 drop",
-    "add rule inet wifidogx dstnat_wifidogx_outgoing meta mark 0x20000 accept",
-    "add rule inet wifidogx dstnat_wifidogx_outgoing meta mark 0x10000 accept",
+    "add rule inet wifidogx dstnat_wifidogx_outgoing meta mark and 0x00ff0000 == 0x20000 accept",
+    "add rule inet wifidogx dstnat_wifidogx_outgoing meta mark and 0x00ff0000 == 0x10000 accept",
     "add rule inet wifidogx dstnat_wifidogx_outgoing ip daddr @set_wifidogx_gateway accept",
     "add rule inet wifidogx dstnat_wifidogx_outgoing ip6 daddr @set_wifidogx_gateway_v6 accept",
     "add rule inet wifidogx dstnat_wifidogx_outgoing ether saddr @set_wifidogx_tmp_trust_clients accept",
@@ -265,8 +278,8 @@ const char *nft_wifidogx_init_script[] = {
     "add rule inet wifidogx dstnat_wifidogx_outgoing ip daddr @set_wifidogx_wildcard_trust_domains accept",
     "add rule inet wifidogx dstnat_wifidogx_outgoing ip6 daddr @set_wifidogx_wildcard_trust_domains_v6 accept",
     "add rule inet wifidogx dstnat_wifidogx_outgoing jump dstnat_wifidogx_unknown",
-    "add rule inet wifidogx forward_wifidogx_wan meta mark 0x20000 accept",
-    "add rule inet wifidogx forward_wifidogx_wan meta mark 0x10000 accept",
+    "add rule inet wifidogx forward_wifidogx_wan meta mark and 0x00ff0000 == 0x20000 accept",
+    "add rule inet wifidogx forward_wifidogx_wan meta mark and 0x00ff0000 == 0x10000 accept",
     "add rule inet wifidogx forward_wifidogx_wan ip daddr @set_wifidogx_auth_servers accept",
     "add rule inet wifidogx forward_wifidogx_wan ip6 daddr @set_wifidogx_auth_servers_v6 accept",
     "add rule inet wifidogx forward_wifidogx_wan ip daddr @set_wifidogx_trust_domains accept",
@@ -432,42 +445,6 @@ generate_nft_wifidogx_init_script()
     fclose(output_file);
 }
 
-/** @internal
- * 
-*/
-static int
-is_safe_nft_handle(const char *handle)
-{
-	size_t i;
-
-	if (!handle || !*handle || strlen(handle) > 20) {
-		return 0;
-	}
-	for (i = 0; handle[i]; i++) {
-		if (!isdigit((unsigned char)handle[i])) {
-			return 0;
-		}
-	}
-	return 1;
-}
-
-static int
-is_safe_nft_chain(const char *chain)
-{
-	size_t i;
-
-	if (!chain || !*chain || strlen(chain) > 64) {
-		return 0;
-	}
-	for (i = 0; chain[i]; i++) {
-		unsigned char c = (unsigned char)chain[i];
-		if (!(isalnum(c) || c == '_' || c == '-')) {
-			return 0;
-		}
-	}
-	return 1;
-}
-
 static int
 nftables_exec_script(const char *nft_cmd)
 {
@@ -607,15 +584,15 @@ nft_do_init_script_command()
  * @param[out] outgoing_len Length of output
  */
 static void 
-nft_statistical_helper(const char *tab, const char *chain, char **output, uint32_t *output_len)
+nft_statistical_set_helper(const char *tab, const char *set_name, char **output, uint32_t *output_len)
 {
-    if (!tab || !chain || !output || !output_len) {
+    if (!tab || !set_name || !output || !output_len) {
         debug(LOG_ERR, "Invalid parameters");
         return;
     }
 
     char cmd[256] = {0};
-    snprintf(cmd, sizeof(cmd), "nft -j list chain inet %s %s", tab, chain);
+    snprintf(cmd, sizeof(cmd), "nft -j list set inet %s %s", tab, set_name);
     debug(LOG_DEBUG, "Running command: %s", cmd);
 
     FILE *fp = popen(cmd, "r");
@@ -679,27 +656,6 @@ nft_statistical_helper(const char *tab, const char *chain, char **output, uint32
  * @param[out] outgoing Pointer to store output string
  * @param[out] outgoing_len Length of output
  */
-static void 
-nft_statistical_outgoing(char **outgoing, uint32_t *outgoing_len)
-{
-    nft_statistical_helper("wifidogx", "mangle_prerouting_wifidogx_outgoing", outgoing, outgoing_len);
-}
-
-/**
- * @brief Get incoming traffic statistics using libnftables
- * 
- * Retrieves statistics for incoming traffic from the
- * mangle_postrouting_wifidogx_incoming chain using libnftables API
- *
- * @param[out] incoming Pointer to store output string  
- * @param[out] incoming_len Length of output
- */
-static void
-nft_statistical_incoming(char **incoming, uint32_t *incoming_len)
-{
-    nft_statistical_helper("wifidogx", "mangle_postrouting_wifidogx_incoming", incoming, incoming_len);
-}
-
 static void
 __nft_add_gw()
 {
@@ -813,123 +769,6 @@ nft_fw_destroy(void)
     return 0;
 }
 
-static int
-check_nft_expr_json_array_object(json_object *jobj, const char *ip, const char *mac)
-{
-    int arraylen = json_object_array_length(jobj);
-    int ip_flag = (ip == NULL) ? 1 : 0;
-    int mac_flag = (mac == NULL) ? 1 : 0;
-
-    for (int i = 0; i < arraylen; i++) {
-        json_object *jobj_item = json_object_array_get_idx(jobj, i);
-        json_object *jobj_item_match = NULL;
-
-        if (json_object_object_get_ex(jobj_item, "match", &jobj_item_match)) {
-            json_object *jobj_item_match_left = NULL;
-            json_object *jobj_item_match_right = NULL;
-
-            if (json_object_object_get_ex(jobj_item_match, "left", &jobj_item_match_left) &&
-                json_object_object_get_ex(jobj_item_match, "right", &jobj_item_match_right)) {
-
-                json_object *jobj_item_match_left_payload = NULL;
-                if (json_object_object_get_ex(jobj_item_match_left, "payload", &jobj_item_match_left_payload)) {
-                    json_object *jobj_item_match_left_payload_protocol = NULL;
-                    if (json_object_object_get_ex(jobj_item_match_left_payload, "protocol", &jobj_item_match_left_payload_protocol)) {
-                        const char *protocol = json_object_get_string(jobj_item_match_left_payload_protocol);
-                        const char *right = json_object_get_string(jobj_item_match_right);
-
-                        if (strcmp(protocol, "ether") == 0 && mac && strcmp(right, mac) == 0) {
-                            mac_flag = 1;
-                        } else if (strcmp(protocol, "ip") == 0 && ip && strcmp(right, ip) == 0) {
-                            ip_flag = 1;
-                        } else if (strcmp(protocol, "ip6") == 0 && ip && strcmp(right, ip) == 0) {
-                            ip_flag = 1;
-                        }
-                    }
-                }
-            }
-        }
-
-        if (ip_flag && mac_flag) {
-            return 1;
-        }
-    }
-
-    return 0;
-}
-
-/*
- * delete client from firewall
- */
-static void
-nft_fw_del_rule_by_ip_and_mac(const char *ip, const char *mac, const char *chain)
-{
-    char *buf = NULL;
-    uint32_t buf_len = 0;
-    nft_statistical_helper("wifidogx", chain, &buf, &buf_len);
-    if (buf == NULL) {
-        debug(LOG_ERR, "nft_statistical_helper failed");
-        return;
-    }
-
-    json_object *jobj = json_tokener_parse(buf);
-    if (jobj == NULL) {
-        debug(LOG_ERR, "json_tokener_parse failed");
-        free(buf);
-        return;
-    }
-    free(buf);
-
-    json_object *jobj_nftables;
-    if (!json_object_object_get_ex(jobj, "nftables", &jobj_nftables)) {
-        debug(LOG_ERR, "json_object_object_get_ex failed for nftables");
-        json_object_put(jobj);
-        return;
-    }
-
-    int len = json_object_array_length(jobj_nftables);
-    char cmd[128] = {0};
-    for (int i = 0; i < len; i++) {
-        json_object *jobj_item = json_object_array_get_idx(jobj_nftables, i);
-        if (jobj_item == NULL) {
-            debug(LOG_ERR, "json_object_array_get_idx failed for index %d", i);
-            continue;
-        }
-
-        json_object *jobj_rule;
-        if (!json_object_object_get_ex(jobj_item, "rule", &jobj_rule)) {
-            continue;
-        }
-
-        debug(LOG_DEBUG, "jobj_rule: %s", json_object_to_json_string(jobj_rule));
-        json_object *jobj_rule_expr;
-        if (!json_object_object_get_ex(jobj_rule, "expr", &jobj_rule_expr)) {
-            debug(LOG_ERR, "json_object_object_get_ex failed for expr");
-            continue;
-        }
-
-        if (check_nft_expr_json_array_object(jobj_rule_expr, ip, mac)) {
-            json_object *jobj_rule_handle;
-            if (!json_object_object_get_ex(jobj_rule, "handle", &jobj_rule_handle)) {
-                debug(LOG_ERR, "json_object_object_get_ex failed for handle");
-                continue;
-            }
-
-            const char *handle = json_object_get_string(jobj_rule_handle);
-            if (!is_safe_nft_chain(chain) || !is_safe_nft_handle(handle)) {
-                debug(LOG_ERR, "Refusing unsafe nft delete: chain=%s handle=%s",
-                      chain ? chain : "(null)", handle ? handle : "(null)");
-                continue;
-            }
-            snprintf(cmd, sizeof(cmd), "delete rule inet wifidogx %s handle %s", chain, handle);
-            nftables_do_command("%s", cmd);
-            memset(cmd, 0, sizeof(cmd));
-        }
-    }
-
-    json_object_put(jobj);
-}
-
 /**
  * Control client firewall access
  *
@@ -967,26 +806,24 @@ nft_fw_access(fw_access_t type, const char *ip, const char *mac, int tag)
 
     switch(type) {
         case FW_ACCESS_ALLOW:
-            // Add outgoing traffic rule with counter and mark
+            // Add client to O(1) nftables auth sets (and skip incoming counter set when aw-bpf handles stats)
             if (is_valid_ip(ip)) {
-                nftables_do_command("add rule inet wifidogx mangle_prerouting_wifidogx_outgoing "
-                                "ether saddr %s ip saddr %s counter mark set 0x20000 accept", 
+                nftables_do_command("add element inet wifidogx set_wifidogx_auth_clients_v4 { %s . %s }",
                                 mac, ip);
 
-                // Add incoming traffic rule with counter
-                nftables_do_command("add rule inet wifidogx mangle_postrouting_wifidogx_incoming "
-                                "ip daddr %s counter accept", ip);
+                if (!aw_bpf_stats_active()) {
+                    nftables_do_command("add element inet wifidogx set_wifidogx_auth_in_v4 { %s }", ip);
+                }
 
                 snprintf(cmd, sizeof(cmd), "aw-bpfctl ipv4 add %s", ip);
                 aw_bpfctl_execute_best_effort(cmd, "FW_ACCESS_ALLOW ipv4");
             } else if (is_valid_ip6(ip)){
-                nftables_do_command("add rule inet wifidogx mangle_prerouting_wifidogx_outgoing "
-                                "ether saddr %s ip6 saddr %s counter mark set 0x20000 accept", 
+                nftables_do_command("add element inet wifidogx set_wifidogx_auth_clients_v6 { %s . %s }",
                                 mac, ip);
 
-                // Add incoming traffic rule with counter
-                nftables_do_command("add rule inet wifidogx mangle_postrouting_wifidogx_incoming "
-                                "ip6 daddr %s counter accept", ip);
+                if (!aw_bpf_stats_active()) {
+                    nftables_do_command("add element inet wifidogx set_wifidogx_auth_in_v6 { %s }", ip);
+                }
 
                 snprintf(cmd, sizeof(cmd), "aw-bpfctl ipv6 add %s", ip);
                 aw_bpfctl_execute_best_effort(cmd, "FW_ACCESS_ALLOW ipv6");
@@ -1002,19 +839,25 @@ nft_fw_access(fw_access_t type, const char *ip, const char *mac, int tag)
             break;
 
         case FW_ACCESS_DENY:
-            // Remove client rules from outgoing chain
-            nft_fw_del_rule_by_ip_and_mac(ip, mac, "mangle_prerouting_wifidogx_outgoing");
-            
-            // Remove client rules from incoming chain
-            nft_fw_del_rule_by_ip_and_mac(ip, NULL, "mangle_postrouting_wifidogx_incoming");
-
             if (is_valid_ip(ip)) {
+                nftables_do_command("delete element inet wifidogx set_wifidogx_auth_clients_v4 { %s . %s }",
+                                mac, ip);
+                if (!aw_bpf_stats_active()) {
+                    nftables_do_command("delete element inet wifidogx set_wifidogx_auth_in_v4 { %s }", ip);
+                }
+
                 snprintf(cmd, sizeof(cmd), "aw-bpfctl ipv4 del %s", ip);
                 aw_bpfctl_execute_best_effort(cmd, "FW_ACCESS_DENY ipv4");
 
                 snprintf(cmd, sizeof(cmd), "conntrack -D -s %s >/dev/null 2>&1", ip);
                 execute(cmd, 0);
             } else if (is_valid_ip6(ip)) {
+                nftables_do_command("delete element inet wifidogx set_wifidogx_auth_clients_v6 { %s . %s }",
+                                mac, ip);
+                if (!aw_bpf_stats_active()) {
+                    nftables_do_command("delete element inet wifidogx set_wifidogx_auth_in_v6 { %s }", ip);
+                }
+
                 snprintf(cmd, sizeof(cmd), "aw-bpfctl ipv6 del %s", ip);
                 aw_bpfctl_execute_best_effort(cmd, "FW_ACCESS_DENY ipv6");
 
@@ -1083,32 +926,54 @@ nft_fw_reload_client()
         return 1;
     }
 
-    // Flush existing client chains
-    fprintf(fp, "flush chain inet wifidogx mangle_prerouting_wifidogx_outgoing\n");
-    fprintf(fp, "flush chain inet wifidogx mangle_postrouting_wifidogx_incoming\n");
-    
-    // Add rules for each client
+    // Flush existing auth sets (keep fixed lookup rules in mangle chains intact)
+    fprintf(fp, "flush set inet wifidogx set_wifidogx_auth_clients_v4\n");
+    fprintf(fp, "flush set inet wifidogx set_wifidogx_auth_clients_v6\n");
+    fprintf(fp, "flush set inet wifidogx set_wifidogx_auth_in_v4\n");
+    fprintf(fp, "flush set inet wifidogx set_wifidogx_auth_in_v6\n");
+
+    int skip_in_stats = aw_bpf_stats_active();
+
+    // Add set elements for each client
     t_client *current = first_client;
     char rule[512];
     do {
-        // Add outgoing rule with counters
-        snprintf(rule, sizeof(rule), 
-                "add rule inet wifidogx mangle_prerouting_wifidogx_outgoing "
-                "ether saddr %s ip saddr %s counter packets %llu bytes %llu "
-                "mark set 0x20000 accept\n",
-                current->mac, current->ip,
-                current->counters.outgoing_packets,
-                current->counters.outgoing_bytes);
-        fprintf(fp, "%s", rule);
+        if (current->mac && is_valid_mac(current->mac)) {
+            if (current->ip && is_valid_ip(current->ip)) {
+                snprintf(rule, sizeof(rule),
+                        "add element inet wifidogx set_wifidogx_auth_clients_v4 { %s . %s counter packets %llu bytes %llu }\n",
+                        current->mac, current->ip,
+                        current->counters.outgoing_packets,
+                        current->counters.outgoing_bytes);
+                fprintf(fp, "%s", rule);
 
-        // Add incoming rule with counters
-        snprintf(rule, sizeof(rule),
-                "add rule inet wifidogx mangle_postrouting_wifidogx_incoming "
-                "ip daddr %s counter packets %llu bytes %llu accept\n",
-                current->ip,
-                current->counters.incoming_packets,
-                current->counters.incoming_bytes);
-        fprintf(fp, "%s", rule);
+                if (!skip_in_stats) {
+                    snprintf(rule, sizeof(rule),
+                            "add element inet wifidogx set_wifidogx_auth_in_v4 { %s counter packets %llu bytes %llu }\n",
+                            current->ip,
+                            current->counters.incoming_packets,
+                            current->counters.incoming_bytes);
+                    fprintf(fp, "%s", rule);
+                }
+            }
+            if (current->ip6 && is_valid_ip6(current->ip6)) {
+                snprintf(rule, sizeof(rule),
+                        "add element inet wifidogx set_wifidogx_auth_clients_v6 { %s . %s counter packets %llu bytes %llu }\n",
+                        current->mac, current->ip6,
+                        current->counters6.outgoing_packets,
+                        current->counters6.outgoing_bytes);
+                fprintf(fp, "%s", rule);
+
+                if (!skip_in_stats) {
+                    snprintf(rule, sizeof(rule),
+                            "add element inet wifidogx set_wifidogx_auth_in_v6 { %s counter packets %llu bytes %llu }\n",
+                            current->ip6,
+                            current->counters6.incoming_packets,
+                            current->counters6.incoming_bytes);
+                    fprintf(fp, "%s", rule);
+                }
+            }
+        }
 
         current = current->next;
     } while (current != NULL);
@@ -1281,167 +1146,72 @@ update_client_counters(t_client *client, uint64_t packets, uint64_t bytes, int i
 }
 
 /**
- * @brief Process nftables expressions to extract counter data and client information
- *
- * This function parses a JSON object containing nftables expressions to extract:
- * 1. Counter data (packets and bytes)
- * 2. Client information based on IP or MAC address
- * 
- * The function then updates the client counters with the extracted information.
- *
- * @param jobj_expr JSON object array containing nftables expressions
- * @param is_outgoing Flag indicating if the traffic is outgoing (1) or incoming (0)
- *
- * The function performs the following:
- * - Iterates through expression array
- * - Extracts packet and byte counters if present
- * - Identifies client by IP or MAC address from match expressions
- * - Updates client counters with accumulated data
- *
- * @note The function expects the JSON object to follow nftables JSON format
- * @note Client identification stops after finding the first valid IP/MAC match
+ * @brief Process JSON representation of an nftables set with per-element counters
  */
 static void
-process_nftables_expr(json_object *jobj_expr, int is_outgoing)
-{
-    if (!jobj_expr) {
-        debug(LOG_ERR, "Invalid input: jobj_expr is NULL");
-        return;
-    }
-
-    uint64_t packets = 0, bytes = 0;
-    const char *mac = NULL, *ip = NULL;
-    int is_ip6 = 0;
-    bool has_counter = false;
-
-    // Get array length of expressions
-    int expr_arraylen = json_object_array_length(jobj_expr);
-    if (expr_arraylen <= 0) {
-        debug(LOG_DEBUG, "Empty expression array");
-        return;
-    }
-
-    // First pass: collect counter data
-    // Second pass: collect client identifiers
-    for (int pass = 1; pass <= 2; pass++) {
-        for (int j = 0; j < expr_arraylen; j++) {
-            json_object *expr_item = json_object_array_get_idx(jobj_expr, j);
-            if (!expr_item) continue;
-
-            if (pass == 1) {
-                // Process counter information
-                json_object *counter_obj = NULL;
-                if (json_object_object_get_ex(expr_item, "counter", &counter_obj)) {
-                    json_object *packets_obj = NULL, *bytes_obj = NULL;
-                    if (json_object_object_get_ex(counter_obj, "packets", &packets_obj) &&
-                        json_object_object_get_ex(counter_obj, "bytes", &bytes_obj)) {
-                        packets = json_object_get_int64(packets_obj);
-                        bytes = json_object_get_int64(bytes_obj);
-                        has_counter = true;
-                    }
-                }
-            } else {
-                // Process match information for client identification
-                json_object *match_obj = NULL;
-                if (json_object_object_get_ex(expr_item, "match", &match_obj)) {
-                    json_object *left = NULL, *right = NULL;
-                    if (!json_object_object_get_ex(match_obj, "left", &left) ||
-                        !json_object_object_get_ex(match_obj, "right", &right)) {
-                        continue;
-                    }
-
-                    json_object *payload = NULL;
-                    if (!json_object_object_get_ex(left, "payload", &payload)) {
-                        continue;
-                    }
-
-                    json_object *protocol_obj = NULL;
-                    if (!json_object_object_get_ex(payload, "protocol", &protocol_obj)) {
-                        continue;
-                    }
-
-                    const char *protocol = json_object_get_string(protocol_obj);
-                    const char *value = json_object_get_string(right);
-
-                    if (!protocol || !value) continue;
-
-                    if (strcmp(protocol, "ip") == 0) {
-                        ip = value;
-                    } else if (strcmp(protocol, "ip6") == 0) {
-                        ip = value;
-                        is_ip6 = 1;
-                    } else if (strcmp(protocol, "ether") == 0) {
-                        mac = value;
-                    }
-                }
-            }
-        }
-    }
-
-    // Only update counters if we found both counter data and client identifiers
-    if (has_counter && ip) {
-        t_client *client = mac?client_list_find(ip, mac):client_list_find_by_ip(ip);
-        if (client) {
-            update_client_counters(client, packets, bytes, is_outgoing, is_ip6);
-        } else {
-            debug(LOG_DEBUG, "No client found for IP: %s, MAC: %s", 
-                  ip ? ip : "N/A", mac ? mac : "N/A");
-        }
-    }
-}
-
-/**
- * @brief Process JSON representation of nftables rules
- *
- * Parses a JSON object containing nftables rules and processes each rule's expressions.
- * The function traverses the JSON structure to extract rule expressions for either
- * incoming or outgoing traffic.
- *
- * @param jobj The root JSON object containing nftables configuration
- * @param is_outgoing Flag indicating if processing outgoing (1) or incoming (0) rules
- * 
- * @details
- * The expected JSON structure should be:
- * {
- *   "nftables": [
- *     {
- *       "rule": {
- *         "expr": [...]
- *       }
- *     },
- *     ...
- *   ]
- * }
- *
- * The function will:
- * 1. Extract the "nftables" array
- * 2. Iterate through each array element
- * 3. Extract "rule" and "expr" objects
- * 4. Process expressions through process_nftables_expr()
- *
- * @note Function silently returns if required JSON objects are not found
- */
-static void 
-process_nftables_json(json_object *jobj, int is_outgoing)
+process_nftables_set_json(json_object *jobj, int is_outgoing, int is_ip6)
 {
     json_object *jobj_nftables = NULL;
-    if (!json_object_object_get_ex(jobj, "nftables", &jobj_nftables)) {
-        debug(LOG_ERR, "process_nftables_json(): jobj_nftables is NULL");
+    if (!jobj || !json_object_object_get_ex(jobj, "nftables", &jobj_nftables)) {
+        debug(LOG_ERR, "process_nftables_set_json(): jobj_nftables is NULL");
         return;
     }
 
     int arraylen = json_object_array_length(jobj_nftables);
     for (int i = 0; i < arraylen; i++) {
         json_object *jobj_item = json_object_array_get_idx(jobj_nftables, i);
-        if (jobj_item == NULL) continue;
+        json_object *jobj_set = NULL;
+        json_object *jobj_elem_arr = NULL;
+        if (!jobj_item || !json_object_object_get_ex(jobj_item, "set", &jobj_set))
+            continue;
+        if (!json_object_object_get_ex(jobj_set, "elem", &jobj_elem_arr) ||
+            !json_object_is_type(jobj_elem_arr, json_type_array))
+            continue;
 
-        json_object *jobj_rule = NULL;
-        if (!json_object_object_get_ex(jobj_item, "rule", &jobj_rule)) continue;
+        int n_elems = json_object_array_length(jobj_elem_arr);
+        for (int j = 0; j < n_elems; j++) {
+            json_object *elem_wrap = json_object_array_get_idx(jobj_elem_arr, j);
+            json_object *elem_obj = NULL;
+            if (!elem_wrap || !json_object_object_get_ex(elem_wrap, "elem", &elem_obj))
+                continue;
 
-        json_object *jobj_expr = NULL;
-        if (!json_object_object_get_ex(jobj_rule, "expr", &jobj_expr)) continue;
+            json_object *counter_obj = NULL;
+            json_object *packets_obj = NULL, *bytes_obj = NULL;
+            if (!json_object_object_get_ex(elem_obj, "counter", &counter_obj) ||
+                !json_object_object_get_ex(counter_obj, "packets", &packets_obj) ||
+                !json_object_object_get_ex(counter_obj, "bytes", &bytes_obj))
+                continue;
 
-        process_nftables_expr(jobj_expr, is_outgoing);
+            uint64_t packets = (uint64_t)json_object_get_int64(packets_obj);
+            uint64_t bytes = (uint64_t)json_object_get_int64(bytes_obj);
+
+            json_object *val_obj = NULL;
+            if (!json_object_object_get_ex(elem_obj, "val", &val_obj))
+                continue;
+
+            const char *mac = NULL;
+            const char *ip = NULL;
+            json_object *concat_arr = NULL;
+            if (json_object_is_type(val_obj, json_type_object) &&
+                json_object_object_get_ex(val_obj, "concat", &concat_arr) &&
+                json_object_is_type(concat_arr, json_type_array) &&
+                json_object_array_length(concat_arr) >= 2) {
+                mac = json_object_get_string(json_object_array_get_idx(concat_arr, 0));
+                ip = json_object_get_string(json_object_array_get_idx(concat_arr, 1));
+            } else if (json_object_is_type(val_obj, json_type_string)) {
+                ip = json_object_get_string(val_obj);
+            }
+
+            if (!ip) continue;
+
+            t_client *client = mac ? client_list_find(ip, mac) : client_list_find_by_ip(ip);
+            if (client) {
+                update_client_counters(client, packets, bytes, is_outgoing, is_ip6);
+            } else {
+                debug(LOG_DEBUG, "No client found for IP: %s, MAC: %s",
+                      ip, mac ? mac : "N/A");
+            }
+        }
     }
 }
 
@@ -1665,47 +1435,34 @@ nft_fw_counters_update_ebpf()
 static int
 nft_fw_counters_update_nftables()
 {
-    // get client outgoing traffic
-    char *outgoing = NULL;
-    uint32_t outgoing_len = 0;
-    nft_statistical_outgoing(&outgoing, &outgoing_len);
-    if (outgoing == NULL) {
-        debug(LOG_ERR, "Failed to get outgoing traffic");
-        return -1;
-    }
-    debug(LOG_DEBUG, "outgoing: %s", outgoing);
-    json_object *jobj_outgoing = json_tokener_parse(outgoing);
-    if (jobj_outgoing == NULL) {
-        debug(LOG_ERR, "Failed to parse outgoing json");
-        free(outgoing);
-        return -1;
-    }
+    static const struct {
+        const char *set_name;
+        int is_outgoing;
+        int is_ip6;
+    } sets[] = {
+        { "set_wifidogx_auth_clients_v4", 1, 0 },
+        { "set_wifidogx_auth_clients_v6", 1, 1 },
+        { "set_wifidogx_auth_in_v4",      0, 0 },
+        { "set_wifidogx_auth_in_v6",      0, 1 },
+    };
 
-    // Process outgoing traffic statistics
-    process_nftables_json(jobj_outgoing, 0);
-    json_object_put(jobj_outgoing);
-    free(outgoing);
-
-    // get client incoming traffic
-    char *incoming = NULL;
-    uint32_t incoming_len = 0;
-    nft_statistical_incoming(&incoming, &incoming_len);
-    if (incoming == NULL) {
-        debug(LOG_ERR, "Failed to get incoming traffic");
-        return -1;
+    for (size_t i = 0; i < sizeof(sets) / sizeof(sets[0]); i++) {
+        char *buf = NULL;
+        uint32_t buf_len = 0;
+        nft_statistical_set_helper("wifidogx", sets[i].set_name, &buf, &buf_len);
+        if (!buf) {
+            debug(LOG_WARNING, "Failed to query nft set %s", sets[i].set_name);
+            continue;
+        }
+        json_object *jobj = json_tokener_parse(buf);
+        free(buf);
+        if (!jobj) {
+            debug(LOG_ERR, "Failed to parse json for nft set %s", sets[i].set_name);
+            continue;
+        }
+        process_nftables_set_json(jobj, sets[i].is_outgoing, sets[i].is_ip6);
+        json_object_put(jobj);
     }
-    debug(LOG_DEBUG, "incoming: %s", incoming);
-    json_object *jobj_incoming = json_tokener_parse(incoming);
-    if (jobj_incoming == NULL) {
-        debug(LOG_ERR, "Failed to parse incoming json");
-        free(incoming);
-        return -1;
-    }
-
-    // Process incoming traffic statistics
-    process_nftables_json(jobj_incoming, 1);
-    json_object_put(jobj_incoming);
-    free(incoming);
 
     return 0;
 }
